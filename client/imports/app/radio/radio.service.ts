@@ -428,7 +428,11 @@ export class AppRadioService implements OnDestroy {
                     .subscribe());
 
                 this._subscriptions.systems.push(RadioSystems
-                    .find()
+                    .find({}, {
+                        sort: {
+                            system: 1,
+                        },
+                    })
                     .pipe(debounceTime(100))
                     .subscribe((systems: RadioSystem[]) => {
                         this._systems.splice(0, this._systems.length, ...systems);
