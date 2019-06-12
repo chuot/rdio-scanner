@@ -1,0 +1,17 @@
+<mat-sidenav-container class="radio-body">
+    <mat-sidenav #searchPanel [autoFocus]="false" [disableClose]="true" mode="push" [opened]="searchPanelOpened"
+        position="start">
+        <app-radio-search class="radio-search"></app-radio-search>
+    </mat-sidenav>
+    <mat-sidenav #selectPanel [autoFocus]="false" [disableClose]="true" mode="push" [opened]="selectPanelOpened"
+        position="end">
+        <app-radio-select class="radio-select"></app-radio-select>
+    </mat-sidenav>
+    <mat-sidenav-content>
+        <div class="radio-body-inner">
+            <app-radio-led class="radio-led"></app-radio-led>
+            <app-radio-display class="radio-display"></app-radio-display>
+            <app-radio-control class="radio-control"></app-radio-control>
+        </div>
+    </mat-sidenav-content>
+</mat-sidenav-container>

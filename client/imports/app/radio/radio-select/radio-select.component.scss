@@ -1,0 +1,42 @@
+:host {
+    display: flex;
+    flex-direction: row;
+    min-height: 100%;
+}
+
+.radio-body {
+    min-width: 100%;
+    padding: 12px;
+}
+
+.radio-button-group {
+    justify-content: flex-start;
+}
+
+.radio-button-mini.all-off {
+    background: rgb(100, 50, 50);
+}
+
+.radio-button-mini.all-on {
+    background: rgb(50, 100, 50);
+}
+
+.radio-button-spacer {
+    flex: 1;
+}
+
+.radio-system {
+    font-family: Roboto, 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+
+    &:not(:last-child) {
+        margin-bottom: 12px;
+    }
+
+    legend {
+        opacity: .8;
+        padding: 0 12px;
+    }
+}

@@ -1,0 +1,67 @@
+$color-dark: rgb(50, 50, 60);
+$color-light: rgb(240, 240, 250);
+
+$color-off: rgb(230, 50, 50);
+$color-on: rgb(100, 230, 50);
+
+button.radio-button {
+    align-items: center;
+    background: $color-dark;
+    border: none;
+    border-radius: 4px;
+    box-shadow: 1px 1px 2px $color-light inset, -1px -1px 1px $color-dark inset, 0 0 8px 2px black;
+    box-sizing: border-box;
+    color: $color-light;
+    display: inline-flex;
+    flex-direction: column;
+    font-family: Roboto, 'Helvetica Neue', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    height: 40px;
+    justify-content: center;
+    line-height: 14px;
+    margin: 4px;
+    overflow: hidden;
+    position: relative;
+    text-shadow: 0 0 2px $color-dark;
+    text-transform: uppercase;
+    width: 70px;
+
+    &:active,
+    &:focus {
+        outline: 0;
+    }
+
+    &:active {
+        top: 4px;
+    }
+
+    &.off::after,
+    &.on::after {
+        content: '';
+        border-radius: 4px;
+        display: block;
+        height: 6px;
+        position: absolute;
+        right: 6px;
+        top: 6px;
+        width: 6px;
+    }
+
+    &.off::after {
+        background: $color-off;
+        box-shadow: 1px 1px 1px $color-light inset, 0 0 3px 2px $color-off;
+    }
+
+    &.on::after {
+        background: $color-on;
+        box-shadow: 1px 1px 1px $color-light inset, 0 0 3px 2px $color-on;
+    }
+
+    >div {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        width: inherit;
+    }
+}

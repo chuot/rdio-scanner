@@ -1,0 +1,25 @@
+$color-off: rgb(80, 80, 80);
+$color-on: rgb(100, 230, 50);
+
+:host {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+
+    >div {
+        background: $color-off;
+        border-radius: 2px;
+        height: 12px;
+        width: 24px;
+
+        &:not(:last-child) {
+            margin-right: 4px;
+        }
+
+        &.on {
+            background: $color-on;
+            box-shadow: 0 0 6px 3px $color-on;
+        }
+    }
+}

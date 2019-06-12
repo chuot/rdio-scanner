@@ -1,0 +1,113 @@
+.radio-body {
+    background: rgb(70, 70, 70) url('images/carbon.png');
+    box-sizing: border-box;
+    color: rgb(255, 255, 255);
+}
+
+.radio-button,
+.radio-button-mini {
+    background: rgb(50, 50, 50);
+    border: none;
+    border-radius: 4px;
+    box-shadow: 1px 1px 2px rgb(255, 255, 255) inset, -1px -1px 1px rgb(0, 0, 0) inset, 0 0 2px 2px rgb(0, 0, 0);
+    box-sizing: border-box;
+    color: rgb(255, 255, 255);
+    font-family: Roboto, 'Helvetica Neue', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    height: 40px;
+    line-height: 40px;
+    margin: 4px;
+    overflow: hidden;
+    position: relative;
+    text-overflow: ellipsis;
+    text-shadow: 0 0 4px rgb(0, 0, 0);
+    white-space: nowrap;
+    width: auto;
+
+    &:active,
+    &:focus {
+        outline: 0;
+    }
+
+    &:active {
+        top: 4px;
+    }
+
+    &.off::after,
+    &.on::after {
+        content: '';
+        border-radius: 4px;
+        display: block;
+        height: 6px;
+        position: absolute;
+        right: 6px;
+        top: 6px;
+        width: 6px;
+    }
+
+    &.off::after {
+        background: rgb(230, 50, 50);
+        box-shadow: 1px 1px 1px rgb(255, 255, 255) inset, 0 0 3px 2px rgb(230, 50, 50);
+    }
+
+    &.on::after {
+        background: rgb(100, 230, 50);
+        box-shadow: 1px 1px 1px rgb(255, 255, 255) inset, 0 0 3px 2px rgb(100, 230, 50);
+    }
+}
+
+.radio-button {
+    min-width: 64px;
+}
+
+.radio-button-group {
+    align-items: center;
+    display: flex;
+    flex: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+
+    .radio-button {
+        width: calc(25% - 8px);
+    }
+
+    .radio-button-mini {
+        width: calc(12.5% - 8px);
+    }
+}
+
+.radio-button-mini {
+    font-size: 10px;
+    min-width: 30px;
+}
+
+.radio-button-spacer {
+    flex: auto;
+    min-width: .00001px;
+}
+
+@media (min-width: 720px) {
+    .radio-button-group {
+        .radio-button {
+            width: calc(20% - 8px);
+        }
+
+        .radio-button-mini {
+            width: calc(10% - 8px);
+        }
+    }
+}
+
+@media (min-width: 1200px) {
+    .radio-button-group {
+        .radio-button {
+            width: calc(10% - 8px);
+        }
+
+        .radio-button-mini {
+            width: calc(5% - 8px);
+        }
+    }
+}

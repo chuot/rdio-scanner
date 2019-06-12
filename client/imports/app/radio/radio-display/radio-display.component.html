@@ -1,0 +1,83 @@
+<div>
+    <div>
+        <span>{{ clock | date:'HH' }}{{ clock.getSeconds() % 2 ? ' ' : ':' }}{{ clock | date:'mm' }}</span>
+    </div>
+    <div>
+        <span>Q: {{ queueLength }}</span>
+    </div>
+</div>
+<div>
+    <div>
+        <span>{{ currentCall ? currentCall.systemData?.name || currentCall.system : 'System'}}</span>
+    </div>
+    <div>
+        <span>{{ currentCall ? currentCall.talkgroupData?.tag : 'Tag' }}</span>
+    </div>
+</div>
+<div>
+    <div>
+        <span>{{ currentCall ? currentCall.talkgroupData?.alphaTag : 'Alpha Tag' }}</span>
+    </div>
+    <div>
+        <span>{{ currentCall ? (currentCall.startTime | date:'HH:mm') : '00:00' }}</span>
+    </div>
+</div>
+<div>
+    <span>{{ currentCall ? currentCall.talkgroupData?.description || (currentFrequency | freq) : 'Idle' }}</span>
+</div>
+<div>
+    <div>
+        <span>F: {{ currentFrequency | freq }}</span>
+    </div>
+    <div>
+        <span *ngIf="!currentCall || !(currentCall.talkgroupData?.mode === 'A')">
+            TGID: {{ currentCall ? currentCall.talkgroup : 0 }}
+        </span>
+    </div>
+</div>
+<div>
+    <div>
+        <span *ngIf="!currentCall || !(currentCall.talkgroupData?.mode === 'A')">
+            E: {{ currentError }} S: {{ currentSpike }}
+        </span>
+    </div>
+    <div>
+        <span *ngIf="!currentCall || !(currentCall.talkgroupData?.mode === 'A')">
+            UID: {{ currentUnit }}
+        </span>
+    </div>
+</div>
+<table>
+    <thead>
+        <tr>
+            <th>
+                <span>Time</span>
+            </th>
+            <th>
+                <span>System</span>
+            </th>
+            <th>
+                <span>Tag</span>
+            </th>
+            <th>
+                <span>Description</span>
+            </th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr *ngFor="let call of history">
+            <td>
+                <span>{{ call?.startTime | date:'HH:mm' }}</span>
+            </td>
+            <td>
+                <span>{{ call?.systemData?.name || call?.system}}</span>
+            </td>
+            <td>
+                <span>{{ call?.talkgroupData?.alphaTag || call?.talkgroup }}</span>
+            </td>
+            <td>
+                <span>{{ call?.talkgroupData?.description || (call?.freq | freq) }}</span>
+            </td>
+        </tr>
+    </tbody>
+</table>

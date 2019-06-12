@@ -1,0 +1,30 @@
+<div class="radio-button-group">
+    <button class="radio-button" (click)="toggleLiveFeed()" [ngClass]="{ off: !liveFeed, on: liveFeed }">
+        LIVE<br>FEED
+    </button>
+    <button class="radio-button" (click)="holdSystem()" [ngClass]="{ off: !systemHold, on: systemHold }">
+        HOLD<br>SYS
+    </button>
+    <button class="radio-button" (click)="holdTalkgroup()" [ngClass]="{ off: !talkgroupHold, on: talkgroupHold }">
+        HOLD<br>TG
+    </button>
+</div>
+<div class="radio-button-group">
+    <button class="radio-button" (click)="replayLast()">
+        REPLAY<br>LAST
+    </button>
+    <button class="radio-button" (click)="skipNext()">
+        SKIP<br>NEXT
+    </button>
+    <button class="radio-button" (click)="avoid()">
+        AVOID
+    </button>
+</div>
+<div class="radio-button-group">
+    <button class="radio-button" (click)="searchCall()">
+        SEARCH<br>CALL
+    </button>
+    <button class="radio-button" (click)="selectTalkgroups()">
+        SELECT<br>TG
+    </button>
+</div>
