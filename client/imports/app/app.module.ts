@@ -16,12 +16,12 @@ import { AppSharedModule } from './shared/shared.module';
             {
                 // loadChildren: () => import('./radio/radio.module').then((m) => m.AppRadioModule),
                 loadChildren: './radio/radio.module#AppRadioModule',
-                path: 'rdio-scanner',
+                path: '',
             },
             {
                 path: '**',
                 pathMatch: 'full',
-                redirectTo: '/rdio-scanner',
+                redirectTo: '',
             }
         ])
     ],
