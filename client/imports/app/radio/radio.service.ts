@@ -134,6 +134,10 @@ export class AppRadioService implements OnDestroy {
             this._hold.system = this._hold.system === null ? call.systemData || call.system : null;
 
             this._emitHoldEvent(this._hold.system === null ? '-sys' : '+sys');
+
+            if (this._hold.system !== null) {
+                this._cleanQueue();
+            }
         }
     }
 
@@ -144,6 +148,10 @@ export class AppRadioService implements OnDestroy {
             this._hold.talkgroup = this._hold.talkgroup === null ? call.talkgroupData || call.talkgroup : null;
 
             this._emitHoldEvent(this._hold.talkgroup === null ? '-tg' : '+tg');
+
+            if (this._hold.talkgroup !== null) {
+                this._cleanQueue();
+            }
         }
     }
 
@@ -157,6 +165,8 @@ export class AppRadioService implements OnDestroy {
             this._emitLiveEvent();
 
             this._flushQueue();
+
+            this.stop();
         }
 
         this._writeLive();
@@ -253,6 +263,16 @@ export class AppRadioService implements OnDestroy {
             const tg = call.talkgroup;
             const avoided = this._avoids[sys] && this._avoids[sys][tg];
             return typeof avoided === 'boolean' ? avoided : false;
+        }
+    }
+
+    private _cleanQueue(): void {
+        const queueLength = this._call.queue.length;
+
+        this._call.queue = this._call.queue.filter((_call: RadioCall) => !this._callFiltered(_call));
+
+        if (queueLength !== this._call.queue.length) {
+            this._emitQueueEvent();
         }
     }
 
