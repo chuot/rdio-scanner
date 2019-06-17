@@ -115,6 +115,8 @@ export class AppRadioService implements OnDestroy {
             this.stop();
         }
 
+        this._cleanQueue();
+
         if (this.live) {
             this._unsubscribeLiveFeed();
             this._subscribeLiveFeed();
