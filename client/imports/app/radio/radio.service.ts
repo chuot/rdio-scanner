@@ -6,7 +6,6 @@ import { RadioAvoids, RadioCall, RadioCalls, RadioEvent, RadioSystem, RadioSyste
 
 const LOCAL_STORAGE_KEY = {
     avoids: 'radio-avoids',
-    live: 'radio-live',
 };
 
 @Injectable()
@@ -54,9 +53,7 @@ export class AppRadioService implements OnDestroy {
 
         this._readAvoids();
 
-        this._subscribeSystems().then(() => {
-            // this._readLive();
-        });
+        this._subscribeSystems();
     }
 
     ngOnDestroy(): void {
@@ -170,8 +167,6 @@ export class AppRadioService implements OnDestroy {
 
             this.stop();
         }
-
-        this._writeLive();
     }
 
     play(call?: RadioCall): void {
@@ -375,14 +370,6 @@ export class AppRadioService implements OnDestroy {
         this._emitAvoidsEvent();
     }
 
-    private _readLive(): void {
-        const live = this._readLocalStorage(LOCAL_STORAGE_KEY.live);
-
-        if (live !== false) {
-            this.liveFeed(true);
-        }
-    }
-
     private _readLocalStorage(key: string): any {
         if (window instanceof Window && window.localStorage instanceof Storage) {
             try {
@@ -457,16 +444,18 @@ export class AppRadioService implements OnDestroy {
                     })
                     .pipe(debounceTime(100))
                     .subscribe((systems: RadioSystem[]) => {
-                        this._systems.splice(0, this._systems.length, ...systems);
+                        if (systems.length) {
+                            this._systems.splice(0, this._systems.length, ...systems);
 
-                        this._emitSystemsEvent();
+                            this._emitSystemsEvent();
 
-                        this._syncAvoids();
-                        this._writeAvoids();
+                            this._syncAvoids();
+                            this._writeAvoids();
 
-                        if (!hasInitialize) {
-                            hasInitialize = true;
-                            resolve();
+                            if (!hasInitialize) {
+                                hasInitialize = true;
+                                resolve();
+                            }
                         }
                     }));
             }
@@ -537,10 +526,6 @@ export class AppRadioService implements OnDestroy {
         });
 
         this._writeLocalStorage(LOCAL_STORAGE_KEY.avoids, avoids);
-    }
-
-    private _writeLive(): void {
-        this._writeLocalStorage(LOCAL_STORAGE_KEY.live, this.live);
     }
 
     private _writeLocalStorage(key: string, value: any): void {
