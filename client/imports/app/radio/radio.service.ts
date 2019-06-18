@@ -227,6 +227,9 @@ export class AppRadioService implements OnDestroy {
     stop(): void {
         if (this._call.current) {
             this._audio.pause();
+
+            this._audio.src = null;
+            this._audio.load();
         }
     }
 
