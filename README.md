@@ -53,7 +53,7 @@ Refer to the examples folder for download scripts, etc. Attention, the first arg
 
 ### Talkgroups files
 
-The main display information are obtained from the database. You must provision the databse by uploading each CSV file to Rdio Scanner with the talkgroups script from the examples directory.
+The main display information are obtained from the database. You must provision the database by uploading each CSV file to Rdio Scanner with the talkgroups script from the examples directory.
 
 ```bash
 ./upload.sh 2 /home/radio/trunk-recorder/SERAM.csv
