@@ -13,12 +13,19 @@
     justify-content: flex-start;
 }
 
-.radio-button-mini.all-off {
-    background: rgb(100, 50, 50);
-}
+.radio-button-mini {
 
-.radio-button-mini.all-on {
-    background: rgb(50, 100, 50);
+    &:not(:last-child) {
+        margin-left: auto;
+    }
+
+    &.all-off {
+        background: rgb(100, 50, 50);
+    }
+
+    &.all-on {
+        background: rgb(50, 100, 50);
+    }
 }
 
 .radio-system {
