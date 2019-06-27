@@ -7,18 +7,21 @@
 .radio-body {
     min-width: 100%;
     padding: 12px;
+
+    >div:first-child {
+        padding-right: 14.5px;
+    }
 }
 
 .radio-button-group {
     justify-content: flex-start;
+
+    *:nth-last-child(2) {
+        margin-left: auto;
+    }
 }
 
 .radio-button-mini {
-
-    &:not(:last-child) {
-        margin-left: auto;
-    }
-
     &.all-off {
         background: rgb(100, 50, 50);
     }

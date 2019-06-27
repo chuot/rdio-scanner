@@ -3,7 +3,6 @@
         <button (click)="close()" mat-icon-button>
             <mat-icon>arrow_back</mat-icon>
         </button>
-        <div class="radio-button-spacer"></div>
         <button class="radio-button-mini all-off" (click)="avoid(null, null, true)">
             OFF
         </button>
@@ -21,7 +20,6 @@
                 {{ talkgroup.alphaTag }}
             </button>
             <ng-container *ngIf="system.talkgroups.length > 1">
-                <div class="radio-button-spacer"></div>
                 <button class="radio-button-mini all-off" (click)="avoid(system, null, true)">
                     OFF
                 </button>
