@@ -1,6 +1,6 @@
 import { EventEmitter, Injectable, OnDestroy } from '@angular/core';
 import { MeteorObservable } from 'meteor-rxjs';
-import { Subscription } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { debounceTime, filter, skip } from 'rxjs/operators';
 import { RadioAvoids, RadioCall, RadioCalls, RadioEvent, RadioSystem, RadioSystems, RadioTalkgroup } from './radio';
 
@@ -16,7 +16,8 @@ export class AppRadioService implements OnDestroy {
         return !!this._subscriptions.liveFeed.length;
     }
 
-    private _audio: HTMLAudioElement = new Audio();
+    private _audio: HTMLAudioElement;
+    private _audioEvent: Subject<void> = new Subject();
 
     private _avoids: RadioAvoids = {};
 
@@ -39,9 +40,11 @@ export class AppRadioService implements OnDestroy {
         };
 
     private _subscriptions: {
+        audio: Subscription[];
         liveFeed: Subscription[];
         systems: Subscription[];
     } = {
+            audio: [],
             liveFeed: [],
             systems: [],
         };
@@ -49,10 +52,9 @@ export class AppRadioService implements OnDestroy {
     private _systems: RadioSystem[] = [];
 
     constructor() {
-        this._configureAudio();
-
         this._readAvoids();
 
+        this._subscribeAudioEvent();
         this._subscribeSystems();
     }
 
@@ -155,6 +157,8 @@ export class AppRadioService implements OnDestroy {
     }
 
     liveFeed(status = !this.live): void {
+        this._configureAudio();
+
         if (status) {
             this._subscribeLiveFeed();
 
@@ -170,6 +174,8 @@ export class AppRadioService implements OnDestroy {
     }
 
     play(call?: RadioCall): void {
+        this._configureAudio();
+
         if (call) {
             if (call.audio) {
                 if (this._call.current) {
@@ -277,34 +283,19 @@ export class AppRadioService implements OnDestroy {
     }
 
     private _configureAudio(): void {
-        const stopHandler = () => {
-            if (this._call.current) {
-                this._call.previous = this._call.current;
-                this._call.current = null;
+        if (!this._audio) {
+            this._audio = new Audio();
 
-                this._emitCallEvent();
+            this._audio.oncanplaythrough = () => this._audio.play();
 
-                setTimeout(() => this.play(), 1000);
-            }
-        };
+            this._audio.onabort = () => this._audioEvent.next();
+            this._audio.onended = () => this._audioEvent.next();
+            this._audio.onerror = () => this._audioEvent.next();
+            this._audio.onpause = () => this._audioEvent.next();
+            this._audio.onstalled = () => this._audioEvent.next();
 
-        const suspendHandler = () => {
-            this._audio.play();
-        };
-
-        const timeHandler = () => {
-            this._emitTimeEvent();
-        };
-
-        this._audio.autoplay = true;
-
-        this._audio.onabort = () => stopHandler();
-        this._audio.onerror = () => stopHandler();
-        this._audio.onpause = () => stopHandler();
-
-        this._audio.onsuspend = () => suspendHandler();
-
-        this._audio.ontimeupdate = () => timeHandler();
+            this._audio.ontimeupdate = () => this._emitTimeEvent();
+        }
     }
 
     private _emitAvoidEvent(sys: number, tg: number): void {
@@ -381,6 +372,23 @@ export class AppRadioService implements OnDestroy {
                 return null;
             }
         }
+    }
+
+    private _subscribeAudioEvent(): void {
+        this._subscriptions.audio.push(
+            this._audioEvent
+                .pipe(debounceTime(1000))
+                .subscribe(() => {
+                    if (this._call.current) {
+                        this._call.previous = this._call.current;
+                        this._call.current = null;
+
+                        this._emitCallEvent();
+
+                        setTimeout(() => this.play(), 1000);
+                    }
+                }),
+        );
     }
 
     private _subscribeLiveFeed(): void {
@@ -501,6 +509,7 @@ export class AppRadioService implements OnDestroy {
     }
 
     private _unsubscribe(subscriptions: Subscription[] = [
+        ...this._subscriptions.audio,
         ...this._subscriptions.liveFeed,
         ...this._subscriptions.systems,
     ]) {

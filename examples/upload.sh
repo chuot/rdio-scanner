@@ -5,7 +5,7 @@ key="30851354-741b-4b7e-a126-4b56cca99732"
 
 basename="${2%.*}"
 jsonfile="$basename.json"
-mpegfile="$basename.mp3"
+mpegfile="$basename.aac"
 system=$1
 wavfile="$basename.wav"
 
