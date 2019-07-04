@@ -1,6 +1,6 @@
 import { EventEmitter, Injectable, OnDestroy } from '@angular/core';
 import { MeteorObservable } from 'meteor-rxjs';
-import { Subject, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { debounceTime, filter, skip } from 'rxjs/operators';
 import { RadioAvoids, RadioCall, RadioCalls, RadioEvent, RadioSystem, RadioSystems, RadioTalkgroup } from './radio';
 
@@ -17,7 +17,6 @@ export class AppRadioService implements OnDestroy {
     }
 
     private _audio: HTMLAudioElement;
-    private _audioEvent: Subject<void> = new Subject();
 
     private _avoids: RadioAvoids = {};
 
@@ -40,11 +39,9 @@ export class AppRadioService implements OnDestroy {
         };
 
     private _subscriptions: {
-        audio: Subscription[];
         liveFeed: Subscription[];
         systems: Subscription[];
     } = {
-            audio: [],
             liveFeed: [],
             systems: [],
         };
@@ -54,7 +51,6 @@ export class AppRadioService implements OnDestroy {
     constructor() {
         this._readAvoids();
 
-        this._subscribeAudioEvent();
         this._subscribeSystems();
     }
 
@@ -180,24 +176,22 @@ export class AppRadioService implements OnDestroy {
             if (call.audio) {
                 if (this._call.current) {
                     this._call.queue.unshift(call);
+
                     this.stop();
+
                 } else {
                     this._call.current = call;
 
                     this._audio.src = call.audio;
                     this._audio.load();
-
-                    this._emitCallEvent();
                 }
             }
+
         } else if (!this._call.current && this._call.queue.length) {
             this._call.current = this._call.queue.shift();
 
             this._audio.src = this._call.current.audio;
             this._audio.load();
-
-            this._emitCallEvent();
-            this._emitQueueEvent();
         }
     }
 
@@ -234,8 +228,10 @@ export class AppRadioService implements OnDestroy {
         if (this._call.current) {
             this._audio.pause();
 
-            this._audio.src = null;
-            this._audio.load();
+            this._call.previous = this._call.current;
+            this._call.current = null;
+
+            this._emitCallEvent();
         }
     }
 
@@ -284,17 +280,55 @@ export class AppRadioService implements OnDestroy {
 
     private _configureAudio(): void {
         if (!this._audio) {
+            let playing = false;
+            let watchdog = null;
+
             this._audio = new Audio();
 
-            this._audio.oncanplaythrough = () => this._audio.play();
+            this._audio.autoplay = true;
 
-            this._audio.onabort = () => this._audioEvent.next();
-            this._audio.onended = () => this._audioEvent.next();
-            this._audio.onerror = () => this._audioEvent.next();
-            this._audio.onpause = () => this._audioEvent.next();
-            this._audio.onstalled = () => this._audioEvent.next();
+            this._audio.onabort =
+                this._audio.onended =
+                this._audio.onerror =
+                this._audio.onpause = () => {
+                    if (playing) {
+                        playing = false;
 
-            this._audio.ontimeupdate = () => this._emitTimeEvent();
+                        if (watchdog) {
+                            clearTimeout(watchdog);
+                            watchdog = null;
+                        }
+
+                        this.stop();
+
+                        if (this._call.queue.length) {
+                            this.play();
+                        }
+                    }
+                };
+
+            this._audio.onplay = () => {
+                playing = true;
+
+                this._emitCallEvent();
+                this._emitQueueEvent();
+            };
+
+            this._audio.ontimeupdate = () => {
+                if (playing) {
+                    this._emitTimeEvent();
+
+                    if (watchdog) {
+                        clearTimeout(watchdog);
+                    }
+
+                    watchdog = setTimeout(() => {
+                        this.stop();
+                        watchdog = null;
+                    }, 5000);
+
+                }
+            };
         }
     }
 
@@ -374,23 +408,6 @@ export class AppRadioService implements OnDestroy {
         }
     }
 
-    private _subscribeAudioEvent(): void {
-        this._subscriptions.audio.push(
-            this._audioEvent
-                .pipe(debounceTime(1000))
-                .subscribe(() => {
-                    if (this._call.current) {
-                        this._call.previous = this._call.current;
-                        this._call.current = null;
-
-                        this._emitCallEvent();
-
-                        setTimeout(() => this.play(), 1000);
-                    }
-                }),
-        );
-    }
-
     private _subscribeLiveFeed(): void {
         if (!this._subscriptions.liveFeed.length) {
             const options = {
@@ -438,39 +455,30 @@ export class AppRadioService implements OnDestroy {
         }
     }
 
-    private _subscribeSystems(): Promise<void> {
-        let hasInitialize = false;
+    private _subscribeSystems(): void {
+        if (!this._subscriptions.systems.length) {
+            this._subscriptions.systems.push(MeteorObservable
+                .subscribe('systems')
+                .subscribe());
 
-        return new Promise((resolve) => {
-            if (!this._subscriptions.systems.length) {
-                this._subscriptions.systems.push(MeteorObservable
-                    .subscribe('systems')
-                    .subscribe());
+            this._subscriptions.systems.push(RadioSystems
+                .find({}, {
+                    sort: {
+                        system: 1,
+                    },
+                })
+                .pipe(debounceTime(100))
+                .subscribe((systems: RadioSystem[]) => {
+                    if (systems.length) {
+                        this._systems.splice(0, this._systems.length, ...systems);
 
-                this._subscriptions.systems.push(RadioSystems
-                    .find({}, {
-                        sort: {
-                            system: 1,
-                        },
-                    })
-                    .pipe(debounceTime(100))
-                    .subscribe((systems: RadioSystem[]) => {
-                        if (systems.length) {
-                            this._systems.splice(0, this._systems.length, ...systems);
+                        this._emitSystemsEvent();
 
-                            this._emitSystemsEvent();
-
-                            this._syncAvoids();
-                            this._writeAvoids();
-
-                            if (!hasInitialize) {
-                                hasInitialize = true;
-                                resolve();
-                            }
-                        }
-                    }));
-            }
-        });
+                        this._syncAvoids();
+                        this._writeAvoids();
+                    }
+                }));
+        }
     }
 
     private _syncAvoids(): void {
@@ -509,7 +517,6 @@ export class AppRadioService implements OnDestroy {
     }
 
     private _unsubscribe(subscriptions: Subscription[] = [
-        ...this._subscriptions.audio,
         ...this._subscriptions.liveFeed,
         ...this._subscriptions.systems,
     ]) {
