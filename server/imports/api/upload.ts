@@ -10,7 +10,7 @@ if (Meteor.isServer) {
         if (req.method === 'POST') {
             const form = new Form();
 
-            let audio = 'data:audio/mpeg;base64,';
+            let audio = '';
             let json = '';
             let key = '';
             let system = '';
@@ -19,10 +19,10 @@ if (Meteor.isServer) {
                 part.on('data', (data) => {
                     switch (part.name.toLowerCase()) {
                         case 'audio':
-                            audio += data.toString('base64');
+                            audio += data.toString('binary');
                             break;
                         case 'json':
-                            json += data.toString('binary');
+                            json += data.toString('utf8');
                             break;
                         case 'key':
                             key += data.toString('utf8');
@@ -40,6 +40,8 @@ if (Meteor.isServer) {
                 const apiKeys = Meteor.settings.apiKeys;
 
                 if (key && Array.isArray(apiKeys) && apiKeys.find((apiKey) => apiKey === key)) {
+                    audio = 'data:audio/mpeg;base64,' + Buffer.from(audio, 'binary').toString('base64');
+
                     try {
                         const call = new Call(Object.assign({}, JSON.parse(json), { audio, system }));
 
@@ -57,7 +59,6 @@ if (Meteor.isServer) {
                     res.writeHead(403);
                     res.end('wrong or no api key provided');
                 }
-
             }));
 
             form.parse(req);
