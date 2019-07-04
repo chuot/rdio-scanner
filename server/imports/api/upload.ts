@@ -40,10 +40,11 @@ if (Meteor.isServer) {
                 const apiKeys = Meteor.settings.apiKeys;
 
                 if (key && Array.isArray(apiKeys) && apiKeys.find((apiKey) => apiKey === key)) {
-                    audio = 'data:audio/mpeg;base64,' + Buffer.from(audio, 'binary').toString('base64');
-
                     try {
-                        const call = new Call(Object.assign({}, JSON.parse(json), { audio, system }));
+                        const call = new Call(Object.assign({}, JSON.parse(json), {
+                            audio: urlEncode('audio/mpeg', audio),
+                            system,
+                        }));
 
                         Calls.collection.insert(call, (error: Meteor.Error) => {
                             res.writeHead(error ? 500 : 200);
@@ -63,9 +64,39 @@ if (Meteor.isServer) {
 
             form.parse(req);
 
+            pruneCalls();
+
         } else {
             res.writeHead(404);
             res.end();
         }
     });
+}
+
+function base64Encode(value: any): string {
+    return Buffer.from(value, 'binary').toString('base64');
+}
+
+function urlEncode(mimeType: string, value: any): string {
+    return `data:${mimeType};base64,${base64Encode(value)}`;
+}
+
+function getPruneDays(): number | null {
+    const pruneDays = Meteor.settings.pruneDays;
+    return typeof pruneDays === 'number' ? pruneDays : null;
+}
+
+function pruneCalls(): void {
+    const pruneDays = getPruneDays();
+
+    if (pruneDays !== null) {
+        const currentDate = new Date();
+        const dateLimit = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - pruneDays);
+
+        Calls.collection.remove({
+            createdAt: {
+                $lt: dateLimit,
+            },
+        });
+    }
 }

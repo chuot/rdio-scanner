@@ -1,7 +1,7 @@
 #!/bin/bash
 
 api="http://127.0.0.1:3000/upload"
-key="30851354-741b-4b7e-a126-4b56cca99732"
+key="b29eb8b9-9bcd-4e6e-bb4f-d244ada12736"
 
 basename="${2%.*}"
 jsonfile="$basename.json"
