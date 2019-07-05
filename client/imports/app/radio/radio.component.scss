@@ -29,6 +29,13 @@
     flex-direction: row;
     flex-wrap: wrap;
     margin: 24px;
+    width: calc(100% - 48px);
+}
+
+.radio-control,
+.radio-display,
+.radio-led {
+    width: inherit;
 }
 
 .radio-display {
