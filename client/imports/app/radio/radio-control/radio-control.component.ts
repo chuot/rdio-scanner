@@ -53,7 +53,7 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
     }
 
     skipNext(): void {
-        this.appRadioService.stop();
+        this.appRadioService.skip();
     }
 
     toggleLiveFeed(): void {

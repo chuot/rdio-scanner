@@ -106,11 +106,11 @@ export class AppRadioService implements OnDestroy {
             }
         }
 
-        if (this._call.current && this._callFiltered()) {
-            this.stop();
-        }
-
         this._cleanQueue();
+
+        if (this._call.current && this._callFiltered()) {
+            this.skip();
+        }
 
         if (this.live) {
             this._unsubscribeLiveFeed();
@@ -177,7 +177,7 @@ export class AppRadioService implements OnDestroy {
                 if (this._call.current) {
                     this._call.queue.unshift(call);
 
-                    this.stop();
+                    this.skip(true);
 
                 } else {
                     this._call.current = call;
@@ -224,9 +224,25 @@ export class AppRadioService implements OnDestroy {
         this._emitSelectEvent();
     }
 
+    skip(nodelay = false): void {
+        this.stop();
+
+        if (nodelay) {
+            this.play();
+        } else {
+            setTimeout(() => {
+                if (this._call.queue.length) {
+                    this.play();
+                }
+            }, 1000);
+        }
+    }
+
     stop(): void {
         if (this._call.current) {
             this._audio.pause();
+            this._audio.src = null;
+            this._audio.load();
 
             this._call.previous = this._call.current;
             this._call.current = null;
@@ -283,38 +299,7 @@ export class AppRadioService implements OnDestroy {
             let playing = false;
             let watchdog = null;
 
-            this._audio = new Audio();
-
-            this._audio.autoplay = true;
-
-            this._audio.onabort =
-                this._audio.onended =
-                this._audio.onerror =
-                this._audio.onpause = () => {
-                    if (playing) {
-                        playing = false;
-
-                        if (watchdog) {
-                            clearTimeout(watchdog);
-                            watchdog = null;
-                        }
-
-                        this.stop();
-
-                        if (this._call.queue.length) {
-                            this.play();
-                        }
-                    }
-                };
-
-            this._audio.onplay = () => {
-                playing = true;
-
-                this._emitCallEvent();
-                this._emitQueueEvent();
-            };
-
-            this._audio.ontimeupdate = () => {
+            const progressHandler = () => {
                 if (playing) {
                     this._emitTimeEvent();
 
@@ -322,13 +307,42 @@ export class AppRadioService implements OnDestroy {
                         clearTimeout(watchdog);
                     }
 
-                    watchdog = setTimeout(() => {
-                        this.stop();
-                        watchdog = null;
-                    }, 5000);
-
+                    watchdog = setTimeout(() => stopHandler(), 2000);
                 }
             };
+
+            const startHandler = () => {
+                playing = true;
+
+                this._emitCallEvent();
+                this._emitQueueEvent();
+            };
+
+            const stopHandler = () => {
+                if (playing) {
+                    playing = false;
+
+                    if (watchdog) {
+                        clearTimeout(watchdog);
+                        watchdog = null;
+                    }
+
+                    this.skip();
+                }
+            };
+
+            this._audio = new Audio();
+
+            this._audio.autoplay = true;
+
+            this._audio.onabort = () => stopHandler();
+            this._audio.onended = () => stopHandler();
+            this._audio.onerror = () => stopHandler();
+            this._audio.onpause = () => stopHandler();
+
+            this._audio.onplay = () => startHandler();
+
+            this._audio.ontimeupdate = () => progressHandler();
         }
     }
 
