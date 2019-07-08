@@ -15,7 +15,7 @@
     "@angular/platform-browser": "8.1.0",
     "@angular/platform-browser-dynamic": "8.1.0",
     "@angular/router": "8.1.0",
-    "@babel/runtime": "7.5.0",
+    "@babel/runtime": "7.5.1",
     "bcrypt": "^3.0.6",
     "core-js": "3.1.4",
     "hammerjs": "^2.0.8",

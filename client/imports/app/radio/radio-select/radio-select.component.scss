@@ -46,3 +46,29 @@
         padding: 0 12px;
     }
 }
+
+@media (min-width: 720px) {
+    .radio-button-group {
+        .radio-button,
+        .radio-button-none {
+            width: calc(20% - 8px);
+        }
+
+        .radio-button-mini {
+            width: calc(10% - 8px);
+        }
+    }
+}
+
+@media (min-width: 1200px) {
+    .radio-button-group {
+        .radio-button,
+        .radio-button-none {
+            width: calc(10% - 8px);
+        }
+
+        .radio-button-mini {
+            width: calc(5% - 8px);
+        }
+    }
+}

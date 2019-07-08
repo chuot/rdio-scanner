@@ -18,61 +18,57 @@
 
 .mat-sidenav-content {
     align-items: center;
-    box-sizing: border-box;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     justify-content: center;
 }
 
-.radio-body-inner {
+.radio-bezel {
+    box-sizing: border-box;
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
-    margin: 24px;
-    width: calc(100% - 48px);
+    max-width: 640px;
+    overflow: hidden;
+    padding: 24px;
 }
 
 .radio-control,
 .radio-display,
 .radio-led {
-    width: inherit;
+    flex: 100%;
+    max-width: 100%;
 }
 
-.radio-display {
-    align-self: center;
+.radio-display,
+.radio-led {
+    margin-bottom: 24px;
 }
 
-@media (orientation: landscape) {
-
-    .radio-body-inner {
-        max-width: 720px;
+@media (orientation: landscape) and (max-width: 640px) {
+    .radio-bezel {
+        flex-direction: row;
+        flex-wrap: wrap;
     }
 
-    .radio-control,
+    .radio-control {
+        flex: calc(50% - 24px);
+        max-width: calc(50% - 24px);
+        margin-left: 24px;
+    }
+
     .radio-display {
         flex: 50%;
         max-width: 50%;
     }
 
-    .radio-led {
-        flex: 100%;
-    }
-}
-
-@media (orientation: portrait) {
-
-    .radio-body-inner {
-        max-width: 480px;
-    }
-
-    .radio-control,
     .radio-display,
     .radio-led {
-        flex: 100%;
+        margin: 0;
     }
 
-    .radio-display,
     .radio-led {
-        margin-bottom: 48px;
+        flex: 100%;
+        max-width: 100%;
     }
 }

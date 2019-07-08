@@ -11,6 +11,7 @@ $color-on: rgb(100, 230, 50);
         background: $color-off;
         border-radius: 2px;
         height: 12px;
+        margin: 6px;
         width: 24px;
 
         &:not(:last-child) {

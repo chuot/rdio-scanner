@@ -5,6 +5,12 @@
 }
 
 .radio-button,
+.radio-button-mini,
+.radio-button-none {
+    margin: 4px;
+}
+
+.radio-button,
 .radio-button-mini {
     background: rgb(45, 45, 45);
     border: none;
@@ -17,7 +23,6 @@
     font-weight: 500;
     height: 40px;
     line-height: 40px;
-    margin: 4px;
     overflow: hidden;
     position: relative;
     text-overflow: ellipsis;
@@ -57,7 +62,8 @@
     }
 }
 
-.radio-button {
+.radio-button,
+.radio-button-none {
     min-width: 64px;
 }
 
@@ -67,9 +73,10 @@
     flex: auto;
     flex-direction: row;
     flex-wrap: wrap;
-    justify-content: space-evenly;
+    justify-content: space-between;
 
-    .radio-button {
+    .radio-button,
+    .radio-button-none {
         width: calc(25% - 8px);
     }
 
@@ -81,32 +88,4 @@
 .radio-button-mini {
     font-size: 10px;
     min-width: 30px;
-}
-
-.radio-button-spacer {
-    flex: 1;
-}
-
-@media (min-width: 720px) {
-    .radio-button-group {
-        .radio-button {
-            width: calc(20% - 8px);
-        }
-
-        .radio-button-mini {
-            width: calc(10% - 8px);
-        }
-    }
-}
-
-@media (min-width: 1200px) {
-    .radio-button-group {
-        .radio-button {
-            width: calc(10% - 8px);
-        }
-
-        .radio-button-mini {
-            width: calc(5% - 8px);
-        }
-    }
 }

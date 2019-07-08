@@ -67,10 +67,10 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
     private _handleRadioTimeEvent(event: RadioEvent): void {
         if ('time' in event) {
             const currentFreq = this.currentCall.freqList
-                .reduce((cur: RadioCallFreq, freq: RadioCallFreq) => freq.pos <= event.time ? freq : cur, null);
+                .reduce((cur: RadioCallFreq, freq: RadioCallFreq) => freq.pos < event.time ? freq : cur, null);
 
             const currentSrc = this.currentCall.srcList
-                .reduce((cur: RadioCallSrc, src: RadioCallSrc) => src.pos <= event.time ? src : cur, null);
+                .reduce((cur: RadioCallSrc, src: RadioCallSrc) => src.pos < event.time ? src : cur, null);
 
             const currentError = currentFreq && currentFreq.errorCount;
             const currentFrequency = (currentFreq && currentFreq.freq);
