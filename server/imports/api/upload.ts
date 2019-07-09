@@ -13,6 +13,7 @@ if (Meteor.isServer) {
             let audio = '';
             let json = '';
             let key = '';
+            let mimeType = '';
             let system = '';
 
             form.on('part', (part) => {
@@ -20,6 +21,7 @@ if (Meteor.isServer) {
                     switch (part.name.toLowerCase()) {
                         case 'audio':
                             audio += data.toString('binary');
+                            mimeType = part.headers['content-type'];
                             break;
                         case 'json':
                             json += data.toString('utf8');
@@ -42,7 +44,7 @@ if (Meteor.isServer) {
                 if (key && Array.isArray(apiKeys) && apiKeys.find((apiKey) => apiKey === key)) {
                     try {
                         const call = new Call(Object.assign({}, JSON.parse(json), {
-                            audio: urlEncode('audio/mpeg', audio),
+                            audio: urlEncode(mimeType, audio),
                             system,
                         }));
 
