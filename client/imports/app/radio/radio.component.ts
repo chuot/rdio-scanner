@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RadioEvent } from './radio';
 import { AppRadioService } from './radio.service';
@@ -25,6 +25,14 @@ export class AppRadioComponent implements OnDestroy, OnInit {
 
     ngOnDestroy(): void {
         this._unsubscribe();
+    }
+
+    @HostListener('window:beforeunload', ['$event'])
+    private _exitNotification(event: BeforeUnloadEvent): void {
+        if (this.appRadioService.live) {
+            event.preventDefault();
+            event.returnValue = false;
+        }
     }
 
     private _subscribe(): void {

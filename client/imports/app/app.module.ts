@@ -22,8 +22,8 @@ import { AppSharedModule } from './shared/shared.module';
                 path: '**',
                 pathMatch: 'full',
                 redirectTo: '',
-            }
-        ])
+            },
+        ]),
     ],
 })
 export class AppModule { }
