@@ -298,7 +298,7 @@ export class AppRadioService implements OnDestroy {
             let watchdog = null;
 
             const progressHandler = () => {
-                if (playing) {
+                if (this._call.current && playing) {
                     this._emitTimeEvent();
 
                     if (watchdog) {
@@ -310,14 +310,16 @@ export class AppRadioService implements OnDestroy {
             };
 
             const startHandler = () => {
-                playing = true;
+                if (this._call.current) {
+                    playing = true;
 
-                this._emitCallEvent();
-                this._emitQueueEvent();
+                    this._emitCallEvent();
+                    this._emitQueueEvent();
+                }
             };
 
             const stopHandler = () => {
-                if (playing) {
+                if (this._call.current && playing) {
                     playing = false;
 
                     if (watchdog) {
