@@ -240,7 +240,7 @@ export class AppRadioService implements OnDestroy {
 
     stop(): void {
         if (this._call.current) {
-            this._audio.src = 'data:audio/aac;base64,//FsQAOf/N4CAExhdmM1OC4zNS4xMDAAAjBADv/xbEADn/zeAgBMYXZjNTguMzUuMTAwAAIwQA4=';
+            this._audio.src = this._getEmptyAudioStream();
 
             this._call.previous = this._call.current;
             this._call.current = null;
@@ -329,7 +329,7 @@ export class AppRadioService implements OnDestroy {
                 }
             };
 
-            this._audio = new Audio();
+            this._audio = new Audio(this._getEmptyAudioStream());
 
             this._audio.autoplay = true;
 
@@ -388,6 +388,10 @@ export class AppRadioService implements OnDestroy {
         this._call.queue.splice(0, this._call.queue.length);
 
         this._emitQueueEvent();
+    }
+
+    private _getEmptyAudioStream(): string {
+        return 'data:audio/aac;base64,//FsQAOf/N4CAExhdmM1OC4zNS4xMDAAAjBADv/xbEADn/zeAgBMYXZjNTguMzUuMTAwAAIwQA4=';
     }
 
     private _readAvoids(): void {
