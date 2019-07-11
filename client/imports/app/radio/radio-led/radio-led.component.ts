@@ -12,6 +12,7 @@ import { AppRadioService } from '../radio.service';
     templateUrl: './radio-led.component.html',
 })
 export class AppRadioLedComponent implements OnDestroy, OnInit {
+    paused = false;
     rx = false;
 
     private _subcriptions: Subscription[] = [];
@@ -32,8 +33,17 @@ export class AppRadioLedComponent implements OnDestroy, OnInit {
         }
     }
 
+    private _handlePauseEvent(event: RadioEvent): void {
+        if ('pause' in event) {
+            this.paused = event.pause;
+        }
+    }
+
     private _subscribe(): void {
-        this._subcriptions.push(this.appRadioService.event.subscribe((event: RadioEvent) => this._handleCallEvent(event)));
+        this._subcriptions.push(this.appRadioService.event.subscribe((event: RadioEvent) =>  {
+            this._handleCallEvent(event);
+            this._handlePauseEvent(event);
+        }));
     }
 
     private _unsubscribe(subscriptions: Subscription[] = this._subcriptions): void {

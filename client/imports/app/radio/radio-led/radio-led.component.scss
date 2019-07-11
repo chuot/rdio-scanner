@@ -22,5 +22,16 @@ $color-on: rgb(100, 230, 50);
             background: $color-on;
             box-shadow: 0 0 6px 3px $color-on;
         }
+
+        &.paused {
+            animation: blink 2s step-end infinite;
+        }
+    }
+}
+
+@keyframes blink {
+    50% {
+        background: $color-off;
+        box-shadow: none;
     }
 }

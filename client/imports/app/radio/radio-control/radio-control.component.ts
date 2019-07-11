@@ -13,6 +13,7 @@ import { AppRadioService } from '../radio.service';
 })
 export class AppRadioControlComponent implements OnDestroy, OnInit {
     liveFeed: boolean = this.appRadioService.live;
+    paused = false;
     systemHold = false;
     talkgroupHold = false;
 
@@ -40,6 +41,10 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
         this.appRadioService.holdTalkgroup();
     }
 
+    pause(): void {
+        this.appRadioService.pause();
+    }
+
     replayLast(): void {
         this.appRadioService.replay();
     }
@@ -58,6 +63,12 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
 
     toggleLiveFeed(): void {
         this.appRadioService.liveFeed();
+    }
+
+    private _handlePauseEvent(event: RadioEvent): void {
+        if ('pause' in event) {
+            this.paused = event.pause;
+        }
     }
 
     private _handleRadioEvent(event: RadioEvent): void {
@@ -83,7 +94,10 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
 
     private _subscribe(): void {
         this._subscriptions.push(
-            this.appRadioService.event.subscribe((event: RadioEvent) => this._handleRadioEvent(event)),
+            this.appRadioService.event.subscribe((event: RadioEvent) => {
+                this._handlePauseEvent(event);
+                this._handleRadioEvent(event);
+            }),
         );
     }
 

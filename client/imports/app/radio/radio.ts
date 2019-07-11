@@ -30,6 +30,7 @@ export interface RadioEvent {
     call?: RadioCall | null;
     hold?: '-sys' | '+sys' | '-tg' | '+tg';
     live?: boolean;
+    pause?: boolean;
     queue?: number;
     search?: null;
     select?: null;

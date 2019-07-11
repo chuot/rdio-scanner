@@ -38,6 +38,8 @@ export class AppRadioService implements OnDestroy {
             talkgroup: null,
         };
 
+    private _paused = false;
+
     private _subscriptions: {
         liveFeed: Subscription[];
         systems: Subscription[];
@@ -169,6 +171,26 @@ export class AppRadioService implements OnDestroy {
         }
     }
 
+    pause(): void {
+        this._configureAudio();
+
+        this._paused = !this._paused;
+
+        this._emitPauseEvent();
+
+        if (this._paused) {
+            this._audio.pause();
+
+        } else {
+            if (this._call.current) {
+                this._audio.play();
+
+            } else {
+                this.skip();
+            }
+        }
+    }
+
     play(call?: RadioCall): void {
         this._configureAudio();
 
@@ -187,7 +209,7 @@ export class AppRadioService implements OnDestroy {
                 }
             }
 
-        } else if (!this._call.current && this._call.queue.length) {
+        } else if (!this._call.current && this._call.queue.length && !this._paused) {
             this._call.current = this._call.queue.shift();
 
             this._audio.src = this._call.current.audio;
@@ -209,10 +231,12 @@ export class AppRadioService implements OnDestroy {
     }
 
     replay(): void {
-        const call = this._call.current || this._call.previous;
+        if (!this._paused) {
+            const call = this._call.current || this._call.previous;
 
-        if (call) {
-            this.play(call);
+            if (call) {
+                this.play(call);
+            }
         }
     }
 
@@ -230,11 +254,7 @@ export class AppRadioService implements OnDestroy {
         if (nodelay) {
             this.play();
         } else {
-            setTimeout(() => {
-                if (this._call.queue.length) {
-                    this.play();
-                }
-            }, 1000);
+            setTimeout(() => this.play(), 1000);
         }
     }
 
@@ -319,7 +339,7 @@ export class AppRadioService implements OnDestroy {
             };
 
             const stopHandler = () => {
-                if (this._call.current && playing) {
+                if (this._call.current && playing && !this._paused) {
                     playing = false;
 
                     if (watchdog) {
@@ -364,6 +384,10 @@ export class AppRadioService implements OnDestroy {
 
     private _emitLiveEvent(): void {
         this.event.emit({ live: this.live });
+    }
+
+    private _emitPauseEvent(): void {
+        this.event.emit({ pause: this._paused });
     }
 
     private _emitQueueEvent(): void {
