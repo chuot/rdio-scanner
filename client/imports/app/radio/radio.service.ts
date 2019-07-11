@@ -186,7 +186,7 @@ export class AppRadioService implements OnDestroy {
                 this._audio.play();
 
             } else {
-                this.skip();
+                this.skip(true);
             }
         }
     }
