@@ -104,7 +104,6 @@ export class AppRadioService implements OnDestroy {
                 const tg = call.talkgroup;
                 this._avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this._avoids[sys][tg];
                 this._emitAvoidEvent(sys, tg);
-                this._writeAvoids();
             }
         }
 
