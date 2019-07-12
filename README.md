@@ -117,13 +117,13 @@ rdio-scanner.tar.gz
 $ tar -xvzf rdio-scanner.tar.gz --strip-components 1
 ...
 $ cd programs/server
-$ npm i
+$ npm i --production
 $ sudo systemctl start rdio-scanner.service
 ```
 
 ## Trunk Recorder upload
 
-### MP3 and JSON files
+### AUDIO and JSON files
 
 Refer to the examples folder for upload scripts, and so on. Be careful, the first argument of the upload scripts is the system number.
 
