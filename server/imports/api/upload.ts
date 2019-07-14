@@ -6,6 +6,15 @@ import { Calls } from '../../../imports/collections/calls';
 import { Call } from '../../../imports/models/call';
 
 if (Meteor.isServer) {
+    createApiHandler();
+    createPruneCallsTimer();
+}
+
+function base64Encode(value: any): string {
+    return Buffer.from(value, 'binary').toString('base64');
+}
+
+function createApiHandler(): void {
     WebApp.connectHandlers.use('/upload', (req: IncomingMessage, res: ServerResponse) => {
         if (req.method === 'POST') {
             const form = new Form();
@@ -66,8 +75,6 @@ if (Meteor.isServer) {
 
             form.parse(req);
 
-            pruneCalls();
-
         } else {
             res.writeHead(404);
             res.end();
@@ -75,12 +82,8 @@ if (Meteor.isServer) {
     });
 }
 
-function base64Encode(value: any): string {
-    return Buffer.from(value, 'binary').toString('base64');
-}
-
-function urlEncode(mimeType: string, value: any): string {
-    return `data:${mimeType};base64,${base64Encode(value)}`;
+function createPruneCallsTimer(): void {
+    setInterval(() => pruneCalls(), 90000);
 }
 
 function getPruneDays(): number | null {
@@ -101,4 +104,8 @@ function pruneCalls(): void {
             },
         });
     }
+}
+
+function urlEncode(mimeType: string, value: any): string {
+    return `data:${mimeType};base64,${base64Encode(value)}`;
 }

@@ -7,6 +7,10 @@ import { System } from '../../../imports/models/system';
 import { Talkgroup } from '../../../imports/models/talkgroup';
 
 if (Meteor.isServer) {
+    createApiHandler();
+}
+
+function createApiHandler(): void {
     WebApp.connectHandlers.use('/talkgroups', (req: IncomingMessage, res: ServerResponse) => {
         if (req.method === 'POST') {
             const form = new Form();
