@@ -193,26 +193,28 @@ export class AppRadioService implements OnDestroy {
     play(call?: RadioCall): void {
         this._configureAudio();
 
-        if (call) {
-            if (call.audio) {
-                if (this._call.current) {
-                    this._call.queue.unshift(call);
+        if (!this._paused) {
+            if (call) {
+                if (call.audio) {
+                    if (this._call.current) {
+                        this._call.queue.unshift(call);
 
-                    this.skip(true);
+                        this.skip(true);
 
-                } else {
-                    this._call.current = call;
+                    } else {
+                        this._call.current = call;
 
-                    this._audio.src = call.audio;
-                    this._audio.load();
+                        this._audio.src = call.audio;
+                        this._audio.load();
+                    }
                 }
+
+            } else if (!this._call.current && this._call.queue.length && !this._paused) {
+                this._call.current = this._call.queue.shift();
+
+                this._audio.src = this._call.current.audio;
+                this._audio.load();
             }
-
-        } else if (!this._call.current && this._call.queue.length && !this._paused) {
-            this._call.current = this._call.queue.shift();
-
-            this._audio.src = this._call.current.audio;
-            this._audio.load();
         }
     }
 
