@@ -83,7 +83,7 @@ function createApiHandler(): void {
 }
 
 function createPruneCallsTimer(): void {
-    setInterval(() => pruneCalls(), 90000);
+    Meteor.setInterval(() => pruneCalls(), 10000);
 }
 
 function getPruneDays(): number | null {
