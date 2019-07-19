@@ -18,7 +18,6 @@
     "@babel/runtime": "7.5.4",
     "bcrypt": "^3.0.6",
     "core-js": "3.1.4",
-    "hammerjs": "^2.0.8",
     "meteor-node-stubs": "0.4.1",
     "meteor-rxjs": "0.4.14",
     "multiparty": "^4.2.1",
