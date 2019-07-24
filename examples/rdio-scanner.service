@@ -18,7 +18,7 @@ Environment=PORT=3000
 Environment=HTTP_FORWARDED_COUNT=1
 Environment=ROOT_URL=http://radio
 Environment=MONGO_URL=mongodb://localhost:27017/rdio-scanner
-Environment=METEOR_SETTINGS={"apiKeys":["b29eb8b9-9bcd-4e6e-bb4f-d244ada12736"],"pruneDays":30}
+Environment=METEOR_SETTINGS='{"apiKeys":["b29eb8b9-9bcd-4e6e-bb4f-d244ada12736"],"pruneDays":10}'
 
 [Install]
 WantedBy=multi-user.target
