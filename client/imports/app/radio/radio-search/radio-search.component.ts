@@ -28,6 +28,9 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
     count = 0;
 
+    dateMax: Date;
+    dateMin: Date;
+
     form: FormGroup = this.ngFormBuilder.group({
         date: [],
         sort: [],
@@ -58,10 +61,12 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
     private _subscriptions: {
         calls: Subscription[];
+        dateLimits: Subscription[];
         form: Subscription[];
         radio: Subscription[];
     } = {
             calls: [],
+            dateLimits: [],
             form: [],
             radio: [],
         };
@@ -111,8 +116,10 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
             if (this._active) {
                 this._subscribeCalls();
+                this._subscribeDateLimits();
             } else {
                 this._unsubscribeCalls();
+                this._unsubscribeDateLimits();
             }
         }
     }
@@ -212,6 +219,40 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
             }));
     }
 
+    private _subscribeDateLimits(): void {
+        this._subscriptions.dateLimits.push(
+
+            MeteorObservable.subscribe('calls', {}, {
+                fields: { audio: 0 },
+                limit: 1,
+                sort: { startTime: -1 },
+            }).subscribe(() => {
+                const call = RadioCalls.findOne({}, {
+                    sort: { startTime: -1 },
+                });
+
+                if (call) {
+                    this.dateMax = call.startTime;
+                }
+            }),
+
+            MeteorObservable.subscribe('calls', {}, {
+                fields: { audio: 0 },
+                limit: 1,
+                sort: { startTime: 1 },
+            }).subscribe(() => {
+                const call = RadioCalls.findOne({}, {
+                    sort: { startTime: 1 },
+                });
+
+                if (call) {
+                    this.dateMin = call.startTime;
+                }
+            }),
+
+        );
+    }
+
     private _subscribeFormChanges(): void {
         const dateForm = this.form.get('date');
         const sortForm = this.form.get('sort');
@@ -268,6 +309,7 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
     private _unsubscribe(subscriptions: Subscription[] = [
         ...this._subscriptions.calls,
+        ...this._subscriptions.dateLimits,
         ...this._subscriptions.form,
         ...this._subscriptions.radio,
     ]): void {
@@ -278,5 +320,9 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
     private _unsubscribeCalls(): void {
         this._unsubscribe(this._subscriptions.calls);
+    }
+
+    private _unsubscribeDateLimits(): void {
+        this._unsubscribe(this._subscriptions.dateLimits);
     }
 }

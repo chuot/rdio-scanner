@@ -81,7 +81,7 @@
                 <mat-label>
                     Date
                 </mat-label>
-                <input formControlName="date" [matDatepicker]="date" matInput placeholder="Choose a date">
+                <input (focus)="date.open()" formControlName="date" [matDatepicker]="date" matInput [max]="dateMax" [min]="dateMin" placeholder="Choose a date">
                 <mat-datepicker-toggle matSuffix [for]="date"></mat-datepicker-toggle>
                 <mat-datepicker #date></mat-datepicker>
             </mat-form-field>
@@ -115,7 +115,7 @@
             </mat-form-field>
         </div>
         <div>
-            <button (click)="resetFilters()" mat-raised-button>
+            <button (click)="resetFilters()" mat-raised-button type="button">
                 Reset
             </button>
         </div>
