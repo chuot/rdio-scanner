@@ -17,6 +17,7 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
     currentError = 0;
     currentFrequency = 0;
     currentSpike = 0;
+    currentTime: Date;
     currentUnit = 0;
     history = new Array<RadioCall>(5);
     live = false;
@@ -40,16 +41,17 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
     }
 
     private _handleRadioCallEvent(event: RadioEvent): void {
-            if (
-                'call' in event &&
-                event.call !== null &&
-                event.call !== this.currentCall &&
-                !this.history.find((call) => call === event.call)
-            ) {
-                this.history.pop();
-                this.history.unshift(this.currentCall);
-                this.currentCall = event.call;
-            }
+        if (
+            'call' in event &&
+            event.call !== null &&
+            event.call !== this.currentCall &&
+            !this.history.find((call) => call === event.call)
+        ) {
+            this.history.pop();
+            this.history.unshift(this.currentCall);
+            this.currentCall = event.call;
+            this.currentTime = event.call.startTime;
+        }
     }
 
     private _handleRadioLiveEvent(event: RadioEvent): void {
@@ -75,12 +77,24 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
             const currentError = currentFreq && currentFreq.errorCount;
             const currentFrequency = (currentFreq && currentFreq.freq);
             const currentSpike = currentFreq && currentFreq.spikeCount;
+
             const currentUnit = currentSrc && currentSrc.src;
 
             this.currentError = typeof currentError === 'number' ? currentError : 0;
             this.currentFrequency = typeof currentFrequency === 'number' ? currentFrequency : this.currentCall.freq;
             this.currentSpike = typeof currentSpike === 'number' ? currentSpike : 0;
             this.currentUnit = typeof currentUnit === 'number' ? currentUnit : 0;
+
+            if (this.currentCall && this.currentCall.startTime instanceof Date) {
+                this.currentTime = new Date(
+                    this.currentCall.startTime.getFullYear(),
+                    this.currentCall.startTime.getMonth(),
+                    this.currentCall.startTime.getDate(),
+                    this.currentCall.startTime.getHours(),
+                    this.currentCall.startTime.getMinutes(),
+                    this.currentCall.startTime.getSeconds() + event.time
+                );
+            }
         }
     }
 

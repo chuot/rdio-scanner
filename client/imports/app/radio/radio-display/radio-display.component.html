@@ -19,7 +19,7 @@
         <span>{{ currentCall ? currentCall.talkgroupData?.alphaTag : 'Alpha Tag' }}</span>
     </div>
     <div>
-        <span>{{ currentCall ? (currentCall.startTime | date:'HH:mm') : '00:00' }}</span>
+        <span>{{ currentCall ? (currentTime | date:'HH:mm') : '00:00' }}</span>
     </div>
 </div>
 <div>
