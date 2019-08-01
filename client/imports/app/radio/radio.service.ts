@@ -363,6 +363,8 @@ export class AppRadioService implements OnDestroy {
 
             this._audio.onplay = () => startHandler();
 
+            this._audio.onstalled = () => this._audio.play();
+
             this._audio.ontimeupdate = () => progressHandler();
         }
     }
@@ -461,24 +463,28 @@ export class AppRadioService implements OnDestroy {
                 transform: (call: RadioCall) => this.transform(call),
             };
 
-            const avoids = Object.keys(this._avoids).map((sys: string) => +sys).reduce((sel: any, sys: number) => {
-                const tgs = Object.keys(this._avoids[sys]).map((tg: string) => +tg).filter((tg: number) => this._avoids[sys][tg]);
+            const avoids = Object.keys(this._avoids)
+                .map((sys: string) => +sys)
+                .reduce((sel: any, sys: number) => {
+                    const tgs = Object.keys(this._avoids[sys])
+                        .map((tg: string) => +tg)
+                        .filter((tg: number) => this._avoids[sys][tg]);
 
-                if (tgs.length) {
-                    sel.push({
-                        $and: [
-                            {
-                                system: { $ne: sys },
-                            },
-                            {
-                                talkgroup: { $nin: tgs },
-                            },
-                        ],
-                    });
-                }
+                    if (tgs.length) {
+                        sel.push({
+                            $and: [
+                                {
+                                    system: { $ne: sys },
+                                },
+                                {
+                                    talkgroup: { $nin: tgs },
+                                },
+                            ],
+                        });
+                    }
 
-                return sel;
-            }, []);
+                    return sel;
+                }, []);
 
             const selector = avoids.length ? { $or: avoids } : {};
 
