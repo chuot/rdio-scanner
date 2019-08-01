@@ -349,6 +349,7 @@ export class AppRadioService implements OnDestroy {
             const stopHandler = () => {
                 if (this._call.current && playing && !this._paused) {
                     playing = false;
+                    progress = 0;
 
                     if (watchdog) {
                         clearTimeout(watchdog);
