@@ -316,17 +316,24 @@ export class AppRadioService implements OnDestroy {
     private _configureAudio(): void {
         if (!this._audio) {
             let playing = false;
+            let progress = 0;
             let watchdog = null;
 
             const progressHandler = () => {
                 if (this._call.current && playing) {
-                    this._emitTimeEvent();
+                    // Hack for audio.currentTime that sometime returns unreliable values
+                    if (this._audio.currentTime - progress < 5) {
+                        this._emitTimeEvent();
+                    }
+
+                    progress = this._audio.currentTime;
 
                     if (watchdog) {
                         clearTimeout(watchdog);
                     }
 
-                    watchdog = setTimeout(() => stopHandler(), 2000);
+                    // Hack for IOS devices that don't always send stop events
+                    watchdog = setTimeout(() => stopHandler(), 1000);
                 }
             };
 
