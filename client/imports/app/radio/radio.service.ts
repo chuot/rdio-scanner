@@ -372,6 +372,7 @@ export class AppRadioService implements OnDestroy {
             this._audio.onplay = () => startHandler();
 
             this._audio.onstalled = () => this._audio.play();
+            this._audio.onsuspend = () => this._audio.play();
 
             this._audio.ontimeupdate = () => progressHandler();
         }
