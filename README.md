@@ -138,3 +138,9 @@ The main display information are obtained from the database. You must provision 
 ```bash
 $ ./upload.sh 2 /home/radio/trunk-recorder/SERAM.csv
 ```
+
+## Android and background apps
+
+For those of you who want to let Rdio Scanner run in the background, make sure Android does not kill your browser when it is in the background.
+
+For example, on my Samsung S9+, I need to configure Android to not kill Chrome when it is running in the background. Then everything works like a charm, unless another application wants to broadcast sound. But even in this case, Rdio Scanner will stop the current call if there is one and resume as soon as there is a new call to play in the queue.
