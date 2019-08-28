@@ -74,14 +74,6 @@
             }
         }
 
-        // td {
-
-        //     &:nth-child(2),
-        //     &:nth-child(3) {
-        //         text-transform: uppercase;
-        //     }
-        // }
-
         th {
             color: rgba(0, 0, 0, .4);
             font-weight: 400;
@@ -100,7 +92,6 @@
     span {
         overflow: hidden;
         text-overflow: ellipsis;
-        user-select: none;
         white-space: nowrap;
     }
 }
