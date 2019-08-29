@@ -243,9 +243,7 @@ export class AppRadioService implements OnDestroy {
                         EVENTS.forEach((event) => document.body.addEventListener(event, resume));
                     }
 
-                    this.emitTimeEvent();
-
-                    this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
+                    this.startAudioTimer();
 
                 }, (error: Error) => {
                     this.skip(true);
@@ -272,6 +270,8 @@ export class AppRadioService implements OnDestroy {
 
     replay(): void {
         if (!this.paused) {
+            this.stopAudioTimer();
+
             this.play(this.call.current || this.call.previous);
         }
     }
@@ -296,10 +296,7 @@ export class AppRadioService implements OnDestroy {
     }
 
     stop(): void {
-        if (this.audioTimer !== null) {
-            clearInterval(this.audioTimer);
-            this.audioTimer = null;
-        }
+        this.stopAudioTimer();
 
         if (this.audioSource) {
             this.audioSource.disconnect();
@@ -462,6 +459,21 @@ export class AppRadioService implements OnDestroy {
             } catch (e) {
                 return null;
             }
+        }
+    }
+
+    private startAudioTimer(): void {
+        if (this.audioTimer === null) {
+            this.emitTimeEvent();
+
+            this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
+        }
+    }
+
+    private stopAudioTimer(): void {
+        if (this.audioTimer !== null) {
+            clearInterval(this.audioTimer);
+            this.audioTimer = null;
         }
     }
 
