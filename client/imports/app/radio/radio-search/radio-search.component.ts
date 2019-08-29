@@ -44,6 +44,10 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
     readonly columns = ['control', 'date', 'time', 'system', 'alpha', 'description'];
 
+    get actualPageSize() {
+        return this.pageSize.value;
+    }
+
     @ViewChild(MatPaginator, { static: true }) private matPaginator: MatPaginator;
     @ViewChild(MatTable, { static: true }) private matTable: MatTable<RadioCall[]>;
 

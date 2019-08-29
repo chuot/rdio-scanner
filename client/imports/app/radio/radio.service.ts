@@ -248,9 +248,9 @@ export class AppRadioService implements OnDestroy {
                     this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
 
                 }, (error: Error) => {
-                    throw (error);
-
                     this.skip(true);
+
+                    throw (error);
                 });
             }
         }

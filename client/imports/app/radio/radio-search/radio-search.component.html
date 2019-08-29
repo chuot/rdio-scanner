@@ -58,7 +58,7 @@
             <mat-header-row *matHeaderRowDef="columns"></mat-header-row>
             <mat-row *matRowDef="let call; columns: columns"></mat-row>
         </mat-table>
-        <mat-paginator [length]="count" [hidePageSize]="true" (page)="onPage($event)" [pageSize]="pageSize"
+        <mat-paginator [length]="count" [hidePageSize]="true" (page)="onPage($event)" [pageSize]="actualPageSize"
             [showFirstLastButtons]="true">
         </mat-paginator>
     </div>
