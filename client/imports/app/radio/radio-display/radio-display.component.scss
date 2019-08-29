@@ -22,13 +22,6 @@
             margin-bottom: 12px;
         }
 
-        // &:nth-child(2),
-        // &:nth-child(3) {
-        //     >div:first-child {
-        //         text-transform: uppercase;
-        //     }
-        // }
-
         &:nth-child(4) {
             font-size: 24px;
             height: 32px;
@@ -85,7 +78,7 @@
         }
 
         tbody>tr {
-            border-top: 1px dotted rgba(0, 0, 0, .4);
+            border-top: 1px solid rgba(0, 0, 0, .2);
         }
     }
 
