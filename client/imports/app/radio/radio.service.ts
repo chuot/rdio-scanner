@@ -243,7 +243,7 @@ export class AppRadioService implements OnDestroy {
                         EVENTS.forEach((event) => document.body.addEventListener(event, resume));
                     }
 
-                    this.startAudioTimer();
+                    this.resetAudioTimer();
 
                 }, (error: Error) => {
                     this.skip(true);
@@ -460,6 +460,11 @@ export class AppRadioService implements OnDestroy {
                 return null;
             }
         }
+    }
+
+    private resetAudioTimer(): void {
+        this.stopAudioTimer();
+        this.startAudioTimer();
     }
 
     private startAudioTimer(): void {
