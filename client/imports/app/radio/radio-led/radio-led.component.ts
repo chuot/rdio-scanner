@@ -15,38 +15,38 @@ export class AppRadioLedComponent implements OnDestroy, OnInit {
     paused = false;
     rx = false;
 
-    private _subcriptions: Subscription[] = [];
+    private subcriptions: Subscription[] = [];
 
-    constructor(public appRadioService: AppRadioService) { }
+    constructor(private appRadioService: AppRadioService) { }
 
     ngOnInit(): void {
-        this._subscribe();
+        this.subscribe();
     }
 
     ngOnDestroy(): void {
-        this._unsubscribe();
+        this.unsubscribe();
     }
 
-    private _handleCallEvent(event: RadioEvent): void {
+    private handleCallEvent(event: RadioEvent): void {
         if ('call' in event) {
             this.rx = event.call === null ? false : true;
         }
     }
 
-    private _handlePauseEvent(event: RadioEvent): void {
+    private handlePauseEvent(event: RadioEvent): void {
         if ('pause' in event) {
             this.paused = event.pause;
         }
     }
 
-    private _subscribe(): void {
-        this._subcriptions.push(this.appRadioService.event.subscribe((event: RadioEvent) =>  {
-            this._handleCallEvent(event);
-            this._handlePauseEvent(event);
+    private subscribe(): void {
+        this.subcriptions.push(this.appRadioService.event.subscribe((event: RadioEvent) =>  {
+            this.handleCallEvent(event);
+            this.handlePauseEvent(event);
         }));
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = this._subcriptions): void {
+    private unsubscribe(subscriptions: Subscription[] = this.subcriptions): void {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }

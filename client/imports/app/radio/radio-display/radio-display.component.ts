@@ -23,24 +23,24 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
     live = false;
     queueLength = 0;
 
-    private _clockInterval: NodeJS.Timeout;
-    private _subscriptions: Subscription[] = [];
+    private clockInterval: NodeJS.Timeout;
+    private subscriptions: Subscription[] = [];
 
-    constructor(public appRadioService: AppRadioService) { }
+    constructor(private appRadioService: AppRadioService) { }
 
     ngOnInit(): void {
-        this._clockInterval = setInterval(() => this.clock = new Date(), 1000);
+        this.clockInterval = setInterval(() => this.clock = new Date(), 1000);
 
-        this._subscribe();
+        this.subscribe();
     }
 
     ngOnDestroy(): void {
-        this._unsubscribe();
+        this.unsubscribe();
 
-        clearInterval(this._clockInterval);
+        clearInterval(this.clockInterval);
     }
 
-    private _handleRadioCallEvent(event: RadioEvent): void {
+    private handleRadioCallEvent(event: RadioEvent): void {
         if (
             'call' in event &&
             event.call !== null &&
@@ -54,19 +54,19 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
         }
     }
 
-    private _handleRadioLiveEvent(event: RadioEvent): void {
+    private handleRadioLiveEvent(event: RadioEvent): void {
         if ('live' in event) {
             this.live = event.live;
         }
     }
 
-    private _handleRadioQueueEvent(event: RadioEvent): void {
+    private handleRadioQueueEvent(event: RadioEvent): void {
         if ('queue' in event) {
             this.queueLength = event.queue;
         }
     }
 
-    private _handleRadioTimeEvent(event: RadioEvent): void {
+    private handleRadioTimeEvent(event: RadioEvent): void {
         if ('time' in event) {
             const currentFreq = this.currentCall.freqList
                 .reduce((cur: RadioCallFreq, freq: RadioCallFreq) => freq.pos < event.time ? freq : cur, null);
@@ -98,18 +98,18 @@ export class AppRadioDisplayComponent implements OnDestroy, OnInit {
         }
     }
 
-    private _subscribe(): void {
-        this._subscriptions.push(
+    private subscribe(): void {
+        this.subscriptions.push(
             this.appRadioService.event.subscribe((event: RadioEvent) => {
-                this._handleRadioCallEvent(event);
-                this._handleRadioLiveEvent(event);
-                this._handleRadioQueueEvent(event);
-                this._handleRadioTimeEvent(event);
+                this.handleRadioCallEvent(event);
+                this.handleRadioLiveEvent(event);
+                this.handleRadioQueueEvent(event);
+                this.handleRadioTimeEvent(event);
             }),
         );
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = this._subscriptions): void {
+    private unsubscribe(subscriptions: Subscription[] = this.subscriptions): void {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }

@@ -17,16 +17,16 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
     systemHold = false;
     talkgroupHold = false;
 
-    private _subscriptions: Subscription[] = [];
+    private subscriptions: Subscription[] = [];
 
-    constructor(public appRadioService: AppRadioService) { }
+    constructor(private appRadioService: AppRadioService) { }
 
     ngOnInit(): void {
-        this._subscribe();
+        this.subscribe();
     }
 
     ngOnDestroy(): void {
-        this._unsubscribe();
+        this.unsubscribe();
     }
 
     avoid(): void {
@@ -65,13 +65,13 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
         this.appRadioService.liveFeed();
     }
 
-    private _handlePauseEvent(event: RadioEvent): void {
+    private handlePauseEvent(event: RadioEvent): void {
         if ('pause' in event) {
             this.paused = event.pause;
         }
     }
 
-    private _handleRadioEvent(event: RadioEvent): void {
+    private handleRadioEvent(event: RadioEvent): void {
         if ('hold' in event) {
             switch (event.hold) {
                 case '-sys':
@@ -92,16 +92,16 @@ export class AppRadioControlComponent implements OnDestroy, OnInit {
         }
     }
 
-    private _subscribe(): void {
-        this._subscriptions.push(
+    private subscribe(): void {
+        this.subscriptions.push(
             this.appRadioService.event.subscribe((event: RadioEvent) => {
-                this._handlePauseEvent(event);
-                this._handleRadioEvent(event);
+                this.handlePauseEvent(event);
+                this.handleRadioEvent(event);
             }),
         );
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = this._subscriptions): void {
+    private unsubscribe(subscriptions: Subscription[] = this.subscriptions): void {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }

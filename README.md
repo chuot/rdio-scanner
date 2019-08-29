@@ -1,4 +1,4 @@
-# Rdio Scanner - v1.0.0
+# Rdio Scanner - v1.5.0
 
 Rdio Scanner uses the files created by [Trunk Recorder](https://github.com/robotastic/trunk-recorder) and offers them in a nice web based interface, inspired by my own personnal use of police radio scanners.
 

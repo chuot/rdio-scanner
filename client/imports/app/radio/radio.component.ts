@@ -15,28 +15,28 @@ export class AppRadioComponent implements OnDestroy, OnInit {
     searchPanelOpened = false;
     selectPanelOpened = false;
 
-    private _subscriptions: Subscription[] = [];
+    private subscriptions: Subscription[] = [];
 
-    constructor(public appRadioService: AppRadioService) { }
+    constructor(private appRadioService: AppRadioService) { }
 
     ngOnInit(): void {
-        this._subscribe();
+        this.subscribe();
     }
 
     ngOnDestroy(): void {
-        this._unsubscribe();
+        this.unsubscribe();
     }
 
     @HostListener('window:beforeunload', ['$event'])
-    private _exitNotification(event: BeforeUnloadEvent): void {
+    private exitNotification(event: BeforeUnloadEvent): void {
         if (this.appRadioService.live) {
             event.preventDefault();
             event.returnValue = false;
         }
     }
 
-    private _subscribe(): void {
-        this._subscriptions.push(
+    private subscribe(): void {
+        this.subscriptions.push(
             this.appRadioService.event.subscribe((event: RadioEvent) => {
                 if ('search' in event) {
                     this.searchPanelOpened = !this.searchPanelOpened;
@@ -50,7 +50,7 @@ export class AppRadioComponent implements OnDestroy, OnInit {
         );
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = this._subscriptions): void {
+    private unsubscribe(subscriptions: Subscription[] = this.subscriptions): void {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }

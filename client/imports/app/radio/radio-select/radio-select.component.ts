@@ -16,18 +16,18 @@ export class AppRadioSelectComponent implements OnDestroy, OnInit {
 
     systems: RadioSystem[] = [];
 
-    private _subscriptions: Subscription[] = [];
+    private subscriptions: Subscription[] = [];
 
-    constructor(public appRadioService: AppRadioService) {
+    constructor(private appRadioService: AppRadioService) {
         this.avoids = this.appRadioService.getAvoids();
     }
 
     ngOnInit(): void {
-        this._subscribe();
+        this.subscribe();
     }
 
     ngOnDestroy(): void {
-        this._unsubscribe();
+        this.unsubscribe();
     }
 
     avoid(system: RadioSystem | null, talkgroup: RadioTalkgroup | null, status: boolean): void {
@@ -42,34 +42,34 @@ export class AppRadioSelectComponent implements OnDestroy, OnInit {
         this.appRadioService.select();
     }
 
-    private _handleAvoidEvent(event: RadioEvent): void {
+    private handleAvoidEvent(event: RadioEvent): void {
         if ('avoid' in event) {
             this.avoids[event.avoid.sys][event.avoid.tg] = event.avoid.status;
         }
     }
 
-    private _handleAvoidsEvent(event: RadioEvent): void {
+    private handleAvoidsEvent(event: RadioEvent): void {
         if ('avoids' in event) {
             this.avoids = event.avoids;
         }
     }
 
-    private _handleSystemsEvent(event: RadioEvent): void {
+    private handleSystemsEvent(event: RadioEvent): void {
         if ('systems' in event) {
             this.systems.splice(0, this.systems.length, ...event.systems);
         }
     }
 
-    private _subscribe(): void {
-        this._subscriptions.push(
+    private subscribe(): void {
+        this.subscriptions.push(
             this.appRadioService.event.subscribe((event: RadioEvent) => {
-                this._handleAvoidEvent(event);
-                this._handleSystemsEvent(event);
+                this.handleAvoidEvent(event);
+                this.handleSystemsEvent(event);
             })
         );
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = this._subscriptions) {
+    private unsubscribe(subscriptions: Subscription[] = this.subscriptions) {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }

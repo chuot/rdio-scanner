@@ -44,22 +44,18 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
     readonly columns = ['control', 'date', 'time', 'system', 'alpha', 'description'];
 
-    get pageSize() {
-        return this._pageSize.value;
-    }
+    @ViewChild(MatPaginator, { static: true }) private matPaginator: MatPaginator;
+    @ViewChild(MatTable, { static: true }) private matTable: MatTable<RadioCall[]>;
 
-    @ViewChild(MatPaginator, { static: true }) private _matPaginator: MatPaginator;
-    @ViewChild(MatTable, { static: true }) private _matTable: MatTable<RadioCall[]>;
+    private active = false;
+    private filterDate: BehaviorSubject<Date> = new BehaviorSubject<Date>(DEFAULT_FILTERS.date);
+    private filterSystem: BehaviorSubject<number> = new BehaviorSubject<number>(DEFAULT_FILTERS.system);
+    private filterTalkgroup: BehaviorSubject<number> = new BehaviorSubject<number>(DEFAULT_FILTERS.talkgroup);
+    private pageCurrent: BehaviorSubject<number> = new BehaviorSubject<number>(1);
+    private pageSize: BehaviorSubject<number> = new BehaviorSubject<number>(10);
+    private pageSort: BehaviorSubject<number> = new BehaviorSubject<number>(DEFAULT_FILTERS.sort);
 
-    private _active = false;
-    private _filterDate: BehaviorSubject<Date> = new BehaviorSubject<Date>(DEFAULT_FILTERS.date);
-    private _filterSystem: BehaviorSubject<number> = new BehaviorSubject<number>(DEFAULT_FILTERS.system);
-    private _filterTalkgroup: BehaviorSubject<number> = new BehaviorSubject<number>(DEFAULT_FILTERS.talkgroup);
-    private _pageCurrent: BehaviorSubject<number> = new BehaviorSubject<number>(1);
-    private _pageSize: BehaviorSubject<number> = new BehaviorSubject<number>(10);
-    private _pageSort: BehaviorSubject<number> = new BehaviorSubject<number>(DEFAULT_FILTERS.sort);
-
-    private _subscriptions: {
+    private subscriptions: {
         calls: Subscription[];
         dateLimits: Subscription[];
         form: Subscription[];
@@ -80,12 +76,12 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
     }
 
     ngOnInit(): void {
-        this._subscribeFormChanges();
-        this._subscribeRadioEvent();
+        this.subscribeFormChanges();
+        this.subscribeRadioEvent();
     }
 
     ngOnDestroy(): void {
-        this._unsubscribe();
+        this.unsubscribe();
     }
 
     close(): void {
@@ -93,7 +89,7 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
     }
 
     onPage(event: PageEvent): void {
-        this._pageCurrent.next(event.pageIndex + 1);
+        this.pageCurrent.next(event.pageIndex + 1);
     }
 
     play(call: RadioCall): void {
@@ -101,7 +97,7 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
             if (call.audio) {
                 this.appRadioService.play(call);
             } else {
-                this._loadAudio(call).then(() => this.appRadioService.play(call));
+                this.loadAudio(call).then(() => this.appRadioService.play(call));
             }
         }
     }
@@ -110,27 +106,27 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
         this.form.reset(DEFAULT_FILTERS);
     }
 
-    private _handleSearchEvent(event: RadioEvent): void {
+    private handleSearchEvent(event: RadioEvent): void {
         if ('search' in event) {
-            this._active = !this._active;
+            this.active = !this.active;
 
-            if (this._active) {
-                this._subscribeCalls();
-                this._subscribeDateLimits();
+            if (this.active) {
+                this.subscribeCalls();
+                this.subscribeDateLimits();
             } else {
-                this._unsubscribeCalls();
-                this._unsubscribeDateLimits();
+                this.unsubscribeCalls();
+                this.unsubscribeDateLimits();
             }
         }
     }
 
-    private _handleSystemsEvent(event: RadioEvent): void {
+    private handleSystemsEvent(event: RadioEvent): void {
         if ('systems' in event) {
             this.systems.splice(0, this.systems.length, ...event.systems);
         }
     }
 
-    private _loadAudio(call: RadioCall): Promise<RadioCall> {
+    private loadAudio(call: RadioCall): Promise<RadioCall> {
         return new Promise((resolve) => {
             if (call) {
                 MeteorObservable.call('call-audio', call._id).subscribe((audio: string) => {
@@ -143,20 +139,20 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
         });
     }
 
-    private _subscribeCalls(): void {
+    private subscribeCalls(): void {
         const subscriptions: Subscription[] = [];
 
-        this._subscriptions.calls.push(combineLatest(
-            this._filterDate,
-            this._filterSystem,
-            this._filterTalkgroup,
-            this._pageCurrent,
-            this._pageSize,
-            this._pageSort,
+        this.subscriptions.calls.push(combineLatest(
+            this.filterDate,
+            this.filterSystem,
+            this.filterTalkgroup,
+            this.pageCurrent,
+            this.pageSize,
+            this.pageSort,
         )
             .pipe(
                 debounceTime(100),
-                finalize(() => this._unsubscribe(subscriptions)),
+                finalize(() => this.unsubscribe(subscriptions)),
             )
             .subscribe(([
                 date,
@@ -191,7 +187,7 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
                     selector.talkgroup = talkgroup;
                 }
 
-                this._unsubscribe(subscriptions);
+                this.unsubscribe(subscriptions);
 
                 subscriptions.push(MeteorObservable.subscribe('calls', selector, {
                     fields: {
@@ -211,7 +207,7 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
                         .subscribe((calls: RadioCall[]) => {
                             this.calls.splice(0, this.calls.length, ...calls);
 
-                            this._matTable.renderRows();
+                            this.matTable.renderRows();
 
                             MeteorObservable.call('calls-count', selector).subscribe((count: number) => this.count = count);
                         }));
@@ -219,8 +215,8 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
             }));
     }
 
-    private _subscribeDateLimits(): void {
-        this._subscriptions.dateLimits.push(
+    private subscribeDateLimits(): void {
+        this.subscriptions.dateLimits.push(
 
             MeteorObservable.subscribe('calls', {}, {
                 fields: { audio: 0 },
@@ -253,17 +249,17 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
         );
     }
 
-    private _subscribeFormChanges(): void {
+    private subscribeFormChanges(): void {
         const dateForm = this.form.get('date');
         const sortForm = this.form.get('sort');
         const systemForm = this.form.get('system');
         const talkgroupForm = this.form.get('talkgroup');
 
-        this._subscriptions.form.push(dateForm.valueChanges.subscribe((date: Date) => {
-            this._filterDate.next(date);
+        this.subscriptions.form.push(dateForm.valueChanges.subscribe((date: Date) => {
+            this.filterDate.next(date);
         }));
 
-        this._subscriptions.form.push(systemForm.valueChanges.subscribe((sys: number) => {
+        this.subscriptions.form.push(systemForm.valueChanges.subscribe((sys: number) => {
             if (sys === -1) {
                 this.talkgroups.splice(0, this.talkgroups.length);
 
@@ -285,44 +281,44 @@ export class AppRadioSearchComponent implements OnDestroy, OnInit {
 
             talkgroupForm.reset(-1);
 
-            this._filterSystem.next(sys);
-            this._matPaginator.firstPage();
+            this.filterSystem.next(sys);
+            this.matPaginator.firstPage();
         }));
 
-        this._subscriptions.form.push(talkgroupForm.valueChanges.subscribe((tg: number) => {
-            this._filterTalkgroup.next(tg);
-            this._matPaginator.firstPage();
+        this.subscriptions.form.push(talkgroupForm.valueChanges.subscribe((tg: number) => {
+            this.filterTalkgroup.next(tg);
+            this.matPaginator.firstPage();
         }));
 
-        this._subscriptions.form.push(sortForm.valueChanges.subscribe((sort: number) => {
-            this._pageSort.next(sort);
-            this._matPaginator.firstPage();
-        }));
-    }
-
-    private _subscribeRadioEvent(): void {
-        this._subscriptions.radio.push(this.appRadioService.event.subscribe((event: RadioEvent) => {
-            this._handleSearchEvent(event);
-            this._handleSystemsEvent(event);
+        this.subscriptions.form.push(sortForm.valueChanges.subscribe((sort: number) => {
+            this.pageSort.next(sort);
+            this.matPaginator.firstPage();
         }));
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = [
-        ...this._subscriptions.calls,
-        ...this._subscriptions.dateLimits,
-        ...this._subscriptions.form,
-        ...this._subscriptions.radio,
+    private subscribeRadioEvent(): void {
+        this.subscriptions.radio.push(this.appRadioService.event.subscribe((event: RadioEvent) => {
+            this.handleSearchEvent(event);
+            this.handleSystemsEvent(event);
+        }));
+    }
+
+    private unsubscribe(subscriptions: Subscription[] = [
+        ...this.subscriptions.calls,
+        ...this.subscriptions.dateLimits,
+        ...this.subscriptions.form,
+        ...this.subscriptions.radio,
     ]): void {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }
     }
 
-    private _unsubscribeCalls(): void {
-        this._unsubscribe(this._subscriptions.calls);
+    private unsubscribeCalls(): void {
+        this.unsubscribe(this.subscriptions.calls);
     }
 
-    private _unsubscribeDateLimits(): void {
-        this._unsubscribe(this._subscriptions.dateLimits);
+    private unsubscribeDateLimits(): void {
+        this.unsubscribe(this.subscriptions.dateLimits);
     }
 }

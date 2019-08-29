@@ -4,6 +4,10 @@ import { Subscription } from 'rxjs';
 import { debounceTime, filter, skip } from 'rxjs/operators';
 import { RadioAvoids, RadioCall, RadioCalls, RadioEvent, RadioSystem, RadioSystems, RadioTalkgroup } from './radio';
 
+declare var webkitAudioContext: any;
+
+const EVENTS = ['mousedown', 'touchdown'];
+
 const LOCAL_STORAGE_KEY = {
     avoids: 'radio-avoids',
 };
@@ -13,14 +17,20 @@ export class AppRadioService implements OnDestroy {
     readonly event = new EventEmitter<RadioEvent>();
 
     get live() {
-        return !!this._subscriptions.liveFeed.length;
+        return !!this.subscriptions.liveFeed.length;
     }
 
-    private _audio: HTMLAudioElement;
+    private audioContext: AudioContext;
 
-    private _avoids: RadioAvoids = {};
+    private audioSource: AudioBufferSourceNode = null;
 
-    private _call: {
+    private audioStartTime = NaN;
+
+    private audioTimer: any = null;
+
+    private avoids: RadioAvoids = {};
+
+    private call: {
         current: RadioCall | null;
         previous: RadioCall | null;
         queue: RadioCall[];
@@ -30,7 +40,7 @@ export class AppRadioService implements OnDestroy {
             queue: [],
         };
 
-    private _hold: {
+    private hold: {
         system: RadioSystem | number | null,
         talkgroup: RadioTalkgroup | number | null,
     } = {
@@ -38,9 +48,9 @@ export class AppRadioService implements OnDestroy {
             talkgroup: null,
         };
 
-    private _paused = false;
+    private paused = false;
 
-    private _subscriptions: {
+    private subscriptions: {
         liveFeed: Subscription[];
         systems: Subscription[];
     } = {
@@ -48,18 +58,20 @@ export class AppRadioService implements OnDestroy {
             systems: [],
         };
 
-    private _systems: RadioSystem[] = [];
+    private systems: RadioSystem[] = [];
 
     constructor() {
-        this._readAvoids();
+        this.bootstrap();
 
-        this._subscribeSystems();
+        this.readAvoids();
+
+        this.subscribeSystems();
     }
 
     ngOnDestroy(): void {
         this.event.complete();
 
-        this._unsubscribe();
+        this.unsubscribe();
     }
 
     avoid(parms: {
@@ -70,183 +82,206 @@ export class AppRadioService implements OnDestroy {
         status?: boolean
     } = {}): void {
         if (typeof parms.all === 'boolean') {
-            Object.keys(this._avoids).map((sys: string) => +sys).forEach((sys: number) => {
-                Object.keys(this._avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
-                    this._avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this._avoids[sys][tg];
-                    this._emitAvoidEvent(sys, tg);
+            Object.keys(this.avoids).map((sys: string) => +sys).forEach((sys: number) => {
+                Object.keys(this.avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
+                    this.avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this.avoids[sys][tg];
+                    this.emitAvoidEvent(sys, tg);
                 });
             });
 
         } else if (parms.call) {
             const sys = parms.call.system;
             const tg = parms.call.talkgroup;
-            this._avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this._avoids[sys][tg];
-            this._emitAvoidEvent(sys, tg);
+            this.avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this.avoids[sys][tg];
+            this.emitAvoidEvent(sys, tg);
 
         } else if (parms.system && parms.talkgroup) {
             const sys = parms.system.system;
             const tg = parms.talkgroup.dec;
-            this._avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this._avoids[sys][tg];
-            this._emitAvoidEvent(sys, tg);
+            this.avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this.avoids[sys][tg];
+            this.emitAvoidEvent(sys, tg);
 
         } else if (parms.system && !parms.talkgroup) {
             const sys = parms.system.system;
-            Object.keys(this._avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
-                this._avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this._avoids[sys][tg];
-                this._emitAvoidEvent(sys, tg);
+            Object.keys(this.avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
+                this.avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this.avoids[sys][tg];
+                this.emitAvoidEvent(sys, tg);
             });
 
         } else {
-            const call = this._call.current || this._call.previous;
+            const call = this.call.current || this.call.previous;
 
             if (call) {
                 const sys = call.system;
                 const tg = call.talkgroup;
-                this._avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this._avoids[sys][tg];
-                this._emitAvoidEvent(sys, tg);
+                this.avoids[sys][tg] = typeof parms.status === 'boolean' ? parms.status : !this.avoids[sys][tg];
+                this.emitAvoidEvent(sys, tg);
             }
         }
 
-        this._cleanQueue();
+        this.cleanQueue();
 
-        if (this._call.current && this._callFiltered()) {
+        if (this.call.current && this.callFiltered()) {
             this.skip();
         }
 
         if (this.live) {
-            this._unsubscribeLiveFeed();
-            this._subscribeLiveFeed();
+            this.unsubscribeLiveFeed();
+            this.subscribeLiveFeed();
         }
 
-        this._writeAvoids();
+        this.writeAvoids();
     }
 
     getAvoids(): RadioAvoids {
-        return this._avoids;
+        return this.avoids;
     }
 
     holdSystem(): void {
-        const call = this._call.current || this._call.previous;
+        const call = this.call.current || this.call.previous;
 
         if (call) {
-            this._hold.system = this._hold.system === null ? call.systemData || call.system : null;
+            this.hold.system = this.hold.system === null ? call.systemData || call.system : null;
 
-            this._emitHoldEvent(this._hold.system === null ? '-sys' : '+sys');
+            this.emitHoldEvent(this.hold.system === null ? '-sys' : '+sys');
 
-            if (this._hold.system !== null) {
-                this._cleanQueue();
+            if (this.hold.system !== null) {
+                this.cleanQueue();
             }
         }
     }
 
     holdTalkgroup(): void {
-        const call = this._call.current || this._call.previous;
+        const call = this.call.current || this.call.previous;
 
         if (call) {
-            this._hold.talkgroup = this._hold.talkgroup === null ? call.talkgroupData || call.talkgroup : null;
+            this.hold.talkgroup = this.hold.talkgroup === null ? call.talkgroupData || call.talkgroup : null;
 
-            this._emitHoldEvent(this._hold.talkgroup === null ? '-tg' : '+tg');
+            this.emitHoldEvent(this.hold.talkgroup === null ? '-tg' : '+tg');
 
-            if (this._hold.talkgroup !== null) {
-                this._cleanQueue();
+            if (this.hold.talkgroup !== null) {
+                this.cleanQueue();
             }
         }
     }
 
     liveFeed(status = !this.live): void {
-        this._configureAudio();
-
         if (status) {
-            this._subscribeLiveFeed();
+            this.subscribeLiveFeed();
 
         } else {
-            this._unsubscribeLiveFeed();
+            this.unsubscribeLiveFeed();
 
-            this._emitLiveEvent();
+            this.emitLiveEvent();
 
-            this._flushQueue();
+            this.flushQueue();
 
             this.stop();
         }
     }
 
     pause(): void {
-        this._configureAudio();
+        this.paused = !this.paused;
 
-        this._paused = !this._paused;
+        this.emitPauseEvent();
 
-        this._emitPauseEvent();
-
-        if (this._paused) {
-            this._audio.pause();
-
-        } else {
-            if (this._call.current) {
-                this._audio.play();
-
+        if (this.audioContext) {
+            if (this.paused) {
+                this.audioContext.suspend();
             } else {
-                this.skip(true);
+                this.audioContext.resume();
+
+                this.play();
             }
         }
     }
 
     play(call?: RadioCall): void {
-        this._configureAudio();
+        if (this.audioContext && !this.paused) {
+            if (!call && !this.call.current && this.call.queue.length) {
+                call = this.call.queue.shift();
+                this.emitQueueEvent();
+            }
 
-        if (!this._paused) {
-            if (call) {
-                if (call.audio) {
-                    if (this._call.current) {
-                        this._call.queue.unshift(call);
+            if (call && call.audio) {
+                this.call.previous = this.call.current;
+                this.call.current = call;
 
-                        this.skip(true);
+                this.emitCallEvent();
 
-                    } else {
-                        this._call.current = call;
+                const audio = /^data:[^;]+;base64,/.test(call.audio) ? atob(call.audio.replace(/^[^,]*,/, '')) : call.audio;
+                const arrayBuffer = new ArrayBuffer(audio.length);
+                const arrayBufferView = new Uint8Array(arrayBuffer);
 
-                        this._audio.src = call.audio;
-                        this._audio.load();
-                    }
+                for (let i = 0; i < audio.length; i++) {
+                    arrayBufferView[i] = audio.charCodeAt(i);
                 }
 
-            } else if (!this._call.current && this._call.queue.length && !this._paused) {
-                this._call.current = this._call.queue.shift();
+                this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+                    if (this.audioSource) {
+                        this.audioSource.disconnect();
+                    }
 
-                this._audio.src = this._call.current.audio;
-                this._audio.load();
+                    this.audioSource = this.audioContext.createBufferSource();
+
+                    this.audioSource.buffer = buffer;
+                    this.audioSource.connect(this.audioContext.destination);
+                    this.audioSource.onended = () => this.skip();
+                    this.audioSource.start();
+
+                    if (this.audioContext.state === 'suspended') {
+                        const resume = () => {
+                            this.audioContext.resume();
+
+                            setTimeout(() => {
+                                if (this.audioContext.state === 'running') {
+                                    EVENTS.forEach((event) => document.body.removeEventListener(event, resume));
+                                }
+                            }, 0);
+                        };
+
+                        EVENTS.forEach((event) => document.body.addEventListener(event, resume));
+                    }
+
+                    this.emitTimeEvent();
+
+                    this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
+
+                }, (error: Error) => {
+                    throw (error);
+
+                    this.skip(true);
+                });
             }
         }
     }
 
-    queue(call: RadioCall | RadioCall[], bypass = false): void {
+
+    queue(call: RadioCall | RadioCall[]): void {
         if (Array.isArray(call)) {
             call.forEach((_call: RadioCall) => this.queue(_call));
 
-        } else if (bypass || !this._callFiltered(call)) {
-            this._call.queue.push(call);
+        } else if (!this.callFiltered(call)) {
+            this.call.queue.push(call);
 
-            this._emitQueueEvent();
+            this.emitQueueEvent();
 
             this.play();
         }
     }
 
     replay(): void {
-        if (!this._paused) {
-            const call = this._call.current || this._call.previous;
-
-            if (call) {
-                this.play(call);
-            }
+        if (!this.paused) {
+            this.play(this.call.current || this.call.previous);
         }
     }
 
     search(): void {
-        this._emitSearchEvent();
+        this.emitSearchEvent();
     }
 
     select(): void {
-        this._emitSelectEvent();
+        this.emitSelectEvent();
     }
 
     skip(nodelay = false): void {
@@ -254,205 +289,173 @@ export class AppRadioService implements OnDestroy {
 
         if (nodelay) {
             this.play();
+
         } else {
             setTimeout(() => this.play(), 1000);
         }
     }
 
     stop(): void {
-        if (this._call.current) {
-            this._audio.src = this._getEmptyAudioStream();
-
-            this._call.previous = this._call.current;
-            this._call.current = null;
-
-            this._emitCallEvent();
+        if (this.audioTimer !== null) {
+            clearInterval(this.audioTimer);
+            this.audioTimer = null;
         }
+
+        if (this.audioSource) {
+            this.audioSource.disconnect();
+            this.audioSource = null;
+        }
+
+        this.audioStartTime = NaN;
+
+        if (this.call.current) {
+            this.call.previous = this.call.current;
+            this.call.current = null;
+        }
+
+        this.emitCallEvent();
     }
 
     transform(call: RadioCall): RadioCall {
-        call.systemData = (call && this._systems
-            .find((_system: RadioSystem) => _system.system === call.system)) || null;
+        call.systemData = (call && this.systems
+            .find((system: RadioSystem) => system.system === call.system)) || null;
 
         call.talkgroupData = (call && call.systemData && call.systemData.talkgroups
-            .find((_talkgroup: RadioTalkgroup) => _talkgroup.dec === call.talkgroup)) || null;
+            .find((talkgroup: RadioTalkgroup) => talkgroup.dec === call.talkgroup)) || null;
 
         return call;
     }
 
-    private _callFiltered(call: RadioCall = this._call.current): boolean {
+    private bootstrap(): void {
+        const bootstrap = () => {
+            if (!this.audioContext) {
+                if ('webkitAudioContext' in window) {
+                    this.audioContext = new webkitAudioContext();
+                } else {
+                    this.audioContext = new AudioContext();
+                }
+
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+            }
+
+            EVENTS.forEach((event) => document.body.removeEventListener(event, bootstrap));
+        };
+
+        EVENTS.forEach((event) => document.body.addEventListener(event, bootstrap));
+    }
+
+    private callFiltered(call: RadioCall = this.call.current): boolean {
         if (
-            this._hold.system !== null &&
-            (typeof this._hold.system === 'object' && this._hold.system !== call.systemData) ||
-            (typeof this._hold.system === 'number' && this._hold.system !== call.system)
+            this.hold.system !== null &&
+            (typeof this.hold.system === 'object' && this.hold.system !== call.systemData) ||
+            (typeof this.hold.system === 'number' && this.hold.system !== call.system)
         ) {
             return true;
 
         } else if (
-            this._hold.talkgroup !== null &&
-            (typeof this._hold.talkgroup === 'object' && this._hold.talkgroup !== call.talkgroupData) ||
-            (typeof this._hold.talkgroup === 'number' && this._hold.talkgroup !== call.talkgroup)
+            this.hold.talkgroup !== null &&
+            (typeof this.hold.talkgroup === 'object' && this.hold.talkgroup !== call.talkgroupData) ||
+            (typeof this.hold.talkgroup === 'number' && this.hold.talkgroup !== call.talkgroup)
         ) {
             return true;
 
         } else {
             const sys = call.system;
             const tg = call.talkgroup;
-            const avoided = this._avoids[sys] && this._avoids[sys][tg];
+            const avoided = this.avoids[sys] && this.avoids[sys][tg];
             return typeof avoided === 'boolean' ? avoided : false;
         }
     }
 
-    private _cleanQueue(): void {
-        const queueLength = this._call.queue.length;
+    private cleanQueue(): void {
+        const queueLength = this.call.queue.length;
 
-        this._call.queue = this._call.queue.filter((_call: RadioCall) => !this._callFiltered(_call));
+        this.call.queue = this.call.queue.filter((call: RadioCall) => !this.callFiltered(call));
 
-        if (queueLength !== this._call.queue.length) {
-            this._emitQueueEvent();
+        if (queueLength !== this.call.queue.length) {
+            this.emitQueueEvent();
         }
     }
 
-    private _configureAudio(): void {
-        if (!this._audio) {
-            let playing = false;
-            let progress = 0;
-            let watchdog = null;
-
-            const progressHandler = () => {
-                if (this._call.current && playing) {
-                    // Hack for audio.currentTime that sometime returns unreliable values
-                    if (this._audio.currentTime - progress < 5) {
-                        this._emitTimeEvent();
-                    }
-
-                    progress = this._audio.currentTime;
-
-                    if (watchdog) {
-                        clearTimeout(watchdog);
-                    }
-
-                    // Hack for IOS devices that don't always send stop events
-                    watchdog = setTimeout(() => stopHandler(), 1000);
-                }
-            };
-
-            const startHandler = () => {
-                if (this._call.current) {
-                    playing = true;
-
-                    this._emitCallEvent();
-                    this._emitQueueEvent();
-                }
-            };
-
-            const stopHandler = () => {
-                if (this._call.current && playing && !this._paused) {
-                    playing = false;
-                    progress = 0;
-
-                    if (watchdog) {
-                        clearTimeout(watchdog);
-                        watchdog = null;
-                    }
-
-                    this.skip();
-                }
-            };
-
-            this._audio = new Audio(this._getEmptyAudioStream());
-
-            this._audio.autoplay = true;
-
-            this._audio.onabort = () => stopHandler();
-            this._audio.onended = () => stopHandler();
-            this._audio.onerror = () => stopHandler();
-            this._audio.onpause = () => stopHandler();
-
-            this._audio.onplay = () => startHandler();
-
-            this._audio.onstalled = () => this._audio.play();
-            this._audio.onsuspend = () => this._audio.play();
-
-            this._audio.ontimeupdate = () => progressHandler();
-        }
+    private emitAvoidEvent(sys: number, tg: number): void {
+        this.event.emit({ avoid: { sys, tg, status: this.avoids[sys][tg] } });
     }
 
-    private _emitAvoidEvent(sys: number, tg: number): void {
-        this.event.emit({ avoid: { sys, tg, status: this._avoids[sys][tg] } });
+    private emitAvoidsEvent(): void {
+        this.event.emit({ avoids: this.avoids });
     }
 
-    private _emitAvoidsEvent(): void {
-        this.event.emit({ avoids: this._avoids });
+    private emitCallEvent(): void {
+        this.event.emit({ call: this.call.current });
     }
 
-    private _emitCallEvent(): void {
-        this.event.emit({ call: this._call.current });
-    }
-
-    private _emitHoldEvent(value: RadioEvent['hold']): void {
+    private emitHoldEvent(value: RadioEvent['hold']): void {
         this.event.emit({ hold: value });
     }
 
-    private _emitLiveEvent(): void {
+    private emitLiveEvent(): void {
         this.event.emit({ live: this.live });
     }
 
-    private _emitPauseEvent(): void {
-        this.event.emit({ pause: this._paused });
+    private emitPauseEvent(): void {
+        this.event.emit({ pause: this.paused });
     }
 
-    private _emitQueueEvent(): void {
-        this.event.emit({ queue: this._call.queue.length });
+    private emitQueueEvent(): void {
+        this.event.emit({ queue: this.call.queue.length });
     }
 
-    private _emitSearchEvent(): void {
+    private emitSearchEvent(): void {
         this.event.emit({ search: null });
     }
 
-    private _emitSelectEvent(): void {
+    private emitSelectEvent(): void {
         this.event.emit({ select: null });
     }
 
-    private _emitSystemsEvent(): void {
-        this.event.emit({ systems: this._systems });
+    private emitSystemsEvent(): void {
+        this.event.emit({ systems: this.systems });
     }
 
-    private _emitTimeEvent(): void {
-        this.event.emit({ time: this._audio.currentTime });
+    private emitTimeEvent(): void {
+        if (!this.paused && !isNaN(this.audioContext.currentTime)) {
+            if (isNaN(this.audioStartTime)) {
+                this.audioStartTime = this.audioContext.currentTime;
+            }
+
+            this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
+        }
     }
 
-    private _flushQueue() {
-        this._call.queue.splice(0, this._call.queue.length);
+    private flushQueue() {
+        this.call.queue.splice(0, this.call.queue.length);
 
-        this._emitQueueEvent();
+        this.emitQueueEvent();
     }
 
-    private _getEmptyAudioStream(): string {
-        return 'data:audio/aac;base64,//FsQAOf/N4CAExhdmM1OC4zNS4xMDAAAjBADv/xbEADn/zeAgBMYXZjNTguMzUuMTAwAAIwQA4=';
-    }
-
-    private _readAvoids(): void {
-        const avoids = this._readLocalStorage(LOCAL_STORAGE_KEY.avoids);
+    private readAvoids(): void {
+        const avoids = this.readLocalStorage(LOCAL_STORAGE_KEY.avoids);
 
         if (avoids) {
             Object.keys(avoids).map((sys: string) => +sys).forEach((sys: number) => {
                 if (Array.isArray(avoids[sys])) {
                     avoids[sys].forEach((tg: number) => {
-                        if (!this._avoids[sys]) {
-                            this._avoids[sys] = {};
+                        if (!this.avoids[sys]) {
+                            this.avoids[sys] = {};
                         }
 
-                        this._avoids[sys][tg] = true;
+                        this.avoids[sys][tg] = true;
                     });
                 }
             });
         }
 
-        this._emitAvoidsEvent();
+        this.emitAvoidsEvent();
     }
 
-    private _readLocalStorage(key: string): any {
+    private readLocalStorage(key: string): any {
         if (window instanceof Window && window.localStorage instanceof Storage) {
             try {
                 return JSON.parse(window.localStorage.getItem(key));
@@ -462,22 +465,22 @@ export class AppRadioService implements OnDestroy {
         }
     }
 
-    private _subscribeLiveFeed(): void {
-        if (!this._subscriptions.liveFeed.length) {
+    private subscribeLiveFeed(): void {
+        if (!this.subscriptions.liveFeed.length) {
             const options = {
                 limit: 1,
                 sort: {
-                    createdAt: -1
+                    createdAt: -1,
                 },
                 transform: (call: RadioCall) => this.transform(call),
             };
 
-            const avoids = Object.keys(this._avoids)
+            const avoids = Object.keys(this.avoids)
                 .map((sys: string) => +sys)
                 .reduce((sel: any, sys: number) => {
-                    const tgs = Object.keys(this._avoids[sys])
+                    const tgs = Object.keys(this.avoids[sys])
                         .map((tg: string) => +tg)
-                        .filter((tg: number) => this._avoids[sys][tg]);
+                        .filter((tg: number) => this.avoids[sys][tg]);
 
                     if (tgs.length) {
                         sel.push({
@@ -497,10 +500,10 @@ export class AppRadioService implements OnDestroy {
 
             const selector = avoids.length ? { $or: avoids } : {};
 
-            this._subscriptions.liveFeed.push(MeteorObservable
+            this.subscriptions.liveFeed.push(MeteorObservable
                 .subscribe('calls', selector, options)
                 .subscribe(() => {
-                    this._subscriptions.liveFeed.push(RadioCalls
+                    this.subscriptions.liveFeed.push(RadioCalls
                         .find(selector, options)
                         .pipe(
                             filter((calls: RadioCall[]) => !!calls.length),
@@ -509,17 +512,17 @@ export class AppRadioService implements OnDestroy {
                         .subscribe((calls: RadioCall[]) => this.queue(calls)));
                 }));
 
-            this._emitLiveEvent();
+            this.emitLiveEvent();
         }
     }
 
-    private _subscribeSystems(): void {
-        if (!this._subscriptions.systems.length) {
-            this._subscriptions.systems.push(MeteorObservable
+    private subscribeSystems(): void {
+        if (!this.subscriptions.systems.length) {
+            this.subscriptions.systems.push(MeteorObservable
                 .subscribe('systems')
                 .subscribe());
 
-            this._subscriptions.systems.push(RadioSystems
+            this.subscriptions.systems.push(RadioSystems
                 .find({}, {
                     sort: {
                         system: 1,
@@ -528,71 +531,71 @@ export class AppRadioService implements OnDestroy {
                 .pipe(debounceTime(100))
                 .subscribe((systems: RadioSystem[]) => {
                     if (systems.length) {
-                        this._systems.splice(0, this._systems.length, ...systems);
+                        this.systems.splice(0, this.systems.length, ...systems);
 
-                        this._emitSystemsEvent();
+                        this.emitSystemsEvent();
 
-                        this._syncAvoids();
-                        this._writeAvoids();
+                        this.syncAvoids();
+                        this.writeAvoids();
                     }
                 }));
         }
     }
 
-    private _syncAvoids(): void {
-        this._systems.forEach((system: RadioSystem) => {
+    private syncAvoids(): void {
+        this.systems.forEach((system: RadioSystem) => {
             const sys = system.system;
 
-            if (typeof this._avoids[sys] !== 'object') {
-                this._avoids[sys] = {};
+            if (typeof this.avoids[sys] !== 'object') {
+                this.avoids[sys] = {};
             }
 
             system.talkgroups.forEach((talkgroup: RadioTalkgroup) => {
                 const tg = talkgroup.dec;
 
-                if (typeof this._avoids[sys][tg] !== 'boolean') {
-                    this._avoids[sys][tg] = false;
+                if (typeof this.avoids[sys][tg] !== 'boolean') {
+                    this.avoids[sys][tg] = false;
                 }
             });
         });
 
-        Object.keys(this._avoids).map((sys: string) => +sys).forEach((sys: number) => {
-            const system = this._systems.find((_system: RadioSystem) => _system.system === +sys);
+        Object.keys(this.avoids).map((sys: string) => +sys).forEach((sys: number) => {
+            const system = this.systems.find((_system: RadioSystem) => _system.system === +sys);
 
             if (system) {
-                Object.keys(this._avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
+                Object.keys(this.avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
                     const talkgroup = system.talkgroups.find((_talkgroup: RadioTalkgroup) => _talkgroup.dec === +tg);
 
                     if (!talkgroup) {
-                        delete this._avoids[sys][tg];
+                        delete this.avoids[sys][tg];
                     }
                 });
 
             } else {
-                delete this._avoids[sys];
+                delete this.avoids[sys];
             }
         });
     }
 
-    private _unsubscribe(subscriptions: Subscription[] = [
-        ...this._subscriptions.liveFeed,
-        ...this._subscriptions.systems,
+    private unsubscribe(subscriptions: Subscription[] = [
+        ...this.subscriptions.liveFeed,
+        ...this.subscriptions.systems,
     ]) {
         while (subscriptions.length) {
             subscriptions.pop().unsubscribe();
         }
     }
 
-    private _unsubscribeLiveFeed(): void {
-        this._unsubscribe(this._subscriptions.liveFeed);
+    private unsubscribeLiveFeed(): void {
+        this.unsubscribe(this.subscriptions.liveFeed);
     }
 
-    private _writeAvoids(): void {
+    private writeAvoids(): void {
         const avoids: { [sys: number]: number[] } = {};
 
-        Object.keys(this._avoids).map((sys: string) => +sys).forEach((sys: number) => {
-            Object.keys(this._avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
-                if (this._avoids[sys][tg]) {
+        Object.keys(this.avoids).map((sys: string) => +sys).forEach((sys: number) => {
+            Object.keys(this.avoids[sys]).map((tg: string) => +tg).forEach((tg: number) => {
+                if (this.avoids[sys][tg]) {
                     if (Array.isArray(avoids[sys])) {
                         avoids[sys].push(tg);
                     } else {
@@ -602,10 +605,10 @@ export class AppRadioService implements OnDestroy {
             });
         });
 
-        this._writeLocalStorage(LOCAL_STORAGE_KEY.avoids, avoids);
+        this.writeLocalStorage(LOCAL_STORAGE_KEY.avoids, avoids);
     }
 
-    private _writeLocalStorage(key: string, value: any): void {
+    private writeLocalStorage(key: string, value: any): void {
         if (window instanceof Window && window.localStorage instanceof Storage) {
             window.localStorage.setItem(key, JSON.stringify(value));
         }
