@@ -69,6 +69,10 @@ export class AppRadioService implements OnDestroy {
     }
 
     ngOnDestroy(): void {
+        if (this.audioContext) {
+            this.audioContext.close();
+        }
+
         this.event.complete();
 
         this.unsubscribe();
@@ -200,14 +204,17 @@ export class AppRadioService implements OnDestroy {
         if (this.audioContext && !this.paused) {
             if (!call && !this.call.current && this.call.queue.length) {
                 call = this.call.queue.shift();
+
                 this.emitQueueEvent();
             }
 
             if (call && call.audio) {
-                this.call.previous = this.call.current;
+                this.stop();
+
                 this.call.current = call;
 
                 this.emitCallEvent();
+                this.emitTimeEvent();
 
                 const audio = /^data:[^;]+;base64,/.test(call.audio) ? atob(call.audio.replace(/^[^,]*,/, '')) : call.audio;
                 const arrayBuffer = new ArrayBuffer(audio.length);
@@ -217,39 +224,32 @@ export class AppRadioService implements OnDestroy {
                     arrayBufferView[i] = audio.charCodeAt(i);
                 }
 
-                this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                    if (this.audioSource) {
-                        this.audioSource.disconnect();
+                this.audioContext.decodeAudioData(arrayBuffer).then((buffer) => {
+                    if (this.call.current) {
+                        this.audioSource = this.audioContext.createBufferSource();
+
+                        this.audioSource.buffer = buffer;
+                        this.audioSource.connect(this.audioContext.destination);
+                        this.audioSource.onended = () => this.skip();
+                        this.audioSource.start();
+
+                        this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
+
+                        if (this.audioContext.state === 'suspended') {
+                            const resume = () => {
+                                this.audioContext.resume();
+
+                                setTimeout(() => {
+                                    if (this.audioContext.state === 'running') {
+                                        EVENTS.forEach((event) => document.body.removeEventListener(event, resume));
+                                    }
+                                });
+                            };
+
+                            EVENTS.forEach((event) => document.body.addEventListener(event, resume));
+                        }
                     }
-
-                    this.audioSource = this.audioContext.createBufferSource();
-
-                    this.audioSource.buffer = buffer;
-                    this.audioSource.connect(this.audioContext.destination);
-                    this.audioSource.onended = () => this.skip();
-                    this.audioSource.start();
-
-                    if (this.audioContext.state === 'suspended') {
-                        const resume = () => {
-                            this.audioContext.resume();
-
-                            setTimeout(() => {
-                                if (this.audioContext.state === 'running') {
-                                    EVENTS.forEach((event) => document.body.removeEventListener(event, resume));
-                                }
-                            }, 0);
-                        };
-
-                        EVENTS.forEach((event) => document.body.addEventListener(event, resume));
-                    }
-
-                    this.resetAudioTimer();
-
-                }, (error: Error) => {
-                    this.skip(true);
-
-                    throw (error);
-                });
+                }).catch(() => this.skip(true));
             }
         }
     }
@@ -270,8 +270,6 @@ export class AppRadioService implements OnDestroy {
 
     replay(): void {
         if (!this.paused) {
-            this.stopAudioTimer();
-
             this.play(this.call.current || this.call.previous);
         }
     }
@@ -296,21 +294,25 @@ export class AppRadioService implements OnDestroy {
     }
 
     stop(): void {
-        this.stopAudioTimer();
-
-        if (this.audioSource) {
-            this.audioSource.disconnect();
-            this.audioSource = null;
-        }
-
-        this.audioStartTime = NaN;
-
         if (this.call.current) {
+            if (this.audioTimer !== null) {
+                clearInterval(this.audioTimer);
+                this.audioTimer = null;
+            }
+
+            if (this.audioSource) {
+                this.audioSource.onended = null;
+                this.audioSource.stop();
+                this.audioSource.disconnect();
+            }
+
+            this.audioStartTime = NaN;
+
             this.call.previous = this.call.current;
             this.call.current = null;
-        }
 
-        this.emitCallEvent();
+            this.emitCallEvent();
+        }
     }
 
     transform(call: RadioCall): RadioCall {
@@ -332,7 +334,7 @@ export class AppRadioService implements OnDestroy {
                     this.audioContext = new AudioContext();
                 }
 
-                if (this.audioContext.state === 'suspended') {
+                if (this.audioContext && this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
             }
@@ -459,26 +461,6 @@ export class AppRadioService implements OnDestroy {
             } catch (e) {
                 return null;
             }
-        }
-    }
-
-    private resetAudioTimer(): void {
-        this.stopAudioTimer();
-        this.startAudioTimer();
-    }
-
-    private startAudioTimer(): void {
-        if (this.audioTimer === null) {
-            this.emitTimeEvent();
-
-            this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
-        }
-    }
-
-    private stopAudioTimer(): void {
-        if (this.audioTimer !== null) {
-            clearInterval(this.audioTimer);
-            this.audioTimer = null;
         }
     }
 
