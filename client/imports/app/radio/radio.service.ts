@@ -224,7 +224,7 @@ export class AppRadioService implements OnDestroy {
                     arrayBufferView[i] = audio.charCodeAt(i);
                 }
 
-                this.audioContext.decodeAudioData(arrayBuffer).then((buffer) => {
+                this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
                     if (this.call.current) {
                         this.audioSource = this.audioContext.createBufferSource();
 
@@ -249,7 +249,7 @@ export class AppRadioService implements OnDestroy {
                             EVENTS.forEach((event) => document.body.addEventListener(event, resume));
                         }
                     }
-                }).catch(() => this.skip(true));
+                }, () => this.skip(true));
             }
         }
     }
