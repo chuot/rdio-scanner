@@ -236,20 +236,10 @@ export class AppRadioService implements OnDestroy {
                         this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
 
                         if (this.audioContext.state === 'suspended') {
-                            const resume = () => {
-                                this.audioContext.resume();
-
-                                setTimeout(() => {
-                                    if (this.audioContext.state === 'running') {
-                                        EVENTS.forEach((event) => document.body.removeEventListener(event, resume));
-                                    }
-                                });
-                            };
-
-                            EVENTS.forEach((event) => document.body.addEventListener(event, resume));
+                            this.audioContext.resume();
                         }
                     }
-                }, () => this.skip(true));
+                }, () => this.skip());
             }
         }
     }
@@ -333,13 +323,15 @@ export class AppRadioService implements OnDestroy {
                 } else {
                     this.audioContext = new AudioContext();
                 }
+            }
 
-                if (this.audioContext && this.audioContext.state === 'suspended') {
+            if (this.audioContext) {
+                EVENTS.forEach((event) => document.body.removeEventListener(event, bootstrap));
+
+                if (this.audioContext.state === 'suspended') {
                     this.audioContext.resume();
                 }
             }
-
-            EVENTS.forEach((event) => document.body.removeEventListener(event, bootstrap));
         };
 
         EVENTS.forEach((event) => document.body.addEventListener(event, bootstrap));
