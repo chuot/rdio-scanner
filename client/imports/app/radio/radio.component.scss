@@ -16,6 +16,10 @@
     width: 100%;
 }
 
+.mat-sidenav-container {
+    height:100%;
+}
+
 .mat-sidenav-content {
     align-items: center;
     display: flex;
@@ -25,8 +29,8 @@
 
 .radio-bezel {
     box-sizing: border-box;
-    height: inherit;
     max-width: 640px;
+    min-height: 0;
     padding: 24px;
 }
 
