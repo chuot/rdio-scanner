@@ -16,24 +16,17 @@
     width: 100%;
 }
 
-.mat-sidenav-container {
-    flex: 1;
-}
-
 .mat-sidenav-content {
     align-items: center;
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     justify-content: center;
 }
 
 .radio-bezel {
     box-sizing: border-box;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
+    height: inherit;
     max-width: 640px;
-    overflow: hidden;
     padding: 24px;
 }
 
