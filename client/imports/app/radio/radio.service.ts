@@ -226,18 +226,16 @@ export class AppRadioService implements OnDestroy {
 
                 this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
                     if (this.call.current) {
-                        this.audioSource = this.audioContext.createBufferSource();
+                        this.audioContext.resume().then(() => {
+                            this.audioSource = this.audioContext.createBufferSource();
 
-                        this.audioSource.buffer = buffer;
-                        this.audioSource.connect(this.audioContext.destination);
-                        this.audioSource.onended = () => this.skip();
-                        this.audioSource.start();
+                            this.audioSource.buffer = buffer;
+                            this.audioSource.connect(this.audioContext.destination);
+                            this.audioSource.onended = () => this.skip();
+                            this.audioSource.start();
 
-                        this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
-
-                        if (this.audioContext.state === 'suspended') {
-                            this.audioContext.resume();
-                        }
+                            this.audioTimer = setInterval(() => this.emitTimeEvent(), 500);
+                        });
                     }
                 }, () => this.skip());
             }
@@ -326,11 +324,9 @@ export class AppRadioService implements OnDestroy {
             }
 
             if (this.audioContext) {
-                EVENTS.forEach((event) => document.body.removeEventListener(event, bootstrap));
-
-                if (this.audioContext.state === 'suspended') {
-                    this.audioContext.resume();
-                }
+                this.audioContext.resume().then(() => {
+                    EVENTS.forEach((event) => document.body.removeEventListener(event, bootstrap));
+                });
             }
         };
 
