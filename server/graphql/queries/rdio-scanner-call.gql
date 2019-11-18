@@ -1,0 +1,1 @@
+rdioScannerCall(id: String): RdioScannerCall

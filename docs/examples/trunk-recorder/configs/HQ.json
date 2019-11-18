@@ -1,0 +1,46 @@
+{
+    "callTimeout": 3,
+    "captureDir": "/home/radio/trunk-recorder/audio_files/HQ",
+    "frequencyFormat": "mhz",
+    "sources": [
+        {
+            "analogLevels": 8,
+            "analogRecorders": 0,
+            "center": 142500000,
+            "device": "rtl=00000082,buflen=65536",
+            "debugRecorders": 0,
+            "digitalLevels": 8,
+            "digitalRecorders": 2,
+            "driver": "osmosdr",
+            "error": 0,
+            "gain": 22.9,
+            "modulation": "qpsk",
+            "ppm": 0,
+            "rate": 2400000,
+            "squelch": 0
+        }
+    ],
+    "statusAsString": true,
+    "systems": [
+        {
+            "alphaTags": [],
+            "audioArchive": false,
+            "channels": [],
+            "control_channels": [
+                142095000,
+                142500000,
+                142635000,
+                142905000
+            ],
+            "hideEncrypted": true,
+            "hideUnknownTalkgroups": true,
+            "minDuration": 0,
+            "recordUnknown": false,
+            "shortName": "HQ",
+            "talkgroupDisplayFormat": "tag_id",
+            "talkgroupsFile": "talkgroups/HQ.csv",
+            "type": "p25",
+            "uploadScript": "scripts/upload-call.sh 31"
+        }
+    ]
+}

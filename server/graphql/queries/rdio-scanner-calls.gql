@@ -1,0 +1,9 @@
+rdioScannerCalls(
+    date: Date
+    first: Int
+    last: Int
+    skip: Int
+    sort: Int
+    system: Int
+    talkgroup: Int
+): RdioScannerCallsQueryResponse

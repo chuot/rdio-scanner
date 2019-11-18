@@ -1,0 +1,331 @@
+<mat-sidenav-container>
+    <mat-sidenav #searchPanel [autoFocus]="false" [disableClose]="true" mode="push" [opened]="searchPanelOpened"
+        position="start">
+        <div class="rdio-search">
+            <mat-toolbar>
+                <div fxFlex></div>
+                <div>
+                    <button (click)="toggleSearchPanel(false)" mat-icon-button>
+                        <mat-icon>arrow_forward</mat-icon>
+                    </button>
+                </div>
+            </mat-toolbar>
+            <div class="rdio-search-results">
+                <mat-table [dataSource]="searchResults">
+                    <ng-container matColumnDef="control">
+                        <mat-header-cell *matHeaderCellDef></mat-header-cell>
+                        <mat-cell *matCellDef="let row">
+                            <ng-container *ngIf="row">
+                                <button (click)="row === call ? skip() : loadAndPlay(row)" mat-icon-button>
+                                    <ng-container *ngIf="row === call">
+                                        <mat-icon>stop</mat-icon>
+                                    </ng-container>
+                                    <ng-container *ngIf="row !== call">
+                                        <mat-icon>play_arrow</mat-icon>
+                                    </ng-container>
+                                </button>
+                            </ng-container>
+                        </mat-cell>
+                    </ng-container>
+                    <ng-container matColumnDef="date">
+                        <mat-header-cell *matHeaderCellDef>
+                            <span>Date</span>
+                        </mat-header-cell>
+                        <mat-cell *matCellDef="let row">
+                            <span>{{ row?.startTime | date:'MM/dd' }}</span>
+                        </mat-cell>
+                    </ng-container>
+                    <ng-container matColumnDef="time">
+                        <mat-header-cell *matHeaderCellDef>
+                            <span>Time</span>
+                        </mat-header-cell>
+                        <mat-cell *matCellDef="let row">
+                            <span>{{ row?.startTime | date:'HH:mm' }}</span>
+                        </mat-cell>
+                    </ng-container>
+                    <ng-container matColumnDef="system">
+                        <mat-header-cell *matHeaderCellDef>
+                            <span>System</span>
+                        </mat-header-cell>
+                        <mat-cell *matCellDef="let row">
+                            <span>{{ row?.systemData?.name || row?.system }}</span>
+                        </mat-cell>
+                    </ng-container>
+                    <ng-container matColumnDef="alpha">
+                        <mat-header-cell *matHeaderCellDef>
+                            <span>Tag</span>
+                        </mat-header-cell>
+                        <mat-cell *matCellDef="let row">
+                            <span>{{ row?.talkgroupData?.alphaTag || row?.talkgroup }}</span>
+                        </mat-cell>
+                    </ng-container>
+                    <ng-container matColumnDef="description">
+                        <mat-header-cell *matHeaderCellDef>
+                            <span>Description</span>
+                        </mat-header-cell>
+                        <mat-cell *matCellDef="let row">
+                            <span>{{ row?.talkgroupData?.description }}</span>
+                        </mat-cell>
+                    </ng-container>
+                    <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'system', 'alpha', 'description']">
+                    </mat-header-row>
+                    <mat-row
+                        *matRowDef="let row; columns: ['control', 'date', 'time', 'system', 'alpha', 'description']">
+                    </mat-row>
+                </mat-table>
+                <mat-progress-bar color="primary" [mode]="searchResultsPending ? 'query' : 'determinate'">
+                </mat-progress-bar>
+                <mat-paginator [disabled]="searchResultsPending" [length]="searchResultsCount" [hidePageSize]="true"
+                    pageSize="10" [showFirstLastButtons]="true">
+                </mat-paginator>
+            </div>
+            <form class="rdio-search-form" [formGroup]="searchForm" autocomplete="off">
+                <div>
+                    <mat-form-field fxFlex>
+                        <mat-label>
+                            Sort order
+                        </mat-label>
+                        <mat-select formControlName="sort">
+                            <mat-option [value]="1">
+                                Ascending
+                            </mat-option>
+                            <mat-option [value]="-1">
+                                Descending
+                            </mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                    <mat-form-field fxFlex>
+                        <mat-label>
+                            Date
+                        </mat-label>
+                        <input (click)="date.open()" formControlName="date" [matDatepicker]="date" matInput
+                            [max]="searchFormDateStop" [min]="searchFormDateStart" placeholder="Choose a date" readonly>
+                        <mat-datepicker-toggle matSuffix [for]="date"></mat-datepicker-toggle>
+                        <mat-datepicker #date></mat-datepicker>
+                    </mat-form-field>
+                </div>
+                <div>
+                    <mat-form-field fxFlex>
+                        <mat-label>
+                            System
+                        </mat-label>
+                        <mat-select formControlName="system">
+                            <mat-option [value]="-1">
+                                All Systems
+                            </mat-option>
+                            <mat-option *ngFor="let system of systems" [value]="system.system">
+                                {{ system.name }}
+                            </mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                    <mat-form-field fxFlex>
+                        <mat-label>
+                            Talkgroup
+                        </mat-label>
+                        <mat-select formControlName="talkgroup">
+                            <mat-option [value]="-1">
+                                All Talkgroups
+                            </mat-option>
+                            <mat-option *ngFor="let talkgroup of getSearchFormTalkgroups()" [value]="talkgroup.dec">
+                                {{ talkgroup.alphaTag }}
+                            </mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                </div>
+                <div>
+                    <button (click)="resetSearchForm()" [disabled]="searchResultsPending" mat-raised-button
+                        type="button">
+                        Reset
+                    </button>
+                </div>
+            </form>
+        </div>
+    </mat-sidenav>
+
+    <mat-sidenav #selectPanel [autoFocus]="false" [disableClose]="true" mode="push" [opened]="selectPanelOpened"
+        position="end">
+        <div class="rdio-select">
+            <mat-toolbar>
+                <button (click)="toggleSelectPanel(false)" mat-icon-button>
+                    <mat-icon>arrow_back</mat-icon>
+                </button>
+                <ng-container *ngIf="systems.length > 1">
+                    <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
+                        OFF
+                    </button>
+                    <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
+                        ON
+                    </button>
+                </ng-container>
+            </mat-toolbar>
+            <fieldset *ngFor="let system of systems">
+                <legend>
+                    {{ system.name }}
+                </legend>
+                <div fxLayout="row wrap" fxLayoutAlign="space-between">
+                    <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button on"
+                        (click)="avoid({ system: system, talkgroup: talkgroup })"
+                        [ngClass]="{ off: !(selection[system.system] && selection[system.system][talkgroup.dec]), on: selection[system.system] && selection[system.system][talkgroup.dec] }">
+                        {{ talkgroup.alphaTag }}
+                    </button>
+                    <ng-container *ngIf="system.talkgroups.length > 1">
+                        <button class="rdio-button-mini all-off" (click)="avoid({ system: system, status: false })">
+                            OFF
+                        </button>
+                        <button class="rdio-button-mini all-on" (click)="avoid({ system: system, status: true })">
+                            ON
+                        </button>
+                    </ng-container>
+                </div>
+            </fieldset>
+        </div>
+    </mat-sidenav>
+
+    <mat-sidenav-content>
+        <div class="rdio-main">
+            <div class="rdio-status" fxLayout="row" fxLayoutAlign="end">
+                <span class="rdio-led" [ngClass]="{ off: !call, on: call, paused: call && livefeedPaused }"></span>
+            </div>
+            <div class="rdio-display">
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span>
+                            {{ displayClock | date:'HH' }}{{ displayClock.getSeconds() % 2 ? ' ' : ':' }}{{ displayClock | date:'mm' }}
+                        </span>
+                    </div>
+                    <div>
+                        <span>
+                            Q: {{ callQueue.length }}
+                        </span>
+                    </div>
+                </div>
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span>
+                            {{ displaySystem }}
+                        </span>
+                    </div>
+                    <div>
+                        <span>
+                            {{ displayTag }}
+                        </span>
+                    </div>
+                </div>
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span>
+                            {{ displayAlphaTag }}
+                        </span>
+                    </div>
+                    <div>
+                        <span>
+                            {{ displayProgress | date:'HH:mm' }}
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <span>
+                        {{ displayDescription }}
+                    </span>
+                </div>
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span>
+                            F: {{ displayFrequency }}
+                        </span>
+                    </div>
+                    <div>
+                        <span *ngIf="displayMode !== 'A'">
+                            TGID: {{ displayTalkgroup }}
+                        </span>
+                    </div>
+                </div>
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span *ngIf="displayMode !== 'A'">
+                            E: {{ displayErrorCount }} S: {{ displaySpikeCount }}
+                        </span>
+                    </div>
+                    <div>
+                        <span *ngIf="displayMode !== 'A'">
+                            UID: {{ displayUnit }}
+                        </span>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>
+                                <span>Time</span>
+                            </th>
+                            <th>
+                                <span>System</span>
+                            </th>
+                            <th>
+                                <span>Tag</span>
+                            </th>
+                            <th>
+                                <span>Description</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let previousCall of callHistory">
+                            <td>
+                                <span>{{ previousCall?.startTime | date:'HH:mm' }}</span>
+                            </td>
+                            <td>
+                                <span>{{ previousCall?.systemData?.name || previousCall?.system}}</span>
+                            </td>
+                            <td>
+                                <span>{{ previousCall?.talkgroupData?.alphaTag || previousCall?.talkgroup }}</span>
+                            </td>
+                            <td>
+                                <span>{{ previousCall?.talkgroupData?.description || previousCall?.freq }}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="rdio-control" fxLayout="column" fxLayoutGap="12px">
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <button class="rdio-button" (click)="livefeed()"
+                        [ngClass]="{ off: !livefeedStatus, on: livefeedStatus }">
+                        LIVE<br>FEED
+                    </button>
+                    <button class="rdio-button" (click)="holdSystem()"
+                        [ngClass]="{ off: !selectionSystemHold, on: selectionSystemHold }">
+                        HOLD<br>SYS
+                    </button>
+                    <button class="rdio-button" (click)="holdTalkgroup()"
+                        [ngClass]="{ off: !selectionTalkgroupHold, on: selectionTalkgroupHold }">
+                        HOLD<br>TG
+                    </button>
+                </div>
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <button class="rdio-button" (click)="replay()">
+                        REPLAY<br>LAST
+                    </button>
+                    <button class="rdio-button" (click)="skip(true)">
+                        SKIP<br>NEXT
+                    </button>
+                    <button class="rdio-button" (click)="avoid()">
+                        AVOID
+                    </button>
+                </div>
+                <div fxLayout="row" fxLayoutAlign="space-between">
+                    <button class="rdio-button" (click)="toggleSearchPanel(true)">
+                        SEARCH<br>CALL
+                    </button>
+                    <button class="rdio-button" (click)="pause()"
+                        [ngClass]="{ off: !livefeedPaused, on: livefeedPaused }">
+                        PAUSE
+                    </button>
+                    <button class="rdio-button" (click)="toggleSelectPanel(true)">
+                        SELECT<br>TG
+                    </button>
+                </div>
+            </div>
+        </div>
+    </mat-sidenav-content>
+</mat-sidenav-container>

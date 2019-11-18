@@ -1,0 +1,10 @@
+[Unit]
+Description=Runs trunk-recorder@%I.service 1 minute after boot up
+
+[Timer]
+OnBootSec=1m
+Unit=trunk-recorder@%I.service
+
+[Install]
+DefaultInstance=DEFAULT
+WantedBy=multi-user.target

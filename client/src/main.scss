@@ -1,0 +1,24 @@
+@import '~@angular/material/theming';
+
+$font-family: Roboto, 'Helvetica Neue', sans-serif;
+
+$custom-typography: mat-typography-config($font-family: $font-family);
+
+@include mat-core($custom-typography);
+
+$primary: mat-palette($mat-grey, 800, 50);
+$accent: mat-palette($mat-green);
+
+$theme: mat-light-theme($primary, $accent);
+
+@include angular-material-theme($theme);
+
+body {
+	font-family: $font-family;
+	margin: 0;
+}
+
+body,
+html {
+	height: 100%;
+}

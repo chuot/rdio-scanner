@@ -1,0 +1,16 @@
+[Unit]
+Description=Rdio Scanner
+After=network.target
+
+[Service]
+WorkingDirectory=/home/radio/rdio-scanner/server
+ExecStart=/usr/bin/node index.js
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=Rdio Scanner
+User=radio
+Group=radio
+
+[Install]
+WantedBy=multi-user.target

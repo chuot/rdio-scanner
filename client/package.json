@@ -1,0 +1,47 @@
+{
+    "name": "rdio-scanner-client",
+    "version": "2.0.0",
+    "private": true,
+    "scripts": {
+        "build": "ng build --cross-origin use-credentials --prod $*",
+        "start": "ng serve"
+    },
+    "author": "Chrystian Huot",
+    "license": "LICENSE",
+    "dependencies": {
+        "@angular/animations": "^8.2.14",
+        "@angular/cdk": "^8.2.3",
+        "@angular/common": "~8.2.14",
+        "@angular/compiler": "~8.2.14",
+        "@angular/core": "~8.2.14",
+        "@angular/flex-layout": "^8.0.0-beta.26",
+        "@angular/forms": "~8.2.14",
+        "@angular/material": "^8.2.3",
+        "@angular/platform-browser": "~8.2.14",
+        "@angular/platform-browser-dynamic": "~8.2.14",
+        "@angular/router": "~8.2.14",
+        "apollo-angular": "^1.8.0",
+        "apollo-angular-link-http": "^1.9.0",
+        "apollo-cache-inmemory": "^1.6.3",
+        "apollo-client": "^2.6.4",
+        "apollo-link": "^1.2.13",
+        "apollo-link-ws": "^1.0.19",
+        "graphql": "^14.5.8",
+        "graphql-tag": "^2.10.1",
+        "rxjs": "~6.5.3",
+        "subscriptions-transport-ws": "^0.9.16",
+        "tslib": "^1.10.0",
+        "zone.js": "~0.10.2"
+    },
+    "devDependencies": {
+        "@angular-devkit/build-angular": "~0.803.19",
+        "@angular/cli": "~8.3.19",
+        "@angular/compiler-cli": "~8.2.14",
+        "@angular/language-service": "~8.2.14",
+        "@types/node": "~12.12.8",
+        "codelyzer": "^5.2.0",
+        "ts-node": "~8.5.2",
+        "tslint": "~5.20.1",
+        "typescript": "~3.5.3"
+    }
+}

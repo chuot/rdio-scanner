@@ -1,0 +1,15 @@
+[Unit]
+Description=%I Trunk-Recorder
+ConditionPathExists=/home/radio/trunk-recorder/configs/%I.json
+
+[Service]
+User=radio
+Group=radio
+WorkingDirectory=/home/radio/trunk-recorder
+ExecStartPre=/bin/sh -c "rm -fr audio_files/%I"
+ExecStart=/home/radio/trunk-recorder/recorder --config /home/radio/trunk-recorder/configs/%I.json
+Restart=always
+
+[Install]
+DefaultInstance=DEFAULT
+WantedBy=multi-user.target

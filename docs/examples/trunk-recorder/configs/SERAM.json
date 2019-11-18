@@ -1,0 +1,76 @@
+{
+    "callTimeout": 3,
+    "captureDir": "/home/radio/trunk-recorder/audio_files",
+    "frequencyFormat": "mhz",
+    "sources": [
+        {
+            "analogLevels": 8,
+            "analogRecorders": 0,
+            "center": 771405250,
+            "device": "rtl=00000090,buflen=65536",
+            "debugRecorders": 0,
+            "digitalLevels": 8,
+            "digitalRecorders": 9,
+            "driver": "osmosdr",
+            "error": 1000,
+            "gain": 28,
+            "modulation": "qpsk",
+            "ppm": 0,
+            "rate": 2400000,
+            "squelch": 0
+        },
+        {
+            "analogLevels": 8,
+            "analogRecorders": 0,
+            "center": 772482250,
+            "device": "rtl=00000091,buflen=65536",
+            "debugRecorders": 0,
+            "digitalLevels": 8,
+            "digitalRecorders": 10,
+            "driver": "osmosdr",
+            "error": 1000,
+            "gain": 28,
+            "modulation": "qpsk",
+            "ppm": 0,
+            "rate": 2400000,
+            "squelch": 0
+        }
+    ],
+    "statusAsString": true,
+    "systems": [
+        {
+            "alphaTags": [],
+            "audioArchive": false,
+            "channels": [],
+            "control_channels": [
+                770756250,
+                770206250,
+                770456250,
+                770506250,
+                770706250,
+                770956250,
+                771006250,
+                771256250,
+                771506250,
+                771756250,
+                772006250,
+                772256250,
+                772506250,
+                773181250,
+                773268750,
+                773431250,
+                773518750,
+                773681250
+            ],
+            "hideEncrypted": true,
+            "hideUnknownTalkgroups": true,
+            "minDuration": 0,
+            "recordUnknown": false,
+            "shortName": "SERAM",
+            "talkgroupDisplayFormat": "tag_id",
+            "talkgroupsFile": "talkgroups/SERAM.csv",
+            "type": "p25",
+            "uploadScript": "scripts/upload-call.sh 21"
+        }
+    ]
+}

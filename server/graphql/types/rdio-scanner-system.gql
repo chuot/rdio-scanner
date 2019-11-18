@@ -1,0 +1,6 @@
+type RdioScannerSystem {
+    id: String
+    name: String
+    system: Int
+    talkgroups: [RdioScannerTalkgroup]
+}

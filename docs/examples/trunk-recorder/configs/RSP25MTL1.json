@@ -1,0 +1,50 @@
+{
+    "callTimeout": 3,
+    "captureDir": "/home/radio/trunk-recorder/audio_files",
+    "frequencyFormat": "mhz",
+    "sources": [
+        {
+            "analogLevels": 8,
+            "analogRecorders": 0,
+            "center": 773031250,
+            "device": "rtl=00000088,buflen=65536",
+            "debugRecorders": 0,
+            "digitalLevels": 8,
+            "digitalRecorders": 10,
+            "driver": "osmosdr",
+            "error": 500,
+            "gain": 22.9,
+            "modulation": "qpsk",
+            "ppm": 0,
+            "rate": 2400000,
+            "squelch": 0
+        }
+    ],
+    "statusAsString": true,
+    "systems": [
+        {
+            "alphaTags": [],
+            "audioArchive": false,
+            "channels": [],
+            "control_channels": [
+                772281250,
+                772031250,
+                772531250,
+                772781250,
+                773281250,
+                773531250,
+                773781250,
+                774031250
+            ],
+            "hideEncrypted": true,
+            "hideUnknownTalkgroups": true,
+            "minDuration": 0,
+            "recordUnknown": false,
+            "shortName": "RSP25S1",
+            "talkgroupDisplayFormat": "tag_id",
+            "talkgroupsFile": "talkgroups/RSP25MTL1.csv",
+            "type": "p25",
+            "uploadScript": "scripts/upload-call.sh 11"
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+type RdioScannerCall {
+    id: String
+    audio: Audio
+    emergency: Boolean
+    freq: Int
+    freqList: [RdioScannerCallFreq]
+    startTime: Date
+    stopTime: Date
+    srcList: [RdioScannerCallSrc]
+    system: Int
+    talkgroup: Int
+}
