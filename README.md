@@ -101,10 +101,10 @@ Resolving deltas: 100% (752/752), done.
 $ cd rdio-scanner
 
 $ node run.js
-Default configuration created at /home/chuot/Temp/rdio-scanner/server/.env
+Default configuration created at /home/radio/rdio-scanner/server/.env
 Make sure your upload scripts use this API key: 1b0800a0-2b5d-422c-a4e3-972d5c1d32ff
 Building client app... done
-Creating SQLITE database at /home/chuot/Temp/rdio-scanner/server/database.sqlite... done
+Creating SQLITE database at /home/radio/rdio-scanner/server/database.sqlite... done
 Rdio Scanner is running at http://0.0.0.0:3000/
 ```
 
