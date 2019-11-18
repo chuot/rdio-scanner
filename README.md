@@ -108,7 +108,7 @@ Creating SQLITE database at /home/radio/rdio-scanner/server/database.sqlite... d
 Rdio Scanner is running at http://0.0.0.0:3000/
 ```
 
-Note that the first time you start *Rdio Scanner8, it will be longer to do so as it has to install required node modules and build the progressive web app.
+Note that the first time you start *Rdio Scanner*, it will be longer to do so as it has to install required node modules and build the progressive web app.
 
 A default configuration file `rdio-scanner/server/.env` will be created. A new random API key will be generated where it will have to be use in your upload scripts.
 
