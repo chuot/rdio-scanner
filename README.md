@@ -4,6 +4,8 @@
 
 For now, only [Trunk Recorder](https://github.com/robotastic/trunk-recorder) software files can be used, but other audio sources can be added later on request.
 
+[![Chat](https://img.shields.io/gitter/room/rdio-scanner/Lobby.svg)](https://gitter.im/rdio-scanner/Lobby?utm_source=share-link&utm_medium=link&utm_campaign=share-link)
+
 ## What's new in this version
 
 The version 2.0 of *Rdio Scanner* is a major rewrite in which Meteor has been replaced by [The Apollo Data Graph Platform](https://www.apollographql.com/) for its API. MongoDB is also replaced by [SQLite](https://www.sqlite.org/) to facilitate the entire installation process. It is still possible to use another database by changing [Sequelize ORM](https://sequelize.org/) settings accordingly.
