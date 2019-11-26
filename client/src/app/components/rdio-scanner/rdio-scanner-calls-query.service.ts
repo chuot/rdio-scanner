@@ -46,18 +46,16 @@ export class AppRdioScannerCallsQueryService extends Query<RdioScannerCallsQuery
     document = gql`
         query rdioScannerCalls(
             $date: Date
-            $first: Int
-            $last: Int
-            $skip: Int
+            $limit: Int
+            $offset: Int
             $sort: Int
             $system: Int
             $talkgroup: Int
         ) {
             rdioScannerCalls(
                 date: $date
-                first: $first
-                last: $last
-                skip: $skip
+                limit: $limit
+                offset: $offset
                 sort: $sort
                 system: $system
                 talkgroup: $talkgroup
@@ -67,21 +65,8 @@ export class AppRdioScannerCallsQueryService extends Query<RdioScannerCallsQuery
                 dateStop
                 results {
                     id
-                    emergency
                     freq
-                    freqList {
-                        errorCount
-                        freq
-                        len
-                        pos
-                        spikeCount
-                    }
                     startTime
-                    stopTime
-                    srcList {
-                        pos
-                        src
-                    }
                     system
                     talkgroup
                 }

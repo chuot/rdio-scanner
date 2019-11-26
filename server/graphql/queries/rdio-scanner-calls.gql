@@ -1,8 +1,7 @@
 rdioScannerCalls(
     date: Date
-    first: Int
-    last: Int
-    skip: Int
+    limit: Int
+    offset: Int
     sort: Int
     system: Int
     talkgroup: Int

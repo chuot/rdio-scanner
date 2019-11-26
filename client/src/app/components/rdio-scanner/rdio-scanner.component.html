@@ -76,7 +76,7 @@
                 <mat-progress-bar color="primary" [mode]="searchResultsPending ? 'query' : 'determinate'">
                 </mat-progress-bar>
                 <mat-paginator [disabled]="searchResultsPending" [length]="searchResultsCount" [hidePageSize]="true"
-                    pageSize="10" [showFirstLastButtons]="true">
+                    [pageSize]="searchResults.value.length" [showFirstLastButtons]="true">
                 </mat-paginator>
             </div>
             <form class="rdio-search-form" [formGroup]="searchForm" autocomplete="off">

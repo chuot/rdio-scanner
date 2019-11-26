@@ -59,5 +59,5 @@ module.exports = {
 
             throw err;
         }
-    }
+    },
 };

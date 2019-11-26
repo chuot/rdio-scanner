@@ -1,6 +1,6 @@
 {
     "name": "rdio-scanner-client",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "private": true,
     "scripts": {
         "build": "ng build --cross-origin use-credentials --prod $*",
@@ -38,7 +38,7 @@
         "@angular/cli": "~8.3.19",
         "@angular/compiler-cli": "~8.2.14",
         "@angular/language-service": "~8.2.14",
-        "@types/node": "~12.12.8",
+        "@types/node": "~12.12.14",
         "codelyzer": "^5.2.0",
         "ts-node": "~8.5.2",
         "tslint": "~5.20.1",

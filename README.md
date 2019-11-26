@@ -1,4 +1,4 @@
-# Rdio Scanner v2.0
+# Rdio Scanner v2.1
 
 *Rdio Scanner* is a progressive web interface designed to resemble an old school radio scanner. It integrates all frontend / backend components to manage audio files from different sources.
 
@@ -8,7 +8,9 @@ For now, only [Trunk Recorder](https://github.com/robotastic/trunk-recorder) sof
 
 ## What's new in this version
 
-The version 2.0 of *Rdio Scanner* is a major rewrite in which Meteor has been replaced by [The Apollo Data Graph Platform](https://www.apollographql.com/) for its API. MongoDB is also replaced by [SQLite](https://www.sqlite.org/) to facilitate the entire installation process. It is still possible to use another database by changing [Sequelize ORM](https://sequelize.org/) settings accordingly.
+Version 2.1 focuses on various speed improvements for searching stored calls.
+
+Version 2.0 is a major rewrite in which Meteor has been replaced by [The Apollo Data Graph Platform](https://www.apollographql.com/) for its API. MongoDB is also replaced by [SQLite](https://www.sqlite.org/) to facilitate the entire installation process. It is still possible to use another database by changing [Sequelize ORM](https://sequelize.org/) settings accordingly.
 
 These changes bring many *performance benefits* to *Rdio scanner* and make it *much easier to install*.
 

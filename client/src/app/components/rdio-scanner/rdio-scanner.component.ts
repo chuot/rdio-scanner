@@ -1,8 +1,7 @@
-import { AfterViewInit, Component, HostListener, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, HostListener, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { MatPaginator, PageEvent } from '@angular/material/paginator';
-import { MatTable, MatTableDataSource } from '@angular/material/table';
-import { Subscription } from 'rxjs';
+import { MatPaginator } from '@angular/material/paginator';
+import { BehaviorSubject, Subscription } from 'rxjs';
 import { AppRdioScannerCallQueryService } from './rdio-scanner-call-query.service';
 import { AppRdioScannerCallSubscriptionService, RdioScannerCall } from './rdio-scanner-call-subscription.service';
 import { AppRdioScannerCallsQueryService } from './rdio-scanner-calls-query.service';
@@ -24,7 +23,7 @@ interface RdioScannerSelection {
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
 })
-export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit {
+export class AppRdioScannerComponent implements OnDestroy, OnInit {
     get call() { return this._call; }
     get callHistory() { return this._callHistory; }
     get callPrevious() { return this._callPrevious; }
@@ -82,7 +81,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
     private _searchFormDateStart = '';
     private _searchFormDateStop = '';
     private _searchPanelOpened = false;
-    private _searchResults = new MatTableDataSource<RdioScannerCall>();
+    private _searchResults = new BehaviorSubject(new Array<RdioScannerCall>(10));
     private _searchResultsCount = 0;
     private _searchResultsPending = false;
     private _selection: RdioScannerSelection = {};
@@ -98,10 +97,12 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
     private livefeedSubscription: Subscription;
     private searchFormSubscription: Subscription;
     private searchPaginatorSubscription: Subscription;
+    private searchResultsBuffer = new Array<RdioScannerCall>(200);
+    private searchResultsBufferFrom = 0;
+    private searchResultsBufferTo = this.searchResultsBuffer.length - 1;
     private systemsSubscription: Subscription;
 
     @ViewChild(MatPaginator, { static: true }) private matPaginator: MatPaginator;
-    @ViewChild(MatTable, { static: true }) private matTable: MatTable<RdioScannerCall>;
 
     constructor(
         private appRdioScannerCallQuery: AppRdioScannerCallQueryService,
@@ -282,17 +283,11 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
     loadAndPlay(call: RdioScannerCall): void {
         this.appRdioScannerCallQuery.fetch({ id: call.id }).subscribe(({ data }) => {
             if (data.rdioScannerCall) {
-                Object.assign(call, data.rdioScannerCall);
+                Object.assign(call, this.transformCall(data.rdioScannerCall));
 
                 this.play(call);
             }
         });
-    }
-
-    ngAfterViewInit(): void {
-        if (this.matPaginator instanceof MatPaginator) {
-            this.searchResults.paginator = this.matPaginator;
-        }
     }
 
     ngOnDestroy(): void {
@@ -314,7 +309,6 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
 
         this.subscribeSystems().then(() => {
             this.subscribeSearchForm();
-
             this.subscribeSearchPaginator();
         });
     }
@@ -430,7 +424,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
 
     toggleSearchPanel(opened = !this.searchPanelOpened): void {
         if (opened) {
-            this.searchCalls();
+            this.loadStoredCalls();
         }
 
         this._searchPanelOpened = opened;
@@ -525,97 +519,70 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
         }, this.selection || {});
     }
 
-    private searchCalls(paginator: {
-        first?: boolean | number;
-        last?: boolean | number;
-        skip?: number;
-    } = {}): void {
-        const options: {
-            date?: Date;
-            first?: number;
-            last?: number;
-            skip?: number;
-            sort?: number;
-            system?: number;
-            talkgroup?: number;
-        } = {};
+    private async loadStoredCalls(filters?: any): Promise<void> {
+        const limit = this.searchResultsBuffer.length;
 
-        const count = 200;
+        const pageFrom = this.matPaginator.pageIndex * this.matPaginator.pageSize;
 
-        const form = this.searchForm.value;
+        const pageTo = this.matPaginator.pageIndex * this.matPaginator.pageSize + this.matPaginator.pageSize - 1;
 
-        if (form.date instanceof Date) {
-            options.date = form.date;
-        }
+        if (!this.searchResultsPending && (filters || !pageFrom ||
+            pageFrom < this.searchResultsBufferFrom || pageTo > this.searchResultsBufferTo)) {
 
-        if (typeof paginator.first === 'boolean') {
-            options.first = count;
+            filters = filters || this.searchForm.value;
 
-        } else if (typeof paginator.first === 'number') {
-            options.first = paginator.first;
+            this.searchResultsBufferFrom = Math.floor(pageFrom / limit) * limit;
+            this.searchResultsBufferTo = this.searchResultsBufferFrom + limit - 1;
 
-        } else if (typeof paginator.last === 'boolean') {
-            options.last = count;
+            const options: {
+                date?: Date;
+                limit?: number;
+                offset?: number;
+                sort?: number;
+                system?: number;
+                talkgroup?: number;
+            } = {};
 
-        } else if (typeof paginator.last === 'number') {
-            options.last = paginator.last;
-
-        } else {
-            options.first = count;
-        }
-
-        if (typeof paginator.skip === 'number' && paginator.skip > 0) {
-            options.skip = paginator.skip;
-        }
-
-        if (typeof form.sort === 'number') {
-            options.sort = form.sort;
-        }
-
-        if (typeof form.system === 'number' && form.system !== -1) {
-            options.system = form.system;
-        }
-
-        if (typeof form.talkgroup === 'number' && form.talkgroup !== -1) {
-            options.talkgroup = form.talkgroup;
-        }
-
-        this._searchResultsPending = true;
-
-        this.searchForm.disable();
-
-        this.appRdioScannerCallsQuery.fetch(options, { fetchPolicy: 'no-cache' }).subscribe(({ data }) => {
-            const results = data.rdioScannerCalls.results.map((call) => this.transformCall(call));
-
-            if (this.searchResults.data.length < data.rdioScannerCalls.count) {
-                const ar = new Array<RdioScannerCall>(data.rdioScannerCalls.count - this.searchResults.data.length);
-
-                if (options.sort < 0) {
-                    this.searchResults.data.unshift(...ar);
-                } else if (options.sort > 0) {
-                    this.searchResults.data.push(...ar);
-                }
+            if (filters.date instanceof Date) {
+                options.date = filters.date;
             }
 
-            if (options.last) {
-                this.searchResults.data.splice((options.skip || this.searchResults.data.length) - results.length,
-                    results.length, ...results);
-
-            } else {
-                this.searchResults.data.splice(options.skip || 0, results.length, ...results);
+            if (limit) {
+                options.limit = limit;
             }
 
-            this._searchResultsCount = data.rdioScannerCalls.count;
-            this._searchFormDateStart = data.rdioScannerCalls.dateStart;
-            this._searchFormDateStop = data.rdioScannerCalls.dateStop;
+            if (this.searchResultsBufferFrom) {
+                options.offset = this.searchResultsBufferFrom;
+            }
 
-            this.matTable.renderRows();
-            this.searchResults.data = this.searchResults.data.slice(); // because renderRow() doesn't want to work
+            if (filters.sort < 0) {
+                options.sort = -1;
+            }
 
-            this.searchForm.enable();
+            if (filters.system >= 0) {
+                options.system = filters.system;
+            }
+
+            if (filters.talkgroup >= 0) {
+                options.talkgroup = filters.talkgroup;
+            }
+
+            this._searchResultsPending = true;
+
+            const query = await this.appRdioScannerCallsQuery.fetch(options, { fetchPolicy: 'no-cache' }).toPromise();
+
+            for (let i = 0; i < limit; i++) {
+                this.searchResultsBuffer[i] = this.transformCall(query.data.rdioScannerCalls.results[i]);
+            }
+
+            this._searchResultsCount = query.data.rdioScannerCalls.count;
+            this._searchFormDateStart = query.data.rdioScannerCalls.dateStart;
+            this._searchFormDateStop = query.data.rdioScannerCalls.dateStop;
 
             this._searchResultsPending = false;
-        });
+        }
+
+        this.searchResults.next(this.searchResultsBuffer.slice(pageFrom % limit, pageTo % limit + 1));
     }
 
     private async subscribeLivefeed(): Promise<void> {
@@ -632,23 +599,17 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
 
         if (!this.searchFormSubscription) {
             this.searchFormSubscription = this.searchForm.valueChanges.subscribe((value) => {
-                if (!this.searchResultsPending) {
-                    if (!Object.keys(value).every((key) => value[key] === lastValue[key])) {
-                        if (value.system !== lastValue.system) {
-                            this.searchForm.get('talkgroup').setValue(-1, { emitEvent: false });
-                        }
+                if (!Object.keys(value).every((key) => value[key] === lastValue[key])) {
+                    lastValue = value;
 
-                        lastValue = this.searchForm.value;
-
-                        this.searchResults.data.splice(0, this.searchResults.data.length,
-                            ...new Array<RdioScannerCall>(this.matPaginator.pageSize));
-
-                        this.searchCalls();
-
-                        if (this.matPaginator.pageIndex > 0) {
-                            this.matPaginator.firstPage();
-                        }
+                    if (value.system !== lastValue.system && value.talkgroup !== -1) {
+                        lastValue.talkgroup = -1;
+                        this.searchForm.get('talkgroup').reset(lastValue.talkgroup);
                     }
+
+                    this.matPaginator.firstPage();
+
+                    this.loadStoredCalls(value);
                 }
             });
         }
@@ -656,43 +617,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
 
     private subscribeSearchPaginator(): void {
         if (!this.searchPaginatorSubscription) {
-            this.searchPaginatorSubscription = this.matPaginator.page.subscribe((event: PageEvent) => {
-                const sortOrder = this.searchForm.get('sort').value;
-
-                if (sortOrder < 0 && event.pageIndex === 0) {
-                    this.searchCalls({ first: true });
-
-                } else if (sortOrder > 0 && event.pageIndex >= event.length / event.pageSize - 1) {
-                    this.searchCalls({ last: true });
-
-                } else if (event.length - event.pageIndex * event.pageSize < event.pageSize) {
-                    const needMore = !this.searchResults.data
-                        .slice(event.pageIndex * event.pageSize, event.pageIndex * event.pageSize + event.pageSize)
-                        .every((call) => call);
-
-                    if (needMore) {
-                        this.searchCalls({ last: true, skip: event.length });
-                    }
-
-                } else if (event.pageIndex > event.previousPageIndex) {
-                    const needMore = !this.searchResults.data
-                        .slice(event.pageIndex * event.pageSize, event.pageIndex * event.pageSize + event.pageSize)
-                        .every((call) => call);
-
-                    if (needMore) {
-                        this.searchCalls({ first: true, skip: event.pageIndex * event.pageSize });
-                    }
-
-                } else if (event.pageIndex < event.previousPageIndex) {
-                    const needMore = !this.searchResults.data
-                        .slice(event.pageIndex * event.pageSize - 1, event.pageIndex * event.pageSize + event.pageSize - 1)
-                        .every((call) => call);
-
-                    if (needMore) {
-                        this.searchCalls({ last: true, skip: event.pageIndex * event.pageSize + event.pageSize - 1 });
-                    }
-                }
-            });
+            this.searchPaginatorSubscription = this.matPaginator.page.subscribe(() => this.loadStoredCalls());
         }
     }
 
@@ -707,11 +632,13 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy, OnInit
     }
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
-        call.systemData = (call && this.systems
-            .find((system: RdioScannerSystem) => system.system === call.system)) || {};
+        if (call) {
+            call.systemData = (call && this.systems
+                .find((system: RdioScannerSystem) => system.system === call.system)) || {};
 
-        call.talkgroupData = (call && call.systemData && Array.isArray(call.systemData.talkgroups) && call.systemData.talkgroups
-            .find((talkgroup: RdioScannerTalkgroup) => talkgroup.dec === call.talkgroup)) || {};
+            call.talkgroupData = (call && call.systemData && Array.isArray(call.systemData.talkgroups) && call.systemData.talkgroups
+                .find((talkgroup: RdioScannerTalkgroup) => talkgroup.dec === call.talkgroup)) || {};
+        }
 
         return call;
     }

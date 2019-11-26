@@ -1,7 +1,6 @@
 'use strict';
 
 const { DataSource } = require('apollo-datasource');
-const { getPageRange } = require('../../helpers/paginator');
 const { callReducer } = require('../../helpers/rdio-scanner');
 
 class RdioScannerSystem extends DataSource {
@@ -21,7 +20,7 @@ class RdioScannerSystem extends DataSource {
         return callReducer(result.dataValues);
     }
 
-    async getCalls({ date, system, talkgroup }, { first, last, skip, sort }) {
+    async getCalls({ date, system, talkgroup }, { limit, offset, sort }) {
         const Op = this.store.Sequelize.Op;
 
         const attributes = {
@@ -59,7 +58,8 @@ class RdioScannerSystem extends DataSource {
 
         const count = await this.store.rdioScannerCall.count({ where });
 
-        const { limit, offset } = getPageRange({ count, first, last, skip });
+        limit = typeof limit === 'number' ? limit : 100;
+        offset = typeof offset === 'number' ? offset : 0;
 
         const calls = await this.store.rdioScannerCall.findAll({ attributes, limit, offset, order, where });
 
