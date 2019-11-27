@@ -16,11 +16,11 @@ if (missingModules.client || missingModules.server) {
     process.stdout.write('Installing node modules...');
 
     if (missingModules.client) {
-        childProcess.execSync('npm install', { cwd: clientPath, stdio: 'ignore' });
+        childProcess.execSync('npm install', { cwd: clientPath, silent: true });
     }
 
     if (missingModules.server) {
-        childProcess.execSync('npm install', { cwd: serverPath, stdio: 'ignore' });
+        childProcess.execSync('npm install', { cwd: serverPath, silent: true });
     }
 
     process.stdout.write(' done\n');
@@ -52,7 +52,7 @@ if (!fs.existsSync(envFile)) {
 
 if (!fs.existsSync(path.resolve(clientPath, 'dist/main.html'))) {
     process.stdout.write('Building client app...');
-    childProcess.execSync('npm run build', { cwd: clientPath, stdio: 'ignore' });
+    childProcess.execSync('npm run build', { cwd: clientPath, silent: true });
     process.stdout.write(' done\n');
 }
 
@@ -63,7 +63,7 @@ if (process.env.DB_DIALECT === 'sqlite') {
 
     if (!fs.existsSync(dbFile)) {
         process.stdout.write(`Creating SQLITE database at ${dbFile}...`);
-        childProcess.execSync('npm run migrate', { cwd: serverPath, stdio: 'ignore' });
+        childProcess.execSync('npm run migrate', { cwd: serverPath, silent: true });
         process.stdout.write(' done\n');
     }
 }
