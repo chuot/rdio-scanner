@@ -85,10 +85,11 @@ Search filters at the bottom of this screen are self explanatory.
 
 It is fairly easy to have *Rdio Scanner* up and running.
 
-You first need to make sure that *Rdio Scanner* prerequesites are install:
+Ensure that your operating system is fully updated and that the prerequisites are installed:
 
-* [Git](https://git-scm.com/downloads)
-* [Node.js](https://nodejs.org/en/download/)
+* [Git v2.23.0 or higher](https://git-scm.com/downloads)
+* [Node.js v10.9.0 or higher](https://nodejs.org/en/download/)
+* [npm v6.2.0 or higher](https://www.npmjs.com/get-npm)
 
 Then clone the *Rdio Scanner* code and run it:
 
