@@ -569,6 +569,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             this._searchResultsPending = true;
 
+            this.searchForm.disable();
+
             const query = await this.appRdioScannerCallsQuery.fetch(options, { fetchPolicy: 'no-cache' }).toPromise();
 
             for (let i = 0; i < limit; i++) {
@@ -580,6 +582,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this._searchFormDateStop = query.data.rdioScannerCalls.dateStop;
 
             this._searchResultsPending = false;
+
+            this.searchForm.enable();
         }
 
         this.searchResults.next(this.searchResultsBuffer.slice(pageFrom % limit, pageTo % limit + 1));
