@@ -22,8 +22,8 @@
         "@angular/router": "~8.2.14",
         "apollo-angular": "^1.8.0",
         "apollo-angular-link-http": "^1.9.0",
-        "apollo-cache-inmemory": "^1.6.3",
-        "apollo-client": "^2.6.4",
+        "apollo-cache-inmemory": "^1.6.5",
+        "apollo-client": "^2.6.8",
         "apollo-link": "^1.2.13",
         "apollo-link-ws": "^1.0.19",
         "graphql": "^14.5.8",
@@ -34,13 +34,13 @@
         "zone.js": "~0.10.2"
     },
     "devDependencies": {
-        "@angular-devkit/build-angular": "~0.803.19",
-        "@angular/cli": "~8.3.19",
+        "@angular-devkit/build-angular": "~0.803.21",
+        "@angular/cli": "~8.3.21",
         "@angular/compiler-cli": "~8.2.14",
         "@angular/language-service": "~8.2.14",
-        "@types/node": "~12.12.14",
-        "codelyzer": "^5.2.0",
-        "ts-node": "~8.5.2",
+        "@types/node": "~12.12.21",
+        "codelyzer": "^5.2.1",
+        "ts-node": "~8.5.4",
         "tslint": "~5.20.1",
         "typescript": "~3.5.3"
     }
