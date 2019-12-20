@@ -24,7 +24,7 @@ function getConfig() {
         host: process.env.DB_HOST || defaultConfig.host,
         logging: defaultConfig.logging,
         password: process.env.DB_PASS || defaultConfig.password,
-        port: process.env.DB_PASS || defaultConfig.port,
+        port: process.env.DB_PORT || defaultConfig.port,
         storage: process.env.DB_STORAGE || defaultConfig.storage,
         username: process.env.DB_USER || defaultConfig.username,
     };
