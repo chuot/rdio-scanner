@@ -15,7 +15,9 @@ class RdioScannerSystem extends DataSource {
     }
 
     async getSystems() {
-        const systems = await this.store.rdioScannerSystem.findAll();
+        const systems = await this.store.rdioScannerSystem.findAll({
+            order: [['system', 'ASC']],
+        });
         return systemReducer(systems);
     }
 }
