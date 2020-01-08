@@ -298,6 +298,8 @@ Much like the previous script, this one is in charge of feeding *Rdio Scanner* w
 
 You need to upload systems and talkgroups definitions to *Rdio Scanner*, the first time you have installed it, and each time you change any *Trunk Recorder*'s configuration.
 
+Note that if you want to remove a system from the *Rdio Scanner* configuration, simply upload an empty CSV file.
+
 **Same here, please change the API key inside it for the one that has been created above within the *quick start section*. Same for the URL where to upload to Rdio Scanner instance**
 
 Once uploaded, you should have your systems and talkgroups listed on *Rdio Scanner* talkgroups selection screen.
