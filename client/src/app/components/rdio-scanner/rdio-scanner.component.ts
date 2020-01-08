@@ -447,6 +447,10 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             }
 
             if (this.audioContext) {
+                if (this.audioContext.state === 'suspended') {
+                    this.audioContext.resume();
+                }
+
                 this.audioContext.resume().then(() => {
                     events.forEach((event) => document.body.removeEventListener(event, bootstrap));
                 });
