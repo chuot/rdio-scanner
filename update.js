@@ -7,6 +7,7 @@ const clientPath = path.resolve(__dirname, 'client');
 const serverPath = path.resolve(__dirname, 'server');
 
 process.stdout.write('Pulling new version from github...');
+childProcess.execSync('git reset --hard', { stdio: ['ignore', 'ignore', 'pipe'] });
 childProcess.execSync('git pull', { stdio: ['ignore', 'ignore', 'pipe'] });
 process.stdout.write(' done\n');
 
