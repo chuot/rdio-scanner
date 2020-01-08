@@ -12,6 +12,17 @@ declare var webkitAudioContext: any;
 
 const LOCAL_STORAGE_KEY = 'rdio-scanner';
 
+enum RdioScannerGroupStatus {
+    Off = 'off',
+    On = 'on',
+    Partial = 'partial',
+}
+
+interface RdioScannerGroup {
+    name: string;
+    status: RdioScannerGroupStatus;
+}
+
 interface RdioScannerSelection {
     [key: string]: {
         [key: string]: boolean;
@@ -40,6 +51,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     get displayTag() { return this._displayTag; }
     get displayTalkgroup() { return this._displayTalkgroup; }
     get displayUnit() { return this._displayUnit; }
+    get groups() { return this._groups; }
     get livefeedPaused() { return this._livefeedPaused; }
     get livefeedStatus() { return !!this.livefeedSubscription; }
     get searchForm() { return this._searchForm; }
@@ -71,6 +83,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private _displayTag = 'Tag';
     private _displayTalkgroup = 0;
     private _displayUnit = 0;
+    private _groups: RdioScannerGroup[] = [];
     private _livefeedPaused = false;
     private _searchForm: FormGroup = this.ngFormBuilder.group({
         date: [null],
@@ -161,6 +174,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 this._selection[sys][tg] = typeof options.status === 'boolean' ? options.status : !this.selection[sys][tg];
             }
         }
+
+        this.buildGroups();
 
         if (this.call && !(this.selection && this.selection[this.call.system] &&
             this._selection[this.call.system][this.call.talkgroup])) {
@@ -422,6 +437,38 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
+    toggleGroup(name: string): void {
+        const group = this.groups.find((_group) => _group.name === name);
+
+        if (group) {
+            const status = group.status === RdioScannerGroupStatus.On ? false : true;
+
+            this.systems.forEach((system) => {
+                system.talkgroups.forEach((talkgroup) => {
+                    if (talkgroup.group === name) {
+                        this.selection[system.system][talkgroup.dec] = status;
+                    }
+                });
+            });
+
+            this.buildGroups();
+
+            if (this.call && !(this.selection && this.selection[this.call.system] &&
+                this._selection[this.call.system][this.call.talkgroup])) {
+                this.skip();
+            }
+
+            if (this.livefeedStatus) {
+                this.unsubscribeLivefeed();
+                this.subscribeLivefeed();
+            }
+
+            this.writeSelection();
+
+            this.cleanQueue();
+        }
+    }
+
     toggleSearchPanel(opened = !this.searchPanelOpened): void {
         if (opened) {
             this.loadStoredCalls();
@@ -460,9 +507,42 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         events.forEach((event) => document.body.addEventListener(event, bootstrap));
     }
 
-    private cleanQueue(): void {
-        const queueLength = this.callQueue.length;
+    private buildGroups(): void {
+        const groups: RdioScannerGroup[] = [];
 
+        this.systems.forEach((system: RdioScannerSystem) => {
+            system.talkgroups
+                .forEach((talkgroup: RdioScannerTalkgroup) => {
+                    const group = groups.find((_group) => _group.name === talkgroup.group);
+
+                    if (!group) {
+                        const allOn = this.systems.every((sys) => {
+                            return sys.talkgroups.filter((tg) => tg.group === talkgroup.group)
+                                .every((tg) => this.selection[sys.system][tg.dec]);
+                        });
+
+                        const allOff = this.systems.every((sys) => {
+                            return sys.talkgroups.filter((tg) => tg.group === talkgroup.group)
+                                .every((tg) => !this.selection[sys.system][tg.dec]);
+                        });
+
+                        const name = talkgroup.group;
+
+                        const status = allOn ? RdioScannerGroupStatus.On
+                            : allOff ? RdioScannerGroupStatus.Off
+                                : RdioScannerGroupStatus.Partial;
+
+                        groups.push({ name, status });
+                    }
+                });
+        });
+
+        groups.sort((a, b) => a.name.localeCompare(b.name));
+
+        this.groups.splice(0, this.groups.length, ...groups);
+    }
+
+    private cleanQueue(): void {
         this._callQueue = this.callQueue.filter((call: RdioScannerCall) => {
             return this.selection && this.selection[call.system] && this.selection[call.system][call.talkgroup];
         });
@@ -474,53 +554,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             .padStart(9, '0')
             .replace(/(\d)(?=(\d{3})+$)/g, '$1 ')
             .concat(' Hz');
-    }
-
-    private processCall(call: RdioScannerCall): void {
-        if (call !== null && typeof call === 'object') {
-            call = this.transformCall(call);
-            this.queue(call);
-        }
-    }
-
-    private processSystems(systems: RdioScannerSystem[]): void {
-        if (Array.isArray(systems)) {
-            this.systems.splice(0, this.systems.length, ...systems);
-
-            this.readSelection();
-            this.rebuildSelection();
-            this.writeSelection();
-        }
-    }
-
-    private readSelection(): any {
-        if (window instanceof Window && window.localStorage instanceof Storage) {
-            try {
-                this._selection = JSON.parse(window.localStorage.getItem(LOCAL_STORAGE_KEY));
-            } catch (err) {
-                this._selection = {};
-            }
-        }
-    }
-
-    private rebuildSelection(): void {
-        this._selection = this.systems.reduce((sa, sv) => {
-            const tgs = sv.talkgroups.map((tg) => tg.dec.toString());
-
-            if (Array.isArray(sa[sv.system])) {
-                Object.keys(sa[sv.system]).forEach((tg) => {
-                    if (!tgs.includes(tg)) {
-                        delete sa[sv.system][tg];
-                    }
-                });
-            }
-
-            sa[sv.system] = sv.talkgroups.reduce((ta, tv) => {
-                ta[tv.dec] = typeof ta[tv.dec] === 'boolean' ? ta[tv.dec] : true;
-                return ta;
-            }, sa[sv.system] || {});
-            return sa;
-        }, this.selection || {});
     }
 
     private async loadStoredCalls(filters?: any): Promise<void> {
@@ -600,6 +633,55 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.livefeedSubscription = this.appRdioScannerCallSubscription.subscribe({ selection })
                 .subscribe(({ data }) => this.processCall(data.rdioScannerCall));
         }
+    }
+
+    private processCall(call: RdioScannerCall): void {
+        if (call !== null && typeof call === 'object') {
+            call = this.transformCall(call);
+            this.queue(call);
+        }
+    }
+
+    private processSystems(systems: RdioScannerSystem[]): void {
+        if (Array.isArray(systems)) {
+            this.systems.splice(0, this.systems.length, ...systems);
+
+            this.readSelection();
+            this.rebuildSelection();
+            this.writeSelection();
+
+            this.buildGroups();
+        }
+    }
+
+    private readSelection(): any {
+        if (window instanceof Window && window.localStorage instanceof Storage) {
+            try {
+                this._selection = JSON.parse(window.localStorage.getItem(LOCAL_STORAGE_KEY));
+            } catch (err) {
+                this._selection = {};
+            }
+        }
+    }
+
+    private rebuildSelection(): void {
+        this._selection = this.systems.reduce((sa, sv) => {
+            const tgs = sv.talkgroups.map((tg) => tg.dec.toString());
+
+            if (Array.isArray(sa[sv.system])) {
+                Object.keys(sa[sv.system]).forEach((tg) => {
+                    if (!tgs.includes(tg)) {
+                        delete sa[sv.system][tg];
+                    }
+                });
+            }
+
+            sa[sv.system] = sv.talkgroups.reduce((ta, tv) => {
+                ta[tv.dec] = typeof ta[tv.dec] === 'boolean' ? ta[tv.dec] : true;
+                return ta;
+            }, sa[sv.system] || {});
+            return sa;
+        }, this.selection || {});
     }
 
     private subscribeSearchForm(): void {

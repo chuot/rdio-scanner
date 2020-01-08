@@ -1,37 +1,37 @@
-54241,d3e1,D,ALPHA 1,MRC TDB Fire Alpha 1,Fire Dispatch,Fire,1
-54242,d3e2,D,BRAVO 1,MRC TDB Fire Bravo 1,Fire Talk,Fire,1
-54243,d3e3,D,BRAVO 2,MRC TDB Fire Bravo 2,Fire Talk,Fire,1
-54248,d3e8,D,BRAVO 3,MRC TDB Fire Bravo 3,Fire Talk,Fire,1
-54251,d3eb,D,BRAVO 4,MRC TDB Fire Bravo 4,Fire Talk,Fire,1
-54261,d3f5,D,BRAVO 5,MRC TDB Fire Bravo 5,Fire Talk,Fire,1
-54244,d3e4,D,BRAVO 6,MRC TDB Fire Bravo 6,Fire Talk,Fire,1
-54129,d371,D,BRAVO 7,MRC TDB Fire Bravo 7,Fire Talk,Fire,1
-54125,d36d,D,BRAVO 8,MRC TDB Fire Bravo 8,Fire Talk,Fire,1
-54005,d2f5,D,D-M FD,Deux-Montagnes Fire Dispatch,Fire Dispatch,Fire,1
-54239,d3df,D,SADP FD,Ste-Anne-des-Plaines Fire Dispatch,Fire Dispatch,Fire,1
-54200,d3b8,D,ST ANN,St-Eustache General Announcement,Fire Talk,Fire,2
-54201,d3b9,D,SE GEN,St-Eustache General,Fire Talk,Fire,2
-54202,d3ba,D,SE OP1,St-Eustache Operations,Fire Talk,Fire,2
-54203,d3bb,D,SE PRV,St-Eustache Prevention,Fire Tac,Fire,2
-54206,d3be,D,SE CCU,St-Eustache Mesure d'Urgence,Interop,Fire,2
-56201,db89,D,DSURGEN,YUL Security Dispatch,Security,Security,2
-56202,db8a,D,DSURTAC,YUL Security Tactical,Security,Security,2
-56203,db8b,D,DSUROP,YUL Security Operations,Security,Security,2
-56211,db93,D,DINCOPS,YUL Fire Dispatch,Fire Dispatch,Fire,1
-56212,db94,D,DINCTAC,YUL Tactical,Fire Tac,Fire,1
-56218,db9a,D,DCCU,YUL CCU,Utilities,Utility,3
-56221,db9d,D,DBATIM,YUL Batiment,Utilities,Utility,3
-56222,db9e,D,DSCHAMP,YUL SCHAMP,Utilities,Utility,3
-56223,db9f,D,DFOULE,YUL Foule,Utilities,Utility,3
-56224,dba0,D,DACCES,YUL Acces,Utilities,Utility,3
-56225,dba1,D,DELECTR,YUL Electricity,Utilities,Utility,3
-56226,dba2,D,DPISTE,YUL Piste,Utilities,Utility,3
-56227,dba3,D,DTABLIER,YUL Tablier,Utilities,Utility,3
-56228,dba4,D,DVTP,YUL VTP,Utilities,Utility,3
-56229,dba5,D,DPONT,YUL Pont,Utilities,Utility,3
-56232,dba8,D,DINSTALL,YUL Install,Utilities,Utility,3
-56204,db8c,D,MSURGEN,YMX Security Dispatch,Security,Security,3
-56213,db95,D,MINCOPS,YMX Fire Dispatch,Fire Dispatch,Fire,1
-56214,db96,D,MINCTAC,YMX Fire Tactical,Fire Tac,Fire,1
-56219,db9b,D,MCCU,YMX CCU,Utilities,Utility,3
-56231,dba7,D,MPISTE,YMX PISTE,Utilities,Utility,3
+54241,d3e1,D,ALPHA 1,MRC TDB Fire Alpha 1,Fire Dispatch,FIRE,1
+54242,d3e2,D,BRAVO 1,MRC TDB Fire Bravo 1,Fire Talk,FIRE,1
+54243,d3e3,D,BRAVO 2,MRC TDB Fire Bravo 2,Fire Talk,FIRE,1
+54248,d3e8,D,BRAVO 3,MRC TDB Fire Bravo 3,Fire Talk,FIRE,1
+54251,d3eb,D,BRAVO 4,MRC TDB Fire Bravo 4,Fire Talk,FIRE,1
+54261,d3f5,D,BRAVO 5,MRC TDB Fire Bravo 5,Fire Talk,FIRE,1
+54244,d3e4,D,BRAVO 6,MRC TDB Fire Bravo 6,Fire Talk,FIRE,1
+54129,d371,D,BRAVO 7,MRC TDB Fire Bravo 7,Fire Talk,FIRE,1
+54125,d36d,D,BRAVO 8,MRC TDB Fire Bravo 8,Fire Talk,FIRE,1
+54005,d2f5,D,D-M FD,Deux-Montagnes Fire Dispatch,Fire Dispatch,FIRE,1
+54239,d3df,D,SADP FD,Ste-Anne-des-Plaines Fire Dispatch,Fire Dispatch,FIRE,1
+54200,d3b8,D,ST ANN,St-Eustache General Announcement,Fire Talk,FIRE,2
+54201,d3b9,D,SE GEN,St-Eustache General,Fire Talk,FIRE,2
+54202,d3ba,D,SE OP1,St-Eustache Operations,Fire Talk,FIRE,2
+54203,d3bb,D,SE PRV,St-Eustache Prevention,Fire Tac,FIRE,2
+54206,d3be,D,SE CCU,St-Eustache Mesure d'urgence,Interop,EMERGENCY,2
+56201,db89,D,DSURGEN,YUL Security Dispatch,Security,SECURITY,2
+56202,db8a,D,DSURTAC,YUL Security Tactical,Security,SECURITY,2
+56203,db8b,D,DSUROP,YUL Security Operations,Security,SECURITY,2
+56211,db93,D,DINCOPS,YUL Fire Dispatch,Fire Dispatch,FIRE,1
+56212,db94,D,DINCTAC,YUL Tactical,Fire Tac,FIRE,1
+56218,db9a,D,DCCU,YUL CCU,Mesure d'urgence,EMERGENCY,3
+56221,db9d,D,DBATIM,YUL Batiment,Utilities,UTILITY,3
+56222,db9e,D,DSCHAMP,YUL SCHAMP,Utilities,UTILITY,3
+56223,db9f,D,DFOULE,YUL Foule,Utilities,UTILITY,3
+56224,dba0,D,DACCES,YUL Acces,Utilities,UTILITY,3
+56225,dba1,D,DELECTR,YUL Electricity,Utilities,UTILITY,3
+56226,dba2,D,DPISTE,YUL Piste,Utilities,UTILITY,3
+56227,dba3,D,DTABLIER,YUL Tablier,Utilities,UTILITY,3
+56228,dba4,D,DVTP,YUL VTP,Utilities,UTILITY,3
+56229,dba5,D,DPONT,YUL Pont,Utilities,UTILITY,3
+56232,dba8,D,DINSTALL,YUL Install,Utilities,UTILITY,3
+56204,db8c,D,MSURGEN,YMX Security Dispatch,Security,SECURITY,3
+56213,db95,D,MINCOPS,YMX Fire Dispatch,Fire Dispatch,FIRE,1
+56214,db96,D,MINCTAC,YMX Fire Tactical,Fire Tac,FIRE,1
+56219,db9b,D,MCCU,YMX CCU,Mesure d'urgence,EMERGENCY,3
+56231,dba7,D,MPISTE,YMX PISTE,Utilities,UTILITY,3

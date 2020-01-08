@@ -149,21 +149,27 @@
                 <button (click)="toggleSelectPanel(false)" mat-icon-button>
                     <mat-icon>arrow_back</mat-icon>
                 </button>
-                <ng-container *ngIf="systems.length > 1">
+            </mat-toolbar>
+            <fieldset>
+                <div fxLayout="row wrap" fxLayoutAlign="space-between">
+                    <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.name)"
+                        [ngClass]="group.status">
+                        {{ group.name }}
+                    </button>
                     <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
                         OFF
                     </button>
                     <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
                         ON
                     </button>
-                </ng-container>
-            </mat-toolbar>
+                </div>
+            </fieldset>
             <fieldset *ngFor="let system of systems">
                 <legend>
                     {{ system.name }}
                 </legend>
                 <div fxLayout="row wrap" fxLayoutAlign="space-between">
-                    <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button on"
+                    <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
                         (click)="avoid({ system: system, talkgroup: talkgroup })"
                         [ngClass]="{ off: !(selection[system.system] && selection[system.system][talkgroup.dec]), on: selection[system.system] && selection[system.system][talkgroup.dec] }">
                         {{ talkgroup.alphaTag }}

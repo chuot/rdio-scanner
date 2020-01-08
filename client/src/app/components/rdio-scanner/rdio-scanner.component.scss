@@ -9,7 +9,7 @@
 
 	* {
 		user-select: none;
-    }
+	}
 
 	&,
 	.mat-sidenav,
@@ -59,10 +59,13 @@
 
 		&:active {
 			top: 4px;
+			transform: scale(.98);
+			transform-origin: bottom center;
 		}
 
 		&.off::after,
-		&.on::after {
+		&.on::after,
+		&.partial::after {
 			content: '';
 			border-radius: 4px;
 			display: block;
@@ -81,6 +84,11 @@
 		&.on::after {
 			background: rgb(100, 230, 50);
 			box-shadow: 1px 1px 1px rgb(255, 255, 255) inset, 0 0 3px 2px rgb(100, 230, 50);
+		}
+
+		&.partial::after {
+			background: rgb(230, 165, 50);
+			box-shadow: 1px 1px 1px rgb(255, 255, 255) inset, 0 0 3px 2px rgb(230, 165, 50);
 		}
 	}
 
@@ -200,6 +208,12 @@
 		}
 	}
 
+    .rdio-main,
+    .rdio-search,
+    .rdio-select {
+		min-width: 370px;
+    }
+
 	.rdio-main {
 		box-sizing: border-box;
 		margin: auto;
@@ -208,7 +222,6 @@
 		justify-content: center;
 		max-width: 640px;
 		min-height: 100%;
-		min-width: 270px;
 		padding: 24px;
 	}
 
@@ -309,6 +322,26 @@
 				opacity: .8;
 				padding: 0 12px;
 			}
+		}
+	}
+
+	@media (min-width: 720px) {
+		.rdio-button {
+			width: calc(20% - 8px);
+		}
+
+		.rdio-button-mini {
+			width: calc(10% - 8px);
+		}
+	}
+
+	@media (min-width: 1200px) {
+		.rdio-button {
+			width: calc(10% - 8px);
+		}
+
+		.rdio-button-mini {
+			width: calc(5% - 8px);
 		}
 	}
 }

@@ -52,7 +52,7 @@ module.exports = ({ pubsub, store }) => (req, res) => upload.fields([
         }
 
         const emit = () => {
-            store.rdioScannerSystem.findAll().then((systems) => {
+            store.rdioScannerSystem.findAll({ order: [['system', 'ASC']]}).then((systems) => {
                 pubsub.publish('rdioScannerSystems', { rdioScannerSystems: systemReducer(systems) });
             })
         };
@@ -60,12 +60,21 @@ module.exports = ({ pubsub, store }) => (req, res) => upload.fields([
         if (system.talkgroups.length) {
             system.talkgroups = JSON.stringify(system.talkgroups);
 
-            store.rdioScannerSystem.upsert(system)
-                .then(() => {
-                    emit();
-                    res.send(`System ${system.name} imported successfully.\n`);
-                })
-                .catch((err) => res.send(err.message));
+            store.rdioScannerSystem.findOne({ where: { system: system.system } })
+                .then((rdioScannerSystem) => {
+                    if (rdioScannerSystem) {
+                        rdioScannerSystem.update(system).then(() => {
+                            emit();
+                            res.send(`System ${system.name} updated successfully.\n`);
+                        });
+
+                    } else {
+                        store.rdioScannerSystem.create(system).then(() => {
+                            emit();
+                            res.send(`System ${system.name} imported successfully.\n`);
+                        });
+                    }
+                });
 
         } else {
             store.rdioScannerSystem.destroy({ where: { system: system.system } })

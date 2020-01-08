@@ -1,14 +1,16 @@
-# Rdio Scanner v2.1
+# Rdio Scanner v2.5
 
 *Rdio Scanner* is a progressive web interface designed to resemble an old school radio scanner. It integrates all frontend / backend components to manage audio files from different sources.
 
 For now, only [Trunk Recorder](https://github.com/robotastic/trunk-recorder) software files can be used, but other audio sources can be added later on request.
 
+Need help?
+
 [![Chat](https://img.shields.io/gitter/room/rdio-scanner/Lobby.svg)](https://gitter.im/rdio-scanner/Lobby?utm_source=share-link&utm_medium=link&utm_campaign=share-link)
 
 ## What's new in this version
 
-Version 2.1 focuses on various speed improvements for searching stored calls.
+Version 2.5 add a new feature where you can toggle talkgroups according to their defined group (emergency, fire, law, transport, ...).
 
 Version 2.0 is a major rewrite in which Meteor has been replaced by [The Apollo Data Graph Platform](https://www.apollographql.com/) for its API. MongoDB is also replaced by [SQLite](https://www.sqlite.org/) to facilitate the entire installation process. It is still possible to use another database by changing [Sequelize ORM](https://sequelize.org/) settings accordingly.
 
@@ -67,7 +69,7 @@ Note that if you change the talkgroups selection while holding a system or a tal
 
 ### Talkgroups selection screen
 
-The talkgroups selection screen is where you select the talkgroups. You can either select them individually, by system or globally.
+The talkgroups selection screen is where you select the talkgroups. You can either select them individually, by system, by group or globally.
 
 Enabled talkgroup calls will be queued for listening.
 

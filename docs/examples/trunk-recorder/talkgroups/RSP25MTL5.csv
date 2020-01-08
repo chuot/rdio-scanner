@@ -1,9 +1,9 @@
-54153,d389,D,ASSOMP FD,L'Assomption Fire Dispatch,Fire Dispatch,Fire,1
-54171,d39b,D,MASCOU FD,Mascouche Fire Dispatch,Fire Dispatch,Fire,1
-54141,d37d,D,REPENT FD1,Repentigny Fire Dispatch 1,Fire Dispatch,Fire,1
-54142,d37e,D,REPENT FD2,Repentigny Fire Dispatch 2,Fire Talk,Fire,1
-54143,d37f,D,REPENT FO,Repentigny Fire Operations,Fire Talk,Fire,1
-54144,d380,D,REPENT FP,Repentigny Fire Prevention,Fire Talk,Fire,1
-54145,d381,D,REPENT EM,Repentigny Emergency Measure,Fire Talk,Fire,1
-54231,d3d7,D,TERREB FD,Terrebonne Fire Dispatch,Fire Dispatch,Fire,1
-54232,d3d8,D,TERREB FO,Terrebonne Fire Operations,Fire Tac,Fire,1
+54153,d389,D,ASSOMP FD,L'Assomption Fire Dispatch,Fire Dispatch,FIRE,1
+54171,d39b,D,MASCOU FD,Mascouche Fire Dispatch,Fire Dispatch,FIRE,1
+54141,d37d,D,REPENT FD1,Repentigny Fire Dispatch 1,Fire Dispatch,FIRE,1
+54142,d37e,D,REPENT FD2,Repentigny Fire Dispatch 2,Fire Talk,FIRE,1
+54143,d37f,D,REPENT FO,Repentigny Fire Operations,Fire Talk,FIRE,1
+54144,d380,D,REPENT FP,Repentigny Fire Prevention,Fire Talk,FIRE,1
+54145,d381,D,REPENT EM,Repentigny Emergency Measure,Fire Talk,FIRE,1
+54231,d3d7,D,TERREB FD,Terrebonne Fire Dispatch,Fire Dispatch,FIRE,1
+54232,d3d8,D,TERREB FO,Terrebonne Fire Operations,Fire Tac,FIRE,1
