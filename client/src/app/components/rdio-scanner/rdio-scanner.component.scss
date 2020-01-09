@@ -125,6 +125,7 @@
 		box-shadow: 2px 2px 4px rgb(0, 0, 0) inset, 1px 1px 2px 1px rgb(255, 255, 255);
 		box-sizing: border-box;
 		color: rgba(0, 0, 0, .8);
+		cursor: default;
 		display: block;
 		font-size: 14px;
 		font-weight: 400;
@@ -208,11 +209,11 @@
 		}
 	}
 
-    .rdio-main,
-    .rdio-search,
-    .rdio-select {
+	.rdio-main,
+	.rdio-search,
+	.rdio-select {
 		min-width: 370px;
-    }
+	}
 
 	.rdio-main {
 		box-sizing: border-box;
@@ -326,22 +327,26 @@
 	}
 
 	@media (min-width: 720px) {
-		.rdio-button {
-			width: calc(20% - 8px);
-		}
+		.rdio-select {
+			.rdio-button {
+				width: calc(20% - 8px);
+			}
 
-		.rdio-button-mini {
-			width: calc(10% - 8px);
+			.rdio-button-mini {
+				width: calc(10% - 8px);
+			}
 		}
 	}
 
 	@media (min-width: 1200px) {
-		.rdio-button {
-			width: calc(10% - 8px);
-		}
+		.rdio-select {
+			.rdio-button {
+				width: calc(10% - 8px);
+			}
 
-		.rdio-button-mini {
-			width: calc(5% - 8px);
+			.rdio-button-mini {
+				width: calc(5% - 8px);
+			}
 		}
 	}
 }
