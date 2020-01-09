@@ -1,4 +1,4 @@
-# Rdio Scanner v2.5
+# Rdio Scanner v2.5.1
 
 *Rdio Scanner* is a progressive web interface designed to resemble an old school radio scanner. It integrates all frontend / backend components to manage audio files from different sources.
 

@@ -1,6 +1,6 @@
 {
     "name": "rdio-scanner-client",
-    "version": "2.5.0",
+    "version": "2.5.1",
     "private": true,
     "scripts": {
         "build": "ng build --cross-origin use-credentials --prod $*",

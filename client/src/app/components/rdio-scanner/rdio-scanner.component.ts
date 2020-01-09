@@ -242,6 +242,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 this.unsubscribeLivefeed();
                 this.subscribeLivefeed();
             }
+
+            this.buildGroups();
         }
     }
 
@@ -279,6 +281,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 this.unsubscribeLivefeed();
                 this.subscribeLivefeed();
             }
+
+            this.buildGroups();
         }
     }
 
@@ -466,6 +470,14 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     toggleGroup(name: string): void {
         const group = this.groups.find((_group) => _group.name === name);
+
+        if (this.selectionSystemHold) {
+            this._selectionSystemHold = null;
+        }
+
+        if (this.selectionTalkgroupHold) {
+            this._selectionTalkgroupHold = null;
+        }
 
         if (group) {
             const status = group.status === RdioScannerGroupStatus.On ? false : true;
