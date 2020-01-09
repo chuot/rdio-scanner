@@ -23,7 +23,7 @@ For those of you who are already running a previous version of *Rdio Scanner*, t
 * Designed to look like a real police radio scanner
 * Incoming calls are queued for lossless listening
 * Temporarily hold a single system or a single talkgroup
-* Select the newsgroups you want to listen to in live streaming mode
+* Select the talkgroups you want to listen to in live streaming mode
 * Easily retrieve and replay past calls
 * Easy to install and configure
 
@@ -53,6 +53,7 @@ Here's where incoming calls are displayed, as long as *LIVE FEED* is enabled.
   * (TGID :) Talkgroup ID
   * (UID :) Unit ID
   * Call history of the last five calls
+  * Double clicking or tapping this area will toggle fullscreen display
 
 * Control area
   * LIVE FEED: When enabled, incoming calls are place in the queue for playback. The queue will be emptied if it is disabled
@@ -77,7 +78,7 @@ Enabled talkgroup calls will be queued for listening.
 
 ### Search call screen
 
-This screen allows you to browse past calls. You can filter the list by date, system and newsgroup.
+This screen allows you to browse past calls. You can filter the list by date, system and talkgroups.
 
 ![Call Search](./docs/images/rdio_scanner_search.png?raw=true "Call Search")
 

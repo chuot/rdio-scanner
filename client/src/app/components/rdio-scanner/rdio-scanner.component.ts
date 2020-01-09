@@ -437,6 +437,33 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
+    toggleFullscreen(): void {
+        if (document.fullscreenElement) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if ((document as any).mozCancelFullScreen) {
+                (document as any).mozCancelFullScreen();
+            } else if ((document as any).msExitFullscreen) {
+                (document as any).msExitFullscreen();
+            } else if ((document as any).mozCancelFullScreen) {
+                (document as any).mozCancelFullScreen();
+            } else if ((document as any).webkitExitFullscreen) {
+                (document as any).webkitExitFullscreen();
+            }
+
+        } else {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            } else if ((document.documentElement as any).mozRequestFullScreen) {
+                (document.documentElement as any).mozRequestFullscreen();
+            } else if ((document.documentElement as any).msRequestFullscreen) {
+                (document.documentElement as any).msRequestFullscreen();
+            } else if ((document.documentElement as any).webkitRequestFullscreen) {
+                (document.documentElement as any).webkitRequestFullscreen();
+            }
+        }
+    }
+
     toggleGroup(name: string): void {
         const group = this.groups.find((_group) => _group.name === name);
 

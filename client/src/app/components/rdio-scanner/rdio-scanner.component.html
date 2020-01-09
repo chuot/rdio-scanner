@@ -192,7 +192,7 @@
             <div class="rdio-status" fxLayout="row" fxLayoutAlign="end">
                 <span class="rdio-led" [ngClass]="{ off: !call, on: call, paused: call && livefeedPaused }"></span>
             </div>
-            <div class="rdio-display">
+            <div class="rdio-display" (dblclick)="toggleFullscreen()">
                 <div fxLayout="row" fxLayoutAlign="space-between">
                     <div>
                         <span>
