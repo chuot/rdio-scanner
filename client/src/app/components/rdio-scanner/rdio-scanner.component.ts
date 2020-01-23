@@ -1,4 +1,4 @@
-import { Component, HostListener, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, EventEmitter, HostListener, NgZone, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject, Subscription } from 'rxjs';
@@ -35,6 +35,8 @@ interface RdioScannerSelection {
     templateUrl: './rdio-scanner.component.html',
 })
 export class AppRdioScannerComponent implements OnDestroy, OnInit {
+    @Output() readonly live = new EventEmitter<boolean>();
+
     get call() { return this._call; }
     get callHistory() { return this._callHistory; }
     get callPrevious() { return this._callPrevious; }
@@ -297,6 +299,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             this.stop();
         }
+
+        this.live.emit(status);
     }
 
     loadAndPlay(call: RdioScannerCall): void {
@@ -310,6 +314,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     ngOnDestroy(): void {
+        this.live.complete();
+
         this.unsubscribeLivefeed();
 
         this.unsubscribeSearchForm();
@@ -729,8 +735,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (!this.searchFormSubscription) {
             this.searchFormSubscription = this.searchForm.valueChanges.subscribe((value) => {
                 if (!Object.keys(value).every((key) => value[key] === lastValue[key])) {
-                    lastValue = value;
-
                     if (value.system !== lastValue.system && value.talkgroup !== -1) {
                         lastValue.talkgroup = -1;
                         this.searchForm.get('talkgroup').reset(lastValue.talkgroup);
@@ -739,6 +743,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     this.matPaginator.firstPage();
 
                     this.loadStoredCalls(value);
+
+                    lastValue = value;
                 }
             });
         }

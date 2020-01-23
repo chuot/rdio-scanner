@@ -2,7 +2,7 @@
 
 module.exports = {
 
-    up: async (queryInterface, Sequelize) => {
+    up: async (queryInterface) => {
         const transaction = await queryInterface.sequelize.transaction();
 
         try {
