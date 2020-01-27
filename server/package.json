@@ -1,6 +1,6 @@
 {
     "name": "rdio-scanner-server",
-    "version": "2.5.1",
+    "version": "3.0.0",
     "private": true,
     "main": "index.js",
     "scripts": {
@@ -11,22 +11,22 @@
     "license": "LICENSE",
     "dependencies": {
         "apollo-datasource": "^0.6.4",
-        "apollo-server-express": "^2.9.15",
+        "apollo-server-express": "^2.9.16",
         "camelcase": "^5.3.1",
         "cors": "^2.8.5",
         "dotenv": "^8.2.0",
         "express": "^4.17.1",
-        "graphql": "^14.5.8",
+        "graphql": "^14.6.0",
         "helmet": "^3.21.2",
         "mariadb": "^2.1.5",
         "multer": "^1.4.2",
         "mysql2": "^2.1.0",
         "nodemon": "^2.0.2",
-        "pg": "^7.17.0",
+        "pg": "^7.17.1",
         "sequelize": "^5.21.3",
         "sequelize-cli": "^5.5.1",
         "sqlite3": "^4.1.1",
-        "uuid": "^3.3.3"
+        "uuid": "^3.4.0"
     },
     "devDependencies": {
         "eslint": "^6.8.0"

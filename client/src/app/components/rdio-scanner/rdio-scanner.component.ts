@@ -1,10 +1,11 @@
-import { Component, EventEmitter, HostListener, NgZone, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, NgZone, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { AppRdioScannerCallQueryService } from './rdio-scanner-call-query.service';
 import { AppRdioScannerCallSubscriptionService, RdioScannerCall } from './rdio-scanner-call-subscription.service';
 import { AppRdioScannerCallsQueryService } from './rdio-scanner-calls-query.service';
+import { AppRdioScannerConfigQueryService, RdioScannerConfig } from './rdio-scanner-config-query.service';
 import { AppRdioScannerSystemsQueryService } from './rdio-scanner-systems-query.service';
 import { AppRdioScannerSystemsSubscriptionService, RdioScannerSystem, RdioScannerTalkgroup } from './rdio-scanner-systems-subscription.service';
 
@@ -41,6 +42,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     get callHistory() { return this._callHistory; }
     get callPrevious() { return this._callPrevious; }
     get callQueue() { return this._callQueue; }
+    get config() { return this._config; }
     get displayAlphaTag() { return this._displayAlphaTag; }
     get displayClock() { return this._displayClock; }
     get displayDescription() { return this._displayDescription; }
@@ -73,6 +75,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private _callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
     private _callPrevious: RdioScannerCall | null = null;
     private _callQueue: RdioScannerCall[] = [];
+    private _config: RdioScannerConfig = {};
     private _displayAlphaTag = 'Alpha tag';
     private _displayClock = new Date();
     private _displayDescription = 'Idle';
@@ -84,7 +87,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private _displaySystem = 'System';
     private _displayTag = 'Tag';
     private _displayTalkgroup = 0;
-    private _displayUnit = 0;
+    private _displayUnit: number | string = 0;
     private _groups: RdioScannerGroup[] = [];
     private _livefeedPaused = false;
     private _searchForm: FormGroup = this.ngFormBuilder.group({
@@ -117,12 +120,15 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private searchResultsBufferTo = this.searchResultsBuffer.length - 1;
     private systemsSubscription: Subscription;
 
+    @ViewChild('downloadLink', { static: true }) private downloadLink: ElementRef;
+
     @ViewChild(MatPaginator, { static: true }) private matPaginator: MatPaginator;
 
     constructor(
         private appRdioScannerCallQuery: AppRdioScannerCallQueryService,
         private appRdioScannerCallsQuery: AppRdioScannerCallsQueryService,
         private appRdioScannerCallSubscription: AppRdioScannerCallSubscriptionService,
+        private appRdioScannerConfigQuery: AppRdioScannerConfigQueryService,
         private appRdioScannerSystemsQuery: AppRdioScannerSystemsQueryService,
         private appRdioScannerSystemsSubscription: AppRdioScannerSystemsSubscriptionService,
         private ngFormBuilder: FormBuilder,
@@ -303,14 +309,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         this.live.emit(status);
     }
 
-    loadAndPlay(call: RdioScannerCall): void {
-        this.appRdioScannerCallQuery.fetch({ id: call.id }).subscribe(({ data }) => {
-            if (data.rdioScannerCall) {
-                Object.assign(call, this.transformCall(data.rdioScannerCall));
+    loadAndDownload(call: RdioScannerCall): void {
+        this.loadCall(call).then((_call) => this.download(_call));
+    }
 
-                this.play(call);
-            }
-        });
+    loadAndPlay(call: RdioScannerCall): void {
+        this.loadCall(call).then((_call) => this.play(_call));
     }
 
     ngOnDestroy(): void {
@@ -332,10 +336,15 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         this.bootstrapAudio();
 
-        this.subscribeSystems().then(() => {
-            this.subscribeSearchForm();
-            this.subscribeSearchPaginator();
-        });
+        this.getConfig().then((config) => {
+            this._config = config;
+
+            this.subscribeSystems().then(() => {
+                this.subscribeSearchForm();
+                this.subscribeSearchPaginator();
+            });
+        })
+
     }
 
     pause(status = !this.livefeedPaused): void {
@@ -593,12 +602,51 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         });
     }
 
+    private download(call: RdioScannerCall = {}): void {
+        if (this.config.allowDownload && Array.isArray(call.audio && call.audio.data)) {
+            let name;
+
+            if (call.audioName) {
+                name = call.audioName;
+
+            } else {
+                const sysName = (call.systemData && call.systemData.name) || call.system;
+                const tgName = (call.talkgroupData && call.talkgroupData.description) || call.talkgroup;
+                const time = new Date(call.startTime).toISOString();
+
+                name = call.audioName || `${sysName}-${tgName}-${time}.m4a`;
+            }
+
+            const audio = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
+            const type = call.audioType || 'audio/aac';
+            const uri = `data:${type};base64,${btoa(audio)}`;
+
+            this.downloadLink.nativeElement.download = name;
+            this.downloadLink.nativeElement.href = uri;
+
+            this.downloadLink.nativeElement.click();
+        }
+    }
+
     private formatFrequency(frequency: number): string {
         return (typeof frequency === 'number' ? frequency : 0)
             .toString()
             .padStart(9, '0')
             .replace(/(\d)(?=(\d{3})+$)/g, '$1 ')
             .concat(' Hz');
+    }
+
+    private async getConfig(): Promise<RdioScannerConfig> {
+        const query = await this.appRdioScannerConfigQuery.fetch().toPromise();
+        return query.data.rdioScannerConfig;
+    }
+
+    private async loadCall(call: RdioScannerCall = {}): Promise<RdioScannerCall | null> {
+        const query = await this.appRdioScannerCallQuery.fetch({ id: call.id }).toPromise();
+
+        Object.assign(call, query.data.rdioScannerCall);
+
+        return call;
     }
 
     private async loadStoredCalls(filters?: any): Promise<void> {
@@ -768,10 +816,25 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (call) {
-            call.systemData = (call && this.systems
-                .find((system: RdioScannerSystem) => system.system === call.system)) || {};
+            const system = this.systems.find((_system: RdioScannerSystem) => _system.system === call.system) || {};
 
-            call.talkgroupData = (call && call.systemData && Array.isArray(call.systemData.talkgroups) && call.systemData.talkgroups
+            if (Array.isArray(call.srcList)) {
+                const aliases = system.aliases || [];
+
+                call.srcList = call.srcList.map((src) => {
+                    const alias = aliases.find((_alias) => _alias.uid === src.src);
+
+                    if (alias) {
+                        src.name = alias.name;
+                    }
+
+                    return src;
+                });
+            }
+
+            call.systemData = system;
+
+            call.talkgroupData = (call.systemData && Array.isArray(call.systemData.talkgroups) && call.systemData.talkgroups
                 .find((talkgroup: RdioScannerTalkgroup) => talkgroup.dec === call.talkgroup)) || {};
         }
 
@@ -827,7 +890,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this._displaySystem = this.call.systemData.name || '';
             this._displayTag = this.call.talkgroupData.tag || '';
             this._displayTalkgroup = this.call.talkgroup || 0;
-            this._displayUnit = currentSrc.src || 0;
+            this._displayUnit = currentSrc.name || currentSrc.src || 0;
         }
     }
 

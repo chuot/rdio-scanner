@@ -26,6 +26,7 @@ export interface RdioScannerCallFreq {
 }
 
 export interface RdioScannerCallSrc {
+    name?: string;
     pos?: number;
     src?: number;
 }

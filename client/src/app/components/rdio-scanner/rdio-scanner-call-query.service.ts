@@ -8,6 +8,8 @@ export interface RdioScannerCall {
         type?: 'Buffer';
         data?: number[];
     };
+    audioName?: string;
+    audioType?: string;
     emergency?: boolean;
     freq?: number;
     freqList?: RdioScannerCallFreq[];
@@ -30,6 +32,7 @@ export interface RdioScannerCallFreq {
 }
 
 export interface RdioScannerCallSrc {
+    name?: string;
     pos?: number;
     src?: number;
 }
@@ -47,6 +50,8 @@ export class AppRdioScannerCallQueryService extends Query<RdioScannerCallQueryRe
             rdioScannerCall(id: $id) {
                 id
                 audio
+                audioName
+                audioType
                 emergency
                 freq
                 freqList {

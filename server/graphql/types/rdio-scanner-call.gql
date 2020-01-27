@@ -1,6 +1,8 @@
 type RdioScannerCall {
     id: String
     audio: Audio
+    audioName: String
+    audioType: String
     emergency: Boolean
     freq: Int
     freqList: [RdioScannerCallFreq]

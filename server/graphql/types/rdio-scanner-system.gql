@@ -1,4 +1,5 @@
 type RdioScannerSystem {
+    aliases: [RdioScannerAlias]
     id: String
     name: String
     system: Int

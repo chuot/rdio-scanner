@@ -1,8 +1,8 @@
-# Rdio Scanner v2.5.1
+# Rdio Scanner v3.0
 
-*Rdio Scanner* is a progressive web interface designed to resemble an old school radio scanner. It integrates all frontend / backend components to manage audio files from different sources.
+*Rdio Scanner* is a progressive web interface designed to act like an old school police radio scanner. It integrates all frontend / backend components to manage audio files from different sources.
 
-For now, only [Trunk Recorder](https://github.com/robotastic/trunk-recorder) software files can be used, but other audio sources can be added later on request.
+For now, only [Trunk Recorder](https://github.com/robotastic/trunk-recorder) generated files can be used, but other audio sources can be added later on request.
 
 Need help?
 
@@ -10,26 +10,24 @@ Need help?
 
 ## What's new in this version
 
-Version 2.5 add a new feature where you can toggle talkgroups according to their defined group (emergency, fire, law, transport, ...).
+Version 3.0 brings new features:
 
-Version 2.0 is a major rewrite in which Meteor has been replaced by [The Apollo Data Graph Platform](https://www.apollographql.com/) for its API. MongoDB is also replaced by [SQLite](https://www.sqlite.org/) to facilitate the entire installation process. It is still possible to use another database by changing [Sequelize ORM](https://sequelize.org/) settings accordingly.
+* Unit aliases support, display names instead of unit ID
+* Download calls from the search pane
+* New configuration options: *allowDownload* and *useGroup*
 
-These changes bring many *performance benefits* to *Rdio scanner* and make it *much easier to install*.
-
-For those of you who are already running a previous version of *Rdio Scanner*, there is no way to upgrade your current database to the new version of *Rdio Scanner*.
+*Note that you can only update from version 2.0 and above. You have to do a fresh install if your actual version is prior to version 2.0.*
 
 ## Features
 
-* Designed to look like a real police radio scanner
+* Designed to act as an old school police radio scanner
 * Incoming calls are queued for lossless listening
 * Temporarily hold a single system or a single talkgroup
 * Select the talkgroups you want to listen to in live streaming mode
-* Easily retrieve and replay past calls
+* Easily retrieve and replay or download past calls
+* Supports UID aliases
+* Control active talkgroups by their system or group
 * Easy to install and configure
-
-## Demo
-
-There is no demo site for Rdio Scanner yet, but we are working on it. We will update this section with an actual URL as it becomes available. For now, you can refer to the following section to get an idea of what is *Rdio Scanner*.
 
 ## Screenshots
 
@@ -209,6 +207,21 @@ RDIO_APIKEYS=[{"key":"b29eb8b9-9bcd-4e6e-bb4f-d244ada12736","systems":[{"system"
 #
 # Calls older than this number of days will be expunge from the database.
 RDIO_PRUNEDAYS=30
+
+# Rdio Scanner allow download
+#
+# Allow users to download calls from the search pane.
+# This option is true by default.
+RDIO_ALLOW_DOWNLOAD=false
+
+# Rdio Scanner use group
+#
+# Allow talkgroup activation/deactivation based on their assigned group
+# (from the talkgroup CSV files). Depending on your setup, you can turn off
+# this feature.
+#
+# This option is true by default
+RDIO_ALLOW_DOWNLOAD=false
 ```
 
 ## Updating Rdio Scanner thereafter
@@ -307,6 +320,10 @@ Note that if you want to remove a system from the *Rdio Scanner* configuration, 
 
 Once uploaded, you should have your systems and talkgroups listed on *Rdio Scanner* talkgroups selection screen.
 
+### docs/examples/trunk-recorder/scripts/upload-aliases.sh
+
+This script is optional. Use it if you want P25 unit id to be displayed as name instead of number.
+
 ### docs/examples/trunk-recorder/systemd
 
 Provided as complimentary files, `trunk-recorder@.service` and `trunk-recorder@.timer` can be use to manage multiple *Trunk Recorder* instances. For example, if you have more that 1 system that requires different *gains* / *tuners* each.
@@ -318,3 +335,7 @@ you can either just enable the `trunk-recorder@[config_name].service` or the `tr
 Since *Trunk Recorder* should only records **knowed** talkgroups, they should be well configured in each CSV files.
 
 **Not having talkgroups well defined will make *Rdio Scanner* display calls with much less informations on screen.**
+
+### docs/examples/trunk-recorder/aliases
+
+This is where you put your UID aliases per system.

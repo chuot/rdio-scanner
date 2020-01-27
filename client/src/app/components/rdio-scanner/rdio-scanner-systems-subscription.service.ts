@@ -2,8 +2,14 @@ import { Injectable } from '@angular/core';
 import { Subscription } from 'apollo-angular';
 import gql from 'graphql-tag';
 
+export interface RdioScannerAlias {
+    name?: string;
+    uid?: number;
+}
+
 export interface RdioScannerSystem {
     id?: string;
+    aliases?: RdioScannerAlias[];
     name?: string;
     system?: number;
     talkgroups?: RdioScannerTalkgroup[];
@@ -30,6 +36,10 @@ export class AppRdioScannerSystemsSubscriptionService extends Subscription<RdioS
         subscription rdioScannerSystems {
             rdioScannerSystems {
                 id
+                aliases {
+                    name
+                    uid
+                }
                 name
                 system
                 talkgroups {

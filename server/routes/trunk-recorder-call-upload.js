@@ -51,6 +51,8 @@ module.exports = ({ pubsub, store }) => (req, res) => upload.fields([
 
         const data = {
             audio: req.files.audio[0].buffer,
+            audioName: req.files.audio[0].originalname,
+            audioType: req.files.audio[0].mimetype,
             emergency: !!meta.emergency,
             freq: parseInt(meta.freq, 10),
             freqList: JSON.stringify(Array.isArray(meta.freqList) ? meta.freqList : []),

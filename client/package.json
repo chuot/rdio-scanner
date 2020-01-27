@@ -1,6 +1,6 @@
 {
     "name": "rdio-scanner-client",
-    "version": "2.5.1",
+    "version": "3.0.0",
     "private": true,
     "scripts": {
         "build": "ng build --cross-origin use-credentials --prod $*",
@@ -26,7 +26,7 @@
         "apollo-client": "^2.6.8",
         "apollo-link": "^1.2.13",
         "apollo-link-ws": "^1.0.19",
-        "graphql": "^14.5.8",
+        "graphql": "^14.6.0",
         "graphql-tag": "^2.10.1",
         "rxjs": "~6.5.4",
         "subscriptions-transport-ws": "^0.9.16",
@@ -34,14 +34,14 @@
         "zone.js": "~0.10.2"
     },
     "devDependencies": {
-        "@angular-devkit/build-angular": "~0.803.21",
-        "@angular/cli": "~8.3.21",
+        "@angular-devkit/build-angular": "~0.803.23",
+        "@angular/cli": "~8.3.23",
         "@angular/compiler-cli": "~8.2.14",
         "@angular/language-service": "~8.2.14",
-        "@types/node": "~13.1.4",
+        "@types/node": "~13.5.0",
         "codelyzer": "^5.2.1",
-        "ts-node": "~8.5.4",
-        "tslint": "~5.20.1",
+        "ts-node": "~8.6.2",
+        "tslint": "~6.0.0",
         "typescript": "~3.5.3"
     }
 }

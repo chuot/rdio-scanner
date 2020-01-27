@@ -51,6 +51,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(clientRoot));
 
+app.post('/api/trunk-recorder-alias-upload', require('./routes/trunk-recorder-alias-upload')({ pubsub, store }));
 app.post('/api/trunk-recorder-call-upload', require('./routes/trunk-recorder-call-upload')({ pubsub, store }));
 app.post('/api/trunk-recorder-system-upload', require('./routes/trunk-recorder-system-upload')({ pubsub, store }));
 

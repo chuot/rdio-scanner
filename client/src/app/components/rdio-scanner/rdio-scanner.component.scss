@@ -228,7 +228,9 @@
 
 	.rdio-search,
 	.rdio-select {
-		padding: 16px;
+        padding: 16px;
+        margin: auto;
+        max-width: 1200px;
 	}
 
 	.rdio-search-form,

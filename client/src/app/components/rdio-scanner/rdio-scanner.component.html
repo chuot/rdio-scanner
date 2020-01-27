@@ -16,14 +16,21 @@
                         <mat-header-cell *matHeaderCellDef></mat-header-cell>
                         <mat-cell *matCellDef="let row">
                             <ng-container *ngIf="row">
-                                <button (click)="row === call ? skip() : loadAndPlay(row)" mat-icon-button>
-                                    <ng-container *ngIf="row === call">
-                                        <mat-icon>stop</mat-icon>
-                                    </ng-container>
-                                    <ng-container *ngIf="row !== call">
-                                        <mat-icon>play_arrow</mat-icon>
-                                    </ng-container>
-                                </button>
+                                <ng-container *ngIf="downloadMode.checked">
+                                    <button (click)="loadAndDownload(row)" mat-icon-button>
+                                        <mat-icon>save_alt</mat-icon>
+                                    </button>
+                                </ng-container>
+                                <ng-container *ngIf="!downloadMode.checked">
+                                    <button (click)="row === call ? skip() : loadAndPlay(row)" mat-icon-button>
+                                        <ng-container *ngIf="row === call">
+                                            <mat-icon>stop</mat-icon>
+                                        </ng-container>
+                                        <ng-container *ngIf="row !== call">
+                                            <mat-icon>play_arrow</mat-icon>
+                                        </ng-container>
+                                    </button>
+                                </ng-container>
                             </ng-container>
                         </mat-cell>
                     </ng-container>
@@ -81,7 +88,7 @@
             </div>
             <form class="rdio-search-form" [formGroup]="searchForm" autocomplete="off">
                 <div>
-                    <mat-form-field fxFlex>
+                    <mat-form-field>
                         <mat-label>
                             Sort order
                         </mat-label>
@@ -94,7 +101,7 @@
                             </mat-option>
                         </mat-select>
                     </mat-form-field>
-                    <mat-form-field fxFlex>
+                    <mat-form-field>
                         <mat-label>
                             Date
                         </mat-label>
@@ -105,7 +112,7 @@
                     </mat-form-field>
                 </div>
                 <div>
-                    <mat-form-field fxFlex>
+                    <mat-form-field>
                         <mat-label>
                             System
                         </mat-label>
@@ -118,7 +125,7 @@
                             </mat-option>
                         </mat-select>
                     </mat-form-field>
-                    <mat-form-field fxFlex>
+                    <mat-form-field>
                         <mat-label>
                             Talkgroup
                         </mat-label>
@@ -132,13 +139,21 @@
                         </mat-select>
                     </mat-form-field>
                 </div>
-                <div>
-                    <button (click)="resetSearchForm()" [disabled]="searchResultsPending" mat-raised-button
-                        type="button">
-                        Reset
-                    </button>
+                <div fxLayout="column">
+                    <div fxFlex fxLayout="row" fxLayoutAlign="center center">
+                        <button (click)="resetSearchForm()" [disabled]="searchResultsPending" mat-raised-button
+                            type="button">
+                            Reset
+                        </button>
+                    </div>
+                    <div fxFlex fxLayout="row" fxLayoutAlign="center center" [fxShow]="config.allowDownload">
+                        <mat-slide-toggle #downloadMode>
+                            <mat-icon>save_alt</mat-icon>
+                        </mat-slide-toggle>
+                    </div>
                 </div>
             </form>
+            <a #downloadLink style="display: none;"></a>
         </div>
     </mat-sidenav>
 
@@ -149,21 +164,31 @@
                 <button (click)="toggleSelectPanel(false)" mat-icon-button>
                     <mat-icon>arrow_back</mat-icon>
                 </button>
-            </mat-toolbar>
-            <fieldset>
-                <div fxLayout="row wrap" fxLayoutAlign="space-between">
-                    <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.name)"
-                        [ngClass]="group.status">
-                        {{ group.name }}
-                    </button>
+                <ng-container *ngIf="!config.useGroup && systems.length > 1">
                     <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
                         OFF
                     </button>
                     <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
                         ON
                     </button>
-                </div>
-            </fieldset>
+                </ng-container>
+            </mat-toolbar>
+            <ng-container *ngIf="config.useGroup">
+                <fieldset>
+                    <div fxLayout="row wrap" fxLayoutAlign="space-between">
+                        <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.name)"
+                            [ngClass]="group.status">
+                            {{ group.name }}
+                        </button>
+                        <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
+                            OFF
+                        </button>
+                        <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
+                            ON
+                        </button>
+                    </div>
+                </fieldset>
+            </ng-container>
             <fieldset *ngFor="let system of systems">
                 <legend>
                     {{ system.name }}

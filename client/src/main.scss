@@ -7,7 +7,7 @@ $custom-typography: mat-typography-config($font-family: $font-family);
 @include mat-core($custom-typography);
 
 $primary: mat-palette($mat-grey, 800, 50);
-$accent: mat-palette($mat-green);
+$accent: mat-palette($mat-indigo);
 
 $theme: mat-light-theme($primary, $accent);
 

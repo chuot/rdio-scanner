@@ -2,8 +2,12 @@
 
 module.exports = (sequelize, DataTypes) => {
     return sequelize.define('rdioScannerSystem', {
+        aliases: DataTypes.JSON,
         name: DataTypes.STRING,
-        system: DataTypes.INTEGER,
+        system: {
+            type: DataTypes.INTEGER,
+            unique: true,
+        },
         talkgroups: DataTypes.JSON,
     }, {});
 };

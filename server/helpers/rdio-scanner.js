@@ -65,6 +65,12 @@ function systemReducer(system) {
 
     } else {
         try {
+            system.aliases = JSON.parse(system.aliases);
+        } catch (err) {
+            system.aliases = [];
+        }
+
+        try {
             system.talkgroups = JSON.parse(system.talkgroups);
         } catch (err) {
             system.talkgroups = [];

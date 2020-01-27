@@ -3,6 +3,8 @@
 module.exports = (sequelize, DataTypes) => {
     return sequelize.define('rdioScannerCall', {
         audio: DataTypes.BLOB('long'),
+        audioName: DataTypes.STRING,
+        audioType: DataTypes.STRING,
         emergency: DataTypes.BOOLEAN,
         freq: DataTypes.INTEGER,
         freqList: DataTypes.JSON,
