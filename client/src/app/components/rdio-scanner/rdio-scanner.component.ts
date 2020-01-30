@@ -131,6 +131,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         private appRdioScannerConfigQuery: AppRdioScannerConfigQueryService,
         private appRdioScannerSystemsQuery: AppRdioScannerSystemsQueryService,
         private appRdioScannerSystemsSubscription: AppRdioScannerSystemsSubscriptionService,
+        private ngElementRef: ElementRef,
         private ngFormBuilder: FormBuilder,
         private ngZone: NgZone,
     ) { }
@@ -457,28 +458,33 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     toggleFullscreen(): void {
+
         if (document.fullscreenElement) {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if ((document as any).mozCancelFullScreen) {
-                (document as any).mozCancelFullScreen();
-            } else if ((document as any).msExitFullscreen) {
-                (document as any).msExitFullscreen();
-            } else if ((document as any).mozCancelFullScreen) {
-                (document as any).mozCancelFullScreen();
-            } else if ((document as any).webkitExitFullscreen) {
-                (document as any).webkitExitFullscreen();
+            const el: any = document;
+
+            if (el.exitFullscreen) {
+                el.exitFullscreen();
+            } else if (el.mozCancelFullScreen) {
+                el.mozCancelFullScreen();
+            } else if (el.msExitFullscreen) {
+                el.msExitFullscreen();
+            } else if (el.mozCancelFullScreen) {
+                el.mozCancelFullScreen();
+            } else if (el.webkitExitFullscreen) {
+                el.webkitExitFullscreen();
             }
 
         } else {
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen();
-            } else if ((document.documentElement as any).mozRequestFullScreen) {
-                (document.documentElement as any).mozRequestFullscreen();
-            } else if ((document.documentElement as any).msRequestFullscreen) {
-                (document.documentElement as any).msRequestFullscreen();
-            } else if ((document.documentElement as any).webkitRequestFullscreen) {
-                (document.documentElement as any).webkitRequestFullscreen();
+            const el = this.ngElementRef.nativeElement;
+
+            if (el.requestFullscreen) {
+                el.requestFullscreen();
+            } else if (el.mozRequestFullScreen) {
+                el.mozRequestFullscreen();
+            } else if (el.msRequestFullscreen) {
+                el.msRequestFullscreen();
+            } else if (el.webkitRequestFullscreen) {
+                el.webkitRequestFullscreen();
             }
         }
     }
