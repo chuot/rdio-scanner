@@ -344,7 +344,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 this.subscribeSearchForm();
                 this.subscribeSearchPaginator();
             });
-        })
+        });
 
     }
 
@@ -458,7 +458,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     toggleFullscreen(): void {
-
         if (document.fullscreenElement) {
             const el: any = document;
 
