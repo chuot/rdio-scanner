@@ -1,3 +1,4 @@
+import { FullscreenOverlayContainer, OverlayContainer } from '@angular/cdk/overlay';
 import { NgModule } from '@angular/core';
 import { AppSharedModule } from '../../shared/shared.module';
 import { AppRdioScannerCallQueryService } from './rdio-scanner-call-query.service';
@@ -19,6 +20,7 @@ import { AppRdioScannerComponent } from './rdio-scanner.component';
         AppRdioScannerConfigQueryService,
         AppRdioScannerSystemsQueryService,
         AppRdioScannerSystemsSubscriptionService,
+        { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
     ],
 })
 export class AppRdioScannerModule { }
