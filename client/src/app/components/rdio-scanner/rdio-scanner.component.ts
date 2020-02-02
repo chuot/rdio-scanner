@@ -567,6 +567,10 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     private buildGroups(): void {
+        if (!this.config.useGroup) {
+            return;
+        }
+
         const groups: RdioScannerGroup[] = [];
 
         this.systems.forEach((system: RdioScannerSystem) => {
