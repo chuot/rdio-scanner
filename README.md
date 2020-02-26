@@ -86,11 +86,15 @@ Search filters at the bottom of this screen are self explanatory.
 
 It is fairly easy to have *Rdio Scanner* up and running.
 
-Ensure that your operating system is fully updated and that the prerequisites are installed:
+Ensure that your operating system is **fully updated** and that the prerequisites are met or installed:
 
+* Minimum of **2 GB** of system memory
 * [Git v2.23.0 or higher](https://git-scm.com/downloads)
-* [Node.js v10.9.0 or higher](https://nodejs.org/en/download/)
+* [SQLite v3.30.0 or higher](https://www.sqlite.org/download.html)
+* [Node.js v10.9.0 or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
 * [npm v6.2.0 or higher](https://www.npmjs.com/get-npm)
+
+Note that it may be possible to run *Rdio Scanner* on a system with less than 2 Gb of memory. However, the client portion will most probably fail to build when you first start *Rdio Scanner*. Try it at your own risk.
 
 Then clone the *Rdio Scanner* code and run it:
 
@@ -114,7 +118,11 @@ Creating SQLITE database at /home/radio/rdio-scanner/server/database.sqlite... d
 Rdio Scanner is running at http://0.0.0.0:3000/
 ```
 
-Note that the first time you start *Rdio Scanner*, it will be longer to do so as it has to install required node modules and build the progressive web app.
+Note that the first time you start *Rdio Scanner*, it will be longer to do so as it has to install required node modules and build the progressive web app. If it fails at this point, you can rerun the following command for more information on the reasons for the failure.
+
+```bash
+$ DEBUG=true node run.js
+```
 
 A default configuration file `rdio-scanner/server/.env` will be created. A new random API key will be generated where it will have to be use in your upload scripts.
 
