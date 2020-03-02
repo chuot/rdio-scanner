@@ -1,4 +1,0 @@
-type RdioScannerConfig {
-    allowDownload: Boolean
-    useGroup: Boolean
-}

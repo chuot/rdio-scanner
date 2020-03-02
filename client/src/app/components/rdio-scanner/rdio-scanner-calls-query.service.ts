@@ -46,7 +46,7 @@ export interface RdioScannerCallsQueryResponse {
 export class AppRdioScannerCallsQueryService extends Query<RdioScannerCallsQueryResponse> {
     document = gql`
         query rdioScannerCalls(
-            $date: Date
+            $date: RdioScannerDate
             $limit: Int
             $offset: Int
             $sort: Int

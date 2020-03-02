@@ -1,4 +1,4 @@
-# Rdio Scanner v3.0
+# Rdio Scanner v3.1
 
 *Rdio Scanner* is a progressive web interface designed to act like an old school police radio scanner. It integrates all frontend / backend components to manage audio files from different sources.
 
@@ -10,11 +10,10 @@ Need help?
 
 ## What's new in this version
 
-Version 3.0 brings new features:
+Version 3.1 brings new features:
 
-* Unit aliases support, display names instead of unit ID
-* Download calls from the search pane
-* New configuration options: *allowDownload* and *useGroup*
+* Code refactoring
+* Display live feed listeners count on server end
 
 *Note that you can only update from version 2.0 and above. You have to do a fresh install if your actual version is prior to version 2.0.*
 

@@ -1,8 +1,0 @@
-rdioScannerCalls(
-    date: Date
-    limit: Int
-    offset: Int
-    sort: Int
-    system: Int
-    talkgroup: Int
-): RdioScannerCallsQueryResponse

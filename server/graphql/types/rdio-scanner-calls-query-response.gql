@@ -1,6 +1,0 @@
-type RdioScannerCallsQueryResponse {
-    count: Int
-    dateStart: Date
-    dateStop: Date
-    results: [RdioScannerCall]
-}

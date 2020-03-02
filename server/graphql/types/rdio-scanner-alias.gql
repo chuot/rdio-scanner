@@ -1,4 +1,0 @@
-type RdioScannerAlias {
-    name: String
-    uid: Int
-}

@@ -1,4 +1,0 @@
-type RdioScannerCallSrc {
-    pos: Float
-    src: Int
-}

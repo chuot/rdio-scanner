@@ -173,7 +173,7 @@
                     </button>
                 </ng-container>
             </mat-toolbar>
-            <ng-container *ngIf="config.useGroup">
+            <ng-container *ngIf="config.useGroup && groups.length">
                 <fieldset>
                     <div fxLayout="row wrap" fxLayoutAlign="space-between">
                         <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.name)"

@@ -1,7 +1,0 @@
-type RdioScannerCallFreq {
-    errorCount: Int
-    freq: Int
-    len: Int
-    pos: Float
-    spikeCount: Int
-}
