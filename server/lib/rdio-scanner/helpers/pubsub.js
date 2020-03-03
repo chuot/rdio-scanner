@@ -6,6 +6,7 @@ class PubSub extends PubSubEngine {
         super();
 
         this.eventEmitter = new EventEmitter();
+        this.eventEmitter.setMaxListeners(0);
 
         this.subscriptions = {};
 
