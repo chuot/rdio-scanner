@@ -28,6 +28,12 @@ Version 3.1 brings new features:
 * Control active talkgroups by their system or group
 * Easy to install and configure
 
+## Demo sites
+
+Consult the Wiki page for Rdio Scanner installations accessible to the public, or even add your own!
+
+Consult the [Wiki page](https://github.com/chuot/rdio-scanner/wiki) for publicly accessible *Rdio Scanner*, **or even add you own!**
+
 ## Screenshots
 
 ### Main screen
