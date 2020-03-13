@@ -89,6 +89,8 @@ Search filters at the bottom of this screen are self explanatory.
 
 It is fairly easy to have *Rdio Scanner* up and running.
 
+> Raspberry Pi users, visit [rdio-scanner-pi-setup](https://github.com/chuot/rdio-scanner-pi-setup) repository for a fully automatic installtion script.
+
 Ensure that your operating system is **fully updated** and that the prerequisites are met or installed:
 
 * Minimum of **2 GB** of system memory
