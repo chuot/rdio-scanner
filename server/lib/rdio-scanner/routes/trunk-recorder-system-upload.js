@@ -58,7 +58,7 @@ class TrunkRecorderSystemUpload {
                     }
 
                     const emit = async () => {
-                        const systems = await models.rdioScannerSystem.findAll();
+                        const systems = await models.rdioScannerSystem.findAll({ order: [['system', 'ASC']]});
 
                         pubsub.publish('rdioScannerSystems', { rdioScannerSystems: systems });
                     };

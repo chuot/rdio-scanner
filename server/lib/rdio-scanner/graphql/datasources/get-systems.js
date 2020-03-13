@@ -2,7 +2,9 @@
 
 function getSystems(models) {
     return async () => {
-        const systems = await models.rdioScannerSystem.findAll();
+        const systems = await models.rdioScannerSystem.findAll({
+            order: [['system', 'ASC']],
+        });
 
         return systems;
     };
