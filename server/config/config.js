@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config();
+
 const config = {
     database: process.env.DB_NAME,
     dialect: process.env.DB_DIALECT || 'sqlite',
