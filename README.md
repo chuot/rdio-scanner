@@ -93,13 +93,13 @@ It is fairly easy to have *Rdio Scanner* up and running.
 
 Ensure that your operating system is **fully updated** and that the prerequisites are met or installed:
 
-* Minimum of **2 GB** of system memory
-* [Git v2.23.0 or higher](https://git-scm.com/downloads)
-* [SQLite v3.30.0 or higher](https://www.sqlite.org/download.html)
-* [Node.js v10.9.0 or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
-* [npm v6.2.0 or higher](https://www.npmjs.com/get-npm)
+* [Curl](https://git-scm.com/downloads)
+* [Git](https://git-scm.com/downloads)
+* [SQLite 3](https://www.sqlite.org/download.html)
+* [Node.js v12.X or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
+* [npm](https://www.npmjs.com/get-npm)
 
-Note that it may be possible to run *Rdio Scanner* on a system with less than 2 Gb of memory. However, the client portion will most probably fail to build when you first start *Rdio Scanner*. Try it at your own risk.
+> The Angular application will most likely fail to transpile if the host has less than 2 GB of RAM available.
 
 Then clone the *Rdio Scanner* code and run it:
 
