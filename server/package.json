@@ -11,22 +11,22 @@
     "license": "LICENSE",
     "dependencies": {
         "apollo-datasource": "^0.7.0",
-        "apollo-server-express": "^2.11.0",
-        "camelcase": "^5.3.1",
+        "apollo-server-express": "^2.12.0",
+        "camelcase": "^6.0.0",
         "cors": "^2.8.5",
         "dotenv": "^8.2.0",
         "express": "^4.17.1",
         "graphql": "^14.6.0",
-        "helmet": "^3.21.3",
-        "mariadb": "^2.2.0",
+        "helmet": "^3.22.0",
+        "mariadb": "^2.3.1",
         "multer": "^1.4.2",
         "mysql2": "^2.1.0",
-        "nodemon": "^2.0.2",
-        "pg": "^7.18.2",
-        "sequelize": "^5.21.5",
+        "nodemon": "^2.0.3",
+        "pg": "^8.0.3",
+        "sequelize": "^5.21.7",
         "sequelize-cli": "^5.5.1",
         "sqlite3": "^4.1.1",
-        "uuid": "^7.0.2"
+        "uuid": "^7.0.3"
     },
     "devDependencies": {
         "eslint": "^6.8.0"
