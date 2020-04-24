@@ -8,6 +8,12 @@ Need help?
 
 [![Chat](https://img.shields.io/gitter/room/rdio-scanner/Lobby.svg)](https://gitter.im/rdio-scanner/Lobby?utm_source=share-link&utm_medium=link&utm_campaign=share-link)
 
+#### WARNING
+
+*RDIO SCANNER* IS INTENDED FOR **PERSONAL USE ONLY**, OR FOR VERY SPECIFIC USE CASE SUCH AS FOR FD PD EMS AGENCIES OR 911 CALL CENTERS. ***RDIO SCANNER* IS NOT INTENDED FOR BROADCASTING TO THE GENERAL PUBLIC**, PAID ACCESS OR NOT.
+
+FOR THE SAKE OF OUR HOBBY, PLEASE KEEP THIS WARNING IN MIND. THIS WILL HELP KEEP AIR WAVES UNENCRYPTED.
+
 ## What's new in this version
 
 Version 3.1 brings new features:
@@ -27,10 +33,6 @@ Version 3.1 brings new features:
 * Supports UID aliases
 * Control active talkgroups by their system or group
 * Easy to install and configure
-
-## Demo sites
-
-Consult the [Wiki page](https://github.com/chuot/rdio-scanner/wiki) for publicly accessible *Rdio Scanner*, **or even add you own!**
 
 ## Screenshots
 
