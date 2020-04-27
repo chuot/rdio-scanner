@@ -236,7 +236,7 @@ RDIO_ALLOW_DOWNLOAD=false
 # this feature.
 #
 # This option is true by default
-RDIO_ALLOW_DOWNLOAD=false
+RDIO_USE_GROUP=false
 ```
 
 ## Updating Rdio Scanner thereafter
