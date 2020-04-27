@@ -6,6 +6,11 @@ class RdioScannerSystem extends Model { }
 
 function rdioScannerSystemFactory(sequelize) {
     RdioScannerSystem.init({
+        aliases: {
+            type: DataTypes.JSON,
+            defaultValue: [],
+            allowNull: false,
+        },
         name: {
             type: DataTypes.STRING,
             allowNull: false,

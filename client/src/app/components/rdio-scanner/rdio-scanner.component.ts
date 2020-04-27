@@ -645,7 +645,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private async loadCall(call: RdioScannerCall = {}): Promise<RdioScannerCall | null> {
         const query = await this.appRdioScannerCallQuery.fetch({ id: call.id }).toPromise();
 
-        Object.assign(call, query.data.rdioScannerCall);
+        Object.assign(call, this.transformCall(query.data.rdioScannerCall));
 
         return call;
     }

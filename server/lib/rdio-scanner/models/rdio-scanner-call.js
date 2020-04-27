@@ -10,6 +10,14 @@ function rdioScannerCallFactory(sequelize) {
             type: DataTypes.BLOB('long'),
             allowNull: false,
         },
+        audioName: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+        audioType: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
         emergency: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,
