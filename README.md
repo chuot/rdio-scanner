@@ -102,12 +102,13 @@ It is fairly easy to have *Rdio Scanner* up and running.
 
 Ensure that your operating system is **fully updated** and that the prerequisites are met or installed:
 
+* [build-essential](https://packages.ubuntu.com/search?keywords=build-essential) on *Ubuntu* or the equivalent on your distro
 * [Curl](https://git-scm.com/downloads)
+* [ffmpeg](https://www.ffmpeg.org/)
 * [Git](https://git-scm.com/downloads)
-* [SQLite 3](https://www.sqlite.org/download.html)
 * [Node.js v12.X or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
 * [npm](https://www.npmjs.com/get-npm)
-* [ffmpeg](https://www.ffmpeg.org/)
+* [SQLite 3](https://www.sqlite.org/download.html)
 
 > The Angular application will most likely fail to transpile if the host has less than 2 GB of RAM available.
 
