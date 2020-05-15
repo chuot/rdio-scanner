@@ -37,7 +37,9 @@ module.exports = {
 
             const envFile = path.resolve(__dirname, '../../../.env');
 
-            const env = fs.existsSync(envFile) ? dotenv.parse(fs.readFileSync(envFile)) : {};
+            const envFileExists = fs.existsSync(envFile);
+
+            const env = envFileExists ? dotenv.parse(fs.readFileSync(envFile)) : {};
 
             const oldSystem = sequelize.define('rdioScannerSystem', {
                 aliases: {
@@ -76,26 +78,31 @@ module.exports = {
 
             let systems;
 
-            try {
-                systems = await oldSystem.findAll({ order: [['system', 'ASC']] });
+            if (envFileExists) {
+                try {
+                    systems = await oldSystem.findAll({ order: [['system', 'ASC']] });
 
-                systems = systems.map((s) => ({
-                    id: s.system,
-                    label: s.name,
-                    talkgroups: s.talkgroups.map((t) => ({
-                        id: t.dec,
-                        label: t.alphaTag,
-                        name: t.description,
-                        tag: t.tag,
-                        group: t.group,
-                    })),
-                    units: Array.isArray(s.aliases) ? s.aliases.map((a) => ({
-                        id: a.uid,
-                        label: a.name,
-                    })) : [],
-                }));
+                    systems = systems.map((s) => ({
+                        id: s.system,
+                        label: s.name,
+                        talkgroups: s.talkgroups.map((t) => ({
+                            id: t.dec,
+                            label: t.alphaTag,
+                            name: t.description,
+                            tag: t.tag,
+                            group: t.group,
+                        })),
+                        units: Array.isArray(s.aliases) ? s.aliases.map((a) => ({
+                            id: a.uid,
+                            label: a.name,
+                        })) : [],
+                    }));
 
-            } catch (_) {
+                } catch (_) {
+                    systems = getExampleSystems();
+                }
+
+            } else {
                 systems = getExampleSystems();
             }
 
@@ -128,7 +135,9 @@ module.exports = {
 
             fs.writeFileSync(configFile, JSON.stringify(config, null, 4));
 
-            fs.unlinkSync(envFile);
+            if (fs.existsSync(envFile)) {
+                fs.unlinkSync(envFile);
+            }
         }
 
         const transaction = await sequelize.transaction();
