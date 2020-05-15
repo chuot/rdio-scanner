@@ -1,0 +1,975 @@
+{
+    "nodejs": {
+        "env": "production",
+        "host": "0.0.0.0",
+        "port": 3000
+    },
+    "sequelize": {
+        "database": null,
+        "dialect": "sqlite",
+        "host": null,
+        "password": null,
+        "port": null,
+        "storage": "database.sqlite",
+        "username": null
+    },
+    "rdioScanner": {
+        "access": null,
+        "allowDownload": true,
+        "apiKeys": [
+            "b29eb8b9-9bcd-4e6e-bb4f-d244ada12736"
+        ],
+        "pruneDays": 7,
+        "systems": [
+            {
+                "id": 11,
+                "label": "RSP25MTL1",
+                "talkgroups": [
+                    {
+                        "id": 54241,
+                        "label": "TDB A1",
+                        "name": "MRC TDB Fire Alpha 1",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54242,
+                        "label": "TDB B1",
+                        "name": "MRC TDB Fire Bravo 1",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54243,
+                        "label": "TDB B2",
+                        "name": "MRC TDB Fire Bravo 2",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54248,
+                        "label": "TDB B3",
+                        "name": "MRC TDB Fire Bravo 3",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54251,
+                        "label": "TDB B4",
+                        "name": "MRC TDB Fire Bravo 4",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54261,
+                        "label": "TDB B5",
+                        "name": "MRC TDB Fire Bravo 5",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54244,
+                        "label": "TDB B6",
+                        "name": "MRC TDB Fire Bravo 6",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54129,
+                        "label": "TDB B7",
+                        "name": "MRC TDB Fire Bravo 7",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54125,
+                        "label": "TDB B8",
+                        "name": "MRC TDB Fire Bravo 8",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54005,
+                        "label": "2MT FD",
+                        "name": "MRC Deux-Montagnes Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54004,
+                        "label": "NC INC GEN",
+                        "name": "North Crown Fire General",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54124,
+                        "label": "BL INC GEN1",
+                        "name": "Blainville Fire General 1",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54239,
+                        "label": "STE-ADP FD",
+                        "name": "Ste-Anne-des-Plaines Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54200,
+                        "label": "SE INC ANN",
+                        "name": "St-Eustache Announcement",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54201,
+                        "label": "SE INC GEN",
+                        "name": "St-Eustache General",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54202,
+                        "label": "SE INC OP1",
+                        "name": "St-Eustache Operations",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54203,
+                        "label": "SE INC PRV",
+                        "name": "St-Eustache Prevention",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 54206,
+                        "label": "SE CCU",
+                        "name": "St-Eustache Emergency",
+                        "tag": "Emergency Ops",
+                        "group": "EMERGENCY"
+                    },
+                    {
+                        "id": 56201,
+                        "label": "DSURGEN",
+                        "name": "YUL Security Dispatch",
+                        "tag": "Security",
+                        "group": "SECURITY"
+                    },
+                    {
+                        "id": 56202,
+                        "label": "DSURTAC",
+                        "name": "YUL Security Tactical",
+                        "tag": "Security",
+                        "group": "SECURITY"
+                    },
+                    {
+                        "id": 56203,
+                        "label": "DSUROP",
+                        "name": "YUL Security Operations",
+                        "tag": "Security",
+                        "group": "SECURITY"
+                    },
+                    {
+                        "id": 56211,
+                        "label": "DINCOPS",
+                        "name": "YUL Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 56212,
+                        "label": "DINCTAC",
+                        "name": "YUL Fire Dispatch",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 56218,
+                        "label": "DCCU",
+                        "name": "YUL CCU",
+                        "tag": "Emergency Ops",
+                        "group": "EMERGENCY"
+                    },
+                    {
+                        "id": 56221,
+                        "label": "DBATIM",
+                        "name": "YUL Batiment",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56222,
+                        "label": "DSCHAMP",
+                        "name": "YUL SCHAMP",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56223,
+                        "label": "DFOULE",
+                        "name": "YUL Foule",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56224,
+                        "label": "DACCESS",
+                        "name": "YUL Access",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56225,
+                        "label": "DELECTR",
+                        "name": "YUL Electricity",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56226,
+                        "label": "DPISTE",
+                        "name": "YUL Piste",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56227,
+                        "label": "DTABLIER",
+                        "name": "YUL Tablier",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56228,
+                        "label": "DVTP",
+                        "name": "YUL VTP",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56229,
+                        "label": "DPONT",
+                        "name": "YUL Pont",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56232,
+                        "label": "DINSTALL",
+                        "name": "YUL Install",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 56204,
+                        "label": "MSURGEN",
+                        "name": "YMX Security Dispatch",
+                        "tag": "Security",
+                        "group": "SECURITY"
+                    },
+                    {
+                        "id": 56213,
+                        "label": "MINCOPS",
+                        "name": "YMX Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 56214,
+                        "label": "MINCTAC",
+                        "name": "YMX Fire Tactical",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 56219,
+                        "label": "MCCU",
+                        "name": "YMX CCU",
+                        "tag": "Emergency Ops",
+                        "group": "EMERGENCY"
+                    },
+                    {
+                        "id": 56231,
+                        "label": "MPISTE",
+                        "name": "YMX Piste",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    }
+                ],
+                "units": [
+                    {
+                        "id": 4424001,
+                        "label": "CAUCA"
+                    }
+                ]
+            },
+            {
+                "id": 12,
+                "label": "RSP25MTL2",
+                "talkgroups": [
+                    {
+                        "id": 58121,
+                        "label": "SSIAL FD",
+                        "name": "SSIAL Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 58122,
+                        "label": "SSIAL CH A",
+                        "name": "SSIAL Radio Channel A",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58123,
+                        "label": "SSIAL NAUTIC A",
+                        "name": "SSIAL Nautic A",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58124,
+                        "label": "SSIAL CH B",
+                        "name": "SSIAL Radio Channel B",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58125,
+                        "label": "SSIAL NAUTIC B",
+                        "name": "SSIAL Nautic B",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58126,
+                        "label": "SSIAL CH C",
+                        "name": "SSIAL Radio Channel C",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58127,
+                        "label": "SSIAL NAUTIC C",
+                        "name": "SSIAL Nautic C",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58128,
+                        "label": "SSIAL 935",
+                        "name": "SSIAL 935",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58129,
+                        "label": "SSIAL LOGISTIC",
+                        "name": "SSIAL Logistique",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 58130,
+                        "label": "SSIAL CADRE",
+                        "name": "SSIAL Cadre",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 58131,
+                        "label": "SSIAL AIRPORT",
+                        "name": "SSIAL Airport",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 58132,
+                        "label": "SSIAL REHAB",
+                        "name": "SSIAL Rehab",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 58139,
+                        "label": "SSIAL INTEROP",
+                        "name": "SSIAL Interop",
+                        "tag": "Interop",
+                        "group": "INTEROP"
+                    }
+                ],
+                "units": [
+                    {
+                        "id": 2006,
+                        "label": "Dispatch"
+                    }
+                ]
+            },
+            {
+                "id": 15,
+                "label": "RSP25MTL5",
+                "talkgroups": [
+                    {
+                        "id": 54153,
+                        "label": "LA INC 1",
+                        "name": "L'Assomption Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54171,
+                        "label": "MA INC 1",
+                        "name": "Mascouche Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54141,
+                        "label": "RY INC 1",
+                        "name": "Repentigny Fire Dispatch 1",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54142,
+                        "label": "RY INC 2",
+                        "name": "Repentigny Fire Operations",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54143,
+                        "label": "RY INC SPE",
+                        "name": "Repentigny Fire Special",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 54144,
+                        "label": "RY INC PRV",
+                        "name": "Repentigny Fire Prevention",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 54145,
+                        "label": "RY CCU",
+                        "name": "Repentigny CCU",
+                        "tag": "Emergency Ops",
+                        "group": "EMERGENCY"
+                    },
+                    {
+                        "id": 54231,
+                        "label": "TB INC 1",
+                        "name": "Terrebonne Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 54232,
+                        "label": "TB INC 2",
+                        "name": "Terrebonne Fire Operations",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    }
+                ],
+                "units": [
+                    {
+                        "id": 4424001,
+                        "label": "CAUCA"
+                    }
+                ]
+            },
+            {
+                "id": 21,
+                "label": "SERAM",
+                "talkgroups": [
+                    {
+                        "id": 60040,
+                        "label": "GENERAL",
+                        "name": "SERAM General",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 60041,
+                        "label": "REPART",
+                        "name": "SERAM Repartition",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50001,
+                        "label": "SG 1",
+                        "name": "SERAM Regroupement 1",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50002,
+                        "label": "SG 2",
+                        "name": "SERAM Regroupement 2",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50003,
+                        "label": "SG 3",
+                        "name": "SERAM Regroupement 3",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50004,
+                        "label": "SG 4",
+                        "name": "SERAM Regroupement 4",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50005,
+                        "label": "SG 5",
+                        "name": "SERAM Regroupement 5",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50006,
+                        "label": "SG 6",
+                        "name": "SERAM Regroupement 6",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50007,
+                        "label": "SG 7",
+                        "name": "SERAM Regroupement 7",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 50008,
+                        "label": "SG 8",
+                        "name": "SERAM Regroupement 8",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 60051,
+                        "label": "CMD 3",
+                        "name": "SERAM Commandement 3",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60052,
+                        "label": "CMD 4",
+                        "name": "SERAM Commandement 4",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60053,
+                        "label": "CMD 5",
+                        "name": "SERAM Commandement 5",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60054,
+                        "label": "CMD 6",
+                        "name": "SERAM Commandement 6",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60055,
+                        "label": "CMD 7",
+                        "name": "SERAM Commandement 7",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60056,
+                        "label": "CMD 8",
+                        "name": "SERAM Commandement 8",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60059,
+                        "label": "CMD 11",
+                        "name": "SERAM Commandement 11",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60091,
+                        "label": "CMD 12",
+                        "name": "SERAM Commandement 12",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60092,
+                        "label": "CMD 13",
+                        "name": "SERAM Commandement 13",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60057,
+                        "label": "CMD 14",
+                        "name": "SERAM Commandement 14",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60061,
+                        "label": "OPS 3",
+                        "name": "SERAM Operations 3",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60062,
+                        "label": "OPS 4",
+                        "name": "SERAM Operations 4",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60063,
+                        "label": "OPS 5",
+                        "name": "SERAM Operations 5",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60064,
+                        "label": "OPS 6",
+                        "name": "SERAM Operations 6",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60065,
+                        "label": "OPS 7",
+                        "name": "SERAM Operations 7",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60066,
+                        "label": "OPS 8",
+                        "name": "SERAM Operations 8",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60069,
+                        "label": "OPS 11",
+                        "name": "SERAM Operations 11",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60093,
+                        "label": "OPS 12",
+                        "name": "SERAM Operations 12",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60094,
+                        "label": "OPS 13",
+                        "name": "SERAM Operations 13",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60067,
+                        "label": "OPS 14",
+                        "name": "SERAM Operations 14",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60042,
+                        "label": "A2 PR A",
+                        "name": "SERAM First Responders A",
+                        "tag": "Interop",
+                        "group": "INTEROP"
+                    },
+                    {
+                        "id": 60043,
+                        "label": "B2 PR B",
+                        "name": "SERAM First Responders B",
+                        "tag": "Interop",
+                        "group": "INTEROP"
+                    },
+                    {
+                        "id": 60058,
+                        "label": "PCM A",
+                        "name": "SERAM Commandement A",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60068,
+                        "label": "PCM B",
+                        "name": "SERAM Commandement B",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60080,
+                        "label": "PCM C",
+                        "name": "SERAM Commandement C",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60081,
+                        "label": "935 A",
+                        "name": "SERAM 935 A",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60082,
+                        "label": "935 B",
+                        "name": "SERAM 935 B",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60079,
+                        "label": "935 C",
+                        "name": "SERAM 935 C",
+                        "tag": "Fire Tac",
+                        "group": "FIRE TAC"
+                    },
+                    {
+                        "id": 60149,
+                        "label": "EMERGENCY",
+                        "name": "SERAM Emergency Operations",
+                        "tag": "Emergency Ops",
+                        "group": "EMERGENCY"
+                    },
+                    {
+                        "id": 60071,
+                        "label": "SC 1",
+                        "name": "SERAM Civil Security 1",
+                        "tag": "Interop",
+                        "group": "INTEROP"
+                    },
+                    {
+                        "id": 60072,
+                        "label": "SC 2",
+                        "name": "SERAM Civil Security 2",
+                        "tag": "Interop",
+                        "group": "INTEROP"
+                    },
+                    {
+                        "id": 60101,
+                        "label": "FORM 1",
+                        "name": "SERAM Training 1",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 60102,
+                        "label": "FORM 2",
+                        "name": "SERAM Training 2",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 60111,
+                        "label": "LIAISON",
+                        "name": "SERAM Liaison",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 60112,
+                        "label": "LOGICTIC",
+                        "name": "SERAM Logistic",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 60114,
+                        "label": "PREV RCI",
+                        "name": "SERAM Prevention RCI",
+                        "tag": "Fire Talk",
+                        "group": "FIRE TALK"
+                    },
+                    {
+                        "id": 60294,
+                        "label": "DSRC MEDIA",
+                        "name": "DSRC Media",
+                        "tag": "Media",
+                        "group": "MEDIA"
+                    }
+                ],
+                "units": [
+                    {
+                        "id": 702099,
+                        "label": "Dispatch"
+                    }
+                ]
+            },
+            {
+                "id": 31,
+                "label": "Laurentides",
+                "talkgroups": [
+                    {
+                        "id": 1,
+                        "label": "MIRABEL FD",
+                        "name": "Mirabel Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 2,
+                        "label": "PREVOST FD",
+                        "name": "Prevost Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 3,
+                        "label": "ST-COLOMBAN FD",
+                        "name": "St-Colomban Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 4,
+                        "label": "ST-SAUVEUR FD",
+                        "name": "St-Sauveur Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 5,
+                        "label": "STE-ANNE-LAC FD",
+                        "name": "Ste-Anne-des-Lacs Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 6,
+                        "label": "STE-SOPHIE FD",
+                        "name": "Ste-Sophie Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    },
+                    {
+                        "id": 7,
+                        "label": "STE-THERESE FD",
+                        "name": "Ste-Therese Fire Dispatch",
+                        "tag": "Fire Dispatch",
+                        "group": "FIRE DISPATCH"
+                    }
+                ],
+                "units": []
+            },
+            {
+                "id": 41,
+                "label": "SQ",
+                "talkgroups": [
+                    {
+                        "id": 1,
+                        "label": "5Q RAWDON",
+                        "name": "SQ 5Q Rawdon",
+                        "tag": "Law Dispatch",
+                        "group": "LAW DISPATCH"
+                    },
+                    {
+                        "id": 2,
+                        "label": "6K VAUD-S.E",
+                        "name": "SQ 6K Vaudreuil-Soulandes Est",
+                        "tag": "Law Dispatch",
+                        "group": "LAW DISPATCH"
+                    },
+                    {
+                        "id": 3,
+                        "label": "8G ST-JEROME",
+                        "name": "SQ 8G St-Jerome",
+                        "tag": "Law Dispatch",
+                        "group": "LAW DISPATCH"
+                    },
+                    {
+                        "id": 4,
+                        "label": "13P ST-LIN",
+                        "name": "SQ 13P St-Lin",
+                        "tag": "Law Dispatch",
+                        "group": "LAW DISPATCH"
+                    }
+                ],
+                "units": []
+            },
+            {
+                "id": 51,
+                "label": "HQ",
+                "talkgroups": [
+                    {
+                        "id": 1001,
+                        "label": "BLAINVILLE *1",
+                        "name": "HQ Blainville Main",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 1002,
+                        "label": "BLAINVILLE *2",
+                        "name": "HQ Blainville Travail",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    },
+                    {
+                        "id": 1003,
+                        "label": "BLAINVILLE *3",
+                        "name": "HQ Blainville Autre",
+                        "tag": "Utility",
+                        "group": "UTILITY"
+                    }
+                ],
+                "units": []
+            },
+            {
+                "id": 61,
+                "label": "AIRCRAFT",
+                "talkgroups": [
+                    {
+                        "id": 1,
+                        "label": "YMX TOWER",
+                        "name": "YMX Tower",
+                        "tag": "Aircraft",
+                        "group": "AIRCRAFT",
+                        "frequency": 11910000
+                    },
+                    {
+                        "id": 2,
+                        "label": "YMX GROUND",
+                        "name": "YMX Ground",
+                        "tag": "Aircraft",
+                        "group": "AIRCRAFT",
+                        "frequency": 121800000
+                    }
+                ],
+                "units": []
+            }
+        ],
+        "useDimmer": false,
+        "useGroup": true,
+        "useLed": true
+    }
+}

@@ -1,12 +1,12 @@
 {
-    "name": "rdio-scanner",
-    "version": "3.1.1",
-    "private": true,
+    "author": "Chrystian Huot",
+    "license": "LICENSE",
     "main": "run.js",
+    "name": "rdio-scanner",
+    "private": true,
     "scripts": {
         "start": "node run.js",
         "update": "node update.js"
     },
-    "author": "Chrystian Huot",
-    "license": "LICENSE"
+    "version": "4.0.0"
 }

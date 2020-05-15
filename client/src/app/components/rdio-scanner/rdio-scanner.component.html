@@ -5,7 +5,7 @@
             <mat-toolbar>
                 <div fxFlex></div>
                 <div>
-                    <button (click)="toggleSearchPanel(false)" mat-icon-button>
+                    <button (click)="searchPanelOpened = false" mat-icon-button>
                         <mat-icon>arrow_forward</mat-icon>
                     </button>
                 </div>
@@ -16,17 +16,18 @@
                         <mat-header-cell *matHeaderCellDef></mat-header-cell>
                         <mat-cell *matCellDef="let row">
                             <ng-container *ngIf="row">
-                                <ng-container *ngIf="downloadMode.checked">
-                                    <button (click)="loadAndDownload(row)" mat-icon-button>
+                                <ng-container *ngIf="config.allowDownload && downloadMode.checked">
+                                    <button (click)="download(row.id)" mat-icon-button>
                                         <mat-icon>save_alt</mat-icon>
                                     </button>
                                 </ng-container>
-                                <ng-container *ngIf="!downloadMode.checked">
-                                    <button (click)="row === call ? skip() : loadAndPlay(row)" mat-icon-button>
-                                        <ng-container *ngIf="row === call">
+                                <ng-container
+                                    *ngIf="!liveFeedPaused && (!config.allowDownload || !downloadMode.checked)">
+                                    <button (click)="row?.id === call?.id ? skip() : play(row.id)" mat-icon-button>
+                                        <ng-container *ngIf="row?.id === call?.id">
                                             <mat-icon>stop</mat-icon>
                                         </ng-container>
-                                        <ng-container *ngIf="row !== call">
+                                        <ng-container *ngIf="row?.id !== call?.id">
                                             <mat-icon>play_arrow</mat-icon>
                                         </ng-container>
                                     </button>
@@ -39,7 +40,7 @@
                             <span>Date</span>
                         </mat-header-cell>
                         <mat-cell *matCellDef="let row">
-                            <span>{{ row?.startTime | date:'MM/dd' }}</span>
+                            <span>{{ row?.dateTime | date:'MM/dd' }}</span>
                         </mat-cell>
                     </ng-container>
                     <ng-container matColumnDef="time">
@@ -47,7 +48,7 @@
                             <span>Time</span>
                         </mat-header-cell>
                         <mat-cell *matCellDef="let row">
-                            <span>{{ row?.startTime | date:'HH:mm' }}</span>
+                            <span>{{ row?.dateTime | date:'HH:mm' }}</span>
                         </mat-cell>
                     </ng-container>
                     <ng-container matColumnDef="system">
@@ -55,7 +56,7 @@
                             <span>System</span>
                         </mat-header-cell>
                         <mat-cell *matCellDef="let row">
-                            <span>{{ row?.systemData?.name || row?.system }}</span>
+                            <span>{{ row?.systemData?.label || row?.system }}</span>
                         </mat-cell>
                     </ng-container>
                     <ng-container matColumnDef="alpha">
@@ -63,26 +64,25 @@
                             <span>Tag</span>
                         </mat-header-cell>
                         <mat-cell *matCellDef="let row">
-                            <span>{{ row?.talkgroupData?.alphaTag || row?.talkgroup }}</span>
+                            <span>{{ row?.talkgroupData?.label || row?.talkgroup }}</span>
                         </mat-cell>
                     </ng-container>
-                    <ng-container matColumnDef="description">
+                    <ng-container matColumnDef="name">
                         <mat-header-cell *matHeaderCellDef>
-                            <span>Description</span>
+                            <span>Name</span>
                         </mat-header-cell>
                         <mat-cell *matCellDef="let row">
-                            <span>{{ row?.talkgroupData?.description }}</span>
+                            <span>{{ row?.talkgroupData?.name }}</span>
                         </mat-cell>
                     </ng-container>
-                    <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'system', 'alpha', 'description']">
+                    <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'system', 'alpha', 'name']">
                     </mat-header-row>
-                    <mat-row
-                        *matRowDef="let row; columns: ['control', 'date', 'time', 'system', 'alpha', 'description']">
+                    <mat-row *matRowDef="let row; columns: ['control', 'date', 'time', 'system', 'alpha', 'name']">
                     </mat-row>
                 </mat-table>
                 <mat-progress-bar color="primary" [mode]="searchResultsPending ? 'query' : 'determinate'">
                 </mat-progress-bar>
-                <mat-paginator [disabled]="searchResultsPending" [length]="searchResultsCount" [hidePageSize]="true"
+                <mat-paginator [disabled]="searchResultsPending" [length]="list?.count" [hidePageSize]="true"
                     [pageSize]="searchResults.value.length" [showFirstLastButtons]="true">
                 </mat-paginator>
             </div>
@@ -106,7 +106,7 @@
                             Date
                         </mat-label>
                         <input (click)="date.open()" formControlName="date" [matDatepicker]="date" matInput
-                            [max]="searchFormDateStop" [min]="searchFormDateStart" placeholder="Choose a date" readonly>
+                            [max]="list?.dateStop" [min]="list?.dateStart" placeholder="Choose a date" readonly>
                         <mat-datepicker-toggle matSuffix [for]="date"></mat-datepicker-toggle>
                         <mat-datepicker #date></mat-datepicker>
                     </mat-form-field>
@@ -120,8 +120,8 @@
                             <mat-option [value]="-1">
                                 All Systems
                             </mat-option>
-                            <mat-option *ngFor="let system of systems" [value]="system.system">
-                                {{ system.name }}
+                            <mat-option *ngFor="let system of config?.systems" [value]="system.id">
+                                {{ system.label }}
                             </mat-option>
                         </mat-select>
                     </mat-form-field>
@@ -133,8 +133,8 @@
                             <mat-option [value]="-1">
                                 All Talkgroups
                             </mat-option>
-                            <mat-option *ngFor="let talkgroup of getSearchFormTalkgroups()" [value]="talkgroup.dec">
-                                {{ talkgroup.alphaTag }}
+                            <mat-option *ngFor="let talkgroup of getSearchFormTalkgroups()" [value]="talkgroup.id">
+                                {{ talkgroup.label }}
                             </mat-option>
                         </mat-select>
                     </mat-form-field>
@@ -146,14 +146,13 @@
                             Reset
                         </button>
                     </div>
-                    <div fxFlex fxLayout="row" fxLayoutAlign="center center" [fxShow]="config.allowDownload">
+                    <div fxFlex fxLayout="row" fxLayoutAlign="center center" [fxShow]="config?.allowDownload">
                         <mat-slide-toggle #downloadMode color="primary">
                             <mat-icon>save_alt</mat-icon>
                         </mat-slide-toggle>
                     </div>
                 </div>
             </form>
-            <a #downloadLink style="display: none;"></a>
         </div>
     </mat-sidenav>
 
@@ -161,10 +160,10 @@
         position="end">
         <div class="rdio-select">
             <mat-toolbar>
-                <button (click)="toggleSelectPanel(false)" mat-icon-button>
+                <button (click)="selectPanelOpened = false" mat-icon-button>
                     <mat-icon>arrow_back</mat-icon>
                 </button>
-                <ng-container *ngIf="!config.useGroup && systems.length > 1">
+                <ng-container *ngIf="!config?.useGroup && config?.systems.length > 1">
                     <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
                         OFF
                     </button>
@@ -173,12 +172,12 @@
                     </button>
                 </ng-container>
             </mat-toolbar>
-            <ng-container *ngIf="config.useGroup && groups.length">
+            <ng-container *ngIf="config?.useGroup && groups?.length > 1">
                 <fieldset>
                     <div fxLayout="row wrap" fxLayoutAlign="space-between">
-                        <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.name)"
+                        <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.label)"
                             [ngClass]="group.status">
-                            {{ group.name }}
+                            {{ group.label }}
                         </button>
                         <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
                             OFF
@@ -189,15 +188,15 @@
                     </div>
                 </fieldset>
             </ng-container>
-            <fieldset *ngFor="let system of systems">
+            <fieldset *ngFor="let system of config?.systems">
                 <legend>
-                    {{ system.name }}
+                    {{ system.label }}
                 </legend>
                 <div fxLayout="row wrap" fxLayoutAlign="space-between">
                     <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
                         (click)="avoid({ system: system, talkgroup: talkgroup })"
-                        [ngClass]="{ off: !(selection[system.system] && selection[system.system][talkgroup.dec]), on: selection[system.system] && selection[system.system][talkgroup.dec] }">
-                        {{ talkgroup.alphaTag }}
+                        [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]), on: map[system.id] && map[system.id][talkgroup.id] }">
+                        {{ talkgroup.label }}
                     </button>
                     <ng-container *ngIf="system.talkgroups.length > 1">
                         <button class="rdio-button-mini all-off" (click)="avoid({ system: system, status: false })">
@@ -214,122 +213,134 @@
 
     <mat-sidenav-content>
         <div class="rdio-main">
-            <div class="rdio-status" fxLayout="row" fxLayoutAlign="end">
-                <span class="rdio-led" [ngClass]="{ off: !call, on: call, paused: call && livefeedPaused }"></span>
+            <div *ngIf="config?.useLed" class="rdio-status" fxLayout="row" fxLayoutAlign="end">
+                <span class="rdio-led" [ngClass]="ledClass"></span>
             </div>
-            <div class="rdio-display" (dblclick)="toggleFullscreen()">
-                <div fxLayout="row" fxLayoutAlign="space-between">
+            <div class="rdio-display" [ngClass]="{ idle: config?.useDimmer && !dimmerDelay }" (dblclick)="toggleFullscreen()">
+                <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
                         <span>
-                            {{ displayClock | date:'HH' }}{{ displayClock.getSeconds() % 2 ? ' ' : ':' }}{{ displayClock | date:'mm' }}
+                            {{ clock | date:'HH:mm' }}
                         </span>
                     </div>
                     <div>
                         <span>
-                            Q: {{ callQueue.length }}
-                        </span>
-                    </div>
-                </div>
-                <div fxLayout="row" fxLayoutAlign="space-between">
-                    <div>
-                        <span>
-                            {{ displaySystem }}
-                        </span>
-                    </div>
-                    <div>
-                        <span>
-                            {{ displayTag }}
+                            Q: {{ callQueue }}
                         </span>
                     </div>
                 </div>
-                <div fxLayout="row" fxLayoutAlign="space-between">
+                <div class="rdio-display-row" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
                         <span>
-                            {{ displayAlphaTag }}
+                            {{ callSystem }}
                         </span>
                     </div>
                     <div>
                         <span>
-                            {{ displayProgress | date:'HH:mm' }}
+                            {{ callTag }}
                         </span>
                     </div>
                 </div>
-                <div>
+                <div class="rdio-display-row" fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span>
+                            {{ callTalkgroup }}
+                        </span>
+                    </div>
+                    <div>
+                        <span>
+                            {{ callProgress | date:'HH:mm' }}
+                        </span>
+                    </div>
+                </div>
+                <div class="rdio-display-row bold">
                     <span>
-                        {{ displayDescription }}
+                        {{ callTalkgroupName }}
                     </span>
                 </div>
-                <div fxLayout="row" fxLayoutAlign="space-between">
+                <div class="rdio-display-row" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
-                        <span>
-                            F: {{ displayFrequency }}
+                        <span *ngIf="callFrequency !== ''">
+                            F: {{ callFrequency }}
                         </span>
                     </div>
                     <div>
-                        <span *ngIf="displayMode !== 'A'">
-                            TGID: {{ displayTalkgroup }}
-                        </span>
-                    </div>
-                </div>
-                <div fxLayout="row" fxLayoutAlign="space-between">
-                    <div>
-                        <span *ngIf="displayMode !== 'A'">
-                            E: {{ displayErrorCount }} S: {{ displaySpikeCount }}
-                        </span>
-                    </div>
-                    <div>
-                        <span *ngIf="displayMode !== 'A'">
-                            UID: {{ displayUnit }}
+                        <span *ngIf="callTalkgroupId !== ''">
+                            TGID: {{ callTalkgroupId }}
                         </span>
                     </div>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>
-                                <span>Time</span>
-                            </th>
-                            <th>
-                                <span>System</span>
-                            </th>
-                            <th>
-                                <span>Tag</span>
-                            </th>
-                            <th>
-                                <span>Description</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr *ngFor="let previousCall of callHistory">
-                            <td>
-                                <span>{{ previousCall?.startTime | date:'HH:mm' }}</span>
-                            </td>
-                            <td>
-                                <span>{{ previousCall?.systemData?.name || previousCall?.system}}</span>
-                            </td>
-                            <td>
-                                <span>{{ previousCall?.talkgroupData?.alphaTag || previousCall?.talkgroup }}</span>
-                            </td>
-                            <td>
-                                <span>{{ previousCall?.talkgroupData?.description || previousCall?.freq }}</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
+                    <div>
+                        <span *ngIf="callError !== ''">
+                            E: {{ callError }}
+                        </span>
+                        <span *ngIf="callSpike !== ''">
+                            S: {{ callSpike }}
+                        </span>
+                    </div>
+                    <div>
+                        <span *ngIf="callUnit !== ''">
+                            UID: {{ callUnit }}
+                        </span>
+                    </div>
+                </div>
+                <div class="rdio-display-bottom-wrapper">
+                    <div class="rdio-display-auth" [ngClass]="{ visible: auth }">
+                        <form class="mat-elevation-z8" autocomplete="off" [formGroup]="authForm"
+                            (ngSubmit)="authenticate()">
+                            <mat-form-field>
+                                <input #password matInput type="password" autocomplete="off" formControlName="password"
+                                    placeholder="Unlock code" (blur)="authFocus()">
+                            </mat-form-field>
+                        </form>
+                    </div>
+                    <table class="rdio-display-history">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <span>Time</span>
+                                </th>
+                                <th>
+                                    <span>System</span>
+                                </th>
+                                <th>
+                                    <span>Talkgroup</span>
+                                </th>
+                                <th>
+                                    <span>Name</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let previousCall of callHistory">
+                                <td>
+                                    <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
+                                </td>
+                                <td>
+                                    <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>
+                                </td>
+                                <td>
+                                    <span>{{ previousCall?.talkgroupData?.label || previousCall?.talkgroup }}</span>
+                                </td>
+                                <td>
+                                    <span>{{ previousCall?.talkgroupData?.name || previousCall?.frequency }}</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <div class="rdio-control" fxLayout="column" fxLayoutGap="12px">
                 <div fxLayout="row" fxLayoutAlign="space-between">
-                    <button class="rdio-button" (click)="livefeed()"
-                        [ngClass]="{ off: !livefeedStatus, on: livefeedStatus }">
+                    <button class="rdio-button" (click)="liveFeed()"
+                        [ngClass]="{ off: !liveFeedActive, on: liveFeedActive }">
                         LIVE<br>FEED
                     </button>
-                    <button class="rdio-button" (click)="holdSystem()"
-                        [ngClass]="{ off: !selectionSystemHold, on: selectionSystemHold }">
+                    <button class="rdio-button" (click)="holdSystem()" [ngClass]="{ off: !holdSys, on: holdSys }">
                         HOLD<br>SYS
                     </button>
-                    <button class="rdio-button" (click)="holdTalkgroup()"
-                        [ngClass]="{ off: !selectionTalkgroupHold, on: selectionTalkgroupHold }">
+                    <button class="rdio-button" (click)="holdTalkgroup()" [ngClass]="{ off: !holdTg, on: holdTg }">
                         HOLD<br>TG
                     </button>
                 </div>
@@ -345,14 +356,14 @@
                     </button>
                 </div>
                 <div fxLayout="row" fxLayoutAlign="space-between">
-                    <button class="rdio-button" (click)="toggleSearchPanel(true)">
+                    <button class="rdio-button" (click)="searchCall()">
                         SEARCH<br>CALL
                     </button>
                     <button class="rdio-button" (click)="pause()"
-                        [ngClass]="{ off: !livefeedPaused, on: livefeedPaused }">
+                        [ngClass]="{ off: !liveFeedPaused, on: liveFeedPaused }">
                         PAUSE
                     </button>
-                    <button class="rdio-button" (click)="toggleSelectPanel(true)">
+                    <button class="rdio-button" (click)="selectTg()">
                         SELECT<br>TG
                     </button>
                 </div>

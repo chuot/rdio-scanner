@@ -1,14 +1,30 @@
+/*
+ * *****************************************************************************
+ *  Copyright (C) 2019-2020 Chrystian Huot
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
 'use strict';
 
 const multer = require('multer');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-const parseDate = require('../helpers/parse-date');
-const validateApiKey = require('../helpers/validate-api-keys');
-
 class TrunkRecorderCallUpload {
-    constructor(models, pubsub) {
+    constructor(app) {
         return {
             path: '/api/trunk-recorder-call-upload',
 
@@ -25,67 +41,37 @@ class TrunkRecorderCallUpload {
                     res.send(`${err.message}\n`);
 
                 } else {
-                    const key = req.body.key;
+                    const apiKey = req.body.key;
 
-                    let meta = req.files.meta[0].buffer.toString();
+                    const reqAudio = req.files.audio[0] || {};
+                    const reqMeta = req.files.meta[0] || {};
+
+                    const audio = reqAudio.buffer;
+                    const audioName = reqAudio.originalname;
+                    const audioType = reqAudio.mimetype;
+
+                    const system = parseInt(req.body.system, 10);
+
+                    let meta;
 
                     try {
-                        meta = JSON.parse(meta);
+                        meta = JSON.parse(reqMeta.buffer.toString());
 
-                    } catch (error) {
+                    } catch (_) {
                         meta = {};
                     }
 
-                    if (Array.isArray(meta.freqList)) {
-                        meta.freqList = meta.freqList.map((f) => ({
-                            errorCount: f.error_count,
-                            freq: f.freq,
-                            len: f.len,
-                            pos: f.pos,
-                            spikeCount: f.spike_count,
-                        }));
-
-                    } else {
-                        meta.freqList = [];
-                    }
-
-                    if (Array.isArray(meta.srcList)) {
-                        meta.srcList = meta.srcList.map((s) => ({
-                            src: s.src,
-                            pos: s.pos,
-                        }));
-
-                    } else {
-                        meta.srcList = [];
-                    }
-
-                    const data = {
-                        audio: req.files.audio[0].buffer,
-                        audioName: req.files.audio[0].originalname,
-                        audioType: req.files.audio[0].mimetype,
-                        emergency: !!meta.emergency,
-                        freq: parseInt(meta.freq, 10),
-                        freqList: Array.isArray(meta.freqList) ? meta.freqList : [],
-                        startTime: parseDate(meta.start_time),
-                        stopTime: parseDate(meta.stop_time),
-                        srcList: Array.isArray(meta.srcList) ? meta.srcList : [],
-                        system: parseInt(req.body.system, 10),
-                        talkgroup: parseInt(meta.talkgroup, 10),
-                    };
-
-                    if (!validateApiKey(key, data.system, data.talkgroup)) {
-                        return res.send(`Api key is invalid for system ${data.system} talkgroup ${data.talkgroup}.\n`);
+                    if (!app.controller.validateApiKey(apiKey, system, meta.talkgroup)) {
+                        return res.send(`Invalid API key for system ${system} talkgroup ${meta.talkgroup}.\n`);
                     }
 
                     try {
-                        const call = await models.rdioScannerCall.create(data);
-
-                        pubsub.publish('rdioScannerCall', { rdioScannerCall: call });
+                        await app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
 
                         res.send(`Call imported successfully.\n`);
 
-                    } catch (err) {
-                        res.send(err.message);
+                    } catch (error) {
+                        res.send(error.message);
                     }
                 }
             }),

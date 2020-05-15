@@ -1,34 +1,89 @@
-'use strict';
+/*
+ * *****************************************************************************
+ *  Copyright (C) 2019-2020 Chrystian Huot
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
 
-require('dotenv').config();
+'use strict';
 
 const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
 const helmet = require('helmet');
 const http = require('http');
+const https = require('https');
 const path = require('path');
+const Sequelize = require('sequelize');
 
 const RdioScanner = require('./lib/rdio-scanner');
 
-const env = process.env.NODE_ENV || 'development';
-const host = process.env.NODE_HOST || '0.0.0.0';
-const staticDir = path.resolve(process.env.APP_CLIENT_DIR || '../client/dist');
-const staticFile = process.env.APP_CLIENT_FILE || 'main.html';
-const port = parseInt(process.env.NODE_PORT, 10) || 3000;
-
 class App {
+    static Config() {
+        const configFile = path.resolve(__dirname, 'config.json');
+
+        let config;
+
+        if (fs.existsSync(configFile)) {
+            config = require(configFile);
+
+        } else {
+            config = {};
+        }
+
+        if (config.nodejs === null || typeof config.nodejs !== 'object') {
+            config.nodejs = {};
+        }
+
+        config.nodejs.env = config.nodejs.env || 'production';
+        config.nodejs.host = config.nodejs.host || '0.0.0.0';
+        config.nodejs.port = config.nodejs.port || 3000;
+
+        if (config.sequelize === null || typeof config.sequelize !== 'object') {
+            config.sequelize = {};
+        }
+
+        config.sequelize.dialect = config.sequelize.dialect || 'sqlite';
+
+        if (config.sequelize.dialectOptions === null || typeof config.sequelize.dialectOptions !== 'object') {
+            config.sequelize.dialectOptions = {};
+        }
+
+        config.sequelize.dialectOptions.timezone = config.sequelize.dialectOptions.timezone || 'Etc/GMT0';
+        config.sequelize.logging = false;
+        config.sequelize.storage = config.sequelize.storage || 'database.sqlite';
+
+        return config;
+    }
+
     constructor() {
+        const staticDir = '../client/dist/rdio-scanner';
+        const staticFile = 'index.html';
+
+        this.config = App.Config();
+
         this.router = express();
         this.router.use(express.json());
         this.router.use(express.urlencoded({ extended: false }));
         this.router.use(express.static(staticDir));
-        this.router.set(port);
+        this.router.set(this.config.nodejs.port);
 
-        if (env !== 'development') {
+        if (this.config.nodejs.env !== 'development') {
             this.router.disable('x-powered-by');
 
-            this.router.get(/\/|\/index.html/, cors(), (req, res) => {
+            this.router.get(/\/|\/index.html/, cors(), (_, res) => {
                 if (fs.existsSync(path.join(staticDir, staticFile))) {
                     return res.sendFile(staticFile, { root: staticDir });
 
@@ -40,11 +95,36 @@ class App {
             this.router.use(helmet());
         }
 
-        this.httpServer = http.createServer(this.router);
-        this.httpServer.listen(port, host, () => console.log(`Server is running at http://${host}:${port}/`));
+        if (this.config.nodejs.env !== 'development' && fs.existsSync(this.config.nodejs.sslCert) && fs.existsSync(this.config.nodejs.sslKey)) {
+            this.httpServer = https.createServer({
+                cert: fs.readFileSync(this.config.nodejs.sslCert),
+                key: fs.readFileSync(this.config.nodejs.sslKey),
+            }, this.router);
 
-        this.rdioScanner = new RdioScanner(this.httpServer, this.router);
+            this.httpServer.listen(this.config.nodejs.port, this.config.nodejs.host, () => {
+                console.log(`Server is running at https://${this.config.nodejs.host}:${this.config.nodejs.port}/`);
+            });
+
+        } else {
+            this.httpServer = http.createServer(this.router);
+
+            this.httpServer.listen(this.config.nodejs.port, this.config.nodejs.host, () => {
+                console.log(`Server is running at http://${this.config.nodejs.host}:${this.config.nodejs.port}/`);
+            });
+        }
+
+        this.sequelize = new Sequelize(this.config.sequelize);
+
+        this.models = {};
+
+        this.routes = {};
+
+        this.rdioScanner = new RdioScanner(this);
     }
 }
 
-module.exports = new App();
+if (require.main === module) {
+    new App();
+}
+
+module.exports = App;

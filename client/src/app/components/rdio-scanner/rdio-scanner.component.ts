@@ -1,36 +1,57 @@
-import { Component, ElementRef, EventEmitter, HostListener, NgZone, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+/*
+ * *****************************************************************************
+ *  Copyright (C) 2019-2020 Chrystian Huot
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+import {
+    ChangeDetectionStrategy,
+    ChangeDetectorRef,
+    Component,
+    ElementRef,
+    EventEmitter,
+    HostListener,
+    OnDestroy,
+    OnInit,
+    Output,
+    ViewChild,
+} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
+import { MatInput } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject, Subscription } from 'rxjs';
-import { AppRdioScannerCallQueryService } from './rdio-scanner-call-query.service';
-import { AppRdioScannerCallSubscriptionService, RdioScannerCall } from './rdio-scanner-call-subscription.service';
-import { AppRdioScannerCallsQueryService } from './rdio-scanner-calls-query.service';
-import { AppRdioScannerConfigQueryService, RdioScannerConfig } from './rdio-scanner-config-query.service';
-import { AppRdioScannerSystemsQueryService } from './rdio-scanner-systems-query.service';
-import { AppRdioScannerSystemsSubscriptionService, RdioScannerSystem, RdioScannerTalkgroup } from './rdio-scanner-systems-subscription.service';
+import { version } from '../../../../package.json';
+import {
+    RdioScannerAvoidOptions,
+    RdioScannerCall,
+    RdioScannerConfig,
+    RdioScannerEvent,
+    RdioScannerGroup,
+    RdioScannerList,
+    RdioScannerLiveFeedMap,
+    RdioScannerSearchOptions,
+    RdioScannerTalkgroup,
+} from './rdio-scanner';
+import { AppRdioScannerService } from './rdio-scanner.service';
 
-declare var webkitAudioContext: any;
-
-const LOCAL_STORAGE_KEY = 'rdio-scanner';
-
-enum RdioScannerGroupStatus {
-    Off = 'off',
-    On = 'on',
-    Partial = 'partial',
-}
-
-interface RdioScannerGroup {
-    name: string;
-    status: RdioScannerGroupStatus;
-}
-
-interface RdioScannerSelection {
-    [key: string]: {
-        [key: string]: boolean;
-    };
-}
+const LOCAL_STORAGE_KEY = AppRdioScannerService.LOCAL_STORAGE_KEY + '-pin';
 
 @Component({
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    providers: [AppRdioScannerService],
     selector: 'app-rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
@@ -38,389 +59,355 @@ interface RdioScannerSelection {
 export class AppRdioScannerComponent implements OnDestroy, OnInit {
     @Output() readonly live = new EventEmitter<boolean>();
 
-    get call() { return this._call; }
-    get callHistory() { return this._callHistory; }
-    get callPrevious() { return this._callPrevious; }
-    get callQueue() { return this._callQueue; }
-    get config() { return this._config; }
-    get displayAlphaTag() { return this._displayAlphaTag; }
-    get displayClock() { return this._displayClock; }
-    get displayDescription() { return this._displayDescription; }
-    get displayErrorCount() { return this._displayErrorCount; }
-    get displayFrequency() { return this._displayFrequency; }
-    get displayMode() { return this._displayMode; }
-    get displayProgress() { return this._displayProgress; }
-    get displaySpikeCount() { return this._displaySpikeCount; }
-    get displaySystem() { return this._displaySystem; }
-    get displayTag() { return this._displayTag; }
-    get displayTalkgroup() { return this._displayTalkgroup; }
-    get displayUnit() { return this._displayUnit; }
-    get groups() { return this._groups; }
-    get livefeedPaused() { return this._livefeedPaused; }
-    get livefeedStatus() { return !!this.livefeedSubscription; }
-    get searchForm() { return this._searchForm; }
-    get searchFormDateStart() { return this._searchFormDateStart; }
-    get searchFormDateStop() { return this._searchFormDateStop; }
-    get searchPanelOpened() { return this._searchPanelOpened; }
-    get searchResults() { return this._searchResults; }
-    get searchResultsCount() { return this._searchResultsCount; }
-    get searchResultsPending() { return this._searchResultsPending; }
-    get selection() { return this._selection; }
-    get selectionSystemHold() { return this._selectionSystemHold; }
-    get selectionTalkgroupHold() { return this._selectionTalkgroupHold; }
-    get selectPanelOpened() { return this._selectPanelOpened; }
-    get systems() { return this._systems; }
+    auth = false;
+    authForm = this.ngFormBuilder.group({
+        password: [],
+    });
 
-    private _call: RdioScannerCall | null = null;
-    private _callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
-    private _callPrevious: RdioScannerCall | null = null;
-    private _callQueue: RdioScannerCall[] = [];
-    private _config: RdioScannerConfig = {};
-    private _displayAlphaTag = 'Alpha tag';
-    private _displayClock = new Date();
-    private _displayDescription = 'Idle';
-    private _displayErrorCount = 0;
-    private _displayFrequency = this.formatFrequency(0);
-    private _displayMode = 'D';
-    private _displayProgress = new Date(0, 0, 0, 0, 0, 0);
-    private _displaySpikeCount = 0;
-    private _displaySystem = 'System';
-    private _displayTag = 'Tag';
-    private _displayTalkgroup = 0;
-    private _displayUnit: number | string = 0;
-    private _groups: RdioScannerGroup[] = [];
-    private _livefeedPaused = false;
-    private _searchForm: FormGroup = this.ngFormBuilder.group({
+    call: RdioScannerCall;
+    callError = '0';
+    callFrequency: string = this.formatFrequency(0);
+    callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
+    callPrevious: RdioScannerCall;
+    callProgress = new Date(0, 0, 0, 0, 0, 0);
+    callQueue = 0;
+    callSpike = '0';
+    callSystem = 'System';
+    callTag = 'Tag';
+    callTalkgroup = 'Talkgroup';
+    callTalkgroupId = '0';
+    callTalkgroupName = `Rdio Scanner v${version.replace(/^(\d+\.\d+).*$/, '$1')}`;
+    callTime = 0;
+    callUnit = '0';
+
+    clock = new Date();
+
+    dimmerDelay: any;
+
+    config: RdioScannerConfig;
+
+    groups: RdioScannerGroup[] = [];
+
+    holdSys = false;
+    holdTg = false;
+
+    ledClass: string;
+
+    list: RdioScannerList;
+
+    liveFeedActive = false;
+    liveFeedPaused = false;
+
+    map: RdioScannerLiveFeedMap = {};
+
+    searchPanelOpened = false;
+
+    searchResults = new BehaviorSubject(new Array<RdioScannerCall>(10));
+    searchResultsPending = false;
+
+    selectPanelOpened = false;
+
+    searchForm: FormGroup = this.ngFormBuilder.group({
         date: [null],
         sort: [-1],
         system: [-1],
         talkgroup: [-1],
     });
-    private _searchFormDateStart = '';
-    private _searchFormDateStop = '';
-    private _searchPanelOpened = false;
-    private _searchResults = new BehaviorSubject(new Array<RdioScannerCall>(10));
-    private _searchResultsCount = 0;
-    private _searchResultsPending = false;
-    private _selection: RdioScannerSelection = {};
-    private _selectionSystemHold: RdioScannerSelection | null = null;
-    private _selectionTalkgroupHold: RdioScannerSelection | null = null;
-    private _selectPanelOpened = false;
-    private _systems: RdioScannerSystem[] = [];
 
-    private audioContext: AudioContext | null = null;
-    private audioSource: AudioBufferSourceNode | null = null;
-    private audioStartTime = NaN;
-    private clockInterval: any = null;
-    private livefeedSubscription: Subscription;
-    private searchFormSubscription: Subscription;
-    private searchPaginatorSubscription: Subscription;
-    private searchResultsBuffer = new Array<RdioScannerCall>(200);
-    private searchResultsBufferFrom = 0;
-    private searchResultsBufferTo = this.searchResultsBuffer.length - 1;
-    private systemsSubscription: Subscription;
+    @ViewChild('password', { read: MatInput, static: true }) private authPassword: MatInput;
 
-    @ViewChild('downloadLink', { static: true }) private downloadLink: ElementRef;
+    private clockInterval: any;
 
-    @ViewChild(MatPaginator, { static: true }) private matPaginator: MatPaginator;
+    @ViewChild(MatPaginator, { static: true }) private searchFormPaginator: MatPaginator;
+
+    private searchResultsLimit = 200;
+    private searchResultsOffset = 0;
+
+    private subscriptions: Subscription[] = [];
 
     constructor(
-        private appRdioScannerCallQuery: AppRdioScannerCallQueryService,
-        private appRdioScannerCallsQuery: AppRdioScannerCallsQueryService,
-        private appRdioScannerCallSubscription: AppRdioScannerCallSubscriptionService,
-        private appRdioScannerConfigQuery: AppRdioScannerConfigQueryService,
-        private appRdioScannerSystemsQuery: AppRdioScannerSystemsQueryService,
-        private appRdioScannerSystemsSubscription: AppRdioScannerSystemsSubscriptionService,
+        private appRdioScannerService: AppRdioScannerService,
+        private ngChangeDetectorRef: ChangeDetectorRef,
         private ngElementRef: ElementRef,
         private ngFormBuilder: FormBuilder,
-        private ngZone: NgZone,
     ) { }
 
-    avoid(options: {
-        all?: boolean;
-        call?: RdioScannerCall;
-        system?: RdioScannerSystem;
-        talkgroup?: RdioScannerTalkgroup;
-        status?: boolean
-    } = {}): void {
-        if (this.selectionSystemHold) {
-            this._selectionSystemHold = null;
+    authenticate(password = this.authForm.get('password').value): void {
+        this.authForm.disable();
+
+        this.appRdioScannerService.authenticate(password);
+    }
+
+    authFocus() {
+        if (this.auth) {
+            this.authPassword.focus();
         }
+    }
 
-        if (this.selectionTalkgroupHold) {
-            this._selectionTalkgroupHold = null;
-        }
-
-        if (typeof options.all === 'boolean') {
-            Object.keys(this.selection).map((sys: string) => +sys).forEach((sys: number) => {
-                Object.keys(this.selection[sys]).map((tg: string) => +tg).forEach((tg: number) => {
-                    this._selection[sys][tg] = typeof options.status === 'boolean' ? options.status : options.all;
-                });
-            });
-
-        } else if (options.call) {
-            const sys = options.call.system;
-            const tg = options.call.talkgroup;
-            this._selection[sys][tg] = typeof options.status === 'boolean' ? options.status : !this.selection[sys][tg];
-
-        } else if (options.system && options.talkgroup) {
-            const sys = options.system.system;
-            const tg = options.talkgroup.dec;
-            this._selection[sys][tg] = typeof options.status === 'boolean' ? options.status : !this.selection[sys][tg];
-
-        } else if (options.system && !options.talkgroup) {
-            const sys = options.system.system;
-            Object.keys(this.selection[sys]).map((tg: string) => +tg).forEach((tg: number) => {
-                this._selection[sys][tg] = typeof options.status === 'boolean' ? options.status : !this.selection[sys][tg];
-            });
+    avoid(options?: RdioScannerAvoidOptions): void {
+        if (this.auth) {
+            this.authPassword.focus();
 
         } else {
-            const call = this.call || this.callPrevious;
-
-            if (call) {
-                const sys = call.system;
-                const tg = call.talkgroup;
-                this._selection[sys][tg] = typeof options.status === 'boolean' ? options.status : !this.selection[sys][tg];
-            }
+            this.appRdioScannerService.avoid(options);
         }
+    }
 
-        this.buildGroups();
-
-        if (this.call && !(this.selection && this.selection[this.call.system] &&
-            this._selection[this.call.system][this.call.talkgroup])) {
-            this.skip();
-        }
-
-        if (this.livefeedStatus) {
-            this.unsubscribeLivefeed();
-            this.subscribeLivefeed();
-        }
-
-        this.writeSelection();
-
-        this.cleanQueue();
+    download(id: number): void {
+        this.appRdioScannerService.loadAndDownload(id);
     }
 
     @HostListener('window:beforeunload', ['$event'])
     exitNotification(event: BeforeUnloadEvent): void {
-        if (this.livefeedStatus) {
+        if (this.liveFeedActive) {
             event.preventDefault();
-            event.returnValue = 'Live feed is ON, do you really want to leave this page?';
+
+            event.returnValue = 'Live Feed is ON, do you really want to leave?';
         }
     }
 
     getSearchFormTalkgroups(): RdioScannerTalkgroup[] {
-        const system = this.systems.find((sys) => sys.system === this.searchForm.get('system').value);
+        const system = this.config?.systems?.find((sys) => sys.id === this.searchForm.get('system').value);
 
         return system ? system.talkgroups : [];
     }
 
-    holdSystem(resubscribe = true): void {
-        const call = this.call || this.callPrevious;
-
-        if (call && this.selection) {
-            if (this.selectionSystemHold) {
-                this._selection = this._selectionSystemHold;
-                this._selectionSystemHold = null;
-
-            } else {
-                if (this.selectionTalkgroupHold) {
-                    this.holdTalkgroup(false);
-                }
-
-                this._selectionSystemHold = this.selection;
-
-                this._selection = Object.keys(this.selection).map((sys) => +sys).reduce((sa, sv) => {
-                    const allOn = Object.keys(this.selection[sv]).every((key) => !this.selection[sv][key]);
-
-                    sa[sv] = Object.keys(this.selection[sv]).map((tg) => +tg).reduce((ta, tv) => {
-                        if (sv === call.system) {
-                            ta[tv] = allOn || this.selection[sv][tv];
-                        } else {
-                            ta[tv] = false;
-                        }
-                        return ta;
-                    }, {});
-                    return sa;
-                }, {});
-
-                this.cleanQueue();
-            }
-
-            if (resubscribe && this.livefeedStatus) {
-                this.unsubscribeLivefeed();
-                this.subscribeLivefeed();
-            }
-
-            this.buildGroups();
-        }
-    }
-
-    holdTalkgroup(resubscribe = true): void {
-        const call = this.call || this.callPrevious;
-
-        if (call && this.selection) {
-            if (this.selectionTalkgroupHold) {
-                this._selection = this._selectionTalkgroupHold;
-                this._selectionTalkgroupHold = null;
-
-            } else {
-                if (this.selectionSystemHold) {
-                    this.holdSystem(false);
-                }
-
-                this._selectionTalkgroupHold = this.selection;
-
-                this._selection = Object.keys(this.selection).map((sys) => +sys).reduce((sa, sv) => {
-                    sa[sv] = Object.keys(this.selection[sv]).map((tg) => +tg).reduce((ta, tv) => {
-                        if (sv === call.system) {
-                            ta[tv] = tv === call.talkgroup;
-                        } else {
-                            ta[tv] = false;
-                        }
-                        return ta;
-                    }, {});
-                    return sa;
-                }, {});
-
-                this.cleanQueue();
-            }
-
-            if (resubscribe && this.livefeedStatus) {
-                this.unsubscribeLivefeed();
-                this.subscribeLivefeed();
-            }
-
-            this.buildGroups();
-        }
-    }
-
-    livefeed(status = !this.livefeedStatus): void {
-        if (status) {
-            this.subscribeLivefeed();
+    holdSystem(): void {
+        if (this.auth) {
+            this.authPassword.focus();
 
         } else {
-            this.unsubscribeLivefeed();
+            this.appRdioScannerService.holdSystem();
+        }
+    }
 
-            this._callQueue.splice(0, this.callQueue.length);
+    holdTalkgroup(): void {
+        if (this.auth) {
+            this.authPassword.focus();
 
-            this.stop();
+        } else {
+            this.appRdioScannerService.holdTalkgroup();
+        }
+    }
+
+    liveFeed(): void {
+        if (this.auth) {
+            this.authPassword.focus();
+
+        } else {
+            this.appRdioScannerService.liveFeed();
+        }
+    }
+
+    ngOnDestroy() {
+        // terminate subscriptions
+
+        while (this.subscriptions.length) {
+            this.subscriptions.pop().unsubscribe();
         }
 
-        this.live.emit(status);
-    }
+        // stop the realtime clock
 
-    loadAndDownload(call: RdioScannerCall): void {
-        this.loadCall(call).then((_call) => this.download(_call));
-    }
+        if (this.clockInterval) {
+            clearInterval(this.clockInterval);
+        }
 
-    loadAndPlay(call: RdioScannerCall): void {
-        this.loadCall(call).then((_call) => this.play(_call));
-    }
+        // terminate our live event emitter
 
-    ngOnDestroy(): void {
         this.live.complete();
-
-        this.unsubscribeLivefeed();
-
-        this.unsubscribeSearchForm();
-
-        this.unsubscribeSearchPaginator();
-
-        this.unsubscribeSystems();
-
-        clearInterval(this.clockInterval);
     }
 
-    ngOnInit(): void {
-        this.clockInterval = setInterval(() => this._displayClock = new Date(), 1000);
+    ngOnInit() {
+        // initialize the realtime clock
 
-        this.bootstrapAudio();
+        setTimeout(() => {
+            this.clock = new Date();
 
-        this.getConfig().then((config) => {
-            this._config = config;
+            this.ngChangeDetectorRef.markForCheck();
 
-            this.subscribeSystems().then(() => {
-                this.subscribeSearchForm();
-                this.subscribeSearchPaginator();
-            });
-        })
+            this.clockInterval = setInterval(() => {
+                this.clock = new Date();
 
-    }
+                this.ngChangeDetectorRef.detectChanges();
+            }, 60 * 1000);
+        }, (60 - new Date().getSeconds()) * 1000);
 
-    pause(status = !this.livefeedPaused): void {
-        this._livefeedPaused = status;
+        // subscribe to events
 
-        if (this.audioContext) {
-            if (this.livefeedPaused) {
-                this.audioContext.suspend();
-            } else {
-                this.audioContext.resume();
+        let searchFormPreviousValue = this.searchForm.value;
 
-                this.play();
-            }
-        }
-    }
+        this.subscriptions.push(
 
-    play(call?: RdioScannerCall): void {
-        if (this.audioContext && !this.livefeedPaused) {
-            if (!call && !this.call && this.callQueue.length) {
-                call = this.callQueue.shift();
-            }
+            // service events
 
-            if (call && call.audio) {
-                this.stop();
+            this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => {
+                if ('auth' in event) {
+                    if (event.auth) {
+                        let password: string;
 
-                if (this.callPrevious && this.callPrevious !== call && !this.callHistory.find((c) => c === this.callPrevious)) {
-                    this._callHistory.pop();
-                    this._callHistory.unshift(this.callPrevious);
+                        if (window instanceof Window && window.localStorage instanceof Storage) {
+                            password = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+
+                            if (password) {
+                                password = atob(password);
+
+                                window.localStorage.removeItem(LOCAL_STORAGE_KEY);
+                            }
+                        }
+
+                        if (password) {
+                            this.authForm.get('password').setValue(password);
+
+                            this.appRdioScannerService.authenticate(password);
+
+                        } else {
+                            this.auth = event.auth;
+
+                            this.authForm.reset();
+
+                            if (this.authForm.disabled) {
+                                this.authForm.enable();
+                            }
+
+                            setTimeout(() => this.authPassword.focus());
+                        }
+                    }
                 }
 
-                this._call = call;
+                if ('config' in event) {
+                    this.config = event.config;
 
-                const arrayBuffer = new ArrayBuffer(call.audio.data.length);
-                const arrayBufferView = new Uint8Array(arrayBuffer);
+                    const password = this.authForm.get('password').value;
 
-                for (let i = 0; i < call.audio.data.length; i++) {
-                    arrayBufferView[i] = call.audio.data[i];
+                    if (password) {
+                        if (window instanceof Window && window.localStorage instanceof Storage) {
+                            window.localStorage.setItem(LOCAL_STORAGE_KEY, btoa(password));
+                        }
+
+                        this.authForm.reset();
+                    }
+
+                    this.auth = false;
+
+                    this.authForm.reset();
+
+                    if (this.authForm.enabled) {
+                        this.authForm.disable();
+                    }
+
+                    if (this.searchPanelOpened) {
+                        this.searchResultsPending = false;
+
+                        this.searchCall();
+                    }
+                }
+
+                if ('call' in event) {
+                    if (event.call) {
+                        this.call = this.transformCall(event.call);
+
+                    } else {
+                        this.callPrevious = this.call;
+
+                        this.call = null;
+                    }
+                }
+
+                if ('groups' in event) {
+                    this.groups = event.groups;
+                }
+
+                if ('holdSys' in event) {
+                    this.holdSys = event.holdSys;
+                }
+
+                if ('holdTg' in event) {
+                    this.holdTg = event.holdTg;
+                }
+
+                if ('liveFeed' in event) {
+                    this.liveFeedActive = event.liveFeed;
+
+                    this.live.emit(this.liveFeedActive);
+                }
+
+                if ('list' in event) {
+                    this.list = event.list;
+
+                    if (Array.isArray(this.list && this.list.results)) {
+                        this.list.results = this.list.results.map((call) => this.transformCall(call));
+                    }
+
+                    this.refreshSearchResults();
+
+                    this.searchResultsPending = false;
+
+                    this.searchForm.enable();
+                }
+
+                if ('map' in event) {
+                    this.map = event.map;
+                }
+
+                if ('pause' in event) {
+                    this.liveFeedPaused = event.pause;
+                }
+
+                if ('queue' in event) {
+                    this.callQueue = event.queue;
+                }
+
+                if ('time' in event) {
+                    this.callTime = event.time;
                 }
 
                 this.updateDisplay();
+            }),
 
-                this.ngZone.run(() => this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                    this.audioContext.resume().then(() => {
-                        const displayInterval = setInterval(() => this.updateDisplay(), 500);
+            // search form events
 
-                        this.audioSource = this.audioContext.createBufferSource();
+            this.searchForm.valueChanges.subscribe((value) => {
+                if (!Object.keys(value).every((key) => value[key] === searchFormPreviousValue[key])) {
+                    if (value.system !== searchFormPreviousValue.system && value.talkgroup !== -1) {
+                        searchFormPreviousValue.talkgroup = -1;
 
-                        this.audioSource.buffer = buffer;
-                        this.audioSource.connect(this.audioContext.destination);
-                        this.audioSource.onended = () => this.ngZone.runTask(() => {
-                            clearInterval(displayInterval);
-                            this.skip();
-                        });
-                        this.audioSource.start();
-                    });
-                }, () => this.skip()));
-            }
+                        this.searchForm.get('talkgroup').reset(searchFormPreviousValue.talkgroup);
+                    }
+
+                    this.searchFormPaginator.firstPage();
+
+                    searchFormPreviousValue = value;
+
+                    this.searchCall();
+                }
+            }),
+
+            // search results paginator events
+
+            this.searchFormPaginator.page.subscribe(() => this.refreshSearchResults()),
+
+        );
+    }
+
+    pause(): void {
+        if (this.auth) {
+            this.authPassword.focus();
+
+        } else {
+            this.appRdioScannerService.pause();
         }
     }
 
-    queue(call: RdioScannerCall): void {
-        const selection = this.selection;
-        const sys = call.system;
-        const tg = call.talkgroup;
-
-        if (selection && selection[sys] && selection[sys][tg]) {
-            this.callQueue.push(call);
-
-            this.play();
-        }
+    play(id: number): void {
+        this.appRdioScannerService.loadAndPlay(id);
     }
 
     replay(): void {
-        if (!this.livefeedPaused) {
-            this.play(this.call || this.callPrevious);
+        if (this.auth) {
+            this.authPassword.focus();
+
+        } else {
+            this.appRdioScannerService.replay();
         }
     }
 
@@ -432,28 +419,79 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             talkgroup: -1,
         });
 
-        if (this.matPaginator.pageIndex > 0) {
-            this.matPaginator.firstPage();
+        this.searchFormPaginator.firstPage();
+
+        this.searchCall();
+    }
+
+    searchCall(): void {
+        if (!this.config) {
+            return;
+        }
+
+        if (this.auth) {
+            this.authPassword.focus();
+
+            return;
+        }
+
+        this.searchPanelOpened = true;
+
+        if (!this.searchResultsPending) {
+            const filter = this.searchForm.value;
+            const limit = this.searchResultsLimit;
+            const offset = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize;
+            const options: RdioScannerSearchOptions = { limit };
+
+            this.searchResultsOffset = Math.floor(offset / limit) * limit;
+
+            if (filter.date instanceof Date) {
+                options.date = filter.date;
+            }
+
+            if (this.searchResultsOffset) {
+                options.offset = this.searchResultsOffset;
+            }
+
+            if (filter.sort < 0) {
+                options.sort = -1;
+            }
+
+            if (filter.system >= 0) {
+                options.system = filter.system;
+            }
+
+            if (filter.talkgroup >= 0) {
+                options.talkgroup = filter.talkgroup;
+            }
+
+            this.searchResultsPending = true;
+
+            this.searchForm.disable();
+
+            this.appRdioScannerService.searchCalls(options);
         }
     }
 
-    skip(nodelay = false): void {
-        this.stop();
+    selectTg(): void {
+        if (!this.config) {
+            return;
+        }
 
-        setTimeout(() => this.play(), nodelay ? 0 : 1000);
+        if (this.auth) {
+            this.authPassword.focus();
+
+        } else {
+            this.selectPanelOpened = true;
+        }
     }
 
-    stop(): void {
-        if (this.audioSource && this.call) {
-            this.audioSource.onended = null;
-            this.audioSource.stop();
-            this.audioSource.disconnect();
-            this.audioSource = null;
+    skip(nodelay?: boolean): void {
+        if (this.auth) {
+            this.authPassword.focus();
 
-            this.audioStartTime = NaN;
-
-            this._callPrevious = this._call;
-            this._call = null;
+        } else {
+            this.appRdioScannerService.skip(nodelay);
         }
     }
 
@@ -488,145 +526,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    toggleGroup(name: string): void {
-        const group = this.groups.find((_group) => _group.name === name);
-
-        if (this.selectionSystemHold) {
-            this._selectionSystemHold = null;
-        }
-
-        if (this.selectionTalkgroupHold) {
-            this._selectionTalkgroupHold = null;
-        }
-
-        if (group) {
-            const status = group.status === RdioScannerGroupStatus.On ? false : true;
-
-            this.systems.forEach((system) => {
-                system.talkgroups.forEach((talkgroup) => {
-                    if (talkgroup.group === name) {
-                        this.selection[system.system][talkgroup.dec] = status;
-                    }
-                });
-            });
-
-            this.buildGroups();
-
-            if (this.call && !(this.selection && this.selection[this.call.system] &&
-                this._selection[this.call.system][this.call.talkgroup])) {
-                this.skip();
-            }
-
-            if (this.livefeedStatus) {
-                this.unsubscribeLivefeed();
-                this.subscribeLivefeed();
-            }
-
-            this.writeSelection();
-
-            this.cleanQueue();
-        }
-    }
-
-    toggleSearchPanel(opened = !this.searchPanelOpened): void {
-        if (opened) {
-            this.loadStoredCalls();
-        }
-
-        this._searchPanelOpened = opened;
-    }
-
-    toggleSelectPanel(opened = !this.selectPanelOpened): void {
-        this._selectPanelOpened = opened;
-    }
-
-    private bootstrapAudio(): void {
-        const events = ['mousedown', 'touchdown'];
-
-        const bootstrap = () => {
-            if (!this.audioContext) {
-                if ('webkitAudioContext' in window) {
-                    this.audioContext = new webkitAudioContext();
-                } else {
-                    this.audioContext = new AudioContext();
-                }
-            }
-
-            if (this.audioContext) {
-                this.audioContext.resume().then(() => {
-                    events.forEach((event) => document.body.removeEventListener(event, bootstrap));
-                });
-            }
-        };
-
-        events.forEach((event) => document.body.addEventListener(event, bootstrap));
-    }
-
-    private buildGroups(): void {
-        const groups: RdioScannerGroup[] = [];
-
-        this.systems.forEach((system: RdioScannerSystem) => {
-            system.talkgroups
-                .forEach((talkgroup: RdioScannerTalkgroup) => {
-                    const group = groups.find((_group) => _group.name === talkgroup.group);
-
-                    if (!group) {
-                        const allOn = this.systems.every((sys) => {
-                            return sys.talkgroups.filter((tg) => tg.group === talkgroup.group)
-                                .every((tg) => this.selection[sys.system][tg.dec]);
-                        });
-
-                        const allOff = this.systems.every((sys) => {
-                            return sys.talkgroups.filter((tg) => tg.group === talkgroup.group)
-                                .every((tg) => !this.selection[sys.system][tg.dec]);
-                        });
-
-                        const name = talkgroup.group;
-
-                        const status = allOn ? RdioScannerGroupStatus.On
-                            : allOff ? RdioScannerGroupStatus.Off
-                                : RdioScannerGroupStatus.Partial;
-
-                        groups.push({ name, status });
-                    }
-                });
-        });
-
-        groups.sort((a, b) => a.name.localeCompare(b.name));
-
-        this.groups.splice(0, this.groups.length, ...groups);
-    }
-
-    private cleanQueue(): void {
-        this._callQueue = this.callQueue.filter((call: RdioScannerCall) => {
-            return this.selection && this.selection[call.system] && this.selection[call.system][call.talkgroup];
-        });
-    }
-
-    private download(call: RdioScannerCall = {}): void {
-        if (this.config.allowDownload && Array.isArray(call.audio && call.audio.data)) {
-            let name;
-
-            if (call.audioName) {
-                name = call.audioName;
-
-            } else {
-                const sysName = (call.systemData && call.systemData.name) || call.system;
-                const tgName = (call.talkgroupData && call.talkgroupData.description) || call.talkgroup;
-                const time = new Date(call.startTime).toISOString();
-
-                name = call.audioName || `${sysName}-${tgName}-${time}.m4a`;
-            }
-
-            const audio = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
-            const type = call.audioType || 'audio/aac';
-            const uri = `data:${type};base64,${btoa(audio)}`;
-
-            this.downloadLink.nativeElement.download = name;
-            this.downloadLink.nativeElement.href = uri;
-
-            this.downloadLink.nativeElement.click();
-        }
+    toggleGroup(label: string): void {
+        this.appRdioScannerService.toggleGroup(label);
     }
 
     private formatFrequency(frequency: number): string {
@@ -637,267 +538,129 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             .concat(' Hz');
     }
 
-    private async getConfig(): Promise<RdioScannerConfig> {
-        const query = await this.appRdioScannerConfigQuery.fetch().toPromise();
-        return query.data.rdioScannerConfig;
-    }
+    private refreshSearchResults(): void {
+        const limit = this.searchResultsLimit;
+        const offset = this.searchResultsOffset;
+        const from = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize;
+        const to = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize + this.searchFormPaginator.pageSize - 1;
 
-    private async loadCall(call: RdioScannerCall = {}): Promise<RdioScannerCall | null> {
-        const query = await this.appRdioScannerCallQuery.fetch({ id: call.id }).toPromise();
+        if (from >= offset + limit || from < offset) {
+            this.searchCall();
 
-        Object.assign(call, this.transformCall(query.data.rdioScannerCall));
+        } else {
+            const calls = this.list.results.slice(from % limit, to % limit + 1);
 
-        return call;
-    }
-
-    private async loadStoredCalls(filters?: any): Promise<void> {
-        const limit = this.searchResultsBuffer.length;
-
-        const pageFrom = this.matPaginator.pageIndex * this.matPaginator.pageSize;
-
-        const pageTo = this.matPaginator.pageIndex * this.matPaginator.pageSize + this.matPaginator.pageSize - 1;
-
-        if (!this.searchResultsPending && (filters || !pageFrom ||
-            pageFrom < this.searchResultsBufferFrom || pageTo > this.searchResultsBufferTo)) {
-
-            filters = filters || this.searchForm.value;
-
-            this.searchResultsBufferFrom = Math.floor(pageFrom / limit) * limit;
-            this.searchResultsBufferTo = this.searchResultsBufferFrom + limit - 1;
-
-            const options: {
-                date?: Date;
-                limit?: number;
-                offset?: number;
-                sort?: number;
-                system?: number;
-                talkgroup?: number;
-            } = {};
-
-            if (filters.date instanceof Date) {
-                options.date = filters.date;
+            while (calls.length < this.searchResults.value.length) {
+                calls.push(null);
             }
 
-            if (limit) {
-                options.limit = limit;
-            }
-
-            if (this.searchResultsBufferFrom) {
-                options.offset = this.searchResultsBufferFrom;
-            }
-
-            if (filters.sort < 0) {
-                options.sort = -1;
-            }
-
-            if (filters.system >= 0) {
-                options.system = filters.system;
-            }
-
-            if (filters.talkgroup >= 0) {
-                options.talkgroup = filters.talkgroup;
-            }
-
-            this._searchResultsPending = true;
-
-            this.searchForm.disable();
-
-            const query = await this.appRdioScannerCallsQuery.fetch(options, { fetchPolicy: 'no-cache' }).toPromise();
-
-            for (let i = 0; i < limit; i++) {
-                this.searchResultsBuffer[i] = this.transformCall(query.data.rdioScannerCalls.results[i]);
-            }
-
-            this._searchResultsCount = query.data.rdioScannerCalls.count;
-            this._searchFormDateStart = query.data.rdioScannerCalls.dateStart;
-            this._searchFormDateStop = query.data.rdioScannerCalls.dateStop;
-
-            this._searchResultsPending = false;
-
-            this.searchForm.enable();
-        }
-
-        this.searchResults.next(this.searchResultsBuffer.slice(pageFrom % limit, pageTo % limit + 1));
-    }
-
-    private async subscribeLivefeed(): Promise<void> {
-        if (!this.livefeedSubscription) {
-            const selection = JSON.stringify(this.selection);
-
-            this.livefeedSubscription = this.appRdioScannerCallSubscription.subscribe({ selection })
-                .subscribe(({ data }) => this.processCall(data.rdioScannerCall));
-        }
-    }
-
-    private processCall(call: RdioScannerCall): void {
-        if (call !== null && typeof call === 'object') {
-            call = this.transformCall(call);
-            this.queue(call);
-        }
-    }
-
-    private processSystems(systems: RdioScannerSystem[]): void {
-        if (Array.isArray(systems)) {
-            this.systems.splice(0, this.systems.length, ...systems);
-
-            this.readSelection();
-            this.rebuildSelection();
-            this.writeSelection();
-
-            this.buildGroups();
-        }
-    }
-
-    private readSelection(): any {
-        if (window instanceof Window && window.localStorage instanceof Storage) {
-            try {
-                this._selection = JSON.parse(window.localStorage.getItem(LOCAL_STORAGE_KEY));
-            } catch (err) {
-                this._selection = {};
-            }
-        }
-    }
-
-    private rebuildSelection(): void {
-        this._selection = this.systems.reduce((sa, sv) => {
-            const tgs = sv.talkgroups.map((tg) => tg.dec.toString());
-
-            if (Array.isArray(sa[sv.system])) {
-                Object.keys(sa[sv.system]).forEach((tg) => {
-                    if (!tgs.includes(tg)) {
-                        delete sa[sv.system][tg];
-                    }
-                });
-            }
-
-            sa[sv.system] = sv.talkgroups.reduce((ta, tv) => {
-                ta[tv.dec] = typeof ta[tv.dec] === 'boolean' ? ta[tv.dec] : true;
-                return ta;
-            }, sa[sv.system] || {});
-            return sa;
-        }, this.selection || {});
-    }
-
-    private subscribeSearchForm(): void {
-        let lastValue = this.searchForm.value;
-
-        if (!this.searchFormSubscription) {
-            this.searchFormSubscription = this.searchForm.valueChanges.subscribe((value) => {
-                if (!Object.keys(value).every((key) => value[key] === lastValue[key])) {
-                    if (value.system !== lastValue.system && value.talkgroup !== -1) {
-                        lastValue.talkgroup = -1;
-                        this.searchForm.get('talkgroup').reset(lastValue.talkgroup);
-                    }
-
-                    this.matPaginator.firstPage();
-
-                    this.loadStoredCalls(value);
-
-                    lastValue = value;
-                }
-            });
-        }
-    }
-
-    private subscribeSearchPaginator(): void {
-        if (!this.searchPaginatorSubscription) {
-            this.searchPaginatorSubscription = this.matPaginator.page.subscribe(() => this.loadStoredCalls());
-        }
-    }
-
-    private async subscribeSystems(): Promise<void> {
-        if (!this.systemsSubscription) {
-            this.appRdioScannerSystemsQuery.watch().valueChanges
-                .subscribe(({ data }) => this.processSystems(data.rdioScannerSystems));
-
-            this.systemsSubscription = this.appRdioScannerSystemsSubscription.subscribe()
-                .subscribe(({ data }) => this.processSystems(data.rdioScannerSystems));
+            this.searchResults.next(calls);
         }
     }
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
-        if (call) {
-            const system = this.systems.find((_system: RdioScannerSystem) => _system.system === call.system) || {};
+        if (call && Array.isArray(this.config && this.config.systems)) {
+            call.systemData = this.config.systems.find((sys) => sys.id === call.system);
 
-            if (Array.isArray(call.srcList)) {
-                const aliases = system.aliases || [];
-
-                call.srcList = call.srcList.map((src) => {
-                    const alias = aliases.find((_alias) => _alias.uid === src.src);
-
-                    if (alias) {
-                        src.name = alias.name;
-                    }
-
-                    return src;
-                });
+            if (Array.isArray(call.systemData.talkgroups)) {
+                call.talkgroupData = call.systemData.talkgroups.find((tg) => tg.id === call.talkgroup);
             }
 
-            call.systemData = system;
-
-            call.talkgroupData = (call.systemData && Array.isArray(call.systemData.talkgroups) && call.systemData.talkgroups
-                .find((talkgroup: RdioScannerTalkgroup) => talkgroup.dec === call.talkgroup)) || {};
+            if (call.talkgroupData?.frequency) {
+                call.frequency = call.talkgroupData.frequency;
+            }
         }
 
         return call;
     }
 
-    private unsubscribeSearchForm(): void {
-        if (this.searchFormSubscription) {
-            this.searchFormSubscription.unsubscribe();
-            this.searchFormSubscription = null;
-        }
-    }
-
-    private unsubscribeSearchPaginator(): void {
-        if (this.searchPaginatorSubscription) {
-            this.searchPaginatorSubscription.unsubscribe();
-            this.searchPaginatorSubscription = null;
-        }
-    }
-
-    private unsubscribeLivefeed(): void {
-        if (this.livefeedSubscription) {
-            this.livefeedSubscription.unsubscribe();
-            this.livefeedSubscription = null;
-        }
-    }
-
-    private unsubscribeSystems(): void {
-        if (this.systemsSubscription) {
-            this.systemsSubscription.unsubscribe();
-            this.systemsSubscription = null;
-        }
-    }
-
-    private updateDisplay(): void {
+    private updateDisplay(time = this.callTime): void {
         if (this.call) {
-            if (isNaN(this.audioStartTime)) {
-                this.audioStartTime = isNaN(this.audioContext.currentTime) ? Date.now() : this.audioContext.currentTime;
+            this.callProgress = new Date(this.call.dateTime);
+            this.callProgress.setSeconds(this.callProgress.getSeconds() + time);
+
+            this.callSystem = this.call.systemData?.label || `${this.call.system}`;
+
+            this.callTag = this.call.talkgroupData?.tag || '';
+
+            this.callTalkgroup = this.call.talkgroupData?.label || `${this.call.talkgroup}`;
+
+            this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call.frequency);
+
+            if (Array.isArray(this.call.frequencies) && this.call.frequencies.length) {
+                const frequency = this.call.frequencies.reduce((p, v) => v.pos <= time ? v : p, {});
+
+                this.callError = typeof frequency.errorCount === 'number' ? `${frequency.errorCount}` : '';
+
+                this.callFrequency = this.formatFrequency(typeof frequency.freq === 'number' ? frequency.freq : this.call.frequency);
+
+                this.callSpike = typeof frequency.spikeCount === 'number' ? `${frequency.spikeCount}` : '';
+
+            } else {
+                this.callError = '';
+
+                this.callFrequency = typeof this.call.frequency === 'number' ? this.formatFrequency(this.call.frequency) : '';
+
+                this.callSpike = '';
             }
 
-            const diffTime = this.audioContext.currentTime - this.audioStartTime;
-            const currentFreq = this.call.freqList.reduce((r, v) => v.pos <= diffTime ? v : r, {});
-            const currentSrc = this.call.srcList.reduce((r, v) => v.pos <= diffTime ? v : r, {});
+            if (Array.isArray(this.call.sources) && this.call.sources.length) {
+                const source = this.call.sources.reduce((p, v) => v.pos <= time ? v : p, {});
 
-            this._displayAlphaTag = this.call.talkgroupData.alphaTag || '';
-            this._displayDescription = this.call.talkgroupData.description || this.formatFrequency(this.call.freq);
-            this._displayErrorCount = currentFreq.errorCount || 0;
-            this._displayFrequency = this.formatFrequency(currentFreq.freq || this.call.freq);
-            this._displayMode = this.call.talkgroupData.mode || 'A';
-            this._displayProgress = new Date(this.call.startTime);
-            this._displayProgress.setSeconds(this.displayProgress.getSeconds() + this.audioContext.currentTime - this.audioStartTime);
-            this._displaySpikeCount = currentFreq.spikeCount || 0;
-            this._displaySystem = this.call.systemData.name || '';
-            this._displayTag = this.call.talkgroupData.tag || '';
-            this._displayTalkgroup = this.call.talkgroup || 0;
-            this._displayUnit = currentSrc.name || currentSrc.src || 0;
-        }
-    }
+                this.callTalkgroupId = `${this.call.talkgroup}`;
 
-    private writeSelection(): any {
-        if (window instanceof Window && window.localStorage instanceof Storage) {
-            window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(this.selection));
+                if (typeof source.src === 'number' && Array.isArray(this.call.systemData?.units)) {
+                    const callUnit = this.call.systemData.units?.find((u) => u.id === source.src);
+
+                    this.callUnit = callUnit ? callUnit.label : `${source.src}`;
+
+                } else {
+                    this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
+                }
+
+            } else {
+                this.callTalkgroupId = '';
+
+                this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
+            }
+
+            if (
+                this.call?.id !== this.callPrevious?.id &&
+                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious?.id)
+            ) {
+                this.callHistory.pop();
+
+                this.callHistory.unshift(this.callPrevious);
+            }
         }
+
+        const colors = ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];
+
+        this.ledClass = this.call && this.liveFeedPaused ? 'on paused' : this.call ? 'on' : 'off';
+
+        if (colors.includes(this.call?.talkgroupData?.led)) {
+            this.ledClass = `${this.ledClass} ${this.call.talkgroupData.led}`;
+
+        } else if (colors.includes(this.call?.systemData?.led)) {
+            this.ledClass = `${this.ledClass} ${this.call.systemData.led}`;
+        }
+
+        const setDimmer = () => {
+            if (this.config?.useDimmer) {
+                if (this.dimmerDelay) {
+                    clearTimeout(this.dimmerDelay);
+                }
+
+                this.dimmerDelay = setTimeout(() => {
+                    this.dimmerDelay = undefined;
+
+                    this.ngChangeDetectorRef.detectChanges();
+                }, 3000);
+            }
+        };
+
+        setDimmer();
+
+        this.ngChangeDetectorRef.detectChanges();
     }
 }
