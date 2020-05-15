@@ -19,6 +19,8 @@
 
 'use strict';
 
+require('dotenv').config();
+
 const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
@@ -55,15 +57,20 @@ class App {
             config.sequelize = {};
         }
 
-        config.sequelize.dialect = config.sequelize.dialect || 'sqlite';
+        config.sequelize.database = config.sequelize.dialect || process.env.DB_NAME || null;
+        config.sequelize.dialect = config.sequelize.dialect || process.env.DB_DIALECT || 'sqlite';
 
         if (config.sequelize.dialectOptions === null || typeof config.sequelize.dialectOptions !== 'object') {
             config.sequelize.dialectOptions = {};
         }
 
         config.sequelize.dialectOptions.timezone = config.sequelize.dialectOptions.timezone || 'Etc/GMT0';
+        config.sequelize.host = config.sequelize.host || process.env.DB_HOST || null;
         config.sequelize.logging = false;
-        config.sequelize.storage = config.sequelize.storage || 'database.sqlite';
+        config.sequelize.password = config.sequelize.password || process.env.DB_PASS || null;
+        config.sequelize.port = config.sequelize.port || process.env.DB_PORT || null;
+        config.sequelize.storage = config.sequelize.storage || process.env.DB_STORAGE || 'database.sqlite';
+        config.sequelize.username = config.sequelize.username || process.env.DB_USER || null;
 
         return config;
     }
