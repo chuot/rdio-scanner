@@ -659,8 +659,9 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             }
 
             if (
-                this.call?.id !== this.callPrevious?.id &&
-                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious?.id)
+                this.callPrevious &&
+                this.callPrevious.id !== this.call.id &&
+                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious.id)
             ) {
                 this.callHistory.pop();
 
