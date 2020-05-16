@@ -314,6 +314,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     if (event.call) {
                         this.call = this.transformCall(event.call);
 
+                        this.updateDimmer();
+
                     } else {
                         this.callPrevious = this.call;
 
