@@ -57,7 +57,7 @@ class App {
             config.sequelize = {};
         }
 
-        config.sequelize.database = config.sequelize.dialect || process.env.DB_NAME || null;
+        config.sequelize.database = config.sequelize.database || process.env.DB_NAME || null;
         config.sequelize.dialect = config.sequelize.dialect || process.env.DB_DIALECT || 'sqlite';
 
         if (config.sequelize.dialectOptions === null || typeof config.sequelize.dialectOptions !== 'object') {
