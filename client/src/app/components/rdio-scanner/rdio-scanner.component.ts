@@ -150,6 +150,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.avoid(options);
+
+            this.updateDimmer();
         }
     }
 
@@ -178,6 +180,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.holdSystem();
+
+            this.updateDimmer();
         }
     }
 
@@ -187,6 +191,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.holdTalkgroup();
+
+            this.updateDimmer();
         }
     }
 
@@ -196,6 +202,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.liveFeed();
+
+            this.updateDimmer();
         }
     }
 
@@ -359,6 +367,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
                 if ('time' in event) {
                     this.callTime = event.time;
+
+                    this.updateDimmer();
                 }
 
                 this.updateDisplay();
@@ -395,6 +405,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.pause();
+
+            this.updateDimmer();
         }
     }
 
@@ -408,6 +420,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.replay();
+
+            this.updateDimmer();
         }
     }
 
@@ -492,6 +506,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         } else {
             this.appRdioScannerService.skip(nodelay);
+
+            this.updateDimmer();
         }
     }
 
@@ -574,6 +590,22 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         return call;
     }
 
+    private updateDimmer(): void {
+        if (this.config?.useDimmer) {
+            if (this.dimmerDelay) {
+                clearTimeout(this.dimmerDelay);
+            }
+
+            this.dimmerDelay = setTimeout(() => {
+                this.dimmerDelay = undefined;
+
+                this.ngChangeDetectorRef.detectChanges();
+            }, 4000);
+        }
+
+        this.ngChangeDetectorRef.detectChanges();
+    }
+
     private updateDisplay(time = this.callTime): void {
         if (this.call) {
             this.callProgress = new Date(this.call.dateTime);
@@ -644,22 +676,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         } else if (colors.includes(this.call?.systemData?.led)) {
             this.ledClass = `${this.ledClass} ${this.call.systemData.led}`;
         }
-
-        const setDimmer = () => {
-            if (this.config?.useDimmer) {
-                if (this.dimmerDelay) {
-                    clearTimeout(this.dimmerDelay);
-                }
-
-                this.dimmerDelay = setTimeout(() => {
-                    this.dimmerDelay = undefined;
-
-                    this.ngChangeDetectorRef.detectChanges();
-                }, 3000);
-            }
-        };
-
-        setDimmer();
 
         this.ngChangeDetectorRef.detectChanges();
     }
