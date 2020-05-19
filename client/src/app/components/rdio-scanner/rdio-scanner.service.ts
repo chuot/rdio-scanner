@@ -373,6 +373,10 @@ export class AppRdioScannerService implements OnDestroy {
         this.stop();
 
         if (nodelay) {
+            if (this.skipDelay) {
+                this.skipDelay = clearTimeout(this.skipDelay);
+            }
+
             this.play();
 
         } else {
