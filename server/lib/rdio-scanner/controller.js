@@ -101,7 +101,7 @@ class Controller {
                 proc.on('close', () => {
                     call.audio = audio;
                     call.audioName = call.audioName ? call.audioName.replace(/\.[^.]+$/, '.m4a') : 'audio.m4a';
-                    call.audioType = 'audio/aac';
+                    call.audioType = 'audio/mp4';
 
                     resolve(call);
                 });
