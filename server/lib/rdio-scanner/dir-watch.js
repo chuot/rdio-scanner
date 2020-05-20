@@ -90,61 +90,65 @@ class DirWatch {
 
                         switch (dirWatch.type) {
                             case 'trunk-recorder': {
-                                const metaFile = path.resolve(file.dir, `${file.name}.json`);
+                                setTimeout(() => {
+                                    const metaFile = path.resolve(file.dir, `${file.name}.json`);
 
-                                if (!fs.existsSync(metaFile)) {
-                                    console.error(`File not found: ${metaFile}`);
+                                    if (!fs.existsSync(metaFile)) {
+                                        console.error(`File not found: ${metaFile}`);
 
-                                    return;
-                                }
-
-                                let meta;
-
-                                try {
-                                    meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
-
-                                } catch (error) {
-                                    console.error(`Error loading file ${metaFile}`);
-
-                                    return;
-                                }
-
-                                if (meta) {
-                                    await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
-
-                                    if (dirWatch.deleteAfter) {
-                                        this.unlink(metaFile);
+                                        return;
                                     }
-                                }
+
+                                    let meta;
+
+                                    try {
+                                        meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+
+                                    } catch (error) {
+                                        console.error(`Error loading file ${metaFile}`);
+
+                                        return;
+                                    }
+
+                                    if (meta) {
+                                        await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
+
+                                        if (dirWatch.deleteAfter) {
+                                            this.unlink(metaFile);
+                                        }
+                                    }
+                                }, 2000);
 
                                 break;
                             }
 
                             case 'sdrtrunk': {
-                                const metaFile = path.resolve(file.dir, `${file.name}.mbe`);
+                                setTimeout(() => {
+                                    const metaFile = path.resolve(file.dir, `${file.name}.mbe`);
 
-                                if (!fs.existsSync(metaFile)) {
-                                    console.error(`File not found: ${metaFile}`);
+                                    if (!fs.existsSync(metaFile)) {
+                                        console.error(`File not found: ${metaFile}`);
 
-                                    return;
-                                }
+                                        return;
+                                    }
 
-                                let meta;
+                                    let meta;
 
-                                try {
-                                    meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+                                    try {
+                                        meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
 
-                                } catch (error) {
-                                    console.error(`Error loading file ${metaFile}`);
+                                    } catch (error) {
+                                        console.error(`Error loading file ${metaFile}`);
 
-                                    return;
-                                }
+                                        return;
+                                    }
 
-                                await this.app.controller.importSdrtrunk(audio, audioName, audioType, system, meta);
+                                    await this.app.controller.importSdrtrunk(audio, audioName, audioType, system, meta);
 
-                                if (dirWatch.deleteAfter) {
-                                    this.unlink(metaFile);
-                                }
+                                    if (dirWatch.deleteAfter) {
+                                        this.unlink(metaFile);
+                                    }
+                                }, 2000);
 
                                 break;
                             }
