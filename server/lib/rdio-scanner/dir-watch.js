@@ -90,7 +90,7 @@ class DirWatch {
 
                         switch (dirWatch.type) {
                             case 'trunk-recorder': {
-                                setTimeout(() => {
+                                setTimeout(async () => {
                                     const metaFile = path.resolve(file.dir, `${file.name}.json`);
 
                                     if (!fs.existsSync(metaFile)) {
@@ -123,7 +123,7 @@ class DirWatch {
                             }
 
                             case 'sdrtrunk': {
-                                setTimeout(() => {
+                                setTimeout(async () => {
                                     const metaFile = path.resolve(file.dir, `${file.name}.mbe`);
 
                                     if (!fs.existsSync(metaFile)) {
