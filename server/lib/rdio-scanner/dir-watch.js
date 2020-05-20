@@ -99,10 +99,10 @@ class DirWatch {
 
                                     await metaWatcher.close();
 
-                                    let meta;
-
                                     try {
-                                        meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+                                        const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+
+                                        await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
 
                                     } catch (error) {
                                         console.error(`Error loading file ${metaFile}`);
@@ -110,12 +110,8 @@ class DirWatch {
                                         return;
                                     }
 
-                                    if (meta) {
-                                        await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
-
-                                        if (dirWatch.deleteAfter) {
-                                            this.unlink(metaFile);
-                                        }
+                                    if (dirWatch.deleteAfter) {
+                                        this.unlink(metaFile);
                                     }
                                 });
 
@@ -138,18 +134,16 @@ class DirWatch {
 
                                     await metaWatcher.close();
 
-                                    let meta;
-
                                     try {
-                                        meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+                                        const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+
+                                        await this.app.controller.importSdrtrunk(audio, audioName, audioType, system, meta);
 
                                     } catch (error) {
                                         console.error(`Error loading file ${metaFile}`);
 
                                         return;
                                     }
-
-                                    await this.app.controller.importSdrtrunk(audio, audioName, audioType, system, meta);
 
                                     if (dirWatch.deleteAfter) {
                                         this.unlink(metaFile);
@@ -185,7 +179,7 @@ class DirWatch {
 
     unlink(filename) {
         try {
-            fs.unlinkSync(filename);
+            setTimeout(() => fs.unlinkSync(filename), 1000);
 
         } catch (error) {
             console.error(`Unable to delete ${filename}`);
