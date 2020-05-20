@@ -92,7 +92,7 @@ class DirWatch {
                                     if (!metaWatcher.closed) {
                                         metaWatcher.close();
                                     }
-                                }, 60 * 1000);
+                                }, 60 * 60 * 1000);
 
                                 metaWatcher.on('add', async () => {
                                     clearTimeout(timeout);
@@ -131,7 +131,7 @@ class DirWatch {
                                     if (!metaWatcher.closed) {
                                         metaWatcher.close();
                                     }
-                                }, 60 * 1000);
+                                }, 60 * 60 * 1000);
 
                                 metaWatcher.on('add', async () => {
                                     clearTimeout(timeout);
