@@ -82,22 +82,22 @@ class DirWatch {
 
                         const talkgroup = parse(dirWatch.talkgroup);
 
-                        if (isNaN(system) || isNaN(talkgroup)) {
-                            console.log(`Unknown system or talkgroup for ${filename}`);
-
-                            return;
-                        }
-
                         switch (dirWatch.type) {
                             case 'trunk-recorder': {
-                                setTimeout(async () => {
-                                    const metaFile = path.resolve(file.dir, `${file.name}.json`);
+                                const metaFile = path.resolve(file.dir, `${file.name}.json`);
 
-                                    if (!fs.existsSync(metaFile)) {
-                                        console.error(`File not found: ${metaFile}`);
+                                const metaWatcher = chokidar.watch(metaFile, { awaitWriteFinish: true });
 
-                                        return;
+                                const timeout = setTimeout(() => {
+                                    if (!metaWatcher.closed) {
+                                        metaWatcher.close();
                                     }
+                                }, 60 * 1000);
+
+                                metaWatcher.on('add', async () => {
+                                    clearTimeout(timeout);
+
+                                    await metaWatcher.close();
 
                                     let meta;
 
@@ -117,20 +117,26 @@ class DirWatch {
                                             this.unlink(metaFile);
                                         }
                                     }
-                                }, 2000);
+                                });
 
                                 break;
                             }
 
                             case 'sdrtrunk': {
-                                setTimeout(async () => {
-                                    const metaFile = path.resolve(file.dir, `${file.name}.mbe`);
+                                const metaFile = path.resolve(file.dir, `${file.name}.mbe`);
 
-                                    if (!fs.existsSync(metaFile)) {
-                                        console.error(`File not found: ${metaFile}`);
+                                const metaWatcher = chokidar.watch(metaFile, { awaitWriteFinish: true });
 
-                                        return;
+                                const timeout = setTimeout(() => {
+                                    if (!metaWatcher.closed) {
+                                        metaWatcher.close();
                                     }
+                                }, 60 * 1000);
+
+                                metaWatcher.on('add', async () => {
+                                    clearTimeout(timeout);
+
+                                    await metaWatcher.close();
 
                                     let meta;
 
@@ -148,7 +154,7 @@ class DirWatch {
                                     if (dirWatch.deleteAfter) {
                                         this.unlink(metaFile);
                                     }
-                                }, 2000);
+                                });
 
                                 break;
                             }
