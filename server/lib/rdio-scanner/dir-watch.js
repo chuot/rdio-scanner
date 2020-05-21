@@ -112,6 +112,7 @@ class DirWatch {
                                     }
 
                                     if (dirWatch.deleteAfter) {
+                                        this.unlink(filename);
                                         this.unlink(metaFile);
                                     }
                                 });
@@ -147,6 +148,7 @@ class DirWatch {
                                     }
 
                                     if (dirWatch.deleteAfter) {
+                                        this.unlink(filename);
                                         this.unlink(metaFile);
                                     }
                                 });
@@ -165,10 +167,10 @@ class DirWatch {
                                     talkgroup,
                                 });
                             }
-                        }
 
-                        if (dirWatch.deleteAfter) {
-                            this.unlink(filename);
+                                if (dirWatch.deleteAfter) {
+                                    this.unlink(filename);
+                                }
                         }
                     }
                 });
