@@ -33,7 +33,10 @@ The *rdioScanner.dirWatch* property an *array* of *dirWatch objects* which descr
 
                 // [optional] The type of the audio file
                 // It can be "default", "sdrtrunk" or "trunk-recorder"
-                "type": "default"
+                "type": "default",
+
+                // [optional] Set this to true to successfully watch files over a network
+                "usePolling": true
             }
         ]
     }

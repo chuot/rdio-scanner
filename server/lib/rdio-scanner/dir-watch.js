@@ -38,6 +38,7 @@ class DirWatch {
                     awaitWriteFinish: true,
                     ignoreInitial: true,
                     recursive: true,
+                    usePolling: typeof dirWatch.usePolling === 'boolean' ? dirWatch.usePolling : false,
                 });
 
                 watcher.on('add', async (filename) => {
