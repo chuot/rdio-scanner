@@ -17,6 +17,7 @@
  * ****************************************************************************
  */
 
+import { DOCUMENT } from '@angular/common';
 import {
     ChangeDetectionStrategy,
     ChangeDetectorRef,
@@ -24,6 +25,7 @@ import {
     ElementRef,
     EventEmitter,
     HostListener,
+    Inject,
     OnDestroy,
     OnInit,
     Output,
@@ -125,8 +127,11 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     private subscriptions: Subscription[] = [];
 
+    private visibilityChangeListener = () => this.ngDetectChanges();
+
     constructor(
         private appRdioScannerService: AppRdioScannerService,
+        @Inject(DOCUMENT) private document: Document,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngElementRef: ElementRef,
         private ngFormBuilder: FormBuilder,
@@ -223,9 +228,16 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         // terminate our live event emitter
 
         this.live.complete();
+
+        // remove visibility change listener
+        this.document.removeEventListener('visibilitychange', this.visibilityChangeListener);
     }
 
     ngOnInit() {
+        // Refresh display on visibility change
+
+        this.document.addEventListener('visibilitychange', this.visibilityChangeListener);
+
         // initialize the realtime clock
 
         const setClock = () => {
@@ -554,6 +566,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             .concat(' Hz');
     }
 
+    private ngDetectChanges(): void {
+        if (!this.document.hidden) {
+            this.ngChangeDetectorRef.detectChanges();
+        }
+    }
+
     private refreshSearchResults(): void {
         const limit = this.searchResultsLimit;
         const offset = this.searchResultsOffset;
@@ -599,11 +617,11 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.dimmerDelay = setTimeout(() => {
                 this.dimmerDelay = undefined;
 
-                this.ngChangeDetectorRef.detectChanges();
+                this.ngDetectChanges();
             }, 4000);
         }
 
-        this.ngChangeDetectorRef.detectChanges();
+        this.ngDetectChanges();
     }
 
     private updateDisplay(time = this.callTime): void {
@@ -678,6 +696,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.ledClass = `${this.ledClass} ${this.call.systemData.led}`;
         }
 
-        this.ngChangeDetectorRef.detectChanges();
+        this.ngDetectChanges();
     }
 }
