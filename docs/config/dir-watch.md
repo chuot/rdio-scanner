@@ -47,28 +47,6 @@ The *rdioScanner.dirWatch* property an *array* of *dirWatch objects* which descr
 
 ## Examples
 
-### Example for rtl-airband
-
-In this example, we assume that *rtl_airband.conf* is configured in **mode = "multichannel"** and each file outputs has a numerial value for *filename_template* like **filename_template = 1001**.
-
-```json
-{
-    "rdioScanner": {
-        "dirWatch": [
-            {
-                "deleteAfter": true,
-                "directory": "/home/radio/rtl-airband/audio_files",
-                "extension": "mp3",
-                "frequency": 119100000,
-                "system": 6,
-                // take the prefix of the filename to get the talkgroup id.
-                "talkgroup": ".*\\/(\\d+)_.*"
-            }
-        ]
-    }
-}
-```
-
 ### Example for SDRTrunk
 
 **Rdio Scanner** will import SDRTrunk *wav* and *mbe* files.

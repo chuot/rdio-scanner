@@ -38,7 +38,6 @@ Well, there is a lot...
 * Directory watcher for automatic importing of audio files
 * Automatic audio conversion to M4A/AAC on the server side. No need to prepare your audio files prior to upload.
 * You can **share your precious audio calls** to other **Rdio Scanner** instances by configuring downstreams.
-* Support for [Trunk Recorder](https://github.com/robotastic/trunk-recorder), [SDRTrunk](https://github.com/DSheirer/sdrtrunk), [RTLSDR-Airband](https://github.com/szpajder/RTLSDR-Airband) and others
 * Easy to install and configure
 
 ## Screenshots
