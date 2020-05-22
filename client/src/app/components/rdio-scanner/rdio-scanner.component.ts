@@ -116,7 +116,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     @ViewChild('password', { read: MatInput, static: true }) private authPassword: MatInput;
 
-    private clockInterval: any;
+    private clockRefresh: any;
 
     @ViewChild(MatPaginator, { static: true }) private searchFormPaginator: MatPaginator;
 
@@ -216,8 +216,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         // stop the realtime clock
 
-        if (this.clockInterval) {
-            clearInterval(this.clockInterval);
+        if (this.clockRefresh) {
+            clearTimeout(this.clockRefresh);
         }
 
         // terminate our live event emitter
@@ -228,17 +228,15 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     ngOnInit() {
         // initialize the realtime clock
 
-        setTimeout(() => {
+        const setClock = () => {
             this.clock = new Date();
 
+            this.clockRefresh = setTimeout(() => setClock(), (60 - this.clock.getSeconds()) * 1000);
+
             this.ngChangeDetectorRef.markForCheck();
+        };
 
-            this.clockInterval = setInterval(() => {
-                this.clock = new Date();
-
-                this.ngChangeDetectorRef.detectChanges();
-            }, 60 * 1000);
-        }, (60 - new Date().getSeconds()) * 1000);
+        setClock();
 
         // subscribe to events
 
