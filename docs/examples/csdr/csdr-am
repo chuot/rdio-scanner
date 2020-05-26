@@ -1,0 +1,85 @@
+#!/bin/bash
+
+##
+## #############################################################################
+##  Copyright (C) 2019-2020 Chrystian Huot
+##
+## This program is free software: you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, either version 3 of the License, or
+## (at your option) any later version.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program.  If not, see <http://www.gnu.org/licenses/>
+## #############################################################################
+##
+
+##
+## Begin of configurable values
+##
+
+audio_dir=./audio_files/air
+device_id=00000001
+center_freq=119.4e6
+gain=38.6
+sampling_rate=2400000
+squelch=2e-4
+
+## List of frequencies covered by your RTL
+
+freqs=(118.9e6 119.1e6 119.9e6)
+
+## Filename tempaltes for each frequencies
+## See sox documentation for multiple files output
+
+filenames=(118900000-%6n 119100000-%6n 119900000-%6n)
+
+##
+## End of configurable values
+##
+
+for i in ${!freqs[@]}; do
+	mkfifo /tmp/csdr_${device_id}_${freqs[i]}_iq.fifo
+
+	mkfifo /tmp/csdr_${device_id}_${freqs[i]}_squelch.fifo
+done
+
+trap cleanup EXIT
+
+test -d ${audio_dir} || mkdir -p ${audio_dir} || exit 1
+
+trap "rm -f /tmp/csdr_${device_id}_*.fifo" EXIT
+
+for i in ${!freqs[@]}; do
+	cat /tmp/csdr_${device_id}_${freqs[i]}_iq.fifo |
+		csdr convert_u8_f |
+		csdr shift_addition_cc $(csdr =\(${center_freq}-${freqs[i]}\)/${sampling_rate}) |
+		csdr fir_decimate_cc 50 0.005 HAMMING |
+		csdr squelch_and_smeter_cc --fifo /tmp/csdr_${device_id}_${freqs[i]}_squelch.fifo --outfifo /dev/null 6e-5 600 |
+		csdr amdemod_cf |
+		csdr agc_ff |
+		csdr limit_ff |
+		csdr convert_f_s16 |
+		sox -c 1 -r 44100 -t s16 - "${audio_dir}/${filenames[i]}.wav" silence 1 0.50 0.1% 1 2.0 0.1% : newfile : restart &
+done
+
+for i in ${!freqs[@]}; do
+	echo ${squelch} >/tmp/csdr_${device_id}_${freqs[i]}_squelch.fifo
+done
+
+server="rtl_sdr -d ${device_id} -f ${center_freq} -g ${gain} -s ${sampling_rate} -"
+
+for i in ${!freqs[@]}; do
+	if [ $i == $((${#freqs[@]} - 1)) ]; then
+		server+=" > /tmp/csdr_${device_id}_${freqs[i]}_iq.fifo"
+	else
+		server+=" | tee /tmp/csdr_${device_id}_${freqs[i]}_iq.fifo"
+	fi
+done
+
+eval ${server}
