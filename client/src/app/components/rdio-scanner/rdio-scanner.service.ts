@@ -622,9 +622,6 @@ export class AppRdioScannerService implements OnDestroy {
                 case WsCommand.Config:
                     this.config = message[1];
 
-                    this.liveFeedMapPriorToHoldSystem = null;
-                    this.liveFeedMapPriorToHoldTalkgroup = null;
-
                     if ('systems' in this.config) {
                         this.liveFeedRebuild();
                     }
@@ -637,8 +634,8 @@ export class AppRdioScannerService implements OnDestroy {
                         auth: false,
                         config: this.config,
                         groups: this.groups,
-                        holdSys: false,
-                        holdTg: false,
+                        holdSys: !!this.liveFeedMapPriorToHoldSystem,
+                        holdTg: !!this.liveFeedMapPriorToHoldTalkgroup,
                         map: this.liveFeedMap,
                     });
 
