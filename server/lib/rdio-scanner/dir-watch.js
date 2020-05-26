@@ -28,8 +28,6 @@ class DirWatch {
     constructor(app = {}) {
         this.app = app;
 
-        this.watchers = [];
-
         this.app.config.dirWatch.forEach((dirWatch = {}) => {
             if (typeof dirWatch.directory !== 'string' || !dirWatch.directory.length) {
                 console.error(`Invalid dirWatch.directory: ${dirWatch.directory}`);
@@ -58,22 +56,46 @@ class DirWatch {
                 usePolling: typeof dirWatch.usePolling === 'boolean' ? dirWatch.usePolling : false,
             });
 
-            watcher.on('add', (filename) => {
-                switch (dirWatch.type) {
-                    case 'trunk-recorder':
-                        this.importTrunkRecorderType(dirWatch, filename);
-                        break;
+            switch (dirWatch.type) {
+                case 'trunk-recorder':
+                    watcher.on('add', (filename) => this.importTrunkRecorderType(dirWatch, filename));
+                    break;
 
-                    case 'sdrtrunk':
-                        this.importSdrTrunkType(dirWatch, filename);
-                        break;
+                case 'sdrtrunk':
+                    watcher.on('add', (filename) => this.importSdrTrunkType(dirWatch, filename));
+                    break;
 
-                    default:
-                        this.importDefaultType(dirWatch, filename);
-                }
-            });
+                default:
+                    if (typeof dirWatch.delay === 'number' && dirWatch.delay >= 100) {
+                        const debounces = {};
 
-            this.watchers.push(watcher);
+                        const debounceFn = (filename) => setTimeout(() => {
+                            if (this.exists(filename)) {
+                                if (this.statFile(filename).size > 44) {
+                                    delete debounces[filename];
+
+                                    this.importDefaultType(dirWatch, filename);
+
+                                } else {
+                                    debounces[filename] = debounceFn(filename);
+                                }
+                            }
+                        }, dirWatch.delay);
+
+                        watcher.on('raw', (_, filename) => {
+                            filename = path.resolve(dir, filename);
+
+                            if (debounces[filename]) {
+                                clearTimeout(debounces[filename]);
+                            }
+
+                            debounces[filename] = debounceFn(filename);
+                        });
+
+                    } else {
+                        watcher.on('add', (filename) => this.importDefaultType(dirWatch, filename));
+                    }
+            }
         });
     }
 
@@ -81,13 +103,13 @@ class DirWatch {
         const file = path.parse(filename);
 
         if (file.ext === `.${dirWatch.extension}`) {
-            const audio = fs.readFileSync(filename);
+            const audio = this.readFile(filename);
 
             const audioName = file.base;
 
             const audioType = mime.lookup(file.base);
 
-            const dateTime = new Date(fs.statSync(filename).ctime);
+            const dateTime = new Date(this.statFile(filename).ctime);
 
             const frequency = parseInt(dirWatch.frequency, 10) || null;
 
@@ -118,7 +140,7 @@ class DirWatch {
             const audioFile = path.resolve(file.dir, `${file.name}.${dirWatch.extension}`);
 
             if (fs.existsSync(audioFile)) {
-                const audio = fs.readFileSync(audioFile);
+                const audio = this.readFile(audioFile);
 
                 const audioName = file.base;
 
@@ -127,7 +149,7 @@ class DirWatch {
                 const system = this.parseId(dirWatch.system, filename);
 
                 try {
-                    const meta = JSON.parse(fs.readFileSync(filename, 'utf8'));
+                    const meta = JSON.parse(this.readFile(filename, 'utf8'));
 
                     await this.app.controller.importSdrtrunk(audio, audioName, audioType, system, meta);
 
@@ -153,7 +175,7 @@ class DirWatch {
             const audioFile = path.resolve(file.dir, `${file.name}.${dirWatch.extension}`);
 
             if (fs.existsSync(audioFile)) {
-                const audio = fs.readFileSync(audioFile);
+                const audio = this.readFile(audioFile);
 
                 const audioName = file.base;
 
@@ -162,7 +184,7 @@ class DirWatch {
                 const system = this.parseId(dirWatch.system, filename);
 
                 try {
-                    const meta = JSON.parse(fs.readFileSync(filename, 'utf8'));
+                    const meta = JSON.parse(this.readFile(filename, 'utf8'));
 
                     await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
 
@@ -202,9 +224,38 @@ class DirWatch {
         }
     }
 
+    exists(filename) {
+        try {
+            return fs.existsSync(filename);
+
+        } catch (error) {
+            return false;
+        }
+    }
+
+    readFile(filename, mode) {
+        try {
+            return fs.readFileSync(filename, mode);
+
+        } catch (error) {
+            console.error(`Unable to read ${filename}`);
+        }
+    }
+
+    statFile(filename) {
+        try {
+            return fs.statSync(filename);
+
+        } catch (error) {
+            console.error(`Unable to stat ${filename}`);
+
+            return {};
+        }
+    }
+
     unlink(filename) {
         try {
-            setTimeout(() => fs.unlinkSync(filename), 1000);
+            fs.unlinkSync(filename);
 
         } catch (error) {
             console.error(`Unable to delete ${filename}`);

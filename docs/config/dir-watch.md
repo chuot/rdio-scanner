@@ -11,6 +11,11 @@ The *rdioScanner.dirWatch* property an *array* of *dirWatch objects* which descr
     "rdioScanner": {
         "dirWatch": [
             {
+                // [optional]
+                // Works only for type="default"
+                // Delay the import until this number of milliseconds without any modification of the file
+                "delay": 3000
+
                 // [optional] Whether the audio is deleted after importation (defaults to false)
                 "deleteAfter": true,
 
