@@ -98,6 +98,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     list: RdioScannerList;
 
     liveFeedActive = false;
+    liveFeedOffline = false;
     liveFeedPaused = false;
 
     map: RdioScannerLiveFeedMap = {};
@@ -153,20 +154,20 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (this.auth) {
             this.authPassword.focus();
 
-        } else {
+        } else if (!this.liveFeedOffline) {
             this.appRdioScannerService.avoid(options);
 
             this.updateDimmer();
         }
     }
 
-    download(id: number): void {
+    download(id: string): void {
         this.appRdioScannerService.loadAndDownload(id);
     }
 
     @HostListener('window:beforeunload', ['$event'])
     exitNotification(event: BeforeUnloadEvent): void {
-        if (this.liveFeedActive) {
+        if (this.liveFeedActive || this.liveFeedOffline) {
             event.preventDefault();
 
             event.returnValue = 'Live Feed is ON, do you really want to leave?';
@@ -183,7 +184,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (this.auth) {
             this.authPassword.focus();
 
-        } else {
+        } else if (!this.liveFeedOffline) {
             this.appRdioScannerService.holdSystem();
 
             this.updateDimmer();
@@ -194,7 +195,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (this.auth) {
             this.authPassword.focus();
 
-        } else {
+        } else if (!this.liveFeedOffline) {
             this.appRdioScannerService.holdTalkgroup();
 
             this.updateDimmer();
@@ -206,6 +207,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.authPassword.focus();
 
         } else {
+            this.liveFeedOffline = false;
+
             this.appRdioScannerService.liveFeed();
 
             this.updateDimmer();
@@ -292,6 +295,23 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     }
                 }
 
+                if ('call' in event) {
+                    if (event.call) {
+                        this.call = this.transformCall(event.call);
+
+                        this.updateDimmer();
+
+                    } else {
+                        this.callPrevious = this.call;
+
+                        this.call = null;
+
+                        if (this.liveFeedOffline) {
+                            this.playNextCall();
+                        }
+                    }
+                }
+
                 if ('config' in event) {
                     this.config = event.config;
 
@@ -317,19 +337,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                         this.searchResultsPending = false;
 
                         this.searchCall();
-                    }
-                }
-
-                if ('call' in event) {
-                    if (event.call) {
-                        this.call = this.transformCall(event.call);
-
-                        this.updateDimmer();
-
-                    } else {
-                        this.callPrevious = this.call;
-
-                        this.call = null;
                     }
                 }
 
@@ -363,6 +370,23 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     this.searchResultsPending = false;
 
                     this.searchForm.enable();
+
+                    if (!this.call && this.liveFeedOffline) {
+                        if (this.searchForm.get('sort').value === -1) {
+                            const nextCall = this.list.results[this.searchResultsLimit - 1];
+
+                            if (nextCall) {
+                                this.appRdioScannerService.loadAndPlay(nextCall.id);
+                            }
+
+                        } else {
+                            const nextCall = this.list.results[0];
+
+                            if (nextCall) {
+                                this.appRdioScannerService.loadAndPlay(nextCall.id);
+                            }
+                        }
+                    }
                 }
 
                 if ('map' in event) {
@@ -390,6 +414,14 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             this.searchForm.valueChanges.subscribe((value) => {
                 if (!Object.keys(value).every((key) => value[key] === searchFormPreviousValue[key])) {
+                    if (this.liveFeedOffline) {
+                        this.liveFeedOffline = false;
+
+                        if (this.call) {
+                            this.appRdioScannerService.stop();
+                        }
+                    }
+
                     if (value.system !== searchFormPreviousValue.system && value.talkgroup !== -1) {
                         searchFormPreviousValue.talkgroup = -1;
 
@@ -422,7 +454,18 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    play(id: number): void {
+    play(id: string): void {
+        if (!this.liveFeedActive && !this.liveFeedOffline) {
+            this.liveFeedOffline = true;
+
+            if (this.holdSys) {
+                this.appRdioScannerService.holdSystem();
+
+            } else if (this.holdTg) {
+                this.appRdioScannerService.holdTalkgroup();
+            }
+        }
+
         this.appRdioScannerService.loadAndPlay(id);
     }
 
@@ -438,6 +481,10 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     resetSearchForm(): void {
+        if (this.liveFeedOffline) {
+            this.stop();
+        }
+
         this.searchForm.reset({
             date: null,
             sort: -1,
@@ -454,14 +501,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (!this.config) {
             return;
         }
-
-        if (this.auth) {
-            this.authPassword.focus();
-
-            return;
-        }
-
-        this.searchPanelOpened = true;
 
         if (!this.searchResultsPending) {
             const filter = this.searchForm.value;
@@ -499,7 +538,24 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    selectTg(): void {
+    showSearchPanel(): void {
+        if (!this.config) {
+            return;
+        }
+
+        if (this.auth) {
+            this.authPassword.focus();
+
+        } else {
+            this.searchPanelOpened = true;
+
+            if (!this.liveFeedOffline) {
+                this.searchCall();
+            }
+        }
+    }
+
+    showSelectPanel(): void {
         if (!this.config) {
             return;
         }
@@ -521,6 +577,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             this.updateDimmer();
         }
+    }
+
+    stop(): void {
+        this.liveFeedOffline = false;
+
+        this.appRdioScannerService.stop();
     }
 
     toggleFullscreen(): void {
@@ -569,6 +631,75 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private ngDetectChanges(): void {
         if (!this.document.hidden) {
             this.ngChangeDetectorRef.detectChanges();
+        }
+    }
+
+    private playNextCall(): void {
+        const callPreviousId = this.callPrevious?.id;
+
+        if (callPreviousId) {
+            const index = this.list.results.findIndex((call) => call.id === callPreviousId);
+
+            if (index !== -1) {
+                const order = this.searchForm.get('sort').value;
+
+                if (order === -1) {
+                    if (index > 0) {
+                        const nextId = this.list.results[index - 1]?.id;
+
+                        if (nextId) {
+                            if (this.searchResults.value.find((call) => call.id === callPreviousId)) {
+                                const pageIndex = (index - 1) % this.searchResults.value.length;
+
+                                if (pageIndex === this.searchResults.value.length - 1 && this.searchFormPaginator.hasPreviousPage()) {
+                                    this.searchFormPaginator.previousPage();
+                                }
+                            }
+
+                            this.appRdioScannerService.loadAndPlay(nextId);
+
+                        } else {
+                            this.liveFeedOffline = false;
+                        }
+
+                    } else if (this.searchFormPaginator.hasPreviousPage()) {
+                        this.searchFormPaginator.previousPage();
+
+                        this.searchCall();
+
+                    } else {
+                        this.liveFeedOffline = false;
+                    }
+
+                } else {
+                    if (index < this.searchResultsLimit - 1) {
+                        const nextId = this.list.results[index + 1]?.id;
+
+                        if (nextId) {
+                            if (this.searchResults.value.find((call) => call.id === callPreviousId)) {
+                                const pageIndex = (index + 1) % this.searchResults.value.length;
+
+                                if (pageIndex === 0 && this.searchFormPaginator.hasNextPage()) {
+                                    this.searchFormPaginator.nextPage();
+                                }
+                            }
+
+                            this.appRdioScannerService.loadAndPlay(nextId);
+
+                        } else {
+                            this.liveFeedOffline = false;
+                        }
+
+                    } else if (this.searchFormPaginator.hasNextPage()) {
+                        this.searchFormPaginator.nextPage();
+
+                        this.searchCall();
+
+                    } else {
+                        this.liveFeedOffline = false;
+                    }
+                }
+            }
         }
     }
 

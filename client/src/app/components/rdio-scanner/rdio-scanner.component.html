@@ -23,7 +23,7 @@
                                 </ng-container>
                                 <ng-container
                                     *ngIf="!liveFeedPaused && (!config.allowDownload || !downloadMode.checked)">
-                                    <button (click)="row?.id === call?.id ? skip() : play(row.id)" mat-icon-button>
+                                    <button (click)="row?.id === call?.id ? stop() : play(row.id)" mat-icon-button>
                                         <ng-container *ngIf="row?.id === call?.id">
                                             <mat-icon>stop</mat-icon>
                                         </ng-container>
@@ -82,7 +82,7 @@
                 </mat-table>
                 <mat-progress-bar color="primary" [mode]="searchResultsPending ? 'query' : 'determinate'">
                 </mat-progress-bar>
-                <mat-paginator [disabled]="searchResultsPending" [length]="list?.count" [hidePageSize]="true"
+                <mat-paginator [disabled]="liveFeedOffline || searchResultsPending" [length]="list?.count" [hidePageSize]="true"
                     [pageSize]="searchResults.value.length" [showFirstLastButtons]="true">
                 </mat-paginator>
             </div>
@@ -334,7 +334,7 @@
             <div class="rdio-control" fxLayout="column" fxLayoutGap="12px">
                 <div fxLayout="row" fxLayoutAlign="space-between">
                     <button class="rdio-button" (click)="liveFeed()"
-                        [ngClass]="{ off: !liveFeedActive, on: liveFeedActive }">
+                        [ngClass]="{ off: !liveFeedActive && !liveFeedOffline, on: liveFeedActive, partial: liveFeedOffline }">
                         LIVE<br>FEED
                     </button>
                     <button class="rdio-button" (click)="holdSystem()" [ngClass]="{ off: !holdSys, on: holdSys }">
@@ -356,14 +356,14 @@
                     </button>
                 </div>
                 <div fxLayout="row" fxLayoutAlign="space-between">
-                    <button class="rdio-button" (click)="searchCall()">
+                    <button class="rdio-button" (click)="showSearchPanel()">
                         SEARCH<br>CALL
                     </button>
                     <button class="rdio-button" (click)="pause()"
                         [ngClass]="{ off: !liveFeedPaused, on: liveFeedPaused }">
                         PAUSE
                     </button>
-                    <button class="rdio-button" (click)="selectTg()">
+                    <button class="rdio-button" (click)="showSelectPanel()">
                         SELECT<br>TG
                     </button>
                 </div>

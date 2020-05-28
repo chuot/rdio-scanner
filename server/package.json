@@ -8,20 +8,20 @@
         "express": "^4.17.1",
         "form-data": "^3.0.0",
         "helmet": "^3.22.0",
-        "mariadb": "^2.3.1",
+        "mariadb": "^2.4.0",
         "mime-types": "^2.1.27",
         "multer": "^1.4.2",
         "mysql2": "^2.1.0",
         "nodemon": "^2.0.4",
-        "pg": "^8.2.0",
-        "sequelize": "^5.21.9",
+        "pg": "^8.2.1",
+        "sequelize": "^5.21.11",
         "sequelize-cli": "^5.5.1",
         "sqlite3": "^4.2.0",
-        "uuid": "^8.0.0",
+        "uuid": "^8.1.0",
         "ws": "^7.3.0"
     },
     "devDependencies": {
-        "eslint": "^7.0.0"
+        "eslint": "^7.1.0"
     },
     "license": "LICENSE",
     "main": "index.js",
@@ -34,5 +34,5 @@
         "migrate": "npx sequelize db:migrate --config lib/sequelize/config.js --migrations-path lib/rdio-scanner/migrations",
         "start": "nodemon index"
     },
-    "version": "4.0.0"
+    "version": "4.1.0"
 }

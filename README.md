@@ -12,7 +12,15 @@ Please click the **star button** at the top of the page on *github* to express y
 
 ## What's new in this version
 
-Well, there is a lot...
+### Version 4.1 - Continuous offline play mode
+
+Playing calls from the `SEARCH CALL` panel while `LIVE FEED` being `OFF` will play the call sequence according to the search filters. Note that the `LIVE FEED` indicator lights `yellow` when continuous offline play mode is active.
+
+To stop continuous offline play mode, press the `STOP BUTTON` on the `SEARCH CALL` panel or press the `LIVE FEED` button twice.
+
+Note that this mode does not take into account the system/talkgroup from the `SELECT TG` panel. `HOLD SYS`, `HOLD TG` and `AVOID` buttons will also be disabled.
+
+### Version 4.0 - A a bunch of new features
 
 * To improve performance, we abandoned *GraphQL* for a pure *WebSocket* command and control system, which also brought a lot of code refactoring.
 * New `server/config.json` file that replaces the `server/.env` file. Systems/Talkgroups/Units are now configurable through that file instead of the old upload scripts.
@@ -33,6 +41,7 @@ Well, there is a lot...
 * Incoming calls from different sources are queued for lossless listening
 * Select the talkgroups you want to listen to in live streaming mode
 * Temporarily hold a single system or a single talkgroup
+* Continuous offline play mode
 * Easily retrieve and replay/download archived calls
 * Decide who has access to what with access control, thus protecting sensitive systems/talkgroups.
 * Directory watcher for automatic importing of audio files
@@ -65,7 +74,7 @@ Here's where incoming calls are displayed, as long as *LIVE FEED* is enabled.
   * Double clicking or tapping this area will toggle fullscreen display
 
 * Control area
-  * LIVE FEED: When enabled, incoming calls are place in the queue for playback. The queue will be emptied if it is disabled
+  * LIVE FEED: When enabled, incoming calls are place in the queue for playback. The queue will be emptied if it is disabled.
   * HOLD SYS: Temporarily hold the current call system, depending on the current talkgroups selection
   * HOLD TG: Same has HOLD SYS, but for the current talkgroup
   * REPLAY LAST: Replay the current call or the previous call if there is none playing

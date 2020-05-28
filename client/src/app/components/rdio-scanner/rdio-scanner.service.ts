@@ -269,13 +269,13 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    loadAndDownload(id: number): void {
+    loadAndDownload(id: string): void {
         if (this.config.allowDownload) {
             this.getCall(id, WsCallFlag.Download);
         }
     }
 
-    loadAndPlay(id: number): void {
+    loadAndPlay(id: string): void {
         this.getCall(id, WsCallFlag.Play);
     }
 
@@ -301,7 +301,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     play(call?: RdioScannerCall): void {
-        if (this.audioContext && !this.skipDelay && !this.liveFeedPaused) {
+        if (this.audioContext && !this.liveFeedPaused) {
             if (!call && !this.call && this.callQueue.length) {
                 call = this.callQueue.shift();
 
@@ -309,7 +309,7 @@ export class AppRdioScannerService implements OnDestroy {
             }
 
             if (call && call.audio) {
-                this.stop();
+                this.stop(false);
 
                 this.call = call;
 
@@ -350,7 +350,7 @@ export class AppRdioScannerService implements OnDestroy {
         const sys = call.system;
         const tg = call.talkgroup;
 
-        if (this.liveFeedMap && this.liveFeedMap[sys] && this.liveFeedMap[sys][tg]) {
+        if (call?.audio && this.liveFeedMap && this.liveFeedMap[sys] && this.liveFeedMap[sys][tg]) {
             this.callQueue.push(call);
 
             this.event.emit({ queue: this.callQueue.length });
@@ -370,7 +370,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     skip(nodelay = false): void {
-        this.stop();
+        this.stop(!this.callQueue.length);
 
         if (nodelay) {
             if (this.skipDelay) {
@@ -388,7 +388,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    stop(): void {
+    stop(emitEvent = true): void {
         if (this.audioSource) {
             if (this.audioTimer !== null) {
                 clearInterval(this.audioTimer);
@@ -409,7 +409,9 @@ export class AppRdioScannerService implements OnDestroy {
 
             this.call = null;
 
-            this.event.emit({ call: null });
+            if (emitEvent) {
+                this.event.emit({ call: null });
+            }
         }
     }
 
@@ -540,7 +542,7 @@ export class AppRdioScannerService implements OnDestroy {
         this.document.body.removeChild(el);
     }
 
-    private getCall(id: number, flags?: any): void {
+    private getCall(id: string, flags?: any): void {
         this.wsSend(WsCommand.Call, id, flags);
     }
 
