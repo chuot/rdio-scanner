@@ -74,6 +74,8 @@ export class AppRdioScannerService implements OnDestroy {
 
     private webSocket: WebSocket;
 
+    private wsMessagePending = false;
+
     constructor(@Inject(DOCUMENT) private document: Document) {
         this.bootstrapAudio();
 
@@ -302,17 +304,11 @@ export class AppRdioScannerService implements OnDestroy {
 
     play(call?: RdioScannerCall): void {
         if (this.audioContext && !this.liveFeedPaused) {
-            if (!call && !this.call && this.callQueue.length) {
+            if (!call && !this.skipDelay && !this.call && this.callQueue.length) {
                 call = this.callQueue.shift();
-
-                this.event.emit({ queue: this.callQueue.length });
             }
 
-            if (call && call.audio) {
-                this.stop(false);
-
-                this.call = call;
-
+            if (call?.audio?.data?.length) {
                 const arrayBuffer = new ArrayBuffer(call.audio.data.length);
                 const arrayBufferView = new Uint8Array(arrayBuffer);
 
@@ -321,9 +317,13 @@ export class AppRdioScannerService implements OnDestroy {
                 }
 
                 this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                    this.event.emit({ call });
-
                     this.audioContext.resume().then(() => {
+                        this.stop({ emit: false });
+
+                        this.call = call;
+
+                        this.event.emit({ call, queue: this.callQueue.length });
+
                         this.audioSource = this.audioContext.createBufferSource();
 
                         this.audioSource.buffer = buffer;
@@ -340,8 +340,15 @@ export class AppRdioScannerService implements OnDestroy {
                                 this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
                             }
                         }, 500);
-                    });
-                }, () => this.skip());
+                    }).catch(() => this.skip());
+                }, () => {
+                    this.event.emit({ call: null, queue: this.callQueue.length });
+
+                    this.skip();
+                });
+
+            } else if (call) {
+                this.event.emit({ call: null, queue: this.callQueue.length });
             }
         }
     }
@@ -369,29 +376,22 @@ export class AppRdioScannerService implements OnDestroy {
         this.wsSend(WsCommand.ListCall, options);
     }
 
-    skip(nodelay = false): void {
-        this.stop(!this.callQueue.length);
+    skip(options?: { delay?: boolean }): void {
+        this.stop();
 
-        if (nodelay) {
-            if (this.skipDelay) {
-                this.skipDelay = clearTimeout(this.skipDelay);
-            }
-
-            this.play();
-
-        } else {
+        if (!this.skipDelay) {
             this.skipDelay = setTimeout(() => {
                 this.skipDelay = undefined;
 
                 this.play();
-            }, 1000);
+            }, typeof options?.delay !== 'boolean' || options.delay ? 1000 : 0);
         }
     }
 
-    stop(emitEvent = true): void {
+    stop(options?: { emit?: boolean }): void {
         if (this.audioSource) {
-            if (this.audioTimer !== null) {
-                clearInterval(this.audioTimer);
+            if (this.audioTimer) {
+                this.audioTimer = clearInterval(this.audioTimer);
             }
 
             this.audioSource.onended = null;
@@ -400,18 +400,16 @@ export class AppRdioScannerService implements OnDestroy {
             this.audioSource = null;
 
             this.audioStartTime = NaN;
-
-            this.audioTimer = null;
         }
 
         if (this.call) {
             this.callPrevious = this.call;
 
             this.call = null;
+        }
 
-            if (emitEvent) {
-                this.event.emit({ call: null });
-            }
+        if (typeof options?.emit !== 'boolean' || options.emit) {
+            this.event.emit({ call: null });
         }
     }
 
@@ -604,6 +602,8 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         if (Array.isArray(message)) {
+            this.wsMessagePending = false;
+
             switch (message[0]) {
                 case WsCommand.Call:
                     switch (message[2]) {
@@ -616,7 +616,9 @@ export class AppRdioScannerService implements OnDestroy {
                             break;
 
                         default:
-                            this.queue(message[1]);
+                            if (this.liveFeedActive) {
+                                this.queue(message[1]);
+                            }
                     }
 
                     break;
@@ -713,7 +715,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private wsSend(command: string, payload?: any, flags?: any): void {
-        if (this.webSocket instanceof WebSocket && this.webSocket.readyState === 1) {
+        if (this.webSocket instanceof WebSocket && this.webSocket.readyState === 1 && !this.wsMessagePending) {
             const message = [command, payload];
 
             if (flags !== null && flags !== undefined) {
@@ -721,6 +723,8 @@ export class AppRdioScannerService implements OnDestroy {
             }
 
             this.webSocket.send(JSON.stringify(message));
+
+            this.wsMessagePending = true;
         }
     }
 }

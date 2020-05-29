@@ -16,7 +16,7 @@ Please click the **star button** at the top of the page on *github* to express y
 
 Playing calls from the `SEARCH CALL` panel while `LIVE FEED` being `OFF` will play the call sequence according to the search filters. Note that the `LIVE FEED` indicator lights `yellow` when continuous offline play mode is active.
 
-To stop continuous offline play mode, press the `STOP BUTTON` on the `SEARCH CALL` panel or press the `LIVE FEED` button twice.
+To stop continuous offline play mode, press the `STOP BUTTON` on the `SEARCH CALL` panel or press the `LIVE FEED` button.
 
 Note that this mode does not take into account the system/talkgroup from the `SELECT TG` panel. `HOLD SYS`, `HOLD TG` and `AVOID` buttons will also be disabled.
 

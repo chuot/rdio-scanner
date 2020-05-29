@@ -34,5 +34,5 @@
         "build": "ng build --prod $*",
         "start": "ng serve"
     },
-    "version": "4.1.0"
+    "version": "4.1.1"
 }

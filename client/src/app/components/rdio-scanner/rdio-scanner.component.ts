@@ -70,6 +70,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
     callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
+    callPending: string = null;
     callPrevious: RdioScannerCall;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
     callQueue = 0;
@@ -206,9 +207,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (this.auth) {
             this.authPassword.focus();
 
-        } else {
+        } else if (this.liveFeedOffline) {
             this.liveFeedOffline = false;
 
+            this.appRdioScannerService.stop();
+
+        } else {
             this.appRdioScannerService.liveFeed();
 
             this.updateDimmer();
@@ -248,7 +252,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             this.clockRefresh = setTimeout(() => setClock(), (60 - this.clock.getSeconds()) * 1000);
 
-            this.ngChangeDetectorRef.markForCheck();
+            this.ngDetectChanges();
         };
 
         setClock();
@@ -299,15 +303,21 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     if (event.call) {
                         this.call = this.transformCall(event.call);
 
+                        if (this.callPending === this.call.id) {
+                            this.callPending = null;
+                        }
+
                         this.updateDimmer();
 
                     } else {
-                        this.callPrevious = this.call;
+                        if (this.call) {
+                            this.callPrevious = this.call;
 
-                        this.call = null;
+                            this.call = null;
 
-                        if (this.liveFeedOffline) {
-                            this.playNextCall();
+                            if (this.liveFeedOffline) {
+                                this.playNextCall();
+                            }
                         }
                     }
                 }
@@ -455,18 +465,22 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     play(id: string): void {
-        if (!this.liveFeedActive && !this.liveFeedOffline) {
-            this.liveFeedOffline = true;
+        if (!this.callPending) {
+            if (!this.liveFeedActive && !this.liveFeedOffline) {
+                this.liveFeedOffline = true;
 
-            if (this.holdSys) {
-                this.appRdioScannerService.holdSystem();
+                if (this.holdSys) {
+                    this.appRdioScannerService.holdSystem();
 
-            } else if (this.holdTg) {
-                this.appRdioScannerService.holdTalkgroup();
+                } else if (this.holdTg) {
+                    this.appRdioScannerService.holdTalkgroup();
+                }
             }
-        }
 
-        this.appRdioScannerService.loadAndPlay(id);
+            this.callPending = id;
+
+            this.appRdioScannerService.loadAndPlay(id);
+        }
     }
 
     replay(): void {
@@ -568,12 +582,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    skip(nodelay?: boolean): void {
+    skip(options: any): void {
         if (this.auth) {
             this.authPassword.focus();
 
         } else {
-            this.appRdioScannerService.skip(nodelay);
+            this.appRdioScannerService.skip(options);
 
             this.updateDimmer();
         }
@@ -656,6 +670,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                                 }
                             }
 
+                            this.callPending = nextId;
+
                             this.appRdioScannerService.loadAndPlay(nextId);
 
                         } else {
@@ -683,6 +699,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                                     this.searchFormPaginator.nextPage();
                                 }
                             }
+
+                            this.callPending = nextId;
 
                             this.appRdioScannerService.loadAndPlay(nextId);
 
@@ -750,9 +768,9 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
                 this.ngDetectChanges();
             }, 4000);
-        }
 
-        this.ngDetectChanges();
+            this.ngDetectChanges();
+        }
     }
 
     private updateDisplay(time = this.callTime): void {

@@ -124,6 +124,7 @@ class Controller {
     async getCall(id, scope) {
         const where = scope !== null && typeof scope === 'object' ? {
             [Op.and]: [
+                { id },
                 {
                     [Op.or]: Object.keys(scope).map((sys) => ({
                         system: sys,
@@ -132,7 +133,6 @@ class Controller {
                         },
                     }), []),
                 },
-                { id },
             ],
         } : { id };
 

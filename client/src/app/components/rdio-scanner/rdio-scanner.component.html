@@ -17,17 +17,20 @@
                         <mat-cell *matCellDef="let row">
                             <ng-container *ngIf="row">
                                 <ng-container *ngIf="config.allowDownload && downloadMode.checked">
-                                    <button (click)="download(row.id)" mat-icon-button>
+                                    <button mat-icon-button (click)="download(row.id)">
                                         <mat-icon>save_alt</mat-icon>
                                     </button>
                                 </ng-container>
                                 <ng-container
                                     *ngIf="!liveFeedPaused && (!config.allowDownload || !downloadMode.checked)">
-                                    <button (click)="row?.id === call?.id ? stop() : play(row.id)" mat-icon-button>
-                                        <ng-container *ngIf="row?.id === call?.id">
+                                    <button mat-icon-button (click)="row?.id === call?.id ? stop() : play(row.id)">
+                                        <ng-container *ngIf="call && row?.id === call?.id">
                                             <mat-icon>stop</mat-icon>
                                         </ng-container>
-                                        <ng-container *ngIf="row?.id !== call?.id">
+                                        <ng-container *ngIf="callPending === row?.id">
+                                            <mat-icon class="spinning">cached</mat-icon>
+                                        </ng-container>
+                                        <ng-container *ngIf="callPending !== row?.id && row?.id !== call?.id">
                                             <mat-icon>play_arrow</mat-icon>
                                         </ng-container>
                                     </button>
@@ -82,8 +85,8 @@
                 </mat-table>
                 <mat-progress-bar color="primary" [mode]="searchResultsPending ? 'query' : 'determinate'">
                 </mat-progress-bar>
-                <mat-paginator [disabled]="liveFeedOffline || searchResultsPending" [length]="list?.count" [hidePageSize]="true"
-                    [pageSize]="searchResults.value.length" [showFirstLastButtons]="true">
+                <mat-paginator [disabled]="liveFeedOffline || searchResultsPending" [length]="list?.count"
+                    [hidePageSize]="true" [pageSize]="searchResults.value.length" [showFirstLastButtons]="true">
                 </mat-paginator>
             </div>
             <form class="rdio-search-form" [formGroup]="searchForm" autocomplete="off">
@@ -216,7 +219,8 @@
             <div *ngIf="config?.useLed" class="rdio-status" fxLayout="row" fxLayoutAlign="end">
                 <span class="rdio-led" [ngClass]="ledClass"></span>
             </div>
-            <div class="rdio-display" [ngClass]="{ idle: !config || (config?.useDimmer && !dimmerDelay) }" (dblclick)="toggleFullscreen()">
+            <div class="rdio-display" [ngClass]="{ idle: !config || (config?.useDimmer && !dimmerDelay) }"
+                (dblclick)="toggleFullscreen()">
                 <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
                         <span>
@@ -348,7 +352,7 @@
                     <button class="rdio-button" (click)="replay()">
                         REPLAY<br>LAST
                     </button>
-                    <button class="rdio-button" (click)="skip(true)">
+                    <button class="rdio-button" (click)="skip({ delay: false })">
                         SKIP<br>NEXT
                     </button>
                     <button class="rdio-button" (click)="avoid()">

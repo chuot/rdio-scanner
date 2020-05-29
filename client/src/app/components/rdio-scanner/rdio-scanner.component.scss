@@ -404,6 +404,23 @@
   }
 }
 
+.spinning {
+  animation-duration: 1000ms;
+  animation-iteration-count: infinite;
+  animation-name: spin;
+  animation-timing-function: linear;
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
 @media (min-width: 720px) {
   .rdio-select {
     .rdio-button {
