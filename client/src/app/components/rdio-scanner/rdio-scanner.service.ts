@@ -308,7 +308,7 @@ export class AppRdioScannerService implements OnDestroy {
                 call = this.callQueue.shift();
             }
 
-            if (call?.audio?.data?.length) {
+            if (call?.audio) {
                 const arrayBuffer = new ArrayBuffer(call.audio.data.length);
                 const arrayBufferView = new Uint8Array(arrayBuffer);
 
@@ -342,7 +342,7 @@ export class AppRdioScannerService implements OnDestroy {
                         }, 500);
                     }).catch(() => this.skip());
                 }, () => {
-                    this.event.emit({ call: null, queue: this.callQueue.length });
+                    this.event.emit({ call, queue: this.callQueue.length });
 
                     this.skip();
                 });
