@@ -23,7 +23,7 @@
                                 </ng-container>
                                 <ng-container
                                     *ngIf="!liveFeedPaused && (!config.allowDownload || !downloadMode.checked)">
-                                    <button mat-icon-button (click)="row?.id === call?.id ? stop() : play(row.id)">
+                                    <button mat-icon-button (click)="row?.id === call?.id ? skip() : play(row.id)">
                                         <ng-container *ngIf="call && row?.id === call?.id">
                                             <mat-icon>stop</mat-icon>
                                         </ng-container>

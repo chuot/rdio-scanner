@@ -582,7 +582,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    skip(options: any): void {
+    skip(options?: any): void {
         if (this.auth) {
             this.authPassword.focus();
 
