@@ -4,7 +4,7 @@
 
 Since **Rdio Scanner v4.0**, the only way to configure radio systems is from the file *server/config.json*.
 
-```json
+```js
 {
     "rdioScanner": {
         "systems": [

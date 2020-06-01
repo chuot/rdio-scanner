@@ -2,7 +2,7 @@
 
 ## Definitions
 
-```json
+```js
 {
     "rdioScanner": {
         // [optional] Does downloading calls from the *search call panel* is allowed.

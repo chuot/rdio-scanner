@@ -6,7 +6,7 @@
 
 The *rdioScanner.dirWatch* property an *array* of *dirWatch objects* which describes folders to watch.
 
-```json
+```js
 {
     "rdioScanner": {
         "dirWatch": [

@@ -8,7 +8,7 @@ The *rdioScanner.apiKeys* property can be as simple as a single *key* to an *arr
 
 If you are already familiar with the *rdioScanner.access* property, it works prety much the same.
 
-```json
+```js
 {
     "rdioScanner": {
         "apiKey": [

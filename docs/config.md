@@ -2,7 +2,7 @@
 
 Since **Rdio Scanner v4.0**, you have to configure your **Rdio Scanner** instance through the file located at `server/config.json`.
 
-```json
+```js
 {
     "nodejs": {
         // Node.js specifics

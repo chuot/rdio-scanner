@@ -161,7 +161,7 @@ At this point, you should be able to access to *Rdio Scanner* with a browser; ju
 
 ## Configuration
 
-Please refer to the file [docs/config.md](./docs/config.md);
+Please refer to the file [docs/config.md](./docs/config.md).
 
 ## Post install updates
 

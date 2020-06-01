@@ -4,7 +4,7 @@
 
 Since **Rdio Scanner v4.0**, imported calls can be re-exported to other instances of **Rdio Scanner**. This means that you can build a mesh of **Rdio Scanner** with you and your friends so you could have your dream scanner!
 
-```json
+```js
 {
     "rdioScanner": {
         "downstreams": [

@@ -6,7 +6,7 @@
 
 You can define specific 
 
-```json
+```js
 {
     "sequelize": {
         // One of *sequelize* dialects

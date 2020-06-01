@@ -6,7 +6,7 @@ It is possible to limit the access to your **Rdio Scanner** instance by adding a
 
 The *rdioScanner.access* property can be as simple as a single *password* to an *array of objects*.
 
-```json
+```js
 {
     "rdioScanner": {
         "access": [

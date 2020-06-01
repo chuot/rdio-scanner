@@ -2,7 +2,7 @@
 
 ## Definition
 
-```json
+```js
 {
     "nodejs": {
         // [optional]
