@@ -32,16 +32,17 @@ import {
 
 declare var webkitAudioContext: any;
 
-enum WsCallFlag {
+enum WebSocketCallFlag {
     Download = 'd',
     Play = 'p',
 }
 
-enum WsCommand {
+enum WebSocketCommand {
     Call = 'CAL',
     Config = 'CFG',
     ListCall = 'LCL',
     LiveFeedMap = 'LFM',
+    Nop = 'NOP',
     Pin = 'PIN',
 }
 
@@ -73,19 +74,21 @@ export class AppRdioScannerService implements OnDestroy {
     private skipDelay: any;
 
     private webSocket: WebSocket;
-
-    private wsMessagePending = false;
+    private webSocketHeartBeat = 30 * 1000;
+    private webSocketInterval: any;
+    private webSocketTimeout: any;
+    private webSocketPendingMessage = false;
 
     constructor(@Inject(DOCUMENT) private document: Document) {
         this.bootstrapAudio();
 
         this.liveFeedRestore();
 
-        this.wsOpen();
+        this.webSocketOpen();
     }
 
     authenticate(password: string): void {
-        this.wsSend(WsCommand.Pin, btoa(password));
+        this.webSocketSend(WebSocketCommand.Pin, btoa(password));
     }
 
     avoid(options: RdioScannerAvoidOptions = {}): void {
@@ -273,16 +276,16 @@ export class AppRdioScannerService implements OnDestroy {
 
     loadAndDownload(id: string): void {
         if (this.config.allowDownload) {
-            this.getCall(id, WsCallFlag.Download);
+            this.getCall(id, WebSocketCallFlag.Download);
         }
     }
 
     loadAndPlay(id: string): void {
-        this.getCall(id, WsCallFlag.Play);
+        this.getCall(id, WebSocketCallFlag.Play);
     }
 
     ngOnDestroy(): void {
-        this.wsClose();
+        this.webSocketClose();
     }
 
     pause(status = !this.liveFeedPaused): void {
@@ -373,7 +376,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     searchCalls(options: RdioScannerSearchOptions): void {
-        this.wsSend(WsCommand.ListCall, options);
+        this.webSocketSend(WebSocketCommand.ListCall, options);
     }
 
     skip(options?: { delay?: boolean }): void {
@@ -541,7 +544,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private getCall(id: string, flags?: any): void {
-        this.wsSend(WsCommand.Call, id, flags);
+        this.webSocketSend(WebSocketCommand.Call, id, flags);
     }
 
     private liveFeedRebuild(): void {
@@ -578,11 +581,11 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private liveFeedStart(): void {
-        this.wsSend(WsCommand.LiveFeedMap, this.liveFeedMap);
+        this.webSocketSend(WebSocketCommand.LiveFeedMap, this.liveFeedMap);
     }
 
     private liveFeedStop(): void {
-        this.wsSend(WsCommand.LiveFeedMap, null);
+        this.webSocketSend(WebSocketCommand.LiveFeedMap, null);
 
         this.stop();
     }
@@ -602,16 +605,18 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         if (Array.isArray(message)) {
-            this.wsMessagePending = false;
+            this.webSocketKeepAlive();
+
+            this.webSocketPendingMessage = false;
 
             switch (message[0]) {
-                case WsCommand.Call:
+                case WebSocketCommand.Call:
                     switch (message[2]) {
-                        case WsCallFlag.Download:
+                        case WebSocketCallFlag.Download:
                             this.download(message[1]);
                             break;
 
-                        case WsCallFlag.Play:
+                        case WebSocketCallFlag.Play:
                             this.play(message[1]);
                             break;
 
@@ -623,7 +628,7 @@ export class AppRdioScannerService implements OnDestroy {
 
                     break;
 
-                case WsCommand.Config:
+                case WebSocketCommand.Config:
                     this.config = message[1];
 
                     if ('systems' in this.config) {
@@ -645,12 +650,12 @@ export class AppRdioScannerService implements OnDestroy {
 
                     break;
 
-                case WsCommand.ListCall:
+                case WebSocketCommand.ListCall:
                     this.event.emit({ list: message[1] });
 
                     break;
 
-                case WsCommand.LiveFeedMap:
+                case WebSocketCommand.LiveFeedMap:
                     this.liveFeedActive = message[1];
 
                     if (this.liveFeedActive) {
@@ -667,7 +672,12 @@ export class AppRdioScannerService implements OnDestroy {
 
                     break;
 
-                case WsCommand.Pin:
+                case WebSocketCommand.Nop:
+                    clearTimeout(this.webSocketTimeout);
+
+                    break;
+
+                case WebSocketCommand.Pin:
                     this.event.emit({ auth: true });
 
                     break;
@@ -675,7 +685,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    private wsClose(): void {
+    private webSocketClose(): void {
         if (this.webSocket instanceof WebSocket) {
             this.webSocket.onclose = undefined;
             this.webSocket.onerror = undefined;
@@ -685,17 +695,36 @@ export class AppRdioScannerService implements OnDestroy {
             this.webSocket.close();
 
             this.webSocket = undefined;
+
+            clearTimeout(this.webSocketTimeout);
+            clearInterval(this.webSocketInterval);
         }
     }
 
-    private wsOpen(): void {
-        const wsUrl = window.origin.replace(/^http/, 'ws');
+    private webSocketKeepAlive(): void {
+        if (this.webSocketTimeout) {
+            this.webSocketTimeout = clearTimeout(this.webSocketTimeout);
+        }
 
-        this.webSocket = new WebSocket(wsUrl);
+        if (this.webSocketInterval) {
+            clearInterval(this.webSocketInterval);
+        }
+
+        this.webSocketInterval = setInterval(() => {
+            this.webSocketSend(WebSocketCommand.Nop);
+
+            this.webSocketTimeout = setTimeout(() => this.webSocketReconnect(), 10 * 1000);
+        }, this.webSocketHeartBeat);
+    }
+
+    private webSocketOpen(): void {
+        const webSocketUrl = window.origin.replace(/^http/, 'ws');
+
+        this.webSocket = new WebSocket(webSocketUrl);
 
         this.webSocket.onclose = (ev: CloseEvent) => {
             if (ev.code !== 1000) {
-                this.wsReconnect();
+                this.webSocketReconnect();
             }
         };
 
@@ -704,19 +733,25 @@ export class AppRdioScannerService implements OnDestroy {
         this.webSocket.onopen = () => {
             this.webSocket.onmessage = (ev: MessageEvent) => this.messageParser(ev.data);
 
-            this.wsSend(WsCommand.Config);
+            this.webSocketKeepAlive();
+
+            this.webSocketSend(WebSocketCommand.Config);
         };
     }
 
-    private wsReconnect(): void {
-        this.wsClose();
+    private webSocketReconnect(): void {
+        this.webSocketClose();
 
-        setTimeout(() => this.wsOpen(), 5 * 1000);
+        setTimeout(() => this.webSocketOpen(), 5 * 1000);
     }
 
-    private wsSend(command: string, payload?: any, flags?: any): void {
-        if (this.webSocket instanceof WebSocket && this.webSocket.readyState === 1 && !this.wsMessagePending) {
-            const message = [command, payload];
+    private webSocketSend(command: string, payload?: any, flags?: any): void {
+        if (this.webSocket instanceof WebSocket && this.webSocket.readyState === 1 && !this.webSocketPendingMessage) {
+            const message = [command];
+
+            if (payload) {
+                message.push(payload);
+            }
 
             if (flags !== null && flags !== undefined) {
                 message.push(flags);
@@ -724,7 +759,7 @@ export class AppRdioScannerService implements OnDestroy {
 
             this.webSocket.send(JSON.stringify(message));
 
-            this.wsMessagePending = true;
+            this.webSocketPendingMessage = true;
         }
     }
 }

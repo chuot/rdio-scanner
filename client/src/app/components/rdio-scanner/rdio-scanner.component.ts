@@ -208,9 +208,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.authPassword.focus();
 
         } else if (this.liveFeedOffline) {
-            this.liveFeedOffline = false;
-
-            this.appRdioScannerService.stop();
+            this.stopOfflinePlay();
 
         } else {
             this.appRdioScannerService.liveFeed();
@@ -300,6 +298,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 }
 
                 if ('call' in event) {
+                    if (this.call) {
+                        this.callPrevious = this.call;
+
+                        this.call = null;
+                    }
+
                     if (event.call) {
                         this.call = this.transformCall(event.call);
 
@@ -307,18 +311,14 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                             this.callPending = null;
                         }
 
+                        if (this.liveFeedOffline) {
+                            this.setOfflineQueueCount(this.call.id);
+                        }
+
                         this.updateDimmer();
 
-                    } else {
-                        if (this.call) {
-                            this.callPrevious = this.call;
-
-                            this.call = null;
-
-                            if (this.liveFeedOffline) {
-                                this.playNextCall();
-                            }
-                        }
+                    } else if (this.liveFeedOffline) {
+                        this.playNextCall();
                     }
                 }
 
@@ -408,7 +408,9 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 }
 
                 if ('queue' in event) {
-                    this.callQueue = event.queue;
+                    if (!this.liveFeedOffline) {
+                        this.callQueue = event.queue;
+                    }
                 }
 
                 if ('time' in event) {
@@ -425,11 +427,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.searchForm.valueChanges.subscribe((value) => {
                 if (!Object.keys(value).every((key) => value[key] === searchFormPreviousValue[key])) {
                     if (this.liveFeedOffline) {
-                        this.liveFeedOffline = false;
-
-                        if (this.call) {
-                            this.appRdioScannerService.stop();
-                        }
+                        this.stopOfflinePlay();
                     }
 
                     if (value.system !== searchFormPreviousValue.system && value.talkgroup !== -1) {
@@ -475,6 +473,8 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 } else if (this.holdTg) {
                     this.appRdioScannerService.holdTalkgroup();
                 }
+
+                this.setOfflineQueueCount(id);
             }
 
             this.callPending = id;
@@ -496,7 +496,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     resetSearchForm(): void {
         if (this.liveFeedOffline) {
-            this.stop();
+            this.stopOfflinePlay();
         }
 
         this.searchForm.reset({
@@ -586,7 +586,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (this.auth) {
             this.authPassword.focus();
 
-        } else {
+        } else if (!this.callPending) {
             this.appRdioScannerService.skip(options);
 
             this.updateDimmer();
@@ -594,7 +594,9 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     stop(): void {
-        this.liveFeedOffline = false;
+        if (this.liveFeedOffline) {
+            this.stopOfflinePlay();
+        }
 
         this.appRdioScannerService.stop();
     }
@@ -651,6 +653,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     private playNextCall(): void {
         const callPreviousId = this.callPrevious?.id;
 
+        const loadAndPlay = (id: string) => {
+            this.callPending = id;
+
+            setTimeout(() => this.appRdioScannerService.loadAndPlay(id), 750);
+        };
+
         if (callPreviousId) {
             const index = this.list.results.findIndex((call) => call.id === callPreviousId);
 
@@ -670,12 +678,10 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                                 }
                             }
 
-                            this.callPending = nextId;
-
-                            this.appRdioScannerService.loadAndPlay(nextId);
+                            loadAndPlay(nextId);
 
                         } else {
-                            this.liveFeedOffline = false;
+                            this.stopOfflinePlay();
                         }
 
                     } else if (this.searchFormPaginator.hasPreviousPage()) {
@@ -684,7 +690,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                         this.searchCall();
 
                     } else {
-                        this.liveFeedOffline = false;
+                        this.stopOfflinePlay();
                     }
 
                 } else {
@@ -700,12 +706,11 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                                 }
                             }
 
-                            this.callPending = nextId;
-
-                            this.appRdioScannerService.loadAndPlay(nextId);
+                            loadAndPlay(nextId);
 
                         } else {
-                            this.liveFeedOffline = false;
+                            this.stopOfflinePlay();
+
                         }
 
                     } else if (this.searchFormPaginator.hasNextPage()) {
@@ -714,7 +719,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                         this.searchCall();
 
                     } else {
-                        this.liveFeedOffline = false;
+                        this.stopOfflinePlay();
                     }
                 }
             }
@@ -738,6 +743,31 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             }
 
             this.searchResults.next(calls);
+        }
+    }
+
+    private setOfflineQueueCount(id = this.call?.id || this.callPrevious?.id): void {
+        if (id) {
+            const index = this.list?.results.findIndex((call) => call.id === id);
+
+            if (index !== -1) {
+                if (this.searchForm.get('sort').value === -1) {
+                    this.callQueue = this.searchResultsOffset + index;
+
+                } else {
+                    this.callQueue = this.list.count - this.searchResultsOffset - index - 1;
+                }
+            }
+        }
+    }
+
+    private stopOfflinePlay(): void {
+        this.liveFeedOffline = false;
+
+        this.callQueue = 0;
+
+        if (this.call) {
+            this.appRdioScannerService.stop();
         }
     }
 

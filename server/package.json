@@ -34,5 +34,5 @@
         "migrate": "npx sequelize db:migrate --config lib/sequelize/config.js --migrations-path lib/rdio-scanner/migrations",
         "start": "nodemon index"
     },
-    "version": "4.1.1"
+    "version": "4.2.0"
 }

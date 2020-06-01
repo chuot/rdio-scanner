@@ -1,0 +1,39 @@
+54241,d3e1,D,TDB A1,MRC TDB Fire Alpha 1,Fire Dispatch,FIRE DISPATCH,1
+54242,d3e2,D,TDB B1,MRC TDB Fire Bravo 1,Fire Tac,FIRE TAC,1
+54243,d3e3,D,TDB B2,MRC TDB Fire Bravo 2,Fire Tac,FIRE TAC,1
+54248,d3e8,D,TDB B3,MRC TDB Fire Bravo 3,Fire Tac,FIRE TAC,1
+54251,d3eb,D,TDB B4,MRC TDB Fire Bravo 4,Fire Tac,FIRE TAC,1
+54261,d3f5,D,TDB B5,MRC TDB Fire Bravo 5,Fire Tac,FIRE TAC,1
+54244,d3e4,D,TDB B6,MRC TDB Fire Bravo 6,Fire Tac,FIRE TAC,1
+54129,d371,D,TDB B7,MRC TDB Fire Bravo 7,Fire Tac,FIRE TAC,1
+54125,d36d,D,TDB B8,MRC TDB Fire Bravo 8,Fire Tac,FIRE TAC,1
+54005,d2f5,D,2MT FD,MRC Deux-Montagnes Fire Dispatch,Fire Dispatch,FIRE DISPATCH,1
+54004,d2f4,D,CN INC GEN,Fire General North Crown,Fire Tac,FIRE TAC,1
+54124,d36c,D,BL INC GEN1,Blainville Fire General 1,Fire Tac,FIRE TAC,1
+54239,d3df,D,STE-ADP FD,Ste-Anne-des-Plaines Fire Dispatch,Fire Dispatch,FIRE DISPATCH,1
+54200,d3b8,D,SE INC ANN,St-Eustache Announcemenet,Fire Dispatch,FIRE DISPATCH,1
+54201,d3b8,D,SE INC GEN,St-Eustache General,Fire Dispatch,FIRE DISPATCH,1
+54202,d3b8,D,SE INC OP1,St-Eustache Operations,Fire Tac,FIRE TAC,1
+54203,d3b8,D,SE INC PRV,St-Eustache Prevention,Fire Talk,FIRE TALK,1
+54206,d3b8,D,SE ENT,St-Eustache Mesure d'urgence,Emergency,EMERGENCY,1
+56201,db89,D,DSURGEN,YUL Security Dispatch,Security,SECURITY,2
+56202,db8a,D,DSURTAC,YUL Security Tactical,Security,SECURITY,2
+56203,db8b,D,DSUROP,YUL Security Operations,Security,SECURITY,2
+56211,db93,D,DINCOPS,YUL Fire Dispatch,Fire Dispatch,FIRE DISPATCH,1
+56212,db94,D,DINCTAC,YUL Tactical,Fire Tac,FIRE TAC,1
+56218,db9a,D,DCCU,YUL CCU,Mesure d'urgence,EMERGENCY,3
+56221,db9d,D,DBATIM,YUL Batiment,Utilities,UTILITY,3
+56222,db9e,D,DSCHAMP,YUL SCHAMP,Utilities,UTILITY,3
+56223,db9f,D,DFOULE,YUL Foule,Utilities,UTILITY,3
+56224,dba0,D,DACCES,YUL Acces,Utilities,UTILITY,3
+56225,dba1,D,DELECTR,YUL Electricity,Utilities,UTILITY,3
+56226,dba2,D,DPISTE,YUL Piste,Utilities,UTILITY,3
+56227,dba3,D,DTABLIER,YUL Tablier,Utilities,UTILITY,3
+56228,dba4,D,DVTP,YUL VTP,Utilities,UTILITY,3
+56229,dba5,D,DPONT,YUL Pont,Utilities,UTILITY,3
+56232,dba8,D,DINSTALL,YUL Install,Utilities,UTILITY,3
+56204,db8c,D,MSURGEN,YMX Security Dispatch,Security,SECURITY,3
+56213,db95,D,MINCOPS,YMX Fire Dispatch,Fire Dispatch,FIRE DISPATCH,1
+56214,db96,D,MINCTAC,YMX Fire Tactical,Fire Tac,FIRE TAC,1
+56219,db9b,D,MCCU,YMX CCU,Emergency,EMERGENCY,3
+56231,dba7,D,MPISTE,YMX PISTE,Utilities,UTILITY,3

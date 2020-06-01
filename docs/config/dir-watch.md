@@ -12,35 +12,48 @@ The *rdioScanner.dirWatch* property an *array* of *dirWatch objects* which descr
         "dirWatch": [
             {
                 // [optional]
-                // Works only for type="default"
+                // Valid for type="default" only
                 // Delay the import until this number of milliseconds without any modification of the file
-                "delay": 3000
+                "delay": 3000,
 
-                // [optional] Whether the audio is deleted after importation (defaults to false)
+                // [optional]
+                // Whether the audio is deleted after importation (defaults to false)
                 "deleteAfter": true,
 
-                // [mandatory] Full path to directory to monitor
+                // [mandatory]
+                // Full path to directory to monitor
                 "directory": "/home/radio/audio_files",
 
-                // [mandatory] Audio file extension to watch
+                // [mandatory]
+                // Audio file extension to watch
                 "extension": "wav",
 
-                // [optional] Fake the frequency on the Rdio Scanner's display (in hertz)
+                // [optional]
+                // Fake the frequency on the Rdio Scanner's display (in hertz)
                 "frequency": 119100000,
 
-                // [mandatory] The system ID to import to. It can also be a regex string 
+                // [optional]
+                // Possible tags are: #DATE, #TIME, #SYS, #TG, #UNIT, #HZ
+                // If no system/talkgroup available from filename, you must specify them with dirWatch.system and dirWatch.talkgroup
+                "mask": "#DATE_#TIMEP25ABC_#SYS_TRAFFIC__TO_#TG_FROM_#UNIT",
+
+                // [optional or mandatory for dirWatch.type="trunk-recorder"]
+                // The system ID to import to
+                // It can also be a regex string, but consider using the mask option
                 "system": 1,
 
-                // [mandatory] for type=default and type=trunk-recorder
-                // [optional] for type=sdrtrunk
-                // The talkgroup ID to import to. It can also be a regex string 
+                // [optional]
+                // The talkgroup ID to import to
+                // It can also be a regex string, but consider using the mask option
                 "talkgroups": 1001,
 
-                // [optional] The type of the audio file
-                // It can be "default", "sdrtrunk" or "trunk-recorder"
+                // [optional]
+                // The type of the audio file (defaults to "default")
+                // It can be "default" or "trunk-recorder"
                 "type": "default",
 
-                // [optional] Set this to true to successfully watch files over a network
+                // [optional]
+                // Set this to true to successfully watch files over a network
                 "usePolling": true
             }
         ]
@@ -48,15 +61,15 @@ The *rdioScanner.dirWatch* property an *array* of *dirWatch objects* which descr
 }
 ```
 
-> It is recommended to test you regex at [regex101](https://regex101.com/)
+> It is recommended to test your regex at [regex101](https://regex101.com/)
 
 ## Examples
 
 ### Example for SDRTrunk
 
-**Rdio Scanner** will import SDRTrunk *wav* and *mbe* files.
+> Tested with SDRTrunk 0.5.0 Alpha 1.
 
-It is recommended to only record calls for **known** aliases in accordance to **[Rdio Scanner systems](./systems.md)**
+We have a `System P25ABC` with `Site 11` which uses an alias table configured to record specified talkgroups, either one by one or by a range. Keep in mind though that only known system/talkgroup by `config.json` will be imported.
 
 ```json
 {
@@ -65,9 +78,8 @@ It is recommended to only record calls for **known** aliases in accordance to **
             {
                 "deleteAfter": true,
                 "directory": "/home/radio/SDRTrunk/recordings",
-                "extension": "wav",
-                "system": 4,
-                "type": "sdrtrunk"
+                "extension": "mp3",
+                "mask": "#DATE_#TIMEP25ABC_#SYS_TRAFFIC__TO_#TG_FROM_#UNIT",
             }
         ]
     }
@@ -76,9 +88,7 @@ It is recommended to only record calls for **known** aliases in accordance to **
 
 ### Example for Trunk Recorder
 
-**Rdio Scanner** will import Trunk Recorder *wav* and *json* files.
-
-It is recommended to only record calls for **known** aliases in accordance to *[Rdio Scanner systems](./systems.md)*
+Importing `dirWatch.type="trunk-recorder"` will also import meta data from the `json` file.
 
 ```json
 {
@@ -88,32 +98,7 @@ It is recommended to only record calls for **known** aliases in accordance to *[
                 "deleteAfter": true,
                 "directory": "/home/radio/trunk-recorder/audio_files",
                 "extension": "wav",
-                "system": ".*[^\\d](\\d_)-.*",
-                "type": "trunk-recorder"
-            }
-        ]
-    }
-}
-```
-
-Another one with one *Trunk Recorder* per system.
-
-```json
-{
-    "rdioScanner": {
-        "dirWatch": [
-            {
-                "deleteAfter": true,
-                "directory": "/home/radio/trunk-recorder/audio_files/RSP25MTL1",
-                "extension": "wav",
                 "system": 11,
-                "type": "trunk-recorder"
-            },
-            {
-                "deleteAfter": true,
-                "directory": "/home/radio/trunk-recorder/audio_files/RSP25MTL5",
-                "extension": "wav",
-                "system": 15,
                 "type": "trunk-recorder"
             }
         ]

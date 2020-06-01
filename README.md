@@ -1,4 +1,4 @@
-# Rdio Scanner v4.0
+# Rdio Scanner v4.2
 
 *Rdio Scanner* is a beautiful progressive web interface allowing you to listen to different audio streams from different sources. Like on a police scanner, you can choose which systems/talkgroups to listen to in live. You can also browse the archives of older audio files.
 
@@ -11,6 +11,13 @@ Like it?
 Please click the **star button** at the top of the page on *github* to express your appreciation to the developer.
 
 ## What's new in this version
+
+### Version 4.2 - Small fixes and dirWatch.mask
+
+* Fix possible race conditions
+* Added websocket keepalive to client which helps mobile clients when switching from/to wifi/wan
+* Better Continuous offline play mode animations and queue count
+* New dirWatch.mask option to simplify meta data import
 
 ### Version 4.1 - Continuous offline play mode
 

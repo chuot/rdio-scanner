@@ -32,6 +32,7 @@ const wsCommand = {
     config: 'CFG',
     listCall: 'LCL',
     liveFeedMap: 'LFM',
+    nop: 'NOP',
     pin: 'PIN',
 };
 
@@ -320,12 +321,12 @@ class Controller {
     }
 
     async importCall(call = {}) {
-        const system = this.app.config.systems.find((sys) => sys.id === call.system) || 'unknown';
+        const system = this.app.config.systems.find((sys) => sys.id == call.system);
 
-        const talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => tg.id === call.talkgroup) : 'unknown';
+        const talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => tg.id == call.talkgroup) : null;
 
         if (!system || !talkgroup) {
-            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} No matching system/talkgroup`);
+            console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} file=${call.audioName} No matching system/talkgroup`);
 
             return;
         }
@@ -348,29 +349,20 @@ class Controller {
         this.app.downstream.exportCall(call);
     }
 
-    async importSdrtrunk(audio, audioName, audioType, system, meta) {
-        await this.importCall({
-            audio,
-            audioName,
-            audioType,
-            dateTime: new Date(meta.frames[0].time),
-            frequencies: [], // is it possible to extract from mbe voice frames ?
-            frequency: null,
-            sources: [{
-                pos: 0,
-                src: meta.from,
-            }], // is it possible to extract from mbe voice frames ?
-            system,
-            talkgroup: meta.to,
-        });
-    }
-
     async importTrunkRecorder(audio, audioName, audioType, system, meta) {
+        const parseDate = (value) => {
+            const date = new Date(1970, 0, 1);
+
+            date.setUTCSeconds(value - date.getTimezoneOffset() * 60);
+
+            return date;
+        };
+
         await this.importCall({
             audio,
             audioName,
             audioType,
-            dateTime: this.parseDate(meta.start_time),
+            dateTime: parseDate(meta.start_time),
             frequencies: Array.isArray(meta.freqList) ? meta.freqList.map((f) => ({
                 errorCount: f.error_count,
                 freq: f.freq,
@@ -477,6 +469,9 @@ class Controller {
 
                 socket.send(JSON.stringify([wsCommand.liveFeedMap, returnStatus]));
 
+            } else if (message[0] === wsCommand.nop) {
+                socket.send(JSON.stringify([wsCommand.nop]));
+
             } else if (message[0] === wsCommand.pin) {
                 const token = Buffer.from(message[1], 'base64').toString();
 
@@ -514,22 +509,6 @@ class Controller {
                     }
                 }
             }
-        }
-    }
-
-    parseDate(value) {
-        if (value instanceof Date) {
-            return value;
-
-        } else if (typeof value === 'number') {
-            const date = new Date(1970, 0, 1);
-
-            date.setUTCSeconds(value - date.getTimezoneOffset() * 60);
-
-            return date;
-
-        } else {
-            return new Date(value);
         }
     }
 

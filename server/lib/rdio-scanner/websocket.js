@@ -37,7 +37,7 @@ class WebSocket {
 
                 ws.ping();
             });
-        }, 15 * 60 * 1000);
+        }, 60 * 1000);
 
         this.wss = new WS.Server({ noServer: true });
 
