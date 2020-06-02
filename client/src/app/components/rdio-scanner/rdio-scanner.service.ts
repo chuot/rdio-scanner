@@ -139,12 +139,6 @@ export class AppRdioScannerService implements OnDestroy {
 
         this.cleanQueue();
 
-        if (this.call && !(this.liveFeedMap && this.liveFeedMap[this.call.system] &&
-            this.liveFeedMap[this.call.system][this.call.talkgroup])) {
-
-            this.skip();
-        }
-
         this.buildGroups();
 
         this.liveFeedStore();
@@ -521,6 +515,12 @@ export class AppRdioScannerService implements OnDestroy {
         this.callQueue = this.callQueue.filter((call: RdioScannerCall) => {
             return this.liveFeedMap && this.liveFeedMap[call.system] && this.liveFeedMap[call.system][call.talkgroup];
         });
+
+        if (this.call && !(this.liveFeedMap && this.liveFeedMap[this.call.system] &&
+            this.liveFeedMap[this.call.system][this.call.talkgroup])) {
+
+            this.skip();
+        }
     }
 
     private download(call: RdioScannerCall): void {
