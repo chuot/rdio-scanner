@@ -436,7 +436,7 @@ class Controller {
                         }
 
                         socket.liveFeed = (call) => {
-                            if (socket.isAlive) {
+                            if (socket.readyState !== 3) {
                                 if (call.system in socket.scope && call.system in message[1]) {
                                     if (socket.scope[call.system].includes(call.talkgroup)) {
                                         if (message[1][call.system] && message[1][call.system][call.talkgroup]) {
