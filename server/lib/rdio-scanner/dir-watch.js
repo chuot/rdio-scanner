@@ -124,10 +124,6 @@ class DirWatch {
             const audioFile = path.resolve(file.dir, `${file.name}.${dirWatch.extension}`);
 
             if (this.exists(audioFile)) {
-                if (dirWatch.mask) {
-                    this.parseMask(dirWatch.mask, filename);
-                }
-
                 const audio = this.readFile(audioFile);
 
                 const audioName = file.base;
