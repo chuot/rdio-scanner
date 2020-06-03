@@ -1,0 +1,132 @@
+#!/usr/bin/env node
+
+/*
+ * *****************************************************************************
+ *  Copyright (C) 2019-2020 Chrystian Huot
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+if (typeof process.argv[2] === 'string' && process.argv[2].toLowerCase() === '-h') {
+    const base = path.parse(process.argv[1]).base;
+
+    return console.log(`USAGE: ${base} <system_id> <input_tg_csv> [output_config_json]`);
+}
+
+const config = {};
+
+const sysId = parseInt(process.argv[2], 10) || null;
+
+if (!sysId) {
+    return console.error(`ERROR: Invalid system id: ${process.argv[2]}`);
+}
+
+const input = process.argv[3] ? path.resolve(__dirname, process.argv[3]) : null;
+
+if (input) {
+    if (!fs.existsSync(input)) {
+        return console.error(`ERROR: ${input} file not found!`);
+
+    } else {
+        try {
+            fs.accessSync(input, fs.constants.R_OK);
+
+        } catch (error) {
+            return console.error(`ERROR: ${input} not readable!`);
+        }
+    }
+
+} else {
+    return console.error('ERROR: No input CSV file specified!');
+}
+
+const output = path.resolve(__dirname, process.argv[4] ? process.argv[4] : '../config.json');
+
+if (output) {
+    if (fs.existsSync(output)) {
+        try {
+            fs.accessSync(output, fs.constants.W_OK);
+
+        } catch (error) {
+            return console.error(`ERROR: ${output} not writable!`);
+        }
+
+        try {
+            fs.accessSync(output, fs.constants.R_OK);
+
+            Object.assign(config, JSON.parse(fs.readFileSync(output, 'utf8')));
+
+        } catch (error) {
+            return console.error(`ERROR: ${output} not readable!`);
+        }
+    }
+}
+
+if (config.rdioScanner === null || typeof config.rdioScanner !== 'object') {
+    config.rdioScanner = {};
+}
+
+if (!Array.isArray(config.rdioScanner.systems)) {
+    config.rdioScanner.systems = [];
+}
+
+const csv = fs.readFileSync(input, 'utf8').split(/[\n|\r|\r\n]/).map((csv) => csv.split(/,/));
+
+const system = {
+    id: sysId,
+    label: path.parse(input).name,
+    talkgroups: [],
+};
+
+for (let line of csv) {
+    const id = parseInt(line[0], 10);
+    const label = line[2] || '';
+    const name = line[4] || '';
+    const tag = line[5] || '';
+    const group = line[6] || '';
+
+    if (id > 0 && label.length && name.length && tag.length && group.length) {
+        system.talkgroups.push({ id, label, name, tag, group });
+    }
+}
+
+system.talkgroups.sort((a, b) => a.id - b.id);
+
+config.rdioScanner.systems.push(system);
+
+config.rdioScanner.systems.sort((a, b) => a.id - b.id);
+
+if (fs.existsSync(output)) {
+    const backup = `${output}.bak`;
+
+    try {
+        fs.renameSync(output, backup);
+
+    } catch (error) {
+        return console.error(`ERROR: Unable to create backup ${backup}!`);
+    }
+}
+
+try {
+    fs.writeFileSync(output, JSON.stringify(config, null, 2));
+
+} catch (error) {
+    return console.error(`ERROR: While writing to ${output}!`);
+}
