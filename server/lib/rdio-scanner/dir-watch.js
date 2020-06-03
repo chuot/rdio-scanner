@@ -132,9 +132,18 @@ class DirWatch {
 
                 const system = this.parseRegex(dirWatch.system, filename);
 
-                try {
-                    const meta = JSON.parse(this.readFile(filename, 'utf8'));
+                let meta;
 
+                try {
+                    meta = JSON.parse(this.readFile(filename, 'utf8'));
+
+                } catch (error) {
+                    console.error(`DirWatch: Error parsing json file ${filename}`);
+
+                    return;
+                }
+
+                try {
                     await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
 
                     if (dirWatch.deleteAfter) {
@@ -144,10 +153,15 @@ class DirWatch {
                     }
 
                 } catch (error) {
-                    console.error(`DirWatch: Error loading file ${filename}`);
+                    console.error(`DirWatch: Error importing file ${audioFile}`);
 
                     return;
                 }
+
+            } else {
+                console.error(`DirWatch: Error missing file ${audioFile}`);
+
+                return;
             }
         }
     }
