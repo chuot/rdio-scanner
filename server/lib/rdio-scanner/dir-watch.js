@@ -153,7 +153,7 @@ class DirWatch {
                     }
 
                 } catch (error) {
-                    console.error(`DirWatch: Error importing file ${audioFile}`);
+                    console.error(`DirWatch: Error importing file ${audioFile}`, error);
 
                     return;
                 }

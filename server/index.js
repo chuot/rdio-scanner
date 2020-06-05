@@ -76,7 +76,7 @@ class App {
     }
 
     constructor() {
-        const staticDir = '../client/dist/rdio-scanner';
+        const staticDir = process.env.CLIENT_HTML_DIR || '../client/dist/rdio-scanner';
         const staticFile = 'index.html';
 
         this.config = App.Config();
@@ -85,7 +85,7 @@ class App {
         this.router.use(express.json());
         this.router.use(express.urlencoded({ extended: false }));
         this.router.use(express.static(staticDir));
-        this.router.set(this.config.nodejs.port);
+        this.router.set(process.env.PORT || this.config.nodejs.port);
 
         if (this.config.nodejs.env !== 'development') {
             this.router.disable('x-powered-by');
