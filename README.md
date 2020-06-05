@@ -170,3 +170,34 @@ You can update your *Rdio Scanner* instance with this simple command:
 ```bash
 $ node update.js
 ```
+
+## Docker
+
+You can also run rdio-scanner via Docker.
+
+```
+docker run -it -p 3000:3000 \
+ -v /home/pi/trunk-recorder/rdio_config.json:/app/server/config.json \
+ -v /home/pi/trunk-recorder/media:/calls \
+ -v /home/pi/trunk-recorder/rdio.db:/db/rdio.db \
+ -e DB_STORAGE="/db/rdio.db" \
+ robbiet480/rdio-scanner:latest
+```
+
+Or via Docker Compose:
+
+```yaml
+version: '3'
+volumes:
+  rdio_database:
+services:
+  rdio:
+    image: robbiet480/rdio-scanner:latest
+    container_name: rdio-scanner
+    volumes:
+      - ./rdio_config.json:/app/server/config.json
+      - rdio_database:/db
+      - ./media:/calls
+    environment:
+      - "DB_STORAGE=/db/rdio.db"
+```
