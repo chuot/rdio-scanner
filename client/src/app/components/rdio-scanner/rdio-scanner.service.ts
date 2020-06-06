@@ -596,7 +596,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    private messageParser(message): void {
+    private messageParser(message: any): void {
         try {
             message = JSON.parse(message);
 

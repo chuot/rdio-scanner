@@ -331,7 +331,7 @@ class Controller {
             return;
         }
 
-        if (call.autioType !== 'audio/aac') {
+        if (call.audioType !== 'audio/aac') {
             try {
                 call = await this.convertCallAudio(call);
 
