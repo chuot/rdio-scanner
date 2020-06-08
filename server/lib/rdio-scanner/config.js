@@ -35,7 +35,7 @@ class Config {
 
         this.systems = Array.isArray(config.systems) ? config.systems : [];
 
-        this.useDimmer = typeof config.useDimmer === 'boolean' ? config.useDimmer : false;
+        this.useDimmer = typeof config.useDimmer === 'boolean' ? config.useDimmer : true;
 
         this.useGroup = typeof config.useGroup === 'boolean' ? config.useGroup : true;
 

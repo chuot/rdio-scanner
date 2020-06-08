@@ -14,8 +14,8 @@
         "pruneDays": 7,
 
         // [optional] Lower the display brightness when no active call
-        // The default is false
-        "useDimmer": false,
+        // The default is true
+        "useDimmer": true,
 
         // [optional] Can talkgroups be activated/disabled by groups on the *select tgs panel*
         // The default is true
