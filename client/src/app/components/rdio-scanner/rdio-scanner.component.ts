@@ -797,7 +797,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 this.dimmerDelay = undefined;
 
                 this.ngDetectChanges();
-            }, 4000);
+            }, 5000);
 
             this.ngDetectChanges();
         }
