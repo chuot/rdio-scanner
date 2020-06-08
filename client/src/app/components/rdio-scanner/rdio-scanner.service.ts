@@ -357,7 +357,9 @@ export class AppRdioScannerService implements OnDestroy {
         if (call?.audio && this.liveFeedMap && this.liveFeedMap[sys] && this.liveFeedMap[sys][tg]) {
             this.callQueue.push(call);
 
-            this.event.emit({ queue: this.callQueue.length });
+            if (this.call) {
+                this.event.emit({ queue: this.callQueue.length });
+            }
 
             this.play();
         }
