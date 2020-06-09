@@ -127,7 +127,7 @@ module.exports = {
                     apiKeys: env.RDIO_APIKEYS ? JSON.parse(env.RDIO_APIKEYS) : [uuid.v4()],
                     pruneDays: env.RDIO_PRUNE_DAYS ? parseInt(env.RDIO_PRUNE_DAYS, 10) : 7,
                     systems,
-                    useDimmer: false,
+                    useDimmer: true,
                     useGroup: env.RDIO_USE_GROUP ? /true/i.exec(`${env.RDIO_USE_GROUP}`) : true,
                     useLed: true,
                 },
