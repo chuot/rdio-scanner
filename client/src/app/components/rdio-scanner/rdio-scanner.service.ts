@@ -465,11 +465,15 @@ export class AppRdioScannerService implements OnDestroy {
 
         const bootstrap = () => {
             if (!this.audioContext) {
+                const options: AudioContextOptions = {
+                    latencyHint: 'playback',
+                };
+
                 if ('webkitAudioContext' in window) {
-                    this.audioContext = new webkitAudioContext();
+                    this.audioContext = new webkitAudioContext(options);
 
                 } else {
-                    this.audioContext = new AudioContext();
+                    this.audioContext = new AudioContext(options);
                 }
             }
 
