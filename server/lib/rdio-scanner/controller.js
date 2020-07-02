@@ -50,10 +50,25 @@ class Controller {
 
         this.ffmpeg = !spawnSync('ffmpeg', ['-version']).error;
 
-        this.pruneInterval = undefined;
-
         if (!this.ffmpeg) {
             console.warn('ffmpeg is missing, no audio conversion possible.');
+        }
+
+        if (this.app.config.pruneDays > 0) {
+            this.pruneInterval = setInterval(() => {
+                const now = new Date();
+
+                this.app.models.call.destroy({
+                    where: {
+                        dateTime: {
+                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.app.config.pruneDays),
+                        },
+                    },
+                });
+            }, 15 * 60 * 1000);
+
+        } else {
+            this.pruneInterval = undefined;
         }
     }
 
@@ -509,30 +524,6 @@ class Controller {
                     }
                 }
             }
-        }
-    }
-
-    pruneSchedulerStart() {
-        if (this.app.config.pruneDays > 0) {
-            this.pruneInterval = setInterval(() => {
-                const now = new Date();
-
-                this.app.models.call.destroy({
-                    where: {
-                        dateTime: {
-                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.app.config.pruneDays),
-                        },
-                    },
-                });
-            }, 15 * 60 * 1000);
-        }
-    }
-
-    pruneSchedulerStop() {
-        if (this.pruneInterval) {
-            clearInterval(this.pruneInterval);
-
-            this.pruneInterval = undefined;
         }
     }
 
