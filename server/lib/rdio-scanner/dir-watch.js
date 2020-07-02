@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,11 +25,24 @@ const mime = require('mime-types');
 const path = require('path');
 
 class DirWatch {
-    constructor(app = {}) {
-        this.app = app;
+    constructor(ctx = {}) {
+        this.config = ctx.config;
 
-        this.app.config.dirWatch.forEach((dirWatch = {}) => {
+        this.controller = ctx.controller;
+
+        this.registredDirectories = [];
+
+        this.config.dirWatch.forEach((dirWatch = {}) => {
             const dir = path.resolve(__dirname, '../../..', dirWatch.directory);
+
+            if (this.registredDirectories.includes(dir)) {
+                console.error(`DirWatch: Duplicate directory definitions ${dir}`);
+
+                return;
+
+            } else {
+                this.registredDirectories.push(dir);
+            }
 
             const watcher = chokidar.watch(dir, {
                 awaitWriteFinish: true,
@@ -84,7 +97,14 @@ class DirWatch {
             const call = {};
 
             if (dirWatch.mask) {
-                Object.assign(call, this.parseMask(dirWatch.mask, filename));
+                const parsedMask = this.parseMask(dirWatch.mask, filename);
+
+                if (parsedMask) {
+                    Object.assign(call, parsedMask);
+
+                } else {
+                    return;
+                }
             }
 
             call.audio = this.readFile(filename);
@@ -109,9 +129,9 @@ class DirWatch {
                 call.talkgroup = this.parseRegex(dirWatch.talkgroup, filename);
             }
 
-            await this.app.controller.importCall(call);
+            await this.controller.importCall(call);
 
-            if (dirWatch.deleteAfter) {
+            if (typeof dirWatch.deleteAfter === 'boolean' && dirWatch.deleteAfter) {
                 this.unlink(filename);
             }
         }
@@ -138,22 +158,22 @@ class DirWatch {
                     meta = JSON.parse(this.readFile(filename, 'utf8'));
 
                 } catch (error) {
-                    console.error(`DirWatch: Error parsing json file ${filename}`);
+                    console.error(`DirWatch: Error parsing json file ${filename}, ${error.message}`);
 
                     return;
                 }
 
                 try {
-                    await this.app.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
+                    await this.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
 
-                    if (dirWatch.deleteAfter) {
+                    if (typeof dirWatch.deleteAfter === 'boolean' && dirWatch.deleteAfter) {
                         this.unlink(audioFile);
 
                         this.unlink(filename);
                     }
 
                 } catch (error) {
-                    console.error(`DirWatch: Error importing file ${audioFile}`);
+                    console.error(`DirWatch: Error importing file ${audioFile}, ${error.message}`);
 
                     return;
                 }
@@ -179,11 +199,14 @@ class DirWatch {
 
         const meta = {
             date: { tag: '#DATE', regex: '[\\d-]+' },
-            hz: { tag: '#HZ', regex: '[\\d-]+' },
+            hz: { tag: '#HZ', regex: '[\\d]+' },
+            khz: { tag: '#KHZ', regex: '[\\d\\.]+' },
+            mhz: { tag: '#MHZ', regex: '[\\d\\.]+' },
             time: { tag: '#TIME', regex: '[\\d:]+' },
             system: { tag: '#SYS', regex: '\\d+' },
             talkgroup: { tag: '#TG', regex: '\\d+' },
             unit: { tag: '#UNIT', regex: '\\d+' },
+            ztime: { tag: '#ZTIME', regex: '[\\d:]+' },
         };
 
         let data = [];
@@ -209,11 +232,11 @@ class DirWatch {
                 return obj;
             }, {});
 
-            if (data.date && data.time) {
+            if (data.date && (data.time || data.ztime)) {
                 const date = data.date.replace(/[^\d]]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
                 const time = data.time.replace(/[^\\d]]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
 
-                const dateTime = new Date(`${date}T${time}`);
+                const dateTime = new Date(`${date}T${time}${data.ztime ? 'Z' : ''}`);
 
                 if (!isNaN(dateTime.getTime())) {
                     call.dateTime = dateTime;
@@ -229,11 +252,11 @@ class DirWatch {
                 }
             }
 
-            if (data.hz) {
-                const freq = parseInt(data.hz, 10);
+            if (data.hz || data.khz || data.mhz) {
+                const freq = +(data.hz || data.khz || data.mhz);
 
                 if (freq) {
-                    call.frequency = freq;
+                    call.frequency = data.hz ? freq : data.khz ? freq * 1000 : data.mhz * 1000000;
                 }
             }
 
@@ -248,9 +271,12 @@ class DirWatch {
             if (data.unit) {
                 call.sources = [{ pos: 0, src: parseInt(data.unit, 10) }];
             }
-        }
 
-        return call;
+            return call;
+
+        } else {
+            return null;
+        }
     }
 
     parseRegex(regex, filename) {
@@ -264,7 +290,7 @@ class DirWatch {
                 return parseInt(filename.replace(regExp, '$1'), 10);
 
             } catch (error) {
-                console.log(`DirWatch: Invalid RegExp: ${regex}`);
+                console.log(`DirWatch: Invalid RegExp: ${regex}, ${error.message}`);
 
                 return NaN;
             }
@@ -288,7 +314,7 @@ class DirWatch {
             return fs.readFileSync(filename, mode);
 
         } catch (error) {
-            console.error(`DirWatch: Unable to read ${filename}`);
+            console.error(`DirWatch: Unable to read ${filename}, ${error.message}`);
         }
     }
 
@@ -297,7 +323,7 @@ class DirWatch {
             return fs.statSync(filename);
 
         } catch (error) {
-            console.error(`DirWatch: Unable to stat ${filename}`);
+            console.error(`DirWatch: Unable to stat ${filename}, ${error.message}`);
 
             return {};
         }
@@ -308,7 +334,7 @@ class DirWatch {
             fs.unlinkSync(filename);
 
         } catch (error) {
-            console.error(`DirWatch: Unable to delete ${filename}`);
+            console.error(`DirWatch: Unable to delete ${filename}, ${error.message}`);
         }
     }
 }
