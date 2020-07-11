@@ -8,6 +8,9 @@
       "schematics": {
         "@schematics/angular:component": {
           "style": "scss"
+        },
+        "@schematics/angular:application": {
+          "strict": true
         }
       },
       "root": "",
@@ -17,6 +20,9 @@
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
+            "allowedCommonJsDependencies": [
+              "@angular/common/locales/en-CA"
+            ],
             "outputPath": "dist/rdio-scanner",
             "index": "src/index.html",
             "main": "src/main.ts",
@@ -70,7 +76,7 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
             "browserTarget": "rdio-scanner:build",
-            "proxyConfig": "src/proxy.conf.js"
+            "proxyConfig": "proxy.conf.js"
           },
           "configurations": {
             "production": {
@@ -94,7 +100,6 @@
             "assets": [
               "src/favicon.ico",
               "src/assets",
-              "src/manifest.webmanifest",
               "src/manifest.webmanifest"
             ],
             "styles": [

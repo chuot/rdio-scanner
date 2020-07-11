@@ -1,0 +1,6 @@
+client/dist
+client/node_modules
+server/config.json*
+server/database.sqlite*
+server/dist
+server/node_modules

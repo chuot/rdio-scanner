@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,11 @@ const url = require('url');
 const WS = require('ws');
 
 class WebSocket {
-    constructor(app) {
+    constructor(ctx = {}) {
+        this.controller = ctx.controller;
+
+        this.httpServer = ctx.httpServer;
+
         this.heartbeat = setInterval(() => {
             this.wss.clients.forEach((ws) => {
                 if (ws.isAlive === false) {
@@ -48,7 +52,7 @@ class WebSocket {
 
             ws.on('error', (error) => console.error(error));
 
-            ws.on('message', async (message) => await app.controller.messageParser(ws, message));
+            ws.on('message', async (message) => await this.controller.messageParser(ws, message));
 
             ws.on('pong', () => ws.isAlive = true);
 
@@ -61,8 +65,8 @@ class WebSocket {
             this.heartbeat = undefined;
         });
 
-        if (app.httpServer instanceof Server) {
-            app.httpServer.on('upgrade', (request, socket, head) => {
+        if (this.httpServer instanceof Server) {
+            this.httpServer.on('upgrade', (request, socket, head) => {
                 const pathname = url.parse(request.url).pathname;
 
                 if (pathname === '/' || pathname === '/index.html') {

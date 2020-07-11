@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,11 @@ import {
     RdioScannerSearchOptions,
 } from './rdio-scanner';
 
-declare var webkitAudioContext: any;
+declare global {
+    interface Window {
+        webkitAudioContext: typeof AudioContext;
+    }
+}
 
 enum WebSocketCallFlag {
     Download = 'd',
@@ -52,31 +56,37 @@ export class AppRdioScannerService implements OnDestroy {
 
     event = new EventEmitter<RdioScannerEvent>();
 
-    private audioContext: AudioContext | null = null;
-    private audioSource: AudioBufferSourceNode | null = null;
+    private audioContext: AudioContext | undefined;
+    private audioSource: AudioBufferSourceNode | undefined;
     private audioStartTime = NaN;
-    private audioTimer: any = null;
+    private audioTimer: number | undefined;
 
-    private call: RdioScannerCall;
-    private callPrevious: RdioScannerCall;
+    private call: RdioScannerCall | undefined;
+    private callPrevious: RdioScannerCall | undefined;
     private callQueue: RdioScannerCall[] = [];
 
-    private config: RdioScannerConfig;
+    private config: RdioScannerConfig = {
+        allowDownload: true,
+        systems: [],
+        useDimmer: true,
+        useGroup: true,
+        useLed: true,
+    };
 
-    private groups: RdioScannerGroup[];
+    private groups: RdioScannerGroup[] = [];
 
     private liveFeedActive = false;
-    private liveFeedMap: RdioScannerLiveFeedMap;
-    private liveFeedMapPriorToHoldSystem: RdioScannerLiveFeedMap | null = null;
-    private liveFeedMapPriorToHoldTalkgroup: RdioScannerLiveFeedMap | null = null;
+    private liveFeedMap = {} as RdioScannerLiveFeedMap;
+    private liveFeedMapPriorToHoldSystem: RdioScannerLiveFeedMap | undefined;
+    private liveFeedMapPriorToHoldTalkgroup: RdioScannerLiveFeedMap | undefined;
     private liveFeedPaused = false;
 
-    private skipDelay: any;
+    private skipDelay: number | undefined;
 
-    private webSocket: WebSocket;
+    private webSocket: WebSocket | undefined;
     private webSocketHeartBeat = 30 * 1000;
-    private webSocketInterval: any;
-    private webSocketTimeout: any;
+    private webSocketInterval: number | undefined;
+    private webSocketTimeout: number | undefined;
     private webSocketPendingMessage = false;
 
     constructor(@Inject(DOCUMENT) private document: Document) {
@@ -93,17 +103,17 @@ export class AppRdioScannerService implements OnDestroy {
 
     avoid(options: RdioScannerAvoidOptions = {}): void {
         if (this.liveFeedMapPriorToHoldSystem) {
-            this.liveFeedMapPriorToHoldSystem = null;
+            this.liveFeedMapPriorToHoldSystem = undefined;
         }
 
         if (this.liveFeedMapPriorToHoldTalkgroup) {
-            this.liveFeedMapPriorToHoldTalkgroup = null;
+            this.liveFeedMapPriorToHoldTalkgroup = undefined;
         }
 
         if (typeof options.all === 'boolean') {
             Object.keys(this.liveFeedMap).map((sys: string) => +sys).forEach((sys: number) => {
                 Object.keys(this.liveFeedMap[sys]).map((tg: string) => +tg).forEach((tg: number) => {
-                    this.liveFeedMap[sys][tg] = typeof options.status === 'boolean' ? options.status : options.all;
+                    this.liveFeedMap[sys][tg] = typeof options.status === 'boolean' ? options.status : !!options.all;
                 });
             });
 
@@ -162,7 +172,8 @@ export class AppRdioScannerService implements OnDestroy {
         if (call && this.liveFeedMap) {
             if (this.liveFeedMapPriorToHoldSystem) {
                 this.liveFeedMap = this.liveFeedMapPriorToHoldSystem;
-                this.liveFeedMapPriorToHoldSystem = null;
+
+                this.liveFeedMapPriorToHoldSystem = undefined;
 
             } else {
                 if (this.liveFeedMapPriorToHoldTalkgroup) {
@@ -177,15 +188,16 @@ export class AppRdioScannerService implements OnDestroy {
                     sysMap[sys] = Object.keys(this.liveFeedMap[sys]).map((tg) => +tg).reduce((tgMap, tg) => {
                         if (sys === call.system) {
                             tgMap[tg] = allOn || this.liveFeedMap[sys][tg];
+
                         } else {
                             tgMap[tg] = false;
                         }
 
                         return tgMap;
-                    }, {});
+                    }, {} as { [key: number]: boolean });
 
                     return sysMap;
-                }, {});
+                }, {} as RdioScannerLiveFeedMap);
 
                 this.cleanQueue();
             }
@@ -214,7 +226,8 @@ export class AppRdioScannerService implements OnDestroy {
         if (call && this.liveFeedMap) {
             if (this.liveFeedMapPriorToHoldTalkgroup) {
                 this.liveFeedMap = this.liveFeedMapPriorToHoldTalkgroup;
-                this.liveFeedMapPriorToHoldTalkgroup = null;
+
+                this.liveFeedMapPriorToHoldTalkgroup = undefined;
 
             } else {
                 if (this.liveFeedMapPriorToHoldSystem) {
@@ -233,10 +246,10 @@ export class AppRdioScannerService implements OnDestroy {
                         }
 
                         return tgMap;
-                    }, {});
+                    }, {} as { [key: number]: boolean });
 
                     return sysMap;
-                }, {});
+                }, {} as RdioScannerLiveFeedMap);
 
                 this.cleanQueue();
             }
@@ -269,7 +282,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     loadAndDownload(id: string): void {
-        if (this.config.allowDownload) {
+        if (this.config?.allowDownload) {
             this.getCall(id, WebSocketCallFlag.Download);
         }
     }
@@ -309,34 +322,36 @@ export class AppRdioScannerService implements OnDestroy {
                 const arrayBuffer = new ArrayBuffer(call.audio.data.length);
                 const arrayBufferView = new Uint8Array(arrayBuffer);
 
-                for (let i = 0; i < call.audio.data.length; i++) {
+                for (let i = 0; i < call.audio?.data.length; i++) {
                     arrayBufferView[i] = call.audio.data[i];
                 }
 
                 this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                    this.audioContext.resume().then(() => {
-                        this.stop({ emit: false });
+                    this.audioContext?.resume().then(() => {
+                        if (this.audioContext) {
+                            this.stop({ emit: false });
 
-                        this.call = call;
+                            this.call = call;
 
-                        this.event.emit({ call, queue: this.callQueue.length });
+                            this.event.emit({ call, queue: this.callQueue.length });
 
-                        this.audioSource = this.audioContext.createBufferSource();
+                            this.audioSource = this.audioContext.createBufferSource();
 
-                        this.audioSource.buffer = buffer;
-                        this.audioSource.connect(this.audioContext.destination);
-                        this.audioSource.onended = () => this.skip();
-                        this.audioSource.start();
+                            this.audioSource.buffer = buffer;
+                            this.audioSource.connect(this.audioContext.destination);
+                            this.audioSource.onended = () => this.skip();
+                            this.audioSource.start();
 
-                        this.audioTimer = setInterval(() => {
-                            if (!this.liveFeedPaused && !isNaN(this.audioContext.currentTime)) {
-                                if (isNaN(this.audioStartTime)) {
-                                    this.audioStartTime = this.audioContext.currentTime;
+                            this.audioTimer = setInterval(() => {
+                                if (this.audioContext && !this.liveFeedPaused && !isNaN(this.audioContext.currentTime)) {
+                                    if (isNaN(this.audioStartTime)) {
+                                        this.audioStartTime = this.audioContext.currentTime;
+                                    }
+
+                                    this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
                                 }
-
-                                this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
-                            }
-                        }, 500);
+                            }, 500);
+                        }
                     }).catch(() => this.skip());
                 }, () => {
                     this.event.emit({ call, queue: this.callQueue.length });
@@ -345,7 +360,7 @@ export class AppRdioScannerService implements OnDestroy {
                 });
 
             } else if (call) {
-                this.event.emit({ call: null, queue: this.callQueue.length });
+                this.event.emit({ call: undefined, queue: this.callQueue.length });
             }
         }
     }
@@ -357,7 +372,7 @@ export class AppRdioScannerService implements OnDestroy {
         if (call?.audio && this.liveFeedMap && this.liveFeedMap[sys] && this.liveFeedMap[sys][tg]) {
             this.callQueue.push(call);
 
-            if (this.call) {
+            if (this.call || this.liveFeedPaused) {
                 this.event.emit({ queue: this.callQueue.length });
             }
 
@@ -390,13 +405,15 @@ export class AppRdioScannerService implements OnDestroy {
     stop(options?: { emit?: boolean }): void {
         if (this.audioSource) {
             if (this.audioTimer) {
-                this.audioTimer = clearInterval(this.audioTimer);
+                clearInterval(this.audioTimer);
+
+                this.audioTimer = undefined;
             }
 
             this.audioSource.onended = null;
             this.audioSource.stop();
             this.audioSource.disconnect();
-            this.audioSource = null;
+            this.audioSource = undefined;
 
             this.audioStartTime = NaN;
         }
@@ -404,11 +421,11 @@ export class AppRdioScannerService implements OnDestroy {
         if (this.call) {
             this.callPrevious = this.call;
 
-            this.call = null;
+            this.call = undefined;
         }
 
         if (typeof options?.emit !== 'boolean' || options.emit) {
-            this.event.emit({ call: null });
+            this.event.emit({ call: undefined });
         }
     }
 
@@ -417,17 +434,17 @@ export class AppRdioScannerService implements OnDestroy {
 
         if (group) {
             if (this.liveFeedMapPriorToHoldSystem) {
-                this.liveFeedMapPriorToHoldSystem = null;
+                this.liveFeedMapPriorToHoldSystem = undefined;
             }
 
             if (this.liveFeedMapPriorToHoldTalkgroup) {
-                this.liveFeedMapPriorToHoldTalkgroup = null;
+                this.liveFeedMapPriorToHoldTalkgroup = undefined;
             }
 
             const status = group.status === RdioScannerGroupStatus.On ? false : true;
 
-            this.config.systems.forEach((sys) => {
-                sys.talkgroups.forEach((tg) => {
+            this.config?.systems.forEach((sys) => {
+                sys.talkgroups?.forEach((tg) => {
                     if (tg.group === label) {
                         this.liveFeedMap[sys.id][tg.id] = status;
                     }
@@ -469,8 +486,8 @@ export class AppRdioScannerService implements OnDestroy {
                     latencyHint: 'playback',
                 };
 
-                if ('webkitAudioContext' in window) {
-                    this.audioContext = new webkitAudioContext(options);
+                if (window.webkitAudioContext) {
+                    this.audioContext = new window.webkitAudioContext(options);
 
                 } else {
                     this.audioContext = new AudioContext(options);
@@ -488,17 +505,17 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private buildGroups(): void {
-        if (this.config?.useGroup) {
+        if (this.config.useGroup) {
             this.groups = this.config.systems.reduce((groups, system) => {
                 system.talkgroups.forEach((talkgroup) => {
                     if (!groups.find((group) => group.label === talkgroup.group)) {
                         const allOn = this.config.systems.every((sys) => {
-                            return sys.talkgroups.filter((tg) => tg.group === talkgroup.group)
+                            return sys.talkgroups?.filter((tg) => tg.group === talkgroup.group)
                                 .every((tg) => this.liveFeedMap[sys.id][tg.id]);
                         });
 
                         const allOff = this.config.systems.every((sys) => {
-                            return sys.talkgroups.filter((tg) => tg.group === talkgroup.group)
+                            return sys.talkgroups?.filter((tg) => tg.group === talkgroup.group)
                                 .every((tg) => !this.liveFeedMap[sys.id][tg.id]);
                         });
 
@@ -530,58 +547,62 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private download(call: RdioScannerCall): void {
-        const file = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
-        const fileName = call.audioName || 'unknown.dat';
-        const fileType = call.audioType || 'audio/*';
-        const fileUri = `data:${fileType};base64,${btoa(file)}`;
+        if (call.audio) {
+            const file = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
+            const fileName = call.audioName || 'unknown.dat';
+            const fileType = call.audioType || 'audio/*';
+            const fileUri = `data:${fileType};base64,${btoa(file)}`;
 
-        const el = this.document.createElement('a');
+            const el = this.document.createElement('a');
 
-        el.style.display = 'none';
+            el.style.display = 'none';
 
-        el.setAttribute('href', fileUri);
-        el.setAttribute('download', fileName);
+            el.setAttribute('href', fileUri);
+            el.setAttribute('download', fileName);
 
-        this.document.body.appendChild(el);
+            this.document.body.appendChild(el);
 
-        el.click();
+            el.click();
 
-        this.document.body.removeChild(el);
+            this.document.body.removeChild(el);
+        }
     }
 
-    private getCall(id: string, flags?: any): void {
+    private getCall(id: string, flags?: string): void {
         this.webSocketSend(WebSocketCommand.Call, id, flags);
     }
 
     private liveFeedRebuild(): void {
-        if (Array.isArray(this.config && this.config.systems)) {
-            this.liveFeedMap = this.config.systems.reduce((sysMap, sys) => {
-                const tgs = sys.talkgroups.map((tg) => tg.id.toString());
+        this.liveFeedMap = this.config.systems.reduce((sysMap, sys) => {
+            const tgs = sys.talkgroups.map((tg) => tg.id.toString());
 
-                sysMap[sys.id] = sys.talkgroups.reduce((tgMap, tg) => {
-                    const state = this.liveFeedMap && this.liveFeedMap[sys.id] && this.liveFeedMap[sys.id][tg.id];
+            sysMap[sys.id] = sys.talkgroups.reduce((tgMap, tg) => {
+                const state = this.liveFeedMap && this.liveFeedMap[sys.id] && this.liveFeedMap[sys.id][tg.id];
 
-                    tgMap[tg.id] = typeof state === 'boolean' ? state : true;
+                tgMap[tg.id] = typeof state === 'boolean' ? state : true;
 
-                    return tgMap;
-                }, sysMap[sys.id] || {});
+                return tgMap;
+            }, sysMap[sys.id] || {});
 
-                return sysMap;
-            }, {} as RdioScannerLiveFeedMap);
+            return sysMap;
+        }, {} as RdioScannerLiveFeedMap);
 
-            this.liveFeedStore();
+        this.liveFeedStore();
 
-            this.buildGroups();
-        }
+        this.buildGroups();
     }
 
-    private liveFeedRestore(): any {
+    private liveFeedRestore(): void {
         if (window instanceof Window && window.localStorage instanceof Storage) {
-            try {
-                this.liveFeedMap = JSON.parse(window.localStorage.getItem(AppRdioScannerService.LOCAL_STORAGE_KEY));
+            const map = window.localStorage.getItem(AppRdioScannerService.LOCAL_STORAGE_KEY);
 
-            } catch (err) {
-                this.liveFeedMap = {};
+            if (map) {
+                try {
+                    this.liveFeedMap = JSON.parse(map);
+
+                } catch (err) {
+                    this.liveFeedMap = {};
+                }
             }
         }
     }
@@ -602,12 +623,12 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    private messageParser(message: any): void {
+    private messageParser(message: string): void {
         try {
             message = JSON.parse(message);
 
-        } catch (_) {
-            console.warn('Invalid control message received');
+        } catch (error) {
+            console.warn(`Invalid control message received, ${error.message}`);
         }
 
         if (Array.isArray(message)) {
@@ -693,10 +714,10 @@ export class AppRdioScannerService implements OnDestroy {
 
     private webSocketClose(): void {
         if (this.webSocket instanceof WebSocket) {
-            this.webSocket.onclose = undefined;
-            this.webSocket.onerror = undefined;
-            this.webSocket.onmessage = undefined;
-            this.webSocket.onopen = undefined;
+            this.webSocket.onclose = null;
+            this.webSocket.onerror = null;
+            this.webSocket.onmessage = null;
+            this.webSocket.onopen = null;
 
             this.webSocket.close();
 
@@ -709,7 +730,9 @@ export class AppRdioScannerService implements OnDestroy {
 
     private webSocketKeepAlive(): void {
         if (this.webSocketTimeout) {
-            this.webSocketTimeout = clearTimeout(this.webSocketTimeout);
+            clearTimeout(this.webSocketTimeout);
+
+            this.webSocketTimeout = undefined;
         }
 
         if (this.webSocketInterval) {
@@ -724,7 +747,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private webSocketOpen(): void {
-        const webSocketUrl = window.origin.replace(/^http/, 'ws');
+        const webSocketUrl = window.location.href.replace(/^http/, 'ws');
 
         this.webSocket = new WebSocket(webSocketUrl);
 
@@ -737,7 +760,9 @@ export class AppRdioScannerService implements OnDestroy {
         this.webSocket.onerror = () => { };
 
         this.webSocket.onopen = () => {
-            this.webSocket.onmessage = (ev: MessageEvent) => this.messageParser(ev.data);
+            if (this.webSocket instanceof WebSocket) {
+                this.webSocket.onmessage = (ev: MessageEvent) => this.messageParser(ev.data);
+            }
 
             this.webSocketKeepAlive();
 
@@ -751,9 +776,9 @@ export class AppRdioScannerService implements OnDestroy {
         setTimeout(() => this.webSocketOpen(), 5 * 1000);
     }
 
-    private webSocketSend(command: string, payload?: any, flags?: any): void {
+    private webSocketSend(command: string, payload?: string | RdioScannerSearchOptions | null, flags?: string): void {
         if (this.webSocket instanceof WebSocket && this.webSocket.readyState === 1 && !this.webSocketPendingMessage) {
-            const message = [command];
+            const message: (string | RdioScannerSearchOptions)[] = [command];
 
             if (payload) {
                 message.push(payload);

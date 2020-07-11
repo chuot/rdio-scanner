@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,11 +38,11 @@ try {
         process.stdout.write('Installing node modules...');
 
         if (missingModules.client) {
-            execSync('npm install', { cwd: clientPath, stdio });
+            execSync('npm ci', { cwd: clientPath, stdio });
         }
 
         if (missingModules.server) {
-            execSync('npm install', { cwd: serverPath, stdio });
+            execSync('npm ci', { cwd: serverPath, stdio });
         }
 
         process.stdout.write(' done\n');
@@ -54,7 +54,9 @@ try {
         process.stdout.write(' done\n');
     }
 
-    execSync('node index.js', { cwd: serverPath, stdio: 'inherit' });
+    const args = process.argv.slice(2).join(' ');
+
+    execSync(`node . ${args}`, { cwd: serverPath, stdio: 'inherit' });
 
 } catch (error) {
     process.stderr.write('\n\nAn error has occured. Please re-run the command like this: \'DEBUG=true node run.js\'\n');

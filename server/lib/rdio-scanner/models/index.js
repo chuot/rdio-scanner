@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,14 +23,10 @@ const callFactory = require('./call');
 const systemFactory = require('./system');
 
 class Models {
-    constructor(app = {}) {
-        this.config = app.config;
-        this.sequelize = app.sequelize;
+    constructor(ctx = {}) {
+        this.call = callFactory(ctx);
 
-        return {
-            call: callFactory(this),
-            system: systemFactory(this),
-        };
+        this.system = systemFactory(ctx);
     }
 }
 

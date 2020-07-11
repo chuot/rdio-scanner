@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 import { DOCUMENT } from '@angular/common';
 import {
+    AfterViewInit,
     ChangeDetectionStrategy,
     ChangeDetectorRef,
     Component,
@@ -27,14 +28,13 @@ import {
     HostListener,
     Inject,
     OnDestroy,
-    OnInit,
     Output,
     ViewChild,
 } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
-import { BehaviorSubject, Subscription } from 'rxjs';
+import { BehaviorSubject, NEVER, Subscription } from 'rxjs';
 import { version } from '../../../../package.json';
 import {
     RdioScannerAvoidOptions,
@@ -58,7 +58,7 @@ const LOCAL_STORAGE_KEY = AppRdioScannerService.LOCAL_STORAGE_KEY + '-pin';
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
 })
-export class AppRdioScannerComponent implements OnDestroy, OnInit {
+export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     @Output() readonly live = new EventEmitter<boolean>();
 
     auth = false;
@@ -66,12 +66,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         password: [],
     });
 
-    call: RdioScannerCall;
+    call: RdioScannerCall | undefined;
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
     callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
-    callPending: string = null;
-    callPrevious: RdioScannerCall;
+    callPending: string | undefined;
+    callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
     callQueue = 0;
     callSpike = '0';
@@ -85,18 +85,18 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     clock = new Date();
 
-    dimmerDelay: any;
+    dimmerDelay: number | undefined;
 
-    config: RdioScannerConfig;
+    config: RdioScannerConfig | undefined;
 
     groups: RdioScannerGroup[] = [];
 
     holdSys = false;
     holdTg = false;
 
-    ledClass: string;
+    ledClass = '';
 
-    list: RdioScannerList;
+    list: RdioScannerList | undefined;
 
     liveFeedActive = false;
     liveFeedOffline = false;
@@ -106,7 +106,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     searchPanelOpened = false;
 
-    searchResults = new BehaviorSubject(new Array<RdioScannerCall>(10));
+    searchResults = new BehaviorSubject(new Array<RdioScannerCall | null>(10));
     searchResultsPending = false;
 
     selectPanelOpened = false;
@@ -118,11 +118,11 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         talkgroup: [-1],
     });
 
-    @ViewChild('password', { read: MatInput, static: true }) private authPassword: MatInput;
+    @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
-    private clockRefresh: any;
+    private clockRefresh: number | undefined;
 
-    @ViewChild(MatPaginator, { static: true }) private searchFormPaginator: MatPaginator;
+    @ViewChild(MatPaginator, { read: MatPaginator }) private searchFormPaginator: MatPaginator | undefined;
 
     private searchResultsLimit = 200;
     private searchResultsOffset = 0;
@@ -139,21 +139,21 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         private ngFormBuilder: FormBuilder,
     ) { }
 
-    authenticate(password = this.authForm.get('password').value): void {
+    authenticate(password = this.authForm.get('password')?.value): void {
         this.authForm.disable();
 
         this.appRdioScannerService.authenticate(password);
     }
 
-    authFocus() {
-        if (this.auth) {
+    authFocus(): void {
+        if (this.auth && this.authPassword instanceof MatInput) {
             this.authPassword.focus();
         }
     }
 
     avoid(options?: RdioScannerAvoidOptions): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else if (!this.liveFeedOffline) {
             this.appRdioScannerService.avoid(options);
@@ -176,14 +176,14 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     getSearchFormTalkgroups(): RdioScannerTalkgroup[] {
-        const system = this.config?.systems?.find((sys) => sys.id === this.searchForm.get('system').value);
+        const system = this.config?.systems?.find((sys) => sys.id === this.searchForm.get('system')?.value);
 
         return system ? system.talkgroups : [];
     }
 
     holdSystem(): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else if (!this.liveFeedOffline) {
             this.appRdioScannerService.holdSystem();
@@ -194,7 +194,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     holdTalkgroup(): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else if (!this.liveFeedOffline) {
             this.appRdioScannerService.holdTalkgroup();
@@ -205,7 +205,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     liveFeed(): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else if (this.liveFeedOffline) {
             this.stopOfflinePlay();
@@ -217,28 +217,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
     }
 
-    ngOnDestroy() {
-        // terminate subscriptions
-
-        while (this.subscriptions.length) {
-            this.subscriptions.pop().unsubscribe();
-        }
-
-        // stop the realtime clock
-
-        if (this.clockRefresh) {
-            clearTimeout(this.clockRefresh);
-        }
-
-        // terminate our live event emitter
-
-        this.live.complete();
-
-        // remove visibility change listener
-        this.document.removeEventListener('visibilitychange', this.visibilityChangeListener);
-    }
-
-    ngOnInit() {
+    ngAfterViewInit(): void {
         // Refresh display on visibility change
 
         this.document.addEventListener('visibilitychange', this.visibilityChangeListener);
@@ -266,7 +245,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => {
                 if ('auth' in event) {
                     if (event.auth) {
-                        let password: string;
+                        let password: string | null = null;
 
                         if (window instanceof Window && window.localStorage instanceof Storage) {
                             password = window.localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -279,7 +258,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                         }
 
                         if (password) {
-                            this.authForm.get('password').setValue(password);
+                            this.authForm.get('password')?.setValue(password);
 
                             this.appRdioScannerService.authenticate(password);
 
@@ -292,7 +271,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                                 this.authForm.enable();
                             }
 
-                            setTimeout(() => this.authPassword.focus());
+                            setTimeout(() => this.authFocus());
                         }
                     }
                 }
@@ -301,14 +280,14 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     if (this.call) {
                         this.callPrevious = this.call;
 
-                        this.call = null;
+                        this.call = undefined;
                     }
 
                     if (event.call) {
                         this.call = this.transformCall(event.call);
 
                         if (this.callPending === this.call.id) {
-                            this.callPending = null;
+                            this.callPending = undefined;
                         }
 
                         if (this.liveFeedOffline) {
@@ -325,7 +304,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 if ('config' in event) {
                     this.config = event.config;
 
-                    const password = this.authForm.get('password').value;
+                    const password = this.authForm.get('password')?.value;
 
                     if (password) {
                         if (window instanceof Window && window.localStorage instanceof Storage) {
@@ -343,35 +322,38 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                         this.authForm.disable();
                     }
 
-                    if (this.searchPanelOpened) {
-                        this.searchResultsPending = false;
+                    this.searchResultsPending = false;
 
+                    if (this.searchPanelOpened) {
                         this.searchCall();
+
+                    } else if (this.searchForm.disabled) {
+                        this.searchForm.enable();
                     }
                 }
 
-                if ('groups' in event) {
+                if (Array.isArray(event?.groups)) {
                     this.groups = event.groups;
                 }
 
-                if ('holdSys' in event) {
+                if (typeof event?.holdSys === 'boolean') {
                     this.holdSys = event.holdSys;
                 }
 
-                if ('holdTg' in event) {
+                if (typeof event?.holdTg === 'boolean') {
                     this.holdTg = event.holdTg;
                 }
 
-                if ('liveFeed' in event) {
+                if (typeof event?.liveFeed === 'boolean') {
                     this.liveFeedActive = event.liveFeed;
 
                     this.live.emit(this.liveFeedActive);
                 }
 
-                if ('list' in event) {
+                if (typeof event?.list === 'object') {
                     this.list = event.list;
 
-                    if (Array.isArray(this.list && this.list.results)) {
+                    if (Array.isArray(this.list.results)) {
                         this.list.results = this.list.results.map((call) => this.transformCall(call));
                     }
 
@@ -382,7 +364,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     this.searchForm.enable();
 
                     if (!this.call && this.liveFeedOffline) {
-                        if (this.searchForm.get('sort').value === -1) {
+                        if (this.searchForm.get('sort')?.value === -1) {
                             const nextCall = this.list.results[this.searchResultsLimit - 1];
 
                             if (nextCall) {
@@ -399,21 +381,21 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     }
                 }
 
-                if ('map' in event) {
+                if (typeof event?.map === 'object') {
                     this.map = event.map;
                 }
 
-                if ('pause' in event) {
+                if (typeof event?.pause === 'boolean') {
                     this.liveFeedPaused = event.pause;
                 }
 
-                if ('queue' in event) {
+                if (typeof event?.queue === 'number') {
                     if (!this.liveFeedOffline) {
                         this.callQueue = event.queue;
                     }
                 }
 
-                if ('time' in event) {
+                if (typeof event?.time === 'number') {
                     this.callTime = event.time;
 
                     this.updateDimmer();
@@ -433,10 +415,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                     if (value.system !== searchFormPreviousValue.system && value.talkgroup !== -1) {
                         searchFormPreviousValue.talkgroup = -1;
 
-                        this.searchForm.get('talkgroup').reset(searchFormPreviousValue.talkgroup);
+                        this.searchForm.get('talkgroup')?.reset(searchFormPreviousValue.talkgroup);
                     }
 
-                    this.searchFormPaginator.firstPage();
+                    if (this.searchFormPaginator instanceof MatPaginator) {
+                        this.searchFormPaginator.firstPage();
+                    }
 
                     searchFormPreviousValue = value;
 
@@ -446,14 +430,35 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             // search results paginator events
 
-            this.searchFormPaginator.page.subscribe(() => this.refreshSearchResults()),
+            this.searchFormPaginator?.page.subscribe(() => this.refreshSearchResults()) || NEVER.subscribe(),
 
         );
     }
 
+    ngOnDestroy(): void {
+        // terminate subscriptions
+
+        while (this.subscriptions.length) {
+            this.subscriptions.pop()?.unsubscribe();
+        }
+
+        // stop the realtime clock
+
+        if (this.clockRefresh) {
+            clearTimeout(this.clockRefresh);
+        }
+
+        // terminate our live event emitter
+
+        this.live.complete();
+
+        // remove visibility change listener
+        this.document.removeEventListener('visibilitychange', this.visibilityChangeListener);
+    }
+
     pause(): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else {
             this.appRdioScannerService.pause();
@@ -485,7 +490,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     replay(): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else {
             this.appRdioScannerService.replay();
@@ -506,13 +511,15 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             talkgroup: -1,
         });
 
-        this.searchFormPaginator.firstPage();
+        if (this.searchFormPaginator instanceof MatPaginator) {
+            this.searchFormPaginator.firstPage();
+        }
 
         this.searchCall();
     }
 
     searchCall(): void {
-        if (!this.config) {
+        if (!this.config || !(this.searchFormPaginator instanceof MatPaginator)) {
             return;
         }
 
@@ -558,7 +565,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
 
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else {
             this.searchPanelOpened = true;
@@ -575,16 +582,16 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         }
 
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else {
             this.selectPanelOpened = true;
         }
     }
 
-    skip(options?: any): void {
+    skip(options?: { delay?: boolean }): void {
         if (this.auth) {
-            this.authPassword.focus();
+            this.authFocus();
 
         } else if (!this.callPending) {
             this.appRdioScannerService.skip(options);
@@ -603,7 +610,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     toggleFullscreen(): void {
         if (document.fullscreenElement) {
-            const el: any = document;
+            const el: {
+                exitFullscreen?: () => void;
+                mozCancelFullScreen?: () => void;
+                msExitFullscreen?: () => void;
+                webkitExitFullscreen?: () => void;
+            } = document;
 
             if (el.exitFullscreen) {
                 el.exitFullscreen();
@@ -611,8 +623,6 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                 el.mozCancelFullScreen();
             } else if (el.msExitFullscreen) {
                 el.msExitFullscreen();
-            } else if (el.mozCancelFullScreen) {
-                el.mozCancelFullScreen();
             } else if (el.webkitExitFullscreen) {
                 el.webkitExitFullscreen();
             }
@@ -636,12 +646,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         this.appRdioScannerService.toggleGroup(label);
     }
 
-    private formatFrequency(frequency: number): string {
-        return (typeof frequency === 'number' ? frequency : 0)
+    private formatFrequency(frequency: number | undefined): string {
+        return typeof frequency === 'number' ? frequency
             .toString()
             .padStart(9, '0')
             .replace(/(\d)(?=(\d{3})+$)/g, '$1 ')
-            .concat(' Hz');
+            .concat(' Hz') : '';
     }
 
     private ngDetectChanges(): void {
@@ -659,18 +669,18 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             setTimeout(() => this.appRdioScannerService.loadAndPlay(id), 750);
         };
 
-        if (callPreviousId) {
+        if (callPreviousId && this.list && this.searchFormPaginator instanceof MatPaginator) {
             const index = this.list.results.findIndex((call) => call.id === callPreviousId);
 
             if (index !== -1) {
-                const order = this.searchForm.get('sort').value;
+                const order = this.searchForm.get('sort')?.value;
 
                 if (order === -1) {
                     if (index > 0) {
                         const nextId = this.list.results[index - 1]?.id;
 
                         if (nextId) {
-                            if (this.searchResults.value.find((call) => call.id === callPreviousId)) {
+                            if (this.searchResults.value.find((call) => call?.id === callPreviousId)) {
                                 const pageIndex = (index - 1) % this.searchResults.value.length;
 
                                 if (pageIndex === this.searchResults.value.length - 1 && this.searchFormPaginator.hasPreviousPage()) {
@@ -698,7 +708,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
                         const nextId = this.list.results[index + 1]?.id;
 
                         if (nextId) {
-                            if (this.searchResults.value.find((call) => call.id === callPreviousId)) {
+                            if (this.searchResults.value.find((call) => call?.id === callPreviousId)) {
                                 const pageIndex = (index + 1) % this.searchResults.value.length;
 
                                 if (pageIndex === 0 && this.searchFormPaginator.hasNextPage()) {
@@ -727,22 +737,24 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
     }
 
     private refreshSearchResults(): void {
-        const limit = this.searchResultsLimit;
-        const offset = this.searchResultsOffset;
-        const from = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize;
-        const to = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize + this.searchFormPaginator.pageSize - 1;
+        if (this.searchFormPaginator instanceof MatPaginator) {
+            const limit = this.searchResultsLimit;
+            const offset = this.searchResultsOffset;
+            const from = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize;
+            const to = this.searchFormPaginator.pageIndex * this.searchFormPaginator.pageSize + this.searchFormPaginator.pageSize - 1;
 
-        if (from >= offset + limit || from < offset) {
-            this.searchCall();
+            if (from >= offset + limit || from < offset) {
+                this.searchCall();
 
-        } else {
-            const calls = this.list.results.slice(from % limit, to % limit + 1);
+            } else if (this.list) {
+                const calls: Array<RdioScannerCall | null> = this.list.results.slice(from % limit, to % limit + 1);
 
-            while (calls.length < this.searchResults.value.length) {
-                calls.push(null);
+                while (calls.length < this.searchResults.value.length) {
+                    calls.push(null);
+                }
+
+                this.searchResults.next(calls);
             }
-
-            this.searchResults.next(calls);
         }
     }
 
@@ -750,11 +762,11 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
         if (id) {
             const index = this.list?.results.findIndex((call) => call.id === id);
 
-            if (index !== -1) {
-                if (this.searchForm.get('sort').value === -1) {
+            if (typeof index === 'number' && index !== -1) {
+                if (this.searchForm.get('sort')?.value === -1) {
                     this.callQueue = this.searchResultsOffset + index;
 
-                } else {
+                } else if (this.list) {
                     this.callQueue = this.list.count - this.searchResultsOffset - index - 1;
                 }
             }
@@ -773,10 +785,10 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (call && Array.isArray(this.config && this.config.systems)) {
-            call.systemData = this.config.systems.find((sys) => sys.id === call.system);
+            call.systemData = this.config?.systems.find((sys) => sys.id === call.system);
 
-            if (Array.isArray(call.systemData.talkgroups)) {
-                call.talkgroupData = call.systemData.talkgroups.find((tg) => tg.id === call.talkgroup);
+            if (Array.isArray(call.systemData?.talkgroups)) {
+                call.talkgroupData = call.systemData?.talkgroups.find((tg) => tg.id === call.talkgroup);
             }
 
             if (call.talkgroupData?.frequency) {
@@ -814,10 +826,10 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
             this.callTalkgroup = this.call.talkgroupData?.label || `${this.call.talkgroup}`;
 
-            this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call.frequency);
+            this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call?.frequency);
 
             if (Array.isArray(this.call.frequencies) && this.call.frequencies.length) {
-                const frequency = this.call.frequencies.reduce((p, v) => v.pos <= time ? v : p, {});
+                const frequency = this.call.frequencies.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
 
                 this.callError = typeof frequency.errorCount === 'number' ? `${frequency.errorCount}` : '';
 
@@ -834,12 +846,12 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             }
 
             if (Array.isArray(this.call.sources) && this.call.sources.length) {
-                const source = this.call.sources.reduce((p, v) => v.pos <= time ? v : p, {});
+                const source = this.call.sources.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
 
                 this.callTalkgroupId = `${this.call.talkgroup}`;
 
                 if (typeof source.src === 'number' && Array.isArray(this.call.systemData?.units)) {
-                    const callUnit = this.call.systemData.units?.find((u) => u.id === source.src);
+                    const callUnit = this.call?.systemData?.units?.find((u) => u.id === source.src);
 
                     this.callUnit = callUnit ? callUnit.label : `${source.src}`;
 
@@ -856,7 +868,7 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
             if (
                 this.callPrevious &&
                 this.callPrevious.id !== this.call.id &&
-                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious.id)
+                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious?.id)
             ) {
                 this.callHistory.pop();
 
@@ -868,11 +880,11 @@ export class AppRdioScannerComponent implements OnDestroy, OnInit {
 
         this.ledClass = this.call && this.liveFeedPaused ? 'on paused' : this.call ? 'on' : 'off';
 
-        if (colors.includes(this.call?.talkgroupData?.led)) {
-            this.ledClass = `${this.ledClass} ${this.call.talkgroupData.led}`;
+        if (colors.includes(this.call?.talkgroupData?.led as string)) {
+            this.ledClass = `${this.ledClass} ${this.call?.talkgroupData?.led}`;
 
-        } else if (colors.includes(this.call?.systemData?.led)) {
-            this.ledClass = `${this.ledClass} ${this.call.systemData.led}`;
+        } else if (colors.includes(this.call?.systemData?.led as string)) {
+            this.ledClass = `${this.ledClass} ${this.call?.systemData?.led}`;
         }
 
         this.ngDetectChanges();

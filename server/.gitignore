@@ -1,4 +1,5 @@
 /.env
-/config.json
-/database.sqlite
+/config.json*
+/database.sqlite*
+/dist
 /node_modules

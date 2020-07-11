@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,14 +34,10 @@ try {
     process.stdout.write(' done\n');
 
     process.stdout.write('Updating node modules...');
-    execSync('npm install', { cwd: clientPath, stdio });
+    execSync('npm ci', { cwd: clientPath, stdio });
     execSync('npm prune', { cwd: clientPath, stdio });
-    execSync('npm install', { cwd: serverPath, stdio });
+    execSync('npm ci', { cwd: serverPath, stdio });
     execSync('npm prune', { cwd: serverPath, stdio });
-    process.stdout.write(' done\n');
-
-    process.stdout.write('Migrating database...');
-    execSync('npm run migrate', { cwd: serverPath, stdio });
     process.stdout.write(' done\n');
 
     process.stdout.write('Building client app...');

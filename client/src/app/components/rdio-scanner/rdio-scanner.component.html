@@ -16,14 +16,15 @@
                         <mat-header-cell *matHeaderCellDef></mat-header-cell>
                         <mat-cell *matCellDef="let row">
                             <ng-container *ngIf="row">
-                                <ng-container *ngIf="config.allowDownload && downloadMode.checked">
+                                <ng-container *ngIf="config?.allowDownload && downloadMode.checked">
                                     <button mat-icon-button (click)="download(row.id)">
                                         <mat-icon>save_alt</mat-icon>
                                     </button>
                                 </ng-container>
                                 <ng-container
-                                    *ngIf="!liveFeedPaused && (!config.allowDownload || !downloadMode.checked)">
-                                    <button mat-icon-button (click)="row?.id === call?.id ? skip() : play(row.id)">
+                                    *ngIf="!liveFeedPaused && (!config?.allowDownload || !downloadMode.checked)">
+                                    <button mat-icon-button
+                                        (click)="row?.id === call?.id ? liveFeedOffline ? stop() : skip() : play(row.id)">
                                         <ng-container *ngIf="call && row?.id === call?.id">
                                             <mat-icon>stop</mat-icon>
                                         </ng-container>
@@ -166,7 +167,7 @@
                 <button (click)="selectPanelOpened = false" mat-icon-button>
                     <mat-icon>arrow_back</mat-icon>
                 </button>
-                <ng-container *ngIf="!config?.useGroup && config?.systems.length > 1">
+                <ng-container *ngIf="config && !config.useGroup && config.systems.length > 1">
                     <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
                         OFF
                     </button>
@@ -175,7 +176,7 @@
                     </button>
                 </ng-container>
             </mat-toolbar>
-            <ng-container *ngIf="config?.useGroup && groups?.length > 1">
+            <ng-container *ngIf="config?.useGroup && groups.length > 1">
                 <fieldset>
                     <div fxLayout="row wrap" fxLayoutAlign="space-between">
                         <button *ngFor="let group of groups" class="rdio-button" (click)="toggleGroup(group.label)"
@@ -219,7 +220,7 @@
             <div *ngIf="config?.useLed" class="rdio-status" fxLayout="row" fxLayoutAlign="end">
                 <span class="rdio-led" [ngClass]="ledClass"></span>
             </div>
-            <div class="rdio-display" [ngClass]="{ idle: !config || (config?.useDimmer && !dimmerDelay) }"
+            <div class="rdio-display" [ngClass]="{ idle: !config || (config.useDimmer && !dimmerDelay) }"
                 (dblclick)="toggleFullscreen()">
                 <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
@@ -264,28 +265,28 @@
                 </div>
                 <div class="rdio-display-row" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
-                        <span *ngIf="callFrequency !== ''">
-                            F: {{ callFrequency }}
+                        <span>
+                            F: {{ callFrequency || 0 }}
                         </span>
                     </div>
                     <div>
-                        <span *ngIf="callTalkgroupId !== ''">
-                            TGID: {{ callTalkgroupId }}
+                        <span>
+                            TGID: {{ callTalkgroupId || 0 }}
                         </span>
                     </div>
                 </div>
                 <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
-                        <span *ngIf="callError !== ''">
-                            E: {{ callError }}
+                        <span>
+                            E: {{ callError || 0 }}
                         </span>
-                        <span *ngIf="callSpike !== ''">
-                            S: {{ callSpike }}
+                        <span>
+                            S: {{ callSpike || 0 }}
                         </span>
                     </div>
                     <div>
-                        <span *ngIf="callUnit !== ''">
-                            UID: {{ callUnit }}
+                        <span>
+                            UID: {{ callUnit || 0 }}
                         </span>
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,10 @@ const EventEmitter = require('events');
 
 const { Op } = require('sequelize');
 
+const uuid = require('uuid');
+
+const systemsDefault = require('./systems-default');
+
 const maxAuthenticationTries = 3;
 
 const wsCommand = {
@@ -36,17 +40,109 @@ const wsCommand = {
     pin: 'PIN',
 };
 
-class Controller {
+class Controller extends EventEmitter {
     get isAccessRestricted() {
-        return this.app.config.access !== null && this.app.config.access !== undefined;
+        return this.config.access !== null;
     }
 
-    constructor(app = {}) {
-        this.app = app;
+    constructor(ctx = {}) {
+        super();
 
-        this.eventEmitter = new EventEmitter();
+        this.setMaxListeners(0);
 
-        this.eventEmitter.setMaxListeners(0);
+        this.config = ctx.config;
+
+        this.config.access = this.config.access !== undefined ? this.config.access : null;
+
+        this.config.allowDownload = typeof this.config.allowDownload === 'boolean' ? this.config.allowDownload : true;
+
+        this.config.apiKeys = this.config.apiKeys !== undefined ? this.config.apiKeys : uuid.v4();
+
+        this.config.disableAudioConversion = typeof this.config.disableAudioConversion === 'boolean' ? this.config.disableAudioConversion : false;
+
+        this.config.pruneDays = typeof this.config.pruneDays === 'number' ? this.config.pruneDays : 7;
+
+        this.config.systems = Array.isArray(this.config.systems) ? this.config.systems : systemsDefault;
+
+        this.config.useDimmer = typeof this.config.useDimmer === 'boolean' ? this.config.useDimmer : true;
+
+        this.config.useGroup = typeof this.config.useGroup === 'boolean' ? this.config.useGroup : true;
+
+        this.config.useLed = typeof this.config.useLed === 'boolean' ? this.config.useLed : true;
+
+        this.config.systems.forEach((system) => {
+            if (system === null || typeof system !== 'object') {
+                console.error(`Config: Unknown system definition: ${JSON.stringify(system)}`);
+
+                return;
+            }
+
+            if (typeof system.id !== 'number') {
+                console.error(`Config: System.id ${JSON.stringify(system.id)} not a number`);
+            }
+
+            if (typeof system.label !== 'string' || !system.label.length) {
+                console.error(`Config: System ${system.id}, label not a string: ${JSON.stringify(system.label)}`);
+            }
+
+            if (!Array.isArray(system.talkgroups)) {
+                system.talkgroups = [];
+            }
+
+            if (!system.talkgroups.length) {
+                console.error(`Config: System ${system.id}, no talkgroups`);
+            }
+
+            system.talkgroups.forEach((talkgroup) => {
+                if (talkgroup === null || typeof talkgroup !== 'object') {
+                    console.error(`Config: System ${system.id}, unknown talkgroup definition: ${JSON.stringify(talkgroup)}`);
+
+                    return;
+                }
+
+                if (typeof talkgroup.id !== 'number') {
+                    console.error(`Config: System ${system.id}, talkgroup.id not a number: ${JSON.stringify(talkgroup.id)}`);
+                }
+
+                if (this.config.useGroup && typeof talkgroup.group !== 'string' || !talkgroup.group.length) {
+                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, group not a string: ${JSON.stringify(talkgroup.group)}`);
+                }
+
+                if (typeof talkgroup.label !== 'string' || !talkgroup.label.length) {
+                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, label not a string: ${JSON.stringify(talkgroup.label)}`);
+                }
+
+                if (typeof talkgroup.name !== 'string' || !talkgroup.name.length) {
+                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, name not a string: ${JSON.stringify(talkgroup.name)}`);
+                }
+
+                if (typeof talkgroup.tag !== 'string' || !talkgroup.tag.length) {
+                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, tag not a string: ${JSON.stringify(talkgroup.tag)}`);
+                }
+            });
+
+            if (!Array.isArray(system.units)) {
+                system.units = [];
+            }
+
+            system.units.forEach((unit) => {
+                if (unit === null || typeof unit !== 'object') {
+                    console.error(`Config: System ${system.id}, unknown unit definition: ${JSON.stringify(unit)}`);
+
+                    return;
+                }
+
+                if (typeof unit.id !== 'number') {
+                    console.error(`Config: System ${system.id}, unit.id not a number: ${JSON.stringify(unit.id)}`);
+                }
+
+                if (typeof unit.label !== 'string' || !unit.label.length) {
+                    console.error(`Config: System ${system.id}, unit ${unit.id}, label not a string: ${JSON.stringify(unit.label)}`);
+                }
+            });
+        })
+
+        this.models = ctx.models;
 
         this.ffmpeg = !spawnSync('ffmpeg', ['-version']).error;
 
@@ -54,21 +150,18 @@ class Controller {
             console.warn('ffmpeg is missing, no audio conversion possible.');
         }
 
-        if (this.app.config.pruneDays > 0) {
+        if (this.config.pruneDays > 0) {
             this.pruneInterval = setInterval(() => {
                 const now = new Date();
 
-                this.app.models.call.destroy({
+                this.models.call.destroy({
                     where: {
                         dateTime: {
-                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.app.config.pruneDays),
+                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.config.pruneDays),
                         },
                     },
                 });
             }, 15 * 60 * 1000);
-
-        } else {
-            this.pruneInterval = undefined;
         }
     }
 
@@ -88,19 +181,40 @@ class Controller {
             }
         }
 
-        return parse(this.app.config.access);
+        return parse(this.config.access);
     }
 
     convertCallAudio(call = {}) {
         return new Promise((resolve, reject) => {
             if (!this.ffmpeg) {
-                return reject('No ffmpeg available');
+                reject('No ffmpeg available');
+
+                return;
             }
 
             if (Buffer.isBuffer(call && call.audio)) {
+                const metadata = [];
+
+                const system = this.config.systems.find((sys) => sys.id === call.system);
+
+                if (system && Array.isArray(system.talkgroups)) {
+                    const talkgroup = system.talkgroups.find((tg) => tg.id === call.talkgroup);
+
+                    if (talkgroup) {
+                        metadata.push(...[
+                            '-metadata', `album="${talkgroup.label}"`,
+                            '-metadata', `artist="${system.label}"`,
+                            '-metadata', `date="${call.dateTime}"`,
+                            '-metadata', `genre="${talkgroup.tag}"`,
+                            '-metadata', `title="${talkgroup.name}"`,
+                        ]);
+                    }
+                }
+
                 const proc = spawn('ffmpeg', [
                     '-i',
                     '-',
+                    ...metadata,
                     '-c:a',
                     'aac',
                     '-b:a',
@@ -152,7 +266,7 @@ class Controller {
             ],
         } : { id };
 
-        const call = await this.app.models.call.findOne({ where });
+        const call = await this.models.call.findOne({ where });
 
         return call || null;
     }
@@ -209,10 +323,10 @@ class Controller {
         } : where1;
 
         const [dateStartQuery, dateStopQuery, count, results] = await Promise.all([
-            await this.app.models.call.findOne({ attributes: ['dateTime'], order: [['dateTime', 'ASC']], where: where1 }),
-            await this.app.models.call.findOne({ attributes: ['dateTime'], order: [['dateTime', 'DESC']], where: where1 }),
-            await this.app.models.call.count({ where: where2 }),
-            await this.app.models.call.findAll({ attributes, limit, offset, order, where: where2 }),
+            await this.models.call.findOne({ attributes: ['dateTime'], order: [['dateTime', 'ASC']], where: where1 }),
+            await this.models.call.findOne({ attributes: ['dateTime'], order: [['dateTime', 'DESC']], where: where1 }),
+            await this.models.call.count({ where: where2 }),
+            await this.models.call.findAll({ attributes, limit, offset, order, where: where2 }),
         ]);
 
         const dateStart = dateStartQuery && dateStartQuery.get('dateTime');
@@ -224,20 +338,20 @@ class Controller {
 
     async getConfig(scope) {
         return Object.assign({}, this.getOptions(), {
-            allowDownload: this.app.config.allowDownload,
+            allowDownload: this.config.allowDownload,
             systems: await this.getSystems(scope),
         });
     }
 
     getOptions() {
         return {
-            useDimmer: this.app.config.useDimmer,
-            useGroup: this.app.config.useGroup,
-            useLed: this.app.config.useLed,
+            useDimmer: this.config.useDimmer,
+            useGroup: this.config.useGroup,
+            useLed: this.config.useLed,
         };
     }
 
-    getScope(token, store = this.app.config.access) {
+    getScope(token, store = this.config.access) {
         const parse = (record, first = true) => {
             const parseSystem = (system, first = true) => {
                 const parseTalkgroup = (talkgroup, first = true) => {
@@ -259,7 +373,7 @@ class Controller {
                     return system.map((sys) => parseSystem(sys, false)).filter((sys) => sys.length);
 
                 } else if (system !== null && typeof system === 'object' && typeof system.id === 'number') {
-                    if (this.app.config.systems.find((sys) => sys.id === system.id)) {
+                    if (this.config.systems.find((sys) => sys.id === system.id)) {
                         const talkgroups = parseTalkgroup(system.talkgroups);
 
                         if (talkgroups.length) {
@@ -274,8 +388,8 @@ class Controller {
                     }
 
                 } else if (typeof system === 'number') {
-                    if (this.app.config.systems.find((sys) => sys.id === system)) {
-                        const systems = parseSystem(this.app.config.systems.find((sys) => sys.id === system), false);
+                    if (this.config.systems.find((sys) => sys.id === system)) {
+                        const systems = parseSystem(this.config.systems.find((sys) => sys.id === system), false);
 
                         return first ? [systems] : systems;
 
@@ -284,7 +398,7 @@ class Controller {
                     }
 
                 } else if (system === '*') {
-                    return parseSystem(this.app.config.systems);
+                    return parseSystem(this.config.systems);
 
                 } else {
                     return [];
@@ -292,17 +406,18 @@ class Controller {
             };
 
             if (record === null || record === undefined) {
-                return this.isAccessRestricted ? [] : parseSystem(this.app.config.systems);
+                return this.isAccessRestricted ? [] : parseSystem(this.config.systems);
 
             } else if (Array.isArray(record)) {
                 return parse(record.find((acc) => acc === token || acc.code === token || acc.key === token));
 
             } else if (record !== null && typeof record === 'object' && (record.code === token || record.key === token)) {
                 const systems = parseSystem(record.systems);
+
                 return first ? systems : systems;
 
             } else if (record === token) {
-                return parseSystem(this.app.config.systems);
+                return parseSystem(this.config.systems);
 
             } else {
                 return [];
@@ -318,7 +433,7 @@ class Controller {
 
     async getSystems(scope = {}) {
         if (scope !== null && typeof scope === 'object') {
-            const systems = await this.app.models.system.findAll({
+            const systems = await this.models.system.findAll({
                 where: {
                     id: {
                         [Op.in]: Object.keys(scope),
@@ -329,14 +444,14 @@ class Controller {
             return systems.map((system) => (system.talkgroups = system.talkgroups.filter((tg) => scope[system.id].includes(tg.id))) && system);
 
         } else {
-            const systems = await this.app.models.system.findAll();
+            const systems = await this.models.system.findAll();
 
             return systems;
         }
     }
 
     async importCall(call = {}) {
-        const system = this.app.config.systems.find((sys) => sys.id == call.system);
+        const system = this.config.systems.find((sys) => sys.id == call.system);
 
         const talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => tg.id == call.talkgroup) : null;
 
@@ -346,7 +461,7 @@ class Controller {
             return;
         }
 
-        if (call.audioType !== 'audio/aac') {
+        if (!this.config.disableAudioConversion && call.audioType !== 'audio/aac') {
             try {
                 call = await this.convertCallAudio(call);
 
@@ -355,13 +470,11 @@ class Controller {
             }
         }
 
-        const newCall = await this.app.models.call.create(call);
+        const newCall = await this.models.call.create(call);
 
         console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} Success`);
 
-        this.eventEmitter.emit('call', newCall);
-
-        this.app.downstream.exportCall(call);
+        this.emit('call', newCall);
     }
 
     async importTrunkRecorder(audio, audioName, audioType, system, meta) {
@@ -438,7 +551,7 @@ class Controller {
 
                     if (allOff) {
                         if (typeof socket.liveFeed === 'function') {
-                            this.eventEmitter.removeListener('call', socket.liveFeed);
+                            this.removeListener('call', socket.liveFeed);
                         }
 
                         socket.liveFeed = undefined;
@@ -447,7 +560,7 @@ class Controller {
 
                     } else {
                         if (typeof socket.liveFeed === 'function') {
-                            this.eventEmitter.removeListener('call', socket.liveFeed);
+                            this.removeListener('call', socket.liveFeed);
                         }
 
                         socket.liveFeed = (call) => {
@@ -461,20 +574,20 @@ class Controller {
                                 }
 
                             } else {
-                                this.eventEmitter.removeListener('call', socket.liveFeed);
+                                this.removeListener('call', socket.liveFeed);
 
                                 socket.liveFeed = undefined;
                             }
                         };
 
-                        this.eventEmitter.addListener('call', socket.liveFeed);
+                        this.addListener('call', socket.liveFeed);
 
                         returnStatus = true;
                     }
 
                 } else {
                     if (typeof socket.liveFeed === 'function') {
-                        this.eventEmitter.removeListener('call', socket.liveFeed);
+                        this.removeListener('call', socket.liveFeed);
                     }
 
                     socket.liveFeed = undefined;
@@ -528,7 +641,7 @@ class Controller {
     }
 
     validateApiKey(apiKey, system, talkgroup) {
-        const scope = this.getScope(apiKey, this.app.config.apiKeys);
+        const scope = this.getScope(apiKey, this.config.apiKeys);
 
         return Array.isArray(scope[system]) && scope[system].includes(talkgroup);
     }

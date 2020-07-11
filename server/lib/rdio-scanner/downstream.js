@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +19,39 @@
 
 'use strict';
 
+const EventEmitter = require('events');
 const FormData = require('form-data');
 const url = require('url');
 
 class Downstream {
-    constructor(app = {}) {
-        this.app = app;
+    constructor(ctx = {}) {
+        if (!Array.isArray(ctx.config.downstreams)) {
+            ctx.config.downstreams = [];
+        }
+
+        this.config = ctx.config.downstreams;
+
+        this.config.forEach((downstream) => {
+            if (typeof downstream.apiKey !== 'string' || !downstream.apiKey.length) {
+                console.error(`Config: no dirWatch.apiKey defined`);
+            }
+
+            if (typeof downstream.disabled !== 'boolean') {
+                downstream.disabled = false;
+            }
+
+            if (downstream.systems === undefined) {
+                downstream.systems = '*';
+            }
+
+            if (typeof downstream.url !== 'string' || !downstream.url.length) {
+                console.error(`Config: no dirWatch.url defined`)
+            }
+        });
+
+        if (ctx.controller instanceof EventEmitter) {
+            ctx.controller.on('call', (call) => this.exportCall(call));
+        }
     }
 
     exportCall(call) {
@@ -53,12 +80,19 @@ class Downstream {
             } else if (typeof system === 'number') {
                 return system === call.system;
 
-            } else {
+            } else if (typeof system === 'string') {
                 return system === '*';
+
+            } else {
+                return true;
             }
         };
 
-        this.app.config.downstreams.forEach((downstream) => {
+        this.config.forEach((downstream) => {
+            if (typeof downstream.disabled === 'boolean' && downstream.disabled) {
+                return;
+            }
+
             if (typeof downstream.apiKey !== 'string' || !downstream.apiKey.length) {
                 return;
             }
@@ -89,8 +123,15 @@ class Downstream {
         });
         form.append('dateTime', call.dateTime.toJSON());
         form.append('frequencies', JSON.stringify(call.frequencies));
-        form.append('frequency', call.frequency);
-        form.append('source', call.source || '');
+
+        if (typeof call.frequency === 'number') {
+            form.append('frequency', call.frequency);
+        }
+
+        if (typeof call.source === 'number') {
+            form.append('source', call.source);
+        }
+
         form.append('sources', JSON.stringify(call.sources));
         form.append('system', call.system);
         form.append('talkgroup', call.talkgroup);
@@ -98,9 +139,10 @@ class Downstream {
         form.submit(apiUrl, (error) => {
             if (error) {
                 console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url} ${error.message}`);
-            }
 
-            console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url} Success`)
+            } else {
+                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url} Success`)
+            }
         });
     }
 }

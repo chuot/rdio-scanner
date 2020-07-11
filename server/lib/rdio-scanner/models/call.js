@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,17 +23,17 @@ const { DataTypes, Model } = require('sequelize');
 
 class RdioScannerCall extends Model { }
 
-function rdioScannerCallFactory(app) {
-    RdioScannerCall.init(rdioScannerCallFactory.Schema, {
+function rdioScannerCallFactory(ctx = {}) {
+    RdioScannerCall.init(rdioScannerCallFactory.schema, {
         modelName: 'rdioScannerCall',
-        sequelize: app.sequelize,
+        sequelize: ctx.sequelize,
         timestamps: false,
     });
 
     return RdioScannerCall;
 }
 
-rdioScannerCallFactory.Schema = {
+rdioScannerCallFactory.schema = {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,

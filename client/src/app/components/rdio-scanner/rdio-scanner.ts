@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,19 +27,19 @@ export interface RdioScannerAvoidOptions {
 
 export interface RdioScannerCall {
     audio?: {
-        type?: 'Buffer';
-        data?: number[];
+        type: 'Buffer';
+        data: number[];
     };
     audioName?: string;
     audioType?: string;
-    dateTime?: Date;
+    dateTime: Date;
     frequencies?: RdioScannerCallFrequency[];
     frequency?: number;
-    id?: string;
+    id: string;
     source?: number;
     sources?: RdioScannerCallSource[];
-    system?: number;
-    talkgroup?: number;
+    system: number;
+    talkgroup: number;
     talkgroupData?: RdioScannerTalkgroup;
     systemData?: RdioScannerSystem;
 }
@@ -58,11 +58,11 @@ export interface RdioScannerCallSource {
 }
 
 export interface RdioScannerConfig {
-    allowDownload?: boolean;
+    allowDownload: boolean;
     systems: RdioScannerSystem[];
-    useDimmer?: boolean;
-    useGroup?: boolean;
-    useLed?: boolean;
+    useDimmer: boolean;
+    useGroup: boolean;
+    useLed: boolean;
 }
 
 export interface RdioScannerEvent {
@@ -114,24 +114,24 @@ export interface RdioScannerSearchOptions {
 }
 
 export interface RdioScannerSystem {
-    id?: number;
-    label?: string;
+    id: number;
+    label: string;
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
-    talkgroups?: RdioScannerTalkgroup[];
+    talkgroups: RdioScannerTalkgroup[];
     units?: RdioScannerUnit[];
 }
 
 export interface RdioScannerTalkgroup {
     frequency?: number;
-    group?: string;
-    id?: number;
-    label?: string;
+    group: string;
+    id: number;
+    label: string;
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
-    name?: string;
-    tag?: string;
+    name: string;
+    tag: string;
 }
 
 export interface RdioScannerUnit {
-    id?: number;
-    label?: string;
+    id: number;
+    label: string;
 }

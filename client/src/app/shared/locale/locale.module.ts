@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- *  Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2020 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ const LOCALE_ID = 'en-CA'; // Because we need dates as yyyy-mm-dd
 
 @NgModule()
 export class AppLocaleModule {
-    static forRoot(): ModuleWithProviders {
+    static forRoot(): ModuleWithProviders<AppLocaleModule> {
         return {
             ngModule: AppLocaleModule,
             providers: [
