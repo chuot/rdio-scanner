@@ -722,10 +722,20 @@ export class AppRdioScannerService implements OnDestroy {
             this.webSocket.close();
 
             this.webSocket = undefined;
-
-            clearTimeout(this.webSocketTimeout);
-            clearInterval(this.webSocketInterval);
         }
+
+        if (this.webSocketTimeout) {
+            clearTimeout(this.webSocketTimeout);
+
+            this.webSocketTimeout = undefined;
+        }
+
+        if (this.webSocketInterval) {
+            clearInterval(this.webSocketInterval);
+
+            this.webSocketInterval = undefined;
+        }
+
     }
 
     private webSocketKeepAlive(): void {
@@ -751,11 +761,7 @@ export class AppRdioScannerService implements OnDestroy {
 
         this.webSocket = new WebSocket(webSocketUrl);
 
-        this.webSocket.onclose = (ev: CloseEvent) => {
-            if (ev.code !== 1000) {
-                this.webSocketReconnect();
-            }
-        };
+        this.webSocket.onclose = () => this.webSocketReconnect();
 
         this.webSocket.onerror = () => { };
 
