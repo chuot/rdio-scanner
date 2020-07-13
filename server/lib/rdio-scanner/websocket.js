@@ -35,11 +35,12 @@ class WebSocket {
                     ws.terminate();
 
                     this.logClientsCount();
+
+                } else {
+                    ws.isAlive = false;
+
+                    ws.ping();
                 }
-
-                ws.isAlive = false;
-
-                ws.ping();
             });
         }, 60 * 1000);
 
