@@ -625,7 +625,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             if (el.requestFullscreen) {
                 el.requestFullscreen();
             } else if (el.mozRequestFullScreen) {
-                el.mozRequestFullscreen();
+                el.mozRequestFullScreen();
             } else if (el.msRequestFullscreen) {
                 el.msRequestFullscreen();
             } else if (el.webkitRequestFullscreen) {
