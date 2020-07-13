@@ -322,7 +322,7 @@ dirWatch: {
 - **delay** - Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a timeout value in *milliseconds* for the audio file to settle before ingesting it.
 - **deleteAfter** - You may want the audio file to be deleted after being ingested. If this value is *true*, all pre-existing audio files will be ingested and deleted as soon as [Rdio Scanner](https://github.com/chuot/rdio-scanner) starts. When this parameter is *false*, pre-existing audio files are neither ingested nor deleted.
 - **directory** - Absolute or relatives to [Rdio Scanner](https://github.com/chuot/rdio-scanner)'s. Path of the directory to be monitored. **This value must be unique**.
-- **extension** - The audio call extension to monitor without the period. Ex.: "Mp3", "wav".
+- **extension** - The audio call extension to monitor without the period. Ex.: "mp3", "wav".
 - **frequency** - You may want to fake the frequency which will be displayed on *Rdio Scanner*. Let say that you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
 - **frequency** - You may want to simulate the frequency that will be displayed. Say you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
 - **mask** - Some metadata can be extracted from the file name of the audio file using specific META tags. Here is the list:
