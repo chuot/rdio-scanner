@@ -1,6 +1,6 @@
 {
-  "name": "rdio-scanner",
-  "short_name": "rdio-scanner",
+  "name": "Rdio Scanner",
+  "short_name": "Rdio Scanner",
   "theme_color": "#1976d2",
   "background_color": "#fafafa",
   "display": "standalone",
