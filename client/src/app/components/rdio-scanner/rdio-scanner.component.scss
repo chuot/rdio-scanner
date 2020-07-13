@@ -8,10 +8,6 @@
   justify-content: center;
 }
 
-* {
-  user-select: none;
-}
-
 :host,
 .mat-sidenav,
 .mat-sidenav-container {
@@ -49,7 +45,6 @@
   position: relative;
   text-overflow: ellipsis;
   text-shadow: 0 0 4px rgb(0, 0, 0);
-  user-select: none;
   white-space: nowrap;
   width: auto;
 
@@ -287,6 +282,7 @@
 .rdio-search,
 .rdio-select {
   min-width: 370px;
+  user-select: none;
 }
 
 .rdio-main {
@@ -336,7 +332,6 @@
 }
 
 .rdio-search-results {
-
   .mat-cell,
   .mat-header-cell {
     &:first-of-type {

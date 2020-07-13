@@ -785,7 +785,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         this.clockRefresh = setTimeout(() => this.syncClock(), (60 - this.clock.getSeconds()) * 1000);
 
         this.ngDetectChanges();
-    };
+    }
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (call && Array.isArray(this.config && this.config.systems)) {
