@@ -129,7 +129,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
     private subscriptions: Subscription[] = [];
 
-    private visibilityChangeListener = () => this.ngDetectChanges();
+    private visibilityChangeListener = () => this.syncClock();
 
     constructor(
         private appRdioScannerService: AppRdioScannerService,
@@ -224,15 +224,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
         // initialize the realtime clock
 
-        const setClock = () => {
-            this.clock = new Date();
-
-            this.clockRefresh = setTimeout(() => setClock(), (60 - this.clock.getSeconds()) * 1000);
-
-            this.ngDetectChanges();
-        };
-
-        setClock();
+        this.syncClock();
 
         // subscribe to events
 
@@ -782,6 +774,18 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.appRdioScannerService.stop();
         }
     }
+
+    private syncClock(): void {
+        this.clock = new Date();
+
+        if (this.clockRefresh) {
+            clearTimeout(this.clockRefresh);
+        }
+
+        this.clockRefresh = setTimeout(() => this.syncClock(), (60 - this.clock.getSeconds()) * 1000);
+
+        this.ngDetectChanges();
+    };
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (call && Array.isArray(this.config && this.config.systems)) {
