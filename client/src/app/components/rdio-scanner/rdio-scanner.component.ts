@@ -18,19 +18,7 @@
  */
 
 import { DOCUMENT } from '@angular/common';
-import {
-    AfterViewInit,
-    ChangeDetectionStrategy,
-    ChangeDetectorRef,
-    Component,
-    ElementRef,
-    EventEmitter,
-    HostListener,
-    Inject,
-    OnDestroy,
-    Output,
-    ViewChild,
-} from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, HostListener, Inject, OnDestroy, Output, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
@@ -52,7 +40,6 @@ import { AppRdioScannerService } from './rdio-scanner.service';
 const LOCAL_STORAGE_KEY = AppRdioScannerService.LOCAL_STORAGE_KEY + '-pin';
 
 @Component({
-    changeDetection: ChangeDetectionStrategy.OnPush,
     providers: [AppRdioScannerService],
     selector: 'app-rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
