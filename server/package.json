@@ -1,7 +1,7 @@
 {
     "author": "Chrystian Huot <chrystian.huot@saubeo.solutions>",
     "dependencies": {
-        "chokidar": "^3.4.0",
+        "chokidar": "^3.4.1",
         "cors": "^2.8.5",
         "dotenv": "^8.2.0",
         "express": "^4.17.1",
@@ -13,7 +13,7 @@
         "mysql2": "^2.1.0",
         "nodemon": "^2.0.4",
         "pg": "^8.3.0",
-        "sequelize": "^6.3.0",
+        "sequelize": "^6.3.3",
         "sqlite3": "^5.0.0",
         "umzug": "^2.3.0",
         "uuid": "^8.2.0",
@@ -23,7 +23,7 @@
         "eslint": "^7.4.0",
         "webpack": "^4.43.0",
         "webpack-cli": "^3.3.12",
-        "webpack-node-externals": "^2.3.0"
+        "webpack-node-externals": "^2.5.0"
     },
     "license": "LICENSE",
     "main": "index.js",
