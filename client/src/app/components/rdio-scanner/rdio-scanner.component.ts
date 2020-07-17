@@ -23,7 +23,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject, NEVER, Subscription } from 'rxjs';
-import { version } from '../../../../package.json';
+import { name as appName, version } from '../../../../package.json';
 import {
     RdioScannerAvoidOptions,
     RdioScannerCall,
@@ -66,7 +66,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     callTag = 'Tag';
     callTalkgroup = 'Talkgroup';
     callTalkgroupId = '0';
-    callTalkgroupName = `Rdio Scanner v${version.replace(/^(\d+\.\d+).*$/, '$1')}`;
+    callTalkgroupName = `Rdio Scanner ${appName === 'rdio-scanner-client' ? 'v'.concat(version.replace(/^(\d+\.\d+).*$/, '$1')) : ''}`;
     callTime = 0;
     callUnit = '0';
 
