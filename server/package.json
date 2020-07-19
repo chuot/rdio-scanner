@@ -20,7 +20,7 @@
         "ws": "^7.3.1"
     },
     "devDependencies": {
-        "eslint": "^7.4.0",
+        "eslint": "^7.5.0",
         "webpack": "^4.43.0",
         "webpack-cli": "^3.3.12",
         "webpack-node-externals": "^2.5.0"
