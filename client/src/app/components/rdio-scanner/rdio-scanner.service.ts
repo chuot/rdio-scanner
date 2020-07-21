@@ -84,7 +84,6 @@ export class AppRdioScannerService implements OnDestroy {
     private skipDelay: number | undefined;
 
     private webSocket: WebSocket | undefined;
-    private webSocketHeartBeat = 30 * 1000;
     private webSocketInterval: number | undefined;
     private webSocketTimeout: number | undefined;
     private webSocketPendingMessage = false;
@@ -632,8 +631,6 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         if (Array.isArray(message)) {
-            this.webSocketKeepAlive();
-
             this.webSocketPendingMessage = false;
 
             switch (message[0]) {
@@ -735,25 +732,6 @@ export class AppRdioScannerService implements OnDestroy {
 
             this.webSocketInterval = undefined;
         }
-
-    }
-
-    private webSocketKeepAlive(): void {
-        if (this.webSocketTimeout) {
-            clearTimeout(this.webSocketTimeout);
-
-            this.webSocketTimeout = undefined;
-        }
-
-        if (this.webSocketInterval) {
-            clearInterval(this.webSocketInterval);
-        }
-
-        this.webSocketInterval = setInterval(() => {
-            this.webSocketSend(WebSocketCommand.Nop);
-
-            this.webSocketTimeout = setTimeout(() => this.webSocketReconnect(), 10 * 1000);
-        }, this.webSocketHeartBeat);
     }
 
     private webSocketOpen(): void {
@@ -769,8 +747,6 @@ export class AppRdioScannerService implements OnDestroy {
             if (this.webSocket instanceof WebSocket) {
                 this.webSocket.onmessage = (ev: MessageEvent) => this.messageParser(ev.data);
             }
-
-            this.webSocketKeepAlive();
 
             this.webSocketSend(WebSocketCommand.Config);
         };
