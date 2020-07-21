@@ -30,7 +30,7 @@
     "name": "rdio-scanner-client",
     "private": true,
     "scripts": {
-        "build": "ng build --prod",
+        "build": "ng build --base-href ./ --prod",
         "start": "ng serve"
     },
     "version": "4.3.0"
