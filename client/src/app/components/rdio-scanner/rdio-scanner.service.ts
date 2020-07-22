@@ -607,13 +607,26 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private liveFeedStart(): void {
+        this.liveFeedActive = true;
+
+        this.event.emit({ liveFeed: true });
+
         this.webSocketSend(WebSocketCommand.LiveFeedMap, this.liveFeedMap);
     }
 
     private liveFeedStop(): void {
-        this.webSocketSend(WebSocketCommand.LiveFeedMap, null);
+        this.liveFeedActive = false;
+
+        this.callQueue.splice(0, this.callQueue.length);
+
+        this.event.emit({
+            liveFeed: false,
+            queue: 0,
+        });
 
         this.stop();
+
+        this.webSocketSend(WebSocketCommand.LiveFeedMap, null);
     }
 
     private liveFeedStore(): void {
@@ -638,10 +651,14 @@ export class AppRdioScannerService implements OnDestroy {
                     switch (message[2]) {
                         case WebSocketCallFlag.Download:
                             this.download(message[1]);
+
                             break;
 
                         case WebSocketCallFlag.Play:
-                            this.play(message[1]);
+                            if (this.liveFeedActive) {
+                                this.play(message[1]);
+                            }
+
                             break;
 
                         default:
@@ -676,23 +693,6 @@ export class AppRdioScannerService implements OnDestroy {
 
                 case WebSocketCommand.ListCall:
                     this.event.emit({ list: message[1] });
-
-                    break;
-
-                case WebSocketCommand.LiveFeedMap:
-                    this.liveFeedActive = message[1];
-
-                    if (this.liveFeedActive) {
-                        this.event.emit({ liveFeed: this.liveFeedActive });
-
-                    } else {
-                        this.callQueue.splice(0, this.callQueue.length);
-
-                        this.event.emit({
-                            liveFeed: this.liveFeedActive,
-                            queue: this.callQueue.length,
-                        });
-                    }
 
                     break;
 
