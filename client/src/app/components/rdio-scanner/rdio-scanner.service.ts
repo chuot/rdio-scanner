@@ -379,9 +379,10 @@ export class AppRdioScannerService implements OnDestroy {
 
             if (this.call || this.liveFeedPaused) {
                 this.event.emit({ queue: this.callQueue.length });
-            }
 
-            this.play();
+            } else {
+                this.play();
+            }
         }
     }
 
