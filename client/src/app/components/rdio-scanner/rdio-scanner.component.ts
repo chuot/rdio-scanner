@@ -22,7 +22,7 @@ import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatPaginator } from '@angular/material/paginator';
-import { BehaviorSubject, NEVER, Subscription } from 'rxjs';
+import { BehaviorSubject, NEVER, Subscription, timer } from 'rxjs';
 import { name as appName, version } from '../../../../package.json';
 import {
     RdioScannerAvoidOptions,
@@ -72,7 +72,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
     clock = new Date();
 
-    dimmerDelay: number | undefined;
+    dimmer = false;
 
     config: RdioScannerConfig | undefined;
 
@@ -107,7 +107,9 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
     @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
-    private clockRefresh: number | undefined;
+    private clockTimer: Subscription | undefined;
+
+    private dimmerTimer: Subscription | undefined;
 
     @ViewChild(MatPaginator, { read: MatPaginator }) private searchFormPaginator: MatPaginator | undefined;
 
@@ -206,34 +208,28 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
     ngAfterViewInit(): void {
         // Refresh display on visibility change
-
         this.document.addEventListener('visibilitychange', this.visibilityChangeListener);
 
-        // initialize the realtime clock
-
+        // start clock sync
         this.syncClock();
 
         // subscribe to events
-
         let searchFormPreviousValue = this.searchForm.value;
 
         this.subscriptions.push(
 
             // service events
-
             this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => {
                 if ('auth' in event) {
                     if (event.auth) {
                         let password: string | null = null;
 
-                        if (window instanceof Window && window.localStorage instanceof Storage) {
-                            password = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+                        password = window?.localStorage?.getItem(LOCAL_STORAGE_KEY);
 
-                            if (password) {
-                                password = atob(password);
+                        if (password) {
+                            password = atob(password);
 
-                                window.localStorage.removeItem(LOCAL_STORAGE_KEY);
-                            }
+                            window.localStorage.removeItem(LOCAL_STORAGE_KEY);
                         }
 
                         if (password) {
@@ -249,8 +245,6 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
                             if (this.authForm.disabled) {
                                 this.authForm.enable();
                             }
-
-                            setTimeout(() => this.authFocus());
                         }
                     }
                 }
@@ -265,9 +259,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
                     if (event.call) {
                         this.call = this.transformCall(event.call);
 
-                        if (this.callPending === this.call.id) {
-                            this.callPending = undefined;
-                        }
+                        this.callPending = undefined;
 
                         if (this.liveFeedOffline) {
                             this.setOfflineQueueCount(this.call.id);
@@ -286,9 +278,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
                     const password = this.authForm.get('password')?.value;
 
                     if (password) {
-                        if (window instanceof Window && window.localStorage instanceof Storage) {
-                            window.localStorage.setItem(LOCAL_STORAGE_KEY, btoa(password));
-                        }
+                        window?.localStorage?.setItem(LOCAL_STORAGE_KEY, btoa(password));
 
                         this.authForm.reset();
                     }
@@ -366,6 +356,10 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
                 if (typeof event?.pause === 'boolean') {
                     this.liveFeedPaused = event.pause;
+
+                    if (!this.liveFeedPaused && this.liveFeedOffline) {
+                        this.playNextCall();
+                    }
                 }
 
                 if (typeof event?.queue === 'number') {
@@ -384,7 +378,6 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             }),
 
             // search form events
-
             this.searchForm.valueChanges.subscribe((value) => {
                 if (!Object.keys(value).every((key) => value[key] === searchFormPreviousValue[key])) {
                     if (this.liveFeedOffline) {
@@ -408,27 +401,21 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             }),
 
             // search results paginator events
-
             this.searchFormPaginator?.page.subscribe(() => this.refreshSearchResults()) || NEVER.subscribe(),
 
         );
     }
 
     ngOnDestroy(): void {
-        // terminate subscriptions
+        // terminate clockTimer
+        this.clockTimer?.unsubscribe();
 
+        // terminate subscriptions
         while (this.subscriptions.length) {
             this.subscriptions.pop()?.unsubscribe();
         }
 
-        // stop the realtime clock
-
-        if (this.clockRefresh) {
-            clearTimeout(this.clockRefresh);
-        }
-
         // terminate our live event emitter
-
         this.live.complete();
 
         // remove visibility change listener
@@ -645,7 +632,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         const loadAndPlay = (id: string) => {
             this.callPending = id;
 
-            setTimeout(() => this.appRdioScannerService.loadAndPlay(id), 750);
+            this.appRdioScannerService.loadAndPlay(id);
         };
 
         if (callPreviousId && this.list && this.searchFormPaginator instanceof MatPaginator) {
@@ -763,13 +750,11 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     }
 
     private syncClock(): void {
+        this.clockTimer?.unsubscribe();
+
         this.clock = new Date();
 
-        if (this.clockRefresh) {
-            clearTimeout(this.clockRefresh);
-        }
-
-        this.clockRefresh = setTimeout(() => this.syncClock(), (60 - this.clock.getSeconds()) * 1000);
+        this.clockTimer = timer(1000 * (60 - this.clock.getSeconds())).subscribe(() => this.syncClock());
 
         this.ngDetectChanges();
     }
@@ -791,19 +776,19 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     }
 
     private updateDimmer(): void {
-        if (this.config?.useDimmer) {
-            if (this.dimmerDelay) {
-                clearTimeout(this.dimmerDelay);
-            }
+        this.dimmerTimer?.unsubscribe();
 
-            this.dimmerDelay = setTimeout(() => {
-                this.dimmerDelay = undefined;
+        this.dimmer = true;
 
-                this.ngDetectChanges();
-            }, 5000);
+        this.dimmerTimer = timer(5 * 1000).subscribe(() => {
+            this.dimmerTimer?.unsubscribe();
+
+            this.dimmerTimer = undefined;
+
+            this.dimmer = false;
 
             this.ngDetectChanges();
-        }
+        });
     }
 
     private updateDisplay(time = this.callTime): void {

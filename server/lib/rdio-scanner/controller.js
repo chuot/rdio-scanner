@@ -36,7 +36,6 @@ const wsCommand = {
     config: 'CFG',
     listCall: 'LCL',
     liveFeedMap: 'LFM',
-    nop: 'NOP',
     pin: 'PIN',
 };
 
@@ -596,9 +595,6 @@ class Controller extends EventEmitter {
                 }
 
                 socket.send(JSON.stringify([wsCommand.liveFeedMap, returnStatus]));
-
-            } else if (message[0] === wsCommand.nop) {
-                socket.send(JSON.stringify([wsCommand.nop]));
 
             } else if (message[0] === wsCommand.pin) {
                 const token = Buffer.from(message[1], 'base64').toString();

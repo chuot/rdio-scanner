@@ -19,6 +19,8 @@
 
 import { DOCUMENT } from '@angular/common';
 import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
+import { interval, timer } from 'rxjs';
+import { takeWhile } from 'rxjs/operators';
 import {
     RdioScannerAvoidOptions,
     RdioScannerCall,
@@ -46,7 +48,6 @@ enum WebSocketCommand {
     Config = 'CFG',
     ListCall = 'LCL',
     LiveFeedMap = 'LFM',
-    Nop = 'NOP',
     Pin = 'PIN',
 }
 
@@ -59,7 +60,6 @@ export class AppRdioScannerService implements OnDestroy {
     private audioContext: AudioContext | undefined;
     private audioSource: AudioBufferSourceNode | undefined;
     private audioStartTime = NaN;
-    private audioTimer: number | undefined;
 
     private call: RdioScannerCall | undefined;
     private callPrevious: RdioScannerCall | undefined;
@@ -81,12 +81,8 @@ export class AppRdioScannerService implements OnDestroy {
     private liveFeedMapPriorToHoldTalkgroup: RdioScannerLiveFeedMap | undefined;
     private liveFeedPaused = false;
 
-    private skipDelay: number | undefined;
-
     private webSocket: WebSocket | undefined;
-    private webSocketInterval: number | undefined;
-    private webSocketTimeout: number | undefined;
-    private webSocketPendingMessage = false;
+    private webSocketMessagePending = false;
 
     constructor(@Inject(DOCUMENT) private document: Document) {
         this.bootstrapAudio();
@@ -165,7 +161,7 @@ export class AppRdioScannerService implements OnDestroy {
         });
     }
 
-    holdSystem(resubscribe = true): void {
+    holdSystem(options?: { resubscribe: boolean }): void {
         const call = this.call || this.callPrevious;
 
         if (call && this.liveFeedMap) {
@@ -176,7 +172,7 @@ export class AppRdioScannerService implements OnDestroy {
 
             } else {
                 if (this.liveFeedMapPriorToHoldTalkgroup) {
-                    this.holdTalkgroup(false);
+                    this.holdTalkgroup({ resubscribe: false });
                 }
 
                 this.liveFeedMapPriorToHoldSystem = this.liveFeedMap;
@@ -203,7 +199,7 @@ export class AppRdioScannerService implements OnDestroy {
 
             this.buildGroups();
 
-            if (resubscribe) {
+            if (typeof options?.resubscribe !== 'boolean' || options.resubscribe) {
                 if (this.liveFeedActive) {
                     this.liveFeedStart();
                 }
@@ -219,7 +215,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    holdTalkgroup(resubscribe = true): void {
+    holdTalkgroup(options?: { resubscribe: boolean }): void {
         const call = this.call || this.callPrevious;
 
         if (call && this.liveFeedMap) {
@@ -230,7 +226,7 @@ export class AppRdioScannerService implements OnDestroy {
 
             } else {
                 if (this.liveFeedMapPriorToHoldSystem) {
-                    this.holdSystem(false);
+                    this.holdSystem({ resubscribe: false });
                 }
 
                 this.liveFeedMapPriorToHoldTalkgroup = this.liveFeedMap;
@@ -255,7 +251,7 @@ export class AppRdioScannerService implements OnDestroy {
 
             this.buildGroups();
 
-            if (resubscribe) {
+            if (typeof options?.resubscribe !== 'boolean' || options.resubscribe) {
                 if (this.liveFeedActive) {
                     this.liveFeedStart();
                 }
@@ -292,75 +288,85 @@ export class AppRdioScannerService implements OnDestroy {
 
     ngOnDestroy(): void {
         this.webSocketClose();
+
+        this.stop();
     }
 
     pause(status = !this.liveFeedPaused): void {
-        if (this.audioContext) {
-            this.liveFeedPaused = status;
+        this.liveFeedPaused = status;
 
-            if (this.liveFeedPaused) {
-                this.audioContext.suspend();
+        if (this.liveFeedPaused) {
+            this.audioContext?.suspend();
 
-            } else {
-                this.audioContext.resume();
+        } else {
+            this.audioContext?.resume();
 
-                this.play();
-            }
-
-            this.event.emit({ pause: this.liveFeedPaused });
+            this.play();
         }
+
+        this.event.emit({ pause: this.liveFeedPaused });
     }
 
-    play(call?: RdioScannerCall): void {
-        if (this.audioContext && !this.liveFeedPaused) {
-            if (!call && !this.skipDelay && !this.call && this.callQueue.length) {
-                call = this.callQueue.shift();
+    play(call?: RdioScannerCall | undefined, options?: { delay?: boolean }): void {
+        if (this.liveFeedPaused) {
+            return;
+
+        } else if (call) {
+            if (this.call) {
+                this.stop({ emit: false });
             }
 
-            if (call?.audio) {
-                const arrayBuffer = new ArrayBuffer(call.audio.data.length);
-                const arrayBufferView = new Uint8Array(arrayBuffer);
+            this.call = call;
 
-                for (let i = 0; i < call.audio?.data.length; i++) {
-                    arrayBufferView[i] = call.audio.data[i];
-                }
+        } else if (this.call) {
+            return;
 
-                this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-                    this.audioContext?.resume().then(() => {
-                        if (this.audioContext) {
-                            this.stop({ emit: false });
+        } else {
+            this.call = this.callQueue.shift();
+        }
 
-                            this.call = call;
+        if (this.call?.audio) {
+            const arrayBuffer = new ArrayBuffer(this.call.audio.data.length);
+            const arrayBufferView = new Uint8Array(arrayBuffer);
 
-                            this.event.emit({ call, queue: this.callQueue.length });
+            for (let i = 0; i < (this.call.audio.data.length); i++) {
+                arrayBufferView[i] = this.call.audio.data[i];
+            }
 
-                            this.audioSource = this.audioContext.createBufferSource();
+            this.audioContext?.decodeAudioData(arrayBuffer, (buffer) => {
+                timer(options?.delay ? 1000 : 0).subscribe(() => {
+                    if (!this.audioContext) {
+                        return;
+                    }
 
-                            this.audioSource.buffer = buffer;
-                            this.audioSource.connect(this.audioContext.destination);
-                            this.audioSource.onended = () => this.skip();
-                            this.audioSource.start();
+                    this.audioSource = this.audioContext.createBufferSource();
+                    this.audioSource.buffer = buffer;
+                    this.audioSource.connect(this.audioContext.destination);
+                    this.audioSource.onended = () => this.skip({ delay: true });
+                    this.audioSource.start();
 
-                            this.audioTimer = setInterval(() => {
-                                if (this.audioContext && !this.liveFeedPaused && !isNaN(this.audioContext.currentTime)) {
-                                    if (isNaN(this.audioStartTime)) {
-                                        this.audioStartTime = this.audioContext.currentTime;
-                                    }
+                    this.event.emit({ call: this.call, queue: this.callQueue.length });
 
-                                    this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
-                                }
-                            }, 500);
+                    interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
+                        if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
+                            if (isNaN(this.audioStartTime)) {
+                                this.audioStartTime = this.audioContext.currentTime;
+                            }
+
+                            if (!this.liveFeedPaused) {
+                                this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
+                            }
                         }
-                    }).catch(() => this.skip());
-                }, () => {
-                    this.event.emit({ call, queue: this.callQueue.length });
-
-                    this.skip();
+                    });
                 });
+            }, () => {
+                this.event.emit({ call: this.call, queue: this.callQueue.length });
 
-            } else if (call) {
-                this.event.emit({ call: undefined, queue: this.callQueue.length });
-            }
+                this.skip();
+            });
+
+        } else if (this.call) {
+            this.event.emit({ call: undefined, queue: this.callQueue.length });
         }
     }
 
@@ -381,7 +387,7 @@ export class AppRdioScannerService implements OnDestroy {
 
     replay(): void {
         if (!this.liveFeedPaused) {
-            this.play(this.call || this.callPrevious);
+            this.play(this.call || this.callPrevious, { delay: false });
         }
     }
 
@@ -392,30 +398,18 @@ export class AppRdioScannerService implements OnDestroy {
     skip(options?: { delay?: boolean }): void {
         this.stop();
 
-        if (!this.skipDelay) {
-            this.skipDelay = setTimeout(() => {
-                this.skipDelay = undefined;
-
-                this.play();
-            }, typeof options?.delay !== 'boolean' || options.delay ? 1000 : 0);
-        }
+        this.play(undefined, options);
     }
 
     stop(options?: { emit?: boolean }): void {
         if (this.audioSource) {
-            if (this.audioTimer) {
-                clearInterval(this.audioTimer);
-
-                this.audioTimer = undefined;
-            }
-
             this.audioSource.onended = null;
             this.audioSource.stop();
             this.audioSource.disconnect();
             this.audioSource = undefined;
-
-            this.audioStartTime = NaN;
         }
+
+        this.audioStartTime = NaN;
 
         if (this.call) {
             this.callPrevious = this.call;
@@ -479,24 +473,29 @@ export class AppRdioScannerService implements OnDestroy {
     private bootstrapAudio(): void {
         const events = ['mousedown', 'touchdown'];
 
-        const bootstrap = () => {
+        const bootstrap = async () => {
             if (!this.audioContext) {
                 const options: AudioContextOptions = {
                     latencyHint: 'playback',
                 };
 
-                if (window.webkitAudioContext) {
-                    this.audioContext = new window.webkitAudioContext(options);
-
-                } else {
-                    this.audioContext = new AudioContext(options);
-                }
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)(options);
             }
 
             if (this.audioContext) {
-                this.audioContext.resume().then(() => {
-                    events.forEach((event) => document.body.removeEventListener(event, bootstrap));
-                });
+                const resume = () => {
+                    if (!this.liveFeedPaused) {
+                        if (this.audioContext?.state === 'suspended') {
+                            this.audioContext?.resume().then(() => resume());
+                        }
+                    }
+                };
+
+                await this.audioContext.resume();
+
+                this.audioContext.onstatechange = () => resume();
+
+                events.forEach((event) => document.body.removeEventListener(event, bootstrap));
             }
         };
 
@@ -567,7 +566,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    private getCall(id: string, flags?: string): void {
+    private getCall(id: string, flags?: WebSocketCallFlag): void {
         this.webSocketSend(WebSocketCommand.Call, id, flags);
     }
 
@@ -592,16 +591,14 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private liveFeedRestore(): void {
-        if (window instanceof Window && window.localStorage instanceof Storage) {
-            const map = window.localStorage.getItem(AppRdioScannerService.LOCAL_STORAGE_KEY);
+        const map = window?.localStorage?.getItem(AppRdioScannerService.LOCAL_STORAGE_KEY);
 
-            if (map) {
-                try {
-                    this.liveFeedMap = JSON.parse(map);
+        if (map) {
+            try {
+                this.liveFeedMap = JSON.parse(map);
 
-                } catch (err) {
-                    this.liveFeedMap = {};
-                }
+            } catch (err) {
+                this.liveFeedMap = {};
             }
         }
     }
@@ -630,9 +627,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private liveFeedStore(): void {
-        if (window instanceof Window && window.localStorage instanceof Storage) {
-            window.localStorage.setItem(AppRdioScannerService.LOCAL_STORAGE_KEY, JSON.stringify(this.liveFeedMap));
-        }
+        window?.localStorage?.setItem(AppRdioScannerService.LOCAL_STORAGE_KEY, JSON.stringify(this.liveFeedMap));
     }
 
     private messageParser(message: string): void {
@@ -644,8 +639,6 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         if (Array.isArray(message)) {
-            this.webSocketPendingMessage = false;
-
             switch (message[0]) {
                 case WebSocketCommand.Call:
                     switch (message[2]) {
@@ -655,9 +648,7 @@ export class AppRdioScannerService implements OnDestroy {
                             break;
 
                         case WebSocketCallFlag.Play:
-                            if (this.liveFeedActive) {
-                                this.play(message[1]);
-                            }
+                            this.play(message[1], { delay: true });
 
                             break;
 
@@ -696,17 +687,14 @@ export class AppRdioScannerService implements OnDestroy {
 
                     break;
 
-                case WebSocketCommand.Nop:
-                    clearTimeout(this.webSocketTimeout);
-
-                    break;
-
                 case WebSocketCommand.Pin:
                     this.event.emit({ auth: true });
 
                     break;
             }
         }
+
+        this.webSocketMessagePending = false;
     }
 
     private webSocketClose(): void {
@@ -720,18 +708,6 @@ export class AppRdioScannerService implements OnDestroy {
 
             this.webSocket = undefined;
         }
-
-        if (this.webSocketTimeout) {
-            clearTimeout(this.webSocketTimeout);
-
-            this.webSocketTimeout = undefined;
-        }
-
-        if (this.webSocketInterval) {
-            clearInterval(this.webSocketInterval);
-
-            this.webSocketInterval = undefined;
-        }
     }
 
     private webSocketOpen(): void {
@@ -739,7 +715,11 @@ export class AppRdioScannerService implements OnDestroy {
 
         this.webSocket = new WebSocket(webSocketUrl);
 
-        this.webSocket.onclose = () => this.webSocketReconnect();
+        this.webSocket.onclose = (ev: CloseEvent) => {
+            if (ev.code !== 1000) {
+                this.webSocketReconnect();
+            }
+        };
 
         this.webSocket.onerror = () => { };
 
@@ -755,11 +735,13 @@ export class AppRdioScannerService implements OnDestroy {
     private webSocketReconnect(): void {
         this.webSocketClose();
 
-        setTimeout(() => this.webSocketOpen(), 5 * 1000);
+        this.webSocketOpen();
     }
 
     private webSocketSend(command: string, payload?: string | RdioScannerSearchOptions | null, flags?: string): void {
-        if (this.webSocket instanceof WebSocket && this.webSocket.readyState === 1 && !this.webSocketPendingMessage) {
+        if (this.webSocket?.readyState === 1) {
+            this.webSocketMessagePending = true;
+
             const message: (string | RdioScannerSearchOptions)[] = [command];
 
             if (payload) {
@@ -771,8 +753,6 @@ export class AppRdioScannerService implements OnDestroy {
             }
 
             this.webSocket.send(JSON.stringify(message));
-
-            this.webSocketPendingMessage = true;
         }
     }
 }

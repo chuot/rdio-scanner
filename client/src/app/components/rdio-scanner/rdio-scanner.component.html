@@ -220,7 +220,7 @@
             <div *ngIf="config?.useLed" class="rdio-status" fxLayout="row" fxLayoutAlign="end">
                 <span class="rdio-led" [ngClass]="ledClass"></span>
             </div>
-            <div class="rdio-display" [ngClass]="{ idle: !config || (config.useDimmer && !dimmerDelay) }"
+            <div class="rdio-display" [ngClass]="{ idle: !config || config?.useDimmer && !dimmer }"
                 (dblclick)="toggleFullscreen()">
                 <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
                     <div>
@@ -353,7 +353,7 @@
                     <button class="rdio-button" (click)="replay()">
                         REPLAY<br>LAST
                     </button>
-                    <button class="rdio-button" (click)="skip({ delay: false })">
+                    <button class="rdio-button" (click)="skip()">
                         SKIP<br>NEXT
                     </button>
                     <button class="rdio-button" (click)="avoid()">
