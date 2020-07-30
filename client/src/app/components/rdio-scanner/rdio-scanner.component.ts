@@ -66,7 +66,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     callTag = 'Tag';
     callTalkgroup = 'Talkgroup';
     callTalkgroupId = '0';
-    callTalkgroupName = `Rdio Scanner ${appName === 'rdio-scanner-client' ? 'v'.concat(version.replace(/^(\d+\.\d+).*$/, '$1')) : ''}`;
+    callTalkgroupName = `Rdio Scanner ${appName === 'rdio-scanner-client' ? 'v'.concat(version) : ''}`;
     callTime = 0;
     callUnit = '0';
 

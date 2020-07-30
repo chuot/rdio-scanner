@@ -58,8 +58,9 @@ export class AppRdioScannerService implements OnDestroy {
     event = new EventEmitter<RdioScannerEvent>();
 
     private audioContext: AudioContext | undefined;
+
     private audioSource: AudioBufferSourceNode | undefined;
-    private audioStartTime = NaN;
+    private audioSourceStartTime = NaN;
 
     private call: RdioScannerCall | undefined;
     private callPrevious: RdioScannerCall | undefined;
@@ -311,7 +312,7 @@ export class AppRdioScannerService implements OnDestroy {
         if (this.liveFeedPaused) {
             return;
 
-        } else if (call) {
+        } else if (call?.audio) {
             if (this.call) {
                 this.stop({ emit: false });
             }
@@ -325,56 +326,48 @@ export class AppRdioScannerService implements OnDestroy {
             this.call = this.callQueue.shift();
         }
 
-        if (this.call?.audio) {
-            const arrayBuffer = new ArrayBuffer(this.call.audio.data.length);
-            const arrayBufferView = new Uint8Array(arrayBuffer);
+        if (!this.call?.audio) {
+            return;
+        }
 
-            for (let i = 0; i < (this.call.audio.data.length); i++) {
-                arrayBufferView[i] = this.call.audio.data[i];
-            }
+        const arrayBuffer = new ArrayBuffer(this.call.audio.data.length);
+        const arrayBufferView = new Uint8Array(arrayBuffer);
 
-            this.audioContext?.decodeAudioData(arrayBuffer, (buffer) => {
-                timer(options?.delay ? 1000 : 0).subscribe(() => {
-                    if (!this.audioContext) {
-                        return;
-                    }
+        for (let i = 0; i < (this.call.audio.data.length); i++) {
+            arrayBufferView[i] = this.call.audio.data[i];
+        }
 
-                    this.audioSource = this.audioContext.createBufferSource();
-                    this.audioSource.buffer = buffer;
-                    this.audioSource.connect(this.audioContext.destination);
-                    this.audioSource.onended = () => this.skip({ delay: true });
-                    this.audioSource.start();
+        this.audioContext?.decodeAudioData(arrayBuffer, (buffer) => {
+            timer(options?.delay ? 1000 : 0).subscribe(() => {
+                if (!this.audioContext || !this.call) {
+                    return;
+                }
 
-                    this.event.emit({ call: this.call, queue: this.callQueue.length });
+                this.audioSource = this.audioContext.createBufferSource();
+                this.audioSource.buffer = buffer;
+                this.audioSource.connect(this.audioContext.destination);
+                this.audioSource.onended = () => this.skip({ delay: true });
+                this.audioSource.start();
 
-                    interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
-                        if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
-                            if (isNaN(this.audioStartTime)) {
-                                this.audioStartTime = this.audioContext.currentTime;
-                            }
-
-                            if (!this.liveFeedPaused) {
-                                this.event.emit({ time: this.audioContext.currentTime - this.audioStartTime });
-                            }
-                        }
-                    });
-                });
-            }, () => {
                 this.event.emit({ call: this.call, queue: this.callQueue.length });
 
-                this.skip();
-            });
+                interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
+                    if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
+                        if (isNaN(this.audioSourceStartTime)) {
+                            this.audioSourceStartTime = this.audioContext.currentTime;
+                        }
 
-        } else if (this.call) {
-            this.event.emit({ call: undefined, queue: this.callQueue.length });
-        }
+                        if (!this.liveFeedPaused) {
+                            this.event.emit({ time: this.audioContext.currentTime - this.audioSourceStartTime });
+                        }
+                    }
+                });
+            });
+        }, () => this.skip());
     }
 
     queue(call: RdioScannerCall): void {
-        const sys = call.system;
-        const tg = call.talkgroup;
-
-        if (call?.audio && this.liveFeedMap && this.liveFeedMap[sys] && this.liveFeedMap[sys][tg]) {
+        if (call?.audio) {
             this.callQueue.push(call);
 
             if (this.call || this.liveFeedPaused) {
@@ -387,9 +380,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     replay(): void {
-        if (!this.liveFeedPaused) {
-            this.play(this.call || this.callPrevious, { delay: false });
-        }
+        this.play(this.call || this.callPrevious, { delay: false });
     }
 
     searchCalls(options: RdioScannerSearchOptions): void {
@@ -408,9 +399,8 @@ export class AppRdioScannerService implements OnDestroy {
             this.audioSource.stop();
             this.audioSource.disconnect();
             this.audioSource = undefined;
+            this.audioSourceStartTime = NaN;
         }
-
-        this.audioStartTime = NaN;
 
         if (this.call) {
             this.callPrevious = this.call;
@@ -419,7 +409,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         if (typeof options?.emit !== 'boolean' || options.emit) {
-            this.event.emit({ call: undefined });
+            this.event.emit({ call: undefined, queue: this.callQueue.length });
         }
     }
 
@@ -654,7 +644,10 @@ export class AppRdioScannerService implements OnDestroy {
                             break;
 
                         default:
-                            if (this.liveFeedActive) {
+                            if (this.liveFeedActive &&
+                                this.liveFeedMap &&
+                                this.liveFeedMap[message[1].system] &&
+                                this.liveFeedMap[message[1].system][message[1].talkgroup]) {
                                 this.queue(message[1]);
                             }
                     }
