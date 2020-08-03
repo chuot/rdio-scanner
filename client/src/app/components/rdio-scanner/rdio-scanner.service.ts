@@ -339,7 +339,7 @@ export class AppRdioScannerService implements OnDestroy {
 
         this.audioContext?.decodeAudioData(arrayBuffer, (buffer) => {
             timer(options?.delay ? 1000 : 0).subscribe(() => {
-                if (!this.audioContext || !this.call) {
+                if (!this.audioContext || this.audioSource || !this.call) {
                     return;
                 }
 
@@ -363,14 +363,14 @@ export class AppRdioScannerService implements OnDestroy {
                     }
                 });
             });
-        }, () => this.skip());
+        }, () => this.skip({ delay: false }));
     }
 
     queue(call: RdioScannerCall): void {
         if (call?.audio) {
             this.callQueue.push(call);
 
-            if (this.call || this.liveFeedPaused) {
+            if (this.audioSource || this.call || this.liveFeedPaused) {
                 this.event.emit({ queue: this.callQueue.length });
 
             } else {
