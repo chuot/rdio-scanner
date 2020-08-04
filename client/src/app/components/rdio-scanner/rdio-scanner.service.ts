@@ -363,7 +363,11 @@ export class AppRdioScannerService implements OnDestroy {
                     }
                 });
             });
-        }, () => this.skip({ delay: false }));
+        }, () => {
+            this.event.emit({ call: this.call, queue: this.callQueue.length });
+
+            this.skip({ delay: false });
+        });
     }
 
     queue(call: RdioScannerCall): void {

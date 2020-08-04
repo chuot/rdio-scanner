@@ -256,10 +256,10 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
                         this.call = undefined;
                     }
 
+                    this.callPending = undefined;
+
                     if (event.call) {
                         this.call = this.transformCall(event.call);
-
-                        this.callPending = undefined;
 
                         if (this.liveFeedOffline) {
                             this.setOfflineQueueCount(this.call.id);
