@@ -6,6 +6,14 @@
   flex-direction: row;
   font-family: Roboto, 'Helvetica Neue', sans-serif;
   justify-content: center;
+
+  .mat-sidenav,
+  .mat-sidenav-container,
+  .mat-toolbar {
+    background-color: inherit;
+    color: inherit;
+    padding: 0;
+  }
 }
 
 :host,
@@ -13,14 +21,6 @@
 .mat-sidenav-container {
   height: 100%;
   width: 100%;
-}
-
-.mat-sidenav,
-.mat-sidenav-container,
-.mat-toolbar {
-  background-color: inherit;
-  color: inherit;
-  padding: 0;
 }
 
 .rdio-button,
@@ -332,6 +332,7 @@
 }
 
 .rdio-search-results {
+
   .mat-cell,
   .mat-header-cell {
     &:first-of-type {
