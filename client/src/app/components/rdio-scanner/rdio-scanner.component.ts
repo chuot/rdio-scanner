@@ -654,7 +654,11 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
                                 }
                             }
 
-                            loadAndPlay(nextId);
+                            timer(1000).subscribe(() => {
+                                if (this.liveFeedOffline) {
+                                    loadAndPlay(nextId);
+                                }
+                            });
 
                         } else {
                             this.stopOfflinePlay();
@@ -836,7 +840,7 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
                 }
 
             } else {
-                this.callTalkgroupId = '';
+                this.callTalkgroupId = this.call.talkgroup.toString();
 
                 this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
             }

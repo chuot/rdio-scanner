@@ -643,7 +643,7 @@ export class AppRdioScannerService implements OnDestroy {
                             break;
 
                         case WebSocketCallFlag.Play:
-                            this.play(message[1], { delay: true });
+                            this.play(message[1]);
 
                             break;
 

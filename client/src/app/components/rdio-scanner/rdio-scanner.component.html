@@ -285,8 +285,8 @@
                         </span>
                     </div>
                     <div>
-                        <span>
-                            UID: {{ callUnit || 0 }}
+                        <span *ngIf="callUnit">
+                            UID: {{ callUnit }}
                         </span>
                     </div>
                 </div>

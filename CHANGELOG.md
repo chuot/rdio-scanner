@@ -1,3 +1,11 @@
+# Version 4.4
+
+- Config.systems.talkgroups.patches to group many talkgroups (patches) into one talkgroup.id.
+- Config.options now groups allowDownloads, disableAudioConversion, pruneDays, useDimmer, useGroup and useLed options instead of having them spread all over the config file.
+- Client will always display talkgroup id on the right side instead of 0 when call is analog.
+- Fix annoying bug when next call queued to play is still played even though offline continuous play mode is turned off.
+- Talkgroup ID is displayed no matter what and unit ID is displayed only if known.
+
 # Version 4.3
 
 - Add metatags to converted audio files.

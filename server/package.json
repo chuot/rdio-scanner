@@ -1,7 +1,7 @@
 {
     "author": "Chrystian Huot <chrystian.huot@saubeo.solutions>",
     "dependencies": {
-        "chokidar": "^3.4.1",
+        "chokidar": "^3.4.2",
         "cors": "^2.8.5",
         "dotenv": "^8.2.0",
         "express": "^4.17.1",
@@ -23,7 +23,7 @@
         "eslint": "^7.6.0",
         "webpack": "^4.44.1",
         "webpack-cli": "^3.3.12",
-        "webpack-node-externals": "^2.5.0"
+        "webpack-node-externals": "^2.5.1"
     },
     "license": "LICENSE",
     "main": "index.js",
@@ -39,5 +39,5 @@
         "build": "webpack",
         "start": "nodemon"
     },
-    "version": "4.3.4"
+    "version": "4.4.1"
 }

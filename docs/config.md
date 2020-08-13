@@ -38,9 +38,6 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
     // See Access control section below for more details
     "access": null,
 
-    // (boolean) Can users download archived calls. Default value is true
-    "allowDownload": true,
-
     // (multiple types) API keys for upload scripts and downstreamers
     // Default value is a random generated UUID
     // See API keys section below for more details
@@ -51,36 +48,42 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
     // See DirWatch section below for more details
     "dirWatch": []
 
-    // (boolean) Disable the audio format conversion to m4a/aac
-    // Default value is false
-    "disableAudioConversion": false,
-
     // (object[]) Downstream audio files to other Rdio Scanner instances
     // Default value is an empty array
     // See Downstreams section below for more details
     "downstreams": [],
 
-    // (number) Clear the database for audio files older than the specified number of days
-    // Default value is 7
-    // Specifying a value of 0 will disable this feature
-    "pruneDays": 7
+    // (object) Options definitions
+    "options": {
+      // (boolean) Can users download archived calls. Default value is true
+      "allowDownload": true,
+
+      // (boolean) Disable the audio format conversion to m4a/aac
+      // Default value is false
+      "disableAudioConversion": false,
+
+      // (number) Clear the database for audio files older than the specified number of days
+      // Default value is 7
+      // Specifying a value of 0 will disable this feature
+      "pruneDays": 7
+
+      // (boolean) Turn off the screen backlight when it is inactive
+      // Default value is true
+      "useDimmer": true
+
+      // (boolean) Also toggle talkgroups based on their group assignment
+      // Default value is true
+      // See Systems section below for more details on groups
+      "useGroup": true
+
+      // (boolean) Show the activity led
+      // Default value is true
+      "useLed": true
+    }
 
     // (object[]) Systems definitions
     // See Systems section below for more details
     "systems": []
-
-    // (boolean) Turn off the screen backlight when it is inactive
-    // Default value is true
-    "useDimmer": true
-
-    // (boolean) Also toggle talkgroups based on their group assignment
-    // Default value is true
-    // See Systems section below for more details on groups
-    "useGroup": true
-
-    // (boolean) Show the activity led
-    // Default value is true
-    "useLed": true
   },
 
   // Radio Scanner uses sqlite for its default database
@@ -472,6 +475,7 @@ systems: {
     id: number;
     label: string;
     name: string;
+    patches: number[];
     tag: string;
     group?: string; // mandatory if useGroup is true, optional if not
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
@@ -490,6 +494,7 @@ systems: {
   - **id** - Talkgroup ID.
   - **label** - Talkgroup label shown on the left side of third row.
   - **name** - Talkgroup name shown on the fouth row.
+  - **patches** - Array of talkgroup ID to include in this talkgroup.
   - **tag** - Talkgroup tag shown on the right side of second row.
 - **units** - Unit aliases.
   - **id** - Unit ID.

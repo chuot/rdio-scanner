@@ -53,21 +53,55 @@ class Controller extends EventEmitter {
 
         this.config.access = this.config.access !== undefined ? this.config.access : null;
 
-        this.config.allowDownload = typeof this.config.allowDownload === 'boolean' ? this.config.allowDownload : true;
-
         this.config.apiKeys = this.config.apiKeys !== undefined ? this.config.apiKeys : uuid.v4();
 
-        this.config.disableAudioConversion = typeof this.config.disableAudioConversion === 'boolean' ? this.config.disableAudioConversion : false;
+        if (this.config.options === null || typeof this.config.options !== 'object') {
+            this.config.options = {};
+        }
 
-        this.config.pruneDays = typeof this.config.pruneDays === 'number' ? this.config.pruneDays : 7;
+        this.config.options.allowDownload = typeof this.config.options.allowDownload === 'boolean' ? this.config.options.allowDownload
+            : typeof this.config.allowDownload === 'boolean' ? this.config.allowDownload : true;
+
+        if (this.config.allowDownload !== null || this.config.allowDownload !== undefined) {
+            delete this.config.allowDownload;
+        }
+
+        this.config.options.disableAudioConversion = typeof this.config.options.disableAudioConversion === 'boolean' ? this.config.options.disableAudioConversion
+            : typeof this.config.disableAudioConversion === 'boolean' ? this.config.disableAudioConversion : false;
+
+        if (this.config.disableAudioConversion !== null || this.config.disableAudioConversion !== undefined) {
+            delete this.config.disableAudioConversion;
+        }
+
+        this.config.options.pruneDays = typeof this.config.options.pruneDays === 'number' ? this.config.options.pruneDays
+            : typeof this.config.pruneDays === 'number' ? this.config.pruneDays : 7;
+
+        if (this.config.pruneDays !== null || this.config.pruneDays !== undefined) {
+            delete this.config.pruneDays;
+        }
+
+        this.config.options.useDimmer = typeof this.config.options.useDimmer === 'boolean' ? this.config.options.useDimmer
+            : typeof this.config.useDimmer === 'boolean' ? this.config.useDimmer : true;
+
+        if (this.config.useDimmer !== null || this.config.useDimmer !== undefined) {
+            delete this.config.useDimmer;
+        }
+
+        this.config.options.useGroup = typeof this.config.options.useGroup === 'boolean' ? this.config.options.useGroup
+            : typeof this.config.useGroup === 'boolean' ? this.config.useGroup : true;
+
+        if (this.config.useGroup !== null || this.config.useGroup !== undefined) {
+            delete this.config.useGroup;
+        }
+
+        this.config.options.useLed = typeof this.config.options.useLed === 'boolean' ? this.config.options.useLed
+            : typeof this.config.useLed === 'boolean' ? this.config.useLed : true;
+
+        if (this.config.useLed !== null || this.config.useLed !== undefined) {
+            delete this.config.useLed;
+        }
 
         this.config.systems = Array.isArray(this.config.systems) ? this.config.systems : systemsDefault;
-
-        this.config.useDimmer = typeof this.config.useDimmer === 'boolean' ? this.config.useDimmer : true;
-
-        this.config.useGroup = typeof this.config.useGroup === 'boolean' ? this.config.useGroup : true;
-
-        this.config.useLed = typeof this.config.useLed === 'boolean' ? this.config.useLed : true;
 
         this.config.systems.forEach((system) => {
             if (system === null || typeof system !== 'object') {
@@ -115,6 +149,10 @@ class Controller extends EventEmitter {
                     console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, name not a string: ${JSON.stringify(talkgroup.name)}`);
                 }
 
+                if (talkgroup.patches !== undefined && !Array.isArray(talkgroup.patches)) {
+                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, patches not an array: ${JSON.stringify(talkgroup.patches)}`);
+                }
+
                 if (typeof talkgroup.tag !== 'string' || !talkgroup.tag.length) {
                     console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, tag not a string: ${JSON.stringify(talkgroup.tag)}`);
                 }
@@ -149,14 +187,14 @@ class Controller extends EventEmitter {
             console.warn('ffmpeg is missing, no audio conversion possible.');
         }
 
-        if (this.config.pruneDays > 0) {
+        if (this.config.options.pruneDays > 0) {
             this.pruneInterval = setInterval(() => {
                 const now = new Date();
 
                 this.models.call.destroy({
                     where: {
                         dateTime: {
-                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.config.pruneDays),
+                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.config.options.pruneDays),
                         },
                     },
                 });
@@ -337,16 +375,16 @@ class Controller extends EventEmitter {
 
     async getConfig(scope) {
         return Object.assign({}, this.getOptions(), {
-            allowDownload: this.config.allowDownload,
+            allowDownload: this.config.options.allowDownload,
             systems: await this.getSystems(scope),
         });
     }
 
     getOptions() {
         return {
-            useDimmer: this.config.useDimmer,
-            useGroup: this.config.useGroup,
-            useLed: this.config.useLed,
+            useDimmer: this.config.options.useDimmer,
+            useGroup: this.config.options.useGroup,
+            useLed: this.config.options.useLed,
         };
     }
 
@@ -450,9 +488,21 @@ class Controller extends EventEmitter {
     }
 
     async importCall(call = {}) {
-        const system = this.config.systems.find((sys) => sys.id == call.system);
+        const system = this.config.systems.find((sys) => sys.id === call.system);
 
-        const talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => tg.id == call.talkgroup) : null;
+        const talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => {
+            if (tg.id === call.talkgroup) {
+                return true;
+
+            } else if (Array.isArray(tg.patches) && tg.patches.includes(call.talkgroup)) {
+                call.talkgroup = tg.id;
+
+                return true;
+
+            } else {
+                return false;
+            }
+        }) : null;
 
         if (!system || !talkgroup) {
             console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} file=${call.audioName} No matching system/talkgroup`);
