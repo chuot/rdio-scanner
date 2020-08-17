@@ -677,7 +677,6 @@ class Controller extends EventEmitter {
                     if (socket.isAuthenticated) {
                         socket.send(JSON.stringify([wsCommand.config, await this.getConfig(socket.scope)]));
 
-
                     } else {
                         socket.send(JSON.stringify([wsCommand.pin]));
                     }
@@ -689,7 +688,14 @@ class Controller extends EventEmitter {
     validateApiKey(apiKey, system, talkgroup) {
         const scope = this.getScope(apiKey, this.config.apiKeys);
 
-        return Array.isArray(scope[system]) && scope[system].includes(talkgroup);
+        return Array.isArray(scope[system]) && (
+            scope[system].includes(talkgroup) ||
+            this.config.systems.some((sys) => {
+                return sys.id === system && sys.talkgroups.some((tg) => {
+                    return Array.isArray(tg.patches) && tg.patches.includes(talkgroup);
+                })
+            })
+        );
     }
 }
 

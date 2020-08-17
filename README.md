@@ -48,4 +48,10 @@ The server side of [Rdio Scanner](https://github.com/chuot/rdio-scanner) can mon
 
 You can ask your questions or post your comments on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) where the community continues to grow.
 
-## And as usual: Happy Rdio scanning !
+## Show your appreciation / Support the author
+
+If you like [Rdio Scanner](https://github.com/chuot/rdio-scanner) please consider **starring the repository** to show you appreciation to the author for his hard work. It cost nothing but is really appreciated.
+
+If you use [Rdio Scanner](https://github.com/chuot/rdio-scanner) for commercial purposes or derive income from it, please consider [sponsoring this project](https://github.com/sponsors/chuot) to help support continued development.
+
+**Happy Rdio scanning !**
