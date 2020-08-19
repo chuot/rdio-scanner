@@ -67,7 +67,7 @@ class Downstream {
                     return talkgroup === call.talkgroup;
 
                 } else {
-                    return talkgroup === '*';
+                    return talkgroup === undefined || talkgroup === '*';
                 }
             };
 
@@ -84,7 +84,7 @@ class Downstream {
                 return system === '*';
 
             } else {
-                return true;
+                return false;
             }
         };
 

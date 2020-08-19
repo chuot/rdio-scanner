@@ -10,94 +10,94 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
 
 ``` js
 {
-  "nodejs": {
-    // (string) "development" or "production". Default is "production".
-    "environment": "production",
+    "nodejs": {
+        // (string) "development" or "production". Default is "production".
+        "environment": "production",
 
-    // (string) Which IP to bind to? Default is "0.0.0.0"
-    "host": "0.0.0.0",
+        // (string) Which IP to bind to? Default is "0.0.0.0"
+        "host": "0.0.0.0",
 
-    // (number) Which PORT to bind to? Default is 3000
-    "port": 3000,
+        // (number) Which PORT to bind to? Default is 3000
+        "port": 3000,
 
-    // (string) Path to the SSL CA certificate
-    // See SSL certificates section below for more details
-    "sslCA": null,
+        // (string) Path to the SSL CA certificate
+        // See SSL certificates section below for more details
+        "sslCA": null,
 
-    // (string) Path to the SSL certificate
-    // See SSL certificates section below for more details
-    "sslCert": null,
+        // (string) Path to the SSL certificate
+        // See SSL certificates section below for more details
+        "sslCert": null,
 
-    // (string) Path to the SSL privat key
-    // See SSL certificates section below for more details
-    "sslKey": null
-  },
+        // (string) Path to the SSL privat key
+        // See SSL certificates section below for more details
+        "sslKey": null
+    },
 
-  "rdioScanner": {
-    // (multiple types) Access control for Rdio Scanner
-    // See Access control section below for more details
-    "access": null,
+    "rdioScanner": {
+        // (multiple types) Access control for Rdio Scanner
+        // See Access control section below for more details
+        "access": null,
 
-    // (multiple types) API keys for upload scripts and downstreamers
-    // Default value is a random generated UUID
-    // See API keys section below for more details
-    "apiKeys": "<random generated uuid>",
+        // (multiple types) API keys for upload scripts and downstreamers
+        // Default value is a random generated UUID
+        // See API keys section below for more details
+        "apiKeys": "<random generated uuid>",
 
-    // (object[]) Directory monitoring for ingestion of audio files
-    // Default value is an empty array
-    // See DirWatch section below for more details
-    "dirWatch": []
+        // (object[]) Directory monitoring for ingestion of audio files
+        // Default value is an empty array
+        // See DirWatch section below for more details
+        "dirWatch": []
 
-    // (object[]) Downstream audio files to other Rdio Scanner instances
-    // Default value is an empty array
-    // See Downstreams section below for more details
-    "downstreams": [],
+        // (object[]) Downstream audio files to other Rdio Scanner instances
+        // Default value is an empty array
+        // See Downstreams section below for more details
+        "downstreams": [],
 
-    // (object) Options definitions
-    "options": {
-      // (boolean) Can users download archived calls. Default value is true
-      "allowDownload": true,
+        // (object) Options definitions
+        "options": {
+            // (boolean) Can users download archived calls. Default value is true
+            "allowDownload": true,
 
-      // (boolean) Disable the audio format conversion to m4a/aac
-      // Default value is false
-      "disableAudioConversion": false,
+            // (boolean) Disable the audio format conversion to m4a/aac
+            // Default value is false
+            "disableAudioConversion": false,
 
-      // (number) Clear the database for audio files older than the specified number of days
-      // Default value is 7
-      // Specifying a value of 0 will disable this feature
-      "pruneDays": 7
+            // (number) Clear the database for audio files older than the specified number of days
+            // Default value is 7
+            // Specifying a value of 0 will disable this feature
+            "pruneDays": 7
 
-      // (boolean) Turn off the screen backlight when it is inactive
-      // Default value is true
-      "useDimmer": true
+            // (boolean) Turn off the screen backlight when it is inactive
+            // Default value is true
+            "useDimmer": true
 
-      // (boolean) Also toggle talkgroups based on their group assignment
-      // Default value is true
-      // See Systems section below for more details on groups
-      "useGroup": true
+            // (boolean) Also toggle talkgroups based on their group assignment
+            // Default value is true
+            // See Systems section below for more details on groups
+            "useGroup": true
 
-      // (boolean) Show the activity led
-      // Default value is true
-      "useLed": true
+            // (boolean) Show the activity led
+            // Default value is true
+            "useLed": true
+        }
+
+        // (object[]) Systems definitions
+        // See Systems section below for more details
+        "systems": []
+    },
+
+    // Radio Scanner uses sqlite for its default database
+    // It is recommended to stick to sqlite as it works very well
+    // Refer to https://sequelize.org/v5/manual/dialects.html for more details
+    "sequelize": {
+        "database": null,
+        "dialect": "sqlite",
+        "host": null,
+        "password": null,
+        "port": null,
+        "storage": "database.sqlite",
+        "username": null
     }
-
-    // (object[]) Systems definitions
-    // See Systems section below for more details
-    "systems": []
-  },
-
-  // Radio Scanner uses sqlite for its default database
-  // It is recommended to stick to sqlite as it works very well
-  // Refer to https://sequelize.org/v5/manual/dialects.html for more details
-  "sequelize": {
-    "database": null,
-    "dialect": "sqlite",
-    "host": null,
-    "password": null,
-    "port": null,
-    "storage": "database.sqlite",
-    "username": null
-  }
 }
 ```
 
@@ -162,38 +162,46 @@ access: null | string | string[] | {
 }
 ```
 
-Default value is `null`.
+Default value is `null` .
 
 **Examples**
 
-- No access control, access to all systems/talkgroups
+* No access control, access to all systems/talkgroups
 
-  ``` json
+  
+
+``` json
   "access": null
   ```
 
-- Single unique password, access to all systems/talkgroups
+* Single unique password, access to all systems/talkgroups
 
-  ``` json
+  
+
+``` json
   "access": "password"
   ```
 
   or
 
-  ``` json
+  
+
+``` json
   "access": {
     "code": "password",
     "systems": "*"
   }
   ```
 
-- Complex access control
+* Complex access control
 
-  `password1` gives access to system 11 / talkgroups 54241, 54125 and system 21 / talkgroups 60040, 60041, 50003.
+`password1` gives access to system 11 / talkgroups 54241, 54125 and system 21 / talkgroups 60040, 60041, 50003.
 
-  `password2` and `password3` give access to all systems/talkgroups.
+`password2` and `password3` give access to all systems/talkgroups.
 
-  ``` json
+  
+
+``` json
   "access": [
     {
       "code": "password1",
@@ -246,32 +254,38 @@ apiKeys: null | string | string[] | {
 }
 ```
 
-Default value is an empty array `[]`.
+Default value is an empty array `[]` .
 
 **Examples**
 
-- Single API key which allows upload to any systems/talkgroups
+* Single API key which allows upload to any systems/talkgroups
 
-  ``` json
+  
+
+``` json
   "apiKeys": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e"
   ```
 
   or
 
-  ``` json
+  
+
+``` json
   "access": {
     "key": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e",
     "systems": "*"
   }
   ```
 
-- Complex API keys definition
+* Complex API keys definition
 
   API key `d2079382-07df-4aa9-8940-8fb9e4ef5f2e` gives access to system 11 / talkgroups 54241, 54125 and system 21 / talkgroups 60040, 60041, 50003.
 
   API keys `cfcfa7d5-897c-4b96-b974-2fec80c3f775` and `a3ac707e-eaf9-4951-a9d5-c52186fa5093` give access to all systems/talkgroups.
 
-  ``` json
+  
+
+``` json
   "apiKeys": [
     {
       "key": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e",
@@ -322,35 +336,37 @@ dirWatch: {
 }[]
 ```
 
-- **delay** - Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a timeout value in *milliseconds* for the audio file to settle before ingesting it.
-- **deleteAfter** - You may want the audio file to be deleted after being ingested. If this value is *true*, all pre-existing audio files will be ingested and deleted as soon as [Rdio Scanner](https://github.com/chuot/rdio-scanner) starts. When this parameter is *false*, pre-existing audio files are neither ingested nor deleted.
-- **directory** - Absolute or relatives to [Rdio Scanner](https://github.com/chuot/rdio-scanner)'s. Path of the directory to be monitored. **This value must be unique**.
-- **extension** - The audio call extension to monitor without the period. Ex.: "mp3", "wav".
-- **frequency** - You may want to fake the frequency which will be displayed on *Rdio Scanner*. Let say that you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
-- **frequency** - You may want to simulate the frequency that will be displayed. Say you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
-- **mask** - Some metadata can be extracted from the file name of the audio file using specific META tags. Here is the list:
-  - **#DATE** - extract the date like *20200608* or *2020-06-08*.
-  - **#HZ** - extract the frequency in hertz like *119100000*.
-  - **#KHZ** - extract the frequency in kilohertz like *119100*.
-  - **#MHZ** - extract the frequency in megahertz like *119.100*.
-  - **#TIME** - extract the *local* time like *0853439* or *08:34:39*.
-  - **#SYS** - extract the system id like *11*.
-  - **#TG** - extract the talkgroup id like *54241*.
-  - **#UNIT** - extract the unit id like *4424001*.
-  - **#ZTIME** - extract the *zulu* time like *0453439* or *04:34:39*.
-- **system** - A valid system id defined in **rdioScanner.systems**.
-- **talkgroup** - A valid talkgroup id defined in **rdioScanner.systems**.
-- **type** - In case of *Trunk Recorder*, the metadata of the *JSON file* will be used.
+* **delay** - Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a timeout value in *milliseconds* for the audio file to settle before ingesting it.
+* **deleteAfter** - You may want the audio file to be deleted after being ingested. If this value is *true*, all pre-existing audio files will be ingested and deleted as soon as [Rdio Scanner](https://github.com/chuot/rdio-scanner) starts. When this parameter is *false*, pre-existing audio files are neither ingested nor deleted.
+* **directory** - Absolute or relatives to [Rdio Scanner](https://github.com/chuot/rdio-scanner)'s. Path of the directory to be monitored. **This value must be unique**.
+* **extension** - The audio call extension to monitor without the period. Ex.: "mp3", "wav".
+* **frequency** - You may want to fake the frequency which will be displayed on *Rdio Scanner*. Let say that you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
+* **frequency** - You may want to simulate the frequency that will be displayed. Say you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
+* **mask** - Some metadata can be extracted from the file name of the audio file using specific META tags. Here is the list:
+  + **#DATE** - extract the date like *20200608* or *2020-06-08*.
+  + **#HZ** - extract the frequency in hertz like *119100000*.
+  + **#KHZ** - extract the frequency in kilohertz like *119100*.
+  + **#MHZ** - extract the frequency in megahertz like *119.100*.
+  + **#TIME** - extract the *local* time like *0853439* or *08:34:39*.
+  + **#SYS** - extract the system id like *11*.
+  + **#TG** - extract the talkgroup id like *54241*.
+  + **#UNIT** - extract the unit id like *4424001*.
+  + **#ZTIME** - extract the *zulu* time like *0453439* or *04:34:39*.
+* **system** - A valid system id defined in **rdioScanner.systems**.
+* **talkgroup** - A valid talkgroup id defined in **rdioScanner.systems**.
+* **type** - In case of *Trunk Recorder*, the metadata of the *JSON file* will be used.
 
 > Note that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must know the **system id** and the **talkgroup id** for the call to be ingested. These two values must be specified either by **dirWatch.system**, **dirWatch.talkgroup**, **dirWatch.mask** or a mix of them. **dirWatch.system** and **dirWatch.talkgroup** have priority over **dirWatch.mask**.
 
-Default value is an empty array `[]`.
+Default value is an empty array `[]` .
 
 **Examples**
 
-- Ingest audio files from **Trunk Recorder**
+* Ingest audio files from **Trunk Recorder**
 
-  ``` json
+  
+
+``` json
   "dirWatch": [
     {
       "deleteAfter": true,
@@ -369,9 +385,11 @@ Default value is an empty array `[]`.
   ]
   ```
 
-- Ingest audio files from **RTLSDR-Airband**
+* Ingest audio files from **RTLSDR-Airband**
 
-  ``` json
+  
+
+``` json
   "dirWatch": [
     {
       "deleteAfter": true,
@@ -385,9 +403,11 @@ Default value is an empty array `[]`.
   ]
   ```
 
-- Ingest audio files from **SDRTrunk**
+* Ingest audio files from **SDRTrunk**
 
-  ``` json
+  
+
+``` json
   "dirWatch": [
     {
       "deleteAfter": true,
@@ -404,7 +424,7 @@ Ingested audio calls can be sent downstream to other [Rdio Scanner](https://gith
 
 This is handy if you want to build a mesh of [Rdio Scanner](https://github.com/chuot/rdio-scanner). Let's say you want to exchange audio files with your friend who lives in another city. Or you want to ingest audio files from a Digital Logger through an internal instance and transfer these audio files to your public instance.
 
-> Remember that the API key you will use must be correctly configured on the receiving host as for the system and the talkgroup.
+> Remember that the API key you will use must be correctly configured on the receiving host.
 
 **Structure of the rdioScanner.downstreams object**
 
@@ -414,16 +434,16 @@ downstreams: {
   disabled: boolean;
   systems: number | number[] | {
     id: number;
-    talkgroups: number | number[];
+    talkgroups: number | number[] | "*" | undefined;
   } | {
     id: number;
     talkgroups: number | number[];
-  }[] | "*";
+  }[] | "*" | undefined;
   url: string;
 }[]
 ```
 
-Default value is an empty array `[]`.
+Default value is an empty array `[]` .
 
 **Examples**
 
@@ -441,13 +461,21 @@ Default value is an empty array `[]`.
         ]
       },
       {
+        "id": 12
+      },
+      {
+        "id": 15,
+        "talkgroups": "*"
+      },
+      {
         "id": 21,
         "talkgroups": [
           60040,
           60041,
           50003
         ]
-      }
+      },
+      31
     ],
     "url": "http://rdio-scanner.example.com:3000/"
   },
@@ -459,6 +487,8 @@ Default value is an empty array `[]`.
   }
 ]
 ```
+
+> Note in this example for API key `d2079382-07df-4aa9-8940-8fb9e4ef5f2e` that systems 12, 15 and 31 will downstream all of their talkgroups, unlike systems 11 and 21 which will only downstream some of their talkgroups.
 
 ## Systems - rdioScanner.systems
 
@@ -487,29 +517,29 @@ systems: {
 }[]
 ```
 
-- **id** - System ID.
-- **label** - System label shown on the left side of second row.
-- **led** - Optional LED color for the whole system. By default the LED is *green*.
-- **talkgroups** - Talkgroups for the system.
-  - **id** - Talkgroup ID.
-  - **label** - Talkgroup label shown on the left side of third row.
-  - **name** - Talkgroup name shown on the fouth row.
-  - **patches** - Array of talkgroup ID to include in this talkgroup.
-  - **tag** - Talkgroup tag shown on the right side of second row.
-- **units** - Unit aliases.
-  - **id** - Unit ID.
-  - **label** - Unit label shown on the right side of six sixth row.
+* **id** - System ID.
+* **label** - System label shown on the left side of second row.
+* **led** - Optional LED color for the whole system. By default the LED is *green*.
+* **talkgroups** - Talkgroups for the system.
+  + **id** - Talkgroup ID.
+  + **label** - Talkgroup label shown on the left side of third row.
+  + **name** - Talkgroup name shown on the fouth row.
+  + **patches** - Array of talkgroup ID to include in this talkgroup.
+  + **tag** - Talkgroup tag shown on the right side of second row.
+* **units** - Unit aliases.
+  + **id** - Unit ID.
+  + **label** - Unit label shown on the right side of six sixth row.
 
 ## Load a system from RadioReference.com
 
 You may want to load your `server/config.json` with some systems from [RadioReference.com](https://radioreference.com/).
 
-You can choose any `system_id` you want to refer to this system. If you choose an existing `system_id` in `config.json`, you will replace it with the new one.
+You can choose any `system_id` you want to refer to this system. If you choose an existing `system_id` in `config.json` , you will replace it with the new one.
 
 See examples in the installation documents:
 
-- [Install from the Docker Image](./install-docker.md)
-- [Install from the GitHub Repository](./install-github.md)
+* [Install from the Docker Image](./install-docker.md)
+* [Install from the GitHub Repository](./install-github.md)
 
 > Note that [Rdio Scanner](https://github.com/chuot/rdio-scanner) has been designed to resemble old school radio scanners where each talkgroup has its own toggle button on the **SELECT TG** panel. Loading too many systems/talkgroups will make the web application very slow. Depending on your use case, you may want to have no more than 400 talkgroups.
 
