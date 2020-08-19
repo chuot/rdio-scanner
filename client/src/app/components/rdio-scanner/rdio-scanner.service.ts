@@ -62,12 +62,15 @@ export class AppRdioScannerService implements OnDestroy {
     private audioSource: AudioBufferSourceNode | undefined;
     private audioSourceStartTime = NaN;
 
+    private beepContext: AudioContext | undefined;
+
     private call: RdioScannerCall | undefined;
     private callPrevious: RdioScannerCall | undefined;
     private callQueue: RdioScannerCall[] = [];
 
     private config: RdioScannerConfig = {
         allowDownload: true,
+        keyBeep: true,
         systems: [],
         useDimmer: true,
         useGroup: true,
@@ -160,6 +163,27 @@ export class AppRdioScannerService implements OnDestroy {
             map: this.liveFeedMap,
             queue: this.callQueue.length,
         });
+    }
+
+    beep(style = 1): void {
+        if (this.config.keyBeep) {
+            switch (style) {
+                case 1:
+                    this.beep1();
+                    break;
+
+                case 2:
+                    this.beep2();
+                    break;
+
+                case 3:
+                    this.beep3();
+                    break;
+
+                default:
+                    this.beep1();
+            }
+        }
     }
 
     holdSystem(options?: { resubscribe: boolean }): void {
@@ -296,7 +320,7 @@ export class AppRdioScannerService implements OnDestroy {
     pause(status = !this.liveFeedPaused): void {
         this.liveFeedPaused = status;
 
-        if (this.liveFeedPaused) {
+        if (status) {
             this.audioContext?.suspend();
 
         } else {
@@ -465,16 +489,106 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
+    private beep1(): void {
+        const context = this.beepContext;
+
+        if (context) {
+            const gn = context.createGain();
+
+            const osc = context.createOscillator();
+
+            gn.connect(context.destination);
+
+            gn.gain.value = .1;
+
+            osc.connect(gn);
+
+            osc.frequency.value = 1200;
+
+            osc.type = 'square';
+
+            context.resume().then(() => {
+                osc.start();
+
+                osc.stop(context.currentTime + .05);
+            });
+        }
+    }
+
+    private beep2(): void {
+        const context = this.beepContext;
+
+        if (context) {
+            const gn = context.createGain();
+
+            const osc1 = context.createOscillator();
+            const osc2 = context.createOscillator();
+
+            gn.connect(context.destination);
+
+            gn.gain.value = .1;
+
+            osc1.connect(gn);
+            osc2.connect(gn);
+
+            osc1.frequency.value = 1200;
+            osc2.frequency.value = 925;
+
+            osc1.type = 'square';
+            osc2.type = 'square';
+
+            context.resume().then(() => {
+                osc1.start();
+                osc1.stop(context.currentTime + .1);
+
+                osc2.start(context.currentTime + .1);
+                osc2.stop(context.currentTime + .2);
+            });
+        }
+    }
+
+    private beep3(): void {
+        const context = this.beepContext;
+
+        if (context) {
+            const gn = context.createGain();
+
+            const osc1 = context.createOscillator();
+            const osc2 = context.createOscillator();
+
+            gn.connect(context.destination);
+
+            gn.gain.value = .1;
+
+            osc1.connect(gn);
+            osc2.connect(gn);
+
+            osc1.frequency.value = 925;
+            osc2.frequency.value = 925;
+
+            osc1.type = 'square';
+            osc2.type = 'square';
+
+            context.resume().then(() => {
+                osc1.start();
+                osc1.stop(context.currentTime + .05);
+
+                osc2.start(context.currentTime + .1);
+                osc2.stop(context.currentTime + .15);
+            });
+        }
+    }
+
     private bootstrapAudio(): void {
         const events = ['mousedown', 'touchdown'];
 
         const bootstrap = async () => {
             if (!this.audioContext) {
-                const options: AudioContextOptions = {
-                    latencyHint: 'playback',
-                };
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+            }
 
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)(options);
+            if (!this.beepContext) {
+                this.beepContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
             }
 
             if (this.audioContext) {

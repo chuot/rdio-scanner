@@ -145,6 +145,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else if (!this.liveFeedOffline) {
+            this.appRdioScannerService.beep(options || this.call || this.callPrevious ? 1 : 3);
+
             this.appRdioScannerService.avoid(options);
 
             this.updateDimmer();
@@ -175,6 +177,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else if (!this.liveFeedOffline) {
+            this.appRdioScannerService.beep(this.call || this.callPrevious ? this.holdSys ? 2 : 1 : 3);
+
             this.appRdioScannerService.holdSystem();
 
             this.updateDimmer();
@@ -186,6 +190,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else if (!this.liveFeedOffline) {
+            this.appRdioScannerService.beep(this.call || this.callPrevious ? this.holdTg ? 2 : 1 : 3);
+
             this.appRdioScannerService.holdTalkgroup();
 
             this.updateDimmer();
@@ -196,13 +202,19 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         if (this.auth) {
             this.authFocus();
 
-        } else if (this.liveFeedOffline) {
-            this.stopOfflinePlay();
-
         } else {
-            this.appRdioScannerService.liveFeed();
+            if (this.liveFeedOffline) {
+                this.appRdioScannerService.beep(2);
 
-            this.updateDimmer();
+                this.stopOfflinePlay();
+
+            } else {
+                this.appRdioScannerService.beep(this.liveFeedActive ? 2 : 1);
+
+                this.appRdioScannerService.liveFeed();
+
+                this.updateDimmer();
+            }
         }
     }
 
@@ -427,6 +439,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else {
+            this.appRdioScannerService.beep(this.liveFeedPaused ? 2 : 1);
+
             this.appRdioScannerService.pause();
 
             this.updateDimmer();
@@ -459,6 +473,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else {
+            this.appRdioScannerService.beep(this.call || this.callPrevious ? 1 : 3);
+
             this.appRdioScannerService.replay();
 
             this.updateDimmer();
@@ -534,6 +550,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else {
+            this.appRdioScannerService.beep();
+
             this.searchPanelOpened = true;
 
             if (!this.liveFeedOffline) {
@@ -551,6 +569,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else {
+            this.appRdioScannerService.beep();
+
             this.selectPanelOpened = true;
         }
     }
@@ -560,6 +580,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else if (!this.callPending) {
+            this.appRdioScannerService.beep(this.call || this.callPrevious ? 1 : 3);
+
             this.appRdioScannerService.skip(options);
 
             this.updateDimmer();
@@ -609,6 +631,8 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     }
 
     toggleGroup(label: string): void {
+        this.appRdioScannerService.beep();
+
         this.appRdioScannerService.toggleGroup(label);
     }
 

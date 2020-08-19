@@ -73,6 +73,8 @@ class Controller extends EventEmitter {
             delete this.config.disableAudioConversion;
         }
 
+        this.config.options.keyBeep = typeof this.config.options.keyBeep === 'boolean' ? this.config.options.keyBeep : true;
+
         this.config.options.pruneDays = typeof this.config.options.pruneDays === 'number' ? this.config.options.pruneDays
             : typeof this.config.pruneDays === 'number' ? this.config.pruneDays : 7;
 
@@ -382,6 +384,7 @@ class Controller extends EventEmitter {
 
     getOptions() {
         return {
+            keyBeep: this.config.options.keyBeep,
             useDimmer: this.config.options.useDimmer,
             useGroup: this.config.options.useGroup,
             useLed: this.config.options.useLed,

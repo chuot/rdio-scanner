@@ -62,6 +62,10 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             // Default value is false
             "disableAudioConversion": false,
 
+            // (boolean) Emit beeps when clicking buttons
+            // Default value is true
+            "keyBeep": true,
+
             // (number) Clear the database for audio files older than the specified number of days
             // Default value is 7
             // Specifying a value of 0 will disable this feature

@@ -59,6 +59,7 @@ export interface RdioScannerCallSource {
 
 export interface RdioScannerConfig {
     allowDownload: boolean;
+    keyBeep: boolean;
     systems: RdioScannerSystem[];
     useDimmer: boolean;
     useGroup: boolean;

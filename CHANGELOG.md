@@ -1,3 +1,7 @@
+# Version 4.5
+
+- Config.options.keyBeep which by default is true
+
 # Version 4.4
 
 - Config.systems.talkgroups.patches to group many talkgroups (patches) into one talkgroup.id.
