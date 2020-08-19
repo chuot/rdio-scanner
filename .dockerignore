@@ -1,3 +1,4 @@
+dist
 client/dist
 client/node_modules
 server/config.json*
