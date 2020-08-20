@@ -63,16 +63,18 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             "disableAudioConversion": false,
 
             // (boolean) Emit beeps when clicking buttons
-            // Default value is true
-            "keyBeep": true,
+            // Default value is true which is converted to Uniden style beeps
+            // See KeypadBeeps section below for more details
+            "keypadBeeps": true,
 
             // (number) Clear the database for audio files older than the specified number of days
             // Default value is 7
             // Specifying a value of 0 will disable this feature
             "pruneDays": 7
 
-            // (boolean) Turn off the screen backlight when it is inactive
-            // Default value is true
+            // (boolean | number) Turn off the screen backlight when it is inactive
+            // You can specify the delay as a number of seconds
+            // Default value is true which the same as 5 seconds
             "useDimmer": true
 
             // (boolean) Also toggle talkgroups based on their group assignment
@@ -493,6 +495,133 @@ Default value is an empty array `[]` .
 ```
 
 > Note in this example for API key `d2079382-07df-4aa9-8940-8fb9e4ef5f2e` that systems 12, 15 and 31 will downstream all of their talkgroups, unlike systems 11 and 21 which will only downstream some of their talkgroups.
+
+## KeypadBeeps - rdioScanner.options.keypadBeeps
+
+Each button press can emit a specific beep depending on whether a function is activated, deactivated or denied.
+
+**Structure of the rdioScanner.options.keypadBeeps object**
+
+``` typescript
+options: {
+  keypadBeeps: false | {
+    activate: {          // beeps sequence when a function is activated
+      begin: number;     // seconds
+      end: number;       // seconds
+      frequency: number; // hertz
+      type: 'sine' | 'square' | 'sawtooth' | 'triangle';
+    }[],
+    deactivate: {        // beeps sequence when a function is deactivates
+      begin: number;     // seconds
+      end: number;       // seconds
+      frequency: number; // hertz
+      type: 'sine' | 'square' | 'sawtooth' | 'triangle';
+    }[],
+    denied: {            // beeps sequence when a function is denied
+      begin: number;     // seconds
+      end: number;       // seconds
+      frequency: number; // hertz
+      type: 'sine' | 'square' | 'sawtooth' | 'triangle';
+    }[],
+  };
+}[]
+```
+
+Default value is (*Uniden Style*):
+
+``` json
+"options": {
+  "keypadBeeps": {
+    "activate": [
+      {
+        "begin": 0,
+        "end": 0.05,
+        "frequency": 1200,
+        "type": "square"
+      }
+    ],
+    "deactivate": [
+      {
+        "begin": 0,
+        "end": 0.1,
+        "frequency": 1200,
+        "type": "square"
+      },
+      {
+        "begin": 0.1,
+        "end": 0.2,
+        "frequency": 925,
+        "type": "square"
+      }
+    ],
+    "denied": [
+      {
+        "begin": 0,
+        "end": 0.05,
+        "frequency": 925,
+        "type": "square"
+      },
+      {
+        "begin": 0.1,
+        "end": 0.15,
+        "frequency": 925,
+        "type": "square"
+      }
+    ]
+  }
+}
+```
+
+**Example - Whistler style**
+
+``` json
+"options": {
+  "keypadBeeps": {
+    "activate": [
+      {
+        "begin": 0,
+        "end": 0.05,
+        "frequency": 2000,
+        "type": "triangle"
+      }
+    ],
+    "deactivate": [
+      {
+        "begin": 0,
+        "end": 0.04,
+        "frequency": 1500,
+        "type": "triangle"
+      },
+      {
+        "begin": 0.04,
+        "end": 0.08,
+        "frequency": 1400,
+        "type": "triangle"
+      }
+    ],
+    "denied": [
+      {
+        "begin": 0,
+        "end": 0.04,
+        "frequency": 1400,
+        "type": "triangle"
+      },
+      {
+        "begin": 0.05,
+        "end": 0.09,
+        "frequency": 1400,
+        "type": "triangle"
+      },
+      {
+        "begin": 0.1,
+        "end": 0.14,
+        "frequency": 1400,
+        "type": "triangle"
+      }
+    ]
+  }
+}
+```
 
 ## Systems - rdioScanner.systems
 

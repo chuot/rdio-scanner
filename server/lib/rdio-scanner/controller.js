@@ -49,137 +49,7 @@ class Controller extends EventEmitter {
 
         this.setMaxListeners(0);
 
-        this.config = ctx.config;
-
-        this.config.access = this.config.access !== undefined ? this.config.access : null;
-
-        this.config.apiKeys = this.config.apiKeys !== undefined ? this.config.apiKeys : uuid.v4();
-
-        if (this.config.options === null || typeof this.config.options !== 'object') {
-            this.config.options = {};
-        }
-
-        this.config.options.allowDownload = typeof this.config.options.allowDownload === 'boolean' ? this.config.options.allowDownload
-            : typeof this.config.allowDownload === 'boolean' ? this.config.allowDownload : true;
-
-        if (this.config.allowDownload !== null || this.config.allowDownload !== undefined) {
-            delete this.config.allowDownload;
-        }
-
-        this.config.options.disableAudioConversion = typeof this.config.options.disableAudioConversion === 'boolean' ? this.config.options.disableAudioConversion
-            : typeof this.config.disableAudioConversion === 'boolean' ? this.config.disableAudioConversion : false;
-
-        if (this.config.disableAudioConversion !== null || this.config.disableAudioConversion !== undefined) {
-            delete this.config.disableAudioConversion;
-        }
-
-        this.config.options.keyBeep = typeof this.config.options.keyBeep === 'boolean' ? this.config.options.keyBeep : true;
-
-        this.config.options.pruneDays = typeof this.config.options.pruneDays === 'number' ? this.config.options.pruneDays
-            : typeof this.config.pruneDays === 'number' ? this.config.pruneDays : 7;
-
-        if (this.config.pruneDays !== null || this.config.pruneDays !== undefined) {
-            delete this.config.pruneDays;
-        }
-
-        this.config.options.useDimmer = typeof this.config.options.useDimmer === 'boolean' ? this.config.options.useDimmer
-            : typeof this.config.useDimmer === 'boolean' ? this.config.useDimmer : true;
-
-        if (this.config.useDimmer !== null || this.config.useDimmer !== undefined) {
-            delete this.config.useDimmer;
-        }
-
-        this.config.options.useGroup = typeof this.config.options.useGroup === 'boolean' ? this.config.options.useGroup
-            : typeof this.config.useGroup === 'boolean' ? this.config.useGroup : true;
-
-        if (this.config.useGroup !== null || this.config.useGroup !== undefined) {
-            delete this.config.useGroup;
-        }
-
-        this.config.options.useLed = typeof this.config.options.useLed === 'boolean' ? this.config.options.useLed
-            : typeof this.config.useLed === 'boolean' ? this.config.useLed : true;
-
-        if (this.config.useLed !== null || this.config.useLed !== undefined) {
-            delete this.config.useLed;
-        }
-
-        this.config.systems = Array.isArray(this.config.systems) ? this.config.systems : systemsDefault;
-
-        this.config.systems.forEach((system) => {
-            if (system === null || typeof system !== 'object') {
-                console.error(`Config: Unknown system definition: ${JSON.stringify(system)}`);
-
-                return;
-            }
-
-            if (typeof system.id !== 'number') {
-                console.error(`Config: System.id ${JSON.stringify(system.id)} not a number`);
-            }
-
-            if (typeof system.label !== 'string' || !system.label.length) {
-                console.error(`Config: System ${system.id}, label not a string: ${JSON.stringify(system.label)}`);
-            }
-
-            if (!Array.isArray(system.talkgroups)) {
-                system.talkgroups = [];
-            }
-
-            if (!system.talkgroups.length) {
-                console.error(`Config: System ${system.id}, no talkgroups`);
-            }
-
-            system.talkgroups.forEach((talkgroup) => {
-                if (talkgroup === null || typeof talkgroup !== 'object') {
-                    console.error(`Config: System ${system.id}, unknown talkgroup definition: ${JSON.stringify(talkgroup)}`);
-
-                    return;
-                }
-
-                if (typeof talkgroup.id !== 'number') {
-                    console.error(`Config: System ${system.id}, talkgroup.id not a number: ${JSON.stringify(talkgroup.id)}`);
-                }
-
-                if (this.config.useGroup && typeof talkgroup.group !== 'string' || !talkgroup.group.length) {
-                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, group not a string: ${JSON.stringify(talkgroup.group)}`);
-                }
-
-                if (typeof talkgroup.label !== 'string' || !talkgroup.label.length) {
-                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, label not a string: ${JSON.stringify(talkgroup.label)}`);
-                }
-
-                if (typeof talkgroup.name !== 'string' || !talkgroup.name.length) {
-                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, name not a string: ${JSON.stringify(talkgroup.name)}`);
-                }
-
-                if (talkgroup.patches !== undefined && !Array.isArray(talkgroup.patches)) {
-                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, patches not an array: ${JSON.stringify(talkgroup.patches)}`);
-                }
-
-                if (typeof talkgroup.tag !== 'string' || !talkgroup.tag.length) {
-                    console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, tag not a string: ${JSON.stringify(talkgroup.tag)}`);
-                }
-            });
-
-            if (!Array.isArray(system.units)) {
-                system.units = [];
-            }
-
-            system.units.forEach((unit) => {
-                if (unit === null || typeof unit !== 'object') {
-                    console.error(`Config: System ${system.id}, unknown unit definition: ${JSON.stringify(unit)}`);
-
-                    return;
-                }
-
-                if (typeof unit.id !== 'number') {
-                    console.error(`Config: System ${system.id}, unit.id not a number: ${JSON.stringify(unit.id)}`);
-                }
-
-                if (typeof unit.label !== 'string' || !unit.label.length) {
-                    console.error(`Config: System ${system.id}, unit ${unit.id}, label not a string: ${JSON.stringify(unit.label)}`);
-                }
-            });
-        })
+        this.config = parseConfig(ctx.config);
 
         this.models = ctx.models;
 
@@ -384,7 +254,7 @@ class Controller extends EventEmitter {
 
     getOptions() {
         return {
-            keyBeep: this.config.options.keyBeep,
+            keypadBeeps: this.config.options.keypadBeeps,
             useDimmer: this.config.options.useDimmer,
             useGroup: this.config.options.useGroup,
             useLed: this.config.options.useLed,
@@ -481,7 +351,8 @@ class Controller extends EventEmitter {
                 },
             });
 
-            return systems.map((system) => (system.talkgroups = system.talkgroups.filter((tg) => scope[system.id].includes(tg.id))) && system);
+            return systems.map((system) => (system.talkgroups = system.talkgroups
+                .filter((tg) => scope[system.id].includes(tg.id))) && system);
 
         } else {
             const systems = await this.models.system.findAll();
@@ -508,7 +379,8 @@ class Controller extends EventEmitter {
         }) : null;
 
         if (!system || !talkgroup) {
-            console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} file=${call.audioName} No matching system/talkgroup`);
+            console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} `
+                + `file=${call.audioName} No matching system/talkgroup`);
 
             return;
         }
@@ -700,6 +572,228 @@ class Controller extends EventEmitter {
             })
         );
     }
+}
+
+function parseConfig(config) {
+    const ledColors = ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow']
+
+    const oscillatorNodeType = ['sine', 'square', 'sawtooth', 'triangle'];
+
+    config.access = config.access !== undefined ? config.access : null;
+
+    config.apiKeys = config.apiKeys !== undefined ? config.apiKeys : uuid.v4();
+
+    if (config.options === null || typeof config.options !== 'object') {
+        config.options = {};
+    }
+
+    config.options.allowDownload = typeof config.options.allowDownload === 'boolean' ? config.options.allowDownload
+        : typeof config.allowDownload === 'boolean' ? config.allowDownload : true;
+
+    if (config.allowDownload !== null || config.allowDownload !== undefined) {
+        delete config.allowDownload;
+    }
+
+    config.options.disableAudioConversion = typeof config.options.disableAudioConversion === 'boolean'
+        ? config.options.disableAudioConversion : typeof config.disableAudioConversion === 'boolean'
+            ? config.disableAudioConversion : false;
+
+    if (config.disableAudioConversion !== null || config.disableAudioConversion !== undefined) {
+        delete config.disableAudioConversion;
+    }
+
+    config.options.keypadBeeps = config.options.keypadBeeps === false ? false : config.options.keyBeep === false
+        ? false : config.options.keypadBeeps !== null && typeof config.options.keypadBeeps === 'object'
+            ? config.options.keypadBeeps : {};
+
+    if (config.options.keyBeep !== undefined) {
+        delete config.options.keyBeep;
+    }
+
+    if (typeof config.options.keypadBeeps === 'object') {
+        if (Array.isArray(config.options.keypadBeeps.activate)) {
+            config.options.keypadBeeps.activate.forEach((beep, index) => {
+                beep.begin = typeof beep.begin === 'number' ? beep.begin : index * 0.05;
+                beep.end = typeof beep.end === 'number' ? beep.end : index * 0.05 + 0.05;
+                beep.frequency = typeof beep.frequency === 'number' ? beep.frequency : 1200;
+                beep.type = oscillatorNodeType.includes(beep.type) ? beep.type : 'square';
+            });
+
+        } else {
+            config.options.keypadBeeps.activate = [{
+                begin: 0,
+                end: 0.05,
+                frequency: 1200,
+                type: 'square',
+            }];
+
+        }
+
+        if (Array.isArray(config.options.keypadBeeps.deactivate)) {
+            config.options.keypadBeeps.deactivate.forEach((beep, index) => {
+                beep.begin = typeof beep.begin === 'number' ? beep.begin : index * 0.1;
+                beep.end = typeof beep.end === 'number' ? beep.end : index * 0.1 + 0.1;
+                beep.frequency = typeof beep.frequency === 'number' ? beep.frequency : 925;
+                beep.type = oscillatorNodeType.includes(beep.type) ? beep.type : 'square';
+            });
+
+        } else {
+            config.options.keypadBeeps.deactivate = [{
+                begin: 0,
+                end: 0.1,
+                frequency: 1200,
+                type: 'square',
+            }, {
+                begin: 0.1,
+                end: 0.2,
+                frequency: 925,
+                type: 'square',
+            }];
+        }
+
+        if (Array.isArray(config.options.keypadBeeps.denied)) {
+            config.options.keypadBeeps.denied.forEach((beep, index) => {
+                beep.begin = typeof beep.begin === 'number' ? beep.begin : index * 0.1;
+                beep.end = typeof beep.end === 'number' ? beep.end : index * 0.1 + 0.05;
+                beep.frequency = typeof beep.frequency === 'number' ? beep.frequency : 925;
+                beep.type = oscillatorNodeType.includes(beep.type) ? beep.type : 'square';
+            });
+
+        } else {
+            config.options.keypadBeeps.denied = [{
+                begin: 0,
+                end: 0.05,
+                frequency: 925,
+                type: 'square',
+            }, {
+                begin: 0.1,
+                end: 0.15,
+                frequency: 925,
+                type: 'square',
+            }];
+        }
+    }
+
+    config.options.pruneDays = typeof config.options.pruneDays === 'number' ? config.options.pruneDays
+        : typeof config.pruneDays === 'number' ? config.pruneDays : 7;
+
+    if (config.pruneDays !== null || config.pruneDays !== undefined) {
+        delete config.pruneDays;
+    }
+
+    config.options.useDimmer = typeof config.options.useDimmer === 'number' ? config.options.useDimmer
+        : typeof config.options.useDimmer === 'boolean' ? config.options.useDimmer
+            : typeof config.useDimmer === 'boolean' ? config.useDimmer : true;
+
+    if (config.useDimmer !== null || config.useDimmer !== undefined) {
+        delete config.useDimmer;
+    }
+
+    config.options.useGroup = typeof config.options.useGroup === 'boolean' ? config.options.useGroup
+        : typeof config.useGroup === 'boolean' ? config.useGroup : true;
+
+    if (config.useGroup !== null || config.useGroup !== undefined) {
+        delete config.useGroup;
+    }
+
+    config.options.useLed = typeof config.options.useLed === 'boolean' ? config.options.useLed
+        : typeof config.useLed === 'boolean' ? config.useLed : true;
+
+    if (config.useLed !== null || config.useLed !== undefined) {
+        delete config.useLed;
+    }
+
+    config.systems = Array.isArray(config.systems) ? config.systems : systemsDefault;
+
+    config.systems.forEach((system) => {
+        if (system === null || typeof system !== 'object') {
+            console.error(`Config: Unknown system definition: ${JSON.stringify(system)}`);
+
+            return;
+        }
+
+        if (typeof system.id !== 'number') {
+            console.error(`Config: System.id ${JSON.stringify(system.id)} not a number`);
+        }
+
+        if (typeof system.label !== 'string' || !system.label.length) {
+            console.error(`Config: System ${system.id}, label not a string: ${JSON.stringify(system.label)}`);
+        }
+
+        if (typeof system.led !== 'undefined') {
+            system.led = ledColors.includes(system.led) ? system.led : 'green';
+        }
+
+        if (!Array.isArray(system.talkgroups)) {
+            system.talkgroups = [];
+        }
+
+        if (!system.talkgroups.length) {
+            console.error(`Config: System ${system.id}, no talkgroups`);
+        }
+
+        system.talkgroups.forEach((talkgroup) => {
+            if (talkgroup === null || typeof talkgroup !== 'object') {
+                console.error(`Config: System ${system.id}, unknown talkgroup definition: ${JSON.stringify(talkgroup)}`);
+
+                return;
+            }
+
+            if (typeof talkgroup.id !== 'number') {
+                console.error(`Config: System ${system.id}, talkgroup.id not a number: ${JSON.stringify(talkgroup.id)}`);
+            }
+
+            if (config.useGroup && typeof talkgroup.group !== 'string' || !talkgroup.group.length) {
+                console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, `
+                    + `group not a string: ${JSON.stringify(talkgroup.group)}`);
+            }
+
+            if (typeof talkgroup.label !== 'string' || !talkgroup.label.length) {
+                console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, `
+                    + `label not a string: ${JSON.stringify(talkgroup.label)}`);
+            }
+
+            if (typeof talkgroup.led !== 'undefined') {
+                talkgroup.led = ledColors.includes(talkgroup.led) ? talkgroup.led : 'green';
+            }
+
+            if (typeof talkgroup.name !== 'string' || !talkgroup.name.length) {
+                console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, `
+                    + `name not a string: ${JSON.stringify(talkgroup.name)}`);
+            }
+
+            if (talkgroup.patches !== undefined && !Array.isArray(talkgroup.patches)) {
+                console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, `
+                    + `patches not an array: ${JSON.stringify(talkgroup.patches)}`);
+            }
+
+            if (typeof talkgroup.tag !== 'string' || !talkgroup.tag.length) {
+                console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, tag not a string: ${JSON.stringify(talkgroup.tag)}`);
+            }
+        });
+
+        if (!Array.isArray(system.units)) {
+            system.units = [];
+        }
+
+        system.units.forEach((unit) => {
+            if (unit === null || typeof unit !== 'object') {
+                console.error(`Config: System ${system.id}, unknown unit definition: ${JSON.stringify(unit)}`);
+
+                return;
+            }
+
+            if (typeof unit.id !== 'number') {
+                console.error(`Config: System ${system.id}, unit.id not a number: ${JSON.stringify(unit.id)}`);
+            }
+
+            if (typeof unit.label !== 'string' || !unit.label.length) {
+                console.error(`Config: System ${system.id}, unit ${unit.id}, label not a string: ${JSON.stringify(unit.label)}`);
+            }
+        });
+    });
+
+    return config;
 }
 
 module.exports = Controller;

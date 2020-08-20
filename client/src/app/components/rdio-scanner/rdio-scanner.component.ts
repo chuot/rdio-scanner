@@ -26,6 +26,7 @@ import { BehaviorSubject, NEVER, Subscription, timer } from 'rxjs';
 import { name as appName, version } from '../../../../package.json';
 import {
     RdioScannerAvoidOptions,
+    RdioScannerBeepStyle,
     RdioScannerCall,
     RdioScannerConfig,
     RdioScannerEvent,
@@ -144,10 +145,15 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         if (this.auth) {
             this.authFocus();
 
-        } else if (!this.liveFeedOffline) {
-            this.appRdioScannerService.beep(options || this.call || this.callPrevious ? 1 : 3);
+        } else {
+            if (options || this.call || this.callPrevious) {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-            this.appRdioScannerService.avoid(options);
+                this.appRdioScannerService.avoid(options);
+
+            } else {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            }
 
             this.updateDimmer();
         }
@@ -176,10 +182,15 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         if (this.auth) {
             this.authFocus();
 
-        } else if (!this.liveFeedOffline) {
-            this.appRdioScannerService.beep(this.call || this.callPrevious ? this.holdSys ? 2 : 1 : 3);
+        } else {
+            if (this.call || this.callPrevious) {
+                this.appRdioScannerService.beep(this.holdSys ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
 
-            this.appRdioScannerService.holdSystem();
+                this.appRdioScannerService.holdSystem();
+
+            } else {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            }
 
             this.updateDimmer();
         }
@@ -189,10 +200,15 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         if (this.auth) {
             this.authFocus();
 
-        } else if (!this.liveFeedOffline) {
-            this.appRdioScannerService.beep(this.call || this.callPrevious ? this.holdTg ? 2 : 1 : 3);
+        } else {
+            if (this.call || this.callPrevious) {
+                this.appRdioScannerService.beep(this.holdTg ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
 
-            this.appRdioScannerService.holdTalkgroup();
+                this.appRdioScannerService.holdTalkgroup();
+
+            } else {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            }
 
             this.updateDimmer();
         }
@@ -204,17 +220,17 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
 
         } else {
             if (this.liveFeedOffline) {
-                this.appRdioScannerService.beep(2);
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
 
                 this.stopOfflinePlay();
 
             } else {
-                this.appRdioScannerService.beep(this.liveFeedActive ? 2 : 1);
+                this.appRdioScannerService.beep(this.liveFeedActive ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
 
                 this.appRdioScannerService.liveFeed();
-
-                this.updateDimmer();
             }
+
+            this.updateDimmer();
         }
     }
 
@@ -439,9 +455,14 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else {
-            this.appRdioScannerService.beep(this.liveFeedPaused ? 2 : 1);
+            if (this.liveFeedPaused) {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Deactivate).then(() => this.appRdioScannerService.pause());
 
-            this.appRdioScannerService.pause();
+            } else {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+
+                this.appRdioScannerService.pause();
+            }
 
             this.updateDimmer();
         }
@@ -473,9 +494,14 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             this.authFocus();
 
         } else {
-            this.appRdioScannerService.beep(this.call || this.callPrevious ? 1 : 3);
+            if (!this.liveFeedPaused && (this.call || this.callPrevious)) {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-            this.appRdioScannerService.replay();
+                this.appRdioScannerService.replay();
+
+            } else {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            }
 
             this.updateDimmer();
         }
@@ -579,10 +605,15 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
         if (this.auth) {
             this.authFocus();
 
-        } else if (!this.callPending) {
-            this.appRdioScannerService.beep(this.call || this.callPrevious ? 1 : 3);
+        } else {
+            if (this.call && !this.callPending) {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-            this.appRdioScannerService.skip(options);
+                this.appRdioScannerService.skip(options);
+
+            } else {
+                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+            }
 
             this.updateDimmer();
         }
@@ -804,19 +835,23 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     }
 
     private updateDimmer(): void {
-        this.dimmerTimer?.unsubscribe();
+        if (this.config?.useDimmer) {
+            const delay = typeof this.config.useDimmer === 'boolean' ? 5000 : this.config.useDimmer * 1000;
 
-        this.dimmer = true;
-
-        this.dimmerTimer = timer(5 * 1000).subscribe(() => {
             this.dimmerTimer?.unsubscribe();
 
-            this.dimmerTimer = undefined;
+            this.dimmer = true;
 
-            this.dimmer = false;
+            this.dimmerTimer = timer(delay).subscribe(() => {
+                this.dimmerTimer?.unsubscribe();
 
-            this.ngDetectChanges();
-        });
+                this.dimmerTimer = undefined;
+
+                this.dimmer = false;
+
+                this.ngDetectChanges();
+            });
+        }
     }
 
     private updateDisplay(time = this.callTime): void {

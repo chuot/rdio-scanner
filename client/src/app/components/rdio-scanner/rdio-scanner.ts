@@ -25,6 +25,19 @@ export interface RdioScannerAvoidOptions {
     status?: boolean;
 }
 
+export interface RdioScannerBeep {
+    begin: number;
+    end: number;
+    frequency: number;
+    type: OscillatorType;
+}
+
+export enum RdioScannerBeepStyle {
+    Activate = 'activate',
+    Deactivate = 'deactivate',
+    Denied = 'denied',
+}
+
 export interface RdioScannerCall {
     audio?: {
         type: 'Buffer';
@@ -59,9 +72,9 @@ export interface RdioScannerCallSource {
 
 export interface RdioScannerConfig {
     allowDownload: boolean;
-    keyBeep: boolean;
+    keypadBeeps: RdioScannerKeypadBeeps | false;
     systems: RdioScannerSystem[];
-    useDimmer: boolean;
+    useDimmer: boolean | number;
     useGroup: boolean;
     useLed: boolean;
 }
@@ -90,6 +103,12 @@ export enum RdioScannerGroupStatus {
 export interface RdioScannerGroup {
     label: string;
     status: RdioScannerGroupStatus;
+}
+
+export interface RdioScannerKeypadBeeps {
+    [RdioScannerBeepStyle.Activate]: RdioScannerBeep[];
+    [RdioScannerBeepStyle.Deactivate]: RdioScannerBeep[];
+    [RdioScannerBeepStyle.Denied]: RdioScannerBeep[];
 }
 
 export interface RdioScannerList {

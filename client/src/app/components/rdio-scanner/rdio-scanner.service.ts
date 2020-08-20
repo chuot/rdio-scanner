@@ -23,6 +23,7 @@ import { interval, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 import {
     RdioScannerAvoidOptions,
+    RdioScannerBeepStyle,
     RdioScannerCall,
     RdioScannerConfig,
     RdioScannerEvent,
@@ -70,7 +71,7 @@ export class AppRdioScannerService implements OnDestroy {
 
     private config: RdioScannerConfig = {
         allowDownload: true,
-        keyBeep: true,
+        keypadBeeps: false,
         systems: [],
         useDimmer: true,
         useGroup: true,
@@ -165,25 +166,42 @@ export class AppRdioScannerService implements OnDestroy {
         });
     }
 
-    beep(style = 1): void {
-        if (this.config.keyBeep) {
-            switch (style) {
-                case 1:
-                    this.beep1();
-                    break;
+    beep(style = RdioScannerBeepStyle.Activate): Promise<void> {
+        return new Promise((resolve) => {
+            if (!this.beepContext || !this.config.keypadBeeps) {
+                resolve();
 
-                case 2:
-                    this.beep2();
-                    break;
-
-                case 3:
-                    this.beep3();
-                    break;
-
-                default:
-                    this.beep1();
+                return;
             }
-        }
+
+            const context = this.beepContext;
+
+            const gn = context.createGain();
+
+            const seq = this.config.keypadBeeps[style];
+
+            gn.gain.value = .1;
+
+            gn.connect(context.destination);
+
+            seq.forEach((beep, index) => {
+                const osc = context.createOscillator();
+
+                osc.connect(gn);
+
+                osc.frequency.value = beep.frequency;
+
+                osc.type = beep.type;
+
+                if (index === seq.length - 1) {
+                    osc.onended = () => resolve();
+                }
+
+                osc.start(context.currentTime + beep.begin);
+
+                osc.stop(context.currentTime + beep.end);
+            });
+        });
     }
 
     holdSystem(options?: { resubscribe: boolean }): void {
@@ -489,98 +507,8 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    private beep1(): void {
-        const context = this.beepContext;
-
-        if (context) {
-            const gn = context.createGain();
-
-            const osc = context.createOscillator();
-
-            gn.connect(context.destination);
-
-            gn.gain.value = .1;
-
-            osc.connect(gn);
-
-            osc.frequency.value = 1200;
-
-            osc.type = 'square';
-
-            context.resume().then(() => {
-                osc.start();
-
-                osc.stop(context.currentTime + .05);
-            });
-        }
-    }
-
-    private beep2(): void {
-        const context = this.beepContext;
-
-        if (context) {
-            const gn = context.createGain();
-
-            const osc1 = context.createOscillator();
-            const osc2 = context.createOscillator();
-
-            gn.connect(context.destination);
-
-            gn.gain.value = .1;
-
-            osc1.connect(gn);
-            osc2.connect(gn);
-
-            osc1.frequency.value = 1200;
-            osc2.frequency.value = 925;
-
-            osc1.type = 'square';
-            osc2.type = 'square';
-
-            context.resume().then(() => {
-                osc1.start();
-                osc1.stop(context.currentTime + .1);
-
-                osc2.start(context.currentTime + .1);
-                osc2.stop(context.currentTime + .2);
-            });
-        }
-    }
-
-    private beep3(): void {
-        const context = this.beepContext;
-
-        if (context) {
-            const gn = context.createGain();
-
-            const osc1 = context.createOscillator();
-            const osc2 = context.createOscillator();
-
-            gn.connect(context.destination);
-
-            gn.gain.value = .1;
-
-            osc1.connect(gn);
-            osc2.connect(gn);
-
-            osc1.frequency.value = 925;
-            osc2.frequency.value = 925;
-
-            osc1.type = 'square';
-            osc2.type = 'square';
-
-            context.resume().then(() => {
-                osc1.start();
-                osc1.stop(context.currentTime + .05);
-
-                osc2.start(context.currentTime + .1);
-                osc2.stop(context.currentTime + .15);
-            });
-        }
-    }
-
     private bootstrapAudio(): void {
-        const events = ['mousedown', 'touchdown'];
+        const events = ['keydown', 'mousedown', 'touchdown'];
 
         const bootstrap = async () => {
             if (!this.audioContext) {
@@ -603,7 +531,13 @@ export class AppRdioScannerService implements OnDestroy {
                 await this.audioContext.resume();
 
                 this.audioContext.onstatechange = () => resume();
+            }
 
+            if (this.beepContext) {
+                await this.beepContext.resume();
+            }
+
+            if (this.audioContext && this.beepContext) {
                 events.forEach((event) => document.body.removeEventListener(event, bootstrap));
             }
         };
