@@ -72,11 +72,10 @@ export interface RdioScannerCallSource {
 
 export interface RdioScannerConfig {
     allowDownload: boolean;
-    keypadBeeps: RdioScannerKeypadBeeps | false;
+    keypadBeeps: RdioScannerKeypadBeeps | number | false;
     systems: RdioScannerSystem[];
     useDimmer: boolean | number;
     useGroup: boolean;
-    useLed: boolean;
 }
 
 export interface RdioScannerEvent {

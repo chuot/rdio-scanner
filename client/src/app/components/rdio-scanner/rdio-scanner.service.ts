@@ -29,6 +29,7 @@ import {
     RdioScannerEvent,
     RdioScannerGroup,
     RdioScannerGroupStatus,
+    RdioScannerKeypadBeeps,
     RdioScannerLiveFeedMap,
     RdioScannerSearchOptions,
 } from './rdio-scanner';
@@ -51,6 +52,93 @@ enum WebSocketCommand {
     LiveFeedMap = 'LFM',
     Pin = 'PIN',
 }
+
+const KeypadBeeps: {
+    [key: string]: RdioScannerKeypadBeeps;
+} = {
+    uniden: {
+        activate: [
+            {
+                begin: 0,
+                end: 0.05,
+                frequency: 1200,
+                type: 'square',
+            },
+        ],
+        deactivate: [
+            {
+                begin: 0,
+                end: 0.1,
+                frequency: 1200,
+                type: 'square',
+            },
+            {
+                begin: 0.1,
+                end: 0.2,
+                frequency: 925,
+                type: 'square',
+            },
+        ],
+        denied: [
+            {
+                begin: 0,
+                end: 0.05,
+                frequency: 925,
+                type: 'square',
+            },
+            {
+                begin: 0.1,
+                end: 0.15,
+                frequency: 925,
+                type: 'square',
+            },
+        ],
+    },
+    whistler: {
+        activate: [
+            {
+                begin: 0,
+                end: 0.05,
+                frequency: 2000,
+                type: 'triangle',
+            }
+        ],
+        deactivate: [
+            {
+                begin: 0,
+                end: 0.04,
+                frequency: 1500,
+                type: 'triangle',
+            },
+            {
+                begin: 0.04,
+                end: 0.08,
+                frequency: 1400,
+                type: 'triangle',
+            },
+        ],
+        denied: [
+            {
+                begin: 0,
+                end: 0.04,
+                frequency: 1400,
+                type: 'triangle',
+            },
+            {
+                begin: 0.05,
+                end: 0.09,
+                frequency: 1400,
+                type: 'triangle',
+            },
+            {
+                begin: 0.1,
+                end: 0.14,
+                frequency: 1400,
+                type: 'triangle'
+            },
+        ],
+    },
+};
 
 @Injectable()
 export class AppRdioScannerService implements OnDestroy {
@@ -75,7 +163,6 @@ export class AppRdioScannerService implements OnDestroy {
         systems: [],
         useDimmer: true,
         useGroup: true,
-        useLed: true,
     };
 
     private groups: RdioScannerGroup[] = [];
@@ -178,7 +265,12 @@ export class AppRdioScannerService implements OnDestroy {
 
             const gn = context.createGain();
 
-            const seq = this.config.keypadBeeps[style];
+            const keypadBeeps = this.config.keypadBeeps === 1 ? KeypadBeeps.uniden
+                : this.config.keypadBeeps === 2 ? KeypadBeeps.whistler
+                    : typeof this.config.keypadBeeps === 'object' ? this.config.keypadBeeps
+                        : KeypadBeeps.uniden;
+
+            const seq = keypadBeeps[style];
 
             gn.gain.value = .1;
 

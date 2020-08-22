@@ -1,6 +1,14 @@
+# Version 4.6
+
+- Fix documentation in regards to load-rrd in install-github.md.
+- Fix database absolute path in config.json.
+- Remove config.options.useLed.
+- Rename Config.options.keyBeep to Config.options.keypadBeeps.
+- Config.options.keypadBeeps now with presets instead of full pattern declaration.
+
 # Version 4.5
 
-- Config.options.keyBeep which by default is true
+- Config.options.keyBeep which by default is true.
 
 # Version 4.4
 

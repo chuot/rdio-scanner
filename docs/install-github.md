@@ -81,10 +81,10 @@ First download the CSV file for all talkgroups from a trunked system. Here we wi
 You can choose any `system_id` you want to refer to this system. If you choose an existing `system_id` in `config.json`, you will replace it with the new one.
 
 ``` bash
-$ node run load-rrdb
+$ node server load-rrdb
 USAGE: load-rrdb <system_id> <input_tg_csv>
 
-$ node run load-rrdb 11 ~/Downloads/trs_tg_7537.csv
+$ node server load-rrdb 11 ~/Downloads/trs_tg_7537.csv
 File /home/radio/Downloads/trs_tg_7537.csv imported successfully into system 11
 ```
 
@@ -100,10 +100,10 @@ Server is running at http://0.0.0.0:3000
 Even if your instance of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is preconfigured with a new random UUID for your API keys, you may want to generate others. The following command will generate a new UUID which you can copy/paste into the `server/config.json` file.
 
 ``` bash
-$ node run random-uuid
+$ node server random-uuid
 aaf366c5-fa20-40a7-b617-dc7587c792fd
 
-$ node random-uuid 5
+$ node server random-uuid 5
 003c391c-610c-4900-b17f-80f6c9af2bbc
 cd32028a-ca81-469c-90d5-8fd1bfb69228
 df2f76b0-be15-44e9-848a-c9a71b092707

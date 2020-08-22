@@ -79,7 +79,9 @@ class App {
         config.sequelize.host = config.sequelize.host || process.env.DB_HOST || null;
         config.sequelize.password = config.sequelize.password || process.env.DB_PASS || null;
         config.sequelize.port = config.sequelize.port || process.env.DB_PORT || null;
-        config.sequelize.storage = config.sequelize.storage || path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, 'database.sqlite');
+        config.sequelize.storage = config.sequelize.storage
+            ? path.resolve(__dirname, config.sequelize.storage)
+            : path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, 'database.sqlite');
         config.sequelize.username = config.sequelize.username || process.env.DB_USER || null;
 
         config.persist = () => {

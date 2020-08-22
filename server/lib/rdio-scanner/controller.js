@@ -256,8 +256,7 @@ class Controller extends EventEmitter {
         return {
             keypadBeeps: this.config.options.keypadBeeps,
             useDimmer: this.config.options.useDimmer,
-            useGroup: this.config.options.useGroup,
-            useLed: this.config.options.useLed,
+            useGroup: this.config.options.useGroup
         };
     }
 
@@ -602,9 +601,11 @@ function parseConfig(config) {
         delete config.disableAudioConversion;
     }
 
-    config.options.keypadBeeps = config.options.keypadBeeps === false ? false : config.options.keyBeep === false
-        ? false : config.options.keypadBeeps !== null && typeof config.options.keypadBeeps === 'object'
-            ? config.options.keypadBeeps : {};
+    config.options.keypadBeeps = config.options.keypadBeeps === false ? false
+        : config.options.keyBeep === false ? false
+        : config.options.keypadBeeps !== null && typeof config.options.keypadBeeps === 'object' ? config.options.keypadBeeps
+        : [1, 2].includes(config.options.keypadBeeps) ? config.options.keypadBeeps
+        : 1;
 
     if (config.options.keyBeep !== undefined) {
         delete config.options.keyBeep;
@@ -696,11 +697,12 @@ function parseConfig(config) {
         delete config.useGroup;
     }
 
-    config.options.useLed = typeof config.options.useLed === 'boolean' ? config.options.useLed
-        : typeof config.useLed === 'boolean' ? config.useLed : true;
-
     if (config.useLed !== null || config.useLed !== undefined) {
         delete config.useLed;
+    }
+
+    if (config.options.useLed !== null || config.options.useLed !== undefined) {
+        delete config.options.useLed;
     }
 
     config.systems = Array.isArray(config.systems) ? config.systems : systemsDefault;

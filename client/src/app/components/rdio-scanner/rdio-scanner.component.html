@@ -217,7 +217,7 @@
 
     <mat-sidenav-content>
         <div class="rdio-main">
-            <div *ngIf="config?.useLed" class="rdio-status" fxLayout="row" fxLayoutAlign="end">
+            <div class="rdio-status" fxLayout="row" fxLayoutAlign="end">
                 <span class="rdio-led" [ngClass]="ledClass"></span>
             </div>
             <div class="rdio-display" [ngClass]="{ idle: !config || config?.useDimmer && !dimmer }"

@@ -10,7 +10,7 @@
 
 The LED is illuminated when there is active audio and it blinks if audio is paused.
 
-The color is *green* by default, but can be customized in `config.json` by the system or by the talkgroup. You can also disable it completely with the `useLed` configuration options.
+The color is *green* by default, but can be customized in `config.json` by the system or by the talkgroup.
 
 ### Display Area
 

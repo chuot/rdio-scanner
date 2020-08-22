@@ -63,28 +63,24 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             "disableAudioConversion": false,
 
             // (boolean) Emit beeps when clicking buttons
-            // Default value is true which is converted to Uniden style beeps
+            // Default value is 1 which is preset #1
             // See KeypadBeeps section below for more details
-            "keypadBeeps": true,
+            "keypadBeeps": 1,
 
             // (number) Clear the database for audio files older than the specified number of days
             // Default value is 7
             // Specifying a value of 0 will disable this feature
-            "pruneDays": 7
+            "pruneDays": 7,
 
             // (boolean | number) Turn off the screen backlight when it is inactive
             // You can specify the delay as a number of seconds
             // Default value is true which the same as 5 seconds
-            "useDimmer": true
+            "useDimmer": true,
 
             // (boolean) Also toggle talkgroups based on their group assignment
             // Default value is true
             // See Systems section below for more details on groups
             "useGroup": true
-
-            // (boolean) Show the activity led
-            // Default value is true
-            "useLed": true
         }
 
         // (object[]) Systems definitions
@@ -504,30 +500,32 @@ Each button press can emit a specific beep depending on whether a function is ac
 
 ``` typescript
 options: {
-  keypadBeeps: false | {
-    activate: {          // beeps sequence when a function is activated
-      begin: number;     // seconds
-      end: number;       // seconds
-      frequency: number; // hertz
+  keypadBeeps: false | 1 | 2 | { // false = disabled, 1 = uniden, 2 = whistler, object = custom
+    activate: {                  // beeps sequence when a function is activated
+      begin: number;             // seconds
+      end: number;               // seconds
+      frequency: number;         // hertz
       type: 'sine' | 'square' | 'sawtooth' | 'triangle';
     }[],
-    deactivate: {        // beeps sequence when a function is deactivates
-      begin: number;     // seconds
-      end: number;       // seconds
-      frequency: number; // hertz
+    deactivate: {                // beeps sequence when a function is deactivates
+      begin: number;             // seconds
+      end: number;               // seconds
+      frequency: number;         // hertz
       type: 'sine' | 'square' | 'sawtooth' | 'triangle';
     }[],
-    denied: {            // beeps sequence when a function is denied
-      begin: number;     // seconds
-      end: number;       // seconds
-      frequency: number; // hertz
+    denied: {                    // beeps sequence when a function is denied
+      begin: number;             // seconds
+      end: number;               // seconds
+      frequency: number;         // hertz
       type: 'sine' | 'square' | 'sawtooth' | 'triangle';
     }[],
   };
 }[]
 ```
 
-Default value is (*Uniden Style*):
+**rdioScanner.options.keypadBeeps presets**
+
+Setting `options.keypadBeeps` to `1` set the keypadBeeps to Uniden style. It is equivalent to:
 
 ``` json
 "options": {
@@ -572,7 +570,7 @@ Default value is (*Uniden Style*):
 }
 ```
 
-**Example - Whistler style**
+Setting `options.keypadBeeps` to `2` set the keypadBeeps to Whistler style. It is equivalent to:
 
 ``` json
 "options": {
