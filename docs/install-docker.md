@@ -72,7 +72,21 @@ File /app/data/trs_tg_7537.csv imported successfully into system 11
 $ rm ~/.rdio-scanner/trs_tg_7537.csv
 ```
 
-# 5. Start Rdio Scanner
+# 5. Load talkgroups from a Trunk Recorder CSV file (optional)
+
+``` bash
+$ mv ~/Downloads/tgs.csv ~/.rdio-scanner
+
+$ docker run -it --rm chuot/rdio-scanner:latest load-tr
+USAGE: load-tr <system_id> <input_tg_csv>
+
+$ docker run -it --rm --user $(id -u):$(id -g) --volume ~/.rdio-scanner:/app/data chuot/rdio-scanner:latest load-tr 12 tgs.csv
+File /app/data/tgs.csv imported successfully into system 12
+
+$ rm ~/.rdio-scanner/tgs.csv
+```
+
+# 6. Start Rdio Scanner
 
 By default, [Rdio Scanner](https://github.com/chuot/rdio-scanner) runs on port 3000. It is recommended to configure a **SSL certificate** and then to map port 3000 to port 443 using the `--publish 3000:443` option.
 

@@ -75,6 +75,52 @@ class Utils {
         return `File ${input} imported successfully into system ${sysId}`;
     }
 
+    loadTR(sysId, input) {
+        if (typeof sysId !== 'number' || sysId < 0) {
+            throw new Error(`Invalid system id ${JSON.stringify(sysId)}`);
+        }
+
+        if (typeof input !== 'string' || !input.length) {
+            throw new Error(`Invalid filename ${JSON.stringify(input)}`);
+        }
+
+        input = path.resolve(__dirname, input);
+
+        if (!fs.existsSync(input)) {
+            throw new Error(`${input} file not found!`);
+        }
+
+        const csv = fs.readFileSync(input, 'utf8').split(/[\n|\r|\r\n]/).map((csv) => csv.split(/,/));
+
+        const system = {
+            id: sysId,
+            label: path.parse(input).name,
+            talkgroups: [],
+        };
+
+        for (let line of csv) {
+            const id = parseInt(line[0], 10);
+            const label = line[3] || '';
+            const name = line[4] || '';
+            const tag = line[5] || '';
+            const group = line[6] || '';
+
+            if (id > 0 && label.length && name.length && tag.length && group.length) {
+                system.talkgroups.push({ id, label, name, tag, group });
+            }
+        }
+
+        system.talkgroups.sort((a, b) => a.id - b.id);
+
+        this.config.systems = this.config.systems.filter((system) => system.id !== sysId);
+
+        this.config.systems.push(system);
+
+        this.config.systems.sort((a, b) => a.id - b.id);
+
+        return `File ${input} imported successfully into system ${sysId}`;
+    }
+
     randomUUID(count = 1) {
         const uuids = [];
 

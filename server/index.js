@@ -213,6 +213,31 @@ class App {
                 process.exit();
             });
 
+        } else if (cmd === 'load-tr') {
+            this.rdioScanner.once('ready', () => {
+                if (process.argv.length === 5) {
+                    try {
+                        const sysId = parseInt(process.argv[3], 10);
+
+                        const input = path.resolve(process.env.APP_DATA || __dirname, process.argv[4]);
+
+                        const msg = this.rdioScanner.utils.loadTR(sysId, input);
+
+                        console.log(msg);
+
+                    } catch (error) {
+                        console.error(error.message);
+                    }
+
+                } else {
+                    console.log(`USAGE: ${cmd} <system_id> <input_tg_csv>`);
+                }
+
+                this.config.persist();
+
+                process.exit();
+            });
+
         } else if (cmd === 'random-uuid') {
             this.rdioScanner.once('ready', () => {
                 const count = parseInt(process.argv[3], 10) || 1;

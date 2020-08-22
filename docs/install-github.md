@@ -88,7 +88,17 @@ $ node server load-rrdb 11 ~/Downloads/trs_tg_7537.csv
 File /home/radio/Downloads/trs_tg_7537.csv imported successfully into system 11
 ```
 
-# 5. Start Rdio Scanner
+# 5. Load talkgroups from a Trunk Recorder CSV file (optional)
+
+``` bash
+$ node server load-tr
+USAGE: load-tr <system_id> <input_tg_csv>
+
+$ node server load-tr 12 ~/Downloads/tgs.csv
+File /home/radio/Downloads/tgs.csv imported successfully into system 12
+```
+
+# 6. Start Rdio Scanner
 
 ``` bash
 $ node run server

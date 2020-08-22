@@ -661,7 +661,7 @@ systems: {
   + **id** - Unit ID.
   + **label** - Unit label shown on the right side of six sixth row.
 
-## Load a system from RadioReference.com
+## Load a system from RadioReference.com or talkgroups from Trunk Recorder CSV file
 
 You may want to load your `server/config.json` with some systems from [RadioReference.com](https://radioreference.com/).
 
