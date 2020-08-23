@@ -36,69 +36,81 @@ class DirWatch {
 
         this.registredDirectories = [];
 
+        this.config.forEach((dirWatch = {}) => {
+            if (typeof dirWatch.directory !== 'string' || !dirWatch.directory.length) {
+                console.error(`Config: No dirWatch.direction defined`);
+
+                return;
+            }
+
+            if (typeof dirWatch.extension !== 'string' || !dirWatch.extension.length) {
+                console.error(`Config: Mo dirWatch.extension defined`);
+
+                return;
+            }
+
+            if (typeof dirWatch.delay !== 'number' || dirWatch.delay < 100) {
+                delete dirWatch.delay;
+            }
+
+            if (typeof dirWatch.deleteAfter !== 'boolean') {
+                dirWatch.deleteAfter = false;
+            }
+
+            if (dirWatch.frequency === null || typeof dirWatch.frequency !== 'number') {
+                delete dirWatch.frequency;
+            }
+
+            if (dirWatch.mask === null || typeof dirWatch.mask !== 'string' || !dirWatch.mask.length) {
+                delete dirWatch.mask;
+            }
+
+            dirWatch.usePolling = dirWatch.usePolling === true ? true
+                : typeof dirWatch.usePolling === 'number' && dirWatch.usePolling >= 1000 ? dirWatch.usePolling
+                    : false;
+
+            if (!dirWatch.usePolling) {
+                delete dirWatch.usePolling;
+            }
+
+            if (dirWatch.system === null && typeof dirWatch.system !== 'number' && dirWatch.system !== 'string') {
+                delete dirWatch.system;
+            }
+
+            if (dirWatch.talkgroup === null && typeof dirWatch.talkgroup !== 'number' && dirWatch.talkgroup !== 'string') {
+                delete dirWatch.talkgroup;
+            }
+
+            if (!['trunk-recorder'].includes(dirWatch.type)) {
+                delete dirWatch.type;
+            }
+
+            const dir = path.resolve(__dirname, '../../..', dirWatch.directory);
+
+            if (this.registredDirectories.includes(dir)) {
+                console.error(`Config: Duplicate directory definitions ${dir}`);
+
+                return;
+
+            } else {
+                this.registredDirectories.push(dir);
+            }
+        });
+
         ctx.once('ready', () => {
             this.config.forEach((dirWatch = {}) => {
-                if (typeof dirWatch.directory !== 'string' || !dirWatch.directory.length) {
-                    console.error(`Config: No dirWatch.direction defined`);
-
-                    return;
-                }
-
-                if (typeof dirWatch.extension !== 'string' || !dirWatch.extension.length) {
-                    console.error(`Config: Mo dirWatch.extension defined`);
-
-                    return;
-                }
-
-                if (typeof dirWatch.delay !== 'number' || dirWatch.delay < 100) {
-                    delete dirWatch.delay;
-                }
-
-                if (typeof dirWatch.deleteAfter !== 'boolean') {
-                    dirWatch.deleteAfter = false;
-                }
-
-                if (dirWatch.frequency === null || typeof dirWatch.frequency !== 'number') {
-                    delete dirWatch.frequency;
-                }
-
-                if (dirWatch.mask === null || typeof dirWatch.mask !== 'string' || !dirWatch.mask.length) {
-                    delete dirWatch.mask;
-                }
-
-                if (typeof dirWatch.usePolling !== 'boolean' || !dirWatch.usePolling) {
-                    delete dirWatch.usePolling;
-                }
-
-                if (dirWatch.system === null && typeof dirWatch.system !== 'number' && dirWatch.system !== 'string') {
-                    delete dirWatch.system;
-                }
-
-                if (dirWatch.talkgroup === null && typeof dirWatch.talkgroup !== 'number' && dirWatch.talkgroup !== 'string') {
-                    delete dirWatch.talkgroup;
-                }
-
-                if (!['trunk-recorder'].includes(dirWatch.type)) {
-                    delete dirWatch.type;
-                }
-
-                const dir = path.resolve(__dirname, '../../..', dirWatch.directory);
-
-                if (this.registredDirectories.includes(dir)) {
-                    console.error(`Config: Duplicate directory definitions ${dir}`);
-
-                    return;
-
-                } else {
-                    this.registredDirectories.push(dir);
-                }
-
-                const watcher = chokidar.watch(dir, {
+                const options = {
                     awaitWriteFinish: true,
                     ignoreInitial: !dirWatch.deleteAfter,
                     recursive: true,
-                    usePolling: dirWatch.usePolling,
-                });
+                    usePolling: !!dirWatch.usePolling || false,
+                };
+
+                if (options.usePolling) {
+                    options.binaryInterval = options.interval = dirWatch.usePolling === true ? 1000 : dirWatch.usePolling;
+                }
+
+                const watcher = chokidar.watch(path.resolve(__dirname, '../../..', dirWatch.directory), options);
 
                 switch (dirWatch.type) {
                     case 'trunk-recorder':

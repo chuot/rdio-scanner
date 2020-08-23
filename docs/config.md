@@ -333,7 +333,7 @@ dirWatch: {
   system?: number | string;            // optional
   talkgroup?: number | string;         // optional
   type?: "default" | "trunk-recorder"; // optional, default is default
-  usePolling?: boolean;                // optional, default is false
+  usePolling?: boolean | number;       // optional, value is in ms, true = 1000ms, default is false
 }[]
 ```
 
@@ -356,6 +356,7 @@ dirWatch: {
 * **system** - A valid system id defined in **rdioScanner.systems**.
 * **talkgroup** - A valid talkgroup id defined in **rdioScanner.systems**.
 * **type** - In case of *Trunk Recorder*, the metadata of the *JSON file* will be used.
+* **usePolling** - When monitoring a network folder, you must use Polling for dirWatch to work. However, this is very CPU intensive and should be used with care. You can also try values greater than 1000 to decrease CPU consumption.
 
 > Note that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must know the **system id** and the **talkgroup id** for the call to be ingested. These two values must be specified either by **dirWatch.system**, **dirWatch.talkgroup**, **dirWatch.mask** or a mix of them. **dirWatch.system** and **dirWatch.talkgroup** have priority over **dirWatch.mask**.
 
@@ -382,7 +383,7 @@ Default value is an empty array `[]` .
       "extension": "wav",
       "system": 21,
       "type": "trunk-recorder"
-    },
+    }
   ]
   ```
 
