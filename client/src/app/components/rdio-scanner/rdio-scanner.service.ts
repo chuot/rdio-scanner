@@ -29,6 +29,7 @@ import {
     RdioScannerEvent,
     RdioScannerGroup,
     RdioScannerGroupStatus,
+    RdioScannerKeypadBeeps,
     RdioScannerLiveFeedMap,
     RdioScannerSearchOptions,
 } from './rdio-scanner';
@@ -169,23 +170,17 @@ export class AppRdioScannerService implements OnDestroy {
 
     beep(style = RdioScannerBeepStyle.Activate): Promise<void> {
         return new Promise((resolve) => {
-            if (!this.beepContext || !this.config.keypadBeeps) {
-                resolve();
-
-                return;
-            }
-
             const context = this.beepContext;
 
-            const gn = context.createGain();
+            const seq = this.config.keypadBeeps && this.config.keypadBeeps[style];
 
-            const seq = this.config?.keypadBeeps[style];
-
-            if (!Array.isArray(seq) || !seq.length) {
+            if (!context || !seq) {
                 resolve();
 
                 return;
             }
+
+            const gn = context.createGain();
 
             gn.gain.value = .1;
 
