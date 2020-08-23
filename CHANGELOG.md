@@ -5,6 +5,7 @@
 - Change config.options.useDimmer to config.options.dimmerDelay.
 - Fix potential error in handling keypadBeeps styles.
 - Change handling of skip delay on client.
+- Fix beep method not completing promise in some situation.
 
 # Version 4.6
 
