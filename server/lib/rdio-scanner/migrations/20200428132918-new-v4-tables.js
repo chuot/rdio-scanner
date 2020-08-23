@@ -31,7 +31,11 @@ module.exports = {
 
             await queryInterface.createTable('rdioScannerCalls2', rdioScannerCallFactory.schema, { transaction });
 
-            await queryInterface.sequelize.query('INSERT INTO `rdioScannerCalls2` SELECT `id`,`audio`,`audioName`,`audioType`,`startTime`,`freqList`,`freq`,null,`srcList`,`system`,`talkgroup` FROM `rdioScannerCalls`', { transaction });
+            await queryInterface.sequelize.query([
+                'INSERT INTO `rdioScannerCalls2`',
+                'SELECT `id`,`audio`,`audioName`,`audioType`,`startTime`,`freqList`,`freq`,null,`srcList`,`system`,`talkgroup`',
+                'FROM `rdioScannerCalls`',
+            ].join(' '), { transaction });
 
             await queryInterface.dropTable('rdioScannerCalls', { transaction });
 

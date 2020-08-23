@@ -27,7 +27,7 @@ const { Op } = require('sequelize');
 
 const uuid = require('uuid');
 
-const systemsDefault = require('./systems-default');
+const defaults = require('./defaults');
 
 const maxAuthenticationTries = 3;
 
@@ -253,11 +253,19 @@ class Controller extends EventEmitter {
     }
 
     getOptions() {
-        return {
-            keypadBeeps: this.config.options.keypadBeeps,
-            useDimmer: this.config.options.useDimmer,
-            useGroup: this.config.options.useGroup
-        };
+        const options = this.config.options;
+
+        const keypadBeeps = options.keypadBeeps === false ? false
+            : options.keypadBeeps === 1 ? defaults.keypadBeeps.uniden
+            : options.keypadBeeps === 2 ? defaults.keypadBeeps.whistler
+            : options.keypadBeeps !== null && typeof options.keypadBeeps === 'object' ? options.keypadBeeps
+            : defaults.keypadBeeps.uniden;
+
+        const useDimmer = this.config.options.keypadBeeps;
+
+        const useGroup = this.config.options.useGroup;
+
+        return { keypadBeeps, useDimmer, useGroup };
     }
 
     getScope(token, store = this.config.access) {
@@ -705,7 +713,7 @@ function parseConfig(config) {
         delete config.options.useLed;
     }
 
-    config.systems = Array.isArray(config.systems) ? config.systems : systemsDefault;
+    config.systems = Array.isArray(config.systems) ? config.systems : defaults.systems;
 
     config.systems.forEach((system) => {
         if (system === null || typeof system !== 'object') {

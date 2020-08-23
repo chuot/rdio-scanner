@@ -29,7 +29,8 @@ module.exports = {
 
             await queryInterface.addColumn('rdioScannerCalls', 'audioType', Sequelize.STRING, { transaction });
 
-            await queryInterface.addColumn('rdioScannerSystems', 'aliases', { allowNull: false, defaultValue: [], type: Sequelize.JSON }, { transaction });
+            await queryInterface.addColumn('rdioScannerSystems', 'aliases',
+                { allowNull: false, defaultValue: [], type: Sequelize.JSON }, { transaction });
 
             await transaction.commit();
 

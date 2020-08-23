@@ -138,10 +138,12 @@ class Downstream {
 
         form.submit(apiUrl, (error) => {
             if (error) {
-                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url} ${error.message}`);
+                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} `
+                    + `file=${call.audioName} to=${downstream.url} ${error.message}`);
 
             } else {
-                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url} Success`)
+                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} `
+                    + `file=${call.audioName} to=${downstream.url} Success`);
             }
         });
     }
