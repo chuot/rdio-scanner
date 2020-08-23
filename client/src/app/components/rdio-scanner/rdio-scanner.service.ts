@@ -177,7 +177,7 @@ export class AppRdioScannerService implements OnDestroy {
 
             const gn = context.createGain();
 
-            const seq = this.config.keypadBeeps[style];
+            const seq = this.config?.keypadBeeps[style] || [];
 
             gn.gain.value = .1;
 
