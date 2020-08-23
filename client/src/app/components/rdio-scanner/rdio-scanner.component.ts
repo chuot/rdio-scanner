@@ -877,7 +877,9 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
             } else {
                 this.callError = '';
 
-                this.callFrequency = typeof this.call.frequency === 'number' ? this.formatFrequency(this.call.frequency) : '';
+                this.callFrequency = typeof this.call.frequency === 'number'
+                    ? this.formatFrequency(this.call.frequency)
+                    : this.call.audioName?.replace(/\..+$/, '') || '';
 
                 this.callSpike = '';
             }
