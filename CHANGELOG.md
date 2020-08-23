@@ -6,7 +6,9 @@
 - Fix potential error in handling keypadBeeps styles.
 - Change handling of skip delay on client.
 - Fix beep method not completing promise in some situation.
-- Allow specifying polling delay on dirWatch
+- Allow specifying polling delay on dirWatch.
+- Trim silence from audio files when converting to m4a.
+- Display filename instead of frequency when no frequency value available.
 
 # Version 4.6
 
