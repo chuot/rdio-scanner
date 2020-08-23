@@ -255,17 +255,17 @@ class Controller extends EventEmitter {
     getOptions() {
         const options = this.config.options;
 
+        const dimmerDelay = this.config.options.dimmerDelay;
+
         const keypadBeeps = options.keypadBeeps === false ? false
             : options.keypadBeeps === 1 ? defaults.keypadBeeps.uniden
             : options.keypadBeeps === 2 ? defaults.keypadBeeps.whistler
             : options.keypadBeeps !== null && typeof options.keypadBeeps === 'object' ? options.keypadBeeps
             : defaults.keypadBeeps.uniden;
 
-        const useDimmer = this.config.options.keypadBeeps;
-
         const useGroup = this.config.options.useGroup;
 
-        return { keypadBeeps, useDimmer, useGroup };
+        return { dimmerDelay, keypadBeeps, useGroup };
     }
 
     getScope(token, store = this.config.access) {
@@ -601,6 +601,9 @@ function parseConfig(config) {
         delete config.allowDownload;
     }
 
+    config.options.dimmerDelay = typeof config.options.dimmerDelay === 'number' && config.options.dimmerDelay > 0
+        ? config.options.dimmerDelay : 5000;
+
     config.options.disableAudioConversion = typeof config.options.disableAudioConversion === 'boolean'
         ? config.options.disableAudioConversion : typeof config.disableAudioConversion === 'boolean'
             ? config.disableAudioConversion : false;
@@ -690,11 +693,11 @@ function parseConfig(config) {
         delete config.pruneDays;
     }
 
-    config.options.useDimmer = typeof config.options.useDimmer === 'number' ? config.options.useDimmer
-        : typeof config.options.useDimmer === 'boolean' ? config.options.useDimmer
-            : typeof config.useDimmer === 'boolean' ? config.useDimmer : true;
+    if (config.options.useDimmer !== undefined) {
+        delete config.options.useDimmer;
+    }
 
-    if (config.useDimmer !== null || config.useDimmer !== undefined) {
+    if (config.useDimmer !== undefined) {
         delete config.useDimmer;
     }
 

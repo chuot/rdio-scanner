@@ -71,9 +71,9 @@ export class AppRdioScannerService implements OnDestroy {
 
     private config: RdioScannerConfig = {
         allowDownload: true,
+        dimmerDelay: false,
         keypadBeeps: false,
         systems: [],
-        useDimmer: true,
         useGroup: true,
     };
 

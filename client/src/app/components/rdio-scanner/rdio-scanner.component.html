@@ -220,7 +220,7 @@
             <div class="rdio-status" fxLayout="row" fxLayoutAlign="end">
                 <span class="rdio-led" [ngClass]="ledClass"></span>
             </div>
-            <div class="rdio-display" [ngClass]="{ idle: !config || config?.useDimmer && !dimmer }"
+            <div class="rdio-display" [ngClass]="{ idle: !dimmer }"
                 (dblclick)="toggleFullscreen()">
                 <div class="rdio-display-row margin" fxLayout="row" fxLayoutAlign="space-between">
                     <div>

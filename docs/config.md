@@ -58,6 +58,10 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             // (boolean) Can users download archived calls. Default value is true
             "allowDownload": true,
 
+            // (number) Delay in milliseconds before turning off the screen backlight when inactive
+            // Default value is 5000 milliseconds
+            "dimmerDelay": 5000,
+
             // (boolean) Disable the audio format conversion to m4a/aac
             // Default value is false
             "disableAudioConversion": false,
@@ -71,11 +75,6 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             // Default value is 7
             // Specifying a value of 0 will disable this feature
             "pruneDays": 7,
-
-            // (boolean | number) Turn off the screen backlight when it is inactive
-            // You can specify the delay as a number of seconds
-            // Default value is true which the same as 5 seconds
-            "useDimmer": true,
 
             // (boolean) Also toggle talkgroups based on their group assignment
             // Default value is true

@@ -1,3 +1,9 @@
+# Version 4.6.3
+
+- Add load-tr to load Trunk Recorder talkgroups csv.
+- Move back keypadsBeeps presets to backend.
+- Change config.options.useDimmer to config.options.dimmerDelay.
+
 # Version 4.6
 
 - Fix documentation in regards to load-rrd in install-github.md.

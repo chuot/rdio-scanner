@@ -835,14 +835,12 @@ export class AppRdioScannerComponent implements AfterViewInit, OnDestroy {
     }
 
     private updateDimmer(): void {
-        if (this.config?.useDimmer) {
-            const delay = typeof this.config.useDimmer === 'boolean' ? 5000 : this.config.useDimmer * 1000;
-
+        if (typeof this.config?.dimmerDelay === 'number') {
             this.dimmerTimer?.unsubscribe();
 
             this.dimmer = true;
 
-            this.dimmerTimer = timer(delay).subscribe(() => {
+            this.dimmerTimer = timer(this.config.dimmerDelay).subscribe(() => {
                 this.dimmerTimer?.unsubscribe();
 
                 this.dimmerTimer = undefined;
