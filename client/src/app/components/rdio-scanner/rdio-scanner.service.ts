@@ -85,6 +85,8 @@ export class AppRdioScannerService implements OnDestroy {
     private liveFeedMapPriorToHoldTalkgroup: RdioScannerLiveFeedMap | undefined;
     private liveFeedPaused = false;
 
+    private skipDelay = false;
+
     private webSocket: WebSocket | undefined;
     private webSocketMessagePending = false;
 
@@ -349,8 +351,8 @@ export class AppRdioScannerService implements OnDestroy {
         this.event.emit({ pause: this.liveFeedPaused });
     }
 
-    play(call?: RdioScannerCall | undefined, options?: { delay?: boolean }): void {
-        if (this.liveFeedPaused) {
+    play(call?: RdioScannerCall | undefined): void {
+        if (this.liveFeedPaused || this.skipDelay) {
             return;
 
         } else if (call?.audio) {
@@ -379,30 +381,28 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         this.audioContext?.decodeAudioData(arrayBuffer, (buffer) => {
-            timer(options?.delay ? 1000 : 0).subscribe(() => {
-                if (!this.audioContext || this.audioSource || !this.call) {
-                    return;
-                }
+            if (!this.audioContext || this.audioSource || !this.call) {
+                return;
+            }
 
-                this.audioSource = this.audioContext.createBufferSource();
-                this.audioSource.buffer = buffer;
-                this.audioSource.connect(this.audioContext.destination);
-                this.audioSource.onended = () => this.skip({ delay: true });
-                this.audioSource.start();
+            this.audioSource = this.audioContext.createBufferSource();
+            this.audioSource.buffer = buffer;
+            this.audioSource.connect(this.audioContext.destination);
+            this.audioSource.onended = () => this.skip({ delay: true });
+            this.audioSource.start();
 
-                this.event.emit({ call: this.call, queue: this.callQueue.length });
+            this.event.emit({ call: this.call, queue: this.callQueue.length });
 
-                interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
-                    if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
-                        if (isNaN(this.audioSourceStartTime)) {
-                            this.audioSourceStartTime = this.audioContext.currentTime;
-                        }
-
-                        if (!this.liveFeedPaused) {
-                            this.event.emit({ time: this.audioContext.currentTime - this.audioSourceStartTime });
-                        }
+            interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
+                if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
+                    if (isNaN(this.audioSourceStartTime)) {
+                        this.audioSourceStartTime = this.audioContext.currentTime;
                     }
-                });
+
+                    if (!this.liveFeedPaused) {
+                        this.event.emit({ time: this.audioContext.currentTime - this.audioSourceStartTime });
+                    }
+                }
             });
         }, () => {
             this.event.emit({ call: this.call, queue: this.callQueue.length });
@@ -425,7 +425,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     replay(): void {
-        this.play(this.call || this.callPrevious, { delay: false });
+        this.play(this.call || this.callPrevious);
     }
 
     searchCalls(options: RdioScannerSearchOptions): void {
@@ -435,7 +435,18 @@ export class AppRdioScannerService implements OnDestroy {
     skip(options?: { delay?: boolean }): void {
         this.stop();
 
-        this.play(undefined, options);
+        if (options?.delay) {
+            this.skipDelay = true;
+
+            timer(1000).subscribe(() => {
+                this.skipDelay = false;
+
+                this.play();
+            });
+
+        } else {
+            this.play();
+        }
     }
 
     stop(options?: { emit?: boolean }): void {

@@ -3,6 +3,8 @@
 - Add load-tr to load Trunk Recorder talkgroups csv.
 - Move back keypadsBeeps presets to backend.
 - Change config.options.useDimmer to config.options.dimmerDelay.
+- Fix potential error in handling keypadBeeps styles.
+- Change handling of skip delay on client.
 
 # Version 4.6
 
