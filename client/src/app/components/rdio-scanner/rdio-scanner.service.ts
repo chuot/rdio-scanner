@@ -416,7 +416,7 @@ export class AppRdioScannerService implements OnDestroy {
         if (call?.audio) {
             this.callQueue.push(call);
 
-            if (this.audioSource || this.call || this.liveFeedPaused) {
+            if (this.audioSource || this.call || this.liveFeedPaused || this.skipDelay) {
                 this.event.emit({ queue: this.callQueue.length });
 
             } else {
