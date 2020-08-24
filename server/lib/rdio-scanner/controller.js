@@ -123,9 +123,9 @@ class Controller extends EventEmitter {
                 const proc = spawn('ffmpeg', [
                     '-i',
                     '-',
-                    '-af',
-                    'silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,'
-                        + 'silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse',
+                    // '-af',
+                    // 'silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,'
+                    //     + 'silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse',
                     ...metadata,
                     '-c:a',
                     'aac',
