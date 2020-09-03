@@ -1,4 +1,4 @@
-# Version 4.6.3
+# Version 4.6.4
 
 - Add load-tr to load Trunk Recorder talkgroups csv.
 - Move back keypadsBeeps presets to backend.
@@ -9,6 +9,7 @@
 - Allow specifying polling delay on dirWatch.
 - Trim silence from audio files when converting to m4a.
 - Display filename instead of frequency when no frequency value available.
+- Fix NaN values when importing from upstream.
 
 # Version 4.6
 
