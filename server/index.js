@@ -76,12 +76,28 @@ class App {
 
         config.sequelize.database = config.sequelize.database || process.env.DB_NAME || null;
         config.sequelize.dialect = config.sequelize.dialect || process.env.DB_DIALECT || 'sqlite';
+
+        if (typeof config.sequelize.dialectOptions !== 'undefined') {
+            delete config.sequelize.dialectOptions;
+        }
+
+        if (typeof config.sequelize.logging !== 'undefined') {
+            delete config.sequelize.logging;
+        }
+
         config.sequelize.host = config.sequelize.host || process.env.DB_HOST || null;
         config.sequelize.password = config.sequelize.password || process.env.DB_PASS || null;
         config.sequelize.port = config.sequelize.port || process.env.DB_PORT || null;
-        config.sequelize.storage = config.sequelize.storage
-            ? path.resolve(__dirname, config.sequelize.storage)
-            : path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, 'database.sqlite');
+
+        if (config.sequelize.dialect === 'sqlite') {
+            config.sequelize.storage = config.sequelize.storage
+                ? path.resolve(__dirname, config.sequelize.storage)
+                : path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, 'database.sqlite');
+
+        } else {
+            config.sequelize.storage = null;
+        }
+
         config.sequelize.username = config.sequelize.username || process.env.DB_USER || null;
 
         config.persist = () => {
