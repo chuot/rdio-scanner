@@ -73,9 +73,9 @@ class CallUpload {
                     frequencies = [];
                 }
 
-                const frequency = parseInt(reqBody.frequency, 10);
+                const frequency = parseInt(reqBody.frequency, 10) || null;
 
-                const source = parseInt(reqBody.source, 10);
+                const source = parseInt(reqBody.source, 10) || null;
 
                 let sources;
 
@@ -86,16 +86,18 @@ class CallUpload {
                     sources = [];
                 }
 
-                const system = parseInt(reqBody.system, 10);
+                const system = parseInt(reqBody.system, 10) || null;
 
-                const talkgroup = parseInt(reqBody.talkgroup, 10);
+                const talkgroup = parseInt(reqBody.talkgroup, 10) || null;
 
                 if (!this.controller.validateApiKey(apiKey, system, talkgroup)) {
                     const message = `system=${system} talkgroup=${talkgroup} file=${audioName} No matching system/talkgroup`;
 
                     console.warn(`Api: ${message}`);
 
-                    return res.send(`${message}\n`);
+                    res.send(`${message}\n`);
+
+                    return;
                 }
 
                 try {
@@ -115,7 +117,7 @@ class CallUpload {
                     res.send(`Call imported successfully.\n`);
 
                 } catch (error) {
-                    res.send(error.message);
+                    res.status(500).send(error.message);
                 }
             }
         });

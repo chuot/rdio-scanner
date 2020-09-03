@@ -262,9 +262,9 @@ class Controller extends EventEmitter {
 
         const keypadBeeps = options.keypadBeeps === false ? false
             : options.keypadBeeps === 1 ? defaults.keypadBeeps.uniden
-            : options.keypadBeeps === 2 ? defaults.keypadBeeps.whistler
-            : options.keypadBeeps !== null && typeof options.keypadBeeps === 'object' ? options.keypadBeeps
-            : defaults.keypadBeeps.uniden;
+                : options.keypadBeeps === 2 ? defaults.keypadBeeps.whistler
+                    : options.keypadBeeps !== null && typeof options.keypadBeeps === 'object' ? options.keypadBeeps
+                        : defaults.keypadBeeps.uniden;
 
         const useGroup = this.config.options.useGroup;
 
@@ -404,9 +404,16 @@ class Controller extends EventEmitter {
             }
         }
 
-        const newCall = await this.models.call.create(call);
+        let newCall;
 
-        console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} Success`);
+        try {
+            newCall = await this.models.call.create(call);
+
+            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} Success`);
+
+        } catch (error) {
+            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} ${error.message}`);
+        }
 
         this.emit('call', newCall);
     }
@@ -617,9 +624,9 @@ function parseConfig(config) {
 
     config.options.keypadBeeps = config.options.keypadBeeps === false ? false
         : config.options.keyBeep === false ? false
-        : config.options.keypadBeeps !== null && typeof config.options.keypadBeeps === 'object' ? config.options.keypadBeeps
-        : [1, 2].includes(config.options.keypadBeeps) ? config.options.keypadBeeps
-        : 1;
+            : config.options.keypadBeeps !== null && typeof config.options.keypadBeeps === 'object' ? config.options.keypadBeeps
+                : [1, 2].includes(config.options.keypadBeeps) ? config.options.keypadBeeps
+                    : 1;
 
     if (config.options.keyBeep !== undefined) {
         delete config.options.keyBeep;
