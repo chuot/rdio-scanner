@@ -18,8 +18,8 @@ LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 WORKDIR /app
 ENV APP_DATA=/app/data \
     APP_PORT=3000
-RUN apk --no-cache --no-progress add ffmpeg sqlite && \
-    mkdir -p "${APP_DATA}" 
+RUN apk --no-cache --no-progress add ffmpeg sqlite tzdata && \
+    mkdir -p "${APP_DATA}"
 COPY LICENSE .
 COPY --from=client-build /app/client/dist/rdio-scanner/. client/.
 COPY --from=server-build /app/server/node_modules/. server/node_modules/.
