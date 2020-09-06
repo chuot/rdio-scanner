@@ -57,11 +57,18 @@ class DirWatch {
                 dirWatch.deleteAfter = false;
             }
 
+            if (typeof dirWatch.disabled === 'boolean' && !dirWatch.disabled) {
+                delete dirWatch.disabled;
+            }
+
             if (dirWatch.frequency === null || typeof dirWatch.frequency !== 'number') {
                 delete dirWatch.frequency;
             }
 
-            if (dirWatch.mask === null || typeof dirWatch.mask !== 'string' || !dirWatch.mask.length) {
+            if (dirWatch.mask === null || (
+                !(typeof dirWatch.mask === 'string' && dirWatch.mask.length) &&
+                !(Array.isArray(dirWatch.mask) && dirWatch.mask.every((mask) => typeof mask === 'string' && mask.length))
+            )) {
                 delete dirWatch.mask;
             }
 
@@ -123,19 +130,23 @@ class DirWatch {
 
                             const debounceFn = (filename) => setTimeout(() => {
                                 if (this.exists(filename)) {
-                                    if (this.statFile(filename).size > 44) {
-                                        delete debounces[filename];
+                                    const stat = this.statFile(filename);
 
-                                        this.importDefaultType(dirWatch, filename);
+                                    if (stat.isFile()) {
+                                        if (stat.size > 44) {
+                                            delete debounces[filename];
 
-                                    } else {
-                                        debounces[filename] = debounceFn(filename);
+                                            this.importDefaultType(dirWatch, filename);
+
+                                        } else {
+                                            debounces[filename] = debounceFn(filename);
+                                        }
                                     }
                                 }
                             }, dirWatch.delay);
 
                             watcher.on('raw', (_, filename) => {
-                                filename = path.resolve(dir, filename);
+                                console.log(filename);
 
                                 if (debounces[filename]) {
                                     clearTimeout(debounces[filename]);
@@ -159,12 +170,16 @@ class DirWatch {
             const call = {};
 
             if (dirWatch.mask) {
-                const parsedMask = this.parseMask(dirWatch.mask, filename);
+                const parsedMask = Array.isArray(dirWatch.mask)
+                    ? dirWatch.mask.reduce((meta, mask) => meta !== null ? meta : this.parseMask(mask, filename), null)
+                    : this.parseMask(dirWatch.mask, filename);
 
                 if (parsedMask) {
                     Object.assign(call, parsedMask);
 
                 } else {
+                    console.error(`DirWatch: No matching mask for file ${filename}`);
+
                     return;
                 }
             }
@@ -294,11 +309,21 @@ class DirWatch {
                 return obj;
             }, {});
 
-            if (data.date && (data.time || data.ztime)) {
+            if (data.date && data.time) {
                 const date = data.date.replace(/[^\d]]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
                 const time = data.time.replace(/[^\\d]]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
 
-                const dateTime = new Date(`${date}T${time}${data.ztime ? 'Z' : ''}`);
+                const dateTime = new Date(`${date}T${time}`);
+
+                if (!isNaN(dateTime.getTime())) {
+                    call.dateTime = dateTime;
+                }
+
+            } else if (data.date && data.ztime) {
+                const date = data.date.replace(/[^\d]]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
+                const time = data.ztime.replace(/[^\\d]]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
+
+                const dateTime = new Date(`${date}T${time}Z`);
 
                 if (!isNaN(dateTime.getTime())) {
                     call.dateTime = dateTime;
