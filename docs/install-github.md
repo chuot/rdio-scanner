@@ -6,15 +6,15 @@ Sometimes you don't want to run a Docker image, so you can follow these instruct
 
 Make sure your operating system is **fully updated** and that the prerequisites are installed. Also make sure that you have enough memory to compile the Angular web application.
 
-* [build-essential](https://packages.ubuntu.com/search?keywords=build-essential) on *Ubuntu* or its equivalent specific to your Linux distribution
-* [curl](https://git-scm.com/downloads)
-* [ffmpeg](https://www.ffmpeg.org/)
-* [git](https://git-scm.com/downloads)
-* [Node.js LTS or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
-* [npm](https://www.npmjs.com/get-npm)
-* [SQLite 3](https://www.sqlite.org/download.html)
+- [build-essential](https://packages.ubuntu.com/search?keywords=build-essential) on _Ubuntu_ or its equivalent specific to your Linux distribution
+- [curl](https://git-scm.com/downloads)
+- [ffmpeg](https://www.ffmpeg.org/)
+- [git](https://git-scm.com/downloads)
+- [Node.js LTS or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
+- [npm](https://www.npmjs.com/get-npm)
+- [SQLite 3](https://www.sqlite.org/download.html)
 
-``` bash
+```bash
 $ which curl ffmpeg gcc g++ git make node npm sqlite3
 /usr/bin/curl
 /usr/bin/ffmpeg
@@ -42,12 +42,12 @@ Resolving deltas: 100% (752/752), done.
 
 # 3. Database and configuration initialization
 
-Note that the first time [Rdio Scanner](https://github.com/chuot/rdio-scanner) will start, it will take longer  as it has to install required node modules and build the progressive web application.
+Note that the first time [Rdio Scanner](https://github.com/chuot/rdio-scanner) will start, it will take longer as it has to install required node modules and build the progressive web application.
 
-``` bash
+```bash
 $ cd rdio-scanner
 
-$ node run init 
+$ node run init
 Installing node modules... done
 Building client app... done
 Configuration and database initialized
@@ -80,7 +80,7 @@ First download the CSV file for all talkgroups from a trunked system. Here we wi
 
 You can choose any `system_id` you want to refer to this system. If you choose an existing `system_id` in `config.json`, you will replace it with the new one.
 
-``` bash
+```bash
 $ node server load-rrdb
 USAGE: load-rrdb <system_id> <input_tg_csv>
 
@@ -90,7 +90,7 @@ File /home/radio/Downloads/trs_tg_7537.csv imported successfully into system 11
 
 # 5. Load talkgroups from a Trunk Recorder CSV file (optional)
 
-``` bash
+```bash
 $ node server load-tr
 USAGE: load-tr <system_id> <input_tg_csv>
 
@@ -100,7 +100,7 @@ File /home/radio/Downloads/tgs.csv imported successfully into system 12
 
 # 6. Start Rdio Scanner
 
-``` bash
+```bash
 $ node run server
 Server is running at http://0.0.0.0:3000
 ```
@@ -109,7 +109,7 @@ Server is running at http://0.0.0.0:3000
 
 Even if your instance of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is preconfigured with a new random UUID for your API keys, you may want to generate others. The following command will generate a new UUID which you can copy/paste into the `server/config.json` file.
 
-``` bash
+```bash
 $ node server random-uuid
 aaf366c5-fa20-40a7-b617-dc7587c792fd
 
@@ -125,7 +125,7 @@ dc50e0d6-c635-436b-bb70-b46d99f12df9
 
 If new commits have been pushed to the [Rdio Scanner GitHub repository](https://github.com/chuot/rdio-scanner), you can easily update like this:
 
-``` bash
+```bash
 $ node update
 Pulling new version from github... done
 Updating node modules... done

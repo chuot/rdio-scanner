@@ -6,19 +6,19 @@ The [Rdio Scanner Docker Image](https://hub.docker.com/r/chuot/rdio-scanner) is 
 
 Do `docker pull chuot/rdio-scanner:latest` like this:
 
-``` bash
+```bash
 $ docker pull chuot/rdio-scanner:latest
 latest: Pulling from chuot/rdio-scanner
-cbdbe7a5bc2a: Already exists 
-bd07af9ed1a4: Pull complete 
-3556ccf180b2: Pull complete 
-089d4748da74: Pull complete 
-d461af9c0a5f: Pull complete 
-b13fa0022c33: Pull complete 
-af86cf4eebc5: Pull complete 
-dbbf263c046e: Pull complete 
-adf8257900e9: Pull complete 
-9716c9a06d21: Pull complete 
+cbdbe7a5bc2a: Already exists
+bd07af9ed1a4: Pull complete
+3556ccf180b2: Pull complete
+089d4748da74: Pull complete
+d461af9c0a5f: Pull complete
+b13fa0022c33: Pull complete
+af86cf4eebc5: Pull complete
+dbbf263c046e: Pull complete
+adf8257900e9: Pull complete
+9716c9a06d21: Pull complete
 Digest: sha256:1264d0a9dc682e2057d7d6b89fee98164212fc0763ad3f40eb3193da75c64c75
 Status: Downloaded newer image for chuot/rdio-scanner:latest
 docker.io/chuot/rdio-scanner:latest
@@ -28,7 +28,7 @@ docker.io/chuot/rdio-scanner:latest
 
 We now need to initialize the config.json file and the database. But first we need to determine where these files will be located on your host. We will use `~/.rdio-scanner` in the following example, but you can choose any location you want. We will then pass this location via the `--volume` option.
 
-``` bash
+```bash
 $ mkdir ~/.rdio-scanner
 
 $ docker run -it --rm --user $(id -u):$(id -g) --volume ~/.rdio-scanner:/app/data chuot/rdio-scanner:latest init
@@ -47,7 +47,7 @@ The `config.json` is preloaded with 2 systems, which you probably don't want. Th
 
 If your [Rdio Scanner](https://github.com/chuot/rdio-scanner) is already running, be sure to restart it every time you make changes to the `config.json` file.
 
-``` bash
+```bash
 $ docker restart rdio-scanner
 rdio-scanner
 ```
@@ -60,7 +60,7 @@ First download the CSV file for all talkgroups from a trunked system. Then move 
 
 You can choose any `system_id` you want to refer to this system. If you choose an existing `system_id` in `config.json`, you will replace it with the new one.
 
-``` bash
+```bash
 $ mv ~/Downloads/trs_tg_7537.csv ~/.rdio-scanner
 
 $ docker run -it --rm chuot/rdio-scanner:latest load-rrdb
@@ -74,7 +74,7 @@ $ rm ~/.rdio-scanner/trs_tg_7537.csv
 
 # 5. Load talkgroups from a Trunk Recorder CSV file (optional)
 
-``` bash
+```bash
 $ mv ~/Downloads/tgs.csv ~/.rdio-scanner
 
 $ docker run -it --rm chuot/rdio-scanner:latest load-tr
@@ -92,8 +92,8 @@ By default, [Rdio Scanner](https://github.com/chuot/rdio-scanner) runs on port 3
 
 However, we will stick to port 3000 in this example.
 
-``` bash
-$ docker run --detach --name rdio-scanner --publish 3000:3000 --restart always --user $(id -u):$(id -g) --volume ~/.rdio-scanner:/app/data chuot/rdio-scanner:latest
+```bash
+$ docker run --detach --env TZ=America/Toronto --name rdio-scanner --publish 3000:3000 --restart always --user $(id -u):$(id -g) --volume ~/.rdio-scanner:/app/data chuot/rdio-scanner:latest
 520cdbf51fca11d8bacea12d81245f1cb4d984f80d2be2e3039727b59533a6a9
 
 $ docker logs rdio-scanner
@@ -104,7 +104,7 @@ Server is running at http://0.0.0.0:3000
 
 Even if your instance of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is preconfigured with a new random UUID for your API keys, you may want to generate others. The following command will generate a new UUID which you can copy/paste into the `config.json` file.
 
-``` bash
+```bash
 $ docker run -it --rm chuot/rdio-scanner:latest random-uuid
 aaf366c5-fa20-40a7-b617-dc7587c792fd
 
@@ -120,7 +120,7 @@ dc50e0d6-c635-436b-bb70-b46d99f12df9
 
 If a newer version of [Rdio Scanner Docker Image](https://hub.docker.com/r/chuot/rdio-scanner) is released, you can easily update it like this:
 
-``` bash
+```bash
 $ docker pull chuot/rdio-scanner:latest
 ...
 

@@ -10,7 +10,7 @@ This API is used by the **downstream** feature to received audio files from othe
 
 However, this API can be used for purposes other than **downstream**, as long as the API key gives access to the systems/talkgroups on which you wish to upload the audio file.
 
-``` bash
+```bash
 $ curl https://other-rdio-scanner.example.com/api/call-upload \
     -F "key=d2079382-07df-4aa9-8940-8fb9e4ef5f2e" \
     -F "audio=@/recordings/audio.wav" \
@@ -27,33 +27,33 @@ Call imported successfully
 - **key** - API key on the receiving host, see `config.json`.
 - **audio** - Full path to your audio file. The path **must be prefixed** with the **@ sign**.
 - **dateTime** - Audio date and time in JSON format.
-- **frequencies** - (optional) A JSON string. Inspired by *Trunk Recorder*, the JSON structure is:
-    ``` typescript
-    {
-        errorCount: number;
-        freq: number;         // in hertz
-        len: number;          // in seconds
-        pos: number;          // in seconds
-        spikeCount: number;
-    }[]
-    ```
+- **frequencies** - (optional) A JSON string. Inspired by _Trunk Recorder_, the JSON structure is:
+  ```typescript
+  {
+    errorCount: number;
+    freq: number; // in hertz
+    len: number; // in seconds
+    pos: number; // in seconds
+    spikeCount: number;
+  }[];
+  ```
 - **frequency** - (optional) The frequency at which the call was recorded.
 - **source** - (optional) The unit ID.
-- **sources** - (optional) A JSON string. Inspired by *Trunk Recorder*. the JSON string structure is:
-    ``` typescript
-    {
-        pos: number;          // in seconds
-        src: number;          // the unit ID
-    }[]
-    ```
+- **sources** - (optional) A JSON string. Inspired by _Trunk Recorder_. the JSON string structure is:
+  ```typescript
+  {
+    pos: number; // in seconds
+    src: number; // the unit ID
+  }[];
+  ```
 - **system** - The system ID to attach this audio file.
 - **talkgroup** - The talkgroup ID to attach this audio file.
 
 ## Trunk Recorder API - /api/trunk-recorder-call-upload
 
-This API is used by *Trunk Recorder upload-script* where a JSON file is also available for metadata.
+This API is used by _Trunk Recorder upload-script_ where a JSON file is also available for metadata.
 
-``` bash
+```bash
 $ curl https://rdio-scanner.other.instance/api/trunk-recorder-call-upload \
     -F "key=d2079382-07df-4aa9-8940-8fb9e4ef5f2e" \
     -F "audio=@/recordings/audio.wav" \

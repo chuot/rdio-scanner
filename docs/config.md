@@ -8,7 +8,7 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
 
 **Structure**
 
-``` js
+```js
 {
     "nodejs": {
         // (string) "development" or "production". Default is "production".
@@ -108,7 +108,7 @@ It is possible to run [Rdio Scanner](https://github.com/chuot/rdio-scanner) in S
 
 If you don't have a certificate, you can generate one yourself like this:
 
-``` bash
+```bash
 $ openssl req -nodes -new -x509 -keyout server.key -out server.cert
 Generating a RSA private key
 ..........+++++
@@ -133,7 +133,7 @@ Email Address []:
 
 Then add the files to your configuration:
 
-``` json
+```json
 "nodejs": {
   "sslCert": "server.cert",
   "sslKey": "server.key"
@@ -150,7 +150,7 @@ When used, the user will be prompted once for their password. It is then stored 
 
 **Structure of the rdioScanner.access object**
 
-``` typescript
+```typescript
 access: null | string | string[] | {
   code: string;
   systems: number | number[] | {
@@ -167,42 +167,34 @@ Default value is `null` .
 
 **Examples**
 
-* No access control, access to all systems/talkgroups
+- No access control, access to all systems/talkgroups
 
-  
-
-``` json
+```json
   "access": null
-  ```
+```
 
-* Single unique password, access to all systems/talkgroups
+- Single unique password, access to all systems/talkgroups
 
-  
-
-``` json
+```json
   "access": "password"
-  ```
+```
 
-  or
+or
 
-  
-
-``` json
+```json
   "access": {
     "code": "password",
     "systems": "*"
   }
-  ```
+```
 
-* Complex access control
+- Complex access control
 
 `password1` gives access to system 11 / talkgroups 54241, 54125 and system 21 / talkgroups 60040, 60041, 50003.
 
 `password2` and `password3` give access to all systems/talkgroups.
 
-  
-
-``` json
+```json
   "access": [
     {
       "code": "password1",
@@ -230,7 +222,7 @@ Default value is `null` .
     },
     "password3"
   ]
-  ```
+```
 
 ## API keys - rdioScanner.apiKeys
 
@@ -242,7 +234,7 @@ It is also possible to restrict these API keys to specific systems/talkgroups.
 
 **Structure of the rdioScanner.apiKeys object**
 
-``` typescript
+```typescript
 apiKeys: null | string | string[] | {
   key: string;
   systems: number | number[] | {
@@ -259,34 +251,28 @@ Default value is an empty array `[]` .
 
 **Examples**
 
-* Single API key which allows upload to any systems/talkgroups
+- Single API key which allows upload to any systems/talkgroups
 
-  
-
-``` json
+```json
   "apiKeys": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e"
-  ```
+```
 
-  or
+or
 
-  
-
-``` json
+```json
   "access": {
     "key": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e",
     "systems": "*"
   }
-  ```
+```
 
-* Complex API keys definition
+- Complex API keys definition
 
   API key `d2079382-07df-4aa9-8940-8fb9e4ef5f2e` gives access to system 11 / talkgroups 54241, 54125 and system 21 / talkgroups 60040, 60041, 50003.
 
   API keys `cfcfa7d5-897c-4b96-b974-2fec80c3f775` and `a3ac707e-eaf9-4951-a9d5-c52186fa5093` give access to all systems/talkgroups.
 
-  
-
-``` json
+```json
   "apiKeys": [
     {
       "key": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e",
@@ -314,7 +300,7 @@ Default value is an empty array `[]` .
     },
     "a3ac707e-eaf9-4951-a9d5-c52186fa5093"
   ]
-  ```
+```
 
 ## DirWatch - rdioScanner.dirWatch
 
@@ -322,14 +308,14 @@ You can also define a `dirWatch` to monitor new audio files from any directory.
 
 **Structure**
 
-``` typescript
+```typescript
 dirWatch: {
   delay?: number;                      // optional, value is in ms
   deleteAfter?: boolean;               // default is false
   directory: string;                   // mandatory, unique
   extension: string;                   // mandatory
   frequency?: number;                  // optional, value is in hertz
-  mask?: string;                       // optional, see possible values below
+  mask?: string | string[];            // optional, see possible values below
   system?: number | string;            // optional
   talkgroup?: number | string;         // optional
   type?: "default" | "trunk-recorder"; // optional, default is default
@@ -337,26 +323,26 @@ dirWatch: {
 }[]
 ```
 
-* **delay** - Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a timeout value in *milliseconds* for the audio file to settle before ingesting it.
-* **deleteAfter** - You may want the audio file to be deleted after being ingested. If this value is *true*, all pre-existing audio files will be ingested and deleted as soon as [Rdio Scanner](https://github.com/chuot/rdio-scanner) starts. When this parameter is *false*, pre-existing audio files are neither ingested nor deleted.
-* **directory** - Absolute or relatives to [Rdio Scanner](https://github.com/chuot/rdio-scanner)'s. Path of the directory to be monitored. **This value must be unique**.
-* **extension** - The audio call extension to monitor without the period. Ex.: "mp3", "wav".
-* **frequency** - You may want to fake the frequency which will be displayed on *Rdio Scanner*. Let say that you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
-* **frequency** - You may want to simulate the frequency that will be displayed. Say you are recording an AM frequency from *RTLSDR-Airband*, here you would put that frequency.
-* **mask** - Some metadata can be extracted from the file name of the audio file using specific META tags. Here is the list:
-  + **#DATE** - extract the date like *20200608* or *2020-06-08*.
-  + **#HZ** - extract the frequency in hertz like *119100000*.
-  + **#KHZ** - extract the frequency in kilohertz like *119100*.
-  + **#MHZ** - extract the frequency in megahertz like *119.100*.
-  + **#TIME** - extract the *local* time like *0853439* or *08:34:39*.
-  + **#SYS** - extract the system id like *11*.
-  + **#TG** - extract the talkgroup id like *54241*.
-  + **#UNIT** - extract the unit id like *4424001*.
-  + **#ZTIME** - extract the *zulu* time like *0453439* or *04:34:39*.
-* **system** - A valid system id defined in **rdioScanner.systems**.
-* **talkgroup** - A valid talkgroup id defined in **rdioScanner.systems**.
-* **type** - In case of *Trunk Recorder*, the metadata of the *JSON file* will be used.
-* **usePolling** - When monitoring a network folder, you must use Polling for dirWatch to work. However, this is very CPU intensive and should be used with care. You can also try values greater than 1000 to decrease CPU consumption.
+- **delay** - Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a timeout value in _milliseconds_ for the audio file to settle before ingesting it.
+- **deleteAfter** - You may want the audio file to be deleted after being ingested. If this value is _true_, all pre-existing audio files will be ingested and deleted as soon as [Rdio Scanner](https://github.com/chuot/rdio-scanner) starts. When this parameter is _false_, pre-existing audio files are neither ingested nor deleted.
+- **directory** - Absolute or relatives to [Rdio Scanner](https://github.com/chuot/rdio-scanner)'s. Path of the directory to be monitored. **This value must be unique**.
+- **extension** - The audio call extension to monitor without the period. Ex.: "mp3", "wav".
+- **frequency** - You may want to fake the frequency which will be displayed on _Rdio Scanner_. Let say that you are recording an AM frequency from _RTLSDR-Airband_, here you would put that frequency.
+- **frequency** - You may want to simulate the frequency that will be displayed. Say you are recording an AM frequency from _RTLSDR-Airband_, here you would put that frequency.
+- **mask** - Some metadata can be extracted from the file name of the audio file using specific META tags. You may define a simple mask for the dirWatch or an array of masks. Here is the list of possible META tags:
+  - **#DATE** - extract the date like _20200608_ or _2020-06-08_.
+  - **#HZ** - extract the frequency in hertz like _119100000_.
+  - **#KHZ** - extract the frequency in kilohertz like _119100_.
+  - **#MHZ** - extract the frequency in megahertz like _119.100_.
+  - **#TIME** - extract the _local_ time like _0853439_ or _08:34:39_.
+  - **#SYS** - extract the system id like _11_.
+  - **#TG** - extract the talkgroup id like _54241_.
+  - **#UNIT** - extract the unit id like _4424001_.
+  - **#ZTIME** - extract the _zulu_ time like _0453439_ or _04:34:39_.
+- **system** - A valid system id defined in **rdioScanner.systems**. It can also be a regexp string to extract the system id.
+- **talkgroup** - A valid talkgroup id defined in **rdioScanner.systems**. It can also be a regexp string to extract the talkgroup id.
+- **type** - In case of _Trunk Recorder_, the metadata of the _JSON file_ will be used.
+- **usePolling** - When monitoring a network folder, you must use Polling for dirWatch to work. However, this is very CPU intensive and should be used with care. You can also try values greater than 1000 to decrease CPU consumption.
 
 > Note that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must know the **system id** and the **talkgroup id** for the call to be ingested. These two values must be specified either by **dirWatch.system**, **dirWatch.talkgroup**, **dirWatch.mask** or a mix of them. **dirWatch.system** and **dirWatch.talkgroup** have priority over **dirWatch.mask**.
 
@@ -364,11 +350,9 @@ Default value is an empty array `[]` .
 
 **Examples**
 
-* Ingest audio files from **Trunk Recorder**
+- Ingest audio files from **Trunk Recorder**
 
-  
-
-``` json
+```json
   "dirWatch": [
     {
       "deleteAfter": true,
@@ -385,13 +369,11 @@ Default value is an empty array `[]` .
       "type": "trunk-recorder"
     }
   ]
-  ```
+```
 
-* Ingest audio files from **RTLSDR-Airband**
+- Ingest audio files from **RTLSDR-Airband**
 
-  
-
-``` json
+```json
   "dirWatch": [
     {
       "deleteAfter": true,
@@ -403,22 +385,25 @@ Default value is an empty array `[]` .
       "type": "trunk-recorder"
     }
   ]
-  ```
+```
 
-* Ingest audio files from **SDRTrunk**
+- Ingest audio files from **SDRTrunk**
 
-  
-
-``` json
+```json
   "dirWatch": [
     {
       "deleteAfter": true,
       "directory": "/home/radio/SDRTrunk/recordings",
       "extension": "mp3",
-      "mask": "#DATE_#TIMERSP25MTL_#SYS_TRAFFIC__TO_#TG_FROM_#UNIT"
+      "frequency": 772531250,
+      "mask": [
+        "#DATE_#TIMERSP25MTL1_TRAFFIC__TO_#TG_FROM_#UNIT",
+        "#DATE_#TIMERSP25MTL1_TRAFFIC__TO_#TG"
+      ],
+      "system": 11
     }
   ]
-  ```
+```
 
 ## Downstreams - rdioScanner.downstreams
 
@@ -430,7 +415,7 @@ This is handy if you want to build a mesh of [Rdio Scanner](https://github.com/c
 
 **Structure of the rdioScanner.downstreams object**
 
-``` typescript
+```typescript
 downstreams: {
   apiKey: string;
   disabled: boolean;
@@ -449,7 +434,7 @@ Default value is an empty array `[]` .
 
 **Examples**
 
-``` json
+```json
 "downstreams": [
   {
     "apiKey": "d2079382-07df-4aa9-8940-8fb9e4ef5f2e",
@@ -498,7 +483,7 @@ Each button press can emit a specific beep depending on whether a function is ac
 
 **Structure of the rdioScanner.options.keypadBeeps object**
 
-``` typescript
+```typescript
 options: {
   keypadBeeps: false | 1 | 2 | { // false = disabled, 1 = uniden, 2 = whistler, object = custom
     activate: {                  // beeps sequence when a function is activated
@@ -527,7 +512,7 @@ options: {
 
 Setting `options.keypadBeeps` to `1` set the keypadBeeps to Uniden style. It is equivalent to:
 
-``` json
+```json
 "options": {
   "keypadBeeps": {
     "activate": [
@@ -572,7 +557,7 @@ Setting `options.keypadBeeps` to `1` set the keypadBeeps to Uniden style. It is 
 
 Setting `options.keypadBeeps` to `2` set the keypadBeeps to Whistler style. It is equivalent to:
 
-``` json
+```json
 "options": {
   "keypadBeeps": {
     "activate": [
@@ -627,7 +612,7 @@ The heart of [Rdio Scanner](https://github.com/chuot/rdio-scanner) where all you
 
 **Definitions of the rdioScanner.systems object**
 
-``` typescript
+```typescript
 systems: {
   id: number;
   label: string;
@@ -648,18 +633,18 @@ systems: {
 }[]
 ```
 
-* **id** - System ID.
-* **label** - System label shown on the left side of second row.
-* **led** - Optional LED color for the whole system. By default the LED is *green*.
-* **talkgroups** - Talkgroups for the system.
-  + **id** - Talkgroup ID.
-  + **label** - Talkgroup label shown on the left side of third row.
-  + **name** - Talkgroup name shown on the fouth row.
-  + **patches** - Array of talkgroup ID to include in this talkgroup.
-  + **tag** - Talkgroup tag shown on the right side of second row.
-* **units** - Unit aliases.
-  + **id** - Unit ID.
-  + **label** - Unit label shown on the right side of six sixth row.
+- **id** - System ID.
+- **label** - System label shown on the left side of second row.
+- **led** - Optional LED color for the whole system. By default the LED is _green_.
+- **talkgroups** - Talkgroups for the system.
+  - **id** - Talkgroup ID.
+  - **label** - Talkgroup label shown on the left side of third row.
+  - **name** - Talkgroup name shown on the fouth row.
+  - **patches** - Array of talkgroup ID to include in this talkgroup.
+  - **tag** - Talkgroup tag shown on the right side of second row.
+- **units** - Unit aliases.
+  - **id** - Unit ID.
+  - **label** - Unit label shown on the right side of six sixth row.
 
 ## Load a system from RadioReference.com or talkgroups from Trunk Recorder CSV file
 
@@ -669,8 +654,8 @@ You can choose any `system_id` you want to refer to this system. If you choose a
 
 See examples in the installation documents:
 
-* [Install from the Docker Image](./install-docker.md)
-* [Install from the GitHub Repository](./install-github.md)
+- [Install from the Docker Image](./install-docker.md)
+- [Install from the GitHub Repository](./install-github.md)
 
 > Note that [Rdio Scanner](https://github.com/chuot/rdio-scanner) has been designed to resemble old school radio scanners where each talkgroup has its own toggle button on the **SELECT TG** panel. Loading too many systems/talkgroups will make the web application very slow. Depending on your use case, you may want to have no more than 400 talkgroups.
 
