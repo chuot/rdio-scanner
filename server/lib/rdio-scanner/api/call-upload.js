@@ -91,11 +91,9 @@ class CallUpload {
                 const talkgroup = parseInt(reqBody.talkgroup, 10) || null;
 
                 if (!this.controller.validateApiKey(apiKey, system, talkgroup)) {
-                    const message = `system=${system} talkgroup=${talkgroup} file=${audioName} No matching system/talkgroup`;
+                    console.warn(`Api: system=${system} talkgroup=${talkgroup} file=${audioName} No matching system/talkgroup`);
 
-                    console.warn(`Api: ${message}`);
-
-                    res.send(`${message}\n`);
+                    res.sendStatus(403);
 
                     return;
                 }
@@ -117,7 +115,9 @@ class CallUpload {
                     res.send(`Call imported successfully.\n`);
 
                 } catch (error) {
-                    res.status(500).send(error.message);
+                    console.error(`Api: system=${system} talkgroup=${talkgroup} file=${audioName} ${error.message}`);
+
+                    res.sendStatus(500);
                 }
             }
         });

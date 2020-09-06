@@ -403,14 +403,9 @@ class Controller extends EventEmitter {
 
         let newCall;
 
-        try {
-            newCall = await this.models.call.create(call);
+        newCall = await this.models.call.create(call);
 
-            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} Success`);
-
-        } catch (error) {
-            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} ${error.message}`);
-        }
+        console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} Success`);
 
         this.emit('call', newCall);
     }

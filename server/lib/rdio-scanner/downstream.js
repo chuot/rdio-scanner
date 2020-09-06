@@ -136,14 +136,17 @@ class Downstream {
         form.append('system', call.system);
         form.append('talkgroup', call.talkgroup);
 
-        form.submit(apiUrl, (error) => {
+        form.submit(apiUrl, (error, response) => {
+            const message = `Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url}`;
+
             if (error) {
-                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} `
-                    + `file=${call.audioName} to=${downstream.url} ${error.message}`);
+                console.error(`${message} ${error.message}`);
+
+            } else if (response.statusCode !== 200) {
+                console.error(`${message} ${response.statusMessage}`);
 
             } else {
-                console.log(`Downstream: system=${call.system} talkgroup=${call.talkgroup} `
-                    + `file=${call.audioName} to=${downstream.url} Success`);
+                console.log(`${message} Success`);
             }
         });
     }
