@@ -1,4 +1,4 @@
-# Version 4.6.4
+# Version 4.6.5
 
 - Add load-tr to load Trunk Recorder talkgroups csv.
 - Move back keypadsBeeps presets to backend.
@@ -10,6 +10,11 @@
 - Trim silence from audio files when converting to m4a.
 - Display filename instead of frequency when no frequency value available.
 - Fix NaN values when importing from upstream.
+- Fix time zone management, especially on the Docker container.
+- Config.dirWatch.mask now supports multiple definitions.
+- DirWatch now warns about unmatched mask.
+- DownStream now reports error if something is going wrong.
+- Documentation update.
 
 # Version 4.6
 
@@ -71,9 +76,9 @@
 ## Upgrading from version 3
 
 - Your `server/.env` file will be used to create the new `server/config.json` file. Then the `server/.env` will be deleted.
-- The `rdioScannerSystems` table will be used to create the *rdioScanner.systems* within `server/config.json`. Then the `rdioScannerSystems` table will be purged.
+- The `rdioScannerSystems` table will be used to create the _rdioScanner.systems_ within `server/config.json`. Then the `rdioScannerSystems` table will be purged.
 - The `rdioScannerCalls` table will be rebuilt, which can be pretty long on some systems.
-- It is no longer possible to upload neither your TALKGROUP.CSV nor you ALIAS.CSV files to *Rdio Scanner*. Instead, you have to define them in the `server/config.json` file.
+- It is no longer possible to upload neither your TALKGROUP.CSV nor you ALIAS.CSV files to _Rdio Scanner_. Instead, you have to define them in the `server/config.json` file.
 
 > YOU SHOULD BACKUP YOUR `SERVER/.ENV` FILE AND YOUR DATABASE PRIOR TO UPGRADING, JUST IN CASE. WE'VE TESTED THE UPGRADE PROCESS MANY TIMES, BUT WE CAN'T KNOW FOR SURE IF IT'S GOING TO WORK WELL ON YOUR SIDE.
 
@@ -86,7 +91,7 @@
 
 - Unit aliases support, display names instead of unit ID.
 - Download calls from the search panel.
-- New configuration options: *allowDownload* and *useGroup*.
+- New configuration options: _allowDownload_ and _useGroup_.
 
 > Note that you can only update from version 2.0 and above. You have to do a fresh install if your actual version is prior to version 2.0.
 
