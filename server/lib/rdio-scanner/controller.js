@@ -35,7 +35,7 @@ const wsCommand = {
     call: 'CAL',
     config: 'CFG',
     listCall: 'LCL',
-    liveFeedMap: 'LFM',
+    livefeedMap: 'LFM',
     pin: 'PIN',
 };
 
@@ -51,7 +51,39 @@ class Controller extends EventEmitter {
 
         this.config = parseConfig(ctx.config);
 
+        this.groups = {};
+
         this.models = ctx.models;
+
+        this.tags = {};
+
+        this.config.systems.forEach((system) => {
+            system.talkgroups.forEach((talkgroup) => {
+                if (!this.groups[talkgroup.group]) {
+                    this.groups[talkgroup.group] = {};
+                }
+
+                if (!this.groups[talkgroup.group][system.id]) {
+                    this.groups[talkgroup.group][system.id] = [];
+                }
+
+                if (!this.groups[talkgroup.group][system.id].includes(talkgroup.id)) {
+                    this.groups[talkgroup.group][system.id].push(talkgroup.id);
+                }
+
+                if (!this.tags[talkgroup.tag]) {
+                    this.tags[talkgroup.tag] = {};
+                }
+
+                if (!this.tags[talkgroup.tag][system.id]) {
+                    this.tags[talkgroup.tag][system.id] = [];
+                }
+
+                if (!this.tags[talkgroup.tag][system.id].includes(talkgroup.id)) {
+                    this.tags[talkgroup.tag][system.id].push(talkgroup.id);
+                }
+            })
+        });
 
         this.ffmpeg = !spawnSync('ffmpeg', ['-version']).error;
 
@@ -145,7 +177,7 @@ class Controller extends EventEmitter {
                     resolve(call);
                 });
 
-                proc.on('error', (error) => reject(error));
+                proc.on('error', (error) => reject(error.message));
 
                 proc.stdin.on('error', (error) => reject(error.message));
 
@@ -181,6 +213,47 @@ class Controller extends EventEmitter {
     }
 
     async getCalls(options, scope) {
+        const filters = [];
+
+        if (scope !== null && typeof scope === 'object') {
+            filters.push({
+                [Op.or]: Object.keys(scope).map((sys) => ({
+                    system: +sys,
+                    talkgroup: { [Op.in]: scope[sys] },
+                })),
+            });
+        }
+
+        if (options && typeof options.group === 'string' && options.group.length) {
+            const group = this.groups[options.group];
+
+            filters.push({
+                [Op.or]: Object.keys(group).map((sys) => ({
+                    system: +sys,
+                    talkgroup: { [Op.in]: group[sys] },
+                })),
+            });
+        }
+
+        if (options && typeof options.system === 'number') {
+            filters.push({ system: options.system });
+        }
+
+        if (options && typeof options.tag === 'string' && options.tag.length) {
+            const tag = this.tags[options.tag];
+
+            filters.push({
+                [Op.or]: Object.keys(tag).map((sys) => ({
+                    system: +sys,
+                    talkgroup: { [Op.in]: tag[sys] },
+                })),
+            });
+        }
+
+        if (options && typeof options.talkgroup === 'number') {
+            filters.push({ talkgroup: options.talkgroup });
+        }
+
         const attributes = ['id', 'dateTime', 'system', 'talkgroup'];
 
         const date = options && typeof options.date === 'string' ? new Date(options.date) : null;
@@ -191,33 +264,7 @@ class Controller extends EventEmitter {
 
         const order = [['dateTime', options && typeof options.sort === 'number' && options.sort < 0 ? 'DESC' : 'ASC']];
 
-        const system = options && typeof options.system === 'number' ? options.system : null;
-
-        const talkgroup = options && typeof options.talkgroup === 'number' ? options.talkgroup : null;
-
-        let where1 = null;
-
-        if (scope !== null && typeof scope === 'object') {
-            where1 = {
-                [Op.or]: Object.keys(scope).map((sys) => ({
-                    system: sys,
-                    talkgroup: {
-                        [Op.in]: scope[sys],
-                    },
-                }), []),
-            };
-        }
-
-        if (system && talkgroup) {
-            where1 = {
-                [Op.and]: where1 ? [where1, { system }, { talkgroup }] : [{ system }, { talkgroup }],
-            };
-
-        } else if (system) {
-            where1 = {
-                [Op.and]: where1 ? [where1, { system }] : [{ system }],
-            };
-        }
+        const where1 = filters.length ? { [Op.and]: filters } : {};
 
         const where2 = date ? {
             [Op.and]: [
@@ -242,13 +289,14 @@ class Controller extends EventEmitter {
 
         const dateStop = dateStopQuery && dateStopQuery.get('dateTime');
 
-        return { count, dateStart, dateStop, results };
+        return { count, dateStart, dateStop, options, results };
     }
 
     async getConfig(scope) {
         return Object.assign({}, this.getOptions(), {
-            allowDownload: this.config.options.allowDownload,
+            groups: this.groups,
             systems: await this.getSystems(scope),
+            tags: this.tags,
         });
     }
 
@@ -263,9 +311,7 @@ class Controller extends EventEmitter {
                     : options.keypadBeeps !== null && typeof options.keypadBeeps === 'object' ? options.keypadBeeps
                         : defaults.keypadBeeps.uniden;
 
-        const useGroup = this.config.options.useGroup;
-
-        return { dimmerDelay, keypadBeeps, useGroup };
+        return { dimmerDelay, keypadBeeps };
     }
 
     getScope(token, store = this.config.access) {
@@ -455,8 +501,6 @@ class Controller extends EventEmitter {
             }
 
             if (this.isAccessRestricted && !socket.isAuthenticated && message[0] !== wsCommand.pin) {
-                socket.send(JSON.stringify([wsCommand.config, await this.getOptions()]));
-
                 socket.send(JSON.stringify([wsCommand.pin]));
 
             } else if (message[0] === wsCommand.call) {
@@ -476,27 +520,27 @@ class Controller extends EventEmitter {
             } else if (message[0] === wsCommand.listCall) {
                 socket.send(JSON.stringify([wsCommand.listCall, await this.getCalls(message[1], socket.scope)]));
 
-            } else if (message[0] === wsCommand.liveFeedMap) {
+            } else if (message[0] === wsCommand.livefeedMap) {
                 let returnStatus;
 
                 if (message[1] !== null && typeof message[1] === 'object') {
                     const allOff = Object.keys(message[1]).every((sys) => Object.keys(message[1][sys]).every((tg) => !message[1][sys][tg]));
 
                     if (allOff) {
-                        if (typeof socket.liveFeed === 'function') {
-                            this.removeListener('call', socket.liveFeed);
+                        if (typeof socket.livefeed === 'function') {
+                            this.removeListener('call', socket.livefeed);
                         }
 
-                        socket.liveFeed = undefined;
+                        socket.livefeed = undefined;
 
                         returnStatus = true;
 
                     } else {
-                        if (typeof socket.liveFeed === 'function') {
-                            this.removeListener('call', socket.liveFeed);
+                        if (typeof socket.livefeed === 'function') {
+                            this.removeListener('call', socket.livefeed);
                         }
 
-                        socket.liveFeed = (call) => {
+                        socket.livefeed = (call) => {
                             if (socket.readyState !== 3) {
                                 if (call.system in socket.scope && call.system in message[1]) {
                                     if (socket.scope[call.system].includes(call.talkgroup)) {
@@ -507,28 +551,28 @@ class Controller extends EventEmitter {
                                 }
 
                             } else {
-                                this.removeListener('call', socket.liveFeed);
+                                this.removeListener('call', socket.livefeed);
 
-                                socket.liveFeed = undefined;
+                                socket.livefeed = undefined;
                             }
                         };
 
-                        this.addListener('call', socket.liveFeed);
+                        this.addListener('call', socket.livefeed);
 
                         returnStatus = true;
                     }
 
                 } else {
-                    if (typeof socket.liveFeed === 'function') {
-                        this.removeListener('call', socket.liveFeed);
+                    if (typeof socket.livefeed === 'function') {
+                        this.removeListener('call', socket.livefeed);
                     }
 
-                    socket.liveFeed = undefined;
+                    socket.livefeed = undefined;
 
                     returnStatus = false;
                 }
 
-                socket.send(JSON.stringify([wsCommand.liveFeedMap, returnStatus]));
+                socket.send(JSON.stringify([wsCommand.livefeedMap, returnStatus]));
 
             } else if (message[0] === wsCommand.pin) {
                 const token = Buffer.from(message[1], 'base64').toString();
@@ -596,8 +640,9 @@ function parseConfig(config) {
         config.options = {};
     }
 
-    config.options.allowDownload = typeof config.options.allowDownload === 'boolean' ? config.options.allowDownload
-        : typeof config.allowDownload === 'boolean' ? config.allowDownload : true;
+    if (config.options.allowDownload !== null || config.options.allowDownload !== undefined) {
+        delete config.options.allowDownload;
+    }
 
     if (config.allowDownload !== null || config.allowDownload !== undefined) {
         delete config.allowDownload;
@@ -703,8 +748,9 @@ function parseConfig(config) {
         delete config.useDimmer;
     }
 
-    config.options.useGroup = typeof config.options.useGroup === 'boolean' ? config.options.useGroup
-        : typeof config.useGroup === 'boolean' ? config.useGroup : true;
+    if (config.options.useGroup !== null || config.options.useGroup !== undefined) {
+        delete config.options.useGroup;
+    }
 
     if (config.useGroup !== null || config.useGroup !== undefined) {
         delete config.useGroup;
@@ -758,7 +804,7 @@ function parseConfig(config) {
                 console.error(`Config: System ${system.id}, talkgroup.id not a number: ${JSON.stringify(talkgroup.id)}`);
             }
 
-            if (config.useGroup && typeof talkgroup.group !== 'string' || !talkgroup.group.length) {
+            if (typeof talkgroup.group !== 'string' || !talkgroup.group.length) {
                 console.error(`Config: System ${system.id}, talkgroup ${talkgroup.id}, `
                     + `group not a string: ${JSON.stringify(talkgroup.group)}`);
             }

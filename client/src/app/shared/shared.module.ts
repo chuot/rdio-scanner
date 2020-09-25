@@ -19,7 +19,6 @@
 
 import { CommonModule } from '@angular/common';
 import { ModuleWithProviders, NgModule } from '@angular/core';
-import { FlexLayoutModule } from '@angular/flex-layout';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { AppLocaleModule } from './locale/locale.module';
 import { AppMaterialModule } from './material/material.module';
@@ -29,7 +28,6 @@ import { AppMaterialModule } from './material/material.module';
         AppLocaleModule,
         AppMaterialModule,
         CommonModule,
-        FlexLayoutModule,
         FormsModule,
         ReactiveFormsModule,
     ],

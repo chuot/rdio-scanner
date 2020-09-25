@@ -21,12 +21,22 @@ import { FullscreenOverlayContainer, OverlayContainer } from '@angular/cdk/overl
 import { NgModule } from '@angular/core';
 import { AppSharedModule } from '../../shared/shared.module';
 import { AppRdioScannerComponent } from './rdio-scanner.component';
+import { AppRdioScannerService } from './rdio-scanner.service';
+import { AppRdioScannerMainComponent } from './main/main.component';
+import { AppRdioScannerSearchComponent } from './search/search.component';
+import { AppRdioScannerSelectComponent } from './select/select.component';
 
 @NgModule({
-    declarations: [AppRdioScannerComponent],
+    declarations: [
+        AppRdioScannerComponent,
+        AppRdioScannerMainComponent,
+        AppRdioScannerSearchComponent,
+        AppRdioScannerSelectComponent,
+    ],
     exports: [AppRdioScannerComponent],
     imports: [AppSharedModule],
     providers: [
+        AppRdioScannerService,
         { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
     ],
 })

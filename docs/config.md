@@ -55,9 +55,6 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
 
         // (object) Options definitions
         "options": {
-            // (boolean) Can users download archived calls. Default value is true
-            "allowDownload": true,
-
             // (number) Delay in milliseconds before turning off the screen backlight when inactive
             // Default value is 5000 milliseconds
             "dimmerDelay": 5000,
@@ -75,11 +72,6 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             // Default value is 7
             // Specifying a value of 0 will disable this feature
             "pruneDays": 7,
-
-            // (boolean) Also toggle talkgroups based on their group assignment
-            // Default value is true
-            // See Systems section below for more details on groups
-            "useGroup": true
         }
 
         // (object[]) Systems definitions
@@ -310,16 +302,16 @@ You can also define a `dirWatch` to monitor new audio files from any directory.
 
 ```typescript
 dirWatch: {
-  delay?: number;                      // optional, value is in ms
-  deleteAfter?: boolean;               // default is false
-  directory: string;                   // mandatory, unique
-  extension: string;                   // mandatory
-  frequency?: number;                  // optional, value is in hertz
-  mask?: string | string[];            // optional, see possible values below
-  system?: number | string;            // optional
-  talkgroup?: number | string;         // optional
-  type?: "default" | "trunk-recorder"; // optional, default is default
-  usePolling?: boolean | number;       // optional, value is in ms, true = 1000ms, default is false
+  delay?: number;                                    // optional, value is in ms
+  deleteAfter?: boolean;                             // default is false
+  directory: string;                                 // mandatory, unique
+  extension: string;                                 // mandatory
+  frequency?: number;                                // optional, value is in hertz
+  mask?: string | string[];                          // optional, see possible values below
+  system?: number | string;                          // optional
+  talkgroup?: number | string;                       // optional
+  type?: "default" | "sdr-trunk" | "trunk-recorder"; // optional, default is default
+  usePolling?: boolean | number;                     // optional, value is in ms, true = 1000ms, default is false
 }[]
 ```
 
@@ -341,7 +333,7 @@ dirWatch: {
   - **#ZTIME** - extract the _zulu_ time like _0453439_ or _04:34:39_.
 - **system** - A valid system id defined in **rdioScanner.systems**. It can also be a regexp string to extract the system id.
 - **talkgroup** - A valid talkgroup id defined in **rdioScanner.systems**. It can also be a regexp string to extract the talkgroup id.
-- **type** - In case of _Trunk Recorder_, the metadata of the _JSON file_ will be used.
+- **type** - When _sdr-trunk_, metadata are obtained from the MP3 tags. When _trunk-recorder_, metadata are obtained from the JSON file.
 - **usePolling** - When monitoring a network folder, you must use Polling for dirWatch to work. However, this is very CPU intensive and should be used with care. You can also try values greater than 1000 to decrease CPU consumption.
 
 > Note that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must know the **system id** and the **talkgroup id** for the call to be ingested. These two values must be specified either by **dirWatch.system**, **dirWatch.talkgroup**, **dirWatch.mask** or a mix of them. **dirWatch.system** and **dirWatch.talkgroup** have priority over **dirWatch.mask**.
@@ -350,6 +342,20 @@ Default value is an empty array `[]` .
 
 **Examples**
 
+- Ingest audio files from **SDRTrunk**
+
+> Note that **System name** on SDRTrunk **must match** the **system.label** in your configuration.
+
+```json
+  "dirWatch": [
+    {
+      "deleteAfter": true,
+      "directory": "/home/radio/SDRTrunk/recordings",
+      "type": "sdr-trunk"
+    }
+  ]
+```
+
 - Ingest audio files from **Trunk Recorder**
 
 ```json
@@ -357,14 +363,12 @@ Default value is an empty array `[]` .
     {
       "deleteAfter": true,
       "directory": "/home/radio/trunk-recorder/audio_files/RSP25MTL1",
-      "extension": "wav",
       "system": 11,
       "type": "trunk-recorder"
     },
     {
       "deleteAfter": true,
       "directory": "/home/radio/trunk-recorder/audio_files/SERAM",
-      "extension": "wav",
       "system": 21,
       "type": "trunk-recorder"
     }
@@ -383,24 +387,6 @@ Default value is an empty array `[]` .
       "system": 61,
       "talkgroup": 61,
       "type": "trunk-recorder"
-    }
-  ]
-```
-
-- Ingest audio files from **SDRTrunk**
-
-```json
-  "dirWatch": [
-    {
-      "deleteAfter": true,
-      "directory": "/home/radio/SDRTrunk/recordings",
-      "extension": "mp3",
-      "frequency": 772531250,
-      "mask": [
-        "#DATE_#TIMERSP25MTL1_TRAFFIC__TO_#TG_FROM_#UNIT",
-        "#DATE_#TIMERSP25MTL1_TRAFFIC__TO_#TG"
-      ],
-      "system": 11
     }
   ]
 ```
@@ -623,7 +609,7 @@ systems: {
     name: string;
     patches: number[];
     tag: string;
-    group?: string; // mandatory if useGroup is true, optional if not
+    group?: string;
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
   }[];
   units: {

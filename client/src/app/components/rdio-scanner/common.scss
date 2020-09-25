@@ -1,0 +1,83 @@
+.rdio-button,
+.rdio-button-mini,
+.rdio-button-none {
+  margin: 4px;
+}
+
+.rdio-button,
+.rdio-button-mini {
+  background: rgb(45, 45, 45);
+  border: none;
+  border-radius: 4px;
+  box-shadow: 1px 1px 2px rgb(255, 255, 255) inset,
+    -1px -1px 1px rgb(0, 0, 0) inset, 0 0 2px 2px rgb(0, 0, 0);
+  box-sizing: border-box;
+  color: rgb(255, 255, 255);
+  font-family: inherit;
+  font-weight: 500;
+  height: 40px;
+  line-height: 40px;
+  overflow: hidden;
+  position: relative;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 4px rgb(0, 0, 0);
+  white-space: nowrap;
+  width: auto;
+
+  &:active,
+  &:focus {
+    outline: 0;
+  }
+
+  &:active {
+    top: 4px;
+    transform: scale(0.98);
+    transform-origin: bottom center;
+  }
+
+  &.off::after,
+  &.on::after,
+  &.partial::after {
+    content: "";
+    border-radius: 4px;
+    display: block;
+    height: 6px;
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    width: 6px;
+  }
+
+  &.off::after {
+    background: rgb(230, 50, 50);
+    box-shadow: 1px 1px 1px rgb(255, 255, 255) inset,
+      0 0 3px 2px rgb(230, 50, 50);
+  }
+
+  &.on::after {
+    background: rgb(100, 230, 50);
+    box-shadow: 1px 1px 1px rgb(255, 255, 255) inset,
+      0 0 3px 2px rgb(100, 230, 50);
+  }
+
+  &.partial::after {
+    background: rgb(230, 165, 50);
+    box-shadow: 1px 1px 1px rgb(255, 255, 255) inset,
+      0 0 3px 2px rgb(230, 165, 50);
+  }
+}
+
+.rdio-button {
+  color: rgb(250, 250, 250);
+  font-size: 12px;
+  min-width: 64px;
+  text-transform: uppercase;
+  width: calc(25% - 8px);
+}
+
+.rdio-button-mini {
+  font-size: 10px;
+  min-width: 30px;
+  text-transform: uppercase;
+  width: calc(12.5% - 8px);
+}

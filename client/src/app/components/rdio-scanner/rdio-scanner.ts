@@ -71,11 +71,11 @@ export interface RdioScannerCallSource {
 }
 
 export interface RdioScannerConfig {
-    allowDownload: boolean;
     dimmerDelay: number | false;
+    groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
     systems: RdioScannerSystem[];
-    useGroup: boolean;
+    tags: { [key: string]: { [key: number]: number[] } };
 }
 
 export interface RdioScannerEvent {
@@ -85,10 +85,11 @@ export interface RdioScannerEvent {
     groups?: RdioScannerGroup[];
     holdSys?: boolean;
     holdTg?: boolean;
-    list?: RdioScannerList;
-    liveFeed?: boolean;
-    map?: RdioScannerLiveFeedMap;
+    livefeedMode?: RdioScannerLivefeedMode;
+    map?: RdioScannerLivefeedMap;
     pause?: boolean;
+    playbackList?: RdioScannerPlaybackList;
+    playbackPending?: string;
     queue?: number;
     time?: number;
 }
@@ -110,25 +111,34 @@ export interface RdioScannerKeypadBeeps {
     [RdioScannerBeepStyle.Denied]: RdioScannerBeep[];
 }
 
-export interface RdioScannerList {
-    count: number;
-    dateStart: Date;
-    dateStop: Date;
-    results: RdioScannerCall[];
-}
-
-export interface RdioScannerLiveFeedMap {
+export interface RdioScannerLivefeedMap {
     [key: string]: {
         [key: string]: boolean;
     };
 }
 
+export enum RdioScannerLivefeedMode {
+    Offline = 'offline',
+    Online = 'online',
+    Playback = 'playback',
+}
+
+export interface RdioScannerPlaybackList {
+    count: number;
+    dateStart: Date;
+    dateStop: Date;
+    options: RdioScannerSearchOptions;
+    results: RdioScannerCall[];
+}
+
 export interface RdioScannerSearchOptions {
     date?: Date;
-    limit?: number;
-    offset?: number;
-    sort?: number;
+    group?: string;
+    limit: number;
+    offset: number;
+    sort: number;
     system?: number;
+    tag?: string;
     talkgroup?: number;
 }
 

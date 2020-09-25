@@ -1,0 +1,128 @@
+<div class="rdio-status">
+    <div class="led" [ngClass]="ledStyle"></div>
+</div>
+<div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
+    <div class="row margin">
+        <div>
+            <span>{{ clock | date:'HH:mm' }}</span>
+        </div>
+        <div>
+            <span>Q: {{ callQueue }}</span>
+        </div>
+    </div>
+    <div class="row">
+        <div>
+            <span>{{ callSystem }}</span>
+        </div>
+        <div>
+            <span>{{ callTag }}</span>
+        </div>
+    </div>
+    <div class="row">
+        <div>
+            <span>{{ callTalkgroup }}</span>
+        </div>
+        <div>
+            <span>{{ callProgress | date:'HH:mm' }}</span>
+        </div>
+    </div>
+    <div class="row bold">
+        <span>{{ callTalkgroupName }}</span>
+    </div>
+    <div class="row">
+        <div>
+            <span>F: {{ callFrequency || 0 }}</span>
+        </div>
+        <div>
+            <span>TGID: {{ callTalkgroupId || 0 }}</span>
+        </div>
+    </div>
+    <div class="row margin">
+        <div>
+            <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
+        </div>
+        <div>
+            <span *ngIf="callUnit">UID: {{ callUnit }}</span>
+        </div>
+    </div>
+    <div class="wrapper">
+        <div class="auth" [ngClass]="{ visible: auth }">
+            <form class="mat-elevation-z8" autocomplete="off" [formGroup]="authForm" (ngSubmit)="authenticate()">
+                <mat-form-field>
+                    <input #password matInput type="password" autocomplete="off" formControlName="password"
+                        placeholder="Unlock code" (blur)="authFocus()">
+                </mat-form-field>
+            </form>
+        </div>
+        <table class="history">
+            <thead>
+                <tr>
+                    <th>
+                        <span>Time</span>
+                    </th>
+                    <th>
+                        <span>System</span>
+                    </th>
+                    <th>
+                        <span>Talkgroup</span>
+                    </th>
+                    <th>
+                        <span>Name</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let previousCall of callHistory">
+                    <td>
+                        <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
+                    </td>
+                    <td>
+                        <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>
+                    </td>
+                    <td>
+                        <span>{{ previousCall?.talkgroupData?.label || previousCall?.talkgroup }}</span>
+                    </td>
+                    <td>
+                        <span>{{ previousCall?.talkgroupData?.name || previousCall?.frequency }}</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="rdio-control">
+    <div class="row">
+        <button class="rdio-button" (click)="livefeed()"
+            [ngClass]="{ off: livefeedOffline && !playbackMode, on: livefeedOnline, partial: playbackMode }">
+            LIVE<br>FEED
+        </button>
+        <button class="rdio-button" (click)="holdSystem()" [ngClass]="{ off: !holdSys, on: holdSys }">
+            HOLD<br>SYS
+        </button>
+        <button class="rdio-button" (click)="holdTalkgroup()" [ngClass]="{ off: !holdTg, on: holdTg }">
+            HOLD<br>TG
+        </button>
+    </div>
+    <div class="row">
+        <button class="rdio-button" (click)="replay()">
+            REPLAY<br>LAST
+        </button>
+        <button class="rdio-button" (click)="skip()">
+            SKIP<br>NEXT
+        </button>
+        <button class="rdio-button" (click)="avoid()">
+            AVOID
+        </button>
+    </div>
+    <div class="row">
+        <button class="rdio-button" (click)="showSearchPanel()">
+            SEARCH<br>CALL
+        </button>
+        <button class="rdio-button" (click)="pause()" [ngClass]="{ off: !livefeedPaused, on: livefeedPaused }">
+            PAUSE
+        </button>
+        <button class="rdio-button" (click)="showSelectPanel()">
+            SELECT<br>TG
+        </button>
+    </div>
+</div>

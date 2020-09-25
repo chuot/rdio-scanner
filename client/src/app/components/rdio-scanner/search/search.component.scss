@@ -1,0 +1,143 @@
+:host {
+  box-sizing: border-box;
+  display: block;
+  padding: 8px;
+  margin: auto;
+  max-width: 1200px;
+  user-select: none;
+}
+
+.mat-toolbar {
+  background: inherit;
+  color: inherit;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.rdio-filters form {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+
+  .mat-form-field {
+    @for $i from 1 through 6 {
+      &:nth-of-type(#{$i}) {
+        order: #{$i};
+      }
+    }
+  }
+
+  .reset {
+    display: flex;
+    flex: 100%;
+    flex-direction: row;
+    justify-content: flex-end;
+    order: 7;
+  }
+}
+
+.rdio-list {
+  border-radius: 4px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  padding: 0;
+
+  .mat-cell,
+  .mat-header-cell {
+    &:first-of-type {
+      padding-left: 0;
+    }
+
+    &:last-of-type {
+      padding-right: 8px;
+    }
+
+    &:nth-child(1) {
+      flex: 0 0 40px;
+    }
+
+    &:nth-child(2),
+    &:nth-child(3) {
+      flex: 0 0 50px;
+    }
+
+    &:nth-child(4),
+    &:nth-child(5) {
+      flex: 0 0 20%;
+    }
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .paginator {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    padding-left: 8px;;
+  }
+
+  .spin {
+    animation-duration: 1000ms;
+    animation-iteration-count: infinite;
+    animation-name: spin;
+    animation-timing-function: linear;
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(-360deg);
+      }
+    }
+  }
+}
+
+@media (max-width: 459px) {
+  .rdio-filters form .mat-form-field {
+    flex: 100%;
+  }
+}
+
+@media (min-width: 460px) and (max-width: 979px) {
+  .rdio-filters form .mat-form-field {
+    flex: calc(50% - 1em);
+
+    &:nth-of-type(2),
+    &:nth-of-type(4),
+    &:nth-of-type(6) {
+      margin-left: 1em;
+    }
+  }
+}
+
+@media (min-width: 980px) {
+  .rdio-filters form .mat-form-field {
+    flex: calc(100% / 3 - 2em);
+
+    &:nth-of-type(2),
+    &:nth-of-type(4),
+    &:nth-of-type(5),
+    &:nth-of-type(6) {
+      margin-left: 1em;
+    }
+
+    &:nth-of-type(3) {
+      order: 4;
+    }
+
+    &:nth-of-type(4) {
+      order: 5;
+    }
+
+    &:nth-of-type(5) {
+      order: 3;
+    }
+  }
+}

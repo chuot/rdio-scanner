@@ -19,10 +19,17 @@
 
 'use strict';
 
+const { spawn, spawnSync } = require('child_process');
 const chokidar = require('chokidar');
 const fs = require('fs');
 const mime = require('mime-types');
 const path = require('path');
+
+const RECORDER_TYPE = {
+    default: 'default',
+    sdrTrunk: 'sdr-trunk',
+    trunkRecorder: 'trunk-recorder',
+};
 
 class DirWatch {
     constructor(ctx = {}) {
@@ -34,17 +41,19 @@ class DirWatch {
 
         this.controller = ctx.controller;
 
+        this.ffprobe = !spawnSync('ffprobe', ['-version']).error;
+
         this.registredDirectories = [];
 
         this.config.forEach((dirWatch = {}) => {
             if (typeof dirWatch.directory !== 'string' || !dirWatch.directory.length) {
-                console.error(`Config: No dirWatch.direction defined`);
+                console.error(`Config: No dirWatch.directory defined`);
 
                 return;
             }
 
-            if (typeof dirWatch.extension !== 'string' || !dirWatch.extension.length) {
-                console.error(`Config: Mo dirWatch.extension defined`);
+            if (dirWatch.type === RECORDER_TYPE.default && (typeof dirWatch.extension !== 'string' || !dirWatch.extension.length)) {
+                console.error(`Config: Mo dirWatch.extension defined for dirwatch.type='${RECORDER_TYPE.default}'`);
 
                 return;
             }
@@ -88,7 +97,16 @@ class DirWatch {
                 delete dirWatch.talkgroup;
             }
 
-            if (!['trunk-recorder'].includes(dirWatch.type)) {
+            if ([RECORDER_TYPE.sdrTrunk, RECORDER_TYPE.trunkRecorder].includes(dirWatch.type)) {
+                if (typeof dirWatch.extension !== 'undefined') {
+                    delete dirWatch.extension;
+                }
+
+                if (dirWatch.type === RECORDER_TYPE.sdrTrunk && typeof dirWatch.system !== 'undefined') {
+                    delete dirWatch.system;
+                }
+
+            } else {
                 delete dirWatch.type;
             }
 
@@ -96,6 +114,11 @@ class DirWatch {
 
             if (this.registredDirectories.includes(dir)) {
                 console.error(`Config: Duplicate directory definitions ${dir}`);
+
+                return;
+
+            } else if (dirWatch.type === RECORDER_TYPE.sdrTrunk && !this.ffprobe) {
+                console.error(`Config: ffprobe is missing, dirWatch.type='${RECORDER_TYPE.sdrTrunk}' are ignored`);
 
                 return;
 
@@ -120,7 +143,11 @@ class DirWatch {
                 const watcher = chokidar.watch(path.resolve(__dirname, '../../..', dirWatch.directory), options);
 
                 switch (dirWatch.type) {
-                    case 'trunk-recorder':
+                    case RECORDER_TYPE.sdrTrunk:
+                        watcher.on('add', (filename) => this.importSdrTrunkType(dirWatch, filename));
+                        break;
+
+                    case RECORDER_TYPE.trunkRecorder:
                         watcher.on('add', (filename) => this.importTrunkRecorderType(dirWatch, filename));
                         break;
 
@@ -214,11 +241,138 @@ class DirWatch {
         }
     }
 
+    async importSdrTrunkType(dirWatch, filename) {
+        const file = path.parse(filename);
+
+        if (file.ext === '.mp3') {
+            const audioFile = path.resolve(file.dir, `${file.name}.mp3`);
+
+            if (this.exists(audioFile)) {
+                const audio = this.readFile(audioFile);
+
+                const audioName = file.base;
+
+                const audioType = mime.lookup(audioFile);
+
+                const proc = spawn('ffprobe', [
+                    '-loglevel',
+                    'quiet',
+                    '-print_format',
+                    'json',
+                    '-show_entries',
+                    'format',
+                    '-',
+                ]);
+
+                let probe = Buffer.from([]);
+
+                proc.on('close', async() => {
+                    try {
+                        probe = JSON.parse(probe.toString());
+
+                    } catch (error) {
+                        console.error(`DirWatch: Unable to process ffprobe output for file ${filename}`);
+                    }
+
+                    if (!(probe && probe.format && probe.format.tags)) {
+                        console.error(`DirWatch: Unknown ffprobe json output for file ${filename}`);
+
+                        return;
+                    }
+
+                    const tags = probe.format.tags;
+
+                    if (typeof tags.TDAT !== 'string' || !tags.TDAT.length) {
+                        console.error(`DirWatch: Unable to fetch date from MP3 tags for file ${filename}`);
+
+                        return;
+                    }
+
+                    const dateTime = new Date(tags.TDAT);
+
+                    const frequency = parseInt(tags.comment.match(/Frequency:([0-9]+)/)[1], 10);
+
+                    if (isNaN(frequency)) {
+                        console.error(`DirWatch: Unable to fetch frequency from MP3 tags for file ${filename}`);
+
+                        return;
+                    }
+
+                    const sys = this.controller.config.systems.find((system) => system.label === tags.TIT1);
+
+                    if (!sys) {
+                        console.error(`DirWatch: Unable to find system label ${tags.TIT1} for file ${filename}`);
+
+                        return;
+                    }
+
+                    const system = sys.id;
+
+                    const source = parseInt(tags.artist, 10);
+
+                    if (isNaN(source)) {
+                        console.error(`DirWatch: Unable to fetch unit id from MP3 tags for file ${filename}`);
+
+                        return;
+                    }
+
+                    const talkgroup = parseInt(tags.title.match(/P:([0-9]+)/)[1], 10);
+
+                    if (isNaN(talkgroup)) {
+                        console.error(`DirWatch: Unable to fetch talkgroup id from MP3 tags for file ${filename}`);
+
+                        return;
+                    }
+
+                    const call = {
+                        audio,
+                        audioName,
+                        audioType,
+                        dateTime,
+                        frequency,
+                        source,
+                        system,
+                        talkgroup,
+                    };
+
+                    try {
+                        await this.controller.importCall(call);
+
+                        if (dirWatch.deleteAfter) {
+                            this.unlink(filename);
+                        }
+
+                    } catch (error) {
+                        console.error(`DirWatch: Error importing file ${audioFile}, ${error.message}`);
+
+                        return;
+                    }
+                });
+
+                proc.on('error', (error) => {
+                    console.error(`DirWatch: Error while fetching MP3 tags for file ${filename}, ${error.message}`);
+                });
+
+                proc.stdin.on('error', (error) => {
+                    console.error(`DirWatch: Error while fetching MP3 tags for file ${filename}, ${error.message}`);
+                });
+
+                proc.stdout.on('data', (data) => probe = Buffer.concat([probe, data]));
+
+                process.nextTick(() => {
+                    proc.stdin.setEncoding('binary');
+                    proc.stdin.write(audio);
+                    proc.stdin.end();
+                });
+            }
+        }
+    }
+
     async importTrunkRecorderType(dirWatch, filename) {
         const file = path.parse(filename);
 
         if (file.ext === '.json') {
-            const audioFile = path.resolve(file.dir, `${file.name}.${dirWatch.extension}`);
+            const audioFile = path.resolve(file.dir, `${file.name}.wav`);
 
             if (this.exists(audioFile)) {
                 const audio = this.readFile(audioFile);

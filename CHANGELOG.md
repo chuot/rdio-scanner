@@ -1,20 +1,11 @@
-# Version 4.6.5
+# Version 4.7
 
+- New dirWatch.type='sdr-trunk'.
+- New search panel layout with new group and tag filters.
 - Add load-tr to load Trunk Recorder talkgroups csv.
-- Move back keypadsBeeps presets to backend.
-- Change config.options.useDimmer to config.options.dimmerDelay.
-- Fix potential error in handling keypadBeeps styles.
-- Change handling of skip delay on client.
-- Fix beep method not completing promise in some situation.
-- Allow specifying polling delay on dirWatch.
-- Trim silence from audio files when converting to m4a.
-- Display filename instead of frequency when no frequency value available.
-- Fix NaN values when importing from upstream.
-- Fix time zone management, especially on the Docker container.
-- Config.dirWatch.mask now supports multiple definitions.
-- DirWatch now warns about unmatched mask.
-- DownStream now reports error if something is going wrong.
-- Documentation update.
+- Remove Config.options.allowDownloads, but the feature remains.
+- Remove Config.options.useGroup, but the feature remains.
+- Bug fixes.
 
 # Version 4.6
 
@@ -23,10 +14,12 @@
 - Remove config.options.useLed.
 - Rename Config.options.keyBeep to Config.options.keypadBeeps.
 - Config.options.keypadBeeps now with presets instead of full pattern declaration.
+- Bug fixes.
 
 # Version 4.5
 
 - Config.options.keyBeep which by default is true.
+- Bug fixes.
 
 # Version 4.4
 
