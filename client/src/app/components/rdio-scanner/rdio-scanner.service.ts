@@ -589,7 +589,15 @@ export class AppRdioScannerService implements OnDestroy {
             }
 
             if (this.beepContext) {
+                const resume = () => {
+                    if (this.beepContext?.state === 'suspended') {
+                        this.beepContext?.resume().then(() => resume());
+                    }
+                };
+
                 await this.beepContext.resume();
+
+                this.beepContext.onstatechange = () => resume();
             }
 
             if (this.audioContext && this.beepContext) {

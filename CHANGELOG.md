@@ -7,6 +7,13 @@
 - Remove Config.options.useGroup, but the feature remains.
 - Bug fixes.
 
+## Version 4.7.1
+ - Fix crash on client when access to talkgroups is restricted with a password.
+
+## Version 4.7.2
+ - Fix Keypad beeps not working on iOS.
+ - Fix pause not going off due to the above bug.
+
 # Version 4.6
 
 - Fix documentation in regards to load-rrd in install-github.md.
