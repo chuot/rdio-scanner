@@ -294,10 +294,37 @@ class Controller extends EventEmitter {
 
     async getConfig(scope) {
         return Object.assign({}, this.getOptions(), {
-            groups: this.groups,
+            groups: this.getGroups(scope),
             systems: await this.getSystems(scope),
-            tags: this.tags,
+            tags: this.getTags(scope),
         });
+    }
+
+    getGroups(scope = {}) {
+        if (scope !== null && typeof scope === 'object') {
+            return Object.keys(this.groups).reduce((groups, group) => {
+                Object.keys(this.groups[group]).forEach((system) => {
+                    if (Object.keys(scope).includes(system)) {
+                        const talkgroups = this.groups[group][system]
+                            .filter((talkgroup) => scope[system].includes(talkgroup));
+
+                        if (talkgroups.length) {
+                            if (!groups[group]) {
+                                groups[group] = {};
+                            }
+
+                            groups[group][system] = talkgroups;
+                        }
+                    }
+
+                });
+
+                return groups;
+            }, {});
+
+        } else {
+            return this.groups;
+        }
     }
 
     getOptions() {
@@ -411,6 +438,33 @@ class Controller extends EventEmitter {
             const systems = await this.models.system.findAll();
 
             return systems;
+        }
+    }
+
+    getTags(scope = {}) {
+        if (scope !== null && typeof scope === 'object') {
+            return Object.keys(this.tags).reduce((tags, tag) => {
+                Object.keys(this.tags[tag]).forEach((system) => {
+                    if (Object.keys(scope).includes(system)) {
+                        const talkgroups = this.tags[tag][system]
+                            .filter((talkgroup) => scope[system].includes(talkgroup));
+
+                        if (talkgroups.length) {
+                            if (!tags[tag]) {
+                                tags[tag] = {};
+                            }
+
+                            tags[tag][system] = talkgroups;
+                        }
+                    }
+
+                });
+
+                return tags;
+            }, {});
+
+        } else {
+            return this.tags;
         }
     }
 

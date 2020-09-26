@@ -682,7 +682,7 @@ export class AppRdioScannerService implements OnDestroy {
 
         this.websocket.onclose = (ev: CloseEvent) => {
             if (ev.code !== 1000) {
-                this.reconnectWebsocket();
+                timer(2000).subscribe(() => this.reconnectWebsocket());
             }
         };
 
@@ -815,13 +815,13 @@ export class AppRdioScannerService implements OnDestroy {
 
     private rebuildGroups(): void {
         this.groups = Object.keys(this.config.groups || []).map((label) => {
-            const allOff = Object.keys(this.config.groups[label])
-                .map((sys) => +sys)
-                .every((sys: number) => this.config.groups[label][sys].every((tg) => !this.livefeedMap[sys][tg]));
+            const allOff = Object.keys(this.config.groups[label]).map((sys) => +sys)
+                .every((sys: number) => this.config.groups[label] && this.config.groups[label][sys]
+                    .every((tg) => !this.livefeedMap[sys][tg]));
 
-            const allOn = Object.keys(this.config.groups[label])
-                .map((sys) => +sys)
-                .every((sys: number) => this.config.groups[label][sys].every((tg) => this.livefeedMap[sys][tg]));
+            const allOn = Object.keys(this.config.groups[label]).map((sys) => +sys)
+                .every((sys: number) => this.config.groups[label] && this.config.groups[label][sys]
+                    .every((tg) => this.livefeedMap[sys][tg]));
 
             const status = allOff ? RdioScannerGroupStatus.Off : allOn ? RdioScannerGroupStatus.On : RdioScannerGroupStatus.Partial;
 
