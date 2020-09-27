@@ -14,6 +14,9 @@
  - Fix Keypad beeps not working on iOS.
  - Fix pause not going off due to the above bug.
 
+## Version 4.7.3
+ - Fix websocket not connection on ssl.
+
 # Version 4.6
 
 - Fix documentation in regards to load-rrd in install-github.md.
