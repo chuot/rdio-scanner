@@ -19,7 +19,6 @@
 
 'use strict';
 
-const { Server } = require('http');
 const url = require('url');
 const WS = require('ws');
 
@@ -66,15 +65,13 @@ class WebSocket {
             this.heartbeat = undefined;
         });
 
-        if (this.httpServer instanceof Server) {
-            this.httpServer.on('upgrade', (request, socket, head) => {
-                const pathname = url.parse(request.url).pathname;
+        this.httpServer.on('upgrade', (request, socket, head) => {
+            const pathname = url.parse(request.url).pathname;
 
-                if (pathname === '/' || pathname === '/index.html') {
-                    this.wss.handleUpgrade(request, socket, head, (ws) => this.wss.emit('connection', ws, request));
-                }
-            });
-        }
+            if (pathname === '/' || pathname === '/index.html') {
+                this.wss.handleUpgrade(request, socket, head, (ws) => this.wss.emit('connection', ws, request));
+            }
+        });
     }
 
     logClientsCount() {

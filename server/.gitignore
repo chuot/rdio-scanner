@@ -1,4 +1,6 @@
 /.env
+/*.pem
+/*.key
 /config.json*
 /database.sqlite*
 /dist
