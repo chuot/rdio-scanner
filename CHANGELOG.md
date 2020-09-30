@@ -7,18 +7,28 @@
 - Remove Config.options.useGroup, but the feature remains.
 - Bug fixes.
 
-## Version 4.7.1
- - Fix crash on client when access to talkgroups is restricted with a password.
+_v4.7.1_
 
-## Version 4.7.2
- - Fix Keypad beeps not working on iOS.
- - Fix pause not going off due to the above bug.
+- Fix crash on client when access to talkgroups is restricted with a password.
 
-## Version 4.7.3
- - Fix websocket not connection on ssl.
+_v4.7.2_
 
-## Version 4.7.4
- - Fix display width too wide when long talkgroup name.
+- Fix Keypad beeps not working on iOS.
+- Fix pause not going off due to the above bug.
+
+_v4.7.3_
+
+- Fix websocket not connection on ssl.
+
+_v4.7.4_
+
+- Fix display width too wide when long talkgroup name.
+
+_v4.7.5_
+
+- Fix playback mode getting mixed up if clicking too fast on play.
+- Fix side panels background color inheritance.
+- Node modules update.
 
 # Version 4.6
 

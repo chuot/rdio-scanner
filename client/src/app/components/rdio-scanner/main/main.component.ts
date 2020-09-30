@@ -163,16 +163,9 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             this.authFocus();
 
         } else {
-            if (this.playbackMode) {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+            this.appRdioScannerService.beep(this.livefeedOffline ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
 
-                this.appRdioScannerService.stopPlaybackMode();
-
-            } else {
-                this.appRdioScannerService.beep(this.livefeedOffline ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
-
-                this.appRdioScannerService.livefeed();
-            }
+            this.appRdioScannerService.livefeed();
 
             this.updateDimmer();
         }

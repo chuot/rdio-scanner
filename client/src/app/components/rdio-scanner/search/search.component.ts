@@ -89,11 +89,11 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
     }
 
     formChangeHandler(): void {
-       if (this.livefeedPlayback) {
-           this.appRdioScannerService.stopPlaybackMode();
-       }
+        if (this.livefeedPlayback) {
+            this.appRdioScannerService.stopPlaybackMode();
+        }
 
-       this.searchCalls();
+        this.searchCalls();
     }
 
     formGroupHandler(): void {
@@ -424,11 +424,11 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
     }
 
     stop(): void {
-        if (this.livefeedOnline) {
-            this.appRdioScannerService.stop();
-
-        } else if (this.livefeedPlayback) {
+        if (this.livefeedPlayback) {
             this.appRdioScannerService.stopPlaybackMode();
+
+        } else {
+            this.appRdioScannerService.stop();
         }
     }
 

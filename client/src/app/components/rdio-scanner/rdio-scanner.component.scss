@@ -4,23 +4,23 @@
   display: block;
   height: 100%;
   min-width: 320px;
-}
 
-.mat-sidenav {
-  background-color: inherit;
-  color: inherit;
-  width: 100%;
-}
+  .mat-sidenav {
+    background-color: inherit;
+    color: inherit;
+    width: 100%;
+  }
 
-.mat-sidenav-container {
-  background-color: inherit;
-  color: inherit;
-  height: inherit;
-}
+  .mat-sidenav-container {
+    background-color: inherit;
+    color: inherit;
+    height: inherit;
+  }
 
-.mat-sidenav-content {
-  align-items: center;
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
+  .mat-sidenav-content {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+  }
 }

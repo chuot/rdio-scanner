@@ -19,7 +19,7 @@
 
 import { DOCUMENT } from '@angular/common';
 import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
-import { interval, timer } from 'rxjs';
+import { interval, Subscription, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 import {
     RdioScannerAvoidOptions,
@@ -88,8 +88,9 @@ export class AppRdioScannerService implements OnDestroy {
     private livefeedPaused = false;
 
     private playbackList: RdioScannerPlaybackList | undefined;
+    private playbackPending: string | undefined;
 
-    private skipDelay = false;
+    private skipDelay: Subscription | undefined;
 
     private websocket: WebSocket | undefined;
 
@@ -314,12 +315,15 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    livefeed(status: boolean = !(this.livefeedMode === RdioScannerLivefeedMode.Online)): void {
-        if (status) {
+    livefeed(): void {
+        if (this.livefeedMode === RdioScannerLivefeedMode.Offline) {
             this.startLivefeed();
 
-        } else {
+        } else if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
             this.stopLivefeed();
+
+        } else if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
+            this.stopPlaybackMode();
         }
     }
 
@@ -328,7 +332,15 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     loadAndPlay(id: string): void {
-        this.stop({ emit: false });
+        if (this.skipDelay) {
+            this.skipDelay.unsubscribe();
+
+            this.skipDelay = undefined;
+        }
+
+        this.playbackPending = id;
+
+        this.stop();
 
         if (this.livefeedMode === RdioScannerLivefeedMode.Offline) {
             this.livefeedMode = RdioScannerLivefeedMode.Playback;
@@ -427,12 +439,17 @@ export class AppRdioScannerService implements OnDestroy {
         });
     }
 
-    queue(call: RdioScannerCall): void {
+    queue(call: RdioScannerCall, options?: { priority?: boolean }): void {
         if (!call?.audio) {
             return;
         }
 
-        this.callQueue.push(call);
+        if (options?.priority) {
+            this.callQueue.unshift(call);
+
+        } else {
+            this.callQueue.push(call);
+        }
 
         if (this.audioSource || this.call || this.livefeedPaused || this.skipDelay) {
             this.event.emit({
@@ -453,27 +470,26 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     skip(options?: { delay?: boolean }): void {
+        const play = () => {
+            if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
+                this.playbackNextCall();
+
+            } else {
+                this.play();
+            }
+        };
+
         this.stop();
 
         if (options?.delay) {
-            this.skipDelay = true;
+            this.skipDelay = timer(1000).subscribe(() => {
+                this.skipDelay = undefined;
 
-            timer(1000).subscribe(() => {
-                this.skipDelay = false;
-
-                if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
-                    this.playbackNextCall();
-
-                } else {
-                    this.play();
-                }
+                play();
             });
 
-        } else if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
-            this.playbackNextCall();
-
         } else {
-            this.play();
+            play();
         }
     }
 
@@ -493,25 +509,18 @@ export class AppRdioScannerService implements OnDestroy {
         }
 
         if (typeof options?.emit !== 'boolean' || options.emit) {
-            if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
-                this.event.emit({ call: undefined });
-
-            } else {
-                this.event.emit({ call: undefined, queue: this.callQueue.length });
-            }
+            this.event.emit({ call: this.call });
         }
     }
 
     stopPlaybackMode(): void {
-        if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
-            this.livefeedMode = RdioScannerLivefeedMode.Offline;
+        this.livefeedMode = RdioScannerLivefeedMode.Offline;
 
-            this.cleanQueue();
+        this.clearQueue();
 
-            this.stop({ emit: false });
+        this.event.emit({ livefeedMode: this.livefeedMode, queue: 0 });
 
-            this.event.emit({ call: this.call, livefeedMode: this.livefeedMode, queue: this.callQueue.length });
-        }
+        this.stop();
     }
 
     toggleGroup(label: string): void {
@@ -609,20 +618,19 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private cleanQueue(): void {
-        if (this.livefeedMode === RdioScannerLivefeedMode.Playback) {
-            this.callQueue.splice(0, this.callQueue.length);
+        this.callQueue = this.callQueue.filter((call: RdioScannerCall) => {
+            return this.livefeedMap && this.livefeedMap[call.system] && this.livefeedMap[call.system][call.talkgroup];
+        });
 
-        } else {
-            this.callQueue = this.callQueue.filter((call: RdioScannerCall) => {
-                return this.livefeedMap && this.livefeedMap[call.system] && this.livefeedMap[call.system][call.talkgroup];
-            });
+        if (this.call && !(this.livefeedMap && this.livefeedMap[this.call.system] &&
+            this.livefeedMap[this.call.system][this.call.talkgroup])) {
 
-            if (this.call && !(this.livefeedMap && this.livefeedMap[this.call.system] &&
-                this.livefeedMap[this.call.system][this.call.talkgroup])) {
-
-                this.skip();
-            }
+            this.skip();
         }
+    }
+
+    private clearQueue(): void {
+        this.callQueue.splice(0, this.callQueue.length);
     }
 
     private closeWebsocket(): void {
@@ -719,6 +727,11 @@ export class AppRdioScannerService implements OnDestroy {
                     if (message[2] === WebsocketCallFlag.Download) {
                         this.download(message[1]);
 
+                    } else if (message[2] === WebsocketCallFlag.Play && message[1]?.id === this.playbackPending) {
+                        this.playbackPending = undefined;
+
+                        this.queue(this.transformCall(message[1]), { priority: true });
+
                     } else {
                         this.queue(this.transformCall(message[1]));
                     }
@@ -777,7 +790,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private playbackNextCall(): void {
-        if (this.call || !this.playbackList || this.livefeedMode !== RdioScannerLivefeedMode.Playback) {
+        if (this.call || this.livefeedMode !== RdioScannerLivefeedMode.Playback || !this.playbackList || this.playbackPending) {
             return;
         }
 
@@ -903,7 +916,7 @@ export class AppRdioScannerService implements OnDestroy {
     private stopLivefeed(): void {
         this.livefeedMode = RdioScannerLivefeedMode.Offline;
 
-        this.callQueue.splice(0, this.callQueue.length);
+        this.clearQueue();
 
         this.event.emit({ livefeedMode: this.livefeedMode, queue: 0 });
 
