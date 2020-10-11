@@ -93,6 +93,8 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
             this.appRdioScannerService.stopPlaybackMode();
         }
 
+        this.paginator?.firstPage();
+
         this.searchCalls();
     }
 

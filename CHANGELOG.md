@@ -30,6 +30,12 @@ _v4.7.5_
 - Fix side panels background color inheritance.
 - Node modules update.
 
+_v4.7.6_
+
+- Fix search results not going back to page 1 when search filters are modified.
+- Skip next button no longer emit a denied beeps sequence when pushed while there's no audio playing.
+- Node modules update.
+
 # Version 4.6
 
 - Fix documentation in regards to load-rrd in install-github.md.

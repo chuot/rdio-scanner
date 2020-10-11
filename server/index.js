@@ -150,7 +150,7 @@ class App {
         if (this.config.nodejs.env !== 'development') {
             this.router.disable('x-powered-by');
 
-            this.router.get(/\/|\/index.html/, (_, res) => {
+            this.router.get(/^(\/|\/index.html)$/, (_, res) => {
                 if (fs.existsSync(path.join(staticDir, staticFile))) {
                     return res.sendFile(staticFile, { root: staticDir });
 
