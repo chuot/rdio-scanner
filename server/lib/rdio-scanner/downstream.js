@@ -133,8 +133,8 @@ class Downstream {
         }
 
         form.append('sources', JSON.stringify(call.sources));
-        form.append('system', call.system);
-        form.append('talkgroup', call.talkgroup);
+        form.append('system', this.getSystemId(call, downstream));
+        form.append('talkgroup', this.getTalkgroupId(call, downstream));
 
         form.submit(apiUrl, (error, response) => {
             const message = `Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url}`;
@@ -149,6 +149,56 @@ class Downstream {
                 console.log(`${message} Success`);
             }
         });
+    }
+
+    getSystemId(call, downstream) {
+        const parseSystem = (system) => {
+            if (Array.isArray(system)) {
+                system = system.find((sys) => sys !== null && typeof sys === 'object' && sys.id === call.system);
+
+                return system ? parseSystem(system) : call.system;
+
+            } else if (system !== null && typeof system === 'object') {
+                return typeof system.id_as === 'number' && system.id === call.system ? system.id_as : call.system;
+
+            } else {
+                return call.system;
+            }
+        }
+
+        return parseSystem(downstream.systems);
+    }
+
+    getTalkgroupId(call, downstream) {
+        const parseSystem = (system) => {
+            const parseTalkgroup = (talkgroup) => {
+                if (Array.isArray(talkgroup)) {
+                    talkgroup = talkgroup.find((tg) => tg !== null && typeof tg === 'object' && tg.id === call.talkgroup);
+
+                    return talkgroup ? parseTalkgroup(talkgroup) : call.talkgroup;
+
+                } else if (talkgroup !== null && typeof talkgroup === 'object') {
+                    return typeof talkgroup.id_as === 'number' && talkgroup.id === call.talkgroup ? talkgroup.id_as : talkgroup.id;
+
+                } else {
+                    return call.talkgroup;
+                }
+            }
+
+            if (Array.isArray(system)) {
+                system = system.find((sys) => sys !== null && typeof sys === 'object' && sys.id === call.system);
+
+                return system ? parseSystem(system) : call.system;
+
+            } else if (system !== null && typeof system === 'object') {
+                return system.id === call.system ? parseTalkgroup(system.talkgroups) : call.talkgroup;
+
+            } else {
+                return call.system;
+            }
+        }
+
+        return parseSystem(downstream.systems);
     }
 }
 

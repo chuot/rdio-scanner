@@ -18,7 +18,7 @@
  */
 
 import { DOCUMENT } from '@angular/common';
-import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
+import { EventEmitter, Inject, Injectable, OnDestroy, SystemJsNgModuleLoader } from '@angular/core';
 import { interval, Subscription, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 import {
@@ -209,7 +209,7 @@ export class AppRdioScannerService implements OnDestroy {
         });
     }
 
-    holdSystem(options?: { resubscribe: boolean }): void {
+    holdSystem(options?: { resubscribe?: boolean }): void {
         const call = this.call || this.callPrevious;
 
         if (call && this.livefeedMap) {
@@ -263,7 +263,7 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    holdTalkgroup(options?: { resubscribe: boolean }): void {
+    holdTalkgroup(options?: { resubscribe?: boolean }): void {
         const call = this.call || this.callPrevious;
 
         if (call && this.livefeedMap) {
@@ -344,6 +344,14 @@ export class AppRdioScannerService implements OnDestroy {
 
         if (this.livefeedMode === RdioScannerLivefeedMode.Offline) {
             this.livefeedMode = RdioScannerLivefeedMode.Playback;
+
+            if (this.livefeedMapPriorToHoldSystem) {
+                this.holdSystem({ resubscribe: false });
+            }
+
+            if (this.livefeedMapPriorToHoldTalkgroup) {
+                this.holdTalkgroup({ resubscribe: false });
+            }
 
             this.event.emit({ livefeedMode: this.livefeedMode, playbackPending: id });
 
@@ -489,8 +497,22 @@ export class AppRdioScannerService implements OnDestroy {
             });
 
         } else {
+            if (this.skipDelay) {
+                this.skipDelay?.unsubscribe();
+
+                this.skipDelay = undefined;
+            }
+
             play();
         }
+    }
+
+    startLivefeed(): void {
+        this.livefeedMode = RdioScannerLivefeedMode.Online;
+
+        this.event.emit({ livefeedMode: this.livefeedMode });
+
+        this.sendtoWebsocket(WebsocketCommand.LivefeedMap, this.livefeedMap);
     }
 
     stop(options?: { emit?: boolean }): void {
@@ -511,6 +533,18 @@ export class AppRdioScannerService implements OnDestroy {
         if (typeof options?.emit !== 'boolean' || options.emit) {
             this.event.emit({ call: this.call });
         }
+    }
+
+    stopLivefeed(): void {
+        this.livefeedMode = RdioScannerLivefeedMode.Offline;
+
+        this.clearQueue();
+
+        this.event.emit({ livefeedMode: this.livefeedMode, queue: 0 });
+
+        this.stop();
+
+        this.sendtoWebsocket(WebsocketCommand.LivefeedMap, null);
     }
 
     stopPlaybackMode(): void {
@@ -745,7 +779,7 @@ export class AppRdioScannerService implements OnDestroy {
                         dimmerDelay: typeof config.dimmerDelay === 'number' ? config.dimmerDelay : 5000,
                         groups: typeof config.groups !== null && typeof config.groups === 'object' ? config.groups : {},
                         keypadBeeps: config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
-                        systems: Array.isArray(config.systems) ? config.systems : [],
+                        systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
                     };
 
@@ -905,26 +939,6 @@ export class AppRdioScannerService implements OnDestroy {
         }
     }
 
-    private startLivefeed(): void {
-        this.livefeedMode = RdioScannerLivefeedMode.Online;
-
-        this.event.emit({ livefeedMode: this.livefeedMode });
-
-        this.sendtoWebsocket(WebsocketCommand.LivefeedMap, this.livefeedMap);
-    }
-
-    private stopLivefeed(): void {
-        this.livefeedMode = RdioScannerLivefeedMode.Offline;
-
-        this.clearQueue();
-
-        this.event.emit({ livefeedMode: this.livefeedMode, queue: 0 });
-
-        this.stop();
-
-        this.sendtoWebsocket(WebsocketCommand.LivefeedMap, null);
-    }
-
     private storeLivefeedMap(): void {
         window?.localStorage?.setItem(AppRdioScannerService.LOCAL_STORAGE_KEY, JSON.stringify(this.livefeedMap));
     }
@@ -932,6 +946,10 @@ export class AppRdioScannerService implements OnDestroy {
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (Array.isArray(this.config?.systems)) {
             call.systemData = this.config.systems.find((system) => system.id === call.system);
+
+            if (!call.systemData) {
+                console.log(call.system, call.systemData);
+            }
 
             if (Array.isArray(call.systemData?.talkgroups)) {
                 call.talkgroupData = call.systemData?.talkgroups.find((talkgroup) => talkgroup.id === call.talkgroup);

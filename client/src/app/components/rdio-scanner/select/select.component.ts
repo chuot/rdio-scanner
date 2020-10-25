@@ -60,7 +60,7 @@ export class AppRdioScannerSelectComponent implements OnDestroy {
 
     private eventHandler(event: RdioScannerEvent): void {
         if (event.config) {
-            this.systems = event.config.systems;
+            this.systems = this.sortSystems(event.config.systems);
         }
 
         if (event.groups) {
@@ -70,5 +70,22 @@ export class AppRdioScannerSelectComponent implements OnDestroy {
         if (event.map) {
             this.map = event.map;
         }
+    }
+
+    private sortSystems(systems: RdioScannerSystem[]): RdioScannerSystem[] {
+        return systems.sort((sysA, sysB) => {
+            if (typeof sysA.order === 'number' && typeof sysB.order !== 'number') {
+                return -1;
+
+            } else if (typeof sysA.order !== 'number' && typeof sysB.order === 'number') {
+                return 1;
+
+            } else if (typeof sysA.order === 'number' && typeof sysB.order === 'number') {
+                return sysA.order - sysB.order;
+
+            } else {
+                return sysA.id - sysB.id;
+            }
+        });
     }
 }

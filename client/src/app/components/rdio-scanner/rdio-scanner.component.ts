@@ -17,7 +17,8 @@
  * ****************************************************************************
  */
 
-import { Component, ElementRef, EventEmitter, HostListener, OnDestroy, Output } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
+import { MatSidenav } from '@angular/material/sidenav';
 import { RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
 import { AppRdioScannerService } from './rdio-scanner.service';
 
@@ -27,11 +28,13 @@ import { AppRdioScannerService } from './rdio-scanner.service';
     templateUrl: './rdio-scanner.component.html',
 })
 export class AppRdioScannerComponent implements OnDestroy {
-    @Output() readonly live = new EventEmitter<boolean>();
-
     private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
+
+    @ViewChild('searchPanel') private searchPanel: MatSidenav | undefined;
+
+    @ViewChild('selectPanel') private selectPanel: MatSidenav | undefined;
 
     constructor(
         private appRdioScannerService: AppRdioScannerService,
@@ -47,10 +50,20 @@ export class AppRdioScannerComponent implements OnDestroy {
         }
     }
 
+    start(): void {
+        this.appRdioScannerService.startLivefeed();
+    }
+
+    stop(): void {
+        this.appRdioScannerService.stopLivefeed();
+
+        this.searchPanel?.close();
+
+        this.selectPanel?.close();
+    }
+
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
-
-        this.live.complete();
     }
 
     toggleFullscreen(): void {
@@ -64,10 +77,13 @@ export class AppRdioScannerComponent implements OnDestroy {
 
             if (el.exitFullscreen) {
                 el.exitFullscreen();
+
             } else if (el.mozCancelFullScreen) {
                 el.mozCancelFullScreen();
+
             } else if (el.msExitFullscreen) {
                 el.msExitFullscreen();
+
             } else if (el.webkitExitFullscreen) {
                 el.webkitExitFullscreen();
             }
@@ -77,10 +93,13 @@ export class AppRdioScannerComponent implements OnDestroy {
 
             if (el.requestFullscreen) {
                 el.requestFullscreen();
+
             } else if (el.mozRequestFullScreen) {
                 el.mozRequestFullScreen();
+
             } else if (el.msRequestFullscreen) {
                 el.msRequestFullscreen();
+
             } else if (el.webkitRequestFullscreen) {
                 el.webkitRequestFullscreen();
             }

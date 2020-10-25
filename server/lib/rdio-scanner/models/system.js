@@ -53,6 +53,10 @@ rdioScannerSystemFactory.Schema = {
         type: DataTypes.STRING,
         allowNull: true,
     },
+    order: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+    },
     talkgroups: {
         type: DataTypes.JSON,
         defaultValue: [],

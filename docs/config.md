@@ -322,7 +322,7 @@ dirWatch: {
 - **frequency** - You may want to fake the frequency which will be displayed on _Rdio Scanner_. Let say that you are recording an AM frequency from _RTLSDR-Airband_, here you would put that frequency.
 - **frequency** - You may want to simulate the frequency that will be displayed. Say you are recording an AM frequency from _RTLSDR-Airband_, here you would put that frequency.
 - **mask** - Some metadata can be extracted from the file name of the audio file using specific META tags. You may define a simple mask for the dirWatch or an array of masks. Here is the list of possible META tags:
-  - **#DATE** - extract the date like _20200608_ or _2020-06-08_.
+  - **#DATE** - extract the date like _20201231 (YYYYMMMDD)_ or _2020-12-31 (YYYY-MM-DD)_.
   - **#HZ** - extract the frequency in hertz like _119100000_.
   - **#KHZ** - extract the frequency in kilohertz like _119100_.
   - **#MHZ** - extract the frequency in megahertz like _119.100_.
@@ -407,16 +407,24 @@ downstreams: {
   disabled: boolean;
   systems: number | number[] | {
     id: number;
-    talkgroups: number | number[] | "*" | undefined;
+    id_as: number | undefined;        // optional, downstream as a dirrerent system.id
+    talkgroups: number | number[] | {
+      id: number,
+      id_as: number,                  // optional, downstream as a dirrerent talkgroup.id
+    } | "*";
   } | {
     id: number;
-    talkgroups: number | number[];
-  }[] | "*" | undefined;
+    id_as: number | undefined;        // optional, downstream as a different system.id
+    talkgroups: number | number[] | {
+      id: number,
+      id_as: number,                  // optional, downstream as a dirrerent talkgroup.id
+    } | "*";
+  }[] | "*";
   url: string;
 }[]
 ```
 
-Default value is an empty array `[]` .
+Default value is an empty array `[]`.
 
 **Examples**
 
@@ -428,6 +436,7 @@ Default value is an empty array `[]` .
     "systems": [
       {
         "id": 11,
+        "id_as": 7537,
         "talkgroups": [
           54241,
           54125
@@ -442,6 +451,7 @@ Default value is an empty array `[]` .
       },
       {
         "id": 21,
+        "id_as": 8086,
         "talkgroups": [
           60040,
           60041,
@@ -603,6 +613,7 @@ systems: {
   id: number;
   label: string;
   led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
+  order?: number;
   talkgroups: {
     id: number;
     label: string;
@@ -621,7 +632,8 @@ systems: {
 
 - **id** - System ID.
 - **label** - System label shown on the left side of second row.
-- **led** - Optional LED color for the whole system. By default the LED is _green_.
+- **led** - Optional, LED color for the whole system. By default the LED is _green_.
+- **order** - Optional, sort order with which systems are displayed on the client side.
 - **talkgroups** - Talkgroups for the system.
   - **id** - Talkgroup ID.
   - **label** - Talkgroup label shown on the left side of third row.

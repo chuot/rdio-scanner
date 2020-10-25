@@ -146,6 +146,7 @@ export interface RdioScannerSystem {
     id: number;
     label: string;
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
+    order?: number;
     talkgroups: RdioScannerTalkgroup[];
     units?: RdioScannerUnit[];
 }

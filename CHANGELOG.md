@@ -1,3 +1,12 @@
+# Version 4.8
+
+- Add downstream.system.id_as property to allow export system with a different id.
+- Add system.order for system list ordering on the client side.
+- Fix client main screen unscrollable overflow while in landscape.
+- Fix issue 26 - date in documentation for mask isn't clear.
+- The skip button now also allows you to skip the one second delay between calls.
+- Node modules update.
+
 # Version 4.7
 
 - New dirWatch.type='sdr-trunk'.

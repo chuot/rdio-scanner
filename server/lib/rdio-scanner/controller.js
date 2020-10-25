@@ -839,6 +839,10 @@ function parseConfig(config) {
             system.led = ledColors.includes(system.led) ? system.led : 'green';
         }
 
+        if (system.order !== undefined && typeof system.order !== 'number') {
+            delete system.order;
+        }
+
         if (!Array.isArray(system.talkgroups)) {
             system.talkgroups = [];
         }
