@@ -43,6 +43,7 @@ The server side of [Rdio Scanner](https://github.com/chuot/rdio-scanner) can mon
 - [docs/webapp.md](./docs/webapp.md) - How to operate the frontend interface
 - [docs/api.md](./docs/api.md) - [Rdio Scanner](https://github.com/chuot/rdio-scanner) API's reference
 - [docs/examples](./docs/examples) - Some miscellaneous examples
+- [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
 
 ## Questions / Comments
 
