@@ -24,6 +24,9 @@
             ON
         </button>
     </div>
+    <button (click)="closePanel.emit()" mat-icon-button>
+        <mat-icon>arrow_back</mat-icon>
+    </button>
 </fieldset>
 <fieldset *ngFor="let system of systems" class="fieldset">
     <legend>
@@ -44,4 +47,7 @@
             </button>
         </ng-container>
     </div>
+    <button (click)="closePanel.emit()" mat-icon-button>
+        <mat-icon>arrow_back</mat-icon>
+    </button>
 </fieldset>
