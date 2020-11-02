@@ -7,6 +7,11 @@
 - The skip button now also allows you to skip the one second delay between calls.
 - Node modules update.
 
+_v4.8.1_
+
+- Refactor panels' back button and make them fixed at the viewport top.
+- Node modules update.
+
 # Version 4.7
 
 - New dirWatch.type='sdr-trunk'.

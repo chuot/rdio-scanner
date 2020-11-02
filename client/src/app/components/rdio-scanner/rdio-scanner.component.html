@@ -1,13 +1,41 @@
 <mat-sidenav-container>
-    <mat-sidenav #searchPanel [autoFocus]="false" [disableClose]="true" mode="push" position="start">
-        <app-rdio-scanner-search #searchComponent (closePanel)="searchPanel.close()"></app-rdio-scanner-search>
+    <mat-sidenav #searchPanel [autoFocus]="false" [disableClose]="true" position="start">
+        <div class="panel search">
+            <mat-toolbar>
+                <div>
+                    <button mat-icon-button (click)="searchPanel.close()">
+                        <mat-icon>arrow_forward</mat-icon>
+                    </button>
+                </div>
+            </mat-toolbar>
+            <div #scrollableSearch>
+                <div>
+                    <app-rdio-scanner-search #searchComponent></app-rdio-scanner-search>
+                </div>
+            </div>
+        </div>
     </mat-sidenav>
-    <mat-sidenav #selectPanel [autoFocus]="false" [disableClose]="true" mode="push" position="end">
-        <app-rdio-scanner-select (closePanel)="selectPanel.close()"></app-rdio-scanner-select>
+    <mat-sidenav #selectPanel [autoFocus]="false" [disableClose]="true" position="end">
+        <div class="panel select">
+            <mat-toolbar>
+                <div>
+                    <button mat-icon-button (click)="selectPanel.close()">
+                        <mat-icon>arrow_back</mat-icon>
+                    </button>
+                </div>
+            </mat-toolbar>
+            <div #scrollableSelect>
+                <div>
+                    <app-rdio-scanner-select></app-rdio-scanner-select>
+                </div>
+            </div>
+        </div>
     </mat-sidenav>
     <mat-sidenav-content>
-        <app-rdio-scanner-main (openSearchPanel)="searchPanel.open(); searchComponent.searchCalls()"
-            (openSelectPanel)="selectPanel.open()" (toggleFullscreen)="toggleFullscreen()">
+        <app-rdio-scanner-main
+            (openSearchPanel)="scrollableSearch.scrollTo(0, 0); searchPanel.open(); searchComponent.searchCalls()"
+            (openSelectPanel)="scrollableSelect.scrollTo(0, 0); selectPanel.open();"
+            (toggleFullscreen)="toggleFullscreen()">
         </app-rdio-scanner-main>
     </mat-sidenav-content>
 </mat-sidenav-container>

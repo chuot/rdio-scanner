@@ -1,17 +1,4 @@
-<mat-toolbar>
-    <button (click)="closePanel.emit()" mat-icon-button>
-        <mat-icon>arrow_back</mat-icon>
-    </button>
-    <ng-container *ngIf="(groups?.length || 0) < 2 && (systems?.length || 0) > 1">
-        <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
-            OFF
-        </button>
-        <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
-            ON
-        </button>
-    </ng-container>
-</mat-toolbar>
-<fieldset *ngIf="(groups?.length || 0) > 1" class="fieldset">
+<fieldset class="fieldset">
     <div>
         <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status"
             (click)="toggleGroup(group.label)">

@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, OnDestroy, Output } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { RdioScannerAvoidOptions, RdioScannerBeepStyle, RdioScannerEvent, RdioScannerGroup, RdioScannerLivefeedMap, RdioScannerSystem } from '../rdio-scanner';
 import { AppRdioScannerService } from '../rdio-scanner.service';
 
@@ -30,8 +30,6 @@ import { AppRdioScannerService } from '../rdio-scanner.service';
     templateUrl: './select.component.html',
 })
 export class AppRdioScannerSelectComponent implements OnDestroy {
-    @Output() closePanel = new EventEmitter<void>();
-
     groups: RdioScannerGroup[] | undefined;
 
     map: RdioScannerLivefeedMap = {};

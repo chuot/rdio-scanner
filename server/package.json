@@ -6,13 +6,13 @@
         "dotenv": "^8.2.0",
         "express": "^4.17.1",
         "form-data": "^3.0.0",
-        "helmet": "^4.1.1",
+        "helmet": "^4.2.0",
         "mariadb": "^2.5.1",
         "mime-types": "^2.1.27",
         "multer": "^1.4.2",
         "mysql2": "^2.2.5",
         "nodemon": "^2.0.6",
-        "pg": "^8.4.1",
+        "pg": "^8.4.2",
         "sequelize": "^6.3.5",
         "sqlite3": "^5.0.0",
         "umzug": "^2.3.0",
@@ -20,8 +20,8 @@
         "ws": "^7.3.1"
     },
     "devDependencies": {
-        "eslint": "^7.12.0",
-        "webpack": "^5.2.0",
+        "eslint": "^7.12.1",
+        "webpack": "^5.3.2",
         "webpack-cli": "^4.1.0",
         "webpack-node-externals": "^2.5.2"
     },
@@ -39,5 +39,5 @@
         "build": "webpack",
         "start": "nodemon"
     },
-    "version": "4.8.0"
+    "version": "4.8.1"
 }

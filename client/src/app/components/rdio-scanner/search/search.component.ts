@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
@@ -41,8 +41,6 @@ import { AppRdioScannerService } from '../rdio-scanner.service';
 export class AppRdioScannerSearchComponent implements OnDestroy {
     call: RdioScannerCall | undefined;
     callPending: string | undefined;
-
-    @Output() closePanel = new EventEmitter<void>();
 
     form = this.ngFormBuilder.group({
         date: [null],

@@ -1,5 +1,7 @@
+$background-color: rgb(30, 30, 30);
+
 :host {
-  background-color: rgb(30, 30, 30);
+  background-color: $background-color;
   color: rgb(255, 255, 255);
   display: block;
   height: 100%;
@@ -22,5 +24,41 @@
     display: flex;
     flex-direction: row;
     justify-content: center;
+  }
+}
+
+.panel {
+  background-color: $background-color;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  &.search .mat-toolbar >  div {
+    justify-content: flex-end;
+  }
+
+  > div {
+    flex: 1;
+    height: 100%;
+    overflow: auto;
+  }
+
+  .mat-toolbar {
+    background-color: inherit;
+    box-shadow: 0 8px 20px rgba($background-color, 0.9);
+    color: currentColor;
+    z-index: 2;
+
+    > div {
+      display: flex;
+      flex-direction: row;
+    }
+  }
+
+  > div > div,
+  .mat-toolbar > div {
+    margin: 0 auto;
+    max-width: 1200px;
+    width: 100%;
   }
 }
