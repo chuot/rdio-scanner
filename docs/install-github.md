@@ -105,7 +105,7 @@ $ node run server
 Server is running at http://0.0.0.0:3000
 ```
 
-# Generate new UUIDs for your config file (optional)
+# 7. Generate new UUIDs for your config file (optional)
 
 Even if your instance of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is preconfigured with a new random UUID for your API keys, you may want to generate others. The following command will generate a new UUID which you can copy/paste into the `server/config.json` file.
 
@@ -121,7 +121,7 @@ dc50e0d6-c635-436b-bb70-b46d99f12df9
 74b602c0-b4ad-49a0-bb40-00008c31f9b2
 ```
 
-# Update Rdio Scanner
+# 8. Update Rdio Scanner
 
 If new commits have been pushed to the [Rdio Scanner GitHub repository](https://github.com/chuot/rdio-scanner), you can easily update like this:
 
@@ -133,7 +133,7 @@ Building client app... done
 Please restart Rdio Scanner
 ```
 
-# Finally
+# 9. Finally
 
 Remember that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must be supplied with audio files from a recorder. Either you use a `dirWatch` to monitor a folder, or you use the API with an `upload script`. See the [examples folder](./examples) for some examples.
 

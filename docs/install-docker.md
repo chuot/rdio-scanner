@@ -2,6 +2,8 @@
 
 The [Rdio Scanner Docker Image](https://hub.docker.com/r/chuot/rdio-scanner) is the easiest installation method. The only prerequisite is that your host must have Docker installed before continuing.
 
+Before going any further, make sure you have enough knowledge about using Docker. For those new to Docker, I recommend reading at least the [Docker Overview](https://docs.docker.com/get-started/overview/).
+
 # 1. Pull the docker image
 
 Do `docker pull chuot/rdio-scanner:latest` like this:
@@ -27,6 +29,8 @@ docker.io/chuot/rdio-scanner:latest
 # 2. Database and configuration initialization
 
 We now need to initialize the config.json file and the database. But first we need to determine where these files will be located on your host. We will use `~/.rdio-scanner` in the following example, but you can choose any location you want. We will then pass this location via the `--volume` option.
+
+> NOTE: If you are running the container in a SELINUX environement, you may need to append a `:z` to your volume definition: `--volume ~/.rdio-scanner:/app/data:z` for things to work. More inforation [here](https://docs.docker.com/storage/bind-mounts/#configure-the-selinux-label).
 
 ```bash
 $ mkdir ~/.rdio-scanner
@@ -97,10 +101,11 @@ $ docker run --detach --env TZ=America/Toronto --name rdio-scanner --publish 300
 520cdbf51fca11d8bacea12d81245f1cb4d984f80d2be2e3039727b59533a6a9
 
 $ docker logs rdio-scanner
-Server is running at http://0.0.0.0:3000
+Server is running at http://0.0.0.0:3000$ docker stop rdio-scanner
+rdio-scanner
 ```
 
-# Generate new UUIDs for your config file (optional)
+# 7. Generate new UUIDs for your config file (optional)
 
 Even if your instance of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is preconfigured with a new random UUID for your API keys, you may want to generate others. The following command will generate a new UUID which you can copy/paste into the `config.json` file.
 
@@ -116,7 +121,7 @@ dc50e0d6-c635-436b-bb70-b46d99f12df9
 74b602c0-b4ad-49a0-bb40-00008c31f9b2
 ```
 
-# Update Rdio Scanner
+# 8. Update Rdio Scanner
 
 If a newer version of [Rdio Scanner Docker Image](https://hub.docker.com/r/chuot/rdio-scanner) is released, you can easily update it like this:
 
@@ -124,11 +129,18 @@ If a newer version of [Rdio Scanner Docker Image](https://hub.docker.com/r/chuot
 $ docker pull chuot/rdio-scanner:latest
 ...
 
-$ docker restart rdio-scanner
+$ docker stop rdio-scanner
 rdio-scanner
+
+$ docker rm rdio-scanner
+rdio-scanner
+
+$ docker run ... // see section 6 above
 ```
 
-# Finally
+You can also put these commands in a shell script to simplify future updates.
+
+# 9. Finally
 
 Remember that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must be supplied with audio files from a recorder. Either you mount another volume with the `--volume /recordings:/home/radio/recordings` options and use a `dirWatch` to monitor it, or you use the API with an `upload script`. See the [examples folder](./examples) for some examples.
 

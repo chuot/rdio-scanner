@@ -17,4 +17,5 @@
  * ****************************************************************************
  */
 
+export * from './rdio-scanner.component';
 export * from './rdio-scanner.module';

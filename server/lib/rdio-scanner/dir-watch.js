@@ -308,17 +308,11 @@ class DirWatch {
 
                     const system = sys.id;
 
-                    const source = parseInt(tags.artist, 10);
+                    const source = parseInt(tags.artist, 10) || null;
 
-                    if (isNaN(source)) {
-                        console.error(`DirWatch: Unable to fetch unit id from MP3 tags for file ${filename}`);
+                    const talkgroup = typeof tags.title === 'string' && parseInt((tags.title.match(/([0-9]+)/) || [])[1], 10);
 
-                        return;
-                    }
-
-                    const talkgroup = parseInt(tags.title.match(/P:([0-9]+)/)[1], 10);
-
-                    if (isNaN(talkgroup)) {
+                    if (!talkgroup) {
                         console.error(`DirWatch: Unable to fetch talkgroup id from MP3 tags for file ${filename}`);
 
                         return;

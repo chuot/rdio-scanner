@@ -12,17 +12,17 @@
         "multer": "^1.4.2",
         "mysql2": "^2.2.5",
         "nodemon": "^2.0.6",
-        "pg": "^8.4.2",
+        "pg": "^8.5.1",
         "sequelize": "^6.3.5",
         "sqlite3": "^5.0.0",
         "umzug": "^2.3.0",
         "uuid": "^8.3.1",
-        "ws": "^7.3.1"
+        "ws": "^7.4.0"
     },
     "devDependencies": {
-        "eslint": "^7.12.1",
-        "webpack": "^5.3.2",
-        "webpack-cli": "^4.1.0",
+        "eslint": "^7.13.0",
+        "webpack": "^5.4.0",
+        "webpack-cli": "^4.2.0",
         "webpack-node-externals": "^2.5.2"
     },
     "license": "LICENSE",
@@ -39,5 +39,5 @@
         "build": "webpack",
         "start": "nodemon"
     },
-    "version": "4.8.1"
+    "version": "4.8.2"
 }

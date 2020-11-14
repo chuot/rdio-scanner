@@ -12,6 +12,13 @@ _v4.8.1_
 - Refactor panels' back button and make them fixed at the viewport top.
 - Node modules update.
 
+_v4.8.2_
+
+- Fix dirWatch.type='sdr-trunk' metatag artist as source is now optional.
+- Fix dirWatch.type='sdr-trunk' metatag title as talkgroup.id.
+- Web app now running with Angular 11.
+- Node modules update.
+
 # Version 4.7
 
 - New dirWatch.type='sdr-trunk'.
