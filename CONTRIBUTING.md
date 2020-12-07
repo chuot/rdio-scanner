@@ -12,8 +12,6 @@ Helping others on the (https://github.com/chuot/rdio-scanner/wiki) is a good way
 
 Any contribution to the [Rdio Scanner Wiki](https://github.com/chuot/rdio-scanner/wiki) is welcome and encouraged. It is impossible for the [owner and project manager](https://github.com/chuot) to cover all the [Rdio Scanner](https://github.com/chuot/rdio-scanner) use cases, sharing your own use cases with guided instructions will for sure benefit others.
 
-Any contribution to the [Rdio Scanner Wiki](https://github.com/chuot/rdio-scanner/wiki) is welcome and encouraged.
-
 It is also not possible for the [owner and project manager](https://github.com/chuot) to cover all the [Rdio Scanner](https://github.com/chuot/rdio-scanner) use cases, sharing your own use cases with guided instructions is sure to benefit others.
 
 ## Random Pull Requests

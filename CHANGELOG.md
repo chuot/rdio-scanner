@@ -19,6 +19,12 @@ _v4.8.2_
 - Web app now running with Angular 11.
 - Node modules update.
 
+_v4.8.3_
+
+- Add the ability to overwrite the default dirWatch extension for type sdr-trunk and trunk-recorder.
+- Fix dirWatch.disabled being ignored.
+- Node modules update.
+
 # Version 4.7
 
 - New dirWatch.type='sdr-trunk'.

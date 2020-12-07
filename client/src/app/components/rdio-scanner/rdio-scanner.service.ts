@@ -18,7 +18,7 @@
  */
 
 import { DOCUMENT } from '@angular/common';
-import { EventEmitter, Inject, Injectable, OnDestroy, SystemJsNgModuleLoader } from '@angular/core';
+import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
 import { interval, Subscription, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 import {
@@ -606,7 +606,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private bootstrapAudio(): void {
-        const events = ['keydown', 'mousedown', 'touchdown'];
+        const events = ['keydown', 'mousedown', 'touchstart'];
 
         const bootstrap = async () => {
             if (!this.audioContext) {

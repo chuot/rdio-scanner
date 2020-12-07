@@ -98,7 +98,7 @@ class DirWatch {
             }
 
             if ([RECORDER_TYPE.sdrTrunk, RECORDER_TYPE.trunkRecorder].includes(dirWatch.type)) {
-                if (typeof dirWatch.extension !== 'undefined') {
+                if (typeof dirWatch.extension !== 'string' && typeof dirWatch.extension !== 'undefined') {
                     delete dirWatch.extension;
                 }
 
@@ -128,7 +128,7 @@ class DirWatch {
         });
 
         ctx.once('ready', () => {
-            this.config.forEach((dirWatch = {}) => {
+            this.config.filter((dirWatch) => !dirWatch.disabled).forEach((dirWatch = {}) => {
                 const options = {
                     awaitWriteFinish: true,
                     ignoreInitial: !dirWatch.deleteAfter,
@@ -244,8 +244,10 @@ class DirWatch {
     async importSdrTrunkType(dirWatch, filename) {
         const file = path.parse(filename);
 
-        if (file.ext === '.mp3') {
-            const audioFile = path.resolve(file.dir, `${file.name}.mp3`);
+        const extension = dirWatch.extension || 'mp3';
+
+        if (file.ext === `.${extension}`) {
+            const audioFile = path.resolve(file.dir, `${file.name}.${extension}`);
 
             if (this.exists(audioFile)) {
                 const audio = this.readFile(audioFile);
@@ -266,7 +268,7 @@ class DirWatch {
 
                 let probe = Buffer.from([]);
 
-                proc.on('close', async() => {
+                proc.on('close', async () => {
                     try {
                         probe = JSON.parse(probe.toString());
 
@@ -366,7 +368,7 @@ class DirWatch {
         const file = path.parse(filename);
 
         if (file.ext === '.json') {
-            const audioFile = path.resolve(file.dir, `${file.name}.wav`);
+            const audioFile = path.resolve(file.dir, `${file.name}.${dirWatch.extension || 'wav'}`);
 
             if (this.exists(audioFile)) {
                 const audio = this.readFile(audioFile);
