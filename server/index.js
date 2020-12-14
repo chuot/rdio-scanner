@@ -184,12 +184,7 @@ class App {
             this.httpServer = http.createServer(this.router);
         }
 
-        this.sequelize = new Sequelize(Object.assign({}, {
-            dialectOptions: {
-                timezone: "Etc/GMT0",
-            },
-            logging: false,
-        }, this.config.sequelize));
+        this.sequelize = new Sequelize(Object.assign({}, { logging: false, }, this.config.sequelize));
 
         this.rdioScanner = new RdioScanner(this);
 

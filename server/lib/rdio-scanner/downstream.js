@@ -194,7 +194,7 @@ class Downstream {
                 return system.id === call.system ? parseTalkgroup(system.talkgroups) : call.talkgroup;
 
             } else {
-                return call.system;
+                return call.talkgroup;
             }
         }
 

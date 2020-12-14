@@ -25,6 +25,12 @@ _v4.8.3_
 - Fix dirWatch.disabled being ignored.
 - Node modules update.
 
+_v4.8.4_
+
+- Fix the timezone issue when on mariadb.
+- Fix downstream sending wrong talkgroup id.
+- Node modules security update.
+
 # Version 4.7
 
 - New dirWatch.type='sdr-trunk'.
