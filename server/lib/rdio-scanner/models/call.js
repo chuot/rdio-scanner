@@ -51,6 +51,12 @@ rdioScannerCallFactory.schema = {
         type: DataTypes.STRING,
         allowNull: true,
     },
+    // Duration of clip, in milliseconds
+    audioDuration: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false,
+    },
     dateTime: {
         type: DataTypes.DATE,
         allowNull: false,

@@ -45,6 +45,7 @@ export interface RdioScannerCall {
     };
     audioName?: string;
     audioType?: string;
+    audioDuration?: number;
     dateTime: Date;
     frequencies?: RdioScannerCallFrequency[];
     frequency?: number;

@@ -23,6 +23,7 @@
             <span>{{ callTalkgroup }}</span>
         </div>
         <div>
+            <span>{{ callDuration / 1000 | number:'1.0-1' }}s</span> —
             <span>{{ callProgress | date:'HH:mm' }}</span>
         </div>
     </div>
@@ -57,32 +58,38 @@
         <table class="history">
             <thead>
                 <tr>
-                    <th>
+                    <th class="time">
                         <span>Time</span>
                     </th>
-                    <th>
+                    <th class="duration">
+                        <span>Length</span>
+                    </th>
+                    <th class="system">
                         <span>System</span>
                     </th>
-                    <th>
+                    <th class="talkgroup">
                         <span>Talkgroup</span>
                     </th>
-                    <th>
+                    <th class="name">
                         <span>Name</span>
                     </th>
                 </tr>
             </thead>
             <tbody>
                 <tr *ngFor="let previousCall of callHistory">
-                    <td>
+                    <td class="time">
                         <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
                     </td>
-                    <td>
+                    <td class="duration">
+                        <span *ngIf="previousCall">{{ previousCall.audioDuration / 1000 | number:'1.0-1' }}s</span>
+                    </td>
+                    <td class="system">
                         <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>
                     </td>
-                    <td>
+                    <td class="talkgroup">
                         <span>{{ previousCall?.talkgroupData?.label || previousCall?.talkgroup }}</span>
                     </td>
-                    <td>
+                    <td class="name">
                         <span>{{ previousCall?.talkgroupData?.name || previousCall?.frequency }}</span>
                     </td>
                 </tr>

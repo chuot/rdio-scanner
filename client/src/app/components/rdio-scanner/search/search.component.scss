@@ -48,12 +48,13 @@
     }
 
     &:nth-child(2),
-    &:nth-child(3) {
+    &:nth-child(3),
+    &:nth-child(4) {
       flex: 0 0 50px;
     }
 
-    &:nth-child(4),
-    &:nth-child(5) {
+    &:nth-child(5),
+    &:nth-child(6) {
       flex: 0 0 20%;
     }
 

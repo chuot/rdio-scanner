@@ -35,6 +35,14 @@
                 <span>{{ row?.dateTime | date:'HH:mm' }}</span>
             </mat-cell>
         </ng-container>
+        <ng-container matColumnDef="duration">
+            <mat-header-cell *matHeaderCellDef>
+                <span>Duration</span>
+            </mat-header-cell>
+            <mat-cell *matCellDef="let row">
+                <span>{{ row?.audioDuration / 1000 | number:'1.0-1' }}s</span>
+            </mat-cell>
+        </ng-container>
         <ng-container matColumnDef="system">
             <mat-header-cell *matHeaderCellDef>
                 <span>System</span>
@@ -59,9 +67,9 @@
                 <span>{{ row?.talkgroupData?.name }}</span>
             </mat-cell>
         </ng-container>
-        <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'system', 'alpha', 'name']">
+        <mat-header-row *matHeaderRowDef="['control', 'date', 'time', 'duration', 'system', 'alpha', 'name']">
         </mat-header-row>
-        <mat-row *matRowDef="let row; columns: ['control', 'date', 'time', 'system', 'alpha', 'name']">
+        <mat-row *matRowDef="let row; columns: ['control', 'date', 'time', 'duration', 'system', 'alpha', 'name']">
         </mat-row>
     </mat-table>
     <mat-progress-bar color="primary" [mode]="resultsPending ? 'query' : 'determinate'">

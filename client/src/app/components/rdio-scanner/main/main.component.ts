@@ -45,6 +45,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
     callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
     callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
+    callDuration = 0;
     callQueue = 0;
     callSpike = '0';
     callSystem = 'System';
@@ -405,6 +406,8 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             this.callTalkgroup = this.call.talkgroupData?.label || `${this.call.talkgroup}`;
 
             this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call?.frequency);
+
+            this.callDuration = this.call.audioDuration || 0;
 
             if (Array.isArray(this.call.frequencies) && this.call.frequencies.length) {
                 const frequency = this.call.frequencies.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});

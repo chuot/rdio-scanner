@@ -39,6 +39,7 @@ const rs003OptimizeCalls = require('./migrations/20191126135515-optimize-rdio-sc
 const rs004NewV3Tables = require('./migrations/20191220093214-new-v3-tables');
 const rs005OptimizeCalls = require('./migrations/20200123094105-optimize-rdio-scanner-calls');
 const rs006NewV4Tables = require('./migrations/20200428132918-new-v4-tables');
+const rs007AddAudioDurationCol = require('./migrations/20201228032605-add-duration');
 
 const migrations = [
     { name: '20191028144433-create-rdio-scanner-system', up: rs001CreateSystem.up, down: rs001CreateSystem.down },
@@ -47,6 +48,7 @@ const migrations = [
     { name: '20191220093214-new-v3-tables', up: rs004NewV3Tables.up, down: rs004NewV3Tables.down },
     { name: '20200123094105-optimize-rdio-scanner-calls', up: rs005OptimizeCalls.up, down: rs005OptimizeCalls.down },
     { name: '20200428132918-new-v4-tables', up: rs006NewV4Tables.up, down: rs006NewV4Tables.down },
+    { name: '20201228032605-add-duration', up: rs007AddAudioDurationCol.up, down: rs007AddAudioDurationCol.down },
 ];
 
 class RdioScanner extends EventEmitter {
