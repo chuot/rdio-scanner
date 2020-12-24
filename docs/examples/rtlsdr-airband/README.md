@@ -2,10 +2,6 @@
 
 Here's an example with RTLSDR-Airband:
 
-## Requirements
-
-At the time of this writting, this will work only with the *unstable* branch of RTLSDR-Airband where the [pr #163](https://github.com/szpajder/RTLSDR-Airband/pull/163) has been merged.
-
 ## RTLSDR-Airband's configuration
 
 The trick here is to split audio by transmission and to leverage to `filename_template` to pass the `system_id` and `talkgroup_id`, which can then be utilized by [Rdio Scanner](https://github.com/chuot/rdio-scanner)'s `dirWatch.mask`. So generated files will look like `61_118900_20200711_111311_118900000.mp3`.

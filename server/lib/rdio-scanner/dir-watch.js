@@ -156,13 +156,13 @@ class DirWatch {
                             const debounces = {};
 
                             const debounceFn = (filename) => setTimeout(() => {
+                                delete debounces[filename];
+
                                 if (this.exists(filename)) {
                                     const stat = this.statFile(filename);
 
                                     if (stat.isFile()) {
                                         if (stat.size > 44) {
-                                            delete debounces[filename];
-
                                             this.importDefaultType(dirWatch, filename);
 
                                         } else {
@@ -172,8 +172,10 @@ class DirWatch {
                                 }
                             }, dirWatch.delay);
 
-                            watcher.on('raw', (_, filename) => {
-                                console.log(filename);
+                            watcher.on('raw', (_, filename, details) => {
+                                filename = details.watchedPath.indexOf(filename) === -1 
+                                    ? path.join(details.watchedPath, filename)
+                                    : details.watchedPath;
 
                                 if (debounces[filename]) {
                                     clearTimeout(debounces[filename]);

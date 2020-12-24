@@ -31,6 +31,11 @@ _v4.8.4_
 - Fix downstream sending wrong talkgroup id.
 - Node modules security update.
 
+_v4.8.5_
+
+- Fix broken dirwatch.delay.
+- Node modules update.
+
 # Version 4.7
 
 - New dirWatch.type='sdr-trunk'.
