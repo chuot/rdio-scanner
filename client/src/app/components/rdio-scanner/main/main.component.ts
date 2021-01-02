@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,20 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { Subscription, timer } from 'rxjs';
 import { name as appName, version } from '../../../../../package.json';
-import { RdioScannerAvoidOptions, RdioScannerBeepStyle, RdioScannerCall, RdioScannerConfig, RdioScannerEvent, RdioScannerLivefeedMode } from '../rdio-scanner';
+import {
+    RdioScannerAvoidOptions,
+    RdioScannerBeepStyle,
+    RdioScannerCall,
+    RdioScannerConfig,
+    RdioScannerEvent,
+    RdioScannerLivefeedMap,
+    RdioScannerLivefeedMode,
+} from '../rdio-scanner';
 import { AppRdioScannerService } from '../rdio-scanner.service';
 
 const LOCAL_STORAGE_KEY = AppRdioScannerService.LOCAL_STORAGE_KEY + '-pin';
@@ -38,6 +46,8 @@ const LOCAL_STORAGE_KEY = AppRdioScannerService.LOCAL_STORAGE_KEY + '-pin';
 export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
+
+    avoided = false;
 
     call: RdioScannerCall | undefined;
     callError = '0';
@@ -64,9 +74,13 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
 
     ledStyle = '';
 
+    linked = false;
+
     livefeedOffline = true;
     livefeedOnline = false;
     livefeedPaused = false;
+
+    map: RdioScannerLivefeedMap = {};
 
     playbackMode = false;
 
@@ -104,15 +118,23 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    @HostListener('document:keydown.a')
     avoid(options?: RdioScannerAvoidOptions): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
-            if (options || this.call || this.callPrevious) {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+            const call = this.call || this.callPrevious;
 
+            if (options || call) {
                 this.appRdioScannerService.avoid(options);
+
+                if (call && !this.map[call.system][call.talkgroup]) {
+                    this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+
+                } else {
+                    this.appRdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+                }
 
             } else {
                 this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
@@ -122,6 +144,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    @HostListener('document:keydown.s')
     holdSystem(): void {
         if (this.auth) {
             this.authFocus();
@@ -140,6 +163,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    @HostListener('document:keydown.t')
     holdTalkgroup(): void {
         if (this.auth) {
             this.authFocus();
@@ -158,6 +182,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    @HostListener('document:keydown.l')
     livefeed(): void {
         if (this.auth) {
             this.authFocus();
@@ -181,7 +206,11 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         this.syncClock();
     }
 
-    pause(): void {
+    @HostListener('document:keydown.space', ['$event'])
+    @HostListener('document:keydown.p')
+    pause(event?: KeyboardEvent): void {
+        event?.preventDefault();
+
         if (this.auth) {
             this.authFocus();
 
@@ -199,6 +228,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    @HostListener('document:keydown.r')
     replay(): void {
         if (this.auth) {
             this.authFocus();
@@ -247,6 +277,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    @HostListener('document:keydown.n')
     skip(options?: { delay?: boolean }): void {
         if (this.auth) {
             this.authFocus();
@@ -334,12 +365,20 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             this.holdTg = event.holdTg || false;
         }
 
+        if ('linked' in event) {
+            this.linked = event.linked || false;
+        }
+
         if ('livefeedMode' in event && event.livefeedMode) {
             this.livefeedOffline = event.livefeedMode === RdioScannerLivefeedMode.Offline;
 
             this.livefeedOnline = event.livefeedMode === RdioScannerLivefeedMode.Online;
 
             this.playbackMode = event.livefeedMode === RdioScannerLivefeedMode.Playback;
+        }
+
+        if ('map' in event) {
+            this.map = event.map || {};
         }
 
         if ('pause' in event) {
@@ -454,6 +493,15 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
 
                 this.callHistory.unshift(this.callPrevious);
             }
+        }
+
+        const call = this.call || this.callPrevious;
+
+        if (call && this.map[call.system]) {
+            this.avoided = !this.map[call.system][call.talkgroup];
+
+        } else {
+            this.avoided = false;
         }
 
         const colors = ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];

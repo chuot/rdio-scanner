@@ -35,6 +35,22 @@
 
   &.idle {
     background: rgb(190, 190, 174);
+
+    .avoid {
+      color: rgb(190, 190, 174);
+    }
+  }
+
+  .avoid {
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 3px;
+    color: rgb(209, 238, 238);
+    padding: 0 3px;
+    visibility: hidden;
+  }
+
+  .avoided {
+    visibility: visible;
   }
 
   * {
@@ -80,14 +96,16 @@
     height: 20px;
     justify-content: space-between;
 
-    &.bold {
+    &.big {
       font-size: 24px;
       height: 32px;
       line-height: 32px;
     }
 
-    &.margin {
-      margin-bottom: 12px;
+    &.small {
+      font-size: 12px;
+      height: 14px;
+      line-height: 14px;
     }
   }
 

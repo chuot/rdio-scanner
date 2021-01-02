@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -488,6 +488,29 @@ class Controller extends EventEmitter {
         if (!system || !talkgroup) {
             console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} `
                 + `file=${call.audioName} No matching system/talkgroup`);
+
+            return;
+        }
+
+        const dateFrom = new Date(call.dateTime);
+        const dateTo = new Date(call.dateTime);
+
+        dateFrom.setMilliseconds(dateFrom.getMilliseconds() - 500);
+        dateTo.setMilliseconds(dateTo.getMilliseconds() + 500);
+
+        const duplicateCall = await this.models.call.findOne({
+            where: {
+                dateTime: {
+                    [Op.gte]: dateFrom,
+                    [Op.lte]: dateTo,
+                },
+                system: call.system,
+                talkgroup: call.talkgroup,
+            },
+        });
+
+        if (duplicateCall) {
+            console.log(`NewCall: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} Duplicate call rejected`);
 
             return;
         }

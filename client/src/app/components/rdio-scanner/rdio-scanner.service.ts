@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -152,7 +152,9 @@ export class AppRdioScannerService implements OnDestroy {
             }
         }
 
-        this.cleanQueue();
+        if (this.livefeedMode !== RdioScannerLivefeedMode.Playback) {
+            this.cleanQueue();
+        }
 
         this.rebuildGroups();
 
@@ -731,14 +733,18 @@ export class AppRdioScannerService implements OnDestroy {
         this.websocket = new WebSocket(websocketUrl);
 
         this.websocket.onclose = (ev: CloseEvent) => {
+            this.event.emit({ linked: false });
+
             if (ev.code !== 1000) {
                 timer(2000).subscribe(() => this.reconnectWebsocket());
             }
         };
 
-        this.websocket.onerror = () => { };
+        this.websocket.onerror = () => this.event.emit({ linked: false });
 
         this.websocket.onopen = () => {
+            this.event.emit({ linked: true });
+
             if (this.websocket instanceof WebSocket) {
                 this.websocket.onmessage = (ev: MessageEvent) => this.parseWebsocketMessage(ev.data);
             }

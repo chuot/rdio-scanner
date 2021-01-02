@@ -1,3 +1,11 @@
+# Version 4.9
+
+- Add basic duplicate call detection and rejection.
+- Add keyboard shortcuts for the main buttons.
+- Add an avoid indicator when the talkgroup is avoided.
+- Add an no link indicator when websocket connection is down.
+- Node modules update.
+
 # Version 4.8
 
 - Add downstream.system.id_as property to allow export system with a different id.

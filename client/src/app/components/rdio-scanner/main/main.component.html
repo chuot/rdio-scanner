@@ -2,14 +2,18 @@
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
-    <div class="row margin">
+    <div class="row">
         <div>
             <span>{{ clock | date:'HH:mm' }}</span>
+        </div>
+        <div *ngIf="!linked">
+            <span>NO LINK</span>
         </div>
         <div>
             <span>Q: {{ callQueue }}</span>
         </div>
     </div>
+    <div class="row small"></div>
     <div class="row">
         <div>
             <span>{{ callSystem }}</span>
@@ -26,7 +30,7 @@
             <span>{{ callProgress | date:'HH:mm' }}</span>
         </div>
     </div>
-    <div class="row bold">
+    <div class="row big">
         <span>{{ callTalkgroupName }}</span>
     </div>
     <div class="row">
@@ -37,12 +41,18 @@
             <span>TGID: {{ callTalkgroupId || 0 }}</span>
         </div>
     </div>
-    <div class="row margin">
+    <div class="row">
         <div>
             <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
         </div>
         <div>
             <span *ngIf="callUnit">UID: {{ callUnit }}</span>
+        </div>
+    </div>
+    <div class="row small">
+        <div></div>
+        <div>
+            <span class="avoid" [ngClass]="{ avoided: avoided }">AVOID</span>
         </div>
     </div>
     <div class="wrapper">

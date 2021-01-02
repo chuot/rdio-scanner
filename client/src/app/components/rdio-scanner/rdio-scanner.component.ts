@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2020 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,7 +58,6 @@ export class AppRdioScannerComponent implements OnDestroy {
         this.appRdioScannerService.stopLivefeed();
 
         this.searchPanel?.close();
-
         this.selectPanel?.close();
     }
 
@@ -66,7 +65,11 @@ export class AppRdioScannerComponent implements OnDestroy {
         this.eventSubscription.unsubscribe();
     }
 
-    toggleFullscreen(): void {
+    @HostListener('document:keydown.f')
+    @HostListener('document:keydown.tab', ['$event'])
+    toggleFullscreen(event?: KeyboardEvent): void {
+        event?.preventDefault();
+
         if (document.fullscreenElement) {
             const el: {
                 exitFullscreen?: () => void;
@@ -109,6 +112,30 @@ export class AppRdioScannerComponent implements OnDestroy {
     private eventHandler(event: RdioScannerEvent): void {
         if (event.livefeedMode) {
             this.livefeedMode = event.livefeedMode;
+        }
+    }
+
+    @HostListener('document:keydown.arrowleft', ['$event'])
+    private keyLeftArrow(event?: KeyboardEvent): void {
+        event?.preventDefault();
+
+        if (this.selectPanel?.opened) {
+            this.selectPanel?.close();
+
+        } else {
+            this.searchPanel?.open();
+        }
+    }
+
+    @HostListener('document:keydown.arrowright', ['$event'])
+    private keyRightArrow(event?: KeyboardEvent): void {
+        event?.preventDefault();
+
+        if (this.searchPanel?.opened) {
+            this.searchPanel?.close();
+
+        } else {
+            this.selectPanel?.open();
         }
     }
 }
