@@ -12,6 +12,10 @@ _v4.9.1_
 - dirWatch.type="trunk-recorder" now deletes the JSON file in case the audio file is missing.
 - Fix downstream sending wrong talkgroup id.
 
+_v4.9.2_
+
+- Add Config.options.disableKeyboardShortcuts to make everyone a happy camper.
+
 # Version 4.8
 
 - Add downstream.system.id_as property to allow export system with a different id.

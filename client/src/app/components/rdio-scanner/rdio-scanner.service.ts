@@ -74,6 +74,7 @@ export class AppRdioScannerService implements OnDestroy {
     private config: RdioScannerConfig = {
         dimmerDelay: false,
         groups: {},
+        keyboardShortcuts: true,
         keypadBeeps: false,
         systems: [],
         tags: {},
@@ -784,6 +785,7 @@ export class AppRdioScannerService implements OnDestroy {
                     this.config = {
                         dimmerDelay: typeof config.dimmerDelay === 'number' ? config.dimmerDelay : 5000,
                         groups: typeof config.groups !== null && typeof config.groups === 'object' ? config.groups : {},
+                        keyboardShortcuts: config.keyboardShortcuts,
                         keypadBeeps: config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
                         systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},

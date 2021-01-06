@@ -73,6 +73,7 @@ export interface RdioScannerCallSource {
 export interface RdioScannerConfig {
     dimmerDelay: number | false;
     groups: { [key: string]: { [key: number]: number[] } };
+    keyboardShortcuts: boolean;
     keypadBeeps: RdioScannerKeypadBeeps | false;
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };

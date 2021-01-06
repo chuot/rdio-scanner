@@ -334,13 +334,15 @@ class Controller extends EventEmitter {
 
         const dimmerDelay = this.config.options.dimmerDelay;
 
+        const keyboardShortcuts = !this.config.options.disableKeyboardShortcuts;
+
         const keypadBeeps = options.keypadBeeps === false ? false
             : options.keypadBeeps === 1 ? defaults.keypadBeeps.uniden
                 : options.keypadBeeps === 2 ? defaults.keypadBeeps.whistler
                     : options.keypadBeeps !== null && typeof options.keypadBeeps === 'object' ? options.keypadBeeps
                         : defaults.keypadBeeps.uniden;
 
-        return { dimmerDelay, keypadBeeps };
+        return { dimmerDelay, keyboardShortcuts, keypadBeeps };
     }
 
     getScope(token, store = this.config.access) {
@@ -737,6 +739,9 @@ function parseConfig(config) {
     if (config.disableAudioConversion !== null || config.disableAudioConversion !== undefined) {
         delete config.disableAudioConversion;
     }
+
+    config.options.disableKeyboardShortcuts = typeof config.options.disableKeyboardShortcuts === 'boolean'
+        ? config.options.disableKeyboardShortcuts : false;
 
     config.options.keypadBeeps = config.options.keypadBeeps === false ? false
         : config.options.keyBeep === false ? false

@@ -118,8 +118,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.a')
-    avoid(options?: RdioScannerAvoidOptions): void {
+    @HostListener('document:keydown.a', ['$event'])
+    avoid(options?: RdioScannerAvoidOptions, event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         if (this.auth) {
             this.authFocus();
 
@@ -144,8 +148,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.s')
-    holdSystem(): void {
+    @HostListener('document:keydown.s', ['$event'])
+    holdSystem(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         if (this.auth) {
             this.authFocus();
 
@@ -163,8 +171,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.t')
-    holdTalkgroup(): void {
+    @HostListener('document:keydown.t', ['$event'])
+    holdTalkgroup(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         if (this.auth) {
             this.authFocus();
 
@@ -182,8 +194,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.l')
-    livefeed(): void {
+    @HostListener('document:keydown.l', ['$event'])
+    livefeed(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         if (this.auth) {
             this.authFocus();
 
@@ -207,8 +223,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     @HostListener('document:keydown.space', ['$event'])
-    @HostListener('document:keydown.p')
+    @HostListener('document:keydown.p', ['$event'])
     pause(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         event?.preventDefault();
 
         if (this.auth) {
@@ -228,8 +248,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.r')
-    replay(): void {
+    @HostListener('document:keydown.r', ['$event'])
+    replay(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         if (this.auth) {
             this.authFocus();
 
@@ -277,8 +301,12 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.n')
-    skip(options?: { delay?: boolean }): void {
+    @HostListener('document:keydown.n', ['$event'])
+    skip(options?: { delay?: boolean }, event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         if (this.auth) {
             this.authFocus();
 

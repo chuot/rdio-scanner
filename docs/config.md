@@ -63,6 +63,10 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             // Default value is false
             "disableAudioConversion": false,
 
+            // (boolean) Disable the ability to control Rdio Scanner via keyboard shortcuts
+            // Default value is false
+            "disableKeyboardShortcuts": false,
+
             // (boolean) Emit beeps when clicking buttons
             // Default value is 1 which is preset #1
             // See KeypadBeeps section below for more details

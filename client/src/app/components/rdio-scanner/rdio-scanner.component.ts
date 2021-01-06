@@ -19,7 +19,7 @@
 
 import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
-import { RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
+import { RdioScannerConfig, RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
 import { AppRdioScannerService } from './rdio-scanner.service';
 
 @Component({
@@ -28,6 +28,8 @@ import { AppRdioScannerService } from './rdio-scanner.service';
     templateUrl: './rdio-scanner.component.html',
 })
 export class AppRdioScannerComponent implements OnDestroy {
+    private config: RdioScannerConfig | undefined;
+
     private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
@@ -65,9 +67,13 @@ export class AppRdioScannerComponent implements OnDestroy {
         this.eventSubscription.unsubscribe();
     }
 
-    @HostListener('document:keydown.f')
+    @HostListener('document:keydown.f', ['$event'])
     @HostListener('document:keydown.tab', ['$event'])
     toggleFullscreen(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         event?.preventDefault();
 
         if (document.fullscreenElement) {
@@ -110,6 +116,10 @@ export class AppRdioScannerComponent implements OnDestroy {
     }
 
     private eventHandler(event: RdioScannerEvent): void {
+        if ('config' in event) {
+            this.config = event.config;
+        }
+
         if (event.livefeedMode) {
             this.livefeedMode = event.livefeedMode;
         }
@@ -117,6 +127,10 @@ export class AppRdioScannerComponent implements OnDestroy {
 
     @HostListener('document:keydown.arrowleft', ['$event'])
     private keyLeftArrow(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         event?.preventDefault();
 
         if (this.selectPanel?.opened) {
@@ -129,6 +143,10 @@ export class AppRdioScannerComponent implements OnDestroy {
 
     @HostListener('document:keydown.arrowright', ['$event'])
     private keyRightArrow(event?: KeyboardEvent): void {
+        if (event && !this.config?.keyboardShortcuts) {
+            return;
+        }
+
         event?.preventDefault();
 
         if (this.searchPanel?.opened) {
