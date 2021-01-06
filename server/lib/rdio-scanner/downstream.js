@@ -188,7 +188,7 @@ class Downstream {
             if (Array.isArray(system)) {
                 system = system.find((sys) => sys !== null && typeof sys === 'object' && sys.id === call.system);
 
-                return system ? parseSystem(system) : call.system;
+                return system ? parseSystem(system) : call.talkgroup;
 
             } else if (system !== null && typeof system === 'object') {
                 return system.id === call.system ? parseTalkgroup(system.talkgroups) : call.talkgroup;

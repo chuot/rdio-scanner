@@ -410,6 +410,10 @@ class DirWatch {
             } else {
                 console.error(`DirWatch: Error missing file ${audioFile}`);
 
+                if (dirWatch.deleteAfter) {
+                    this.unlink(filename);
+                }
+
                 return;
             }
         }

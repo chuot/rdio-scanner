@@ -155,6 +155,8 @@ class Controller extends EventEmitter {
                 const proc = spawn('ffmpeg', [
                     '-i',
                     '-',
+                    '-af',
+                    'loudnorm=I=-16:dual_mono=true:TP=-1.5:LRA=11',
                     ...metadata,
                     '-c:a',
                     'aac',
@@ -515,7 +517,7 @@ class Controller extends EventEmitter {
             return;
         }
 
-        if (!this.config.disableAudioConversion && call.audioType !== 'audio/aac') {
+        if (!this.config.disableAudioConversion) {
             try {
                 call = await this.convertCallAudio(call);
 

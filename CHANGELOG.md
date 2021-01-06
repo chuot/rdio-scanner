@@ -6,6 +6,12 @@
 - Add an no link indicator when websocket connection is down.
 - Node modules update.
 
+_v4.9.1_
+
+- Add EBU R128 loudness normalization.
+- dirWatch.type="trunk-recorder" now deletes the JSON file in case the audio file is missing.
+- Fix downstream sending wrong talkgroup id.
+
 # Version 4.8
 
 - Add downstream.system.id_as property to allow export system with a different id.
