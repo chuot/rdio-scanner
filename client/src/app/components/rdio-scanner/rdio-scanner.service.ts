@@ -880,11 +880,11 @@ export class AppRdioScannerService implements OnDestroy {
         this.groups = Object.keys(this.config.groups || []).map((label) => {
             const allOff = Object.keys(this.config.groups[label]).map((sys) => +sys)
                 .every((sys: number) => this.config.groups[label] && this.config.groups[label][sys]
-                    .every((tg) => !this.livefeedMap[sys][tg]));
+                    .every((tg) => this.livefeedMap[sys] && !this.livefeedMap[sys][tg]));
 
             const allOn = Object.keys(this.config.groups[label]).map((sys) => +sys)
                 .every((sys: number) => this.config.groups[label] && this.config.groups[label][sys]
-                    .every((tg) => this.livefeedMap[sys][tg]));
+                    .every((tg) => this.livefeedMap[sys] && this.livefeedMap[sys][tg]));
 
             const status = allOff ? RdioScannerGroupStatus.Off : allOn ? RdioScannerGroupStatus.On : RdioScannerGroupStatus.Partial;
 
@@ -954,10 +954,6 @@ export class AppRdioScannerService implements OnDestroy {
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (Array.isArray(this.config?.systems)) {
             call.systemData = this.config.systems.find((system) => system.id === call.system);
-
-            if (!call.systemData) {
-                console.log(call.system, call.systemData);
-            }
 
             if (Array.isArray(call.systemData?.talkgroups)) {
                 call.talkgroupData = call.systemData?.talkgroups.find((talkgroup) => talkgroup.id === call.talkgroup);

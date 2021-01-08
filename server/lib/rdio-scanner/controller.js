@@ -29,6 +29,8 @@ const uuid = require('uuid');
 
 const defaults = require('./defaults');
 
+const WebSocket = require('./websocket');
+
 const maxAuthenticationTries = 3;
 
 const wsCommand = {
@@ -49,6 +51,8 @@ class Controller extends EventEmitter {
 
         this.setMaxListeners(0);
 
+        this.app = ctx.app;
+
         this.config = parseConfig(ctx.config);
 
         this.groups = {};
@@ -57,6 +61,61 @@ class Controller extends EventEmitter {
 
         this.tags = {};
 
+        this.websocket = null;
+
+        this.ffmpeg = !spawnSync('ffmpeg', ['-version']).error;
+
+        if (!this.ffmpeg) {
+            console.warn('ffmpeg is missing, no audio conversion possible.');
+        }
+
+        if (this.config.options.pruneDays > 0) {
+            this.pruneInterval = setInterval(() => {
+                const now = new Date();
+
+                this.models.call.destroy({
+                    where: {
+                        dateTime: {
+                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.config.options.pruneDays),
+                        },
+                    },
+                });
+            }, 15 * 60 * 1000);
+        }
+
+        this.buildGroupsAndTags();
+    }
+
+    authenticate(token) {
+        const parse = (doc) => {
+            if (!this.isAccessRestricted) {
+                return true;
+
+            } else if (Array.isArray(doc)) {
+                return doc.map((acc) => parse(acc)).some((acc) => acc);
+
+            } else if (doc !== null && typeof doc === 'object') {
+                return doc.code === token;
+
+            } else {
+                return doc === token;
+            }
+        }
+
+        return parse(this.config.access);
+    }
+
+    broadcastConfig() {
+        if (this.websocket) {
+            this.websocket.getSockets().forEach(async (socket) => {
+                socket.scope = this.getScope(socket.token);
+
+                socket.send(JSON.stringify([wsCommand.config, this.getConfig(socket.scope)]));
+            })
+        }
+    }
+
+    buildGroupsAndTags() {
         this.config.systems.forEach((system) => {
             system.talkgroups.forEach((talkgroup) => {
                 if (!this.groups[talkgroup.group]) {
@@ -84,45 +143,6 @@ class Controller extends EventEmitter {
                 }
             })
         });
-
-        this.ffmpeg = !spawnSync('ffmpeg', ['-version']).error;
-
-        if (!this.ffmpeg) {
-            console.warn('ffmpeg is missing, no audio conversion possible.');
-        }
-
-        if (this.config.options.pruneDays > 0) {
-            this.pruneInterval = setInterval(() => {
-                const now = new Date();
-
-                this.models.call.destroy({
-                    where: {
-                        dateTime: {
-                            [Op.lt]: new Date(now.getFullYear(), now.getMonth(), now.getDate() - this.config.options.pruneDays),
-                        },
-                    },
-                });
-            }, 15 * 60 * 1000);
-        }
-    }
-
-    authenticate(token) {
-        const parse = (doc) => {
-            if (!this.isAccessRestricted) {
-                return true;
-
-            } else if (Array.isArray(doc)) {
-                return doc.map((acc) => parse(acc)).some((acc) => acc);
-
-            } else if (doc !== null && typeof doc === 'object') {
-                return doc.code === token;
-
-            } else {
-                return doc === token;
-            }
-        }
-
-        return parse(this.config.access);
     }
 
     convertCallAudio(call = {}) {
@@ -294,15 +314,15 @@ class Controller extends EventEmitter {
         return { count, dateStart, dateStop, options, results };
     }
 
-    async getConfig(scope) {
+    getConfig(scope) {
         return Object.assign({}, this.getOptions(), {
             groups: this.getGroups(scope),
-            systems: await this.getSystems(scope),
+            systems: this.getSystems(scope),
             tags: this.getTags(scope),
         });
     }
 
-    getGroups(scope = {}) {
+    getGroups(scope) {
         if (scope !== null && typeof scope === 'object') {
             return Object.keys(this.groups).reduce((groups, group) => {
                 Object.keys(this.groups[group]).forEach((system) => {
@@ -425,27 +445,18 @@ class Controller extends EventEmitter {
         }, {});
     }
 
-    async getSystems(scope = {}) {
+    getSystems(scope) {
         if (scope !== null && typeof scope === 'object') {
-            const systems = await this.models.system.findAll({
-                where: {
-                    id: {
-                        [Op.in]: Object.keys(scope),
-                    },
-                },
-            });
+            const sysIds = Object.keys(scope).map((id) => +id);
 
-            return systems.map((system) => (system.talkgroups = system.talkgroups
-                .filter((tg) => scope[system.id].includes(tg.id))) && system);
+            return this.config.systems.filter((sys) => sysIds.includes(sys.id));
 
         } else {
-            const systems = await this.models.system.findAll();
-
-            return systems;
+            return this.config.systems;
         }
     }
 
-    getTags(scope = {}) {
+    getTags(scope) {
         if (scope !== null && typeof scope === 'object') {
             return Object.keys(this.tags).reduce((tags, tag) => {
                 Object.keys(this.tags[tag]).forEach((system) => {
@@ -472,10 +483,12 @@ class Controller extends EventEmitter {
         }
     }
 
-    async importCall(call = {}) {
-        const system = this.config.systems.find((sys) => sys.id === call.system);
+    async importCall(call = {}, meta) {
+        meta = meta !== null && typeof meta === 'object' ? meta : {};
 
-        const talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => {
+        let system = this.config.systems.find((sys) => sys.id === call.system);
+
+        let talkgroup = Array.isArray(system && system.talkgroups) ? system.talkgroups.find((tg) => {
             if (tg.id === call.talkgroup) {
                 return true;
 
@@ -488,6 +501,51 @@ class Controller extends EventEmitter {
                 return false;
             }
         }) : null;
+
+        if (this.config.options.autoPopulate) {
+            let populated = false;
+
+            if (!system && call.system) {
+                populated = true;
+
+                system = {
+                    id: call.system,
+                    label: meta.systemLabel || `System ${call.system}`,
+                    talkgroups: [],
+                    units: [],
+                };
+
+                this.config.systems.push(system);
+
+                this.config.systems.sort((a, b) => a.id - b.id);
+            }
+
+            if (!talkgroup && call.talkgroup) {
+                populated = true;
+
+                talkgroup = {
+                    group: 'Unknown',
+                    id: call.talkgroup,
+                    label: `${call.talkgroup}`,
+                    name: `Talkgroup ${call.talkgroup}`,
+                    tag: 'untagged'
+                };
+
+                system.talkgroups.push(talkgroup);
+
+                if (this.config.options.sortTalkgroups) {
+                    system.talkgroups.sort((a, b) => a.id - b.id);
+                }
+
+                this.buildGroupsAndTags();
+            }
+
+            if (populated) {
+                this.app.config.persist();
+
+                this.broadcastConfig();
+            }
+        }
 
         if (!system || !talkgroup) {
             console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} `
@@ -596,7 +654,7 @@ class Controller extends EventEmitter {
                 socket.send(JSON.stringify(response));
 
             } else if (message[0] === wsCommand.config) {
-                socket.send(JSON.stringify([wsCommand.config, await this.getConfig(socket.scope)]));
+                socket.send(JSON.stringify([wsCommand.config, this.getConfig(socket.scope)]));
 
             } else if (message[0] === wsCommand.listCall) {
                 socket.send(JSON.stringify([wsCommand.listCall, await this.getCalls(message[1], socket.scope)]));
@@ -656,7 +714,7 @@ class Controller extends EventEmitter {
                 socket.send(JSON.stringify([wsCommand.livefeedMap, returnStatus]));
 
             } else if (message[0] === wsCommand.pin) {
-                const token = Buffer.from(message[1], 'base64').toString();
+                socket.token = Buffer.from(message[1], 'base64').toString();
 
                 if (typeof socket.authCount !== 'number') {
                     socket.authCount = 1;
@@ -669,22 +727,22 @@ class Controller extends EventEmitter {
                     socket.send(JSON.stringify([wsCommand.pin]));
 
                 } else {
-                    socket.isAuthenticated = this.authenticate(token);
+                    socket.isAuthenticated = this.authenticate(socket.token);
 
                     if (socket.isAuthenticated) {
                         socket.authCount = 0;
 
                     } else if (socket.authCount === maxAuthenticationTries) {
-                        console.log(`Authentication: token=${token} Locked`);
+                        console.log(`Authentication: token=${socket.token} Locked`);
 
                     } else {
-                        console.log(`Authentication: token=${token} Failed`);
+                        console.log(`Authentication: token=${socket.token} Failed`);
                     }
 
-                    socket.scope = this.getScope(token);
+                    socket.scope = this.getScope(socket.token);
 
                     if (socket.isAuthenticated) {
-                        socket.send(JSON.stringify([wsCommand.config, await this.getConfig(socket.scope)]));
+                        socket.send(JSON.stringify([wsCommand.config, this.getConfig(socket.scope)]));
 
                     } else {
                         socket.send(JSON.stringify([wsCommand.pin]));
@@ -694,17 +752,30 @@ class Controller extends EventEmitter {
         }
     }
 
-    validateApiKey(apiKey, system, talkgroup) {
-        const scope = this.getScope(apiKey, this.config.apiKeys);
+    registerWebSocket(websocket) {
+        if (websocket instanceof WebSocket) {
+            this.websocket = websocket;
+        }
+    }
 
-        return Array.isArray(scope[system]) && (
-            scope[system].includes(talkgroup) ||
-            this.config.systems.some((sys) => {
-                return sys.id === system && sys.talkgroups.some((tg) => {
-                    return Array.isArray(tg.patches) && tg.patches.includes(talkgroup);
+    validateApiKey(apiKey, system, talkgroup) {
+        if (typeof apiKey === 'string' && apiKey === this.config.apiKeys) {
+            return true;
+
+        } else if (Array.isArray(this.config.apiKeys) && this.config.apiKeys.includes(apiKey)) {
+            return true;
+
+        } else {
+            const scope = this.getScope(apiKey, this.config.apiKeys);
+
+            return Array.isArray(scope[system]) && (
+                scope[system].includes(talkgroup) || this.config.systems.some((sys) => {
+                    return sys.id === system && sys.talkgroups.some((tg) => {
+                        return Array.isArray(tg.patches) && tg.patches.includes(talkgroup);
+                    })
                 })
-            })
-        );
+            );
+        }
     }
 }
 
@@ -728,6 +799,8 @@ function parseConfig(config) {
     if (config.allowDownload !== null || config.allowDownload !== undefined) {
         delete config.allowDownload;
     }
+
+    config.options.autoPopulate = typeof config.options.autoPopulate === 'boolean' ? config.options.autoPopulate : true;
 
     config.options.dimmerDelay = typeof config.options.dimmerDelay === 'number' && config.options.dimmerDelay > 0
         ? config.options.dimmerDelay : 5000;
@@ -823,6 +896,8 @@ function parseConfig(config) {
     if (config.pruneDays !== null || config.pruneDays !== undefined) {
         delete config.pruneDays;
     }
+
+    config.options.sortTalkgroups = typeof config.options.sortTalkgroups === 'boolean' ? config.options.sortTalkgroups : false;
 
     if (config.options.useDimmer !== undefined) {
         delete config.options.useDimmer;

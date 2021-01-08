@@ -11,17 +11,17 @@
         "mime-types": "^2.1.28",
         "multer": "^1.4.2",
         "mysql2": "^2.2.5",
-        "nodemon": "^2.0.6",
+        "nodemon": "^2.0.7",
         "pg": "^8.5.1",
         "sequelize": "^6.3.5",
-        "sqlite3": "^5.0.0",
+        "sqlite3": "^5.0.1",
         "umzug": "^2.3.0",
         "uuid": "^8.3.2",
         "ws": "^7.4.2"
     },
     "devDependencies": {
         "eslint": "^7.17.0",
-        "webpack": "^5.11.1",
+        "webpack": "^5.12.1",
         "webpack-cli": "^4.3.1",
         "webpack-node-externals": "^2.5.2"
     },
@@ -39,5 +39,5 @@
         "build": "webpack",
         "start": "nodemon"
     },
-    "version": "4.9.2"
+    "version": "5.0.0"
 }

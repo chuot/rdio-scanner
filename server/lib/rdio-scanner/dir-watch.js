@@ -173,7 +173,7 @@ class DirWatch {
                             }, dirWatch.delay);
 
                             watcher.on('raw', (_, filename, details) => {
-                                filename = details.watchedPath.indexOf(filename) === -1 
+                                filename = details.watchedPath.indexOf(filename) === -1
                                     ? path.join(details.watchedPath, filename)
                                     : details.watchedPath;
 
@@ -235,10 +235,17 @@ class DirWatch {
                 call.talkgroup = this.parseRegex(dirWatch.talkgroup, filename);
             }
 
-            await this.controller.importCall(call);
+            try {
+                await this.controller.importCall(call);
 
-            if (dirWatch.deleteAfter) {
-                this.unlink(filename);
+                if (dirWatch.deleteAfter) {
+                    this.unlink(filename);
+                }
+
+            } catch (error) {
+                console.error(`DirWatch: Error importing file ${file.base}, ${error.message}`);
+
+                return;
             }
         }
     }
@@ -304,13 +311,7 @@ class DirWatch {
 
                     const sys = this.controller.config.systems.find((system) => system.label === tags.TIT1);
 
-                    if (!sys) {
-                        console.error(`DirWatch: Unable to find system label ${tags.TIT1} for file ${filename}`);
-
-                        return;
-                    }
-
-                    const system = sys.id;
+                    const system = sys ? sys.id : frequency;
 
                     const source = parseInt(tags.artist, 10) || null;
 
@@ -333,8 +334,10 @@ class DirWatch {
                         talkgroup,
                     };
 
+                    const meta = { systemLabel: tags.TIT1 };
+
                     try {
-                        await this.controller.importCall(call);
+                        await this.controller.importCall(call, meta);
 
                         if (dirWatch.deleteAfter) {
                             this.unlink(filename);

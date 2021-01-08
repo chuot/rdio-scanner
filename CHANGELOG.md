@@ -1,3 +1,10 @@
+# Version 5.0
+
+- Add rdioScanner.options.autoPopulate which by default is true. The configuration file will now be automatically populated from new received calls with unknown system/talkgroup.
+- Add rdioScanner.options.sortTalkgroupswhich by default is false. Sort talkgroups based on their ID.
+- Remove default rdioScanner.systems for new installation, since now we have autoPopulate.
+- Node modules update.
+
 # Version 4.9
 
 - Add basic duplicate call detection and rejection.

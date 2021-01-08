@@ -90,9 +90,7 @@ class App {
         config.sequelize.port = config.sequelize.port || process.env.DB_PORT || null;
 
         if (config.sequelize.dialect === 'sqlite') {
-            config.sequelize.storage = config.sequelize.storage
-                ? path.resolve(__dirname, config.sequelize.storage)
-                : path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, 'database.sqlite');
+            config.sequelize.storage = config.sequelize.storage ? config.sequelize.storage : 'database.sqlite';
 
         } else {
             config.sequelize.storage = null;
@@ -184,7 +182,12 @@ class App {
             this.httpServer = http.createServer(this.router);
         }
 
-        this.sequelize = new Sequelize(Object.assign({}, { logging: false, }, this.config.sequelize));
+        this.sequelize = new Sequelize(Object.assign({}, {
+            logging: false,
+            storage: this.config.sequelize.storage
+                ? path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, this.config.sequelize.storage)
+                : '',
+        }, this.config.sequelize));
 
         this.rdioScanner = new RdioScanner(this);
 

@@ -45,9 +45,7 @@ $ ls -l ~/.rdio-scanner
 
 # 3. Configure Rdio Scanner
 
-The `config.json` is preloaded with 2 systems, which you probably don't want. They just serve as an example and can be replaced with new ones as desired.
-
-> Read the documentation [docs/config.md](./config.md) for an explanation of all configurable parameters.
+Read the documentation [docs/config.md](./config.md) for an explanation of all configurable parameters.
 
 If your [Rdio Scanner](https://github.com/chuot/rdio-scanner) is already running, be sure to restart it every time you make changes to the `config.json` file.
 

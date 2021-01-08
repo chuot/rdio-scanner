@@ -25,6 +25,7 @@ const WS = require('ws');
 class WebSocket {
     constructor(ctx = {}) {
         this.controller = ctx.controller;
+        this.controller.registerWebSocket(this);
 
         this.httpServer = ctx.httpServer;
 
@@ -72,6 +73,10 @@ class WebSocket {
                 this.wss.handleUpgrade(request, socket, head, (ws) => this.wss.emit('connection', ws, request));
             }
         });
+    }
+
+    getSockets() {
+        return this.wss.clients;
     }
 
     logClientsCount() {

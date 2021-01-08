@@ -1,4 +1,4 @@
-<fieldset class="fieldset">
+<fieldset *ngIf="groups?.length && (groups?.length || 0) >= 2" class="fieldset">
     <div>
         <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status"
             (click)="toggleGroup(group.label)">

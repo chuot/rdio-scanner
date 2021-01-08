@@ -75,6 +75,8 @@ class RdioScanner extends EventEmitter {
             app.config.rdioScanner = {};
         }
 
+        this.app = app;
+
         this.config = app.config.rdioScanner;
 
         this.models = new Models(this);

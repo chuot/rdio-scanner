@@ -55,6 +55,11 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
 
         // (object) Options definitions
         "options": {
+            // (boolean) Allows the automatic creation of systems/talkgroups not configured
+            // in the configuration file.
+            // Default value is true milliseconds
+            "autoPopulate": true,
+
             // (number) Delay in milliseconds before turning off the screen backlight when inactive
             // Default value is 5000 milliseconds
             "dimmerDelay": 5000,
@@ -76,6 +81,10 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
             // Default value is 7
             // Specifying a value of 0 will disable this feature
             "pruneDays": 7,
+
+            // (boolean) Sort talkgroups by their id
+            // Default value is false
+            "sortTalkgroups": false
         }
 
         // (object[]) Systems definitions
@@ -348,7 +357,7 @@ Default value is an empty array `[]` .
 
 - Ingest audio files from **SDRTrunk**
 
-> Note that **System name** on SDRTrunk **must match** the **system.label** in your configuration.
+> Note that **System name** on SDRTrunk **must match** the **system.label** in your configuration. If no match is found and if the `autoPopulate` option is enabled, then a new system will be created with the frequency of the control channel frequency as the system.id. It is therefore preferable to preconfigure the system with the correct system.id and system.label.
 
 ```json
   "dirWatch": [
@@ -608,7 +617,7 @@ Setting `options.keypadBeeps` to `2` set the keypadBeeps to Whistler style. It i
 
 ## Systems - rdioScanner.systems
 
-The heart of [Rdio Scanner](https://github.com/chuot/rdio-scanner) where all your systems and talkgroups are defined. Audio files to unknown systems / talkgroups will not be ingested.
+The heart of [Rdio Scanner](https://github.com/chuot/rdio-scanner) where all your systems and talkgroups are defined. Audio files to unknown systems / talkgroups will not be ingested unless `rdioScanner.options.autoPopulate` is true.
 
 **Definitions of the rdioScanner.systems object**
 
