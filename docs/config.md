@@ -57,7 +57,7 @@ This file is at the heart of [Rdio Scanner](https://github.com/chuot/rdio-scanne
         "options": {
             // (boolean) Allows the automatic creation of systems/talkgroups not configured
             // in the configuration file.
-            // Default value is true milliseconds
+            // Default value is true
             "autoPopulate": true,
 
             // (number) Delay in milliseconds before turning off the screen backlight when inactive
