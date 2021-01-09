@@ -398,8 +398,7 @@ Default value is an empty array `[]` .
       "extension": "wav",
       "mask": "TOWER_#DATE_#TIME_#HZ",
       "system": 61,
-      "talkgroup": 61,
-      "type": "trunk-recorder"
+      "talkgroup": 61
     }
   ]
 ```
