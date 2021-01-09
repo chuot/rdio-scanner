@@ -32,5 +32,5 @@
         "build": "ng build --base-href ./ --prod",
         "start": "ng serve"
     },
-    "version": "5.0.1"
+    "version": "5.0.2"
 }

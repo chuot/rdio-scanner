@@ -10,6 +10,10 @@ _v5.0.1_
 - Remove the EBU R128 loudness normalization as it's not working as intended.
 - Fix the API key validation when using the complex syntax.
 
+_v5.0.2_
+
+- Fix rdioScanner.options.disableAudioConversion which was ignored when true.
+
 # Version 4.9
 
 - Add basic duplicate call detection and rejection.

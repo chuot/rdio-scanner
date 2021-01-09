@@ -545,7 +545,8 @@ class Controller extends EventEmitter {
 
         if (!system || !talkgroup) {
             console.log(`NewCall: system=${call.system || 'unknown'} talkgroup=${call.talkgroup || 'unknown'} `
-                + `file=${call.audioName} No matching system/talkgroup`);
+                + `file=${call.audioName} No m
+                atching system/talkgroup`);
 
             return;
         }
@@ -573,7 +574,7 @@ class Controller extends EventEmitter {
             return;
         }
 
-        if (!this.config.disableAudioConversion) {
+        if (!this.config.options.disableAudioConversion) {
             try {
                 call = await this.convertCallAudio(call);
 
