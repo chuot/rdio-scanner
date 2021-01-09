@@ -175,8 +175,6 @@ class Controller extends EventEmitter {
                 const proc = spawn('ffmpeg', [
                     '-i',
                     '-',
-                    '-af',
-                    'loudnorm=I=-16:dual_mono=true:TP=-1.5:LRA=11',
                     ...metadata,
                     '-c:a',
                     'aac',
@@ -365,8 +363,8 @@ class Controller extends EventEmitter {
         return { dimmerDelay, keyboardShortcuts, keypadBeeps };
     }
 
-    getScope(token, store = this.config.access) {
-        const parse = (record, first = true) => {
+    getScope(token, store = this.config.access, systems = this.config.systems) {
+        const parse = (record) => {
             const parseSystem = (system, first = true) => {
                 const parseTalkgroup = (talkgroup, first = true) => {
                     if (Array.isArray(talkgroup)) {
@@ -387,7 +385,7 @@ class Controller extends EventEmitter {
                     return system.map((sys) => parseSystem(sys, false)).filter((sys) => sys.length);
 
                 } else if (system !== null && typeof system === 'object' && typeof system.id === 'number') {
-                    if (this.config.systems.find((sys) => sys.id === system.id)) {
+                    if (systems.find((sys) => sys.id === system.id)) {
                         const talkgroups = parseTalkgroup(system.talkgroups);
 
                         if (talkgroups.length) {
@@ -402,17 +400,17 @@ class Controller extends EventEmitter {
                     }
 
                 } else if (typeof system === 'number') {
-                    if (this.config.systems.find((sys) => sys.id === system)) {
-                        const systems = parseSystem(this.config.systems.find((sys) => sys.id === system), false);
+                    if (systems.find((sys) => sys.id === system)) {
+                        const parsed = parseSystem(this.config.systems.find((sys) => sys.id === system), false);
 
-                        return first ? [systems] : systems;
+                        return first ? [parsed] : parsed;
 
                     } else {
                         return [];
                     }
 
                 } else if (system === '*') {
-                    return parseSystem(this.config.systems);
+                    return parseSystem(systems);
 
                 } else {
                     return [];
@@ -420,18 +418,16 @@ class Controller extends EventEmitter {
             };
 
             if (record === null || record === undefined) {
-                return this.isAccessRestricted ? [] : parseSystem(this.config.systems);
+                return this.isAccessRestricted ? [] : parseSystem(systems);
 
             } else if (Array.isArray(record)) {
                 return parse(record.find((acc) => acc === token || acc.code === token || acc.key === token));
 
             } else if (record !== null && typeof record === 'object' && (record.code === token || record.key === token)) {
-                const systems = parseSystem(record.systems);
-
-                return first ? systems : systems;
+                return parseSystem(record.systems);
 
             } else if (record === token) {
-                return parseSystem(this.config.systems);
+                return parseSystem(systems);
 
             } else {
                 return [];
@@ -759,23 +755,17 @@ class Controller extends EventEmitter {
     }
 
     validateApiKey(apiKey, system, talkgroup) {
-        if (typeof apiKey === 'string' && apiKey === this.config.apiKeys) {
-            return true;
+        const systems = this.config.options.autoPopulate ? [{ id: system, talkgroups: [talkgroup] }] : this.config.systems;
 
-        } else if (Array.isArray(this.config.apiKeys) && this.config.apiKeys.includes(apiKey)) {
-            return true;
+        const scope = this.getScope(apiKey, this.config.apiKeys, systems);
 
-        } else {
-            const scope = this.getScope(apiKey, this.config.apiKeys);
-
-            return Array.isArray(scope[system]) && (
-                scope[system].includes(talkgroup) || this.config.systems.some((sys) => {
-                    return sys.id === system && sys.talkgroups.some((tg) => {
-                        return Array.isArray(tg.patches) && tg.patches.includes(talkgroup);
-                    })
+        return Array.isArray(scope[system]) && (
+            scope[system].includes(talkgroup) || this.config.systems.some((sys) => {
+                return sys.id === system && sys.talkgroups.some((tg) => {
+                    return Array.isArray(tg.patches) && tg.patches.includes(talkgroup);
                 })
-            );
-        }
+            })
+        );
     }
 }
 
