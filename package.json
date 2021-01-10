@@ -10,5 +10,5 @@
         "start": "node run",
         "update": "node update"
     },
-    "version": "5.0.2"
+    "version": "5.0.3"
 }

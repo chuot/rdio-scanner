@@ -14,6 +14,10 @@ _v5.0.2_
 
 - Fix rdioScanner.options.disableAudioConversion which was ignored when true.
 
+_v5.0.3_
+
+- Fix error with docker builds where sequelize can't find the sqlite database.
+
 # Version 4.9
 
 - Add basic duplicate call detection and rejection.

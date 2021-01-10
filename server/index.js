@@ -182,12 +182,12 @@ class App {
             this.httpServer = http.createServer(this.router);
         }
 
-        this.sequelize = new Sequelize(Object.assign({}, {
+        this.sequelize = new Sequelize(Object.assign({}, this.config.sequelize, {
             logging: false,
             storage: this.config.sequelize.storage
                 ? path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || __dirname, this.config.sequelize.storage)
                 : '',
-        }, this.config.sequelize));
+        }));
 
         this.rdioScanner = new RdioScanner(this);
 
