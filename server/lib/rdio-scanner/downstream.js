@@ -21,7 +21,7 @@
 
 const EventEmitter = require('events');
 const FormData = require('form-data');
-const url = require('url');
+const { URL } = require('url');
 
 class Downstream {
     constructor(ctx = {}) {
@@ -111,7 +111,7 @@ class Downstream {
     }
 
     exportCallToRdioScanner(call, downstream) {
-        const apiUrl = url.resolve(downstream.url, '/api/call-upload');
+        const apiUrl = new URL('/api/call-upload', downstream.url);
 
         const form = new FormData();
 
@@ -136,7 +136,13 @@ class Downstream {
         form.append('system', this.getSystemId(call, downstream));
         form.append('talkgroup', this.getTalkgroupId(call, downstream));
 
-        form.submit(apiUrl, (error, response) => {
+        form.submit({
+            host: apiUrl.hostname,
+            path: apiUrl.pathname,
+            port: apiUrl.port,
+            protocol: apiUrl.protocol,
+            rejectUnauthorized: false,
+        }, (error, response) => {
             const message = `Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url}`;
 
             if (error) {

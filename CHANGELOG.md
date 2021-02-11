@@ -18,6 +18,13 @@ _v5.0.3_
 
 - Fix error with docker builds where sequelize can't find the sqlite database.
 
+_v5.0.4_
+
+- Improvement to load-rrdb and load-rr functions.
+- Sort groups on the selection panel.
+- Allow downstream to other instances running with self-signed certificates.
+- Node modules update.
+
 # Version 4.9
 
 - Add basic duplicate call detection and rejection.

@@ -64,7 +64,7 @@ class Utils {
             }
         }
 
-        system.talkgroups.sort((a, b) => a.id - b.id);
+        system.talkgroups.sort((a, b) => a.label.localeCompare(b.label));
 
         this.config.systems = this.config.systems.filter((system) => system.id !== sysId);
 
@@ -99,18 +99,19 @@ class Utils {
         };
 
         for (let line of csv) {
+            const encrypted = typeof line[2] === 'string' ? line[2].includes('E') : false;
             const id = parseInt(line[0], 10);
             const label = line[3] || '';
             const name = line[4] || '';
             const tag = line[5] || '';
             const group = line[6] || '';
 
-            if (id > 0 && label.length && name.length && tag.length && group.length) {
+            if (!encrypted && id > 0 && label.length && name.length && tag.length && group.length) {
                 system.talkgroups.push({ id, label, name, tag, group });
             }
         }
 
-        system.talkgroups.sort((a, b) => a.id - b.id);
+        system.talkgroups.sort((a, b) => a.label.localeCompare(b.label));
 
         this.config.systems = this.config.systems.filter((system) => system.id !== sysId);
 

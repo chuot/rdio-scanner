@@ -1,4 +1,5 @@
 /.env
+/*.crt
 /*.pem
 /*.key
 /config.json*

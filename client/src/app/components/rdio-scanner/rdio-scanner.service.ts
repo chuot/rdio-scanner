@@ -451,7 +451,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     queue(call: RdioScannerCall, options?: { priority?: boolean }): void {
-        if (!call?.audio) {
+        if (!call?.audio || this.livefeedMode === RdioScannerLivefeedMode.Offline) {
             return;
         }
 
@@ -889,7 +889,7 @@ export class AppRdioScannerService implements OnDestroy {
             const status = allOff ? RdioScannerGroupStatus.Off : allOn ? RdioScannerGroupStatus.On : RdioScannerGroupStatus.Partial;
 
             return { label, status };
-        });
+        }).sort((a, b) => a.label.localeCompare(b.label));
     }
 
     private rebuildLivefeedMap(): void {
