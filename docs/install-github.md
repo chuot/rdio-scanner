@@ -12,10 +12,11 @@ Make sure your operating system is **fully updated** and that the prerequisites 
 - [git](https://git-scm.com/downloads)
 - [Node.js LTS or higher](https://nodejs.org/en/download/) (get it [here](https://github.com/nodesource/distributions) if your distro doesn't have the required package)
 - [npm](https://www.npmjs.com/get-npm)
+- [python](https://www.python.org/) (python is required to compile sqlite node package)
 - [SQLite 3](https://www.sqlite.org/download.html)
 
 ```bash
-$ which curl ffmpeg gcc g++ git make node npm sqlite3
+$ which curl ffmpeg gcc g++ git make node npm python sqlite3
 /usr/bin/curl
 /usr/bin/ffmpeg
 /usr/bin/gcc
@@ -24,8 +25,11 @@ $ which curl ffmpeg gcc g++ git make node npm sqlite3
 /usr/bin/make
 /usr/bin/node
 /usr/bin/npm
+/usr/bin/python
 /usr/bin/sqlite3
 ```
+
+> Ubuntu distro provides an old Node.js package. Make sure to use at least the current LTS version. Use the link above to get the latest LTS version.
 
 # 2. Clone the Rdio Scanner GitHub Repository
 

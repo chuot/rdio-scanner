@@ -25,6 +25,12 @@ _v5.0.4_
 - Allow downstream to other instances running with self-signed certificates.
 - Node modules update.
 
+_v5.0.5_
+
+- Node modules security update.
+- Improve documentation in regards to minimal Node.js LTS version.
+- Add python to build requirements (to be able to build SQLite node module).
+
 # Version 4.9
 
 - Add basic duplicate call detection and rejection.
