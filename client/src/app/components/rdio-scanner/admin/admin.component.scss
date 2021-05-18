@@ -1,0 +1,38 @@
+rdio-scanner-admin {
+  .mat-expansion-panel-header {
+    user-select: none;
+  }
+
+  .mat-expansion-panel-header-title {
+    align-items: center;
+
+    .mat-icon:not(.mat-warn):first-of-type {
+      color: rgba(0, 0, 0, 0.7);
+      margin-right: 12px;
+    }
+  }
+}
+
+@media (max-width: 719px) {
+  rdio-scanner-admin {
+    .mat-expansion-panel-header {
+      padding: 0 0.5rem;
+    }
+
+    .mat-expansion-panel-body {
+      padding: 0 0.5rem 16px;
+    }
+  }
+}
+
+@media (min-width: 720px) {
+  rdio-scanner-admin {
+    .mat-expansion-panel-header {
+      padding: 0 1rem;
+    }
+
+    .mat-expansion-panel-body {
+      padding: 0 1rem 16px;
+    }
+  }
+}

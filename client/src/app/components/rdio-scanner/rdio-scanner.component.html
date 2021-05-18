@@ -10,7 +10,7 @@
             </mat-toolbar>
             <div #scrollableSearch>
                 <div>
-                    <app-rdio-scanner-search #searchComponent></app-rdio-scanner-search>
+                    <rdio-scanner-search #searchComponent></rdio-scanner-search>
                 </div>
             </div>
         </div>
@@ -26,16 +26,16 @@
             </mat-toolbar>
             <div #scrollableSelect>
                 <div>
-                    <app-rdio-scanner-select></app-rdio-scanner-select>
+                    <rdio-scanner-select></rdio-scanner-select>
                 </div>
             </div>
         </div>
     </mat-sidenav>
     <mat-sidenav-content>
-        <app-rdio-scanner-main
+        <rdio-scanner-main
             (openSearchPanel)="scrollableSearch.scrollTo(0, 0); searchPanel.open(); searchComponent.searchCalls()"
             (openSelectPanel)="scrollableSelect.scrollTo(0, 0); selectPanel.open();"
             (toggleFullscreen)="toggleFullscreen()">
-        </app-rdio-scanner-main>
+        </rdio-scanner-main>
     </mat-sidenav-content>
 </mat-sidenav-container>

@@ -1,0 +1,19 @@
+.groups {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+
+  > div {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    margin-right: 0.5rem;
+  }
+}
+
+@media (max-width: 719px) {
+  .groups > div {
+    flex: 100%;
+  }
+}

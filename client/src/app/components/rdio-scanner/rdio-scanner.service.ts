@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,13 +49,16 @@ enum WebsocketCallFlag {
 enum WebsocketCommand {
     Call = 'CAL',
     Config = 'CFG',
+    Expired = 'XPR',
     ListCall = 'LCL',
     LivefeedMap = 'LFM',
+    Max = 'MAX',
     Pin = 'PIN',
+    Ver = 'VER',
 }
 
 @Injectable()
-export class AppRdioScannerService implements OnDestroy {
+export class RdioScannerService implements OnDestroy {
     static LOCAL_STORAGE_KEY = 'rdio-scanner';
 
     event = new EventEmitter<RdioScannerEvent>();
@@ -74,7 +77,6 @@ export class AppRdioScannerService implements OnDestroy {
     private config: RdioScannerConfig = {
         dimmerDelay: false,
         groups: {},
-        keyboardShortcuts: true,
         keypadBeeps: false,
         systems: [],
         tags: {},
@@ -331,10 +333,18 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     loadAndDownload(id: string): void {
+        if (!id) {
+            return;
+        }
+
         this.getCall(id, WebsocketCallFlag.Download);
     }
 
     loadAndPlay(id: string): void {
+        if (!id) {
+            return;
+        }
+
         if (this.skipDelay) {
             this.skipDelay.unsubscribe();
 
@@ -765,16 +775,18 @@ export class AppRdioScannerService implements OnDestroy {
         if (Array.isArray(message)) {
             switch (message[0]) {
                 case WebsocketCommand.Call:
-                    if (message[2] === WebsocketCallFlag.Download) {
-                        this.download(message[1]);
+                    if (message[1] !== null) {
+                        if (message[2] === WebsocketCallFlag.Download) {
+                            this.download(message[1]);
 
-                    } else if (message[2] === WebsocketCallFlag.Play && message[1]?.id === this.playbackPending) {
-                        this.playbackPending = undefined;
+                        } else if (message[2] === WebsocketCallFlag.Play && message[1]?.id === this.playbackPending) {
+                            this.playbackPending = undefined;
 
-                        this.queue(this.transformCall(message[1]), { priority: true });
+                            this.queue(this.transformCall(message[1]), { priority: true });
 
-                    } else {
-                        this.queue(this.transformCall(message[1]));
+                        } else {
+                            this.queue(this.transformCall(message[1]));
+                        }
                     }
 
                     break;
@@ -785,7 +797,6 @@ export class AppRdioScannerService implements OnDestroy {
                     this.config = {
                         dimmerDelay: typeof config.dimmerDelay === 'number' ? config.dimmerDelay : 5000,
                         groups: typeof config.groups !== null && typeof config.groups === 'object' ? config.groups : {},
-                        keyboardShortcuts: config.keyboardShortcuts,
                         keypadBeeps: config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
                         systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
@@ -808,6 +819,11 @@ export class AppRdioScannerService implements OnDestroy {
 
                     break;
 
+                case WebsocketCommand.Expired:
+                    this.event.emit({ auth: true, expired: true });
+
+                    break;
+
                 case WebsocketCommand.ListCall:
                     this.playbackList = message[1];
 
@@ -820,6 +836,11 @@ export class AppRdioScannerService implements OnDestroy {
                             this.playbackNextCall();
                         }
                     }
+
+                    break;
+
+                case WebsocketCommand.Max:
+                    this.event.emit({ auth: true, tooMany: true });
 
                     break;
 
@@ -893,7 +914,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private rebuildLivefeedMap(): void {
-        this.livefeedMap = this.config.systems.reduce((sysMap, sys) => {
+        const livefeedMap = this.config.systems.reduce((sysMap, sys) => {
             const tgs = sys.talkgroups.map((tg) => tg.id.toString());
 
             sysMap[sys.id] = sys.talkgroups.reduce((tgMap, tg) => {
@@ -907,6 +928,14 @@ export class AppRdioScannerService implements OnDestroy {
             return sysMap;
         }, {} as RdioScannerLivefeedMap);
 
+        if (this.livefeedMapPriorToHoldSystem != null) {
+            this.livefeedMapPriorToHoldSystem = livefeedMap;
+        } else if (this.livefeedMapPriorToHoldTalkgroup != null) {
+            this.livefeedMapPriorToHoldTalkgroup = livefeedMap;
+        } else {
+            this.livefeedMap = livefeedMap;
+        }
+
         this.storeLivefeedMap();
 
         this.rebuildGroups();
@@ -919,7 +948,7 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private restoreLivefeed(): void {
-        const map = window?.localStorage?.getItem(AppRdioScannerService.LOCAL_STORAGE_KEY);
+        const map = window?.localStorage?.getItem(RdioScannerService.LOCAL_STORAGE_KEY);
 
         if (map) {
             try {
@@ -948,11 +977,11 @@ export class AppRdioScannerService implements OnDestroy {
     }
 
     private storeLivefeedMap(): void {
-        window?.localStorage?.setItem(AppRdioScannerService.LOCAL_STORAGE_KEY, JSON.stringify(this.livefeedMap));
+        window?.localStorage?.setItem(RdioScannerService.LOCAL_STORAGE_KEY, JSON.stringify(this.livefeedMap));
     }
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
-        if (Array.isArray(this.config?.systems)) {
+        if (call && Array.isArray(this.config?.systems)) {
             call.systemData = this.config.systems.find((system) => system.id === call.system);
 
             if (Array.isArray(call.systemData?.talkgroups)) {

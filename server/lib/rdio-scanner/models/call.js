@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +19,12 @@
 
 'use strict';
 
-const { DataTypes, Model } = require('sequelize');
+import Sequelize from 'sequelize';
 
-class RdioScannerCall extends Model { }
+class RdioScannerCall extends Sequelize.Model { }
 
-function rdioScannerCallFactory(ctx = {}) {
-    RdioScannerCall.init(rdioScannerCallFactory.schema, {
+export function callFactory(ctx) {
+    RdioScannerCall.init(callFactory.schema, {
         modelName: 'rdioScannerCall',
         sequelize: ctx.sequelize,
         timestamps: false,
@@ -33,54 +33,52 @@ function rdioScannerCallFactory(ctx = {}) {
     return RdioScannerCall;
 }
 
-rdioScannerCallFactory.schema = {
+callFactory.schema = {
     id: {
-        type: DataTypes.INTEGER,
+        type: Sequelize.DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
     },
     audio: {
-        type: DataTypes.BLOB('long'),
+        type: Sequelize.DataTypes.BLOB('long'),
         allowNull: false,
     },
     audioName: {
-        type: DataTypes.STRING,
+        type: Sequelize.DataTypes.STRING,
         allowNull: true,
     },
     audioType: {
-        type: DataTypes.STRING,
+        type: Sequelize.DataTypes.STRING,
         allowNull: true,
     },
     dateTime: {
-        type: DataTypes.DATE,
+        type: Sequelize.DataTypes.DATE,
         allowNull: false,
     },
     frequencies: {
-        type: DataTypes.JSON,
+        type: Sequelize.DataTypes.JSON,
         defaultValue: [],
         allowNull: false,
     },
     frequency: {
-        type: DataTypes.INTEGER,
+        type: Sequelize.DataTypes.INTEGER,
         allowNull: true,
     },
     source: {
-        type: DataTypes.INTEGER,
+        type: Sequelize.DataTypes.INTEGER,
         allownull: true,
     },
     sources: {
-        type: DataTypes.JSON,
+        type: Sequelize.DataTypes.JSON,
         defaultValue: [],
         allowNull: false,
     },
     system: {
-        type: DataTypes.INTEGER,
+        type: Sequelize.DataTypes.INTEGER,
         allowNull: false,
     },
     talkgroup: {
-        type: DataTypes.INTEGER,
+        type: Sequelize.DataTypes.INTEGER,
         allowNull: false,
     },
 };
-
-module.exports = rdioScannerCallFactory;

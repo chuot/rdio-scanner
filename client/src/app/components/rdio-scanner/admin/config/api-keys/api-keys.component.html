@@ -1,0 +1,80 @@
+<div class="row top">
+    <p class="mat-body">API keys are used for recorder upload scripts and downstream instances. Each of them must
+        authenticate with an API key to exchange audio files.</p>
+    <button type="button" mat-button color="accent" (click)="add()">New API key</button>
+</div>
+<p *ngIf="!apiKeys.length" class="mat-small text-center">No defined API keys</p>
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="apiKeys" (cdkDropListDropped)="drop($event)">
+    <mat-expansion-panel *ngFor="let apiKey of apiKeys; index as i" cdkDrag>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+                {{ apiKey.value.ident || 'NewApiKey' }}
+                <mat-icon *ngIf="apiKey.invalid" color="warn">error</mat-icon>
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <ng-container [formGroup]="apiKey">
+            <div class="row">
+                <p>
+                    <span class="mat-body">Disabled</span><br>
+                    <span class="mat-caption">Disable the API key.</span>
+                </p>
+                <div>
+                    <mat-slide-toggle color="primary" formControlName="disabled"></mat-slide-toggle>
+                </div>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Key</span><br>
+                    <span class="mat-caption">Api key.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input #key type="text" matInput formControlName="key" placeholder="Key">
+                    <button type="button" mat-icon-button matSuffix (click)="copy(key)">
+                        <mat-icon>content_copy</mat-icon>
+                    </button>
+                    <mat-error *ngIf="apiKey.get('key')?.hasError('duplicate')">
+                        Key is already defined
+                    </mat-error>
+                    <mat-error *ngIf="apiKey.get('key')?.hasError('required')">
+                        Key is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Ident</span><br>
+                    <span class="mat-caption">Dummy identifier which serves only to identify this API key is for
+                        whom.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="text" matInput formControlName="ident" placeholder="Ident">
+                    <mat-error *ngIf="apiKey.get('ident')?.hasError('required')">
+                        Ident is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Access</span><br>
+                    <span class="mat-caption">
+                        This API key allows access to <u>
+                            <ng-container *ngIf="apiKey.value.systems === '*'">all</ng-container>
+                            <ng-container *ngIf="apiKey.value.systems !== '*'">some</ng-container>
+                        </u> systems and talkgroups.
+                    </span>
+                </p>
+                <div>
+                    <button type="button" mat-button [disabled]="apiKey.disabled" (click)="select(apiKey)">
+                        Choose systems
+                    </button>
+                </div>
+            </div>
+            <div class="row bottom">
+                <button type="button" mat-button color="warn" (click)="remove(i)">
+                    Delete API key
+                </button>
+            </div>
+        </ng-container>
+    </mat-expansion-panel>
+</mat-accordion>

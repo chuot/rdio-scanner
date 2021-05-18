@@ -1,0 +1,37 @@
+<ng-container *ngIf="form" [formGroup]="form">
+    <div class="row">
+        <p>
+            <span class="mat-body">Id</span><br>
+            <span class="mat-caption">Unit identifier in decimal format.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <input type="number" matInput formControlName="id" placeholder="Id">
+            <mat-error *ngIf="form?.get('id')?.hasError('duplicate')">
+                Id is already defined
+            </mat-error>
+            <mat-error *ngIf="form?.get('id')?.hasError('min')">
+                Id is invalid
+            </mat-error>
+            <mat-error *ngIf="form?.get('id')?.hasError('required')">
+                Id is required
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Label</span><br>
+            <span class="mat-caption">Unit label.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <input type="text" matInput formControlName="label" placeholder="Label">
+            <mat-error *ngIf="form?.get('label')?.hasError('required')">
+                Label is required
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row bottom">
+        <button type="button" mat-button color="warn" (click)="remove.emit()">
+            Delete unit
+        </button>
+    </div>
+</ng-container>

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,14 @@
 import { CommonModule } from '@angular/common';
 import { ModuleWithProviders, NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { ExtraOptions, RouterModule, Routes } from '@angular/router';
 import { AppLocaleModule } from './locale/locale.module';
 import { AppMaterialModule } from './material/material.module';
+
+export interface AppSharedModuleConfig {
+    routerExtraOptions?: ExtraOptions;
+    routerRoutes?: Routes;
+}
 
 @NgModule({
     exports: [
@@ -30,14 +36,25 @@ import { AppMaterialModule } from './material/material.module';
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        RouterModule,
     ],
 })
 export class AppSharedModule {
-    static forRoot(): ModuleWithProviders<AppSharedModule> {
+    static forChild(config: AppSharedModuleConfig = {}): ModuleWithProviders<AppSharedModule> {
+        return {
+            ngModule: AppSharedModule,
+            providers: [
+                ...RouterModule.forChild(config.routerRoutes || []).providers || [],
+            ],
+        };
+    }
+
+    static forRoot(config: AppSharedModuleConfig = {}): ModuleWithProviders<AppSharedModule> {
         return {
             ngModule: AppSharedModule,
             providers: [
                 ...AppLocaleModule.forRoot().providers || [],
+                ...RouterModule.forRoot(config.routerRoutes || [], config.routerExtraOptions || {}).providers || [],
             ],
         };
     }

@@ -1,0 +1,64 @@
+rdio-scanner-admin-systems-selection {
+  > div {
+    min-width: 600px;
+  }
+
+  .flex {
+    flex: 1;
+  }
+
+  .flex-row {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+
+    &.wrap {
+      flex-wrap: wrap;
+
+      > * {
+        box-sizing: border-box;
+        overflow: hidden;
+        padding: 0 0.125rem;
+
+        &:last-child {
+          margin-right: auto;
+        }
+      }
+    }
+  }
+
+  .indent {
+    margin-left: 24px;
+  }
+
+  .margin {
+    margin-bottom: 1rem;
+  }
+
+  .mat-checkbox,
+  .mat-checkbox-layout {
+    max-width: 100%;
+  }
+
+  .mat-checkbox-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mat-dialog-actions {
+    justify-content: space-between;
+  }
+
+  @media (max-width: 719px) {
+    .flex-row.wrap > * {
+      flex: 0 0 50%;
+    }
+  }
+
+  @media (min-width: 720px) {
+    .flex-row.wrap > * {
+      flex: 0 0 20%;
+    }
+  }
+}

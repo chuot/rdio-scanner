@@ -1,0 +1,18 @@
+<div class="row top">
+    <p class="mat-body">All system talkgroups must be associated with a group, which is then used to toggle between
+        active talkgroups.</p>
+    <button type="button" mat-button color="accent" (click)="add()">New group</button>
+</div>
+<div class="groups">
+    <div *ngFor="let group of groups; index as i" [formGroup]="group">
+        <button type="button" mat-icon-button color="warn" (click)="remove(i)">
+            <mat-icon>clear</mat-icon>
+        </button>
+        <mat-form-field floatLabel="never">
+            <input type="text" matInput formControlName="label" placeholder="Group">
+            <mat-error *ngIf="groups[i].get('label')?.hasError('required')">
+                Group is required
+            </mat-error>
+        </mat-form-field>
+    </div>
+</div>

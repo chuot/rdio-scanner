@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,17 +19,63 @@
 
 'use strict';
 
-const rdioScannerCallFactory = require('../models/call');
+export default {
 
-module.exports = {
-
-    up: async (queryInterface) => {
+    up: async (queryInterface, Sequelize) => {
         const transaction = await queryInterface.sequelize.transaction();
 
         try {
             await queryInterface.dropTable('rdioScannerSystems', { transaction });
 
-            await queryInterface.createTable('rdioScannerCalls2', rdioScannerCallFactory.schema, { transaction });
+            await queryInterface.createTable('rdioScannerCalls2', {
+                id: {
+                    type: Sequelize.DataTypes.INTEGER,
+                    primaryKey: true,
+                    autoIncrement: true,
+                },
+                audio: {
+                    type: Sequelize.DataTypes.BLOB('long'),
+                    allowNull: false,
+                },
+                audioName: {
+                    type: Sequelize.DataTypes.STRING,
+                    allowNull: true,
+                },
+                audioType: {
+                    type: Sequelize.DataTypes.STRING,
+                    allowNull: true,
+                },
+                dateTime: {
+                    type: Sequelize.DataTypes.DATE,
+                    allowNull: false,
+                },
+                frequencies: {
+                    type: Sequelize.DataTypes.JSON,
+                    defaultValue: [],
+                    allowNull: false,
+                },
+                frequency: {
+                    type: Sequelize.DataTypes.INTEGER,
+                    allowNull: true,
+                },
+                source: {
+                    type: Sequelize.DataTypes.INTEGER,
+                    allownull: true,
+                },
+                sources: {
+                    type: Sequelize.DataTypes.JSON,
+                    defaultValue: [],
+                    allowNull: false,
+                },
+                system: {
+                    type: Sequelize.DataTypes.INTEGER,
+                    allowNull: false,
+                },
+                talkgroup: {
+                    type: Sequelize.DataTypes.INTEGER,
+                    allowNull: false,
+                },
+            }, { transaction });
 
             await queryInterface.sequelize.query([
                 'INSERT INTO `rdioScannerCalls2`',

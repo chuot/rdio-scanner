@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,14 +31,14 @@ import {
     RdioScannerSystem,
     RdioScannerTalkgroup,
 } from '../rdio-scanner';
-import { AppRdioScannerService } from '../rdio-scanner.service';
+import { RdioScannerService } from '../rdio-scanner.service';
 
 @Component({
-    selector: 'app-rdio-scanner-search',
+    selector: 'rdio-scanner-search',
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
 })
-export class AppRdioScannerSearchComponent implements OnDestroy {
+export class RdioScannerSearchComponent implements OnDestroy {
     call: RdioScannerCall | undefined;
     callPending: string | undefined;
 
@@ -68,7 +68,7 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
 
     private config: RdioScannerConfig | undefined;
 
-    private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private limit = 200;
 
@@ -77,18 +77,18 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
     @ViewChild(MatPaginator, { read: MatPaginator }) private paginator: MatPaginator | undefined;
 
     constructor(
-        private appRdioScannerService: AppRdioScannerService,
+        private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
 
     download(id: string): void {
-        this.appRdioScannerService.loadAndDownload(id);
+        this.rdioScannerService.loadAndDownload(id);
     }
 
     formChangeHandler(): void {
         if (this.livefeedPlayback) {
-            this.appRdioScannerService.stopPlaybackMode();
+            this.rdioScannerService.stopPlaybackMode();
         }
 
         this.paginator?.firstPage();
@@ -127,16 +127,14 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
                 .filter((tag) => this.config?.systems
                     .some((system) => system.talkgroups
                         .some((talkgroup) => talkgroup.group === selectedGroup && talkgroup.tag === tag)))
-                .sort()
             : selectedTalkgroup
                 ? [selectedTalkgroup.tag]
                 : selectedSystem
                     ? Object.keys(this.config.tags)
                         .filter((tag) => selectedSystem.talkgroups
                             .some((talkgroup) => talkgroup.tag === tag))
-                        .sort()
                     : Object.keys(this.config.tags)
-                        .sort();
+        this.optionsTag.sort((a, b) => a.localeCompare(b));
 
         this.optionsTalkgroup = selectedGroup
             ? selectedSystem
@@ -176,18 +174,16 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
                 .filter((group) => Object.keys(this.config?.groups[group] || {})
                     .map((system) => +system)
                     .includes(selectedSystem.id))
-                .sort()
             : Object.keys(this.config.groups)
-                .sort();
+        this.optionsGroup.sort((a, b) => a.localeCompare(b));
 
         this.optionsTag = selectedSystem
             ? Object.keys(this.config.tags)
                 .filter((tag) => Object.keys(this.config?.tags[tag] || {})
                     .map((system) => +system)
                     .includes(selectedSystem.id))
-                .sort()
             : Object.keys(this.config.tags)
-                .sort();
+        this.optionsTag.sort((a, b) => a.localeCompare(b));
 
         this.optionsTalkgroup = selectedSystem
             ? selectedSystem.talkgroups
@@ -223,16 +219,14 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
                 .filter((group) => this.config?.systems
                     .some((system) => system.talkgroups
                         .some((talkgroup) => talkgroup.group === group && talkgroup.tag === selectedTag)))
-                .sort()
             : selectedTalkgroup
                 ? [selectedTalkgroup.group]
                 : selectedSystem
                     ? Object.keys(this.config.groups)
                         .filter((group) => selectedSystem.talkgroups
                             .some((talkgroup) => talkgroup.group === group))
-                        .sort()
                     : Object.keys(this.config.groups)
-                        .sort();
+        this.optionsGroup.sort((a, b) => a.localeCompare(b));
 
         this.optionsSystem = selectedTag
             ? this.config.systems
@@ -283,26 +277,22 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
         this.optionsGroup = selectedTalkgroup
             ? Object.keys(this.config.groups)
                 .filter((group) => group === selectedTalkgroup.group)
-                .sort()
             : selectedSystem
                 ? Object.keys(this.config.groups)
                     .filter((group) => selectedSystem.talkgroups
                         .some((talkgroup) => talkgroup.group === group))
-                    .sort()
                 : Object.keys(this.config.groups)
-                    .sort();
+        this.optionsGroup.sort((a, b) => a.localeCompare(b));
 
         this.optionsTag = selectedTalkgroup
             ? Object.keys(this.config.tags)
                 .filter((tag) => tag === selectedTalkgroup.tag)
-                .sort()
             : selectedSystem
                 ? Object.keys(this.config.tags)
                     .filter((tag) => selectedSystem.talkgroups
                         .some((talkgroup) => talkgroup.tag === tag))
-                    .sort()
                 : Object.keys(this.config.tags)
-                    .sort();
+        this.optionsTag.sort((a, b) => a.localeCompare(b));
 
         this.form.patchValue({
             group: selectedGroup ? this.optionsGroup.findIndex((group) => group === selectedGroup) : -1,
@@ -317,7 +307,7 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
     }
 
     play(id: string): void {
-        this.appRdioScannerService.loadAndPlay(id);
+        this.rdioScannerService.loadAndPlay(id);
     }
 
     refreshResults(): void {
@@ -352,11 +342,6 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
             tag: -1,
             talkgroup: -1,
         });
-
-        this.optionsGroup = Object.keys(this.config?.groups || []);
-        this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
-        this.optionsTag = Object.keys(this.config?.tags || []);
-        this.optionsTalkgroup = [];
 
         this.paginator?.firstPage();
 
@@ -420,15 +405,15 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
 
         this.form.disable();
 
-        this.appRdioScannerService.searchCalls(options);
+        this.rdioScannerService.searchCalls(options);
     }
 
     stop(): void {
         if (this.livefeedPlayback) {
-            this.appRdioScannerService.stopPlaybackMode();
+            this.rdioScannerService.stopPlaybackMode();
 
         } else {
-            this.appRdioScannerService.stop();
+            this.rdioScannerService.stop();
         }
     }
 
@@ -455,7 +440,12 @@ export class AppRdioScannerSearchComponent implements OnDestroy {
         if ('config' in event) {
             this.config = event.config;
 
-            this.resetForm();
+            this.callPending = undefined;
+
+            this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
+            this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
+            this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
+            this.optionsTalkgroup = [];
         }
 
         if ('livefeedMode' in event) {

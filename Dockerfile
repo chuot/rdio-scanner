@@ -17,8 +17,9 @@ FROM node:lts-alpine
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 WORKDIR /app
 ENV APP_DATA=/app/data \
-    APP_PORT=3000
-RUN apk --no-cache --no-progress add ffmpeg sqlite tzdata && \
+    APP_PORT=3000 \
+    DOCKER=1
+RUN apk --no-cache --no-progress add ffmpeg openssl sqlite tzdata && \
     mkdir -p "${APP_DATA}"
 COPY LICENSE .
 COPY --from=client-build /app/client/dist/rdio-scanner/. client/.

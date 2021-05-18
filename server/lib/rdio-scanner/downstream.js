@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,21 +19,21 @@
 
 'use strict';
 
-const EventEmitter = require('events');
-const FormData = require('form-data');
-const { URL } = require('url');
+import EventEmitter from 'events';
+import FormData from 'form-data';
+import { URL } from 'url';
 
-class Downstream {
-    constructor(ctx = {}) {
-        if (!Array.isArray(ctx.config.downstreams)) {
-            ctx.config.downstreams = [];
-        }
+import { Log } from './log.js';
 
-        this.config = ctx.config.downstreams;
+export class Downstream {
+    constructor(ctx) {
+        this.config = ctx.config;
 
-        this.config.forEach((downstream) => {
+        this.log = ctx.log;
+
+        this.config.downstreams.forEach((downstream) => {
             if (typeof downstream.apiKey !== 'string' || !downstream.apiKey.length) {
-                console.error(`Config: no dirWatch.apiKey defined`);
+                this.log.write(Log.error, 'Config: no dirWatch.apiKey defined');
             }
 
             if (typeof downstream.disabled !== 'boolean') {
@@ -45,7 +45,7 @@ class Downstream {
             }
 
             if (typeof downstream.url !== 'string' || !downstream.url.length) {
-                console.error(`Config: no dirWatch.url defined`)
+                this.log.write(Log.error, 'Config: no dirWatch.url defined');
             }
         });
 
@@ -88,7 +88,7 @@ class Downstream {
             }
         };
 
-        this.config.forEach((downstream) => {
+        this.config.downstreams.forEach((downstream) => {
             if (typeof downstream.disabled === 'boolean' && downstream.disabled) {
                 return;
             }
@@ -146,13 +146,13 @@ class Downstream {
             const message = `Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url}`;
 
             if (error) {
-                console.error(`${message} ${error.message}`);
+                this.log.write(Log.error, `Downstream: ${message} ${error.message}`);
 
             } else if (response.statusCode !== 200) {
-                console.error(`${message} ${response.statusMessage}`);
+                this.log.write(Log.warn, `Downstream: ${message} ${response.statusMessage}`);
 
             } else {
-                console.log(`${message} Success`);
+                this.log.write(Log.info, `Downstream: ${message} Success`);
             }
         });
     }
@@ -170,7 +170,7 @@ class Downstream {
             } else {
                 return call.system;
             }
-        }
+        };
 
         return parseSystem(downstream.systems);
     }
@@ -189,7 +189,7 @@ class Downstream {
                 } else {
                     return call.talkgroup;
                 }
-            }
+            };
 
             if (Array.isArray(system)) {
                 system = system.find((sys) => sys !== null && typeof sys === 'object' && sys.id === call.system);
@@ -202,10 +202,8 @@ class Downstream {
             } else {
                 return call.talkgroup;
             }
-        }
+        };
 
         return parseSystem(downstream.systems);
     }
 }
-
-module.exports = Downstream;

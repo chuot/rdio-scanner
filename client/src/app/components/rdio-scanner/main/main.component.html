@@ -61,6 +61,12 @@
                 <mat-form-field>
                     <input #password matInput type="password" autocomplete="off" formControlName="password"
                         placeholder="Unlock code" (blur)="authFocus()">
+                    <mat-error *ngIf="authForm.get('password')?.hasError('expired')">
+                        This unlock code has expired
+                    </mat-error>
+                    <mat-error *ngIf="authForm.get('password')?.hasError('tooMany')">
+                        Too many connections
+                    </mat-error>
                 </mat-form-field>
             </form>
         </div>
@@ -106,9 +112,11 @@
             [ngClass]="{ off: livefeedOffline && !playbackMode, on: livefeedOnline, partial: playbackMode }">
             LIVE<br>FEED
         </button>
+        <div class="spacer"></div>
         <button class="rdio-button" (click)="holdSystem()" [ngClass]="{ off: !holdSys, on: holdSys }">
             HOLD<br>SYS
         </button>
+        <div class="spacer"></div>
         <button class="rdio-button" (click)="holdTalkgroup()" [ngClass]="{ off: !holdTg, on: holdTg }">
             HOLD<br>TG
         </button>
@@ -117,9 +125,11 @@
         <button class="rdio-button" (click)="replay()">
             REPLAY<br>LAST
         </button>
+        <div class="spacer"></div>
         <button class="rdio-button" (click)="skip()">
             SKIP<br>NEXT
         </button>
+        <div class="spacer"></div>
         <button class="rdio-button" (click)="avoid()">
             AVOID
         </button>
@@ -128,9 +138,11 @@
         <button class="rdio-button" (click)="showSearchPanel()">
             SEARCH<br>CALL
         </button>
+        <div class="spacer"></div>
         <button class="rdio-button" (click)="pause()" [ngClass]="{ off: !livefeedPaused, on: livefeedPaused }">
             PAUSE
         </button>
+        <div class="spacer"></div>
         <button class="rdio-button" (click)="showSelectPanel()">
             SELECT<br>TG
         </button>

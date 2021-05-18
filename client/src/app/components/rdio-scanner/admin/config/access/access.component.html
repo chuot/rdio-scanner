@@ -1,0 +1,95 @@
+<div class="row top">
+    <p class="mat-body">You can decide to leave your instance unlocked and accessible to everyone, or set passwords with
+        specific systems/talkgroups. When used, the user will be prompted once for their password. It is then stored
+        internally on the client side and reused thereafter.</p>
+    <button type="button" mat-button color="accent" (click)="add()">New access</button>
+</div>
+<p *ngIf="!accesses.length" class="mat-small text-center">No access is defined, your instance is open and accessible to
+    all</p>
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="accesses" (cdkDropListDropped)="drop($event)">
+    <mat-expansion-panel *ngFor="let access of accesses; index as i" cdkDrag>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+                {{ access.value.ident || 'NewAccess' }}
+                <mat-icon *ngIf="access.invalid" color="warn">error</mat-icon>
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <ng-container [formGroup]="access">
+            <div class="row">
+                <p>
+                    <span class="mat-body">Code</span><br>
+                    <span class="mat-caption">The access code to unlock the client.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input [type]="hideCode ? 'password' : 'text'" matInput formControlName="code" placeholder="Code">
+                    <button type="button" mat-icon-button matSuffix (click)="hideCode = !hideCode">
+                        <mat-icon>{{ hideCode ? 'visibility_off' : 'visibility' }}</mat-icon>
+                    </button>
+                    <mat-error *ngIf="access.get('code')?.hasError('duplicate')">
+                        Code is already defined
+                    </mat-error>
+                    <mat-error *ngIf="access.get('code')?.hasError('required')">
+                        Code is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Ident</span><br>
+                    <span class="mat-caption">Dummy identifier which serves only to identify this access code is for
+                        whom.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="text" matInput formControlName="ident" placeholder="Ident">
+                    <mat-error *ngIf="access.get('ident')?.hasError('required')">
+                        Ident is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Expiration</span><br>
+                    <span class="mat-caption">Expiration date for this access code.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="text" matInput formControlName="expiration" placeholder="Expiration date"
+                        [matDatepicker]="expirationDate" (click)="expirationDate.open()">
+                    <mat-datepicker-toggle matSuffix [for]="expirationDate"></mat-datepicker-toggle>
+                    <mat-datepicker #expirationDate></mat-datepicker>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Limit</span><br>
+                    <span class="mat-caption">Simultaneous connection limit. Access will be refused if the connection
+                        with this access code exceeds the defined limit.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="number" matInput formControlName="limit" placeholder="Limit">
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Access</span><br>
+                    <span class="mat-caption">
+                        The access code allows access to <u>
+                            <ng-container *ngIf="access.value.systems === '*'">all</ng-container>
+                            <ng-container *ngIf="access.value.systems !== '*'">some</ng-container>
+                        </u> systems and talkgroups.
+                    </span>
+                </p>
+                <div>
+                    <button type="button" mat-button [disabled]="access.disabled" (click)="select(access)">
+                        Choose systems
+                    </button>
+                </div>
+            </div>
+            <div class="row bottom">
+                <button type="button" mat-button color="warn" (click)="remove(i)">
+                    Delete access
+                </button>
+            </div>
+        </ng-container>
+    </mat-expansion-panel>
+</mat-accordion>

@@ -1,0 +1,31 @@
+.mat-radio-group {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+
+  > *:not(:last-child) {
+    margin-right: 2rem;
+  }
+}
+
+.mat-table {
+  min-width: 720px;
+}
+
+.mat-cell >  span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mat-column-action {
+  max-width: 40px;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.text-center {
+  text-align: center;
+}

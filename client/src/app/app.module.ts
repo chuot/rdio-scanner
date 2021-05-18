@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,18 +23,25 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { environment } from '../environments/environment';
 import { AppComponent } from './app.component';
-import { AppRdioScannerModule } from './components/rdio-scanner/rdio-scanner.module';
+import { RdioScannerModule } from './components/rdio-scanner/rdio-scanner.module';
 import { AppSharedModule } from './shared/shared.module';
+import { routes } from './app.routes';
 
 @NgModule({
     bootstrap: [AppComponent],
     declarations: [AppComponent],
     imports: [
-        AppRdioScannerModule,
-        AppSharedModule.forRoot(),
+        RdioScannerModule,
+        AppSharedModule.forRoot({
+            routerExtraOptions: { enableTracing: false },
+            routerRoutes: routes,
+        }),
         BrowserAnimationsModule,
         BrowserModule,
-        ServiceWorkerModule.register('ngsw-worker.js', { enabled: environment.production }),
+        ServiceWorkerModule.register('ngsw-worker.js', {
+            enabled: environment.production,
+            registrationStrategy: 'registerWhenStable:30000',
+        }),
     ],
 })
 export class AppModule { }

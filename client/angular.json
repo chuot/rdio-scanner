@@ -15,7 +15,7 @@
       },
       "root": "",
       "sourceRoot": "src",
-      "prefix": "app",
+      "prefix": "rdio-scanner",
       "architect": {
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
@@ -75,7 +75,7 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
             "browserTarget": "rdio-scanner:build",
-            "proxyConfig": "proxy.conf.js"
+            "proxyConfig": "src/proxy.conf.js"
           },
           "configurations": {
             "production": {

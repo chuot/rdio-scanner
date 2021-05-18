@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,24 +20,24 @@
 import { FullscreenOverlayContainer, OverlayContainer } from '@angular/cdk/overlay';
 import { NgModule } from '@angular/core';
 import { AppSharedModule } from '../../shared/shared.module';
-import { AppRdioScannerComponent } from './rdio-scanner.component';
-import { AppRdioScannerService } from './rdio-scanner.service';
-import { AppRdioScannerMainComponent } from './main/main.component';
-import { AppRdioScannerSearchComponent } from './search/search.component';
-import { AppRdioScannerSelectComponent } from './select/select.component';
+import { RdioScannerComponent } from './rdio-scanner.component';
+import { RdioScannerService } from './rdio-scanner.service';
+import { RdioScannerMainComponent } from './main/main.component';
+import { RdioScannerSearchComponent } from './search/search.component';
+import { RdioScannerSelectComponent } from './select/select.component';
 
 @NgModule({
     declarations: [
-        AppRdioScannerComponent,
-        AppRdioScannerMainComponent,
-        AppRdioScannerSearchComponent,
-        AppRdioScannerSelectComponent,
+        RdioScannerComponent,
+        RdioScannerMainComponent,
+        RdioScannerSearchComponent,
+        RdioScannerSelectComponent,
     ],
-    exports: [AppRdioScannerComponent],
+    exports: [RdioScannerComponent],
     imports: [AppSharedModule],
     providers: [
-        AppRdioScannerService,
+        RdioScannerService,
         { provide: OverlayContainer, useClass: FullscreenOverlayContainer },
     ],
 })
-export class AppRdioScannerModule { }
+export class RdioScannerModule { }

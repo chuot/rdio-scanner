@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,17 +17,11 @@
  * ****************************************************************************
  */
 
-'use strict';
+import { Component } from '@angular/core';
 
-const callFactory = require('./call');
-const systemFactory = require('./system');
-
-class Models {
-    constructor(ctx = {}) {
-        this.call = callFactory(ctx);
-
-        this.system = systemFactory(ctx);
-    }
-}
-
-module.exports = Models;
+@Component({
+    selector: 'rdio-scanner-admin-page',
+    styleUrls: ['./admin.component.scss'],
+    templateUrl: './admin.component.html',
+})
+export class RdioScannerAdminPageComponent { }

@@ -1,3 +1,21 @@
+# Version 5.1
+
+This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**
+
+- With the exception of some parameters like the SSL certificates, all configurations have been moved to an administrative dashboard for easier configuration. No more config.json editing!
+- Access codes can now be set with a limit of simultaneous connections. It is also possible to configure an expiration date for each access codes.
+- Auto populate option can now be set per system in addition to globally.
+- Duplicate call detection is now optional and can be disabled from the options section of the administrative dashboard.
+- On a per system basis, it is now possible to blacklist certain talkgroup IDs against ingestion.
+- Groups and tags are now defined in their own section, then linked to talkgroup definitions.
+- Server logs are now stored in the database and accessed through the administrative dashboard, in addition to the standard output.
+- Talkgroups CSV files can now be loaded in from the administrative dashboard.
+- Server configuration can be exported/imported to/from a JSON file.
+- The downstream id_as property is gone due to its complexity of implementation with the new systems/talkgroups selection dialog for access codes, downstreams and apikeys.
+- The keyboard shortcuts are a thing of the past. They caused conflicts with other features.
+- Minor changes to the webapp look, less rounded.
+- Talkgroup buttons label now wraps on 2 lines.
+
 # Version 5.0
 
 - Add rdioScanner.options.autoPopulate which by default is true. The configuration file will now be automatically populated from new received calls with unknown system/talkgroup.

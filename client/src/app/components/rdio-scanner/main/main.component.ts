@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { Subscription, timer } from 'rxjs';
@@ -31,19 +31,19 @@ import {
     RdioScannerLivefeedMap,
     RdioScannerLivefeedMode,
 } from '../rdio-scanner';
-import { AppRdioScannerService } from '../rdio-scanner.service';
+import { RdioScannerService } from '../rdio-scanner.service';
 
-const LOCAL_STORAGE_KEY = AppRdioScannerService.LOCAL_STORAGE_KEY + '-pin';
+const LOCAL_STORAGE_KEY = RdioScannerService.LOCAL_STORAGE_KEY + '-pin';
 
 @Component({
-    selector: 'app-rdio-scanner-main',
+    selector: 'rdio-scanner-main',
     styleUrls: [
         '../common.scss',
         './main.component.scss',
     ],
     templateUrl: './main.component.html',
 })
-export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
+export class RdioScannerMainComponent implements OnDestroy, OnInit {
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
 
@@ -98,10 +98,10 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
 
     private dimmerTimer: Subscription | undefined;
 
-    private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     constructor(
-        private appRdioScannerService: AppRdioScannerService,
+        private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
@@ -109,7 +109,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
     authenticate(password = this.authForm.value.password): void {
         this.authForm.disable();
 
-        this.appRdioScannerService.authenticate(password);
+        this.rdioScannerService.authenticate(password);
     }
 
     authFocus(): void {
@@ -118,12 +118,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
-    @HostListener('document:keydown.a', ['$event'])
-    avoid(options?: RdioScannerAvoidOptions, event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
+    avoid(options?: RdioScannerAvoidOptions): void {
         if (this.auth) {
             this.authFocus();
 
@@ -131,82 +126,67 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             const call = this.call || this.callPrevious;
 
             if (options || call) {
-                this.appRdioScannerService.avoid(options);
+                this.rdioScannerService.avoid(options);
 
                 if (call && !this.map[call.system][call.talkgroup]) {
-                    this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+                    this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
                 } else {
-                    this.appRdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+                    this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
                 }
 
             } else {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
             }
 
             this.updateDimmer();
         }
     }
 
-    @HostListener('document:keydown.s', ['$event'])
-    holdSystem(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
+    holdSystem(): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
             if (this.call || this.callPrevious) {
-                this.appRdioScannerService.beep(this.holdSys ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
+                this.rdioScannerService.beep(this.holdSys ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
 
-                this.appRdioScannerService.holdSystem();
+                this.rdioScannerService.holdSystem();
 
             } else {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
             }
 
             this.updateDimmer();
         }
     }
 
-    @HostListener('document:keydown.t', ['$event'])
-    holdTalkgroup(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
+    holdTalkgroup(): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
             if (this.call || this.callPrevious) {
-                this.appRdioScannerService.beep(this.holdTg ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
+                this.rdioScannerService.beep(this.holdTg ? RdioScannerBeepStyle.Deactivate : RdioScannerBeepStyle.Activate);
 
-                this.appRdioScannerService.holdTalkgroup();
+                this.rdioScannerService.holdTalkgroup();
 
             } else {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
             }
 
             this.updateDimmer();
         }
     }
 
-    @HostListener('document:keydown.l', ['$event'])
-    livefeed(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
+    livefeed(): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
-            this.appRdioScannerService.beep(this.livefeedOffline ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
+            this.rdioScannerService.beep(this.livefeedOffline ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
 
-            this.appRdioScannerService.livefeed();
+            this.rdioScannerService.livefeed();
 
             this.updateDimmer();
         }
@@ -222,49 +202,36 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
         this.syncClock();
     }
 
-    @HostListener('document:keydown.space', ['$event'])
-    @HostListener('document:keydown.p', ['$event'])
-    pause(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
-        event?.preventDefault();
-
+    pause(): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
             if (this.livefeedPaused) {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Deactivate).then(() => this.appRdioScannerService.pause());
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate).then(() => this.rdioScannerService.pause());
 
             } else {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-                this.appRdioScannerService.pause();
+                this.rdioScannerService.pause();
             }
 
             this.updateDimmer();
         }
     }
 
-    @HostListener('document:keydown.r', ['$event'])
-    replay(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
+    replay(): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
             if (!this.livefeedPaused && (this.call || this.callPrevious)) {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-                this.appRdioScannerService.replay();
+                this.rdioScannerService.replay();
 
             } else {
-                this.appRdioScannerService.beep(RdioScannerBeepStyle.Denied);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
             }
 
             this.updateDimmer();
@@ -280,7 +247,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             this.authFocus();
 
         } else {
-            this.appRdioScannerService.beep();
+            this.rdioScannerService.beep();
 
             this.openSearchPanel.emit();
         }
@@ -295,32 +262,27 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             this.authFocus();
 
         } else {
-            this.appRdioScannerService.beep();
+            this.rdioScannerService.beep();
 
             this.openSelectPanel.emit();
         }
     }
 
-    @HostListener('document:keydown.n', ['$event'])
-    skip(options?: { delay?: boolean }, event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
+    skip(options?: { delay?: boolean }): void {
         if (this.auth) {
             this.authFocus();
 
         } else {
-            this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-            this.appRdioScannerService.skip(options);
+            this.rdioScannerService.skip(options);
 
             this.updateDimmer();
         }
     }
 
     stop(): void {
-        this.appRdioScannerService.stop();
+        this.rdioScannerService.stop();
     }
 
     private eventHandler(event: RdioScannerEvent): void {
@@ -338,7 +300,7 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             if (password) {
                 this.authForm.get('password')?.setValue(password);
 
-                this.appRdioScannerService.authenticate(password);
+                this.rdioScannerService.authenticate(password);
 
             } else {
                 this.auth = event.auth;
@@ -385,6 +347,10 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             }
         }
 
+        if ('expired' in event && event.expired === true) {
+            this.authForm.get('password')?.setErrors({ expired: true });
+        }
+
         if ('holdSys' in event) {
             this.holdSys = event.holdSys || false;
         }
@@ -421,6 +387,10 @@ export class AppRdioScannerMainComponent implements OnDestroy, OnInit {
             this.callTime = event.time;
 
             this.updateDimmer();
+        }
+
+        if ('tooMany' in event && event.tooMany === true) {
+            this.authForm.get('password')?.setErrors({ tooMany: true });
         }
 
         this.updateDisplay();

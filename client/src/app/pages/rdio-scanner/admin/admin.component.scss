@@ -1,0 +1,35 @@
+:host {
+  background: #1e1e1e;
+  box-sizing: border-box;
+  display: block;
+  min-height: 100vh;
+  padding: 16px;
+
+  > div {
+    margin: auto;
+    max-width: 1200px;
+  }
+
+  > h1 {
+    color: #2d2d2d;
+    letter-spacing: 0.01rem;
+    margin: 0;
+    padding: 16px 0;
+    text-align: center;
+    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.83);
+  }
+}
+
+@media (max-width: 719px) {
+  :host > h1 {
+    font-size: 28px;
+    line-height: 32px;
+  }
+
+  .mat-card {
+    padding: 8px;
+  }
+}
+
+@media (min-width: 720px) {
+}

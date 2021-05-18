@@ -10,12 +10,12 @@ The client web app is responsive and also works well on mobile devices.
 
 [Rdio Scanner](https://github.com/chuot/rdio-scanner) has all the backend and frontend components to deal with your audio files.
 
-The server side of [Rdio Scanner](https://github.com/chuot/rdio-scanner) can monitor directories for audio files to be ingested, or has an API to upload audio files from a remote (or local) location. Those files are associated to defined systems/talkgroups from the configuration file, then stored locally in its database. The web application clients are notified of these new audio files based on their own systems/talkgroups selection. It is also possible for web application clients to browse for archived audio files and replay them in an offline manner, or download them individually.
+The server side of [Rdio Scanner](https://github.com/chuot/rdio-scanner) can monitor directories for audio files to be ingested, or has an API to upload audio files from a remote (or local) location. Those files are associated to defined systems/talkgroups in the server's configuration, then stored locally in its database. The web application clients are notified of these new audio files based on their own systems/talkgroups selection. It is also possible for clients to browse for archived audio files and replay them in an offline manner, or download them individually.
 
 ## Main features
 
-- It's a progressive web app that also works great on mobile devices.
 - Simplistic interface, but strong usability.
+- Administrative dashboard for easy server configuration.
 - Configurable systems and talkgroups.
 - Talkgroups from any systems can be grouped together for better selection of live streams.
 - Access control via password with possible restriction to systems/talkgroups.
@@ -45,9 +45,15 @@ The server side of [Rdio Scanner](https://github.com/chuot/rdio-scanner) can mon
 - [docs/examples](./docs/examples) - Some miscellaneous examples
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
 
+> Raspberry Pi users can use this [script](https://github.com/chuot/rdio-scanner-pi-setup) to simplify the installation procedure.
+
 ## Questions / Comments
 
 You can ask your questions or post your comments on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) where the community continues to grow.
+
+## Commercial support
+
+Commercial support is available at https://saubeo.solutions/.
 
 ## Show your appreciation / Support the author
 

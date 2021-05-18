@@ -1,0 +1,29 @@
+<mat-accordion displayMode="flat">
+    <mat-expansion-panel>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon>description</mat-icon>
+                Talkgroups CSV
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <rdio-scanner-admin-import-csv (config)="config.emit($event)"></rdio-scanner-admin-import-csv>
+    </mat-expansion-panel>
+    <mat-expansion-panel>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon>password</mat-icon>
+                Admin password
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <rdio-scanner-admin-password></rdio-scanner-admin-password>
+    </mat-expansion-panel>
+    <mat-expansion-panel>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon>sync_alt</mat-icon>
+                Import/export config
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <rdio-scanner-admin-import-export-config (config)="config.emit($event)"></rdio-scanner-admin-import-export-config>
+    </mat-expansion-panel>
+</mat-accordion>

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,22 +19,42 @@
 
 'use strict';
 
-const multer = require('multer');
+import multer from 'multer';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-class TrunkRecorderCallUpload {
-    constructor(ctx = {}) {
-        this.controller = ctx.controller;
-
+export class UploadTrunkRecorder {
+    constructor (ctx) {
         this.path = '/api/trunk-recorder-call-upload';
 
-        if (ctx.router && ctx.router.post) {
-            ctx.router.post(this.path, this.middleware());
-        }
+        this.controller = ctx.controller;
+
+        ctx.router.delete(this.path, this.delete());
+        ctx.router.get(this.path, this.get());
+        ctx.router.patch(this.path, this.patch());
+        ctx.router.post(this.path, this.post());
+        ctx.router.put(this.path, this.put());
     }
 
-    middleware() {
+    delete() {
+        return (req, res) => {
+            res.sendStatus(405);
+        };
+    }
+
+    get() {
+        return (req, res) => {
+            res.sendStatus(405);
+        };
+    }
+
+    patch() {
+        return (req, res) => {
+            res.sendStatus(405);
+        };
+    }
+
+    post() {
         return (req, res) => upload.fields([
             { name: 'audio', maxCount: 1 },
             { name: 'key', maxCount: 1 },
@@ -69,13 +89,13 @@ class TrunkRecorderCallUpload {
                 }
 
                 if (!this.controller.validateApiKey(apiKey, system, meta.talkgroup)) {
-                    return res.send(`Invalid API key for system ${system} talkgroup ${meta.talkgroup}.\n`);
+                    return res.status(403).send(`Invalid API key for system ${system} talkgroup ${meta.talkgroup}.\n`);
                 }
 
                 try {
                     await this.controller.importTrunkRecorder(audio, audioName, audioType, system, meta);
 
-                    res.send(`Call imported successfully.\n`);
+                    res.send('Call imported successfully.\n');
 
                 } catch (error) {
                     res.send(error.message);
@@ -83,6 +103,10 @@ class TrunkRecorderCallUpload {
             }
         });
     }
-}
 
-module.exports = TrunkRecorderCallUpload;
+    put() {
+        return (req, res) => {
+            res.sendStatus(405);
+        };
+    }
+}

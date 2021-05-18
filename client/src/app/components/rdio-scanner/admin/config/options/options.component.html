@@ -1,0 +1,84 @@
+<ng-container *ngIf="form" [formGroup]="form">
+    <div class="row">
+        <p>
+            <span class="mat-body">Auto Populate</span><br>
+            <span class="mat-caption">Globaly allows the automatic creation of unconfigured systems and
+                talkgroups.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="autoPopulate"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Dimmer Delay</span><br>
+            <span class="mat-caption">Delay in milliseconds before turning off the screen backlight when
+                inactive.</span>
+        </p>
+        <mat-form-field>
+            <input matInput formControlName="dimmerDelay" type="number">
+            <mat-error *ngIf="form?.get('dimmerDelay')?.hasError('required')">
+                Dimmer delay is required
+            </mat-error>
+            <mat-error *ngIf="form?.get('dimmerDelay')?.hasError('min')">
+                Dimmer delay is invalid
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Disable Audio Conversion</span><br>
+            <span class="mat-caption">Disable the audio format conversion to m4a/aac. This is usefull if another Rdio
+                Scanner instance is feeding this instance where audio has already been converted.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="disableAudioConversion"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Disable Duplicate Call Detection</span><br>
+            <span class="mat-caption">Disable duplicate audio file detection.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="disableDuplicateDetection"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Keypad Beep Style</span><br>
+            <span class="mat-caption">Provide audio feedback when pressing buttons.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <mat-select formControlName="keypadBeeps" placeholder="Style">
+                <mat-option value="uniden">Uniden</mat-option>
+                <mat-option value="whistler">Whistler</mat-option>
+            </mat-select>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Prune Days</span><br>
+            <span class="mat-caption">Prune the database for data older than the specified number of days. Set to 0 to
+                disable.</span>
+        </p>
+        <mat-form-field>
+            <input matInput formControlName="pruneDays" type="number">
+            <mat-error *ngIf="form?.get('pruneDays')?.hasError('required')">
+                Prune days is required
+            </mat-error>
+            <mat-error *ngIf="form?.get('pruneDays')?.hasError('min')">
+                Prune days is invalid
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Sort Talkgroups</span><br>
+            <span class="mat-caption">Automatically sort talkgroups by their id.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="sortTalkgroups"></mat-slide-toggle>
+        </div>
+    </div>
+</ng-container>

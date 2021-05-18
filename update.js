@@ -1,6 +1,8 @@
+#!/usr/bin/env node
+
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,14 +21,17 @@
 
 'use strict';
 
-const { execSync } = require('child_process');
-const path = require('path');
+import { execSync } from 'child_process';
+import path from 'path';
+import url from 'url';
+
+const dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 try {
     const stdio = `${!!process.env.DEBUG}` === 'true' ? 'inherit' : 'pipe';
 
-    const clientPath = path.resolve(__dirname, 'client');
-    const serverPath = path.resolve(__dirname, 'server');
+    const clientPath = path.resolve(dirname, 'client');
+    const serverPath = path.resolve(dirname, 'server');
 
     process.stdout.write('Pulling new version from github...');
     execSync('git reset --hard', { stdio });

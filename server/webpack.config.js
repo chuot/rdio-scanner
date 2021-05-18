@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,12 @@
 
 'use strict';
 
-const path = require('path');
-const nodeExternals = require('webpack-node-externals');
-const TerserPlugin = require('terser-webpack-plugin');
+import path from 'path';
 
-module.exports = {
+import nodeExternals from 'webpack-node-externals';
+import TerserPlugin from 'terser-webpack-plugin';
+
+export default {
     entry: {
         'index': './index.js',
     },

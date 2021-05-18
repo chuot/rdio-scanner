@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,14 @@
 
 'use strict';
 
-const { spawn, spawnSync } = require('child_process');
-const chokidar = require('chokidar');
-const fs = require('fs');
-const mime = require('mime-types');
-const path = require('path');
+import { spawn, spawnSync } from 'child_process';
+import chokidar from 'chokidar';
+import fs from 'fs';
+import mime from 'mime-types';
+import path from 'path';
+import url from 'url';
+
+const dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const RECORDER_TYPE = {
     default: 'default',
@@ -31,23 +34,25 @@ const RECORDER_TYPE = {
     trunkRecorder: 'trunk-recorder',
 };
 
-class DirWatch {
+export class DirWatch {
     constructor(ctx = {}) {
+        const registredDirectories = [];
+
         if (!Array.isArray(ctx.config.dirWatch)) {
             ctx.config.dirWatch = [];
         }
 
-        this.config = ctx.config.dirWatch;
+        this.config = ctx.config;
 
         this.controller = ctx.controller;
 
         this.ffprobe = !spawnSync('ffprobe', ['-version']).error;
 
-        this.registredDirectories = [];
+        this.watchers = [];
 
-        this.config.forEach((dirWatch = {}) => {
+        this.config.dirWatch.forEach((dirWatch = {}) => {
             if (typeof dirWatch.directory !== 'string' || !dirWatch.directory.length) {
-                console.error(`Config: No dirWatch.directory defined`);
+                console.error('Config: No dirWatch.directory defined');
 
                 return;
             }
@@ -58,61 +63,9 @@ class DirWatch {
                 return;
             }
 
-            if (typeof dirWatch.delay !== 'number' || dirWatch.delay < 100) {
-                delete dirWatch.delay;
-            }
+            const dir = path.resolve(dirname, '../../..', dirWatch.directory);
 
-            if (typeof dirWatch.deleteAfter !== 'boolean') {
-                dirWatch.deleteAfter = false;
-            }
-
-            if (typeof dirWatch.disabled === 'boolean' && !dirWatch.disabled) {
-                delete dirWatch.disabled;
-            }
-
-            if (dirWatch.frequency === null || typeof dirWatch.frequency !== 'number') {
-                delete dirWatch.frequency;
-            }
-
-            if (dirWatch.mask === null || (
-                !(typeof dirWatch.mask === 'string' && dirWatch.mask.length) &&
-                !(Array.isArray(dirWatch.mask) && dirWatch.mask.every((mask) => typeof mask === 'string' && mask.length))
-            )) {
-                delete dirWatch.mask;
-            }
-
-            dirWatch.usePolling = dirWatch.usePolling === true ? true
-                : typeof dirWatch.usePolling === 'number' && dirWatch.usePolling >= 1000 ? dirWatch.usePolling
-                    : false;
-
-            if (!dirWatch.usePolling) {
-                delete dirWatch.usePolling;
-            }
-
-            if (dirWatch.system === null && typeof dirWatch.system !== 'number' && dirWatch.system !== 'string') {
-                delete dirWatch.system;
-            }
-
-            if (dirWatch.talkgroup === null && typeof dirWatch.talkgroup !== 'number' && dirWatch.talkgroup !== 'string') {
-                delete dirWatch.talkgroup;
-            }
-
-            if ([RECORDER_TYPE.sdrTrunk, RECORDER_TYPE.trunkRecorder].includes(dirWatch.type)) {
-                if (typeof dirWatch.extension !== 'string' && typeof dirWatch.extension !== 'undefined') {
-                    delete dirWatch.extension;
-                }
-
-                if (dirWatch.type === RECORDER_TYPE.sdrTrunk && typeof dirWatch.system !== 'undefined') {
-                    delete dirWatch.system;
-                }
-
-            } else {
-                delete dirWatch.type;
-            }
-
-            const dir = path.resolve(__dirname, '../../..', dirWatch.directory);
-
-            if (this.registredDirectories.includes(dir)) {
+            if (registredDirectories.includes(dir)) {
                 console.error(`Config: Duplicate directory definitions ${dir}`);
 
                 return;
@@ -123,73 +76,12 @@ class DirWatch {
                 return;
 
             } else {
-                this.registredDirectories.push(dir);
+                registredDirectories.push(dir);
             }
         });
 
-        ctx.once('ready', () => {
-            this.config.filter((dirWatch) => !dirWatch.disabled).forEach((dirWatch = {}) => {
-                const options = {
-                    awaitWriteFinish: true,
-                    ignoreInitial: !dirWatch.deleteAfter,
-                    recursive: true,
-                    usePolling: !!dirWatch.usePolling || false,
-                };
-
-                if (options.usePolling) {
-                    options.binaryInterval = options.interval = dirWatch.usePolling === true ? 1000 : dirWatch.usePolling;
-                }
-
-                const watcher = chokidar.watch(path.resolve(__dirname, '../../..', dirWatch.directory), options);
-
-                switch (dirWatch.type) {
-                    case RECORDER_TYPE.sdrTrunk:
-                        watcher.on('add', (filename) => this.importSdrTrunkType(dirWatch, filename));
-                        break;
-
-                    case RECORDER_TYPE.trunkRecorder:
-                        watcher.on('add', (filename) => this.importTrunkRecorderType(dirWatch, filename));
-                        break;
-
-                    default:
-                        if (dirWatch.delay >= 100) {
-                            const debounces = {};
-
-                            const debounceFn = (filename) => setTimeout(() => {
-                                delete debounces[filename];
-
-                                if (this.exists(filename)) {
-                                    const stat = this.statFile(filename);
-
-                                    if (stat.isFile()) {
-                                        if (stat.size > 44) {
-                                            this.importDefaultType(dirWatch, filename);
-
-                                        } else {
-                                            debounces[filename] = debounceFn(filename);
-                                        }
-                                    }
-                                }
-                            }, dirWatch.delay);
-
-                            watcher.on('raw', (_, filename, details) => {
-                                filename = details.watchedPath.indexOf(filename) === -1
-                                    ? path.join(details.watchedPath, filename)
-                                    : details.watchedPath;
-
-                                if (debounces[filename]) {
-                                    clearTimeout(debounces[filename]);
-                                }
-
-                                debounces[filename] = debounceFn(filename);
-                            });
-
-                        } else {
-                            watcher.on('add', (filename) => this.importDefaultType(dirWatch, filename));
-                        }
-                }
-            });
-        });
+        ctx.once('ready', async () => await this.refreshWatchers());
+        ctx.config.on('config', async () => await this.refreshWatchers());
     }
 
     async importDefaultType(dirWatch, filename) {
@@ -228,11 +120,11 @@ class DirWatch {
             }
 
             if (call.system === undefined) {
-                call.system = this.parseRegex(dirWatch.system, filename);
+                call.system = dirWatch.systemId;
             }
 
             if (call.talkgroup === undefined) {
-                call.talkgroup = this.parseRegex(dirWatch.talkgroup, filename);
+                call.talkgroup = dirWatch.talkgroupId;
             }
 
             try {
@@ -334,7 +226,10 @@ class DirWatch {
                         talkgroup,
                     };
 
-                    const meta = { systemLabel: tags.TIT1 };
+                    const meta = {
+                        systemLabel: tags.TIT1,
+                        talkgroupLabel: (tags.title.match(/"([^"]+)"/) || [])[1],
+                    };
 
                     try {
                         await this.controller.importCall(call, meta);
@@ -382,7 +277,7 @@ class DirWatch {
 
                 const audioType = mime.lookup(audioFile);
 
-                const system = this.parseRegex(dirWatch.system, filename);
+                const system = dirWatch.systemId;
 
                 let meta;
 
@@ -525,27 +420,6 @@ class DirWatch {
         }
     }
 
-    parseRegex(regex, filename) {
-        if (typeof regex === 'number') {
-            return regex;
-
-        } else if (typeof regex === 'string') {
-            try {
-                const regExp = new RegExp(regex);
-
-                return parseInt(filename.replace(regExp, '$1'), 10);
-
-            } catch (error) {
-                console.log(`DirWatch: Invalid RegExp: ${regex}, ${error.message}`);
-
-                return NaN;
-            }
-
-        } else {
-            return NaN;
-        }
-    }
-
     exists(filename) {
         try {
             return fs.existsSync(filename);
@@ -562,6 +436,76 @@ class DirWatch {
         } catch (error) {
             console.error(`DirWatch: Unable to read ${filename}, ${error.message}`);
         }
+    }
+
+    async refreshWatchers() {
+        while (this.watchers.length) {
+            await this.watchers.pop().close();
+        }
+
+        this.config.dirWatch.filter((dirWatch) => !dirWatch.disabled).forEach((dirWatch = {}) => {
+            const options = {
+                awaitWriteFinish: true,
+                ignoreInitial: !dirWatch.deleteAfter,
+                recursive: true,
+                usePolling: !!dirWatch.usePolling || false,
+            };
+
+            if (options.usePolling) {
+                options.binaryInterval = options.interval = dirWatch.usePolling === true ? 1000 : dirWatch.usePolling;
+            }
+
+            const watcher = chokidar.watch(path.resolve(dirname, '../../..', dirWatch.directory), options);
+
+            this.watchers.push(watcher);
+
+            switch (dirWatch.type) {
+                case RECORDER_TYPE.sdrTrunk:
+                    watcher.on('add', (filename) => this.importSdrTrunkType(dirWatch, filename));
+                    break;
+
+                case RECORDER_TYPE.trunkRecorder:
+                    watcher.on('add', (filename) => this.importTrunkRecorderType(dirWatch, filename));
+                    break;
+
+                default:
+                    if (dirWatch.delay >= 100) {
+                        const debounces = {};
+
+                        const debounceFn = (filename) => setTimeout(() => {
+                            delete debounces[filename];
+
+                            if (this.exists(filename)) {
+                                const stat = this.statFile(filename);
+
+                                if (stat.isFile()) {
+                                    if (stat.size > 44) {
+                                        this.importDefaultType(dirWatch, filename);
+
+                                    } else {
+                                        debounces[filename] = debounceFn(filename);
+                                    }
+                                }
+                            }
+                        }, dirWatch.delay);
+
+                        watcher.on('raw', (_, filename, details) => {
+                            filename = details.watchedPath.indexOf(filename) === -1
+                                ? path.join(details.watchedPath, filename)
+                                : details.watchedPath;
+
+                            if (debounces[filename]) {
+                                clearTimeout(debounces[filename]);
+                            }
+
+                            debounces[filename] = debounceFn(filename);
+                        });
+
+                    } else {
+                        watcher.on('add', (filename) => this.importDefaultType(dirWatch, filename));
+                    }
+            }
+        });
     }
 
     statFile(filename) {
@@ -584,5 +528,3 @@ class DirWatch {
         }
     }
 }
-
-module.exports = DirWatch;

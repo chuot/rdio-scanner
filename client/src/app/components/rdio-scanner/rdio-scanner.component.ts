@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,17 +20,17 @@
 import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
 import { RdioScannerConfig, RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
-import { AppRdioScannerService } from './rdio-scanner.service';
+import { RdioScannerService } from './rdio-scanner.service';
 
 @Component({
-    selector: 'app-rdio-scanner',
+    selector: 'rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
 })
-export class AppRdioScannerComponent implements OnDestroy {
+export class RdioScannerComponent implements OnDestroy {
     private config: RdioScannerConfig | undefined;
 
-    private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
 
@@ -39,8 +39,8 @@ export class AppRdioScannerComponent implements OnDestroy {
     @ViewChild('selectPanel') private selectPanel: MatSidenav | undefined;
 
     constructor(
-        private appRdioScannerService: AppRdioScannerService,
         private ngElementRef: ElementRef,
+        private rdioScannerService: RdioScannerService,
     ) { }
 
     @HostListener('window:beforeunload', ['$event'])
@@ -53,11 +53,11 @@ export class AppRdioScannerComponent implements OnDestroy {
     }
 
     start(): void {
-        this.appRdioScannerService.startLivefeed();
+        this.rdioScannerService.startLivefeed();
     }
 
     stop(): void {
-        this.appRdioScannerService.stopLivefeed();
+        this.rdioScannerService.stopLivefeed();
 
         this.searchPanel?.close();
         this.selectPanel?.close();
@@ -67,15 +67,7 @@ export class AppRdioScannerComponent implements OnDestroy {
         this.eventSubscription.unsubscribe();
     }
 
-    @HostListener('document:keydown.f', ['$event'])
-    @HostListener('document:keydown.tab', ['$event'])
-    toggleFullscreen(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
-        event?.preventDefault();
-
+    toggleFullscreen(): void {
         if (document.fullscreenElement) {
             const el: {
                 exitFullscreen?: () => void;
@@ -122,38 +114,6 @@ export class AppRdioScannerComponent implements OnDestroy {
 
         if (event.livefeedMode) {
             this.livefeedMode = event.livefeedMode;
-        }
-    }
-
-    @HostListener('document:keydown.arrowleft', ['$event'])
-    private keyLeftArrow(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
-        event?.preventDefault();
-
-        if (this.selectPanel?.opened) {
-            this.selectPanel?.close();
-
-        } else {
-            this.searchPanel?.open();
-        }
-    }
-
-    @HostListener('document:keydown.arrowright', ['$event'])
-    private keyRightArrow(event?: KeyboardEvent): void {
-        if (event && !this.config?.keyboardShortcuts) {
-            return;
-        }
-
-        event?.preventDefault();
-
-        if (this.searchPanel?.opened) {
-            this.searchPanel?.close();
-
-        } else {
-            this.selectPanel?.open();
         }
     }
 }

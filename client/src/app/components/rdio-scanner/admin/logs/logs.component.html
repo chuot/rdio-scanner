@@ -1,0 +1,88 @@
+<mat-table [dataSource]="logs">
+    <ng-container matColumnDef="level">
+        <mat-header-cell *matHeaderCellDef>
+            <span>Level</span>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let log">
+            <mat-icon *ngIf="log?.level === 'error'" class="error">error</mat-icon>
+            <mat-icon *ngIf="log?.level === 'info'" class="info">notifications</mat-icon>
+            <mat-icon *ngIf="log?.level === 'warn'" class="warn">warning</mat-icon>
+        </mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="date">
+        <mat-header-cell *matHeaderCellDef>
+            <span>Date</span>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let log">
+            <span>{{ log?.dateTime | date:'MM/dd' }}</span>
+        </mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="time">
+        <mat-header-cell *matHeaderCellDef>
+            <span>Time</span>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let log">
+            <span>{{ log?.dateTime | date:'HH:mm' }}</span>
+        </mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="message">
+        <mat-header-cell *matHeaderCellDef>
+            <span>Message</span>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let log">
+            <span>{{ log?.message }}</span>
+        </mat-cell>
+    </ng-container>
+    <mat-header-row *matHeaderRowDef="['level', 'date', 'time', 'message']">
+    </mat-header-row>
+    <mat-row *matRowDef="let row; columns: ['level', 'date', 'time', 'message']">
+    </mat-row>
+</mat-table>
+<mat-progress-bar color="primary" [mode]="logsQueryPending ? 'query' : 'determinate'">
+</mat-progress-bar>
+<mat-paginator [disabled]="logsQueryPending" [length]="logsQuery?.count" [hidePageSize]="true"
+    [pageSize]="logs.value.length" [showFirstLastButtons]="true" (page)="refresh()">
+</mat-paginator>
+<form autocomplete="off" [formGroup]="form">
+    <mat-form-field>
+        <mat-label>
+            Sort order
+        </mat-label>
+        <mat-select formControlName="sort" (selectionChange)="formHandler()">
+            <mat-option [value]="1">
+                Ascending
+            </mat-option>
+            <mat-option [value]="-1">
+                Descending
+            </mat-option>
+        </mat-select>
+    </mat-form-field>
+    <mat-form-field>
+        <mat-label>
+            Date
+        </mat-label>
+        <input formControlName="date" [matDatepicker]="date" matInput [max]="logsQuery?.dateStop"
+            [min]="logsQuery?.dateStart" placeholder="Choose a date" readonly (click)="date.open()"
+            (dateChange)="formHandler()">
+        <mat-datepicker-toggle matSuffix [for]="date"></mat-datepicker-toggle>
+        <mat-datepicker #date></mat-datepicker>
+    </mat-form-field>
+    <mat-form-field>
+        <mat-label>
+            Level
+        </mat-label>
+        <mat-select formControlName="level" (selectionChange)="formHandler()">
+            <mat-option value="info">Informative</mat-option>
+            <mat-option value="warn">Warning</mat-option>
+            <mat-option value="error">Error</mat-option>
+        </mat-select>
+    </mat-form-field>
+    <div class="reset">
+        <button type="button" mat-raised-button [disabled]="logsQueryPending" (click)="reload()">
+            Reload
+        </button>
+        <button type="button" mat-raised-button [disabled]="logsQueryPending || form.pristine" (click)="reset()">
+            Reset
+        </button>
+    </div>
+</form>

@@ -1,0 +1,50 @@
+<div>
+    <div mat-dialog-title>Systems and talkgroups selection</div>
+    <div [formGroup]="select" mat-dialog-content>
+        <mat-checkbox color="primary" [disableRipple]="true" formControlName="all"
+            [indeterminate]="indeterminate.everything">
+            Everything
+        </mat-checkbox>
+        <h3 class="mat-caption">Groups</h3>
+        <div class="flex-row wrap" formArrayName="groups">
+            <div *ngFor="let group of configGroups; index as groupIndex" [formGroupName]="groupIndex">
+                <mat-checkbox color="primary" [disableRipple]="true" formControlName="checked"
+                    [indeterminate]="indeterminate.groups[groupIndex]">
+                    {{ group.value.label }}
+                </mat-checkbox>
+            </div>
+        </div>
+        <h3 class="mat-caption">Tags</h3>
+        <div class="flex-row wrap" formArrayName="tags">
+            <div *ngFor="let tag of configTags; index as tagIndex" [formGroupName]="tagIndex">
+                <mat-checkbox color="primary" [disableRipple]="true" formControlName="checked"
+                    [indeterminate]="indeterminate.tags[tagIndex]">
+                    {{ tag.value.label }}
+                </mat-checkbox>
+            </div>
+        </div>
+        <h3 class="mat-caption">Systems</h3>
+        <div formArrayName="systems">
+            <div *ngFor="let system of configSystems; index as systemIndex" [formGroupName]="systemIndex">
+                <div class="flex-row margin">
+                    <mat-checkbox color="primary" [disableRipple]="true" formControlName="all"
+                        [indeterminate]="indeterminate.systems[systemIndex]">
+                        {{ system.value.label }}
+                    </mat-checkbox>
+                </div>
+                <div class="flex-row wrap indent margin" formArrayName="talkgroups">
+                    <div *ngFor="let talkgroup of configTalkgroups[systemIndex]; index as talkgroupIndex"
+                        [formGroupName]="talkgroupIndex">
+                        <mat-checkbox color="primary" [disableRipple]="true" formControlName="checked">
+                            {{ talkgroup.value.label }}
+                        </mat-checkbox>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div mat-dialog-actions>
+        <button mat-raised-button (click)="cancel()">Cancel</button>
+        <button mat-raised-button color="primary" (click)="accept()">Ok</button>
+    </div>
+</div>

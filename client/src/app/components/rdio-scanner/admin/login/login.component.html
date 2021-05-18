@@ -1,0 +1,9 @@
+<form [formGroup]="form" (ngSubmit)="login()">
+    <p class="mat-body-1">Please enter the admin password to gain access to the administrative dashboard</p>
+    <mat-form-field hideRequiredMarker>
+        <mat-label>Password</mat-label>
+        <input matInput formControlName="password" type="password" required>
+        <mat-error>{{ message }}</mat-error>
+    </mat-form-field>
+    <button mat-raised-button color="primary" type="submit" [disabled]="form.disabled || form.invalid">Login</button>
+</form>

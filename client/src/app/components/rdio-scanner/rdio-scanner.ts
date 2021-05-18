@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,7 +73,6 @@ export interface RdioScannerCallSource {
 export interface RdioScannerConfig {
     dimmerDelay: number | false;
     groups: { [key: string]: { [key: number]: number[] } };
-    keyboardShortcuts: boolean;
     keypadBeeps: RdioScannerKeypadBeeps | false;
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };
@@ -83,6 +82,7 @@ export interface RdioScannerEvent {
     auth?: boolean;
     config?: RdioScannerConfig;
     call?: RdioScannerCall;
+    expired?: boolean;
     groups?: RdioScannerGroup[];
     holdSys?: boolean;
     holdTg?: boolean;
@@ -94,6 +94,7 @@ export interface RdioScannerEvent {
     playbackPending?: string;
     queue?: number;
     time?: number;
+    tooMany?: boolean;
 }
 
 export enum RdioScannerGroupStatus {
@@ -150,7 +151,7 @@ export interface RdioScannerSystem {
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
     order?: number;
     talkgroups: RdioScannerTalkgroup[];
-    units?: RdioScannerUnit[];
+    units: RdioScannerUnit[];
 }
 
 export interface RdioScannerTalkgroup {

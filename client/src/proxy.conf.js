@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,22 +19,21 @@
 
 'use strict';
 
-const CallUpload = require('./call-upload');
-const TrunkRecorderCallUpload = require('./trunk-recorder-call-upload');
+const server = 'http://localhost:3000';
 
-class API {
-    constructor(ctx = {}) {
-        this.config = ctx.config;
-
-        this.controller = ctx.controller;
-
-        this.router = ctx.router;
-
-        this.routes = {
-            callUpload: new CallUpload(this),
-            trunkRecorderCallUpload: new TrunkRecorderCallUpload(this),
-        };
+const PROXY_CONFIG = [
+    {
+        bypass: (req) => req.upgrade ? null : '/',
+        context: '/',
+        secure: false,
+        target: server,
+        ws: true,
+    },
+    {
+        context: ['/api'],
+        secure: false,
+        target: server,
     }
-}
+];
 
-module.exports = API
+module.exports = PROXY_CONFIG;

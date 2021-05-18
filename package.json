@@ -1,5 +1,8 @@
 {
     "author": "Chrystian Huot <chrystian.huot@saubeo.solutions>",
+    "engines": {
+        "node": ">=14.0"
+    },
     "license": "LICENSE",
     "main": "run.js",
     "name": "rdio-scanner",
@@ -10,5 +13,6 @@
         "start": "node run",
         "update": "node update"
     },
-    "version": "5.0.5"
+    "type": "module",
+    "version": "5.1.0"
 }

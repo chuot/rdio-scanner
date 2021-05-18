@@ -1,0 +1,74 @@
+rdio-scanner-admin-config {
+  .row {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+
+    &.bottom {
+      margin-top: 1rem;
+    }
+
+    &.top {
+      margin-bottom: 1rem;
+    }
+
+    > p {
+      box-sizing: border-box;
+      flex: 1;
+      padding-right: 1rem;
+    }
+
+    ul {
+      list-style-type: none;
+      padding-left: 1rem;
+    }
+
+    .mat-button:last-child {
+      margin-left: auto;
+    }
+  }
+
+  .cdk-drag-handle {
+    opacity: 0.5;
+  }
+
+  .mat-expansion-panel-header-title {
+    align-items: center;
+  }
+
+  .mat-icon[color="warn"] {
+    font-size: 1rem;
+    height: 1rem;
+    opacity: 0.9;
+    padding-left: 0.5rem;
+    width: 1rem;
+  }
+
+  .text-center {
+    text-align: center;
+  }
+}
+
+@media (max-width: 719px) {
+  rdio-scanner-admin-config .mat-form-field {
+    flex: 100%;
+  }
+}
+
+@media (min-width: 720px) {
+  .row {
+    > p ~ div,
+    .mat-form-field {
+      min-width: 260px;
+    }
+
+    > p ~ div > {
+      .mat-button,
+      .mat-slide-toggle {
+        float: right;
+      }
+    }
+  }
+}

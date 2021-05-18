@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,13 @@
 
 'use strict';
 
-const defaults = {
+export const defaults = {
+    adminPassword: 'rdio-scanner',
+    dirWatch: {
+        delay: 0,
+        deleteAfter: false,
+        usePolling: false,
+    },
     keypadBeeps: {
         uniden: {
             activate: [
@@ -104,7 +110,14 @@ const defaults = {
             ],
         },
     },
+    options: {
+        autoPopulate: true,
+        dimmerDelay: 5000,
+        disableAudioConversion: false,
+        disableDuplicateDetection: false,
+        keypadBeeps: 'uniden',
+        pruneDays: 7,
+        sortTalkgroups: false,
+    },
     systems: [],
 };
-
-module.exports = defaults;

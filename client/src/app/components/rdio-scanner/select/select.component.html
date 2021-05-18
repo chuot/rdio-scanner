@@ -12,23 +12,28 @@
         </button>
     </div>
 </fieldset>
-<fieldset *ngFor="let system of systems" class="fieldset">
-    <legend>
-        {{ system.label }}
-    </legend>
-    <div>
-        <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
-            [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]), on: map[system.id] && map[system.id][talkgroup.id] }"
-            (click)="avoid({ system: system, talkgroup: talkgroup })">
-            {{ talkgroup.label }}
-        </button>
-        <ng-container *ngIf="system.talkgroups.length > 1">
-            <button class="rdio-button-mini all-off" (click)="avoid({ system: system, status: false })">
-                OFF
+<ng-container *ngFor="let system of systems">
+    <fieldset *ngIf="system.talkgroups.length" class="fieldset">
+        <legend>
+            {{ system.label }}
+        </legend>
+        <div>
+            <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
+                [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]), on: map[system.id] && map[system.id][talkgroup.id] }"
+                (click)="avoid({ system: system, talkgroup: talkgroup })">
+                {{ talkgroup.label }}
             </button>
-            <button class="rdio-button-mini all-on" (click)="avoid({ system: system, status: true })">
-                ON
-            </button>
-        </ng-container>
-    </div>
-</fieldset>
+            <ng-container *ngIf="system.talkgroups.length > 1">
+                <button class="rdio-button-mini all-off" (click)="avoid({ system: system, status: false })">
+                    OFF
+                </button>
+                <button class="rdio-button-mini all-on" (click)="avoid({ system: system, status: true })">
+                    ON
+                </button>
+            </ng-container>
+        </div>
+    </fieldset>
+</ng-container>
+<ng-container *ngIf="systems?.length === 0">
+    No talkgroup configured!
+</ng-container>

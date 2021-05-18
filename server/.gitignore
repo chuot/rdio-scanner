@@ -1,8 +1,8 @@
-/.env
-/*.crt
-/*.pem
-/*.key
-/config.json*
-/database.sqlite*
-/dist
-/node_modules
+.env
+*.crt
+*.pem
+*.key
+config.json*
+database.sqlite*
+dist
+node_modules

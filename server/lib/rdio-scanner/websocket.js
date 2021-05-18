@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,13 @@
 
 'use strict';
 
-const url = require('url');
-const WS = require('ws');
+import { URL } from 'url';
+import WS from 'ws';
 
-class WebSocket {
-    constructor(ctx = {}) {
+import { Log } from './log.js';
+
+export class WebSocket {
+    constructor(ctx) {
         this.controller = ctx.controller;
         this.controller.registerWebSocket(this);
 
@@ -44,6 +46,8 @@ class WebSocket {
             });
         }, 30000);
 
+        this.log = ctx.log;
+
         this.wss = new WS.Server({ noServer: true });
 
         this.wss.on('connection', (ws) => {
@@ -51,7 +55,7 @@ class WebSocket {
 
             ws.on('close', () => this.logClientsCount());
 
-            ws.on('error', (error) => console.error(error));
+            ws.on('error', (error) => this.log.write(Log.error, `WebSocket: ${error}`));
 
             ws.on('message', async (message) => await this.controller.messageParser(ws, message));
 
@@ -66,13 +70,15 @@ class WebSocket {
             this.heartbeat = undefined;
         });
 
-        this.httpServer.on('upgrade', (request, socket, head) => {
-            const pathname = url.parse(request.url).pathname;
+        if (this.httpServer) {
+            this.httpServer.on('upgrade', (request, socket, head) => {
+                const pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
 
-            if (pathname === '/' || pathname === '/index.html') {
-                this.wss.handleUpgrade(request, socket, head, (ws) => this.wss.emit('connection', ws, request));
-            }
-        });
+                if (pathname === '/' || pathname === '/index.html') {
+                    this.wss.handleUpgrade(request, socket, head, (ws) => this.wss.emit('connection', ws, request));
+                }
+            });
+        }
     }
 
     getSockets() {
@@ -80,8 +86,6 @@ class WebSocket {
     }
 
     logClientsCount() {
-        console.log(`WebSocket: Listeners count is ${this.wss.clients.size}`);
+        this.log.write(Log.info, `WebSocket: Listeners count is ${this.wss.clients.size}`);
     }
 }
-
-module.exports = WebSocket;

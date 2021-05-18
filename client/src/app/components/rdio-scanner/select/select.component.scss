@@ -39,25 +39,34 @@
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
+    justify-content: space-evenly;
   }
+}
+
+.rdio-button {
+  width: calc(25% - 4px);
+}
+
+.rdio-button-mini {
+  width: calc(12.5% - 4px);
 }
 
 @media (min-width: 720px) {
   .rdio-button {
-    width: calc(20% - 8px);
+    width: calc(20% - 4px);
   }
 
   .rdio-button-mini {
-    width: calc(10% - 8px);
+    width: calc(10% - 4px);
   }
 }
 
 @media (min-width: 1200px) {
   .rdio-button {
-    width: calc(10% - 8px);
+    width: calc(10% - 4px);
   }
 
   .rdio-button-mini {
-    width: calc(5% - 8px);
+    width: calc(5% - 4px);
   }
 }

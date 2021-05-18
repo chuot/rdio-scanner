@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,31 +19,31 @@
 
 import { Component, OnDestroy } from '@angular/core';
 import { RdioScannerAvoidOptions, RdioScannerBeepStyle, RdioScannerEvent, RdioScannerGroup, RdioScannerLivefeedMap, RdioScannerSystem } from '../rdio-scanner';
-import { AppRdioScannerService } from '../rdio-scanner.service';
+import { RdioScannerService } from '../rdio-scanner.service';
 
 @Component({
-    selector: 'app-rdio-scanner-select',
+    selector: 'rdio-scanner-select',
     styleUrls: [
         '../common.scss',
         './select.component.scss',
     ],
     templateUrl: './select.component.html',
 })
-export class AppRdioScannerSelectComponent implements OnDestroy {
+export class RdioScannerSelectComponent implements OnDestroy {
     groups: RdioScannerGroup[] | undefined;
 
     map: RdioScannerLivefeedMap = {};
 
     systems: RdioScannerSystem[] | undefined;
 
-    private eventSubscription = this.appRdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
-    constructor(private appRdioScannerService: AppRdioScannerService) { }
+    constructor(private rdioScannerService: RdioScannerService) { }
 
     avoid(options?: RdioScannerAvoidOptions): void {
-        this.appRdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-        this.appRdioScannerService.avoid(options);
+        this.rdioScannerService.avoid(options);
     }
 
     ngOnDestroy(): void {
@@ -51,14 +51,14 @@ export class AppRdioScannerSelectComponent implements OnDestroy {
     }
 
     toggleGroup(label: string): void {
-        this.appRdioScannerService.beep();
+        this.rdioScannerService.beep();
 
-        this.appRdioScannerService.toggleGroup(label);
+        this.rdioScannerService.toggleGroup(label);
     }
 
     private eventHandler(event: RdioScannerEvent): void {
         if (event.config) {
-            this.systems = this.sortSystems(event.config.systems);
+            this.systems = event.config.systems;
         }
 
         if (event.groups) {
@@ -68,22 +68,5 @@ export class AppRdioScannerSelectComponent implements OnDestroy {
         if (event.map) {
             this.map = event.map;
         }
-    }
-
-    private sortSystems(systems: RdioScannerSystem[]): RdioScannerSystem[] {
-        return systems.sort((sysA, sysB) => {
-            if (typeof sysA.order === 'number' && typeof sysB.order !== 'number') {
-                return -1;
-
-            } else if (typeof sysA.order !== 'number' && typeof sysB.order === 'number') {
-                return 1;
-
-            } else if (typeof sysA.order === 'number' && typeof sysB.order === 'number') {
-                return sysA.order - sysB.order;
-
-            } else {
-                return sysA.id - sysB.id;
-            }
-        });
     }
 }

@@ -1,0 +1,56 @@
+.error {
+  color: red;
+}
+
+.info {
+  color: green;
+}
+
+.warn {
+  color: orange;
+}
+
+.mat-cell,
+.mat-header-cell {
+  &:nth-child(1),
+  &:nth-child(2),
+  &:nth-child(3) {
+    flex: 0 0 60px;
+  }
+}
+
+form {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+
+  .mat-form-field,
+  .reset {
+    box-sizing: border-box;
+    padding: 0 0.5rem 1rem 0.5rem;
+  }
+
+  .mat-form-field {
+    min-width: 220px;
+  }
+
+  .reset {
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 719px) {
+  form > .mat-form-field {
+    flex: 100%;
+  }
+}
+
+@media (min-width: 720px) {
+  form > .mat-form-field {
+    flex: 33%;
+  }
+}
