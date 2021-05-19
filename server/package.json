@@ -24,7 +24,7 @@
     },
     "devDependencies": {
         "eslint": "^7.26.0",
-        "webpack": "^5.37.0",
+        "webpack": "^5.37.1",
         "webpack-cli": "^4.7.0",
         "webpack-node-externals": "^3.0.0"
     },
@@ -46,5 +46,5 @@
         "start": "nodemon"
     },
     "type": "module",
-    "version": "5.1.0"
+    "version": "5.1.1"
 }

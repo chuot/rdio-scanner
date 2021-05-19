@@ -245,7 +245,7 @@ function parseAccess(access) {
         }
 
         return { code, ident, order, systems };
-    }).filter((acc) => acc.code !== null);
+    }).filter((acc, idx, arr) => acc.code !== null && arr.findIndex((v) => v.code === acc.code) === idx);
 }
 
 function parseApiKeys(apiKeys) {
@@ -279,7 +279,7 @@ function parseApiKeys(apiKeys) {
             order: index + 1,
             systems,
         };
-    }).filter((api) => api.key !== null);
+    }).filter((api, idx, arr) => api.key !== null && arr.findIndex((v) => v.key === api.key) === idx);
 }
 
 function parseDirWatch(dirWatch) {
@@ -299,7 +299,7 @@ function parseDirWatch(dirWatch) {
         type: ['sdr-trunk', 'trunk-recorder'].includes(dw.type) ? dw.type : null,
         usePolling: typeof dw.usePolling === 'boolean' ? dw.usePolling
             : typeof dw.usePolling === 'number' ? true : defaults.dirWatch.usePolling,
-    })).filter((dw) => dw.directory !== null && dw.system !== null);
+    })).filter((dw, idx, arr) => dw.directory !== null && dw.system !== null && arr.findIndex((v) => v.directory === dw.directory) === idx);
 }
 
 function parseDownstreams(downstreams) {
@@ -325,7 +325,7 @@ function parseDownstreams(downstreams) {
             systems: rewriteSystemsProperty(ds.systems, true),
             url: typeof ds.url === 'string' ? ds.url : null,
         };
-    }).filter((ds) => !(ds.apiKey === null || ds.url === null));
+    }).filter((ds, idx, arr) => !(ds.apiKey === null || ds.url === null) && arr.findIndex((v) => v.apiKey === ds.apiKey) === idx);
 }
 
 function parseOptions(options) {
@@ -368,7 +368,7 @@ function parseSystems(systems) {
             id: typeof unit.id === 'number' ? unit.id : null,
             label: typeof unit.label === 'string' ? unit.label : `${unit.id}`,
         })).filter((unit) => unit.id !== null) : [],
-    })).filter((system) => system.id !== null).sort((sysA, sysB) => {
+    })).filter((system, idx, arr) => system.id !== null && arr.indexOf(system) === idx).sort((sysA, sysB) => {
         if (typeof sysA.order === 'number' && typeof sysB.order !== 'number') {
             return -1;
 

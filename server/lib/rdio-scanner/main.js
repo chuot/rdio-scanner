@@ -20,7 +20,9 @@
 'use strict';
 
 import EventEmitter from 'events';
+import path from 'path';
 import Umzug from 'umzug';
+import url from 'url';
 
 import { Admin } from './admin.js';
 import { API } from './api.js';
@@ -31,6 +33,7 @@ import { DirWatch } from './dir-watch.js';
 import { Downstream } from './downstream.js';
 import { Log } from './log.js';
 import { Models } from './models.js';
+import { Utils } from './utils.js';
 import { WebSocket } from './websocket.js';
 
 import rs001CreateSystem from './migrations/20191028144433-create-rdio-scanner-system.js';
@@ -40,6 +43,8 @@ import rs004NewV3Tables from './migrations/20191220093214-new-v3-tables.js';
 import rs005OptimizeCalls from './migrations/20200123094105-optimize-rdio-scanner-calls.js';
 import rs006NewV4Tables from './migrations/20200428132918-new-v4-tables.js';
 import rs007NewV51Tables from './migrations/20210115105958-new-v5.1-tables.js';
+
+const dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const migrations = [
     { name: '20191028144433-create-rdio-scanner-system', up: rs001CreateSystem.up, down: rs001CreateSystem.down },
@@ -84,8 +89,46 @@ export class RdioScanner extends EventEmitter {
 
         this.config = new Config(this);
 
+        this.utils = new Utils(this);
+
         this.config.once('ready', async () => {
-            if (process.argv[2] === 'reset-admin-password') {
+            const cmd = process.argv[2];
+
+            if (cmd === 'load-rrdb' || cmd === 'load-tr') {
+                if (process.argv.length === 5) {
+                    try {
+                        const sysId = parseInt(process.argv[3], 10);
+
+                        const file = path.resolve(process.env.APP_DATA || dirname, process.argv[4]);
+
+                        this.utils.loadCSV(sysId, file, cmd !== 'load-tr' ? 1 : 0);
+
+                        this.config.once('persisted', () => {
+                            console.log(`File ${file} imported successfully into system ${sysId}`);
+
+                            process.exit();
+                        });
+
+                    } catch (error) {
+                        console.error(error.message);
+
+                        process.exit();
+                    }
+
+                } else {
+                    console.log('USAGE: load-rrdb <system_id> <input_tg_csv>');
+
+                    process.exit();
+                }
+
+            } else if (cmd === 'random-uuid') {
+                const count = parseInt(process.argv[3], 10) || 1;
+
+                this.utils.randomUUID(count).forEach((uuid) => console.log(uuid));
+
+                process.exit();
+
+            } else if (cmd === 'reset-admin-password') {
                 if (typeof process.argv[3] === 'string' && process.argv[3].length) {
                     this.config.adminPassword = process.argv[3];
 

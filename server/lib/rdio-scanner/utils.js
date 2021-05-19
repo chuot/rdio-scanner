@@ -19,118 +19,96 @@
 
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const uuid = require('uuid');
+import fs from 'fs';
+import path from 'path';
+import url from 'url';
+import { v4 as uuidv4 } from 'uuid';
 
-class Utils {
+const dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+export class Utils {
     constructor(ctx = {}) {
         this.config = ctx.config;
     }
 
-    loadRRDB(sysId, input) {
+    loadCSV(sysId, file, type) {
         if (typeof sysId !== 'number' || sysId < 0) {
             throw new Error(`Invalid system id ${JSON.stringify(sysId)}`);
         }
 
-        if (typeof input !== 'string' || !input.length) {
-            throw new Error(`Invalid filename ${JSON.stringify(input)}`);
+        if (typeof file !== 'string' || !file.length) {
+            throw new Error(`Invalid filename ${JSON.stringify(file)}`);
         }
 
-        input = path.resolve(__dirname, input);
+        file = path.resolve(dirname, file);
 
-        if (!fs.existsSync(input)) {
-            throw new Error(`${input} file not found!`);
+        if (!fs.existsSync(file)) {
+            throw new Error(`${file} file not found!`);
         }
 
-        const csv = fs.readFileSync(input, 'utf8').split(/[\n|\r|\r\n]/).map((csv) => csv.split(/,/));
+        type = [0, 1].includes(type) ? type : 0;
+
+        // [id, label, description, tag, group]
+        const fields = [
+            [0, 3, 4, 5, 6], // trunk-recorder
+            [0, 2, 4, 5, 6], // radioreference.com
+        ];
+
+        const groups = this.config.groups;
+
+        const tags = this.config.tags;
+
+        const csv = fs.readFileSync(file, 'utf8').split(/[\n|\r|\r\n]/).map((csv) => csv.split(/,/));
 
         const system = {
             id: sysId,
-            label: path.parse(input).name,
+            label: path.parse(file).name,
             talkgroups: [],
         };
 
         for (let line of csv) {
-            const encrypted = typeof line[3] === 'string' ? line[3].includes('E') : false;
-            const id = parseInt(line[0], 10);
-            const label = line[2] || '';
-            const name = line[4] || '';
-            const tag = line[5] || '';
-            const group = line[6] || '';
+            const id = parseInt(line[fields[type][0]], 10);
+            const label = line[fields[type][1]] || '';
+            const name = line[fields[type][2]] || '';
+            const tagLabel = line[fields[type][3]] || '';
+            const groupLabel = line[fields[type][4]] || '';
 
-            if (!encrypted && id > 0 && label.length && name.length && tag.length && group.length) {
-                system.talkgroups.push({ id, label, name, tag, group });
+            if (isNaN(id) || id <= 0 || !label.length || !name.length) continue;
+
+            if (!groups.find((g) => g.label === groupLabel)) {
+                const id = groups.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 1);
+                console.log(id, groupLabel);
+
+                groups.push({ _id: id, label: groupLabel });
             }
+
+            if (!tags.find((t) => t.label === tagLabel)) {
+                const id = tags.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 1);
+
+                tags.push({ _id: id, label: tagLabel });
+            }
+
+            const groupId = groups.find((g) => g.label === groupLabel)?._id;
+
+            const tagId = tags.find((t) => t.label === tagLabel)?._id;
+
+            system.talkgroups.push({ id, label, name, tagId, groupId });
         }
 
         system.talkgroups.sort((a, b) => a.label.localeCompare(b.label));
 
-        this.config.systems = this.config.systems.filter((system) => system.id !== sysId);
-
-        this.config.systems.push(system);
-
-        this.config.systems.sort((a, b) => a.id - b.id);
-
-        return `File ${input} imported successfully into system ${sysId}`;
-    }
-
-    loadTR(sysId, input) {
-        if (typeof sysId !== 'number' || sysId < 0) {
-            throw new Error(`Invalid system id ${JSON.stringify(sysId)}`);
-        }
-
-        if (typeof input !== 'string' || !input.length) {
-            throw new Error(`Invalid filename ${JSON.stringify(input)}`);
-        }
-
-        input = path.resolve(__dirname, input);
-
-        if (!fs.existsSync(input)) {
-            throw new Error(`${input} file not found!`);
-        }
-
-        const csv = fs.readFileSync(input, 'utf8').split(/[\n|\r|\r\n]/).map((csv) => csv.split(/,/));
-
-        const system = {
-            id: sysId,
-            label: path.parse(input).name,
-            talkgroups: [],
-        };
-
-        for (let line of csv) {
-            const encrypted = typeof line[2] === 'string' ? line[2].includes('E') : false;
-            const id = parseInt(line[0], 10);
-            const label = line[3] || '';
-            const name = line[4] || '';
-            const tag = line[5] || '';
-            const group = line[6] || '';
-
-            if (!encrypted && id > 0 && label.length && name.length && tag.length && group.length) {
-                system.talkgroups.push({ id, label, name, tag, group });
-            }
-        }
-
-        system.talkgroups.sort((a, b) => a.label.localeCompare(b.label));
-
-        this.config.systems = this.config.systems.filter((system) => system.id !== sysId);
-
-        this.config.systems.push(system);
-
-        this.config.systems.sort((a, b) => a.id - b.id);
-
-        return `File ${input} imported successfully into system ${sysId}`;
+        this.config.groups = groups;
+        this.config.tags = tags;
+        this.config.systems = this.config.systems.filter((sys) => sys.id !== sysId).concat(system);
     }
 
     randomUUID(count = 1) {
         const uuids = [];
 
         for (let i = 0; i < count; i++) {
-            uuids.push(uuid.v4());
+            uuids.push(uuidv4());
         }
 
         return uuids;
     }
 }
-
-module.exports = Utils;

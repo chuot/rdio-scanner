@@ -82,7 +82,37 @@ Admin password has been reset.
 
 If you do not specify a password after the `reset-admin-password` command, the default password will be configured, which is `rdio-scanner`.
 
-# 7. Finally
+# 7. Optional command line tools for hardcore users
+
+Load a radioreference.com talkgroups file into a system:
+
+```bash
+$ node server load-rrdb
+USAGE: load-rrdb <system_id> <input_tg_csv>
+```
+
+Load a trunk-recorder talkgroups file into a system:
+
+```bash
+$ node server load-tr
+USAGE: load-tr <system_id> <input_tg_csv>
+```
+
+Generate random UUIDs
+
+```bash
+$ node server random-uuid
+1e5ff9c6-fdaf-495d-b67e-95a73e6c0e06
+
+$ node server random-uuid 5
+c5ab8726-f59a-4609-8d35-7dd534b9d038
+a54d5bdb-0e59-4616-9498-cfc42ac572f1
+061b78a1-b2a9-47a8-91e5-8b285a46a268
+5da5c824-fe4a-4cf8-8146-8a6806af4eed
+92b1eafa-02ff-4993-9133-6098d6d37888
+```
+
+# 8. Finally
 
 Remember that [Rdio Scanner](https://github.com/chuot/rdio-scanner) must be supplied with audio files from a recorder. Either you use a `dirWatch` to monitor a folder, or you use the API with an `upload script`. See the [examples folder](./examples) for some examples.
 

@@ -16,6 +16,12 @@ This one is a big one... **Be sure to backup your config.json and your database.
 - Minor changes to the webapp look, less rounded.
 - Talkgroup buttons label now wraps on 2 lines.
 
+_v5.1.1_
+
+- Fix database migration script to version 5.1 to filter out duplicate property values on unique fields.
+- Fix payload too large error message when saving configuration from the administrative dashboard.
+- Bring back the load-rrdb, load-tr and random uuid command line tools.
+
 # Version 5.0
 
 - Add rdioScanner.options.autoPopulate which by default is true. The configuration file will now be automatically populated from new received calls with unknown system/talkgroup.

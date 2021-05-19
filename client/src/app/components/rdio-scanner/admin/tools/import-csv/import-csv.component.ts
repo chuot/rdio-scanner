@@ -49,7 +49,7 @@ export class RdioScannerAdminImportCsvComponent {
             const group = tg[this.fields[this.mode][4]];
 
             if (!config.groups?.find((g) => g.label === group)) {
-                const id = config.groups?.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 0);
+                const id = config.groups?.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 1);
 
                 config.groups?.push({ _id: id, label: group });
             }
@@ -57,7 +57,7 @@ export class RdioScannerAdminImportCsvComponent {
             const tag = tg[this.fields[this.mode][3]];
 
             if (!config.tags?.find((t) => t.label === tag)) {
-                const id = config.tags?.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 0);
+                const id = config.tags?.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 1);
 
                 config.tags?.push({ _id: id, label: tag });
             }
