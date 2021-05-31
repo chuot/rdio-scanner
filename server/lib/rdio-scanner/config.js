@@ -270,165 +270,30 @@ export class Config extends EventEmitter {
             this._debounceTimeout = setTimeout(async () => {
                 this._debounceTimeout = null;
 
-                this.emit('config', {
-                    access: this.access,
-                    apiKeys: this.apiKeys,
-                    dirWatch: this.dirWatch,
-                    downstreams: this.downstreams,
-                    groups: this.groups,
-                    options: this.options,
-                    systems: this.systems,
-                    tags: this.tags,
-                });
-
                 try {
-                    const transaction = await this._sequelize.transaction({ type: 'DEFERRED' });
+                    writeConfig(this).then(() => {
+                        this.emit('persisted');
 
-                    await this._models.config.upsert({
-                        key: Config.adminPassword,
-                        val: this.adminPassword,
-                    }, { transaction });
-
-                    await this._models.config.upsert({
-                        key: Config.adminPasswordNeedChange,
-                        val: this.adminPasswordNeedChange,
-                    }, { transaction });
-
-                    await this._models.config.upsert({
-                        key: Config.options,
-                        val: this.options,
-                    }, { transaction });
-
-                    await Promise.all([
-                        // access
-                        this._models.access.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.access.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.access.map((access) => this._models.access.upsert(access, { transaction })),
-
-                        // apiKeys
-                        this._models.apiKey.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.apiKeys.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.apiKeys.map((apiKey) => this._models.apiKey.upsert(apiKey, { transaction })),
-
-                        // dirWatch
-                        this._models.dirWatch.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.dirWatch.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.dirWatch.map((dirWatch) => this._models.dirWatch.upsert(dirWatch, { transaction })),
-
-                        // downstream
-                        this._models.downstream.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.downstreams.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.downstreams.map((downstream) => this._models.downstream.upsert(downstream, { transaction })),
-
-                        // groups
-                        this._models.group.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.groups.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.groups.map((group) => this._models.group.upsert(group, { transaction })),
-
-                        // system
-                        this._models.system.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.systems.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.systems.map((system) => this._models.system.upsert(system, { transaction })),
-
-                        // tags
-                        this._models.tag.destroy({
-                            where: {
-                                _id: {
-                                    [Sequelize.Op.notIn]: this.tags.map((o) => o._id).filter((o) => o !== null),
-                                },
-                            },
-                            transaction,
-                        }),
-                        ...this.tags.map((tag) => this._models.tag.upsert(tag, { transaction })),
-                    ]);
-
-                    await transaction.commit();
-
-                    this.emit('persisted');
+                        readConfig(this).then(() => this.emit('config', {
+                            access: this.access,
+                            apiKeys: this.apiKeys,
+                            dirWatch: this.dirWatch,
+                            downstreams: this.downstreams,
+                            groups: this.groups,
+                            options: this.options,
+                            systems: this.systems,
+                            tags: this.tags,
+                        }));
+                    });
 
                 } catch (error) {
                     console.error(`Config@write: ${error.message}`);
                 }
-
             }, 1000);
         });
 
         try {
-            Promise.all([
-                this._models.access.findAll({ sort: [['order', 'ASC']] }),
-                this._models.config.findOne({ where: { key: Config.adminPassword } }),
-                this._models.config.findOne({ where: { key: Config.adminPasswordNeedChange } }),
-                this._models.apiKey.findAll({ sort: [['order', 'ASC']] }),
-                this._models.dirWatch.findAll({ sort: [['order', 'ASC']] }),
-                this._models.downstream.findAll({ sort: [['order', 'ASC']] }),
-                this._models.group.findAll(),
-                this._models.config.findOne({ where: { key: Config.options } }),
-                this._models.config.findOne({ where: { key: Config.secret } }),
-                this._models.system.findAll(),
-                this._models.tag.findAll(),
-            ]).then(([
-                access,
-                adminPassword,
-                adminPasswordNeedChange,
-                apiKeys,
-                dirWatch,
-                downstreams,
-                groups,
-                options,
-                secret,
-                systems,
-                tags,
-            ]) => {
-                this._access = access.map((model) => model.get());
-                this._adminPassword = adminPassword.get('val');
-                this._adminPasswordNeedChange = adminPasswordNeedChange.get('val');
-                this._apiKeys = apiKeys.map((model) => model.get());
-                this._dirWatch = dirWatch.map((model) => model.get());
-                this._downstreams = downstreams.map((model) => model.get());
-                this._groups = groups.map((model) => model.get());
-                this._options = options.get('val');
-                this._secret = secret.get('val');
-                this._systems = systems.map((model) => model.get());
-                this._tags = tags.map((model) => model.get());
-
-                this.emit('ready');
-            });
+            readConfig(this).then(() => this.emit('ready'));
 
         } catch (error) {
             console.error(`Config@read: ${error.message}`);
@@ -447,6 +312,150 @@ Config.options = 'options';
 Config.secret = 'secret';
 Config.tags = 'tags';
 Config.systems = 'systems';
+
+async function readConfig(ctx) {
+    if (!ctx) return;
+
+    await Promise.all([
+        ctx._models.access.findAll({ sort: [['order', 'ASC']] }),
+        ctx._models.config.findOne({ where: { key: Config.adminPassword } }),
+        ctx._models.config.findOne({ where: { key: Config.adminPasswordNeedChange } }),
+        ctx._models.apiKey.findAll({ sort: [['order', 'ASC']] }),
+        ctx._models.dirWatch.findAll({ sort: [['order', 'ASC']] }),
+        ctx._models.downstream.findAll({ sort: [['order', 'ASC']] }),
+        ctx._models.group.findAll(),
+        ctx._models.config.findOne({ where: { key: Config.options } }),
+        ctx._models.config.findOne({ where: { key: Config.secret } }),
+        ctx._models.system.findAll(),
+        ctx._models.tag.findAll(),
+    ]).then(([
+        access,
+        adminPassword,
+        adminPasswordNeedChange,
+        apiKeys,
+        dirWatch,
+        downstreams,
+        groups,
+        options,
+        secret,
+        systems,
+        tags,
+    ]) => {
+        ctx._access = access.map((model) => model.get());
+        ctx._adminPassword = adminPassword.get('val');
+        ctx._adminPasswordNeedChange = adminPasswordNeedChange.get('val');
+        ctx._apiKeys = apiKeys.map((model) => model.get());
+        ctx._dirWatch = dirWatch.map((model) => model.get());
+        ctx._downstreams = downstreams.map((model) => model.get());
+        ctx._groups = groups.map((model) => model.get());
+        ctx._options = options.get('val');
+        ctx._secret = secret.get('val');
+        ctx._systems = systems.map((model) => model.get());
+        ctx._tags = tags.map((model) => model.get());
+    });
+}
+
+async function writeConfig(ctx) {
+    if (!ctx) return;
+
+    const transaction = await ctx._sequelize.transaction({ type: 'DEFERRED' });
+
+    await ctx._models.config.upsert({
+        key: Config.adminPassword,
+        val: ctx.adminPassword,
+    }, { transaction });
+
+    await ctx._models.config.upsert({
+        key: Config.adminPasswordNeedChange,
+        val: ctx.adminPasswordNeedChange,
+    }, { transaction });
+
+    await ctx._models.config.upsert({
+        key: Config.options,
+        val: ctx.options,
+    }, { transaction });
+
+    await Promise.all([
+        // access
+        ctx._models.access.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.access.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.access.map((access) => ctx._models.access.upsert(access, { transaction })),
+
+        // apiKeys
+        ctx._models.apiKey.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.apiKeys.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.apiKeys.map((apiKey) => ctx._models.apiKey.upsert(apiKey, { transaction })),
+
+        // dirWatch
+        ctx._models.dirWatch.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.dirWatch.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.dirWatch.map((dirWatch) => ctx._models.dirWatch.upsert(dirWatch, { transaction })),
+
+        // downstream
+        ctx._models.downstream.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.downstreams.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.downstreams.map((downstream) => ctx._models.downstream.upsert(downstream, { transaction })),
+
+        // groups
+        ctx._models.group.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.groups.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.groups.map((group) => ctx._models.group.upsert(group, { transaction })),
+
+        // system
+        ctx._models.system.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.systems.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.systems.map((system) => ctx._models.system.upsert(system, { transaction })),
+
+        // tags
+        ctx._models.tag.destroy({
+            where: {
+                _id: {
+                    [Sequelize.Op.notIn]: ctx.tags.map((o) => o._id).filter((o) => o !== null),
+                },
+            },
+            transaction,
+        }),
+        ...ctx.tags.map((tag) => ctx._models.tag.upsert(tag, { transaction })),
+    ]);
+
+    await transaction.commit();
+}
 
 function sortByLabel() {
     return (a, b) => typeof a.label === 'string' && typeof b.label === 'string'

@@ -154,7 +154,7 @@ export default {
 
             await queryInterface.bulkInsert('rdioScannerConfigs', [
                 { key: Config.adminPassword, val: JSON.stringify(bcrypt.hashSync(defaults.adminPassword, 10)) },
-                { key: Config.adminPasswordNeedChange, val: true },
+                { key: Config.adminPasswordNeedChange, val: JSON.stringify(true) },
                 { key: Config.options, val: JSON.stringify(options) },
                 { key: Config.secret, val: JSON.stringify(crypto.randomBytes(128).toString('hex')) },
             ], { transaction });

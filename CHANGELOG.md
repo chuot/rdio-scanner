@@ -22,6 +22,14 @@ _v5.1.1_
 - Fix payload too large error message when saving configuration from the administrative dashboard.
 - Bring back the load-rrdb, load-tr and random uuid command line tools.
 
+_v5.1.2_
+
+- Fix config class not returning proper id properties when new records are added.
+- Fix database migration script to version 5.1 when on mysql.
+- Fix bad logic in apiKey validation.
+- Remove the autoJsonMap from the sequelize dialectOptions.
+- Client updated to angular 12.
+
 # Version 5.0
 
 - Add rdioScanner.options.autoPopulate which by default is true. The configuration file will now be automatically populated from new received calls with unknown system/talkgroup.

@@ -20,7 +20,8 @@
       "es2020",
       "dom"
     ],
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
   },
   "angularCompilerOptions": {
     "strictInjectionParameters": true,

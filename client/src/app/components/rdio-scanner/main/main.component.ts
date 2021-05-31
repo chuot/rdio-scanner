@@ -21,7 +21,7 @@ import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, 
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { Subscription, timer } from 'rxjs';
-import { name as appName, version } from '../../../../../package.json';
+import packageInfo from '../../../../../package.json';
 import {
     RdioScannerAvoidOptions,
     RdioScannerBeepStyle,
@@ -61,7 +61,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callTag = 'Tag';
     callTalkgroup = 'Talkgroup';
     callTalkgroupId = '0';
-    callTalkgroupName = `Rdio Scanner ${appName === 'rdio-scanner-client' ? 'v'.concat(version) : ''}`;
+    callTalkgroupName = `Rdio Scanner ${packageInfo.name === 'rdio-scanner-client' ? 'v'.concat(packageInfo.version) : ''}`;
     callTime = 0;
     callUnit = '0';
 

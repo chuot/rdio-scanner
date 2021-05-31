@@ -14,5 +14,5 @@
         "update": "node update"
     },
     "type": "module",
-    "version": "5.1.1"
+    "version": "5.1.2"
 }

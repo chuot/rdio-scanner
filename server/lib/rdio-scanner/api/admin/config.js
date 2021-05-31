@@ -165,9 +165,11 @@ export class Config {
             }));
             this.config.tags = req.body.tags;
 
-            this.log.write(Log.info, 'Admin: Configuration changed');
+            this.config.once('config', () => {
+                this.log.write(Log.info, 'Admin: Configuration changed');
 
-            res.send(getConfig(this));
+                res.send(getConfig(this));
+            });
         };
     }
 }

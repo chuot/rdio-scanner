@@ -1,28 +1,28 @@
 {
     "author": "Chrystian Huot <chrystian.huot@saubeo.solutions>",
     "dependencies": {
-        "@angular/animations": "^11.2.14",
-        "@angular/cdk": "^11.2.12",
-        "@angular/common": "~11.2.14",
-        "@angular/compiler": "~11.2.14",
-        "@angular/core": "~11.2.14",
-        "@angular/forms": "~11.2.14",
-        "@angular/material": "^11.2.12",
-        "@angular/platform-browser": "~11.2.14",
-        "@angular/platform-browser-dynamic": "~11.2.14",
-        "@angular/router": "^11.2.14",
-        "@angular/service-worker": "^11.2.14",
-        "rxjs": "~6.6.7",
+        "@angular/animations": "^12.0.2",
+        "@angular/cdk": "^12.0.2",
+        "@angular/common": "~12.0.2",
+        "@angular/compiler": "~12.0.2",
+        "@angular/core": "~12.0.2",
+        "@angular/forms": "~12.0.2",
+        "@angular/material": "^12.0.2",
+        "@angular/platform-browser": "~12.0.2",
+        "@angular/platform-browser-dynamic": "~12.0.2",
+        "@angular/router": "^12.0.2",
+        "@angular/service-worker": "^12.0.2",
+        "rxjs": "~6.5.5",
         "tslib": "^2.2.0",
         "zone.js": "~0.11.4"
     },
     "devDependencies": {
-        "@angular-devkit/build-angular": "~0.1102.13",
-        "@angular/cli": "^11.2.10",
-        "@angular/compiler-cli": "~11.2.11",
-        "@types/node": "~14.14.41",
-        "ts-node": "~9.1.1",
-        "typescript": "~4.1.5"
+        "@angular-devkit/build-angular": "~12.0.2",
+        "@angular/cli": "^12.0.2",
+        "@angular/compiler-cli": "~12.0.2",
+        "@types/node": "~15.6.1",
+        "ts-node": "~10.0.0",
+        "typescript": "~4.2.4"
     },
     "engines": {
         "node": ">=14.0"
@@ -31,8 +31,8 @@
     "name": "rdio-scanner-client",
     "private": true,
     "scripts": {
-        "build": "ng build --base-href ./ --prod",
+        "build": "ng build --base-href ./ --configuration production",
         "start": "ng serve"
     },
-    "version": "5.1.1"
+    "version": "5.1.2"
 }

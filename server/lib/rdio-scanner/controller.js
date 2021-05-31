@@ -185,6 +185,180 @@ export class Controller extends EventEmitter {
         return parse(this.config.access);
     }
 
+    getAccessScope(token) {
+        const parse = (record) => {
+            const parseSystem = (system, first = true) => {
+                const parseTalkgroup = (talkgroup, first = true) => {
+                    if (Array.isArray(talkgroup)) {
+                        return talkgroup.map((tg) => parseTalkgroup(tg, false));
+
+                    } else if (talkgroup !== null && typeof talkgroup === 'object' && typeof talkgroup.id === 'number') {
+                        return first ? [talkgroup.id] : talkgroup.id;
+
+                    } else if (typeof talkgroup === 'number') {
+                        return first ? [talkgroup] : talkgroup;
+
+                    } else if (talkgroup === '*') {
+                        const talkgroups = (this.config.systems.find((sys) => sys.id === system.id) || {}).talkgroups;
+
+                        return parseTalkgroup(talkgroups);
+
+                    } else {
+                        return [];
+                    }
+                };
+
+                if (Array.isArray(system)) {
+                    return system.map((sys) => parseSystem(sys, false)).filter((sys) => sys.length);
+
+                } else if (system !== null && typeof system === 'object' && typeof system.id === 'number') {
+                    if (this.config.systems.find((sys) => sys.id === system.id)) {
+                        const talkgroups = parseTalkgroup(system.talkgroups);
+
+                        if (talkgroups.length) {
+                            return first ? [[system.id, talkgroups]] : [system.id, talkgroups];
+
+                        } else {
+                            return [];
+                        }
+
+                    } else {
+                        return [];
+                    }
+
+                } else if (typeof system === 'number') {
+                    if (this.config.systems.find((sys) => sys.id === system)) {
+                        const parsed = parseSystem(this.config.systems.find((sys) => sys.id === system), false);
+
+                        return first ? [parsed] : parsed;
+
+                    } else {
+                        return [];
+                    }
+
+                } else if (system === '*') {
+                    return parseSystem(this.config.systems);
+
+                } else {
+                    return [];
+                }
+            };
+
+            if (record === null || record === undefined) {
+                return this.isAccessRestricted ? [] : parseSystem(this.config.systems);
+
+            } else if (Array.isArray(record)) {
+                return parse(record.find((acc) => acc === token || acc.code === token));
+
+            } else if (
+                record !== null && typeof record === 'object' &&
+                (record.code === token || record.key === token) &&
+                (typeof record.disabled !== 'boolean' || !record.disabled)
+            ) {
+                return parseSystem(record.systems);
+
+            } else if (record === token) {
+                return parseSystem(this.config.systems);
+
+            } else {
+                return [];
+            }
+        };
+
+        return parse(this.config.access).reduce((obj, arr) => {
+            obj[arr[0]] = arr[1];
+
+            return obj;
+        }, {});
+    }
+
+    getApiKeyScope(token, systems = this.config.systems) {
+        const parse = (record) => {
+            const parseSystem = (system, first = true) => {
+                const parseTalkgroup = (talkgroup, first = true) => {
+                    if (Array.isArray(talkgroup)) {
+                        return talkgroup.map((tg) => parseTalkgroup(tg, false));
+
+                    } else if (talkgroup !== null && typeof talkgroup === 'object' && typeof talkgroup.id === 'number') {
+                        return first ? [talkgroup.id] : talkgroup.id;
+
+                    } else if (typeof talkgroup === 'number') {
+                        return first ? [talkgroup] : talkgroup;
+
+                    } else if (talkgroup === '*') {
+                        const talkgroups = (systems.find((sys) => sys.id === system.id) || {}).talkgroups;
+
+                        return parseTalkgroup(talkgroups);
+
+                    } else {
+                        return [];
+                    }
+                };
+
+                if (Array.isArray(system)) {
+                    return system.map((sys) => parseSystem(sys, false)).filter((sys) => sys.length);
+
+                } else if (system !== null && typeof system === 'object' && typeof system.id === 'number') {
+                    if (systems.find((sys) => sys.id === system.id)) {
+                        const talkgroups = parseTalkgroup(system.talkgroups);
+
+                        if (talkgroups.length) {
+                            return first ? [[system.id, talkgroups]] : [system.id, talkgroups];
+
+                        } else {
+                            return [];
+                        }
+
+                    } else {
+                        return [];
+                    }
+
+                } else if (typeof system === 'number') {
+                    if (systems.find((sys) => sys.id === system)) {
+                        const parsed = parseSystem(this.config.systems.find((sys) => sys.id === system), false);
+
+                        return first ? [parsed] : parsed;
+
+                    } else {
+                        return [];
+                    }
+
+                } else if (system === '*') {
+                    return parseSystem(systems);
+
+                } else {
+                    return [];
+                }
+            };
+
+            if (record === null || record === undefined) {
+                return [];
+
+            } else if (Array.isArray(record)) {
+                return parse(record.find((acc) => acc === token || acc.key === token));
+
+            } else if (
+                record !== null && typeof record === 'object' &&
+                (record.code === token || record.key === token) &&
+                (typeof record.disabled !== 'boolean' || !record.disabled)
+            ) {
+                return parseSystem(record.systems);
+
+            } else if (record === token) {
+                return parseSystem(systems);
+
+            } else {
+                return [];
+            }
+        };
+
+        return parse(this.config.apiKeys).reduce((obj, arr) => {
+            obj[arr[0]] = arr[1];
+
+            return obj;
+        }, {});
+    }
+
     async getCall(id, scope) {
         const where = scope !== null && typeof scope === 'object' ? {
             [Sequelize.Op.and]: [
@@ -353,93 +527,6 @@ export class Controller extends EventEmitter {
                     : defaults.keypadBeeps.uniden;
 
         return { dimmerDelay, keypadBeeps };
-    }
-
-    getScope(token, store = this.config.access, systems = this.config.systems) {
-        const parse = (record) => {
-            const parseSystem = (system, first = true) => {
-                const parseTalkgroup = (talkgroup, first = true) => {
-                    if (Array.isArray(talkgroup)) {
-                        return talkgroup.map((tg) => parseTalkgroup(tg, false));
-
-                    } else if (talkgroup !== null && typeof talkgroup === 'object' && typeof talkgroup.id === 'number') {
-                        return first ? [talkgroup.id] : talkgroup.id;
-
-                    } else if (typeof talkgroup === 'number') {
-                        return first ? [talkgroup] : talkgroup;
-
-                    } else if (talkgroup === '*') {
-                        const talkgroups = (systems.find((sys) => sys.id === system.id) || {}).talkgroups;
-
-                        return parseTalkgroup(talkgroups);
-
-                    } else {
-                        return [];
-                    }
-                };
-
-                if (Array.isArray(system)) {
-                    return system.map((sys) => parseSystem(sys, false)).filter((sys) => sys.length);
-
-                } else if (system !== null && typeof system === 'object' && typeof system.id === 'number') {
-                    if (systems.find((sys) => sys.id === system.id)) {
-                        const talkgroups = parseTalkgroup(system.talkgroups);
-
-                        if (talkgroups.length) {
-                            return first ? [[system.id, talkgroups]] : [system.id, talkgroups];
-
-                        } else {
-                            return [];
-                        }
-
-                    } else {
-                        return [];
-                    }
-
-                } else if (typeof system === 'number') {
-                    if (systems.find((sys) => sys.id === system)) {
-                        const parsed = parseSystem(this.config.systems.find((sys) => sys.id === system), false);
-
-                        return first ? [parsed] : parsed;
-
-                    } else {
-                        return [];
-                    }
-
-                } else if (system === '*') {
-                    return parseSystem(systems);
-
-                } else {
-                    return [];
-                }
-            };
-
-            if (record === null || record === undefined) {
-                return this.isAccessRestricted ? [] : parseSystem(systems);
-
-            } else if (Array.isArray(record)) {
-                return parse(record.find((acc) => acc === token || acc.code === token || acc.key === token));
-
-            } else if (
-                record !== null && typeof record === 'object' &&
-                (record.code === token || record.key === token) &&
-                (typeof record.disabled !== 'boolean' || !record.disabled)
-            ) {
-                return parseSystem(record.systems);
-
-            } else if (record === token) {
-                return parseSystem(systems);
-
-            } else {
-                return [];
-            }
-        };
-
-        return parse(store).reduce((obj, arr) => {
-            obj[arr[0]] = arr[1];
-
-            return obj;
-        }, {});
     }
 
     getSystems(scope) {
@@ -722,7 +809,7 @@ export class Controller extends EventEmitter {
 
         if (Array.isArray(message)) {
             if (!this.isAccessRestricted && socket.scope === undefined) {
-                socket.scope = this.getScope();
+                socket.scope = this.getAccessScope();
             }
 
             if (message[0] === wsCommand.ver) {
@@ -850,7 +937,7 @@ export class Controller extends EventEmitter {
                     }
 
                     if (socket.access) {
-                        socket.scope = this.getScope(socket.access.code);
+                        socket.scope = this.getAccessScope(socket.access.code);
 
                         socket.send(JSON.stringify([wsCommand.config, this.getConfig(socket.scope)]));
 
@@ -909,7 +996,7 @@ export class Controller extends EventEmitter {
             ? [{ id: system, talkgroups: [talkgroup] }]
             : this.config.systems;
 
-        const scope = this.getScope(apiKey, this.config.apiKeys, systems);
+        const scope = this.getApiKeyScope(apiKey, systems);
 
         return Array.isArray(scope[system]) && (
             scope[system].includes(talkgroup) || this.config.systems.some((sys) => {

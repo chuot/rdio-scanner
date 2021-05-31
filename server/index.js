@@ -156,7 +156,7 @@ export class App extends EventEmitter {
         this.router.set(this.config.nodejs.port);
 
         this.sequelize = new Sequelize(Object.assign({}, this.config.sequelize, {
-            dialectOptions: { autoJsonMap: false },
+            // dialectOptions: { autoJsonMap: false },
             logging: false,
             storage: this.config.sequelize.storage
                 ? path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || dirname, this.config.sequelize.storage)
