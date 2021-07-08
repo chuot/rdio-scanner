@@ -135,7 +135,7 @@ export class App extends EventEmitter {
         this.router.use(cors());
         this.router.use(express.json({ limit: '10mb' }));
         this.router.use(express.urlencoded({ extended: false, limit: '10mb' }));
-        this.router.use(helmet({ contentSecurityPolicy: false }));
+        this.router.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
         this.router.use(express.static(staticDir));
         this.router.use((req, res, next) => {
             if (
@@ -156,7 +156,6 @@ export class App extends EventEmitter {
         this.router.set(this.config.nodejs.port);
 
         this.sequelize = new Sequelize(Object.assign({}, this.config.sequelize, {
-            // dialectOptions: { autoJsonMap: false },
             logging: false,
             storage: this.config.sequelize.storage
                 ? path.resolve(process.env.APP_DATA || process.env.DB_STORAGE || dirname, this.config.sequelize.storage)

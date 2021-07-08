@@ -208,7 +208,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         } else {
             if (this.livefeedPaused) {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate).then(() => this.rdioScannerService.pause());
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+
+                this.rdioScannerService.pause();
 
             } else {
                 this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);

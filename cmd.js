@@ -459,9 +459,6 @@ function readFile(file) {
         } catch (error) {
             exitWithError(error.message);
         }
-
-    } else {
-            exitWithError(`Inexistent token keystore file ${file}`);
     }
 }
 

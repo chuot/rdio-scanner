@@ -1,3 +1,10 @@
+# Version 5.2
+
+- Change to how the server reports version.
+- Fix cmd.js exiting on inexistant session token keystore.
+- Fix issue with iframe.
+- Node modules updated for security fixes.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+dir=$(dirname $0)
+oldver=$(awk '/"version":/{ gsub(/"/, "", $2); print $2 }' $dir/package.json)
+newver=${1:-${oldver}}
+
+sed -i -re "s/^(\s*\"version\":).*$/\1 \"$newver\"/" \
+	$dir/package.json \
+	$dir/client/package.json \
+	$dir/server/package.json
+sed -i -re "s/(version\s*=\s*')[^']*('.*)/\1$newver\2/" \
+	$dir/server/lib/rdio-scanner/version.js

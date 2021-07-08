@@ -86,6 +86,8 @@ export class WebSocket {
     }
 
     logClientsCount() {
-        this.log.write(Log.info, `WebSocket: Listeners count is ${this.wss.clients.size}`);
+        const count = Array.from(this.wss.clients).reduce((c, s) => (!s.justStatus && s.livefeed) ? ++c : c, 0);
+
+        this.log.write(Log.info, `WebSocket: Listeners count is ${count}`);
     }
 }

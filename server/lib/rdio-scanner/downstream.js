@@ -143,7 +143,7 @@ export class Downstream {
             protocol: apiUrl.protocol,
             rejectUnauthorized: false,
         }, (error, response) => {
-            const message = `Downstream: system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url}`;
+            const message = `system=${call.system} talkgroup=${call.talkgroup} file=${call.audioName} to=${downstream.url}`;
 
             if (error) {
                 this.log.write(Log.error, `Downstream: ${message} ${error.message}`);
