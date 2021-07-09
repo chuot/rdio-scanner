@@ -32,6 +32,8 @@ By default, [Rdio Scanner](https://github.com/chuot/rdio-scanner) runs on port 3
 
 However, we will stick to port 3000 in this example.
 
+> Note that it is important to make sure the data folder already exists on the Docker host the very first time you run the Docker container (`~/.rdio-scanner` in this example) or it will be created by the Docker daemon with the wrong owner. In other words, the volume you mount on `/app/data` must be owned by the same user as specified by the `--user` option.
+
 ```bash
 $ docker run --detach --env TZ=America/Toronto --name rdio-scanner --publish 3000:3000 --restart always --user $(id -u):$(id -g) --volume ~/.rdio-scanner:/app/data chuot/rdio-scanner:latest
 520cdbf51fca11d8bacea12d81245f1cb4d984f80d2be2e3039727b59533a6a9
