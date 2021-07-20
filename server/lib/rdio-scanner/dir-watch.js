@@ -329,15 +329,15 @@ export class DirWatch {
         }
 
         const meta = {
-            date: { tag: '#DATE', regex: '[\\d-]+' },
+            date: { tag: '#DATE', regex: '[\\d-_]+' },
             hz: { tag: '#HZ', regex: '[\\d]+' },
             khz: { tag: '#KHZ', regex: '[\\d\\.]+' },
             mhz: { tag: '#MHZ', regex: '[\\d\\.]+' },
-            time: { tag: '#TIME', regex: '[\\d:]+' },
+            time: { tag: '#TIME', regex: '[\\d-:]+' },
             system: { tag: '#SYS', regex: '\\d+' },
             talkgroup: { tag: '#TG', regex: '\\d+' },
             unit: { tag: '#UNIT', regex: '\\d+' },
-            ztime: { tag: '#ZTIME', regex: '[\\d:]+' },
+            ztime: { tag: '#ZTIME', regex: '[\\d-:]+' },
         };
 
         let data = [];
@@ -356,68 +356,67 @@ export class DirWatch {
 
         const match = filename.match(regex);
 
-        if (Array.isArray(match)) {
-            data = data.sort((a, b) => a[1] - b[1]).reduce((obj, val, index) => {
-                obj[val[0]] = match[index + 1];
-
-                return obj;
-            }, {});
-
-            if (data.date && data.time) {
-                const date = data.date.replace(/[^\d]]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
-                const time = data.time.replace(/[^\\d]]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
-
-                const dateTime = new Date(`${date}T${time}`);
-
-                if (!isNaN(dateTime.getTime())) {
-                    call.dateTime = dateTime;
-                }
-
-            } else if (data.date && data.ztime) {
-                const date = data.date.replace(/[^\d]]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
-                const time = data.ztime.replace(/[^\\d]]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
-
-                const dateTime = new Date(`${date}T${time}Z`);
-
-                if (!isNaN(dateTime.getTime())) {
-                    call.dateTime = dateTime;
-                }
-
-            } else if (data.date) {
-                const val = parseInt(data.date, 10);
-
-                if (val > 999999) {
-                    call.dateTime = new Date(1970, 0, 1);
-
-                    call.dateTime.setSeconds(val);
-                }
-            }
-
-            if (data.hz || data.khz || data.mhz) {
-                const freq = +(data.hz || data.khz || data.mhz);
-
-                if (freq) {
-                    call.frequency = data.hz ? freq : data.khz ? freq * 1000 : data.mhz * 1000000;
-                }
-            }
-
-            if (data.system) {
-                call.system = parseInt(data.system, 10);
-            }
-
-            if (data.talkgroup) {
-                call.talkgroup = parseInt(data.talkgroup, 10);
-            }
-
-            if (data.unit) {
-                call.sources = [{ pos: 0, src: parseInt(data.unit, 10) }];
-            }
-
-            return call;
-
-        } else {
+        if (!Array.isArray(match)) {
             return null;
         }
+
+        data = data.sort((a, b) => a[1] - b[1]).reduce((obj, val, index) => {
+            obj[val[0]] = match[index + 1];
+
+            return obj;
+        }, {});
+
+        if (data.date && data.time) {
+            const date = data.date.replace(/[^\d]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
+            const time = data.time.replace(/[^\d]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
+
+            const dateTime = new Date(`${date}T${time}`);
+
+            if (!isNaN(dateTime.getTime())) {
+                call.dateTime = dateTime;
+            }
+
+        } else if (data.date && data.ztime) {
+            const date = data.date.replace(/[^\d]+/g, '').replace(/(\d{4})(\d{2})(\d{2})/g, '$1-$2-$3');
+            const time = data.ztime.replace(/[^\d]+/g, '').replace(/(\d)(?=(\d{2})+$)/g, '$1:');
+
+            const dateTime = new Date(`${date}T${time}Z`);
+
+            if (!isNaN(dateTime.getTime())) {
+                call.dateTime = dateTime;
+            }
+
+        } else if (data.date) {
+            const val = parseInt(data.date, 10);
+
+            if (val > 999999) {
+                call.dateTime = new Date(1970, 0, 1);
+
+                call.dateTime.setSeconds(val);
+            }
+        }
+
+        if (data.hz || data.khz || data.mhz) {
+            const freq = +(data.hz || data.khz || data.mhz);
+
+            if (freq) {
+                call.frequency = data.hz ? freq : data.khz ? freq * 1000 : data.mhz * 1000000;
+            }
+        }
+
+        if (data.system) {
+            call.system = parseInt(data.system, 10);
+        }
+
+        if (data.talkgroup) {
+            call.talkgroup = parseInt(data.talkgroup, 10);
+        }
+
+        if (data.unit) {
+            call.sources = [{ pos: 0, src: parseInt(data.unit, 10) }];
+        }
+
+        return call;
     }
 
     exists(filename) {

@@ -5,6 +5,13 @@
 - Fix issue with iframe.
 - Node modules updated for security fixes.
 
+_v.5.2.1_
+
+- Fix talkgroup header on the search panel (issue #47).
+- Update dirwatch meta tags #DATE, #TIME and #ZTIME for SDRSharp compatibility (issue #48).
+- Fix dirwath date and time parsing bug.
+- Configurable call duplicate detection time frame.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**

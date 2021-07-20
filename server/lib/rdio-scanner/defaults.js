@@ -115,6 +115,7 @@ export const defaults = {
         dimmerDelay: 5000,
         disableAudioConversion: false,
         disableDuplicateDetection: false,
+        duplicateDetectionTimeFrame: 500,
         keypadBeeps: 'uniden',
         pruneDays: 7,
         sortTalkgroups: false,

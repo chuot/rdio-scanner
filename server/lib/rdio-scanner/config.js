@@ -156,7 +156,16 @@ export class Config extends EventEmitter {
     }
 
     get options() {
-        return Object.assign({}, this._options);
+        return {
+            autoPopulate: this._options.autoPopulate ?? defaults.options.autoPopulate,
+            dimmerDelay: this._options.dimmerDelay ?? defaults.options.dimmerDelay,
+            disableAudioConversion: this._options.disableAudioConversion ?? defaults.options.disableAudioConversion,
+            disableDuplicateDetection: this._options.disableDuplicateDetection ?? defaults.options.disableDuplicateDetection,
+            duplicateDetectionTimeFrame: this._options.duplicateDetectionTimeFrame ?? defaults.options.duplicateDetectionTimeFrame,
+            keypadBeeps: this._options.keypadBeeps ?? defaults.options.keypadBeeps,
+            pruneDays: this._options.pruneDays ?? defaults.options.pruneDays,
+            sortTalkgroups: this._options.sortTalkgroups ?? defaults.options.sortTalkgroups,
+        };
     }
 
     set options(options) {
@@ -167,11 +176,12 @@ export class Config extends EventEmitter {
                     'dimmerDelay',
                     'disableAudioConversion',
                     'disableDuplicateDetection',
+                    'duplicateDetectionTimeFrame',
                     'keypadBeeps',
                     'pruneDays',
                     'sortTalkgroups',
                 ].includes(k)) {
-                    o[k] = options[k];
+                    o[k] = options[k] ?? defaults.options[k];
                 }
 
                 return o;

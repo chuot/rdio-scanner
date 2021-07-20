@@ -87,6 +87,7 @@ export interface Options {
     dimmerDelay?: number;
     disableAudioConversion?: boolean;
     disableDuplicateDetection?: boolean;
+    duplicateDetectionTimeFrame?: number;
     keypadBeeps?: string;
     pruneDays?: number;
     sortTalkgroups?: boolean;
@@ -475,6 +476,7 @@ export class RdioScannerAdminService implements OnDestroy {
             dimmerDelay: [options?.dimmerDelay, [Validators.required, Validators.min(0)]],
             disableAudioConversion: [options?.disableAudioConversion],
             disableDuplicateDetection: [options?.disableDuplicateDetection],
+            duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
             pruneDays: [options?.pruneDays, [Validators.required, Validators.min(0)]],
             sortTalkgroups: [options?.sortTalkgroups],

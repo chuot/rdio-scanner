@@ -716,13 +716,14 @@ export class Controller extends EventEmitter {
             return;
         }
 
-        const dateFrom = new Date(call.dateTime);
-        const dateTo = new Date(call.dateTime);
-
-        dateFrom.setMilliseconds(dateFrom.getMilliseconds() - 500);
-        dateTo.setMilliseconds(dateTo.getMilliseconds() + 500);
-
         if (!this.config.options.disableDuplicateDetection) {
+            const dateFrom = new Date(call.dateTime);
+            const dateTo = new Date(call.dateTime);
+            const delay = this.config.options.duplicateDetectionTimeFrame ?? defaults.options.duplicateDetectionTimeFrame;
+
+            dateFrom.setMilliseconds(dateFrom.getMilliseconds() - delay);
+            dateTo.setMilliseconds(dateTo.getMilliseconds() + delay);
+
             const duplicateCall = await this.models.call.findOne({
                 where: {
                     dateTime: {

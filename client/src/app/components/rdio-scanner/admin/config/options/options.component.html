@@ -46,6 +46,22 @@
     </div>
     <div class="row">
         <p>
+            <span class="mat-body">Duplicate Call Detection Time Frame</span><br>
+            <span class="mat-caption">New incoming calls will be rejected if a call already exists in the database with
+                a start time of +/- this delay in milliseconds.</span>
+        </p>
+        <mat-form-field>
+            <input matInput formControlName="duplicateDetectionTimeFrame" type="number">
+            <mat-error *ngIf="form?.get('duplicateDetectionTimeFrame')?.hasError('required')">
+                Duplicate call time frame is required
+            </mat-error>
+            <mat-error *ngIf="form?.get('duplicateDetectionTimeFrame')?.hasError('min')">
+                Duplicate call time frame is invalid
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Keypad Beep Style</span><br>
             <span class="mat-caption">Provide audio feedback when pressing buttons.</span>
         </p>
