@@ -19,6 +19,6 @@
 
 'use strict';
 
-export const version = '5.2.1';
+export const version = '5.2.2';
 
 export default version;

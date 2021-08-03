@@ -12,6 +12,11 @@ _v.5.2.1_
 - Fix dirwath date and time parsing bug.
 - Configurable call duplicate detection time frame.
 
+_v.5.2.2_
+
+- Little changes to the main screen history layout, more room for the second and third columns.
+- Node modules updates.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**
