@@ -5,17 +5,22 @@
 - Fix issue with iframe.
 - Node modules updated for security fixes.
 
-_v.5.2.1_
+_v5.2.1_
 
 - Fix talkgroup header on the search panel (issue #47).
 - Update dirwatch meta tags #DATE, #TIME and #ZTIME for SDRSharp compatibility (issue #48).
 - Fix dirwath date and time parsing bug.
 - Configurable call duplicate detection time frame.
 
-_v.5.2.2_
+_v5.2.2_
 
 - Little changes to the main screen history layout, more room for the second and third columns.
 - Node modules updates.
+
+_v5.2.3_
+
+- Change history columns padding from 1px to 6px on the main screen.
+- Fix a bug in the admin api where the server crash when saving new config from the admin dashboard.
 
 # Version 5.1
 

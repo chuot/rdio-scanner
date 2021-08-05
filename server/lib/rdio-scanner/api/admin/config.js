@@ -72,8 +72,6 @@ export class Config {
                 if (ws.isAlive === false) {
                     ws.terminate();
 
-                    this.logClientsCount();
-
                 } else {
                     ws.isAlive = false;
 

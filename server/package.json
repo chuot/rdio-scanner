@@ -13,7 +13,7 @@
         "mariadb": "^2.5.4",
         "mime-types": "^2.1.32",
         "multer": "^1.4.2",
-        "mysql2": "^2.2.5",
+        "mysql2": "^2.3.0",
         "pg": "^8.7.1",
         "sequelize": "^6.6.5",
         "sqlite3": "^5.0.2",
@@ -46,5 +46,5 @@
         "start": "nodemon"
     },
     "type": "module",
-    "version": "5.2.2"
+    "version": "5.2.3"
 }
