@@ -22,6 +22,12 @@ _v5.2.3_
 - Change history columns padding from 1px to 6px on the main screen.
 - Fix a bug in the admin api where the server crash when saving new config from the admin dashboard.
 
+_v5.2.4_
+
+- Updated to Angular 12.2.
+- New update prompt for clients when server is updated.
+- Fix unaligned back arrow on the search panel.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**

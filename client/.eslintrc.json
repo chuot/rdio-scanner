@@ -1,36 +1,20 @@
 {
     "env": {
-        "commonjs": true,
-        "es6": true,
-        "node": true
+        "browser": true,
+        "es2021": true
     },
-    "extends": "eslint:recommended",
-    "globals": {
-        "Atomics": "readonly",
-        "SharedArrayBuffer": "readonly"
-    },
+    "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended"
+    ],
+    "parser": "@typescript-eslint/parser",
     "parserOptions": {
-        "ecmaVersion": 2020,
+        "ecmaVersion": 12,
         "sourceType": "module"
     },
+    "plugins": [
+        "@typescript-eslint"
+    ],
     "rules": {
-        "linebreak-style": [
-            "error",
-            "unix"
-        ],
-        "max-len": [
-            "error",
-            {
-                "code": 140
-            }
-        ],
-        "quotes": [
-            "error",
-            "single"
-        ],
-        "semi": [
-            "error",
-            "always"
-        ]
     }
 }

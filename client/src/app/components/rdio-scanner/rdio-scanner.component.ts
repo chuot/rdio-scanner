@@ -19,7 +19,7 @@
 
 import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
-import { RdioScannerConfig, RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
+import { RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
 import { RdioScannerService } from './rdio-scanner.service';
 
 @Component({
@@ -28,8 +28,6 @@ import { RdioScannerService } from './rdio-scanner.service';
     templateUrl: './rdio-scanner.component.html',
 })
 export class RdioScannerComponent implements OnDestroy {
-    private config: RdioScannerConfig | undefined;
-
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
@@ -108,10 +106,6 @@ export class RdioScannerComponent implements OnDestroy {
     }
 
     private eventHandler(event: RdioScannerEvent): void {
-        if ('config' in event) {
-            this.config = event.config;
-        }
-
         if (event.livefeedMode) {
             this.livefeedMode = event.livefeedMode;
         }

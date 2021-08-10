@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot
+ * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,10 @@
  * ****************************************************************************
  */
 
-'use strict';
+import { Component } from '@angular/core';
 
-export const version = '5.2.4';
-
-export default version;
+@Component({
+  templateUrl: './update.component.html',
+  styleUrls: ['./update.component.scss'],
+})
+export class AppUpdateComponent { }

@@ -21,6 +21,7 @@ import { DOCUMENT } from '@angular/common';
 import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
 import { interval, Subscription, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
+import { AppUpdateService } from '../../shared/update/update.service';
 import {
     RdioScannerAvoidOptions,
     RdioScannerBeepStyle,
@@ -54,7 +55,6 @@ enum WebsocketCommand {
     LivefeedMap = 'LFM',
     Max = 'MAX',
     Pin = 'PIN',
-    Ver = 'VER',
 }
 
 @Injectable()
@@ -97,7 +97,10 @@ export class RdioScannerService implements OnDestroy {
 
     private websocket: WebSocket | undefined;
 
-    constructor(@Inject(DOCUMENT) private document: Document) {
+    constructor(
+        private appUpdateService: AppUpdateService,
+        @Inject(DOCUMENT) private document: Document,
+    ) {
         this.bootstrapAudio();
 
         this.restoreLivefeed();
@@ -791,7 +794,7 @@ export class RdioScannerService implements OnDestroy {
 
                     break;
 
-                case WebsocketCommand.Config:
+                case WebsocketCommand.Config: {
                     const config = message[1];
 
                     this.config = {
@@ -818,6 +821,7 @@ export class RdioScannerService implements OnDestroy {
                     });
 
                     break;
+                }
 
                 case WebsocketCommand.Expired:
                     this.event.emit({ auth: true, expired: true });
@@ -915,8 +919,6 @@ export class RdioScannerService implements OnDestroy {
 
     private rebuildLivefeedMap(): void {
         const livefeedMap = this.config.systems.reduce((sysMap, sys) => {
-            const tgs = sys.talkgroups.map((tg) => tg.id.toString());
-
             sysMap[sys.id] = sys.talkgroups.reduce((tgMap, tg) => {
                 const state = this.livefeedMap && this.livefeedMap[sys.id] && this.livefeedMap[sys.id][tg.id];
 

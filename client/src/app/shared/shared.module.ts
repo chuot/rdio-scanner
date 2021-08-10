@@ -23,6 +23,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ExtraOptions, RouterModule, Routes } from '@angular/router';
 import { AppLocaleModule } from './locale/locale.module';
 import { AppMaterialModule } from './material/material.module';
+import { AppUpdateModule } from './update/update.module';
 
 export interface AppSharedModuleConfig {
     routerExtraOptions?: ExtraOptions;
@@ -33,6 +34,7 @@ export interface AppSharedModuleConfig {
     exports: [
         AppLocaleModule,
         AppMaterialModule,
+        AppUpdateModule,
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
@@ -54,6 +56,7 @@ export class AppSharedModule {
             ngModule: AppSharedModule,
             providers: [
                 ...AppLocaleModule.forRoot().providers || [],
+                ...AppUpdateModule.forRoot().providers || [],
                 ...RouterModule.forRoot(config.routerRoutes || [], config.routerExtraOptions || {}).providers || [],
             ],
         };
