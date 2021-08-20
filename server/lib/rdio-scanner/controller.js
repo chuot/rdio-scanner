@@ -38,7 +38,6 @@ const wsCommand = {
     livefeedMap: 'LFM',
     max: 'MAX',
     pin: 'PIN',
-    status: 'STS',
     ver: 'VER',
 };
 
@@ -90,7 +89,7 @@ export class Controller extends EventEmitter {
     broadcastConfig() {
         if (this.websocket) {
             this.websocket.getSockets().forEach(async (socket) => {
-                if ((this.isAccessRestricted && !socket.access) || socket.justStatus) {
+                if (this.isAccessRestricted && !socket.access) {
                     return;
                 }
 
@@ -810,30 +809,7 @@ export class Controller extends EventEmitter {
                 socket.scope = this.getAccessScope();
             }
 
-            if (message[0] === wsCommand.status) {
-                if (typeof socket.status !== 'function') {
-                    socket.status = (call) => {
-                        if (socket.readyState !== 3) {
-                            socket.send(JSON.stringify([
-                                wsCommand.status,
-                                `${call.system},${call.talkgroup},${call.id}`,
-                            ]));
-
-                        } else {
-                            this.removeListener('call', socket.status);
-                            socket.status = undefined;
-                        }
-                    };
-                    this.addListener('call', socket.status);
-                    socket.send(JSON.stringify([wsCommand.status, true]));
-
-                } else {
-                    this.removeListener('call', socket.status);
-                    socket.status = undefined;
-                    socket.send(JSON.stringify([wsCommand.status, false]));
-                }
-
-            } else if (message[0] === wsCommand.ver) {
+            if (message[0] === wsCommand.ver) {
                 socket.send(JSON.stringify([wsCommand.ver, this.version]));
 
             } else if (this.isAccessRestricted && !socket.access && message[0] !== wsCommand.pin) {
@@ -878,10 +854,7 @@ export class Controller extends EventEmitter {
 
                         socket.livefeed = (call) => {
                             if (socket.readyState !== 3) {
-                                if (socket.justStatus) {
-                                    socket.send(JSON.stringify([wsCommand.status], `${call.system},${call.talkgroup},${call.id}`));
-
-                                } else if (call.system in socket.scope && call.system in message[1]) {
+                                if (call.system in socket.scope && call.system in message[1]) {
                                     if (socket.scope[call.system].includes(call.talkgroup)) {
                                         if (message[1][call.system] && message[1][call.system][call.talkgroup]) {
                                             socket.send(JSON.stringify([wsCommand.call, call]));
@@ -942,7 +915,7 @@ export class Controller extends EventEmitter {
 
                         if (typeof socket.access.limit === 'number') {
                             const count = Array.from(this.websocket.getSockets())
-                                .reduce((c, s) => (!s.justStatus && s.access?.code === token) ? ++c : c, 0);
+                                .reduce((c, s) => s.access?.code === token ? ++c : c, 0);
 
                             if (count > socket.access.limit) {
                                 socket.send(JSON.stringify([wsCommand.max]));

@@ -28,6 +28,13 @@ _v5.2.4_
 - New update prompt for clients when server is updated.
 - Fix unaligned back arrow on the search panel.
 
+_v5.2.5_
+
+- STS command removed from the server.
+- Minor fixes here and there.
+- README.md updated.
+- Documentation images resized.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**

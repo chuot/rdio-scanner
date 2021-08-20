@@ -51,7 +51,14 @@ The server side of [Rdio Scanner](https://github.com/chuot/rdio-scanner) can mon
 
 You can ask your questions or post your comments on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) where the community continues to grow.
 
-## Commercial support
+## Native app
+
+[Rdio Scanner](https://github.com/chuot/rdio-scanner) is now the perfect software-defined radio companion. Go get the native client here:
+
+[![Available on the App Store](./docs/images/app_store.png?raw=true "Available on the App Store")](https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone)
+[![Get it on Google Play](./docs/images/google_play.png?raw=true "Get It on Google Play")](https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner)
+
+# Commercial support
 
 Commercial support is available at https://saubeo.solutions/.
 
