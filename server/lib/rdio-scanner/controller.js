@@ -985,7 +985,8 @@ export class Controller extends EventEmitter {
             }, 15 * 60 * 1000);
 
         } else {
-            this.pruneScheduler = null;
+            // this causes TypeError because this.pruneScheduer() is no longer a function
+            // this.pruneScheduler = null;
         }
     }
 
