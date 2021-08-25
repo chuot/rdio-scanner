@@ -985,7 +985,7 @@ export class Controller extends EventEmitter {
             }, 15 * 60 * 1000);
 
         } else {
-            this.pruneScheduler = null;
+            this.pruneInterval = null;
         }
     }
 
