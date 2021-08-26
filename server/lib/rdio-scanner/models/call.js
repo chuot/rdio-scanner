@@ -56,7 +56,7 @@ callFactory.schema = {
         allowNull: false,
     },
     frequencies: {
-        type: Sequelize.DataTypes.TEXT('long'),
+        type: Sequelize.DataTypes.TEXT,
         defaultValue: '[]',
         allowNull: false,
         get() {
@@ -81,7 +81,7 @@ callFactory.schema = {
         allownull: true,
     },
     sources: {
-        type: Sequelize.DataTypes.TEXT('long'),
+        type: Sequelize.DataTypes.TEXT,
         defaultValue: '[]',
         allowNull: false,
         get() {

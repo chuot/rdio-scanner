@@ -61,7 +61,7 @@ accessFactory.schema = {
         allowNull: true,
     },
     systems: {
-        type: Sequelize.DataTypes.TEXT('long'),
+        type: Sequelize.DataTypes.TEXT,
         allowNull: false,
         get() {
             const rawValue = this.getDataValue('systems');

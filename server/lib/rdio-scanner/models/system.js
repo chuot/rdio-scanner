@@ -44,8 +44,8 @@ systemFactory.schema = {
         defaultValue: false,
     },
     blacklists: {
-        type: Sequelize.DataTypes.TEXT('long'),
-        defaultValue: [],
+        type: Sequelize.DataTypes.TEXT,
+        defaultValue: '[]',
         allowNull: false,
         get() {
             const rawValue = this.getDataValue('blacklists');
@@ -78,8 +78,8 @@ systemFactory.schema = {
         allowNull: true,
     },
     talkgroups: {
-        type: Sequelize.DataTypes.TEXT('long'),
-        defaultValue: [],
+        type: Sequelize.DataTypes.TEXT,
+        defaultValue: '[]',
         allowNull: false,
         get() {
             const rawValue = this.getDataValue('talkgroups');
@@ -95,8 +95,8 @@ systemFactory.schema = {
         },
     },
     units: {
-        type: Sequelize.DataTypes.TEXT('long'),
-        defaultValue: [],
+        type: Sequelize.DataTypes.TEXT,
+        defaultValue: '[]',
         allowNull: false,
         get() {
             const rawValue = this.getDataValue('units');
