@@ -45,7 +45,19 @@ configFactory.schema = {
         unique: true,
     },
     val: {
-        type: Sequelize.DataTypes.JSON,
+        type: Sequelize.DataTypes.TEXT('long'),
         allowNull: false,
+        get() {
+            const rawValue = this.getDataValue('val');
+            try {
+                return JSON.parse(rawValue);
+            } catch (_) {
+                return rawValue;
+            }
+        },
+        set(value) {
+            const rawValue = JSON.stringify(value);
+            this.setDataValue('val', rawValue);
+        },
     },
 };

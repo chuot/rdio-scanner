@@ -39,6 +39,11 @@ _v5.2.6_
 
 - Fix crash when when options.pruneDays = 0.
 
+_v5.2.7_
+
+- Fix handling of JSON datatypes on MySQL/MariaDB database backend.
+- Fix listeners count.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**

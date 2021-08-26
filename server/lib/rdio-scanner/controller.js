@@ -88,7 +88,7 @@ export class Controller extends EventEmitter {
 
     broadcastConfig() {
         if (this.websocket) {
-            this.websocket.getSockets().forEach(async (socket) => {
+            this.websocket.wss.clients.forEach(async (socket) => {
                 if (this.isAccessRestricted && !socket.access) {
                     return;
                 }
@@ -914,7 +914,7 @@ export class Controller extends EventEmitter {
                         socket.authCount = 0;
 
                         if (typeof socket.access.limit === 'number') {
-                            const count = Array.from(this.websocket.getSockets())
+                            const count = Array.from(this.websocket.wss.clients)
                                 .reduce((c, s) => s.access?.code === token ? ++c : c, 0);
 
                             if (count > socket.access.limit) {

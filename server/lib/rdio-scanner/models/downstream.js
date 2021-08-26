@@ -53,8 +53,20 @@ downstreamFactory.schema = {
         allowNull: true,
     },
     systems: {
-        type: Sequelize.DataTypes.JSON,
+        type: Sequelize.DataTypes.TEXT('long'),
         allowNull: false,
+        get() {
+            const rawValue = this.getDataValue('systems');
+            try {
+                return JSON.parse(rawValue);
+            } catch (_) {
+                return rawValue;
+            }
+        },
+        set(value) {
+            const rawValue = JSON.stringify(value);
+            this.setDataValue('systems', rawValue);
+        },
     },
     url: {
         type: Sequelize.DataTypes.STRING,

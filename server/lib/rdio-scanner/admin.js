@@ -98,7 +98,6 @@ export class Admin {
 
     login(password) {
         if (bcrypt.compareSync(password, this.config.adminPassword)) {
-
             const token = jwt.sign(crypto.randomBytes(32).toString('hex'), this.config.secret);
 
             this.tokens.unshift(token);

@@ -56,9 +56,21 @@ callFactory.schema = {
         allowNull: false,
     },
     frequencies: {
-        type: Sequelize.DataTypes.JSON,
-        defaultValue: [],
+        type: Sequelize.DataTypes.TEXT('long'),
+        defaultValue: '[]',
         allowNull: false,
+        get() {
+            const rawValue = this.getDataValue('frequencies');
+            try {
+                return JSON.parse(rawValue);
+            } catch (_) {
+                return rawValue;
+            }
+        },
+        set(value) {
+            const rawValue = JSON.stringify(value);
+            this.setDataValue('frequencies', rawValue);
+        },
     },
     frequency: {
         type: Sequelize.DataTypes.INTEGER,
@@ -69,9 +81,21 @@ callFactory.schema = {
         allownull: true,
     },
     sources: {
-        type: Sequelize.DataTypes.JSON,
-        defaultValue: [],
+        type: Sequelize.DataTypes.TEXT('long'),
+        defaultValue: '[]',
         allowNull: false,
+        get() {
+            const rawValue = this.getDataValue('sources');
+            try {
+                return JSON.parse(rawValue);
+            } catch (_) {
+                return rawValue;
+            }
+        },
+        set(value) {
+            const rawValue = JSON.stringify(value);
+            this.setDataValue('sources', rawValue);
+        },
     },
     system: {
         type: Sequelize.DataTypes.INTEGER,
