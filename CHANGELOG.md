@@ -48,6 +48,11 @@ _V5.2.8_
 
 - Fix SQLite does not support TEXT with options.
 
+_V5.2.9_
+
+- Fix bad code for server options parsing.
+- Increase dirwatch polling interval from 1000ms to 2500ms.
+
 # Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**

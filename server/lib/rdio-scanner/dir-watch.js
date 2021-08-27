@@ -451,7 +451,7 @@ export class DirWatch {
             };
 
             if (options.usePolling) {
-                options.binaryInterval = options.interval = dirWatch.usePolling === true ? 1000 : dirWatch.usePolling;
+                options.binaryInterval = options.interval = dirWatch.usePolling === true ? 2500 : dirWatch.usePolling;
             }
 
             const watcher = chokidar.watch(path.resolve(dirname, '../../..', dirWatch.directory), options);
