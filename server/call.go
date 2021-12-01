@@ -39,6 +39,7 @@ type Call struct {
 	talkgroupGroup interface{}
 	talkgroupLabel interface{}
 	talkgroupTag   interface{}
+	units          interface{}
 }
 
 func (call *Call) IsValid() bool {

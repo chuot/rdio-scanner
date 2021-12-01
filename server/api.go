@@ -68,6 +68,7 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			talkgroupGroup interface{}
 			talkgroupLabel interface{}
 			talkgroupTag   interface{}
+			units          interface{}
 		)
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -190,9 +191,22 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 									src["pos"] = uint(v)
 								}
 
-								switch v := v["src"].(type) {
+								switch s := v["src"].(type) {
 								case float64:
-									src["src"] = uint(v)
+									src["src"] = uint(s)
+
+									switch t := v["tag"].(type) {
+									case string:
+										var u Units
+										switch v := units.(type) {
+										case Units:
+											u = v
+										default:
+											u = Units{}
+										}
+										u.Add(uint(s), t)
+										units = u
+									}
 								}
 							}
 
@@ -246,6 +260,7 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			talkgroupGroup: talkgroupGroup,
 			talkgroupLabel: talkgroupLabel,
 			talkgroupTag:   talkgroupTag,
+			units:          units,
 		}
 
 		if call.IsValid() {

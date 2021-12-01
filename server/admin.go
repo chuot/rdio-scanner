@@ -271,8 +271,6 @@ func (admin *Admin) GetAuthorization(r *http.Request) string {
 }
 
 func (admin *Admin) GetConfig() map[string]interface{} {
-	// _, docker := os.LookupEnv("DOCKER")
-
 	systems := []map[string]interface{}{}
 	for _, system := range *admin.Controller.Systems {
 		systems = append(systems, map[string]interface{}{
@@ -284,14 +282,14 @@ func (admin *Admin) GetConfig() map[string]interface{} {
 			"led":          system.Led,
 			"order":        system.Order,
 			"talkgroups":   system.Talkgroups,
+			"units":        system.Units,
 		})
 	}
 
 	return map[string]interface{}{
-		"access":   *admin.Controller.Accesses,
-		"apiKeys":  *admin.Controller.Apikeys,
-		"dirWatch": *admin.Controller.Dirwatches,
-		// "docker":      docker,
+		"access":      *admin.Controller.Accesses,
+		"apiKeys":     *admin.Controller.Apikeys,
+		"dirWatch":    *admin.Controller.Dirwatches,
 		"downstreams": *admin.Controller.Downstreams,
 		"groups":      *admin.Controller.Groups,
 		"options":     *admin.Controller.Options,

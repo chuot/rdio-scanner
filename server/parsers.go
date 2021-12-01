@@ -109,22 +109,27 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 				case float64:
 					freq["errorCount"] = uint(v)
 				}
+
 				switch v := v["freq"].(type) {
 				case float64:
 					freq["freq"] = uint(v)
 				}
+
 				switch v := v["len"].(type) {
 				case float64:
 					freq["len"] = uint(v)
 				}
+
 				switch v := v["pos"].(type) {
 				case float64:
 					freq["pos"] = uint(v)
 				}
+
 				switch v := v["spike_count"].(type) {
 				case float64:
 					freq["spikeCount"] = uint(v)
 				}
+
 				freqs = append(freqs, freq)
 			}
 		}
@@ -142,10 +147,25 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 				case float64:
 					source["pos"] = uint(v)
 				}
-				switch v := v["src"].(type) {
+
+				switch s := v["src"].(type) {
 				case float64:
-					source["src"] = uint(v)
+					source["src"] = uint(s)
+
+					switch t := v["tag"].(type) {
+					case string:
+						var units Units
+						switch v := call.units.(type) {
+						case Units:
+							units = v
+						default:
+							units = Units{}
+						}
+						units.Add(uint(s), t)
+						call.units = units
+					}
 				}
+
 				sources = append(sources, source)
 			}
 		}
@@ -165,6 +185,12 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	switch v := m["talkgroup"].(type) {
 	case float64:
 		call.Talkgroup = uint(v)
+	}
+
+	switch v := m["talkgroup_tag"].(type) {
+	case string:
+		call.talkgroupTag = v
+		call.talkgroupLabel = v
 	}
 
 	return nil

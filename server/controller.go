@@ -288,6 +288,14 @@ func (controller *Controller) IngestCall(call *Call) {
 		system.Talkgroups = append(system.Talkgroups, talkgroup)
 	}
 
+	if controller.Options.AutoPopulate || system.AutoPopulate {
+		switch v := call.units.(type) {
+		case Units:
+			populated = true
+			system.Units.Merge(&v)
+		}
+	}
+
 	if populated {
 		if err = controller.Systems.Write(controller.Database); err != nil {
 			logError(err)

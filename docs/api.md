@@ -37,8 +37,8 @@ Call imported successfully
         {
           errorCount: number;
           freq: number; // in hertz
-          len: number; // in seconds
-          pos: number; // in seconds
+          len: number;  // in seconds
+          pos: number;  // in seconds
           spikeCount: number;
         }[];
 
@@ -49,7 +49,8 @@ Call imported successfully
 
         {
           pos: number; // in seconds
-          src: number; // the unit ID
+          src: number; // unit ID
+          tag: number; // [optional] unit tag
         }[];
 
 - **system** - [optional] system ID.

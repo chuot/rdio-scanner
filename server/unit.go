@@ -39,6 +39,23 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 
 type Units []Unit
 
+func (units *Units) Add(id uint, label string) *Units {
+	found := false
+
+	for _, u := range *units {
+		if u.Id == id {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		*units = append(*units, Unit{Id: id, Label: label})
+	}
+
+	return units
+}
+
 func (units *Units) FromJson(str string) error {
 	var v interface{}
 
@@ -65,6 +82,12 @@ func (units *Units) FromJson(str string) error {
 	}
 
 	return nil
+}
+
+func (u *Units) Merge(units *Units) {
+	for _, v := range *units {
+		u.Add(v.Id, v.Label)
+	}
 }
 
 func (units *Units) ToJson() (string, error) {
