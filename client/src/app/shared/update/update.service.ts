@@ -28,9 +28,11 @@ export class AppUpdateService {
     private matDialog: MatDialog,
     private swUpdate: SwUpdate,
   ) {
-    swUpdate.available.subscribe(() => this.prompt());
-    swUpdate.checkForUpdate();
-    setInterval(() => swUpdate.checkForUpdate(), 5 * 60 * 1000);
+    if (swUpdate.isEnabled) {
+      swUpdate.versionUpdates.subscribe(() => this.prompt());
+      swUpdate.checkForUpdate();
+      setInterval(() => swUpdate.checkForUpdate(), 5 * 60 * 1000);
+    }
   }
 
   prompt(): void {

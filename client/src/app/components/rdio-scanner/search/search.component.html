@@ -3,18 +3,17 @@
         <ng-container matColumnDef="control">
             <mat-header-cell *matHeaderCellDef></mat-header-cell>
             <mat-cell *matCellDef="let row">
-                <button *ngIf="downloadMode.checked && row" mat-icon-button (click)="download(row.id)">
+                <button *ngIf="downloadMode.checked && row" mat-icon-button (click)="download(+row.id)">
                     <mat-icon>save_alt</mat-icon>
                 </button>
-                <button
-                    *ngIf="row && !downloadMode.checked && !paused && row?.id !== call?.id && row?.id !== callPending"
-                    mat-icon-button (click)="play(row.id)">
+                <button *ngIf="row && !downloadMode.checked && !paused && row?.id != call?.id && row?.id != callPending"
+                    mat-icon-button (click)="play(+row.id)">
                     <mat-icon>play_arrow</mat-icon>
                 </button>
-                <button *ngIf="row && !downloadMode.checked && row?.id === callPending" mat-icon-button>
+                <button *ngIf="row && !downloadMode.checked && row?.id == callPending" mat-icon-button>
                     <mat-icon class="spin">cached</mat-icon>
                 </button>
-                <button *ngIf="row && !downloadMode.checked && row?.id === call?.id" mat-icon-button (click)="stop()">
+                <button *ngIf="row && !downloadMode.checked && row?.id == call?.id" mat-icon-button (click)="stop()">
                     <mat-icon>stop</mat-icon>
                 </button>
             </mat-cell>
@@ -70,8 +69,9 @@
         <mat-slide-toggle #downloadMode color="primary" labelPosition="before">
             <mat-icon>save_alt</mat-icon>
         </mat-slide-toggle>
-        <mat-paginator [disabled]="livefeedPlayback || resultsPending" [length]="playbackList?.count" [hidePageSize]="true"
-            [pageSize]="results.value.length" [showFirstLastButtons]="true" (page)="refreshResults()">
+        <mat-paginator [disabled]="livefeedPlayback || resultsPending" [length]="playbackList?.count"
+            [hidePageSize]="true" [pageSize]="results.value.length" [showFirstLastButtons]="true"
+            (page)="refreshResults()">
         </mat-paginator>
     </div>
 </mat-card>
@@ -94,17 +94,14 @@
             <mat-label>
                 Date
             </mat-label>
-            <input formControlName="date" [matDatepicker]="date" matInput [max]="playbackList?.dateStop"
-                [min]="playbackList?.dateStart" placeholder="Choose a date" readonly (click)="date.open()"
-                (dateChange)="formChangeHandler()">
-            <mat-datepicker-toggle matSuffix [for]="date"></mat-datepicker-toggle>
-            <mat-datepicker #date></mat-datepicker>
+            <input matInput type="datetime-local" formControlName="date" [max]="playbackList?.dateStop"
+                [min]="playbackList?.dateStart" placeholder="Choose a date" (change)="formChangeHandler()">
         </mat-form-field>
         <mat-form-field>
             <mat-label>
                 System
             </mat-label>
-            <mat-select formControlName="system" (selectionChange)="formSystemHandler()">
+            <mat-select formControlName="system" (selectionChange)="formChangeHandler()">
                 <mat-option [value]="-1">
                     All Systems
                 </mat-option>
@@ -117,7 +114,7 @@
             <mat-label>
                 Talkgroup
             </mat-label>
-            <mat-select formControlName="talkgroup" (selectionChange)="formTalkgroupHandler()">
+            <mat-select formControlName="talkgroup" (selectionChange)="formChangeHandler()">
                 <mat-option [value]="-1">
                     All Talkgroups
                 </mat-option>
@@ -130,7 +127,7 @@
             <mat-label>
                 Group
             </mat-label>
-            <mat-select formControlName="group" (selectionChange)="formGroupHandler()">
+            <mat-select formControlName="group" (selectionChange)="formChangeHandler()">
                 <mat-option [value]="-1">
                     All Groups
                 </mat-option>
@@ -143,7 +140,7 @@
             <mat-label>
                 Tag
             </mat-label>
-            <mat-select formControlName="tag" (selectionChange)="formTagHandler()">
+            <mat-select formControlName="tag" (selectionChange)="formChangeHandler()">
                 <mat-option [value]="-1">
                     All Tags
                 </mat-option>

@@ -37,7 +37,7 @@ export class RdioScannerAdminLogsComponent {
 
     logs = new BehaviorSubject(new Array<Log | null>(10));
 
-    logsQuery: LogsQuery | null = null;
+    logsQuery: LogsQuery | undefined = undefined;
 
     logsQueryPending = false;
 
@@ -105,8 +105,8 @@ export class RdioScannerAdminLogsComponent {
             options.level = this.form.value.level;
         }
 
-        if (this.form.value.date instanceof Date) {
-            options.date = this.form.value.date;
+        if (typeof this.form.value.date === 'string') {
+            options.date = new Date(Date.parse(this.form.value.date));
         }
 
         this.logsQueryPending = true;

@@ -18,7 +18,15 @@
  */
 
 import { Component, OnDestroy } from '@angular/core';
-import { RdioScannerAvoidOptions, RdioScannerBeepStyle, RdioScannerEvent, RdioScannerGroup, RdioScannerLivefeedMap, RdioScannerSystem } from '../rdio-scanner';
+import {
+    RdioScannerAvoidOptions,
+    RdioScannerBeepStyle,
+    RdioScannerCategory,
+    RdioScannerCategoryStatus,
+    RdioScannerEvent,
+    RdioScannerLivefeedMap,
+    RdioScannerSystem,
+} from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
 
 @Component({
@@ -30,18 +38,31 @@ import { RdioScannerService } from '../rdio-scanner.service';
     templateUrl: './select.component.html',
 })
 export class RdioScannerSelectComponent implements OnDestroy {
-    groups: RdioScannerGroup[] | undefined;
+    categories: RdioScannerCategory[] | undefined;
 
     map: RdioScannerLivefeedMap = {};
 
     systems: RdioScannerSystem[] | undefined;
+
+    tagsToggle: boolean | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     constructor(private rdioScannerService: RdioScannerService) { }
 
     avoid(options?: RdioScannerAvoidOptions): void {
-        this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        if (options?.all == true)
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+        else if (options?.all == false)
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+        else if (
+            options?.system !== undefined &&
+            options?.talkgroup !== undefined &&
+            this.map[options!.system.id][options!.talkgroup.id] == false
+        )
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+        else
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
         this.rdioScannerService.avoid(options);
     }
@@ -50,23 +71,21 @@ export class RdioScannerSelectComponent implements OnDestroy {
         this.eventSubscription.unsubscribe();
     }
 
-    toggleGroup(label: string): void {
-        this.rdioScannerService.beep();
+    toggle(category: RdioScannerCategory): void {
+        if (category.status == RdioScannerCategoryStatus.On)
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+        else
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-        this.rdioScannerService.toggleGroup(label);
+        this.rdioScannerService.toggleCategory(category);
     }
 
     private eventHandler(event: RdioScannerEvent): void {
         if (event.config) {
+            this.tagsToggle = event.config.tagsToggle;
             this.systems = event.config.systems;
         }
-
-        if (event.groups) {
-            this.groups = event.groups;
-        }
-
-        if (event.map) {
-            this.map = event.map;
-        }
+        if (event.categories) this.categories = event.categories;
+        if (event.map) this.map = event.map;
     }
 }

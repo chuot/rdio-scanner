@@ -21,7 +21,6 @@ import { CommonModule } from '@angular/common';
 import { ModuleWithProviders, NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ExtraOptions, RouterModule, Routes } from '@angular/router';
-import { AppLocaleModule } from './locale/locale.module';
 import { AppMaterialModule } from './material/material.module';
 import { AppUpdateModule } from './update/update.module';
 
@@ -32,7 +31,6 @@ export interface AppSharedModuleConfig {
 
 @NgModule({
     exports: [
-        AppLocaleModule,
         AppMaterialModule,
         AppUpdateModule,
         CommonModule,
@@ -55,7 +53,6 @@ export class AppSharedModule {
         return {
             ngModule: AppSharedModule,
             providers: [
-                ...AppLocaleModule.forRoot().providers || [],
                 ...AppUpdateModule.forRoot().providers || [],
                 ...RouterModule.forRoot(config.routerRoutes || [], config.routerExtraOptions || {}).providers || [],
             ],

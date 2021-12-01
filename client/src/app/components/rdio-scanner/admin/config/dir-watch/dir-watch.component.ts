@@ -64,7 +64,8 @@ export class RdioScannerAdminDirWatchComponent implements OnChanges {
     }
 
     add(): void {
-        const dirWatch = this.adminService.newDirWatchForm({ usePolling: this.docker });
+        // const dirWatch = this.adminService.newDirWatchForm({ usePolling: this.docker });
+        const dirWatch = this.adminService.newDirWatchForm();
 
         dirWatch.markAllAsTouched();
 

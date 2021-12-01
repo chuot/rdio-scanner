@@ -21,19 +21,11 @@
 
 const server = 'http://localhost:3000';
 
-const PROXY_CONFIG = [
+module.exports = [
     {
-        bypass: (req) => req.upgrade ? null : '/',
-        context: '/',
+        context: ['/**', '!/admin**', '!/ws**'],
         secure: false,
         target: server,
-        ws: true,
-    },
-    {
-        context: ['/api'],
-        secure: false,
-        target: server,
+        ws: true
     }
-];
-
-module.exports = PROXY_CONFIG;
+]

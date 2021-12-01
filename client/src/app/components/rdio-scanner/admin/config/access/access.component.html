@@ -66,7 +66,7 @@
                         with this access code exceeds the defined limit.</span>
                 </p>
                 <mat-form-field floatLabel="never">
-                    <input type="number" matInput formControlName="limit" placeholder="Limit">
+                    <input type="number" min="0" step="1" matInput formControlName="limit" placeholder="Limit">
                 </mat-form-field>
             </div>
             <div class="row">

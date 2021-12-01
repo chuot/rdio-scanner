@@ -157,7 +157,7 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
+            <!-- <div class="row">
                 <p>
                     <span class="mat-body">Delay</span><br>
                     <span class="mat-caption">Depending on the recorder, audio files can be ingested too soon after the
@@ -165,10 +165,10 @@
                         settle before ingesting it.</span>
                 </p>
                 <mat-form-field floatLabel="never">
-                    <input type="number" matInput formControlName="delay" placeholder="Delay">
+                    <input type="number" min="0" step="1" matInput formControlName="delay" placeholder="Delay">
                 </mat-form-field>
-            </div>
-            <div class="row">
+            </div> -->
+            <!-- <div class="row">
                 <p>
                     <span class="mat-body">Use Polling</span><br>
                     <span class="mat-caption">Use polling when monitoring the directory. While this takes a bit more CPU
@@ -178,7 +178,7 @@
                 <div>
                     <mat-slide-toggle color="primary" formControlName="usePolling"></mat-slide-toggle>
                 </div>
-            </div>
+            </div> -->
             <div class="row bottom">
                 <button type="button" mat-button color="warn" (click)="remove(i)">
                     Delete dirwatch

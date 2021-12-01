@@ -21,7 +21,8 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { EventEmitter, Injectable, OnDestroy } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { timer } from 'rxjs';
+import { firstValueFrom, timer } from 'rxjs';
+import { AppUpdateService } from '../../../shared/update/update.service';
 
 export interface Access {
     _id?: string;
@@ -52,7 +53,7 @@ export interface ApiKey {
 
 export interface DirWatch {
     _id?: string;
-    delay?: number;
+    // delay?: number;
     deleteAfter?: boolean;
     directory?: string;
     disabled?: boolean;
@@ -63,7 +64,7 @@ export interface DirWatch {
     systemId?: number;
     talkgroupId?: number;
     type?: string;
-    usePolling?: boolean;
+    // usePolling?: boolean;
 }
 
 export interface Downstream {
@@ -91,6 +92,7 @@ export interface Options {
     keypadBeeps?: string;
     pruneDays?: number;
     sortTalkgroups?: boolean;
+    tagsToggle?: boolean;
 }
 
 export interface Group {
@@ -207,6 +209,7 @@ export class RdioScannerAdminService implements OnDestroy {
     }
 
     constructor(
+        appUpdateService: AppUpdateService,
         private matSnackBar: MatSnackBar,
         private ngFormBuilder: FormBuilder,
         private ngHttpClient: HttpClient,
@@ -222,11 +225,11 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async changePassword(currentPassword: string, newPassword: string): Promise<void> {
         try {
-            const res = await this.ngHttpClient.post<{ passwordNeedChange: boolean }>(
+            const res = await firstValueFrom(this.ngHttpClient.post<{ passwordNeedChange: boolean }>(
                 this.getUrl(url.password),
                 { currentPassword, newPassword },
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             this._passwordNeedChange = res.passwordNeedChange;
 
@@ -242,13 +245,13 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async getConfig(): Promise<Config> {
         try {
-            const res = await this.ngHttpClient.get<{
+            const res = await firstValueFrom(this.ngHttpClient.get<{
                 config: Config;
                 passwordNeedChange: boolean;
             }>(
                 this.getUrl(url.config),
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             if (res.passwordNeedChange !== this._passwordNeedChange) {
                 this._passwordNeedChange = res.passwordNeedChange;
@@ -260,42 +263,42 @@ export class RdioScannerAdminService implements OnDestroy {
 
         } catch (error) {
             this.errorHandler(error);
-
-            return {};
         }
+
+        return {};
     }
 
     getLeds(): string[] {
         return ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];
     }
 
-    async getLogs(options: LogsQueryOptions): Promise<LogsQuery | null> {
+    async getLogs(options: LogsQueryOptions): Promise<LogsQuery | undefined> {
         try {
-            const res = await this.ngHttpClient.post<LogsQuery>(
+            const res = await firstValueFrom(this.ngHttpClient.post<LogsQuery>(
                 this.getUrl(url.logs),
                 options,
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             return res;
 
         } catch (error) {
             this.errorHandler(error);
 
-            return null;
+            return undefined;
         }
     }
 
     async login(password: string): Promise<boolean> {
         try {
-            const res = await this.ngHttpClient.post<{
+            const res = await firstValueFrom(this.ngHttpClient.post<{
                 passwordNeedChange: boolean,
                 token: string
             }>(
                 this.getUrl(url.login),
                 { password },
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             this.token = res.token;
 
@@ -319,11 +322,11 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async logout(): Promise<boolean> {
         try {
-            await this.ngHttpClient.post(
+            this.ngHttpClient.post(
                 this.getUrl(url.logout),
                 null,
                 { headers: this.getHeaders(), responseType: 'text' },
-            ).toPromise();
+            );
 
             this.configWebSocketClose();
 
@@ -342,11 +345,11 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async saveConfig(config: Config): Promise<Config> {
         try {
-            const res = await this.ngHttpClient.put<{ config: Config }>(
+            const res = await firstValueFrom(this.ngHttpClient.put<{ config: Config }>(
                 this.getUrl(url.config),
                 config,
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             return res.config;
 
@@ -396,7 +399,7 @@ export class RdioScannerAdminService implements OnDestroy {
     newDirWatchForm(dirWatch?: DirWatch): FormGroup {
         return this.ngFormBuilder.group({
             _id: [dirWatch?._id],
-            delay: [dirWatch?.delay, Validators.min(0)],
+            // delay: [dirWatch?.delay, Validators.min(0)],
             deleteAfter: [dirWatch?.deleteAfter],
             directory: [dirWatch?.directory, [Validators.required, this.validateDirectory()]],
             disabled: [dirWatch?.disabled],
@@ -407,7 +410,7 @@ export class RdioScannerAdminService implements OnDestroy {
             systemId: [dirWatch?.systemId, this.validateDirwatchSystemId()],
             talkgroupId: [dirWatch?.talkgroupId, this.validateDirwatchTalkgroupId()],
             type: [dirWatch?.type],
-            usePolling: [dirWatch?.usePolling],
+            // usePolling: [dirWatch?.usePolling],
         });
     }
 
@@ -441,7 +444,7 @@ export class RdioScannerAdminService implements OnDestroy {
             _id: [system?._id],
             autoPopulate: [system?.autoPopulate],
             blacklists: [system?.blacklists, this.validateBlacklists()],
-            id: [system?.id, [Validators.required, Validators.min(0), this.validateId()]],
+            id: [system?.id, [Validators.required, Validators.min(1), this.validateId()]],
             label: [system?.label, Validators.required],
             led: [system?.led],
             order: [system?.order],
@@ -454,7 +457,7 @@ export class RdioScannerAdminService implements OnDestroy {
         return this.ngFormBuilder.group({
             frequency: [talkgroup?.frequency, Validators.min(0)],
             groupId: [talkgroup?.groupId, [Validators.required, this.validateGroup()]],
-            id: [talkgroup?.id, [Validators.required, Validators.min(0), this.validateId()]],
+            id: [talkgroup?.id, [Validators.required, Validators.min(1), this.validateId()]],
             label: [talkgroup?.label, Validators.required],
             led: [talkgroup?.led],
             name: [talkgroup?.name, Validators.required],
@@ -480,6 +483,7 @@ export class RdioScannerAdminService implements OnDestroy {
             keypadBeeps: [options?.keypadBeeps, Validators.required],
             pruneDays: [options?.pruneDays, [Validators.required, Validators.min(0)]],
             sortTalkgroups: [options?.sortTalkgroups],
+            tagsToggle: [options?.tagsToggle],
         });
     }
 
@@ -492,7 +496,7 @@ export class RdioScannerAdminService implements OnDestroy {
             this.configWebSocket.close();
 
             this.configWebSocket = undefined;
-        };
+        }
     }
 
     private configWebSocketReconnect(): void {
@@ -531,7 +535,11 @@ export class RdioScannerAdminService implements OnDestroy {
         }
     }
 
-    private errorHandler(error: HttpErrorResponse): void {
+    private errorHandler(error: unknown): void {
+        if (!(error instanceof HttpErrorResponse)) {
+            return;
+        }
+
         if (error.status === 401) {
             this.token = '';
 

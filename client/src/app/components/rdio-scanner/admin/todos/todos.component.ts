@@ -83,7 +83,7 @@ export class RdioScannerAdminTodosComponent implements OnDestroy, OnInit {
         if (!this.config?.apiKeys?.length && !this.config?.dirWatch?.length) {
             todos.push({
                 level: 'info',
-                message: 'No apikeys and no dirwatch defined. Please set at least one to allow ingesting audio files.',
+                message: 'No apikeys or dirwatch defined. Please set at least one to allow ingesting audio files.',
             });
         }
 

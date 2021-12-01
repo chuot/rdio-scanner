@@ -5,7 +5,7 @@
             <span class="mat-caption">Unit identifier in decimal format.</span>
         </p>
         <mat-form-field floatLabel="never">
-            <input type="number" matInput formControlName="id" placeholder="Id">
+            <input type="number" min="0" step="1" matInput formControlName="id" placeholder="Id">
             <mat-error *ngIf="form?.get('id')?.hasError('duplicate')">
                 Id is already defined
             </mat-error>

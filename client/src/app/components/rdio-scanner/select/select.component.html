@@ -1,8 +1,8 @@
-<fieldset *ngIf="groups?.length && (groups?.length || 0) >= 2" class="fieldset">
+<fieldset *ngIf="categories?.length && (categories?.length || 0) >= 2" class="fieldset">
     <div>
-        <button *ngFor="let group of groups" class="rdio-button" [ngClass]="group.status"
-            (click)="toggleGroup(group.label)">
-            {{ group.label }}
+        <button *ngFor="let category of categories" class="rdio-button" [ngClass]="category.status"
+            (click)="toggle(category)">
+            {{ category.label }}
         </button>
         <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
             OFF

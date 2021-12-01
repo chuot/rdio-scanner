@@ -80,7 +80,7 @@ export class RdioScannerAdminImportExportConfigComponent {
                 this.config.emit(config);
 
             } catch (error) {
-                this.matSnackBar.open(error.message, '', { duration: 5000 });
+                this.matSnackBar.open(error as string, '', { duration: 5000 });
             }
         };
 

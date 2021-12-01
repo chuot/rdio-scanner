@@ -23,6 +23,7 @@ import { AppSharedModule } from '../../shared/shared.module';
 import { RdioScannerComponent } from './rdio-scanner.component';
 import { RdioScannerService } from './rdio-scanner.service';
 import { RdioScannerMainComponent } from './main/main.component';
+import { RdioScannerNativeModule } from './native/native.module';
 import { RdioScannerSearchComponent } from './search/search.component';
 import { RdioScannerSelectComponent } from './select/select.component';
 
@@ -34,7 +35,7 @@ import { RdioScannerSelectComponent } from './select/select.component';
         RdioScannerSelectComponent,
     ],
     exports: [RdioScannerComponent],
-    imports: [AppSharedModule],
+    imports: [AppSharedModule, RdioScannerNativeModule],
     providers: [
         RdioScannerService,
         { provide: OverlayContainer, useClass: FullscreenOverlayContainer },

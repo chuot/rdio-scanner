@@ -1,0 +1,23 @@
+:host {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+
+    > div {
+        align-items: center;
+        display: flex;
+        flex-direction: row;
+
+        > *:first-child {
+            padding-right: 0.5em;
+        }
+    }
+
+    .countdown {
+        bottom: 4px;
+        color: rgba(0, 0, 0, 0.67);
+        font-size: 12px;
+        position: absolute;
+        right: 4px;
+    }
+}
