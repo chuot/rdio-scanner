@@ -16,7 +16,7 @@
 ################################################################################
 
 app := rdio-scanner
-ver := 6.0.0
+ver := 6.0.1
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
