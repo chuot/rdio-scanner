@@ -51,18 +51,21 @@ export class RdioScannerSelectComponent implements OnDestroy {
     constructor(private rdioScannerService: RdioScannerService) { }
 
     avoid(options?: RdioScannerAvoidOptions): void {
-        if (options?.all == true)
+        if (options?.all == true) {
             this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
-        else if (options?.all == false)
+
+        } else if (options?.all == false) {
             this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
-        else if (
-            options?.system !== undefined &&
-            options?.talkgroup !== undefined &&
-            this.map[options!.system.id][options!.talkgroup.id] == false
-        )
-            this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
-        else
-            this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
+
+        } else if (options?.system !== undefined && options?.talkgroup !== undefined) {
+            this.rdioScannerService.beep(this.map[options!.system.id][options!.talkgroup.id]
+                ? RdioScannerBeepStyle.Deactivate
+                : RdioScannerBeepStyle.Activate
+            );
+
+        } else {
+            this.rdioScannerService.beep(options?.status ? RdioScannerBeepStyle.Activate : RdioScannerBeepStyle.Deactivate);
+        }
 
         this.rdioScannerService.avoid(options);
     }
