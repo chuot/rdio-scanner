@@ -1,4 +1,4 @@
-![Rdio Scanner](./docs/images/rdio-scanner.png?raw=true)\
+![Rdio Scanner](./docs/images/rdio-scanner.png?raw=true)
 
 # What is it ?
 
