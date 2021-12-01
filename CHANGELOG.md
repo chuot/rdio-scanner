@@ -22,7 +22,7 @@ The backend server has been completely rewritten in GO language. Therefore, all 
 
 _v.6.0.1_
 
-- Fix button sound on select panel for TG (beep state inverted
+- Fix button sound on select panel for TG (beep state inverted)
 - Auto populate system units (issue #66)
 
 ## Version 5.2
