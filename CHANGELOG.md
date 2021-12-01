@@ -20,6 +20,11 @@ The backend server has been completely rewritten in GO language. Therefore, all 
 - Due to the polling situation, the Docker version of Rdio Scanner is no longer offered. Since it is now so easy to install v6 on various platforms, that was a no-brainer.
 - Default database name changed from _database.sqlite_ to _rdio-scanner.db_. You will need to rename your database file with the new name if you want to convert it. Otherwise, a new database will be created.
 
+_v.6.0.1_
+
+- Fix button sound on select panel for TG (beep state inverted
+- Auto populate system units (issue #66)
+
 ## Version 5.2
 
 - Change to how the server reports version.
