@@ -229,6 +229,7 @@ func (groups *Groups) Write(db *Database) error {
 	}
 
 	if err != nil {
+		rows.Close()
 		return formatError(err)
 	}
 

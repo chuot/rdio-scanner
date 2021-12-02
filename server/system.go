@@ -438,6 +438,7 @@ func (systems *Systems) Write(db *Database) error {
 	}
 
 	if err != nil {
+		rows.Close()
 		return formatError(err)
 	}
 

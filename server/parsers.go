@@ -154,15 +154,17 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 
 					switch t := v["tag"].(type) {
 					case string:
-						var units Units
-						switch v := call.units.(type) {
-						case Units:
-							units = v
-						default:
-							units = Units{}
+						if len(t) > 0 {
+							var units Units
+							switch v := call.units.(type) {
+							case Units:
+								units = v
+							default:
+								units = Units{}
+							}
+							units.Add(uint(s), t)
+							call.units = units
 						}
-						units.Add(uint(s), t)
-						call.units = units
 					}
 				}
 

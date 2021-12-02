@@ -630,7 +630,13 @@ func (controller *Controller) SendClientConfig(client *Client) {
 }
 
 func (controller *Controller) Terminate() {
+	if err := controller.Database.Sql.Close(); err != nil {
+		log.Println(err)
+	}
+
 	controller.Dirwatches.Stop()
+
 	log.Println("terminated")
+
 	os.Exit(0)
 }

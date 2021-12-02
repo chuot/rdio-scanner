@@ -17,6 +17,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"runtime"
 
 	"github.com/kardianos/service"
@@ -78,5 +79,6 @@ func (d *DaemonInterface) Start(s service.Service) error {
 }
 
 func (d *DaemonInterface) Stop(s service.Service) error {
+	os.Exit(0)
 	return nil
 }

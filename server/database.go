@@ -67,6 +67,10 @@ func (db *Database) Init(config *Config) error {
 		return fmt.Errorf("unknown database type %s", db.Config.DbType)
 	}
 
+	db.Sql.SetConnMaxLifetime(0)
+	db.Sql.SetMaxIdleConns(10)
+	db.Sql.SetMaxOpenConns(10)
+
 	if err = db.migrate(); err != nil {
 		return err
 	}
@@ -149,6 +153,10 @@ func (db *Database) migrate() error {
 
 	if err == nil {
 		err = db.migration20210830092027(verbose)
+	}
+
+	if err == nil {
+		err = db.migration20211202094819(verbose)
 	}
 
 	return err
@@ -398,6 +406,29 @@ func (db *Database) migration20210830092027(verbose bool) error {
 	}
 
 	return db.migrateWithSchema("20210830092027-v6.0-rename-index", str, verbose)
+}
+
+func (db *Database) migration20211202094819(verbose bool) error {
+	var str []string
+
+	if db.Config.DbType == DbTypeSqlite {
+		str = []string{
+			"alter table `rdioScannerDownstreams` rename to `rdioScannerDownstreams2`",
+			"create table `rdioScannerDownstreams` (`_id` integer primary key autoincrement, `apiKey` varchar(255) not null, `disabled` tinyint(1) default 0, `order` integer, `systems` text not null, `url` varchar(255) not null)",
+			"insert into `rdioScannerDownstreams` select * from `rdioScannerDownstreams2`",
+			"drop table `rdioScannerDownstreams2`",
+		}
+
+	} else {
+		str = []string{
+			"alter table `rdioScannerDownstreams` rename to `rdioScannerDownstreams2`",
+			"create table `rdioScannerDownstreams` (`_id` integer primary key auto_increment, `apiKey` varchar(255) not null, `disabled` tinyint(1) default 0, `order` integer, `systems` text not null, `url` varchar(255) not null)",
+			"insert into `rdioScannerDownstreams` select * from `rdioScannerDownstreams2`",
+			"drop table `rdioScannerDownstreams2`",
+		}
+	}
+
+	return db.migrateWithSchema("20211202094819-v6.0.2-alter-table", str, verbose)
 }
 
 func (db *Database) prepareMigration() (bool, error) {

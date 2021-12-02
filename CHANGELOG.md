@@ -25,6 +25,13 @@ _v.6.0.1_
 - Fix button sound on select panel for TG (beep state inverted)
 - Auto populate system units (issue #66)
 
+_v.6.0.2_
+
+- Try to fix the SQL_BUSY error (issue #67).
+- Fix `-service stop` timing out before exiting.
+- Drop the ApiKey uniqueness of the downstreams database table.
+- Fix auto-populating the database with empty units tag.
+
 ## Version 5.2
 
 - Change to how the server reports version.
