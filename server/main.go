@@ -30,6 +30,16 @@ import (
 )
 
 func main() {
+	const defaultAddr = "0.0.0.0"
+
+	var (
+		addr     string
+		port     string
+		hostname string
+		sslAddr  string
+		sslPort  string
+	)
+
 	config := &Config{}
 	ok, err := config.Init()
 	if err != nil {
@@ -38,9 +48,6 @@ func main() {
 	if !ok {
 		os.Exit(0)
 	}
-
-	fmt.Printf("\nRdio Scanner v%s\n", Version)
-	fmt.Printf("----------------------------------\n")
 
 	database := &Database{}
 	if err = database.Init(config); err != nil {
@@ -65,7 +72,7 @@ func main() {
 				log.Fatal(err)
 			}
 
-			LogEvent(controller.Database, LogLevelInfo, "admin password changed, please restart the server.")
+			LogEvent(controller.Database, LogLevelInfo, "admin password changed.")
 
 			os.Exit(0)
 
@@ -74,21 +81,10 @@ func main() {
 		}
 	}
 
+	fmt.Printf("\nRdio Scanner v%s\n", Version)
+	fmt.Printf("----------------------------------\n")
+
 	LogEvent(controller.Database, LogLevelWarn, "server started")
-
-	Start(controller, "/")
-}
-
-func Start(controller *Controller, rootUrl string) {
-	const defaultAddr = "0.0.0.0"
-
-	var (
-		addr     string
-		port     string
-		hostname string
-		sslAddr  string
-		sslPort  string
-	)
 
 	if h, err := os.Hostname(); err == nil {
 		hostname = h
@@ -118,7 +114,7 @@ func Start(controller *Controller, rootUrl string) {
 		sslAddr = defaultAddr
 	}
 
-	http.HandleFunc(rootUrl, func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path[1:]
 
 		switch url {

@@ -43,7 +43,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         C:\Users\rdio> cd rdio-scanner
 
         C:\Users\rdio\rdio-scanner> tar -xvf ^
-            ..\downloads\rdio-scanner-windows-amd64-v6.0.2.zip
+            ..\downloads\rdio-scanner-windows-amd64-v6.0.3.zip
         x rdio-scanner.exe
         x rdio-scanner.pdf
 
@@ -51,7 +51,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
     
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/25 13:48:48 server started
         2021/11/25 13:48:48 main interface at http://pc-windows:3000
@@ -77,7 +77,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         C:\Users\rdio\rdio-scanner>rdio-scanner -listen :80
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/26 10:53:31 server started
         2021/11/26 10:53:31 main interface at http://pc-windows
@@ -108,7 +108,7 @@ Now we use the self-signed server certificate to run our instance.
             -ssl_key_file server.key            ^
             -ssl_listen :443
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/26 11:05:43 server started
         2021/11/26 11:05:43 main interface at http://pc-windows
@@ -140,7 +140,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/26 11:11:28 server started
         2021/11/26 11:11:28 main interface at http://pc-windows

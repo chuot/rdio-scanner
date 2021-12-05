@@ -39,10 +39,12 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		return err
 	}
 
-	if i, err = strconv.Atoi(m.Artist()); err != nil {
-		return err
+	if len(m.Artist()) > 0 {
+		if i, err = strconv.Atoi(m.Artist()); err != nil {
+			return err
+		}
+		call.Source = uint(i)
 	}
-	call.Source = uint(i)
 
 	s = regexp.MustCompile(`Date:([^;]+);`).FindStringSubmatch(m.Comment())
 	if len(s) == 2 {
@@ -53,7 +55,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 	}
 
 	s = regexp.MustCompile(`Frequency:([0-9]+);`).FindStringSubmatch(m.Comment())
-	if len(s) == 2 {
+	if len(s) == 2 && len(s[1]) > 0 {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
@@ -71,7 +73,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 	}
 
 	s = regexp.MustCompile(`^([0-9]+)`).FindStringSubmatch(m.Title())
-	if len(s) > 1 {
+	if len(s) > 1 && len(s[1]) > 0 {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}

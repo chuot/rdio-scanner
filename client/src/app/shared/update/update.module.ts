@@ -39,6 +39,4 @@ export class AppUpdateModule {
             providers: [AppUpdateService],
         };
     }
-
-    // constructor(appUpdateService: AppUpdateService) { }
 }

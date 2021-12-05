@@ -28,7 +28,7 @@
                     <mat-icon *ngIf="form?.get('dirWatch')?.invalid" color="warn">error</mat-icon>
                 </mat-panel-title>
             </mat-expansion-panel-header>
-            <rdio-scanner-admin-dir-watch #dirWatchComponent [docker]="docker" [form]="dirWatch"></rdio-scanner-admin-dir-watch>
+            <rdio-scanner-admin-dir-watch #dirWatchComponent [form]="dirWatch"></rdio-scanner-admin-dir-watch>
         </mat-expansion-panel>
         <mat-expansion-panel (afterCollapse)="downstreamsComponent.closeAll()">
             <mat-expansion-panel-header>

@@ -44,10 +44,6 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
         return this.form?.get('dirWatch') as FormArray;
     }
 
-    get docker(): boolean {
-        return this.config?.docker || false;
-    }
-
     get downstreams(): FormArray {
         return this.form?.get('downstreams') as FormArray;
     }

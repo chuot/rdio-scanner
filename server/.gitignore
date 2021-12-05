@@ -9,4 +9,4 @@
 /rdio-scanner
 /server
 /webapp/*
-!/webapp/.gitkeep
+!/webapp

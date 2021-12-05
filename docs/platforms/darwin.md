@@ -41,8 +41,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         rdio@macos ~ % mkdir rdio-scanner
         rdio@macos ~ % cd rdio-scanner
         rdio@macos rdio-scanner % unzip \          
-        > ~/Downloads/rdio-scanner-darwin-arm64-v6.0.2.zip 
-        Archive:  /Users/rdio/Downloads/rdio-scanner-darwin-arm64-v6.0.2.zip
+        > ~/Downloads/rdio-scanner-darwin-arm64-v6.0.3.zip 
+        Archive:  /Users/rdio/Downloads/rdio-scanner-darwin-arm64-v6.0.3.zip
           inflating: rdio-scanner            
           inflating: rdio-scanner.pdf        
 
@@ -50,7 +50,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         rdio@macos rdio-scanner % ./rdio-scanner 
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/29 08:38:06 server started
         2021/11/29 08:38:06 main interface at http://macos.local:3000
@@ -76,7 +76,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         rdio@macos rdio-scanner % ./rdio-scanner --listen :80
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/29 08:48:03 server started
         2021/11/29 08:48:03 main interface at http://macos.local
@@ -107,7 +107,7 @@ Now we use the self-signed server certificate to run our instance.
         > -ssl_key_file server.key               \
         > -ssl_listen :443
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/29 08:50:58 server started
         2021/11/29 08:50:58 main interface at http://macos.local
@@ -139,7 +139,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         rdio@macos rdio-scanner % ./rdio-scanner
         
-        Rdio Scanner v6.0.2
+        Rdio Scanner v6.0.3
         ----------------------------------
         2021/11/29 08:54:08 server started
         2021/11/29 08:54:08 main interface at http://macos.local

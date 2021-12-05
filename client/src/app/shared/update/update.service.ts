@@ -24,18 +24,25 @@ import { AppUpdateComponent } from './update.component';
 
 @Injectable()
 export class AppUpdateService {
+  private prompted: boolean = false;
+
   constructor(
     private matDialog: MatDialog,
     private swUpdate: SwUpdate,
   ) {
     if (swUpdate.isEnabled) {
       swUpdate.versionUpdates.subscribe(() => this.prompt());
-      swUpdate.checkForUpdate();
       setInterval(() => swUpdate.checkForUpdate(), 5 * 60 * 1000);
     }
   }
 
   prompt(): void {
+    if (this.prompted) {
+      return;
+    }
+
+    this.prompted = true
+
     this.matDialog.open(AppUpdateComponent).afterClosed().subscribe((doUpdate) => {
       if (doUpdate) {
         if (this.swUpdate.isEnabled) {
@@ -44,6 +51,8 @@ export class AppUpdateService {
           document.location.reload();
         }
       }
+
+      this.prompted = false;
     });
   }
 }

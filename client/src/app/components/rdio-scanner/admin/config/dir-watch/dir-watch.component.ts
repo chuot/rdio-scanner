@@ -28,8 +28,6 @@ import { RdioScannerAdminService } from '../../admin.service';
     templateUrl: './dir-watch.component.html',
 })
 export class RdioScannerAdminDirWatchComponent implements OnChanges {
-    @Input() docker: boolean | undefined;
-
     @Input() form: FormArray | undefined;
 
     get dirWatches(): FormGroup[] {
@@ -64,7 +62,6 @@ export class RdioScannerAdminDirWatchComponent implements OnChanges {
     }
 
     add(): void {
-        // const dirWatch = this.adminService.newDirWatchForm({ usePolling: this.docker });
         const dirWatch = this.adminService.newDirWatchForm();
 
         dirWatch.markAllAsTouched();

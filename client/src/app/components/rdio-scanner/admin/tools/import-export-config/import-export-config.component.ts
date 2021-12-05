@@ -39,10 +39,6 @@ export class RdioScannerAdminImportExportConfigComponent {
     async export(): Promise<void> {
         const config = await this.adminService.getConfig();
 
-        if ('docker' in config) {
-            delete config.docker;
-        }
-
         const file = JSON.stringify(config);
         const fileName = 'rdio-scanner.json';
         const fileType = 'application/json';

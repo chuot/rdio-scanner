@@ -20,17 +20,22 @@ The backend server has been completely rewritten in GO language. Therefore, all 
 - Due to the polling situation, the Docker version of Rdio Scanner is no longer offered. Since it is now so easy to install v6 on various platforms, that was a no-brainer.
 - Default database name changed from _database.sqlite_ to _rdio-scanner.db_. You will need to rename your database file with the new name if you want to convert it. Otherwise, a new database will be created.
 
-_v.6.0.1_
+_v6.0.1_
 
 - Fix button sound on select panel for TG (beep state inverted)
 - Auto populate system units (issue #66)
 
-_v.6.0.2_
+_v6.0.2_
 
 - Try to fix the SQL_BUSY error (issue #67).
 - Fix `-service stop` timing out before exiting.
 - Drop the ApiKey uniqueness of the downstreams database table.
 - Fix auto-populating the database with empty units tag.
+
+_v6.0.3_
+
+- Fix strconv.Atoi: invalid syntax for dirwatch type sdrtrunk.
+- Fix the new version available dialog opening more than once.
 
 ## Version 5.2
 
@@ -39,7 +44,7 @@ _v.6.0.2_
 - Fix issue with iframe.
 - Node modules updated for security fixes.
 
-_v.5.2.1_
+_v5.2.1_
 
 - Fix talkgroup header on the search panel (issue #47).
 - Update dirwatch meta tags #DATE, #TIME and #ZTIME for SDRSharp compatibility (issue #48).

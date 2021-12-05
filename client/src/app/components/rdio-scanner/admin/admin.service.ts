@@ -160,7 +160,6 @@ export interface Config {
     access?: Access[];
     apiKeys?: ApiKey[];
     dirWatch?: DirWatch[];
-    docker?: boolean;
     downstreams?: Downstream[];
     groups?: Group[];
     options?: Options;
@@ -399,7 +398,6 @@ export class RdioScannerAdminService implements OnDestroy {
     newDirWatchForm(dirWatch?: DirWatch): FormGroup {
         return this.ngFormBuilder.group({
             _id: [dirWatch?._id],
-            // delay: [dirWatch?.delay, Validators.min(0)],
             deleteAfter: [dirWatch?.deleteAfter],
             directory: [dirWatch?.directory, [Validators.required, this.validateDirectory()]],
             disabled: [dirWatch?.disabled],
@@ -410,7 +408,6 @@ export class RdioScannerAdminService implements OnDestroy {
             systemId: [dirWatch?.systemId, this.validateDirwatchSystemId()],
             talkgroupId: [dirWatch?.talkgroupId, this.validateDirwatchTalkgroupId()],
             type: [dirWatch?.type],
-            // usePolling: [dirWatch?.usePolling],
         });
     }
 
