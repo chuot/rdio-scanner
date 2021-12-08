@@ -202,11 +202,9 @@ func (accesses *Accesses) Read(db *Database) error {
 		*accesses = append(*accesses, access)
 	}
 
-	if err != nil {
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 
@@ -270,12 +268,9 @@ func (accesses *Accesses) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 

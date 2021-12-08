@@ -174,10 +174,10 @@ func (apikeys *Apikeys) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		err = formatError(err)
+		return formatError(err)
 	}
 
-	return err
+	return nil
 }
 
 func (apikeys *Apikeys) Write(db *Database) error {
@@ -239,12 +239,9 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 

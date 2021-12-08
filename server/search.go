@@ -283,8 +283,10 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 		searchResults.Results = append(searchResults.Results, searchResult)
 	}
 
+	rows.Close()
+
 	if err != nil {
-		err = formatError(err)
+		return nil, formatError(err)
 	}
 
 	return searchResults, err

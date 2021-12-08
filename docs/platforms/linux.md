@@ -25,8 +25,8 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 
 You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the go on your mobile device with the native app.
 
-[![Available on the App Store](./docs/images/app-store-badge.png?raw=true)](https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone)
-[![Get it on Google Play](./docs/images/google-play-badge.png?raw=true)](https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner)
+[![Available on the App Store](../images/app-store-badge.png?raw=true)](https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone)
+[![Get it on Google Play](../images/google-play-badge.png?raw=true)](https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner)
 
 \pagebreak{}
 
@@ -41,8 +41,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         [rdio@pc-linux ~]$ mkdir rdio-scanner
         [rdio@pc-linux ~]$ cd rdio-scanner
         [rdio@pc-linux rdio-scanner]$ unzip \
-        > ~/Downloads/rdio-scanner-linux-amd64-v6.0.3.zip 
-        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.0.3.zip
+        > ~/Downloads/rdio-scanner-linux-amd64-v6.0.4.zip 
+        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.0.4.zip
           inflating: rdio-scanner            
           inflating: rdio-scanner.pdf     
 
@@ -50,11 +50,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         [rdio@pc-linux rdio-scanner]$ ./rdio-scanner 
         
-        Rdio Scanner v6.0.3
+        Rdio Scanner v6.0.4
         ----------------------------------
-        2021/11/29 09:11:48 server started
-        2021/11/29 09:11:48 main interface at http://pc-linux:3000
-        2021/11/29 09:11:48 admin interface at http://pc-linux:3000/admin
+        2021/12/08 09:11:48 server started
+        2021/12/08 09:11:48 main interface at http://pc-linux:3000
+        2021/12/08 09:11:48 admin interface at http://pc-linux:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -77,11 +77,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner -listen :80
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.0.3
+        Rdio Scanner v6.0.4
         ----------------------------------
-        2021/11/29 09:14:00 server started
-        2021/11/29 09:14:00 main interface at http://pc-linux
-        2021/11/29 09:14:00 admin interface at http://pc-linux/admin
+        2021/12/08 09:14:00 server started
+        2021/12/08 09:14:00 main interface at http://pc-linux
+        2021/12/08 09:14:00 admin interface at http://pc-linux/admin
 
 ## Listening with SSL with self-signed certificates
 
@@ -90,8 +90,8 @@ It is advised to share your [Rdio Scanner](https://github.com/chuot/rdio-scanner
 We can create such self-signed certificates by running [Rdio Scanner](https://github.com/chuot/rdio-scanner) with the **-ssl_create** argument.
 
         [rdio@pc-linux rdio-scanner]$ ./rdio-scanner -ssl_create
-        2021/11/29 09:15:03 generating ssl certificate files
-        2021/11/29 09:15:05 ssl files created
+        2021/12/08 09:15:03 generating ssl certificate files
+        2021/12/08 09:15:05 ssl files created
 
 This has generated these files in the same folder as your [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 
@@ -109,12 +109,12 @@ Now we use the self-signed server certificate to run our instance.
         > -ssl_listen :443
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.0.3
+        Rdio Scanner v6.0.4
         ----------------------------------
-        2021/11/29 09:16:47 server started
-        2021/11/29 09:16:47 main interface at http://pc-linux
-        2021/11/29 09:16:47 main interface at https://pc-linux
-        2021/11/29 09:16:47 admin interface at https://pc-linux/admin
+        2021/12/08 09:16:47 server started
+        2021/12/08 09:16:47 main interface at http://pc-linux
+        2021/12/08 09:16:47 main interface at https://pc-linux
+        2021/12/08 09:16:47 admin interface at https://pc-linux/admin
 
 ## Save your advanced configuration to a config file
 
@@ -126,7 +126,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
         > -ssl_key_file server.key                   \
         > -ssl_listen :443                           \
         > -config_save
-        2021/11/29 09:19:29 rdio-scanner.ini file created
+        2021/12/08 09:19:29 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -142,12 +142,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner 
         [sudo] Mot de passe de rdio : 
         
-        Rdio Scanner v6.0.3
+        Rdio Scanner v6.0.4
         ----------------------------------
-        2021/11/29 09:20:40 server started
-        2021/11/29 09:20:40 main interface at http://pc-linux
-        2021/11/29 09:20:40 main interface at https://pc-linux
-        2021/11/29 09:20:40 admin interface at https://pc-linux/admin
+        2021/12/08 09:20:40 server started
+        2021/12/08 09:20:40 main interface at http://pc-linux
+        2021/12/08 09:20:40 main interface at https://pc-linux
+        2021/12/08 09:20:40 admin interface at https://pc-linux/admin
 
 ## Install Rdio Scanner as a service
 

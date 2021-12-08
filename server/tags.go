@@ -166,11 +166,9 @@ func (tags *Tags) Read(db *Database) error {
 		*tags = append(*tags, tag)
 	}
 
-	if err != nil {
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 
@@ -227,12 +225,9 @@ func (tags *Tags) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 

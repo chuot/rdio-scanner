@@ -37,6 +37,13 @@ _v6.0.3_
 - Fix strconv.Atoi: invalid syntax for dirwatch type sdrtrunk.
 - Fix the new version available dialog opening more than once.
 
+_v6.0.4_
+
+- Fix wrong time calculation in prune scheduler.
+- More fix on the SQL_BUSY error (issue #67).
+- Support files (certs, db, ini) are now created in the same folder as the executable, if the folder is writable, or under a `Rdio Scanner` folder in the user's home folder.
+- Some code refactoring.
+
 ## Version 5.2
 
 - Change to how the server reports version.

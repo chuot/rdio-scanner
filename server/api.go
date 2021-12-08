@@ -17,7 +17,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -35,18 +34,11 @@ const (
 )
 
 type Api struct {
-	initialized bool
-	Controller  *Controller
+	Controller *Controller
 }
 
-func (api *Api) Init(controller *Controller) error {
-	if api.initialized {
-		return errors.New("api already initialized")
-	}
-
-	api.Controller = controller
-
-	return nil
+func NewApi(controller *Controller) *Api {
+	return &Api{Controller: controller}
 }
 
 func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {

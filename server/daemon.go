@@ -62,14 +62,16 @@ func NewDaemon() *Daemon {
 	return &d
 }
 
-func (d *Daemon) Control(action string) (bool, error) {
+func (d *Daemon) Control(action string) {
 	if action == "run" {
 		go d.Service.Run()
 
-		return true, nil
-	}
+	} else if err := service.Control(d.Service, action); err == nil {
+		os.Exit(0)
 
-	return false, service.Control(d.Service, action)
+	} else {
+		os.Exit(-1)
+	}
 }
 
 type DaemonInterface struct{}

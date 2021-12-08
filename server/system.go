@@ -358,11 +358,9 @@ func (systems *Systems) Read(db *Database) error {
 		*systems = append(*systems, system)
 	}
 
-	if err != nil {
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 
@@ -437,12 +435,9 @@ func (systems *Systems) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 

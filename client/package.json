@@ -1,31 +1,31 @@
 {
     "author": "Chrystian Huot <chrystian.huot@saubeo.solutions>",
     "dependencies": {
-        "@angular/animations": "^13.0.2",
-        "@angular/cdk": "^13.0.2",
-        "@angular/common": "~13.0.2",
-        "@angular/compiler": "~13.0.2",
-        "@angular/core": "~13.0.2",
-        "@angular/forms": "~13.0.2",
-        "@angular/material": "^13.0.2",
-        "@angular/platform-browser": "~13.0.2",
-        "@angular/platform-browser-dynamic": "~13.0.2",
-        "@angular/router": "^13.0.2",
-        "@angular/service-worker": "^13.0.2",
+        "@angular/animations": "^13.0.3",
+        "@angular/cdk": "^13.0.3",
+        "@angular/common": "~13.0.3",
+        "@angular/compiler": "~13.0.3",
+        "@angular/core": "~13.0.3",
+        "@angular/forms": "~13.0.3",
+        "@angular/material": "^13.0.3",
+        "@angular/platform-browser": "~13.0.3",
+        "@angular/platform-browser-dynamic": "~13.0.3",
+        "@angular/router": "^13.0.3",
+        "@angular/service-worker": "^13.0.3",
         "rxjs": "~7.4.0",
         "tslib": "^2.3.1",
         "zone.js": "~0.11.4"
     },
     "devDependencies": {
-        "@angular-devkit/build-angular": "~13.0.3",
-        "@angular/cli": "^13.0.3",
-        "@angular/compiler-cli": "~13.0.2",
-        "@types/node": "~16.11.11",
-        "@typescript-eslint/eslint-plugin": "^5.5.0",
-        "@typescript-eslint/parser": "^5.5.0",
+        "@angular-devkit/build-angular": "~13.0.4",
+        "@angular/cli": "^13.0.4",
+        "@angular/compiler-cli": "~13.0.3",
+        "@types/node": "~16.11.12",
+        "@typescript-eslint/eslint-plugin": "^5.6.0",
+        "@typescript-eslint/parser": "^5.6.0",
         "ajv-keywords": "^5.1.0",
-        "eslint": "^8.3.0",
-        "npm-check-updates": "^12.0.2",
+        "eslint": "^8.4.1",
+        "npm-check-updates": "^12.0.3",
         "ts-node": "~10.4.0",
         "typescript": "~4.4.4"
     },
@@ -39,5 +39,5 @@
         "build": "ng build --base-href ./ --configuration production",
         "start": "ng serve"
     },
-    "version": "6.0.3"
+    "version": "6.0.4"
 }

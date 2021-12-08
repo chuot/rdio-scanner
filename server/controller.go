@@ -48,9 +48,34 @@ type Controller struct {
 	Register     chan *Client
 	Unregister   chan *Client
 	Ingest       chan *Call
-	initialized  bool
 	ffmpeg       bool
 	ffmpegWarned bool
+	running      bool
+}
+
+func NewController(config *Config) *Controller {
+	controller := &Controller{
+		Config:      config,
+		Accesses:    &Accesses{},
+		Apikeys:     &Apikeys{},
+		Dirwatches:  &Dirwatches{},
+		Downstreams: &Downstreams{},
+		Groups:      &Groups{},
+		Options:     &Options{},
+		Systems:     &Systems{},
+		Tags:        &Tags{},
+		Clients:     make(map[*Client]bool),
+		Register:    make(chan *Client, 64),
+		Unregister:  make(chan *Client, 64),
+		Ingest:      make(chan *Call, 64),
+	}
+
+	controller.Admin = NewAdmin(controller)
+	controller.Api = NewApi(controller)
+	controller.Database = NewDatabase(config)
+	controller.Scheduler = NewScheduler(controller)
+
+	return controller
 }
 
 func (controller *Controller) CheckDuplicate(call *Call) bool {
@@ -68,7 +93,7 @@ func (controller *Controller) CheckDuplicate(call *Call) bool {
 	return count > 0
 }
 
-func (controller *Controller) ConvertAudio(call *Call) error {
+func (controller *Controller) ConvertAudio(call *Call) {
 	var (
 		args = []string{"-i", "-"}
 		err  error
@@ -80,8 +105,7 @@ func (controller *Controller) ConvertAudio(call *Call) error {
 
 			LogEvent(controller.Database, LogLevelWarn, "ffmpeg is not accessible, no audio conversion will be performed.")
 		}
-
-		return nil
+		return
 	}
 
 	if system, ok := controller.Systems.GetSystem(call.System); ok {
@@ -106,6 +130,9 @@ func (controller *Controller) ConvertAudio(call *Call) error {
 	stdout := bytes.NewBuffer([]byte(nil))
 	cmd.Stdout = stdout
 
+	stderr := bytes.NewBuffer([]byte(nil))
+	cmd.Stderr = stderr
+
 	if err = cmd.Run(); err == nil {
 		call.Audio = stdout.Bytes()
 		call.AudioType = "audio/mp4"
@@ -114,9 +141,10 @@ func (controller *Controller) ConvertAudio(call *Call) error {
 		case string:
 			call.AudioName = fmt.Sprintf("%v.m4a", strings.TrimSuffix(v, path.Ext((v))))
 		}
-	}
 
-	return err
+	} else {
+		fmt.Println(stderr.String())
+	}
 }
 
 func (controller *Controller) EmitCall(call *Call) {
@@ -323,10 +351,7 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 
 	if !controller.Options.DisableAudioConversion {
-		if err = controller.ConvertAudio(call); err != nil {
-			logError(fmt.Errorf("convertaudio: %s", err.Error()))
-			return
-		}
+		controller.ConvertAudio(call)
 	}
 
 	if id, err = call.Write(controller.Database); err == nil {
@@ -337,111 +362,6 @@ func (controller *Controller) IngestCall(call *Call) {
 	} else {
 		logError(err)
 	}
-}
-
-func (controller *Controller) Init(config *Config, database *Database) error {
-	if controller.initialized {
-		return errors.New("controller already initialized")
-	}
-
-	var err error
-
-	controller.initialized = true
-	controller.Admin = &Admin{}
-	controller.Api = &Api{}
-	controller.Config = config
-	controller.Database = database
-	controller.Accesses = &Accesses{}
-	controller.Apikeys = &Apikeys{}
-	controller.Dirwatches = &Dirwatches{}
-	controller.Downstreams = &Downstreams{}
-	controller.Groups = &Groups{}
-	controller.Options = &Options{}
-	controller.Scheduler = &Scheduler{}
-	controller.Systems = &Systems{}
-	controller.Tags = &Tags{}
-	controller.Clients = make(map[*Client]bool)
-	controller.Register = make(chan *Client, 64)
-	controller.Unregister = make(chan *Client, 64)
-	controller.Ingest = make(chan *Call, 64)
-
-	if err = controller.Accesses.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Apikeys.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Dirwatches.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Downstreams.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Groups.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Options.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Systems.Read(database); err != nil {
-		return err
-	}
-	if err = controller.Tags.Read(database); err != nil {
-		return err
-	}
-
-	if err = controller.Admin.Init(controller); err != nil {
-		return err
-	}
-	if err = controller.Api.Init(controller); err != nil {
-		return err
-	}
-	if err = controller.Scheduler.Init(controller); err != nil {
-		return err
-	}
-
-	cmd := exec.Command("ffmpeg", "-version")
-	if err := cmd.Run(); err == nil {
-		controller.ffmpeg = true
-
-	} else {
-		controller.ffmpeg = false
-	}
-
-	if err = controller.Scheduler.Start(); err != nil {
-		log.Printf("scheduler: %s", err.Error())
-	}
-
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		<-c
-		controller.Terminate()
-	}()
-
-	go func() {
-		for {
-			select {
-			case call := <-controller.Ingest:
-				controller.IngestCall(call)
-
-			case client := <-controller.Register:
-				controller.Clients[client] = true
-				controller.LogClientsCount()
-
-			case client := <-controller.Unregister:
-				if _, ok := controller.Clients[client]; ok {
-					delete(controller.Clients, client)
-					close(client.Send)
-					controller.LogClientsCount()
-				}
-			}
-		}
-	}()
-
-	controller.Dirwatches.Start(controller)
-
-	return nil
 }
 
 func (controller *Controller) LogClientsCount() {
@@ -629,12 +549,103 @@ func (controller *Controller) SendClientConfig(client *Client) {
 	}
 }
 
+func (controller *Controller) Start() error {
+	var err error
+
+	if controller.running {
+		return errors.New("controller already running")
+	} else {
+		controller.running = true
+	}
+
+	LogEvent(controller.Database, LogLevelWarn, "server started")
+
+	if len(controller.Config.BaseDir) > 0 {
+		LogEvent(controller.Database, LogLevelWarn, fmt.Sprintf("base folder is %s", controller.Config.BaseDir))
+	}
+
+	if err = controller.Accesses.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Apikeys.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Dirwatches.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Downstreams.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Groups.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Options.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Systems.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Tags.Read(controller.Database); err != nil {
+		return err
+	}
+
+	if err = controller.Admin.Start(); err != nil {
+		return err
+	}
+	if err = controller.Scheduler.Start(); err != nil {
+		return err
+	}
+
+	cmd := exec.Command("ffmpeg", "-version")
+	if err := cmd.Run(); err == nil {
+		controller.ffmpeg = true
+
+	} else {
+		controller.ffmpeg = false
+	}
+
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		<-c
+		controller.Terminate()
+	}()
+
+	go func() {
+		for {
+			select {
+			case call := <-controller.Ingest:
+				controller.IngestCall(call)
+
+			case client := <-controller.Register:
+				controller.Clients[client] = true
+				controller.LogClientsCount()
+
+			case client := <-controller.Unregister:
+				if _, ok := controller.Clients[client]; ok {
+					delete(controller.Clients, client)
+					close(client.Send)
+					controller.LogClientsCount()
+				}
+			}
+		}
+	}()
+
+	controller.Dirwatches.Start(controller)
+
+	return nil
+}
+
 func (controller *Controller) Terminate() {
 	if err := controller.Database.Sql.Close(); err != nil {
 		log.Println(err)
 	}
 
 	controller.Dirwatches.Stop()
+
+	for c := range controller.Clients {
+		c.Conn.Close()
+	}
 
 	log.Println("terminated")
 

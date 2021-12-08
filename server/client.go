@@ -49,7 +49,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	client.Access = &Access{}
 	client.Controller = controller
 	client.Conn = conn
-	client.Send = make(chan *Message, 100)
+	client.Send = make(chan *Message, 8)
 	client.LivefeedMap = LivefeedMap{}
 
 	controller.Register <- client

@@ -35,6 +35,7 @@ const (
 )
 
 type Config struct {
+	BaseDir          string
 	ConfigFile       string
 	DbType           string
 	DbFile           string
@@ -53,43 +54,7 @@ type Config struct {
 	newAdminPassword string
 }
 
-func (config *Config) GetConfigFilePath() string {
-	return config.GetPath(config.ConfigFile)
-}
-
-func (config *Config) GetDbFilePath() string {
-	return config.GetPath(config.DbFile)
-}
-
-func (config *Config) GetPath(p string) string {
-	if !path.IsAbs(p) {
-		if exe, err := os.Executable(); err == nil {
-			if !regexp.MustCompile(`go-build[0-9]+`).Match([]byte(exe)) {
-				return path.Join(filepath.Dir(exe), p)
-			}
-		}
-	}
-
-	return p
-}
-
-func (config *Config) GetSslCaCertFilePath() string {
-	return config.GetPath(config.SslCaCertFile)
-}
-
-func (config *Config) GetSslCaKeyFilePath() string {
-	return config.GetPath(config.SslCaKeyFile)
-}
-
-func (config *Config) GetSslCertFilePath() string {
-	return config.GetPath(config.SslCertFile)
-}
-
-func (config *Config) GetSslKeyFilePath() string {
-	return config.GetPath(config.SslKeyFile)
-}
-
-func (config *Config) Init() (ok bool, error error) {
+func NewConfig() *Config {
 	const (
 		defaultAdminUrl   = "/admin"
 		defaultConfigFile = "rdio-scanner.ini"
@@ -101,6 +66,7 @@ func (config *Config) Init() (ok bool, error error) {
 	)
 
 	var (
+		config        = &Config{}
 		configSave    = flag.Bool("config_save", false, fmt.Sprintf("save configuration to %s", defaultConfigFile))
 		serviceAction = flag.String("service", "", "service command, one of start, stop, restart, install, uninstall")
 		sslCreate     = flag.Bool("ssl_create", false, "create self-signed certificates")
@@ -121,33 +87,50 @@ func (config *Config) Init() (ok bool, error error) {
 	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
 	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
 	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
-
 	flag.Parse()
+
+	if exe, err := os.Executable(); err == nil {
+		if !regexp.MustCompile(`go-build[0-9]+`).Match([]byte(exe)) {
+			config.BaseDir = filepath.Dir(exe)
+			if !config.isBaseDirWritable() {
+				if h, err := os.UserHomeDir(); err == nil {
+					config.BaseDir = filepath.Join(h, "Rdio Scanner")
+					if _, err := os.Stat(config.BaseDir); os.IsNotExist(err) {
+						os.MkdirAll(config.BaseDir, 0770)
+					}
+				}
+			}
+		}
+	}
+
+	if !config.isBaseDirWritable() {
+		log.Fatalf("no write permissions in %s", config.BaseDir)
+	}
 
 	switch {
 	case *configSave:
 		if err := config.saveConfig(); err == nil {
-			log.Printf("%s file created", config.ConfigFile)
-			return false, nil
-
+			fmt.Printf("%s file created\n", config.ConfigFile)
+			os.Exit(0)
 		} else {
-			return false, err
+			fmt.Printf("error: %s\n", err.Error())
+			os.Exit(-1)
 		}
 
 	case *sslCreate:
-		log.Print("generating ssl certificate files")
+		fmt.Println("generating ssl certificate files")
 
 		if err := CreateSelfSignedCert(config); err == nil {
-			log.Print("ssl files created")
-			return false, nil
-
+			fmt.Println("ssl files created")
+			os.Exit(0)
 		} else {
-			return false, err
+			fmt.Printf("error: %s", err.Error())
+			os.Exit(-1)
 		}
 
 	case *version:
 		fmt.Println(Version)
-		return false, nil
+		os.Exit(0)
 
 	default:
 		if cfg, err := ini.Load(config.GetConfigFilePath()); err == nil {
@@ -201,15 +184,56 @@ func (config *Config) Init() (ok bool, error error) {
 		}
 
 		if !(config.DbType == DbTypeMariadb || config.DbType == DbTypeMysql || config.DbType == DbTypeSqlite) {
-			return false, fmt.Errorf("unknown database type %s", config.DbType)
+			fmt.Printf("unknown database type %s\n", config.DbType)
+			return nil
 		}
 	}
 
 	if *serviceAction != "" {
-		return NewDaemon().Control(*serviceAction)
+		NewDaemon().Control(*serviceAction)
 	}
 
-	return true, nil
+	return config
+}
+
+func (config *Config) GetConfigFilePath() string {
+	return config.GetPath(config.ConfigFile)
+}
+
+func (config *Config) GetDbFilePath() string {
+	return config.GetPath(config.DbFile)
+}
+
+func (config *Config) GetPath(p string) string {
+	if path.IsAbs(p) {
+		return p
+	}
+	return path.Join(config.BaseDir, p)
+}
+
+func (config *Config) GetSslCaCertFilePath() string {
+	return config.GetPath(config.SslCaCertFile)
+}
+
+func (config *Config) GetSslCaKeyFilePath() string {
+	return config.GetPath(config.SslCaKeyFile)
+}
+
+func (config *Config) GetSslCertFilePath() string {
+	return config.GetPath(config.SslCertFile)
+}
+
+func (config *Config) GetSslKeyFilePath() string {
+	return config.GetPath(config.SslKeyFile)
+}
+
+func (config *Config) isBaseDirWritable() bool {
+	if f, err := os.CreateTemp(config.BaseDir, ".tmp*"); err == nil {
+		f.Close()
+		os.Remove(f.Name())
+		return true
+	}
+	return false
 }
 
 func (config *Config) saveConfig() error {

@@ -229,12 +229,10 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		logResults.Logs = append(logResults.Logs, log)
 	}
 
-	if err != nil {
-		return logResults, formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
-		return logResults, formatError(err)
+	if err != nil {
+		return nil, formatError(err)
 	}
 
 	return logResults, nil

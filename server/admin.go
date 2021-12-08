@@ -37,7 +37,6 @@ const (
 )
 
 type Admin struct {
-	initialized      bool
 	Attempts         AdminLoginAttempts
 	AttemptsMax      uint
 	AttemptsMaxDelay time.Duration
@@ -47,6 +46,7 @@ type Admin struct {
 	Register         chan *websocket.Conn
 	Tokens           []string
 	Unregister       chan *websocket.Conn
+	running          bool
 }
 
 type AdminLoginAttempt struct {
@@ -55,6 +55,20 @@ type AdminLoginAttempt struct {
 }
 
 type AdminLoginAttempts map[string]*AdminLoginAttempt
+
+func NewAdmin(controller *Controller) *Admin {
+	return &Admin{
+		Attempts:         AdminLoginAttempts{},
+		AttemptsMax:      uint(3),
+		AttemptsMaxDelay: time.Duration(time.Duration.Minutes(10)),
+		Broadcast:        make(chan *[]byte, 100),
+		Conns:            make(map[*websocket.Conn]bool),
+		Controller:       controller,
+		Register:         make(chan *websocket.Conn, 100),
+		Tokens:           []string{},
+		Unregister:       make(chan *websocket.Conn, 100),
+	}
+}
 
 func (admin *Admin) BroadcastConfig() {
 
@@ -298,52 +312,6 @@ func (admin *Admin) GetConfig() map[string]interface{} {
 	}
 }
 
-func (admin *Admin) Init(controller *Controller) error {
-	if admin.initialized {
-		return errors.New("admin already initialized")
-	}
-
-	admin.initialized = true
-	admin.Attempts = AdminLoginAttempts{}
-	admin.AttemptsMax = uint(3)
-	admin.AttemptsMaxDelay = time.Duration(time.Duration.Minutes(10))
-	admin.Broadcast = make(chan *[]byte, 100)
-	admin.Conns = make(map[*websocket.Conn]bool)
-	admin.Controller = controller
-	admin.Register = make(chan *websocket.Conn, 100)
-	admin.Tokens = []string{}
-	admin.Unregister = make(chan *websocket.Conn, 100)
-
-	go func() {
-		for {
-			select {
-			case data, ok := <-admin.Broadcast:
-				if !ok {
-					return
-				}
-
-				for conn := range admin.Conns {
-					err := conn.WriteMessage(websocket.TextMessage, *data)
-					if err != nil {
-						admin.Unregister <- conn
-					}
-				}
-
-			case conn := <-admin.Register:
-				admin.Conns[conn] = true
-
-			case conn := <-admin.Unregister:
-				if _, ok := admin.Conns[conn]; ok {
-					delete(admin.Conns, conn)
-					conn.Close()
-				}
-			}
-		}
-	}()
-
-	return nil
-}
-
 func (admin *Admin) LogsHandler(w http.ResponseWriter, r *http.Request) {
 	t := admin.GetAuthorization(r)
 	if !admin.ValidateToken(t) {
@@ -568,6 +536,43 @@ func (admin *Admin) SendConfig(w http.ResponseWriter) {
 	} else {
 		w.WriteHeader(http.StatusExpectationFailed)
 	}
+}
+
+func (admin *Admin) Start() error {
+	if admin.running {
+		return errors.New("admin already running")
+	} else {
+		admin.running = true
+	}
+
+	go func() {
+		for {
+			select {
+			case data, ok := <-admin.Broadcast:
+				if !ok {
+					return
+				}
+
+				for conn := range admin.Conns {
+					err := conn.WriteMessage(websocket.TextMessage, *data)
+					if err != nil {
+						admin.Unregister <- conn
+					}
+				}
+
+			case conn := <-admin.Register:
+				admin.Conns[conn] = true
+
+			case conn := <-admin.Unregister:
+				if _, ok := admin.Conns[conn]; ok {
+					delete(admin.Conns, conn)
+					conn.Close()
+				}
+			}
+		}
+	}()
+
+	return nil
 }
 
 func (admin *Admin) ValidateToken(sToken string) bool {

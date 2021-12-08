@@ -757,8 +757,6 @@ export class RdioScannerService implements OnDestroy {
             }
         };
 
-        this.websocket.onerror = () => this.event.emit({ linked: false });
-
         this.websocket.onopen = () => {
             this.event.emit({ linked: true });
 

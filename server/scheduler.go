@@ -22,22 +22,17 @@ import (
 )
 
 type Scheduler struct {
-	initialized bool
-	cancel      chan interface{}
-	Controller  *Controller
-	Ticker      *time.Ticker
+	Controller *Controller
+	Ticker     *time.Ticker
+	cancel     chan interface{}
+	running    bool
 }
 
-func (scheduler *Scheduler) Init(controller *Controller) error {
-	if scheduler.initialized {
-		return errors.New("scheduler already initialized")
+func NewScheduler(controller *Controller) *Scheduler {
+	return &Scheduler{
+		Controller: controller,
+		cancel:     make(chan interface{}),
 	}
-
-	scheduler.Controller = controller
-	scheduler.cancel = make(chan interface{})
-	scheduler.initialized = true
-
-	return nil
 }
 
 func (scheduler *Scheduler) run() {
@@ -55,14 +50,10 @@ func (scheduler *Scheduler) run() {
 }
 
 func (scheduler *Scheduler) Start() error {
-	if !scheduler.initialized {
-		return errors.New("scheduler not initialized")
-	}
-
-	if scheduler.Ticker != nil {
-		if err := scheduler.Stop(); err != nil {
-			return err
-		}
+	if scheduler.running {
+		return errors.New("scheduler already running")
+	} else {
+		scheduler.running = true
 	}
 
 	scheduler.Ticker = time.NewTicker(time.Hour)
@@ -83,12 +74,13 @@ func (scheduler *Scheduler) Start() error {
 }
 
 func (scheduler *Scheduler) Stop() error {
-	if !scheduler.initialized {
-		return errors.New("scheduler not initialized")
+	if !scheduler.running {
+		return errors.New("scheduler not running")
 	}
 
 	scheduler.Ticker.Stop()
 	scheduler.Ticker = nil
+	scheduler.running = false
 
 	return nil
 }

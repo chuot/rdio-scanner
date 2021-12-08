@@ -40,35 +40,20 @@ func main() {
 		sslPort  string
 	)
 
-	config := &Config{}
-	ok, err := config.Init()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if !ok {
-		os.Exit(0)
-	}
+	config := NewConfig()
 
-	database := &Database{}
-	if err = database.Init(config); err != nil {
-		log.Fatal(err)
-	}
-
-	controller := &Controller{}
-	if err = controller.Init(config, database); err != nil {
-		log.Fatal(err)
-	}
+	controller := NewController(config)
 
 	if config.newAdminPassword != "" {
 		if hash, err := bcrypt.GenerateFromPassword([]byte(config.newAdminPassword), bcrypt.DefaultCost); err == nil {
+			if err := controller.Options.Read(controller.Database); err != nil {
+				log.Fatal(err)
+			}
+
 			controller.Options.adminPassword = string(hash)
 			controller.Options.adminPasswordNeedChange = config.newAdminPassword == defaults.adminPassword
 
 			if err := controller.Options.Write(controller.Database); err != nil {
-				log.Fatal(err)
-			}
-
-			if err := controller.Options.Read(controller.Database); err != nil {
 				log.Fatal(err)
 			}
 
@@ -84,7 +69,9 @@ func main() {
 	fmt.Printf("\nRdio Scanner v%s\n", Version)
 	fmt.Printf("----------------------------------\n")
 
-	LogEvent(controller.Database, LogLevelWarn, "server started")
+	if err := controller.Start(); err != nil {
+		log.Fatal(err)
+	}
 
 	if h, err := os.Hostname(); err == nil {
 		hostname = h

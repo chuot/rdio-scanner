@@ -166,11 +166,9 @@ func (groups *Groups) Read(db *Database) error {
 		*groups = append(*groups, group)
 	}
 
-	if err != nil {
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 
@@ -228,12 +226,9 @@ func (groups *Groups) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 

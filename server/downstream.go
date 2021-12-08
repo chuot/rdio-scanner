@@ -337,23 +337,24 @@ func (downstreams *Downstreams) FromMap(f []interface{}) {
 
 func (downstreams *Downstreams) Read(db *Database) error {
 	var (
-		err  error
-		rows *sql.Rows
+		apikey  interface{}
+		err     error
+		id      uint
+		rows    *sql.Rows
+		systems interface{}
 	)
 
 	*downstreams = Downstreams{}
 
+	formatError := func(err error) error {
+		return fmt.Errorf("downstreams.read: %v", err)
+	}
+
 	if rows, err = db.Sql.Query("select `_id`, `apiKey`, `disabled`, `order`, `systems`, `url` from `rdioScannerDownstreams`"); err != nil {
-		return err
+		return formatError(err)
 	}
 
 	for rows.Next() {
-		var (
-			apikey  interface{}
-			id      uint
-			systems interface{}
-		)
-
 		downstream := Downstream{}
 		if err = rows.Scan(&id, &apikey, &downstream.Disabled, &downstream.Order, &systems, &downstream.Url); err != nil {
 			break
@@ -383,12 +384,10 @@ func (downstreams *Downstreams) Read(db *Database) error {
 		*downstreams = append(*downstreams, downstream)
 	}
 
-	if err != nil {
-		return err
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
-		return err
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil
@@ -473,12 +472,9 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 

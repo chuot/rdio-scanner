@@ -16,7 +16,8 @@
 ################################################################################
 
 app := rdio-scanner
-ver := 6.0.3
+date := 2021/12/08
+ver := 6.0.4
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
@@ -25,7 +26,7 @@ build = @cd server && GOOS=$(1) GOARCH=$(2) go build -o ../dist/$(1)-$(2)/$(3)
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd .. && rm -fr $(1)-$(2)
 
-.PHONY: all clean dist setver
+.PHONY: all clean dist sed
 .PHONY: darwin darwin-amd64 darwin-arm64
 .PHONY: freebsd freebsd-amd64
 .PHONY: linux linux-386 linux-amd64 linux-arm linux-arm64
@@ -38,10 +39,11 @@ clean:
 
 dist: darwin freebsd linux windows
 
-setver:
-	@sed -i -re "s/^(\s*\"version\":).*$$/\1 \"$(ver)\"/" client/package.json
-	@sed -i -re "s/^(const\s+Version\s+=).*$$/\1 \"$(ver)\"/" server/version.go
-	@sed -i -re "s/v[0-9]\.[0-9]\.[0-9]/v$(ver)/" docs/platforms/*.md
+sed:
+	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" client/package.json
+	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" server/version.go
+	@sed -i -re "s|v[0-9]\.[0-9]\.[0-9]|v$(ver)|" COMPILING.md docs/platforms/*.md
+	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/platforms/*.md
 
 webapp: server/webapp/index.html
 

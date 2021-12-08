@@ -17,7 +17,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -27,59 +26,52 @@ import (
 )
 
 type Database struct {
-	initialized    bool
 	Config         *Config
 	DateTimeFormat string
 	Sql            *sql.DB
 }
 
-func (db *Database) Init(config *Config) error {
+func NewDatabase(config *Config) *Database {
 	var err error
 
-	if db.initialized {
-		return errors.New("database already initialized")
-	}
+	database := &Database{Config: config}
 
-	db.initialized = true
-
-	db.Config = config
-
-	switch db.Config.DbType {
+	switch config.DbType {
 	case DbTypeSqlite:
-		db.DateTimeFormat = "2006-01-02 15:04:05.000 -07:00"
+		database.DateTimeFormat = "2006-01-02 15:04:05.000 -07:00"
 
-		dsn := fmt.Sprintf("file:%s", db.Config.GetDbFilePath())
+		dsn := fmt.Sprintf("file:%s", config.GetDbFilePath())
 
-		if db.Sql, err = sql.Open("sqlite", dsn); err != nil {
-			return err
+		if database.Sql, err = sql.Open("sqlite", dsn); err != nil {
+			log.Fatal(err)
 		}
 
 	case DbTypeMariadb, DbTypeMysql:
-		db.DateTimeFormat = "2006-01-02 15:04:05"
+		database.DateTimeFormat = "2006-01-02 15:04:05"
 
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", db.Config.DbUsername, db.Config.DbPassword, db.Config.DbHost, db.Config.DbPort, db.Config.DbName)
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", config.DbUsername, config.DbPassword, config.DbHost, config.DbPort, config.DbName)
 
-		if db.Sql, err = sql.Open("mysql", dsn); err != nil {
-			return err
+		if database.Sql, err = sql.Open("mysql", dsn); err != nil {
+			log.Fatal(err)
 		}
 
 	default:
-		return fmt.Errorf("unknown database type %s", db.Config.DbType)
+		log.Fatalf("unknown database type %s\n", config.DbType)
 	}
 
-	db.Sql.SetConnMaxLifetime(0)
-	db.Sql.SetMaxIdleConns(10)
-	db.Sql.SetMaxOpenConns(10)
+	database.Sql.SetConnMaxLifetime(0)
+	database.Sql.SetMaxIdleConns(10)
+	database.Sql.SetMaxOpenConns(10)
 
-	if err = db.migrate(); err != nil {
-		return err
+	if err = database.migrate(); err != nil {
+		log.Fatal(err)
 	}
 
-	if err = db.seed(); err != nil {
-		return err
+	if err = database.seed(); err != nil {
+		log.Fatal(err)
 	}
 
-	return nil
+	return database
 }
 
 func (db *Database) ParseDateTime(f interface{}) (time.Time, error) {
@@ -102,7 +94,7 @@ func (db *Database) Prune(controller *Controller) error {
 
 	LogEvent(controller.Database, LogLevelInfo, "database pruning")
 
-	date := time.Now().Truncate(time.Duration(controller.Options.PruneDays*24) * time.Hour).Format(db.DateTimeFormat)
+	date := time.Now().Add(-24 * time.Hour * time.Duration(controller.Options.PruneDays)).Format(db.DateTimeFormat)
 
 	if _, err := controller.Database.Sql.Exec("delete from `rdioScannerCalls` where `dateTime` < ?", date); err != nil {
 		return err

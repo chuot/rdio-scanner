@@ -274,7 +274,7 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 	}
 
 	if call.Audio, err = ioutil.ReadFile(audioName); err != nil {
-		return err
+		return nil
 	}
 
 	if b, err = ioutil.ReadFile(p); err != nil {
@@ -494,20 +494,24 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 		}
 	}()
 
-	fileSystem := os.DirFS(dirwatch.Directory)
+	go func() {
+		time.Sleep(2 * time.Second)
 
-	return fs.WalkDir(fileSystem, ".", func(p string, d fs.DirEntry, err error) error {
-		fp := path.Join(dirwatch.Directory, p)
+		fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, d fs.DirEntry, err error) error {
+			fp := path.Join(dirwatch.Directory, p)
 
-		if dirwatch.isDir(fp) {
-			dirwatch.dirs[fp] = true
-			dirwatch.watcher.Add(fp)
+			if dirwatch.isDir(fp) {
+				dirwatch.dirs[fp] = true
+				dirwatch.watcher.Add(fp)
 
-		} else if dirwatch.DeleteAfter {
-			dirwatch.Ingest(fp)
-		}
-		return err
-	})
+			} else if dirwatch.DeleteAfter {
+				dirwatch.Ingest(fp)
+			}
+			return err
+		})
+	}()
+
+	return nil
 }
 
 func (dirwatch *Dirwatch) Stop() {
@@ -582,11 +586,9 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 		*dirwatches = append(*dirwatches, dirwatch)
 	}
 
-	if err != nil {
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 
@@ -641,8 +643,7 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		return formatError(err)
 	}
 
-	rows, err = db.Sql.Query("select `_id` from `rdioScannerDirWatches`")
-	if err != nil {
+	if rows, err = db.Sql.Query("select `_id` from `rdioScannerDirWatches`"); err != nil {
 		return formatError(err)
 	}
 
@@ -661,12 +662,9 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		}
 	}
 
-	if err != nil {
-		rows.Close()
-		return formatError(err)
-	}
+	rows.Close()
 
-	if err = rows.Close(); err != nil {
+	if err != nil {
 		return formatError(err)
 	}
 
@@ -674,28 +672,13 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 }
 
 func (dirwatch *Dirwatch) isDir(d string) bool {
-	var isDir bool
-
-	logError := func(err error) {
-		LogEvent(dirwatch.controller.Database, LogLevelError, fmt.Sprintf("dirwatch.isDir: %s", err.Error()))
+	if fi, err := os.Stat(d); err == nil {
+		if fi.IsDir() {
+			return true
+		}
 	}
 
-	if f, err := os.Open(d); err == nil {
-		if fi, err := f.Stat(); err == nil {
-			if fi.IsDir() {
-				isDir = true
-			}
-		} else {
-			logError(err)
-		}
-		if err := f.Close(); err != nil {
-			logError(err)
-		}
-	} else {
-		logError(err)
-	}
-
-	return isDir
+	return false
 }
 
 func (dirwatch *Dirwatch) walkDir(d string) error {
