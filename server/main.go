@@ -146,7 +146,14 @@ func main() {
 				}
 
 				if b, err := webapp.ReadFile(path.Join("webapp", url)); err == nil {
-					w.Header().Set("Content-Type", mime.TypeByExtension(path.Ext(url)))
+					var t string
+					switch path.Ext(url) {
+					case ".js":
+						t = "text/javascript" // see https://github.com/golang/go/issues/32350
+					default:
+						t = mime.TypeByExtension(path.Ext(url))
+					}
+					w.Header().Set("Content-Type", t)
 					w.Write(b)
 
 				} else if url[:len(url)-1] != "/" {

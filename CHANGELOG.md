@@ -17,7 +17,7 @@
 The backend server has been completely rewritten in GO language. Therefore, all the subpackages used in v5 had to be replaced with new ones. These new subpackages do not necessarily have the same functionality as those of v5.
 
 - No more polling mode for _dirwatch_, which in a way is a good thing as polling was disastrous for CPU consumption. The alternative is to install a local instance and use the downstream feature to feed your main instance.
-- Due to the polling situation, the Docker version of Rdio Scanner is no longer offered. Since it is now so easy to install v6 on various platforms, that was a no-brainer.
+- Due to the polling situation, the Docker version of Rdio Scanner doesn't have the dirwatch feature.
 - Default database name changed from _database.sqlite_ to _rdio-scanner.db_. You will need to rename your database file with the new name if you want to convert it. Otherwise, a new database will be created.
 
 _v6.0.1_
@@ -43,6 +43,12 @@ _v6.0.4_
 - More fix on the SQL_BUSY error (issue #67).
 - Support files (certs, db, ini) are now created in the same folder as the executable, if the folder is writable, or under a `Rdio Scanner` folder in the user's home folder.
 - Some code refactoring.
+
+_v6.0.5_
+
+- Force mime type to `application/javascript` for `.js` extensions. (see https://github.com/golang/go/issues/32350).
+- New `-base_dir` option to specify the directory where all data will be written.
+- New Docker container with disabled dirwatch.
 
 ## Version 5.2
 

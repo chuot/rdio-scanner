@@ -73,22 +73,6 @@ func NewConfig() *Config {
 		version       = flag.Bool("version", false, "show application version")
 	)
 
-	flag.StringVar(&config.DbFile, "db_file", defaultDbFile, "sqlite database file")
-	flag.StringVar(&config.DbHost, "db_host", defaultDbHost, "database host ip or hostname")
-	flag.StringVar(&config.DbName, "db_name", "", "database name")
-	flag.StringVar(&config.DbPassword, "db_pass", "", "database password")
-	flag.UintVar(&config.DbPort, "db_port", defaultDbPort, "database host port")
-	flag.StringVar(&config.DbType, "db_type", defaultDbType, fmt.Sprintf("database type, one of %s, %s, %s", DbTypeSqlite, DbTypeMariadb, DbTypeMysql))
-	flag.StringVar(&config.DbUsername, "db_user", "", "database user name")
-	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "Server config file")
-	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
-	flag.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "Domain name for Let's Encrypt automatic certificate")
-	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
-	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
-	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
-	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
-	flag.Parse()
-
 	if exe, err := os.Executable(); err == nil {
 		if !regexp.MustCompile(`go-build[0-9]+`).Match([]byte(exe)) {
 			config.BaseDir = filepath.Dir(exe)
@@ -102,6 +86,23 @@ func NewConfig() *Config {
 			}
 		}
 	}
+
+	flag.StringVar(&config.BaseDir, "base_dir", config.BaseDir, "base directory where all data will be written")
+	flag.StringVar(&config.DbFile, "db_file", defaultDbFile, "sqlite database file")
+	flag.StringVar(&config.DbHost, "db_host", defaultDbHost, "database host ip or hostname")
+	flag.StringVar(&config.DbName, "db_name", "", "database name")
+	flag.StringVar(&config.DbPassword, "db_pass", "", "database password")
+	flag.UintVar(&config.DbPort, "db_port", defaultDbPort, "database host port")
+	flag.StringVar(&config.DbType, "db_type", defaultDbType, fmt.Sprintf("database type, one of %s, %s, %s", DbTypeSqlite, DbTypeMariadb, DbTypeMysql))
+	flag.StringVar(&config.DbUsername, "db_user", "", "database user name")
+	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
+	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
+	flag.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
+	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
+	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
+	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
+	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
+	flag.Parse()
 
 	if !config.isBaseDirWritable() {
 		log.Fatalf("no write permissions in %s", config.BaseDir)

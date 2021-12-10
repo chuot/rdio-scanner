@@ -30,6 +30,8 @@ import { AdminEvent, RdioScannerAdminService, Config } from '../admin.service';
     templateUrl: './config.component.html',
 })
 export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
+    docker: boolean = false;
+
     form: FormGroup | undefined;
 
     get access(): FormArray {
@@ -79,6 +81,10 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
             if (this.form?.pristine) {
                 this.reset();
             }
+        }
+
+        if ('docker' in event) {
+            this.docker = event.docker!;
         }
     });
 

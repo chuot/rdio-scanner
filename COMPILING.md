@@ -12,6 +12,7 @@ Your os distribution may have all of the following prerequisites available in it
 - latest version of Go ([here](https://go.dev/dl/))
 - latest version of Pandoc with pandoc-pdf ([here](https://pandoc.org/installing.html))
 - latest version of Info-Zip ([here](http://infozip.sourceforge.net/))
+- latest version of podman ([here](https://podman.io/)), only for building containers
 
 ## Compile the app
 
@@ -23,13 +24,13 @@ Clone the official repository on your computer and start the build process.
 
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 
-        rdio-scanner-darwin-amd64-v6.0.4.zip
-        rdio-scanner-darwin-arm64-v6.0.4.zip
-        rdio-scanner-freebsd-amd64-v6.0.4.zip
-        rdio-scanner-linux-386-v6.0.4.zip
-        rdio-scanner-linux-amd64-v6.0.4.zip
-        rdio-scanner-linux-arm64-v6.0.4.zip
-        rdio-scanner-linux-arm-v6.0.4.zip
-        rdio-scanner-windows-amd64-v6.0.4.zip
+        rdio-scanner-darwin-amd64-v6.0.5.zip
+        rdio-scanner-darwin-arm64-v6.0.5.zip
+        rdio-scanner-freebsd-amd64-v6.0.5.zip
+        rdio-scanner-linux-386-v6.0.5.zip
+        rdio-scanner-linux-amd64-v6.0.5.zip
+        rdio-scanner-linux-arm64-v6.0.5.zip
+        rdio-scanner-linux-arm-v6.0.5.zip
+        rdio-scanner-windows-amd64-v6.0.5.zip
 
 **Happy Rdio scanning !**

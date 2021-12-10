@@ -41,8 +41,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         [rdio@pc-linux ~]$ mkdir rdio-scanner
         [rdio@pc-linux ~]$ cd rdio-scanner
         [rdio@pc-linux rdio-scanner]$ unzip \
-        > ~/Downloads/rdio-scanner-linux-amd64-v6.0.4.zip 
-        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.0.4.zip
+        > ~/Downloads/rdio-scanner-linux-amd64-v6.0.5.zip 
+        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.0.5.zip
           inflating: rdio-scanner            
           inflating: rdio-scanner.pdf     
 
@@ -50,7 +50,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         [rdio@pc-linux rdio-scanner]$ ./rdio-scanner 
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 09:11:48 server started
         2021/12/08 09:11:48 main interface at http://pc-linux:3000
@@ -77,7 +77,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner -listen :80
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 09:14:00 server started
         2021/12/08 09:14:00 main interface at http://pc-linux
@@ -109,7 +109,7 @@ Now we use the self-signed server certificate to run our instance.
         > -ssl_listen :443
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 09:16:47 server started
         2021/12/08 09:16:47 main interface at http://pc-linux
@@ -142,7 +142,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner 
         [sudo] Mot de passe de rdio : 
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 09:20:40 server started
         2021/12/08 09:20:40 main interface at http://pc-linux
@@ -169,9 +169,11 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
         [rdio@pc-linux rdio-scanner]$ ./rdio-scanner -h
         Usage of ./rdio-scanner:
           -admin_password string
-        change admin password
+                change admin password
+          -base_dir string
+                base directory where all data will be written
           -config string
-                Server config file (default "rdio-scanner.ini")
+                server config file (default "rdio-scanner.ini")
           -config_save
                 save configuration to rdio-scanner.ini
           -db_file string
@@ -193,7 +195,7 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
           -service string
                 service command, one of start, stop, restart, install, uninstall
           -ssl_auto_cert string
-                Domain name for Let's Encrypt automatic certificate
+                domain name for Let's Encrypt automatic certificate
           -ssl_cert_file string
                 ssl PEM formated certificate
           -ssl_create

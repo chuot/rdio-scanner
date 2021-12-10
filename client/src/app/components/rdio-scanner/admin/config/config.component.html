@@ -20,7 +20,7 @@
             </mat-expansion-panel-header>
             <rdio-scanner-admin-api-keys #apiKeyComponent [form]="apiKeys"></rdio-scanner-admin-api-keys>
         </mat-expansion-panel>
-        <mat-expansion-panel (afterCollapse)="dirWatchComponent.closeAll()">
+        <mat-expansion-panel *ngIf="!docker" (afterCollapse)="dirWatchComponent.closeAll()">
             <mat-expansion-panel-header>
                 <mat-panel-title>
                     <mat-icon>folder</mat-icon>

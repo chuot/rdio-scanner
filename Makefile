@@ -16,17 +16,17 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2021/12/08
-ver := 6.0.4
+date := 2021/12/09
+ver := 6.0.5
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
 
 build = @cd server && GOOS=$(1) GOARCH=$(2) go build -o ../dist/$(1)-$(2)/$(3)
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md CHANGELOG.md
-zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd .. && rm -fr $(1)-$(2)
+zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
-.PHONY: all clean dist sed
+.PHONY: all clean container dist sed
 .PHONY: darwin darwin-amd64 darwin-arm64
 .PHONY: freebsd freebsd-amd64
 .PHONY: linux linux-386 linux-amd64 linux-arm linux-arm64
@@ -36,6 +36,9 @@ all: clean dist
 
 clean:
 	@rm -fr client/node_modules dist server/webapp
+
+container: webapp linux-amd64
+	@podman build --platform linux/amd64 --tag rdio-scanner:latest-beta .
 
 dist: darwin freebsd linux windows
 

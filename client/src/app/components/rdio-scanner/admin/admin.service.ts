@@ -53,7 +53,6 @@ export interface ApiKey {
 
 export interface DirWatch {
     _id?: string;
-    // delay?: number;
     deleteAfter?: boolean;
     directory?: string;
     disabled?: boolean;
@@ -64,7 +63,6 @@ export interface DirWatch {
     systemId?: number;
     talkgroupId?: number;
     type?: string;
-    // usePolling?: boolean;
 }
 
 export interface Downstream {
@@ -170,6 +168,7 @@ export interface Config {
 export interface AdminEvent {
     authenticated?: boolean;
     config?: Config;
+    docker?: boolean;
     passwordNeedChange?: boolean;
 }
 
@@ -191,11 +190,17 @@ export class RdioScannerAdminService implements OnDestroy {
         return !!this.token;
     }
 
+    get docker() {
+        return this._docker;
+    }
+
     get passwordNeedChange() {
         return this._passwordNeedChange;
     }
 
     private configWebSocket: WebSocket | undefined;
+
+    private _docker = false;
 
     private _passwordNeedChange = false;
 
@@ -246,11 +251,18 @@ export class RdioScannerAdminService implements OnDestroy {
         try {
             const res = await firstValueFrom(this.ngHttpClient.get<{
                 config: Config;
+                docker: boolean;
                 passwordNeedChange: boolean;
             }>(
                 this.getUrl(url.config),
                 { headers: this.getHeaders(), responseType: 'json' },
             ));
+
+            if (res.docker !== this._docker) {
+                this._docker = res.docker;
+
+                this.event.emit({ docker: this.docker })
+            }
 
             if (res.passwordNeedChange !== this._passwordNeedChange) {
                 this._passwordNeedChange = res.passwordNeedChange;

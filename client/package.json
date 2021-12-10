@@ -1,25 +1,25 @@
 {
     "author": "Chrystian Huot <chrystian.huot@saubeo.solutions>",
     "dependencies": {
-        "@angular/animations": "^13.0.3",
-        "@angular/cdk": "^13.0.3",
-        "@angular/common": "~13.0.3",
-        "@angular/compiler": "~13.0.3",
-        "@angular/core": "~13.0.3",
-        "@angular/forms": "~13.0.3",
-        "@angular/material": "^13.0.3",
-        "@angular/platform-browser": "~13.0.3",
-        "@angular/platform-browser-dynamic": "~13.0.3",
-        "@angular/router": "^13.0.3",
-        "@angular/service-worker": "^13.0.3",
+        "@angular/animations": "^13.1.0",
+        "@angular/cdk": "^13.1.0",
+        "@angular/common": "~13.1.0",
+        "@angular/compiler": "~13.1.0",
+        "@angular/core": "~13.1.0",
+        "@angular/forms": "~13.1.0",
+        "@angular/material": "^13.1.0",
+        "@angular/platform-browser": "~13.1.0",
+        "@angular/platform-browser-dynamic": "~13.1.0",
+        "@angular/router": "^13.1.0",
+        "@angular/service-worker": "^13.1.0",
         "rxjs": "~7.4.0",
         "tslib": "^2.3.1",
         "zone.js": "~0.11.4"
     },
     "devDependencies": {
-        "@angular-devkit/build-angular": "~13.0.4",
-        "@angular/cli": "^13.0.4",
-        "@angular/compiler-cli": "~13.0.3",
+        "@angular-devkit/build-angular": "~13.1.0",
+        "@angular/cli": "^13.1.0",
+        "@angular/compiler-cli": "~13.1.0",
         "@types/node": "~16.11.12",
         "@typescript-eslint/eslint-plugin": "^5.6.0",
         "@typescript-eslint/parser": "^5.6.0",
@@ -39,5 +39,5 @@
         "build": "ng build --base-href ./ --configuration production",
         "start": "ng serve"
     },
-    "version": "6.0.4"
+    "version": "6.0.5"
 }

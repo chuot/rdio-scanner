@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -528,8 +529,10 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (admin *Admin) SendConfig(w http.ResponseWriter) {
+	_, docker := os.LookupEnv("DOCKER")
 	if b, err := json.Marshal(map[string]interface{}{
 		"config":             admin.GetConfig(),
+		"docker":             docker,
 		"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
 	}); err == nil {
 		w.Write(b)

@@ -41,8 +41,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         rdio@pc-freebsd:~ $ mkdir rdio-scanner
         rdio@pc-freebsd:~ $ cd rdio-scanner
         rdio@pc-freebsd:~/rdio-scanner $ unzip \
-        > ~/rdio-scanner-freebsd-amd64-v6.0.4.zip 
-        Archive:  ../rdio-scanner-freebsd-amd64-v6.0.4.zip
+        > ~/rdio-scanner-freebsd-amd64-v6.0.5.zip 
+        Archive:  ../rdio-scanner-freebsd-amd64-v6.0.5.zip
          extracting: rdio-scanner  
          extracting: rdio-scanner.pdf
 
@@ -50,7 +50,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         rdio@pc-freebsd:~/rdio-scanner $ ./rdio-scanner
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 08:16:36 server started
         2021/12/08 08:16:36 main interface at http://pc-freebsd:3000
@@ -80,7 +80,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner -listen :80
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 08:19:38 server started
         2021/12/08 08:19:38 main interface at http://pc-freebsd
@@ -113,7 +113,7 @@ Now we use the self-signed server certificate to run our instance.
         > -ssl_key_file server.key                                     \
         > -ssl_listen :443
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 10:34:29 server started
         2021/12/08 10:34:29 main interface at http://pc-freebsd
@@ -147,7 +147,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 10:38:28 server started
         2021/12/08 10:38:29 main interface at http://pc-freebsd
@@ -177,41 +177,43 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
         rdio@pc-freebsd:~/rdio-scanner $ ./rdio-scanner -h
         Usage of ./rdio-scanner:
           -admin_password string
-            	change admin password
+                change admin password
+          -base_dir string
+                base directory where all data will be written
           -config string
-            	Server config file (default "rdio-scanner.ini")
+                server config file (default "rdio-scanner.ini")
           -config_save
-            	save configuration to rdio-scanner.ini
+                save configuration to rdio-scanner.ini
           -db_file string
-            	sqlite database file (default "rdio-scanner.db")
+                sqlite database file (default "rdio-scanner.db")
           -db_host string
-            	database host ip or hostname (default "localhost")
+                database host ip or hostname (default "localhost")
           -db_name string
-            	database name
+                database name
           -db_pass string
-            	database password
+                database password
           -db_port uint
-            	database host port (default 3306)
+                database host port (default 3306)
           -db_type string
-            	database type, one of sqlite, mariadb, mysql (default "sqlite")
+                database type, one of sqlite, mariadb, mysql (default "sqlite")
           -db_user string
-            	database user name
+                database user name
           -listen string
-            	listening address (default ":3000")
+                listening address (default ":3000")
           -service string
-            	service command, one of start, stop, restart, install, uninstall
+                service command, one of start, stop, restart, install, uninstall
           -ssl_auto_cert string
-            	Domain name for Let's Encrypt automatic certificate
+                domain name for Let's Encrypt automatic certificate
           -ssl_cert_file string
-            	ssl PEM formated certificate
+                ssl PEM formated certificate
           -ssl_create
-            	create self-signed certificates
+                create self-signed certificates
           -ssl_key_file string
-            	ssl PEM formated key
+                ssl PEM formated key
           -ssl_listen string
-            	listening address for ssl
+                listening address for ssl
           -version
-            	show application version
+                show application version
         rdio@pc-freebsd:~/rdio-scanner $ 
 
 \pagebreak{}

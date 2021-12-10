@@ -43,7 +43,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         C:\Users\rdio> cd rdio-scanner
 
         C:\Users\rdio\rdio-scanner> tar -xvf ^
-            ..\downloads\rdio-scanner-windows-amd64-v6.0.4.zip
+            ..\downloads\rdio-scanner-windows-amd64-v6.0.5.zip
         x rdio-scanner.exe
         x rdio-scanner.pdf
 
@@ -51,7 +51,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
     
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 13:48:48 server started
         2021/12/08 13:48:48 main interface at http://pc-windows:3000
@@ -77,7 +77,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         C:\Users\rdio\rdio-scanner>rdio-scanner -listen :80
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 10:53:31 server started
         2021/12/08 10:53:31 main interface at http://pc-windows
@@ -108,7 +108,7 @@ Now we use the self-signed server certificate to run our instance.
             -ssl_key_file server.key            ^
             -ssl_listen :443
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 11:05:43 server started
         2021/12/08 11:05:43 main interface at http://pc-windows
@@ -140,7 +140,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
         
-        Rdio Scanner v6.0.4
+        Rdio Scanner v6.0.5
         ----------------------------------
         2021/12/08 11:11:28 server started
         2021/12/08 11:11:28 main interface at http://pc-windows
@@ -169,8 +169,10 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
         Usage of rdio-scanner:
           -admin_password string
                 change admin password
+          -base_dir string
+                base directory where all data will be written
           -config string
-                Server config file (default "rdio-scanner.ini")
+                server config file (default "rdio-scanner.ini")
           -config_save
                 save configuration to rdio-scanner.ini
           -db_file string
@@ -192,7 +194,7 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
           -service string
                 service command, one of start, stop, restart, install, uninstall
           -ssl_auto_cert string
-                Domain name for Let's Encrypt automatic certificate
+                domain name for Let's Encrypt automatic certificate
           -ssl_cert_file string
                 ssl PEM formated certificate
           -ssl_create
