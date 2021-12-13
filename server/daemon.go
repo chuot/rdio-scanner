@@ -43,9 +43,11 @@ func NewDaemon() *Daemon {
 		name = "rdio-scanner"
 	}
 
+	p, _ := os.FindProcess(os.Getpid())
+
 	d := Daemon{
 		Errors:    make(chan error, 5),
-		Interface: &DaemonInterface{},
+		Interface: &DaemonInterface{Process: p},
 	}
 
 	d.Config = service.Config{
@@ -62,7 +64,7 @@ func NewDaemon() *Daemon {
 	return &d
 }
 
-func (d *Daemon) Control(action string) {
+func (d *Daemon) Control(action string) *Daemon {
 	if action == "run" {
 		go d.Service.Run()
 
@@ -72,15 +74,21 @@ func (d *Daemon) Control(action string) {
 	} else {
 		os.Exit(-1)
 	}
+
+	return d
 }
 
-type DaemonInterface struct{}
+type DaemonInterface struct {
+	Process *os.Process
+}
 
 func (d *DaemonInterface) Start(s service.Service) error {
 	return nil
 }
 
 func (d *DaemonInterface) Stop(s service.Service) error {
-	os.Exit(0)
+	if d.Process != nil {
+		d.Process.Signal(os.Interrupt)
+	}
 	return nil
 }

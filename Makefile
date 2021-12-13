@@ -16,8 +16,8 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2021/12/09
-ver := 6.0.5
+date := 2021/12/13
+ver := 6.0.6
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
@@ -38,7 +38,7 @@ clean:
 	@rm -fr client/node_modules dist server/webapp
 
 container: webapp linux-amd64
-	@podman build --platform linux/amd64 --tag rdio-scanner:latest-beta .
+	@podman build --format docker --platform linux/amd64,linux/arm,linux/arm64 --manifest rdio-scanner:latest-beta .
 
 dist: darwin freebsd linux windows
 

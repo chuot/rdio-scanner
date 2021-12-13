@@ -637,14 +637,14 @@ func (controller *Controller) Start() error {
 }
 
 func (controller *Controller) Terminate() {
-	if err := controller.Database.Sql.Close(); err != nil {
-		log.Println(err)
-	}
-
 	controller.Dirwatches.Stop()
 
 	for c := range controller.Clients {
 		c.Conn.Close()
+	}
+
+	if err := controller.Database.Sql.Close(); err != nil {
+		log.Println(err)
 	}
 
 	log.Println("terminated")

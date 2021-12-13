@@ -41,8 +41,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         rdio@pc-freebsd:~ $ mkdir rdio-scanner
         rdio@pc-freebsd:~ $ cd rdio-scanner
         rdio@pc-freebsd:~/rdio-scanner $ unzip \
-        > ~/rdio-scanner-freebsd-amd64-v6.0.5.zip 
-        Archive:  ../rdio-scanner-freebsd-amd64-v6.0.5.zip
+        > ~/rdio-scanner-freebsd-amd64-v6.0.6.zip 
+        Archive:  ../rdio-scanner-freebsd-amd64-v6.0.6.zip
          extracting: rdio-scanner  
          extracting: rdio-scanner.pdf
 
@@ -50,11 +50,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         rdio@pc-freebsd:~/rdio-scanner $ ./rdio-scanner
         
-        Rdio Scanner v6.0.5
+        Rdio Scanner v6.0.6
         ----------------------------------
-        2021/12/08 08:16:36 server started
-        2021/12/08 08:16:36 main interface at http://pc-freebsd:3000
-        2021/12/08 08:16:36 admin interface at http://pc-freebsd:3000/admin
+        2021/12/13 08:16:36 server started
+        2021/12/13 08:16:36 main interface at http://pc-freebsd:3000
+        2021/12/13 08:16:36 admin interface at http://pc-freebsd:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -80,11 +80,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner -listen :80
         
-        Rdio Scanner v6.0.5
+        Rdio Scanner v6.0.6
         ----------------------------------
-        2021/12/08 08:19:38 server started
-        2021/12/08 08:19:38 main interface at http://pc-freebsd
-        2021/12/08 08:19:38 admin interface at http://pc-freebsd/admin
+        2021/12/13 08:19:38 server started
+        2021/12/13 08:19:38 main interface at http://pc-freebsd
+        2021/12/13 08:19:38 admin interface at http://pc-freebsd/admin
 
 ## Listening with SSL with self-signed certificates
 
@@ -93,8 +93,8 @@ It is advised to share your [Rdio Scanner](https://github.com/chuot/rdio-scanner
 We can create such self-signed certificates by running [Rdio Scanner](https://github.com/chuot/rdio-scanner) with the **-ssl_create** argument.
 
         rdio@pc-freebsd:~/rdio-scanner $ ./rdio-scanner -ssl_create
-        2021/12/08 10:32:17 generating ssl certificate files
-        2021/12/08 10:32:19 ssl files created
+        2021/12/13 10:32:17 generating ssl certificate files
+        2021/12/13 10:32:19 ssl files created
 
 This has generated these files in the same folder as your [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 
@@ -113,12 +113,12 @@ Now we use the self-signed server certificate to run our instance.
         > -ssl_key_file server.key                                     \
         > -ssl_listen :443
         
-        Rdio Scanner v6.0.5
+        Rdio Scanner v6.0.6
         ----------------------------------
-        2021/12/08 10:34:29 server started
-        2021/12/08 10:34:29 main interface at http://pc-freebsd
-        2021/12/08 10:34:29 main interface at https://pc-freebsd
-        2021/12/08 10:34:29 admin interface at https://pc-freebsd/admin
+        2021/12/13 10:34:29 server started
+        2021/12/13 10:34:29 main interface at http://pc-freebsd
+        2021/12/13 10:34:29 main interface at https://pc-freebsd
+        2021/12/13 10:34:29 admin interface at https://pc-freebsd/admin
 
 ## Save your advanced configuration to a config file
 
@@ -130,7 +130,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
         > -ssl_key_file server.key                            \
         > -ssl_listen :443                                    \
         > -config_save
-        2021/12/08 10:37:00 rdio-scanner.ini file created
+        2021/12/13 10:37:00 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -147,12 +147,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner
         
-        Rdio Scanner v6.0.5
+        Rdio Scanner v6.0.6
         ----------------------------------
-        2021/12/08 10:38:28 server started
-        2021/12/08 10:38:29 main interface at http://pc-freebsd
-        2021/12/08 10:38:29 main interface at https://pc-freebsd
-        2021/12/08 10:38:29 admin interface at https://pc-freebsd/admin
+        2021/12/13 10:38:28 server started
+        2021/12/13 10:38:29 main interface at http://pc-freebsd
+        2021/12/13 10:38:29 main interface at https://pc-freebsd
+        2021/12/13 10:38:29 admin interface at https://pc-freebsd/admin
 
 ## Install Rdio Scanner as a service
 

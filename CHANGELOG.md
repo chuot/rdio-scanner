@@ -50,6 +50,12 @@ _v6.0.5_
 - New `-base_dir` option to specify the directory where all data will be written.
 - New Docker container with disabled dirwatch.
 
+_v6.0.6_
+
+- Fix an issue with not closing the database when restarting the host platform (issue #71).
+- Fixed SDRTunk parser when artist tag contains CTCSS tones.
+- Platforms linux/amd64, linux/arm and linux/arm64 are now available for the Docker container.
+
 ## Version 5.2
 
 - Change to how the server reports version.
