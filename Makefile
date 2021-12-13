@@ -38,7 +38,8 @@ clean:
 	@rm -fr client/node_modules dist server/webapp
 
 container: webapp linux-amd64
-	@podman build --format docker --platform linux/amd64,linux/arm,linux/arm64 --manifest rdio-scanner:latest-beta .
+	@podman build --platform linux/amd64,linux/arm,linux/arm64 --manifest rdio-scanner:latest-beta .
+	@podman manifest push --format v2s2 localhost/rdio-scanner:latest-beta docker://docker.io/chuot/rdio-scanner:latest-beta
 
 dist: darwin freebsd linux windows
 

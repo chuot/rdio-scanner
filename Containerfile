@@ -9,7 +9,7 @@ RUN mkdir -p /app/data && \
     cd server && \
     go build -o ../rdio-scanner && \
     cd .. && \
-    rm -fr server && \
+    rm -fr server /root/.cache /root/go && \
     apk del .build && \
     apk --no-cache --no-progress add ffmpeg tzdata
 VOLUME [ "/app/data" ]
