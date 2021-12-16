@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -55,6 +56,8 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	controller.Register <- client
 
 	go func() {
+		client.Conn.SetReadDeadline(time.Time{})
+
 		for {
 			_, b, err := client.Conn.ReadMessage()
 			if err != nil {
@@ -77,29 +80,45 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	}()
 
 	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+
+		defer func() {
+			ticker.Stop()
+			controller.Unregister <- client
+		}()
+
 		for {
-			message, ok := <-client.Send
-			if !ok {
-				break
-			}
-
-			if client.Conn == nil {
-				break
-			}
-
-			b, err := message.ToJson()
-			if err != nil {
-				log.Println(fmt.Errorf("client.message.tojson: %v", err))
-
-			} else {
-				if err = client.Conn.WriteMessage(websocket.TextMessage, b); err != nil {
-					log.Println(fmt.Errorf("client.conn.writemessage: %v", err))
+			select {
+			case message, ok := <-client.Send:
+				if !ok {
 					break
+				}
+
+				if client.Conn == nil {
+					break
+				}
+
+				b, err := message.ToJson()
+				if err != nil {
+					log.Println(fmt.Errorf("client.message.tojson: %v", err))
+
+				} else {
+					client.Conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
+					if err = client.Conn.WriteMessage(websocket.TextMessage, b); err != nil {
+						log.Println(fmt.Errorf("client.conn.writemessage: %v", err))
+						break
+					}
+				}
+
+			case <-ticker.C:
+				client.Conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
+				if err := client.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
 				}
 			}
 		}
-
-		controller.Unregister <- client
 	}()
 
 	return nil

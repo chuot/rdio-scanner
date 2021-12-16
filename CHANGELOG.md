@@ -56,6 +56,10 @@ _v6.0.6_
 - Fixed SDRTunk parser when artist tag contains CTCSS tones.
 - Platforms linux/amd64, linux/arm and linux/arm64 are now available for the Docker container.
 
+_v6.0.7_
+
+- Fix dropped connections when going through a proxy.
+
 ## Version 5.2
 
 - Change to how the server reports version.
