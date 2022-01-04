@@ -5,7 +5,7 @@
             <span class="mat-caption">System identifier in decimal format.</span>
         </p>
         <mat-form-field floatLabel="never">
-            <input type="number" matInput formControlName="id" placeholder="Id">
+            <input type="number" min="1" step="1" matInput formControlName="id" placeholder="Id">
             <mat-error *ngIf="form.get('id')?.hasError('duplicate')">
                 Id is already defined
             </mat-error>
@@ -58,8 +58,7 @@
                 has an effect if the auto populate option is enabled.</span>
         </p>
         <mat-form-field floatLabel="never">
-            <textarea type="text" matInput [matTextareaAutosize]="true" formControlName="blacklists"
-                placeholder="Blacklists"></textarea>
+            <textarea type="text" matInput formControlName="blacklists" placeholder="Blacklists"></textarea>
             <mat-error *ngIf="form?.get('blacklists')?.hasError('invalid')">
                 Comma separated list of talkgroup Ids
             </mat-error>

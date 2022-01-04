@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callTag = 'Tag';
     callTalkgroup = 'Talkgroup';
     callTalkgroupId = '0';
-    callTalkgroupName = `Rdio Scanner ${packageInfo.name === 'rdio-scanner-client' ? 'v'.concat(packageInfo.version) : ''}`;
+    callTalkgroupName = `Rdio Scanner ${packageInfo.name === 'rdio-scanner' ? 'v'.concat(packageInfo.version) : ''}`;
     callTime = 0;
     callUnit = '0';
 

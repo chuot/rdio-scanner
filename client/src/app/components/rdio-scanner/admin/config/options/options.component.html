@@ -16,7 +16,7 @@
                 inactive.</span>
         </p>
         <mat-form-field>
-            <input matInput formControlName="dimmerDelay" type="number">
+            <input type="number" min="0" step="1" matInput formControlName="dimmerDelay">
             <mat-error *ngIf="form?.get('dimmerDelay')?.hasError('required')">
                 Dimmer delay is required
             </mat-error>
@@ -51,7 +51,7 @@
                 a start time of +/- this delay in milliseconds.</span>
         </p>
         <mat-form-field>
-            <input matInput formControlName="duplicateDetectionTimeFrame" type="number">
+            <input type="number" min="0" step="1" matInput formControlName="duplicateDetectionTimeFrame">
             <mat-error *ngIf="form?.get('duplicateDetectionTimeFrame')?.hasError('required')">
                 Duplicate call time frame is required
             </mat-error>
@@ -79,7 +79,7 @@
                 disable.</span>
         </p>
         <mat-form-field>
-            <input matInput formControlName="pruneDays" type="number">
+            <input type="number" min="0" step="1" matInput formControlName="pruneDays">
             <mat-error *ngIf="form?.get('pruneDays')?.hasError('required')">
                 Prune days is required
             </mat-error>
@@ -90,11 +90,29 @@
     </div>
     <div class="row">
         <p>
+            <span class="mat-body">Search Patched Talkgroups</span><br>
+            <span class="mat-caption">Search for patched talkgroups when using the search panel. Be aware this has a negative impact on search response time.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="searchPatchedTalkgroups"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Sort Talkgroups</span><br>
             <span class="mat-caption">Automatically sort talkgroups by their id.</span>
         </p>
         <div>
             <mat-slide-toggle color="primary" formControlName="sortTalkgroups"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Toggle By Tags</span><br>
+            <span class="mat-caption">Allow toggling talkgroups by their tag.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="tagsToggle"></mat-slide-toggle>
         </div>
     </div>
 </ng-container>

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,16 +24,25 @@ import { AppUpdateComponent } from './update.component';
 
 @Injectable()
 export class AppUpdateService {
+  private prompted: boolean = false;
+
   constructor(
     private matDialog: MatDialog,
     private swUpdate: SwUpdate,
   ) {
-    swUpdate.available.subscribe(() => this.prompt());
-    swUpdate.checkForUpdate();
-    setInterval(() => swUpdate.checkForUpdate(), 5 * 60 * 1000);
+    if (swUpdate.isEnabled) {
+      swUpdate.versionUpdates.subscribe(() => this.prompt());
+      setInterval(() => swUpdate.checkForUpdate(), 5 * 60 * 1000);
+    }
   }
 
   prompt(): void {
+    if (this.prompted) {
+      return;
+    }
+
+    this.prompted = true
+
     this.matDialog.open(AppUpdateComponent).afterClosed().subscribe((doUpdate) => {
       if (doUpdate) {
         if (this.swUpdate.isEnabled) {
@@ -42,6 +51,8 @@ export class AppUpdateService {
           document.location.reload();
         }
       }
+
+      this.prompted = false;
     });
   }
 }

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -83,7 +83,7 @@ export class RdioScannerAdminTodosComponent implements OnDestroy, OnInit {
         if (!this.config?.apiKeys?.length && !this.config?.dirWatch?.length) {
             todos.push({
                 level: 'info',
-                message: 'No apikeys and no dirwatch defined. Please set at least one to allow ingesting audio files.',
+                message: 'No apikeys or dirwatch defined. Please set at least one to allow ingesting audio files.',
             });
         }
 

@@ -1,10 +1,8 @@
-# Rdio Scanner's API
+# API
 
 There is two API endpoints available you can use to upload your audio files to [Rdio Scanner](https://github.com/chuot/rdio-scanner).
 
-> Remember that systems/talkgroups need to be defined in `config.json` .
-
-## Generic API - /api/call-upload
+## Endpoint: /api/call-upload
 
 This API is used by the **downstream** feature to received audio files from other [Rdio Scanner](https://github.com/chuot/rdio-scanner) instances.
 
@@ -12,57 +10,54 @@ However, this API can be used for purposes other than **downstream**, as long as
 
 ```bash
 $ curl https://other-rdio-scanner.example.com/api/call-upload \
+    -F "audio=@/recordings/audio.wav"             \
+    -F "audioName=audio.wav"                      \
+    -F "audioType=audio/x-wav"                    \
+    -F "dateTime=1970-01-01T00:00:00.000Z"        \
+    -F "frequencies=[]"                           \
+    -F "frequency=774031250"                      \
     -F "key=d2079382-07df-4aa9-8940-8fb9e4ef5f2e" \
-    -F "audio=@/recordings/audio.wav" \
-    -F "dateTime=1970-01-01T00:00:00.000Z" \
-    -F "frequencies=[]" \
-    -F "frequency=774031250" \
-    -F "source=4424000" \
-    -F "sources=[]" \
-    -F "system=11" \
-    -F "talkgroup=54241"
+    -F "patches=[]"                               \
+    -F "source=4424000"                           \
+    -F "sources=[]"                               \
+    -F "system=11"                                \
+    -F "systemLabel=RSP25MTL"                     \
+    -F "talkgroup=54241"                          \
+    -F "talkgroupGroup=Fire"                      \
+    -F "talkgroupLabel=TDB A1"                    \
+    -F "talkgroupTag=Fire dispatch"
 Call imported successfully
 ```
 
-- **key** - API key on the receiving host, see `config.json`.
-- **audio** - Full path to your audio file. The path **must be prefixed** with the **@ sign**.
-- **dateTime** - Audio date and time in JSON format.
-- **frequencies** - (optional) A JSON string. Inspired by _Trunk Recorder_, the JSON structure is:
-  ```typescript
-  {
-    errorCount: number;
-    freq: number; // in hertz
-    len: number; // in seconds
-    pos: number; // in seconds
-    spikeCount: number;
-  }[];
-  ```
-- **frequency** - (optional) The frequency at which the call was recorded.
-- **source** - (optional) The unit ID.
-- **sources** - (optional) A JSON string. Inspired by _Trunk Recorder_. the JSON string structure is:
-  ```typescript
-  {
-    pos: number; // in seconds
-    src: number; // the unit ID
-  }[];
-  ```
-- **system** - The system ID to attach this audio file.
-- **talkgroup** - The talkgroup ID to attach this audio file.
+- **audio** - full path to your audio file. The path **must be prefixed** with the **@ sign**.
+- **audioName** - [optional] file name (it can be derived from the audio field).
+- **audioType** - [optional] mime type. (it can be derived from the audio field).
+- **dateTime** - date and time in RFC3339 or unix time format.
+- **frequencies** - [optional] JSON array of objects for frequency changes throughout the conversation.
 
-## Trunk Recorder API - /api/trunk-recorder-call-upload
+        {
+          errorCount: number;
+          freq: number; // in hertz
+          len: number;  // in seconds
+          pos: number;  // in seconds
+          spikeCount: number;
+        }[];
 
-This API is used by _Trunk Recorder upload-script_ where a JSON file is also available for metadata.
+- **frequency** - [optional] the frequency on which the audio file was recorded.
+- **key** - API key on the receiving host.
+- **patches** - [optional] JSON array of objects for patched talkgroup IDs.
+- **source** - [optional] unit ID.
+- **sources** - [optional] JSON array of objects for unit ID changes throughout the conversation.
 
-```bash
-$ curl https://rdio-scanner.other.instance/api/trunk-recorder-call-upload \
-    -F "key=d2079382-07df-4aa9-8940-8fb9e4ef5f2e" \
-    -F "audio=@/recordings/audio.wav" \
-    -F "meta=@/recordings/audio.json" \
-    -F "system=11"
-Call imported successfully
-```
+        {
+          pos: number; // in seconds
+          src: number; // unit ID
+          tag: number; // [optional] unit tag
+        }[];
 
-- **key** - API key on the receiving host, see `config.json`.
-- **audio** - Full path to your audio file. The path **must be prefixed** with the **@ sign**.
-- **meta** - Full path to your audio metadata. the path **must be prefixed** with the **@ sign**.
-- **system** - The system ID to link this audio file.
+- **system** - [optional] system ID.
+- **systemLabel** - [optional] system label.
+- **talkgroup** - talkgroup ID.
+- **talkgroupGroup** - [optional] talkgroup group.
+- **talkgroupLabel** - [optional] talkgroup label.
+- **talkgroupTag** - [optional] talkgroup tag.

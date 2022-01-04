@@ -36,13 +36,7 @@
                 <p>
                     <span class="mat-body">Directory</span><br>
                     <span class="mat-caption">
-                        <ng-container *ngIf="docker">
-                            Absolute or relatives inside the <u>Docker container</u>, path of the directory to be
-                            monitored.
-                        </ng-container>
-                        <ng-container *ngIf="!docker">
-                            Absolute or relatives to the server, path of the directory to be monitored.
-                        </ng-container>
+                        Absolute or relatives to the server, path of the directory to be monitored.
                     </span>
                 </p>
                 <mat-form-field floatLabel="never">
@@ -124,13 +118,15 @@
                     <span class="mat-caption">Some metadata can be extracted from the file name of the audio file using
                         specific META tags. Possible META tags:
                         <ul>
-                            <li><b>#DATE</b> - extract the date like 20201231&nbsp;(YYYYMMMDD), 2020-12-31&nbsp;(YYYY-MM-DD) or 2020_12_31&nbsp;(YYYY_MM_DD).
+                            <li><b>#DATE</b> - extract the date like 20201231&nbsp;(YYYYMMMDD),
+                                2020-12-31&nbsp;(YYYY-MM-DD) or 2020_12_31&nbsp;(YYYY_MM_DD).
                             </li>
                             <li><b>#HZ</b> - extract the frequency in hertz like 119100000.</li>
                             <li><b>#KHZ</b> - extract the frequency in kilohertz like 119100.</li>
                             <li><b>#MHZ</b> - extract the frequency in megahertz like 119.100.</li>
                             <li><b>#SYS</b> - extract the system id like 11.</li>
-                            <li><b>#TIME</b> - extract the local time like 0853439&nbsp;(HHMMSS), 08-34-39&nbsp;(HH-MM-SS) or 08:34:39&nbsp;(HH:MM:SS).</li>
+                            <li><b>#TIME</b> - extract the local time like 0853439&nbsp;(HHMMSS),
+                                08-34-39&nbsp;(HH-MM-SS) or 08:34:39&nbsp;(HH:MM:SS).</li>
                             <li><b>#TG</b> - extract the talkgroup id like 54241.</li>
                             <li><b>#UNIT</b> - extract the unit id like 4424001.</li>
                             <li><b>#ZTIME</b> - extract the zulu time like 0453439, 08-34-39 or 04:34:39.</li>
@@ -156,28 +152,6 @@
                         Invalid frequency
                     </mat-error>
                 </mat-form-field>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">Delay</span><br>
-                    <span class="mat-caption">Depending on the recorder, audio files can be ingested too soon after the
-                        recorder has created the file. You can set a timeout value in milliseconds for the audio file to
-                        settle before ingesting it.</span>
-                </p>
-                <mat-form-field floatLabel="never">
-                    <input type="number" matInput formControlName="delay" placeholder="Delay">
-                </mat-form-field>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">Use Polling</span><br>
-                    <span class="mat-caption">Use polling when monitoring the directory. While this takes a bit more CPU
-                        resources, it is necessary if the monitored directory is from a remote host or from outside of a
-                        Docker container.</span>
-                </p>
-                <div>
-                    <mat-slide-toggle color="primary" formControlName="usePolling"></mat-slide-toggle>
-                </div>
             </div>
             <div class="row bottom">
                 <button type="button" mat-button color="warn" (click)="remove(i)">

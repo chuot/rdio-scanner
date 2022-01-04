@@ -4,15 +4,9 @@ Please follow these simple guidelines to contribute to [Rdio Scanner](https://gi
 
 ## Support requests or general question
 
-Any support request or general question is welcome in the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby). Do not create an issue for this, it will be rejected and closed immediately.
+Support requests or general questions are welcome on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) or on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby). Do not create an issue for this, it will be rejected and closed immediately.
 
 Helping others on the (https://github.com/chuot/rdio-scanner/wiki) is a good way for contributing to the project.
-
-## Wiki pages
-
-Any contribution to the [Rdio Scanner Wiki](https://github.com/chuot/rdio-scanner/wiki) is welcome and encouraged. It is impossible for the [owner and project manager](https://github.com/chuot) to cover all the [Rdio Scanner](https://github.com/chuot/rdio-scanner) use cases, sharing your own use cases with guided instructions will for sure benefit others.
-
-It is also not possible for the [owner and project manager](https://github.com/chuot) to cover all the [Rdio Scanner](https://github.com/chuot/rdio-scanner) use cases, sharing your own use cases with guided instructions is sure to benefit others.
 
 ## Random Pull Requests
 

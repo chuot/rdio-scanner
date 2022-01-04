@@ -1,8 +1,12 @@
-@import '~@angular/material/theming';
+@import "~@angular/material/theming";
+@import "./styles/material-icons";
+@import "./styles/roboto-fonts";
 
-$font-family: Roboto, 'Helvetica Neue', sans-serif;
+$font-family: Roboto, "Helvetica Neue", sans-serif;
 
-$custom-typography: mat-typography-config($font-family: $font-family);
+$custom-typography: mat-typography-config(
+	$font-family: $font-family,
+);
 
 @include mat-core($custom-typography);
 
@@ -21,4 +25,23 @@ body {
 body,
 html {
 	height: 100%;
+}
+
+.material-icons {
+	direction: ltr;
+	display: inline-block;
+	font-family: "Material Icons";
+	font-size: 24px;
+	font-style: normal;
+	font-weight: normal;
+	letter-spacing: normal;
+	line-height: 1;
+	text-transform: none;
+	white-space: nowrap;
+	word-wrap: normal;
+}
+
+.snackbar-white {
+	background: white;
+	color: rgba(0, 0, 0, 0.87);
 }

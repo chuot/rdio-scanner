@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,10 +26,11 @@ import {
     RdioScannerAvoidOptions,
     RdioScannerBeepStyle,
     RdioScannerCall,
+    RdioScannerCategory,
+    RdioScannerCategoryStatus,
+    RdioScannerCategoryType,
     RdioScannerConfig,
     RdioScannerEvent,
-    RdioScannerGroup,
-    RdioScannerGroupStatus,
     RdioScannerLivefeedMap,
     RdioScannerLivefeedMode,
     RdioScannerPlaybackList,
@@ -74,15 +75,16 @@ export class RdioScannerService implements OnDestroy {
     private callPrevious: RdioScannerCall | undefined;
     private callQueue: RdioScannerCall[] = [];
 
+    private categories: RdioScannerCategory[] = [];
+
     private config: RdioScannerConfig = {
         dimmerDelay: false,
         groups: {},
         keypadBeeps: false,
         systems: [],
         tags: {},
+        tagsToggle: false,
     };
-
-    private groups: RdioScannerGroup[] = [];
 
     private livefeedMap = {} as RdioScannerLivefeedMap;
     private livefeedMapPriorToHoldSystem: RdioScannerLivefeedMap | undefined;
@@ -91,14 +93,14 @@ export class RdioScannerService implements OnDestroy {
     private livefeedPaused = false;
 
     private playbackList: RdioScannerPlaybackList | undefined;
-    private playbackPending: string | undefined;
+    private playbackPending: number | undefined;
 
     private skipDelay: Subscription | undefined;
 
     private websocket: WebSocket | undefined;
 
     constructor(
-        private appUpdateService: AppUpdateService,
+        appUpdateService: AppUpdateService,
         @Inject(DOCUMENT) private document: Document,
     ) {
         this.bootstrapAudio();
@@ -162,7 +164,7 @@ export class RdioScannerService implements OnDestroy {
             this.cleanQueue();
         }
 
-        this.rebuildGroups();
+        this.rebuildCategories();
 
         this.storeLivefeedMap();
 
@@ -171,7 +173,7 @@ export class RdioScannerService implements OnDestroy {
         }
 
         this.event.emit({
-            groups: this.groups,
+            categories: this.categories,
             holdSys: false,
             holdTg: false,
             map: this.livefeedMap,
@@ -253,7 +255,7 @@ export class RdioScannerService implements OnDestroy {
                 this.cleanQueue();
             }
 
-            this.rebuildGroups();
+            this.rebuildCategories();
 
             if (typeof options?.resubscribe !== 'boolean' || options.resubscribe) {
                 if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
@@ -262,7 +264,7 @@ export class RdioScannerService implements OnDestroy {
             }
 
             this.event.emit({
-                groups: this.groups,
+                categories: this.categories,
                 holdSys: !!this.livefeedMapPriorToHoldSystem,
                 holdTg: false,
                 map: this.livefeedMap,
@@ -305,7 +307,7 @@ export class RdioScannerService implements OnDestroy {
                 this.cleanQueue();
             }
 
-            this.rebuildGroups();
+            this.rebuildCategories();
 
             if (typeof options?.resubscribe !== 'boolean' || options.resubscribe) {
                 if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
@@ -314,7 +316,7 @@ export class RdioScannerService implements OnDestroy {
             }
 
             this.event.emit({
-                groups: this.groups,
+                categories: this.categories,
                 holdSys: false,
                 holdTg: !!this.livefeedMapPriorToHoldTalkgroup,
                 map: this.livefeedMap,
@@ -335,7 +337,7 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
-    loadAndDownload(id: string): void {
+    loadAndDownload(id: number): void {
         if (!id) {
             return;
         }
@@ -343,7 +345,7 @@ export class RdioScannerService implements OnDestroy {
         this.getCall(id, WebsocketCallFlag.Download);
     }
 
-    loadAndPlay(id: string): void {
+    loadAndPlay(id: number): void {
         if (!id) {
             return;
         }
@@ -573,10 +575,8 @@ export class RdioScannerService implements OnDestroy {
         this.stop();
     }
 
-    toggleGroup(label: string): void {
-        const group = this.groups.find((gr) => gr.label === label);
-
-        if (group) {
+    toggleCategory(category: RdioScannerCategory): void {
+        if (category) {
             if (this.livefeedMapPriorToHoldSystem) {
                 this.livefeedMapPriorToHoldSystem = undefined;
             }
@@ -585,17 +585,20 @@ export class RdioScannerService implements OnDestroy {
                 this.livefeedMapPriorToHoldTalkgroup = undefined;
             }
 
-            const status = group.status === RdioScannerGroupStatus.On ? false : true;
+            const status = category.status === RdioScannerCategoryStatus.On ? false : true;
 
             this.config?.systems.forEach((sys) => {
                 sys.talkgroups?.forEach((tg) => {
-                    if (tg.group === label) {
+                    if (category.type == RdioScannerCategoryType.Group && tg.group === category.label) {
+                        this.livefeedMap[sys.id][tg.id] = status;
+
+                    } else if (category.type == RdioScannerCategoryType.Tag && tg.tag === category.label) {
                         this.livefeedMap[sys.id][tg.id] = status;
                     }
                 });
             });
 
-            this.rebuildGroups();
+            this.rebuildCategories();
 
             if (this.call && !this.livefeedMap[this.call.system] &&
                 this.livefeedMap[this.call.system][this.call.talkgroup]) {
@@ -612,7 +615,7 @@ export class RdioScannerService implements OnDestroy {
             this.cleanQueue();
 
             this.event.emit({
-                groups: this.groups,
+                categories: this.categories,
                 holdSys: false,
                 holdTg: false,
                 map: this.livefeedMap,
@@ -718,8 +721,8 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
-    private getCall(id: string, flags?: WebsocketCallFlag): void {
-        this.sendtoWebsocket(WebsocketCommand.Call, id, flags);
+    private getCall(id: number, flags?: WebsocketCallFlag): void {
+        this.sendtoWebsocket(WebsocketCommand.Call, `${id}`, flags);
     }
 
     private getPlaybackQueueCount(id = this.call?.id || this.callPrevious?.id): number {
@@ -754,8 +757,6 @@ export class RdioScannerService implements OnDestroy {
             }
         };
 
-        this.websocket.onerror = () => this.event.emit({ linked: false });
-
         this.websocket.onopen = () => {
             this.event.emit({ linked: true });
 
@@ -772,7 +773,7 @@ export class RdioScannerService implements OnDestroy {
             message = JSON.parse(message);
 
         } catch (error) {
-            console.warn(`Invalid control message received, ${error.message}`);
+            console.warn(`Invalid control message received, ${error}`);
         }
 
         if (Array.isArray(message)) {
@@ -803,6 +804,7 @@ export class RdioScannerService implements OnDestroy {
                         keypadBeeps: config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
                         systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
+                        tagsToggle: typeof config.tagsToggle !== null && typeof config.tagsToggle === 'boolean' ? config.tagsToggle : false,
                     };
 
                     this.rebuildLivefeedMap();
@@ -813,8 +815,8 @@ export class RdioScannerService implements OnDestroy {
 
                     this.event.emit({
                         auth: false,
+                        categories: this.categories,
                         config: this.config,
-                        groups: this.groups,
                         holdSys: !!this.livefeedMapPriorToHoldSystem,
                         holdTg: !!this.livefeedMapPriorToHoldTalkgroup,
                         map: this.livefeedMap,
@@ -901,8 +903,8 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
-    private rebuildGroups(): void {
-        this.groups = Object.keys(this.config.groups || []).map((label) => {
+    private rebuildCategories(): void {
+        this.categories = Object.keys(this.config.groups || []).map((label) => {
             const allOff = Object.keys(this.config.groups[label]).map((sys) => +sys)
                 .every((sys: number) => this.config.groups[label] && this.config.groups[label][sys]
                     .every((tg) => this.livefeedMap[sys] && !this.livefeedMap[sys][tg]));
@@ -911,10 +913,28 @@ export class RdioScannerService implements OnDestroy {
                 .every((sys: number) => this.config.groups[label] && this.config.groups[label][sys]
                     .every((tg) => this.livefeedMap[sys] && this.livefeedMap[sys][tg]));
 
-            const status = allOff ? RdioScannerGroupStatus.Off : allOn ? RdioScannerGroupStatus.On : RdioScannerGroupStatus.Partial;
+            const status = allOff ? RdioScannerCategoryStatus.Off : allOn ? RdioScannerCategoryStatus.On : RdioScannerCategoryStatus.Partial;
 
-            return { label, status };
-        }).sort((a, b) => a.label.localeCompare(b.label));
+            return { label, status, type: RdioScannerCategoryType.Group };
+        })
+
+        if (this.config.tagsToggle) {
+            this.categories = this.categories.concat(Object.keys(this.config.tags || []).map((label) => {
+                const allOff = Object.keys(this.config.tags[label]).map((sys) => +sys)
+                    .every((sys: number) => this.config.tags[label] && this.config.tags[label][sys]
+                        .every((tg) => this.livefeedMap[sys] && !this.livefeedMap[sys][tg]));
+
+                const allOn = Object.keys(this.config.tags[label]).map((sys) => +sys)
+                    .every((sys: number) => this.config.tags[label] && this.config.tags[label][sys]
+                        .every((tg) => this.livefeedMap[sys] && this.livefeedMap[sys][tg]));
+
+                const status = allOff ? RdioScannerCategoryStatus.Off : allOn ? RdioScannerCategoryStatus.On : RdioScannerCategoryStatus.Partial;
+
+                return { label, status, type: RdioScannerCategoryType.Tag };
+            }))
+        }
+
+        this.categories.sort((a, b) => a.label.localeCompare(b.label));
     }
 
     private rebuildLivefeedMap(): void {
@@ -940,7 +960,7 @@ export class RdioScannerService implements OnDestroy {
 
         this.storeLivefeedMap();
 
-        this.rebuildGroups();
+        this.rebuildCategories();
     }
 
     private reconnectWebsocket(): void {
@@ -964,7 +984,7 @@ export class RdioScannerService implements OnDestroy {
 
     private sendtoWebsocket(command: string, payload?: unknown, flags?: string): void {
         if (this.websocket?.readyState === 1) {
-            const message: (string | unknown)[] = [command];
+            const message: unknown[] = [command];
 
             if (payload) {
                 message.push(payload);

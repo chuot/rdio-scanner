@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,10 +39,6 @@ export class RdioScannerAdminImportExportConfigComponent {
     async export(): Promise<void> {
         const config = await this.adminService.getConfig();
 
-        if ('docker' in config) {
-            delete config.docker;
-        }
-
         const file = JSON.stringify(config);
         const fileName = 'rdio-scanner.json';
         const fileType = 'application/json';
@@ -80,7 +76,7 @@ export class RdioScannerAdminImportExportConfigComponent {
                 this.config.emit(config);
 
             } catch (error) {
-                this.matSnackBar.open(error.message, '', { duration: 5000 });
+                this.matSnackBar.open(error as string, '', { duration: 5000 });
             }
         };
 

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,19 +21,11 @@
 
 const server = 'http://localhost:3000';
 
-const PROXY_CONFIG = [
+module.exports = [
     {
-        bypass: (req) => req.upgrade ? null : '/',
-        context: '/',
+        context: ['/**', '!/admin**', '!/ws**'],
         secure: false,
         target: server,
-        ws: true,
-    },
-    {
-        context: ['/api'],
-        secure: false,
-        target: server,
+        ws: true
     }
-];
-
-module.exports = PROXY_CONFIG;
+]

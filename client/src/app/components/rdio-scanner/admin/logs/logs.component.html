@@ -61,11 +61,8 @@
         <mat-label>
             Date
         </mat-label>
-        <input formControlName="date" [matDatepicker]="date" matInput [max]="logsQuery?.dateStop"
-            [min]="logsQuery?.dateStart" placeholder="Choose a date" readonly (click)="date.open()"
-            (dateChange)="formHandler()">
-        <mat-datepicker-toggle matSuffix [for]="date"></mat-datepicker-toggle>
-        <mat-datepicker #date></mat-datepicker>
+        <input matInput type="datetime-local" formControlName="date" [max]="logsQuery?.dateStop"
+            [min]="logsQuery?.dateStart" placeholder="Choose a date" (change)="formHandler()">
     </mat-form-field>
     <mat-form-field>
         <mat-label>

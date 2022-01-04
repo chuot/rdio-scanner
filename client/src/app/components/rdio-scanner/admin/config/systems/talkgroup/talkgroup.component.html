@@ -5,7 +5,7 @@
             <span class="mat-caption">Talkgroup identifier in decimal format.</span>
         </p>
         <mat-form-field floatLabel="never">
-            <input type="number" matInput formControlName="id" placeholder="Id">
+            <input type="number" min="1" step="1" matInput formControlName="id" placeholder="Id">
             <mat-error *ngIf="form?.get('id')?.hasError('duplicate')">
                 Id is already defined
             </mat-error>
@@ -94,21 +94,9 @@
             <span class="mat-caption">Fake frequency in hertz displayed on the main screen.</span>
         </p>
         <mat-form-field floatLabel="never">
-            <input type="number" matInput formControlName="frequency" placeholder="Frequency">
+            <input type="number" min="0" matInput formControlName="frequency" placeholder="Frequency">
             <mat-error *ngIf="form?.get('frequency')?.errors">
                 Invalid frequency
-            </mat-error>
-        </mat-form-field>
-    </div>
-    <div class="row">
-        <p>
-            <span class="mat-body">Patches</span><br>
-            <span class="mat-caption">A comma separated list of talkgroup id to patch in this one.</span>
-        </p>
-        <mat-form-field floatLabel="never">
-            <textarea type="text" matInput [matTextareaAutosize]="true" formControlName="patches" placeholder="Patches"></textarea>
-            <mat-error *ngIf="form?.get('patches')?.hasError('invalid')">
-                Comma separated list of talkgroup Ids
             </mat-error>
         </mat-form-field>
     </div>

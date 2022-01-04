@@ -1,0 +1,11 @@
+client/.angular/cache
+client/node_modules
+server/*.db
+server/*.crt
+server/*.json
+server/*.key
+server/*.ini
+server/*.sqlite
+server/__debug_bin
+server/autocert
+server/server

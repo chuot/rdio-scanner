@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ import { RdioScannerService } from '../rdio-scanner.service';
 })
 export class RdioScannerSearchComponent implements OnDestroy {
     call: RdioScannerCall | undefined;
-    callPending: string | undefined;
+    callPending: number | undefined;
 
     form = this.ngFormBuilder.group({
         date: [null],
@@ -82,7 +82,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
         private ngFormBuilder: FormBuilder,
     ) { }
 
-    download(id: string): void {
+    download(id: number): void {
         this.rdioScannerService.loadAndDownload(id);
     }
 
@@ -93,221 +93,87 @@ export class RdioScannerSearchComponent implements OnDestroy {
 
         this.paginator?.firstPage();
 
+        this.refreshFilters();
+
         this.searchCalls();
-    }
-
-    formGroupHandler(): void {
-        if (!this.config) {
-            return;
-        }
-
-        const selectedGroup = this.getSelectedGroup();
-
-        const selectedSystem = this.getSelectedSystem();
-
-        const selectedTag = this.getSelectedTag();
-
-        const selectedTalkgroup = this.getSelectedTalkgroup();
-
-        this.optionsSystem = selectedGroup
-            ? this.config.systems
-                .filter((system) => system.talkgroups
-                    .some((talkgroup) => talkgroup.group === selectedGroup))
-                .map((system) => system.label)
-            : selectedTag
-                ? this.config.systems
-                    .filter((system) => system.talkgroups
-                        .some((talkgroup) => talkgroup.tag === selectedTag))
-                    .map((system) => system.label)
-                : this.config.systems
-                    .map((system) => system.label);
-
-        this.optionsTag = selectedGroup
-            ? Object.keys(this.config.tags)
-                .filter((tag) => this.config?.systems
-                    .some((system) => system.talkgroups
-                        .some((talkgroup) => talkgroup.group === selectedGroup && talkgroup.tag === tag)))
-            : selectedTalkgroup
-                ? [selectedTalkgroup.tag]
-                : selectedSystem
-                    ? Object.keys(this.config.tags)
-                        .filter((tag) => selectedSystem.talkgroups
-                            .some((talkgroup) => talkgroup.tag === tag))
-                    : Object.keys(this.config.tags)
-        this.optionsTag.sort((a, b) => a.localeCompare(b));
-
-        this.optionsTalkgroup = selectedGroup
-            ? selectedSystem
-                ? selectedSystem.talkgroups
-                    .filter((talkgroup) => talkgroup.group === selectedGroup)
-                    .map((talkgroup) => talkgroup.label)
-                : []
-            : selectedSystem
-                ? selectedSystem.talkgroups
-                    .map((talkgroup) => talkgroup.label)
-                : [];
-
-        this.form.patchValue({
-            system: selectedSystem ? this.optionsSystem.findIndex((system) => system === selectedSystem.label) : -1,
-            tag: selectedTag ? this.optionsTag.findIndex((tag) => tag === selectedTag) : -1,
-            talkgroup: selectedTalkgroup ? this.optionsTalkgroup.findIndex((talkgroup) => talkgroup === selectedTalkgroup.label) : -1,
-        });
-
-        this.formChangeHandler();
-    }
-
-    formSystemHandler(): void {
-        if (!this.config) {
-            return;
-        }
-
-        const selectedGroup = this.getSelectedGroup();
-
-        const selectedSystem = this.getSelectedSystem();
-
-        const selectedTag = this.getSelectedTag();
-
-        const selectedTalkgroup = this.getSelectedTalkgroup();
-
-        this.optionsGroup = selectedSystem
-            ? Object.keys(this.config.groups)
-                .filter((group) => Object.keys(this.config?.groups[group] || {})
-                    .map((system) => +system)
-                    .includes(selectedSystem.id))
-            : Object.keys(this.config.groups)
-        this.optionsGroup.sort((a, b) => a.localeCompare(b));
-
-        this.optionsTag = selectedSystem
-            ? Object.keys(this.config.tags)
-                .filter((tag) => Object.keys(this.config?.tags[tag] || {})
-                    .map((system) => +system)
-                    .includes(selectedSystem.id))
-            : Object.keys(this.config.tags)
-        this.optionsTag.sort((a, b) => a.localeCompare(b));
-
-        this.optionsTalkgroup = selectedSystem
-            ? selectedSystem.talkgroups
-                .filter((talkgroup) => (selectedGroup ? talkgroup.group === selectedGroup : true)
-                    && (selectedTag ? talkgroup.tag === selectedTag : true))
-                .map((talkgroup) => talkgroup.label)
-            : [];
-
-        this.form.patchValue({
-            group: selectedGroup ? this.optionsGroup.findIndex((group) => group === selectedGroup) : -1,
-            tag: selectedTag ? this.optionsTag.findIndex((tag) => tag === selectedTag) : -1,
-            talkgroup: selectedTalkgroup ? this.optionsTalkgroup.findIndex((talkgroup) => talkgroup === selectedTalkgroup.label) : -1,
-        });
-
-        this.formChangeHandler();
-    }
-
-    formTagHandler(): void {
-        if (!this.config) {
-            return;
-        }
-
-        const selectedGroup = this.getSelectedGroup();
-
-        const selectedSystem = this.getSelectedSystem();
-
-        const selectedTag = this.getSelectedTag();
-
-        const selectedTalkgroup = this.getSelectedTalkgroup();
-
-        this.optionsGroup = selectedTag
-            ? Object.keys(this.config.groups)
-                .filter((group) => this.config?.systems
-                    .some((system) => system.talkgroups
-                        .some((talkgroup) => talkgroup.group === group && talkgroup.tag === selectedTag)))
-            : selectedTalkgroup
-                ? [selectedTalkgroup.group]
-                : selectedSystem
-                    ? Object.keys(this.config.groups)
-                        .filter((group) => selectedSystem.talkgroups
-                            .some((talkgroup) => talkgroup.group === group))
-                    : Object.keys(this.config.groups)
-        this.optionsGroup.sort((a, b) => a.localeCompare(b));
-
-        this.optionsSystem = selectedTag
-            ? this.config.systems
-                .filter((system) => system.talkgroups
-                    .some((talkgroup) => talkgroup.tag === selectedTag))
-                .map((system) => system.label)
-            : selectedGroup
-                ? this.config.systems
-                    .filter((system) => system.talkgroups
-                        .some((talkgroup) => talkgroup.group === selectedGroup))
-                    .map((system) => system.label)
-                : this.config.systems
-                    .map((system) => system.label);
-
-        this.optionsTalkgroup = selectedTag
-            ? selectedSystem
-                ? selectedSystem.talkgroups
-                    .filter((talkgroup) => talkgroup.tag === selectedTag)
-                    .map((talkgroup) => talkgroup.label)
-                : []
-            : selectedSystem
-                ? selectedSystem.talkgroups
-                    .map((talkgroup) => talkgroup.label)
-                : [];
-
-        this.form.patchValue({
-            group: selectedGroup ? this.optionsGroup.findIndex((group) => group === selectedGroup) : -1,
-            system: selectedSystem ? this.optionsSystem.findIndex((system) => system === selectedSystem.label) : -1,
-            talkgroup: selectedTalkgroup ? this.optionsTalkgroup.findIndex((talkgroup) => talkgroup === selectedTalkgroup.label) : -1,
-        });
-
-        this.formChangeHandler();
-    }
-
-    formTalkgroupHandler(): void {
-        if (!this.config) {
-            return;
-        }
-
-        const selectedGroup = this.getSelectedGroup();
-
-        const selectedSystem = this.getSelectedSystem();
-
-        const selectedTag = this.getSelectedTag();
-
-        const selectedTalkgroup = this.getSelectedTalkgroup();
-
-        this.optionsGroup = selectedTalkgroup
-            ? Object.keys(this.config.groups)
-                .filter((group) => group === selectedTalkgroup.group)
-            : selectedSystem
-                ? Object.keys(this.config.groups)
-                    .filter((group) => selectedSystem.talkgroups
-                        .some((talkgroup) => talkgroup.group === group))
-                : Object.keys(this.config.groups)
-        this.optionsGroup.sort((a, b) => a.localeCompare(b));
-
-        this.optionsTag = selectedTalkgroup
-            ? Object.keys(this.config.tags)
-                .filter((tag) => tag === selectedTalkgroup.tag)
-            : selectedSystem
-                ? Object.keys(this.config.tags)
-                    .filter((tag) => selectedSystem.talkgroups
-                        .some((talkgroup) => talkgroup.tag === tag))
-                : Object.keys(this.config.tags)
-        this.optionsTag.sort((a, b) => a.localeCompare(b));
-
-        this.form.patchValue({
-            group: selectedGroup ? this.optionsGroup.findIndex((group) => group === selectedGroup) : -1,
-            tag: selectedTag ? this.optionsTag.findIndex((tag) => tag === selectedTag) : -1,
-        });
-
-        this.formChangeHandler();
     }
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
     }
 
-    play(id: string): void {
+    play(id: number): void {
         this.rdioScannerService.loadAndPlay(id);
+    }
+
+    refreshFilters(): void {
+        if (!this.config) {
+            return;
+        }
+
+        const selectedGroup = this.getSelectedGroup();
+        const selectedSystem = this.getSelectedSystem();
+        const selectedTag = this.getSelectedTag();
+        const selectedTalkgroup = this.getSelectedTalkgroup();
+
+        this.optionsSystem = this.config.systems
+            .filter((system) => {
+                const group = selectedGroup === undefined ||
+                    system.talkgroups.some((talkgroup) => talkgroup.group === selectedGroup);
+                const tag = selectedTag === undefined ||
+                    system.talkgroups.some((talkgroup) => talkgroup.tag === selectedTag);
+                return group && tag;
+            })
+            .map((system) => system.label);
+
+        this.optionsTalkgroup = selectedSystem == undefined
+            ? []
+            : selectedSystem.talkgroups
+                .filter((talkgroup) => {
+                    const group = selectedGroup == undefined ||
+                        talkgroup.group === selectedGroup;
+                    const tag = selectedTag == undefined ||
+                        talkgroup.tag === selectedTag;
+                    return group && tag;
+                })
+                .map((talkgroup) => talkgroup.label);
+
+        this.optionsGroup = Object.keys(this.config.groups)
+            .filter((group) => {
+                const system: boolean = selectedSystem === undefined ||
+                    selectedSystem.talkgroups.some((talkgroup) => talkgroup.group === group)
+                const talkgroup: boolean = selectedTalkgroup === undefined ||
+                    selectedTalkgroup.group === group;
+                const tag: boolean = selectedTag === undefined ||
+                    (selectedTalkgroup !== undefined && selectedTalkgroup.tag === selectedTag) ||
+                    (this.config !== undefined && this.config.systems
+                        .flatMap((system) => system.talkgroups)
+                        .some((talkgroup) => talkgroup.group === group && talkgroup.tag === selectedTag))
+                return system && talkgroup && tag;
+            })
+            .sort((a, b) => a.localeCompare(b))
+
+        this.optionsTag = Object.keys(this.config.tags)
+            .filter((tag) => {
+                const system: boolean = selectedSystem === undefined ||
+                    selectedSystem.talkgroups.some((talkgroup) => talkgroup.tag === tag)
+                const talkgroup: boolean = selectedTalkgroup === undefined ||
+                    selectedTalkgroup.tag === tag;
+                const group: boolean = selectedGroup === undefined ||
+                    (selectedTalkgroup !== undefined && selectedTalkgroup.group === selectedGroup) ||
+                    (this.config !== undefined && this.config.systems
+                        .flatMap((system) => system.talkgroups)
+                        .some((talkgroup) => talkgroup.tag === tag && talkgroup.group === selectedGroup))
+                return system && talkgroup && group;
+            })
+            .sort((a, b) => a.localeCompare(b))
+
+        this.form.patchValue({
+            group: selectedGroup ? this.optionsGroup.findIndex((group) => group === selectedGroup) : -1,
+            system: selectedSystem ? this.optionsSystem.findIndex((system) => system === selectedSystem.label) : -1,
+            tag: selectedTag ? this.optionsTag.findIndex((tag) => tag === selectedTag) : -1,
+            talkgroup: selectedTalkgroup ? this.optionsTalkgroup.findIndex((talkgroup) => talkgroup === selectedTalkgroup.label) : -1,
+        });
     }
 
     refreshResults(): void {
@@ -365,8 +231,8 @@ export class RdioScannerSearchComponent implements OnDestroy {
             sort: this.form.value.sort,
         };
 
-        if (this.form.value.date instanceof Date) {
-            options.date = this.form.value.date;
+        if (typeof this.form.value.date === 'string') {
+            options.date = new Date(Date.parse(this.form.value.date));
         }
 
         if (this.form.value.group >= 0) {
@@ -442,9 +308,9 @@ export class RdioScannerSearchComponent implements OnDestroy {
 
             this.callPending = undefined;
 
-            this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
+            this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
             this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
-            this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
+            this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
             this.optionsTalkgroup = [];
         }
 

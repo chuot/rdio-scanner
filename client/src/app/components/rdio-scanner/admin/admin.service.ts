@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,8 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { EventEmitter, Injectable, OnDestroy } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { timer } from 'rxjs';
+import { firstValueFrom, timer } from 'rxjs';
+import { AppUpdateService } from '../../../shared/update/update.service';
 
 export interface Access {
     _id?: string;
@@ -38,6 +39,13 @@ export interface Access {
     }[] | number[] | '*';
 }
 
+export interface AdminEvent {
+    authenticated?: boolean;
+    config?: Config;
+    docker?: boolean;
+    passwordNeedChange?: boolean;
+}
+
 export interface ApiKey {
     _id?: string;
     disabled?: boolean;
@@ -50,9 +58,19 @@ export interface ApiKey {
     }[] | number[] | '*';
 }
 
+export interface Config {
+    access?: Access[];
+    apiKeys?: ApiKey[];
+    dirWatch?: DirWatch[];
+    downstreams?: Downstream[];
+    groups?: Group[];
+    options?: Options;
+    systems?: System[];
+    tags?: Tag[];
+}
+
 export interface DirWatch {
     _id?: string;
-    delay?: number;
     deleteAfter?: boolean;
     directory?: string;
     disabled?: boolean;
@@ -63,7 +81,6 @@ export interface DirWatch {
     systemId?: number;
     talkgroupId?: number;
     type?: string;
-    usePolling?: boolean;
 }
 
 export interface Downstream {
@@ -80,17 +97,6 @@ export interface Downstream {
         }[] | number[] | '*';
     }[] | number[] | '*';
     url?: string;
-}
-
-export interface Options {
-    autoPopulate?: boolean;
-    dimmerDelay?: number;
-    disableAudioConversion?: boolean;
-    disableDuplicateDetection?: boolean;
-    duplicateDetectionTimeFrame?: number;
-    keypadBeeps?: string;
-    pruneDays?: number;
-    sortTalkgroups?: boolean;
 }
 
 export interface Group {
@@ -121,25 +127,17 @@ export interface LogsQueryOptions {
     sort: number;
 }
 
-export interface Tag {
-    _id?: number;
-    label?: string;
-}
-
-export interface Talkgroup {
-    frequency?: number | null;
-    groupId?: number;
-    id?: number;
-    label?: string;
-    led?: string | null;
-    name?: string;
-    patches?: number[];
-    tagId?: number;
-}
-
-export interface Unit {
-    id?: number | null;
-    label?: string;
+export interface Options {
+    autoPopulate?: boolean;
+    dimmerDelay?: number;
+    disableAudioConversion?: boolean;
+    disableDuplicateDetection?: boolean;
+    duplicateDetectionTimeFrame?: number;
+    keypadBeeps?: string;
+    pruneDays?: number;
+    searchPatchedTalkgroups?: boolean;
+    sortTalkgroups?: boolean;
+    tagsToggle?: boolean;
 }
 
 export interface System {
@@ -154,22 +152,26 @@ export interface System {
     units?: Unit[];
 }
 
-export interface Config {
-    access?: Access[];
-    apiKeys?: ApiKey[];
-    dirWatch?: DirWatch[];
-    docker?: boolean;
-    downstreams?: Downstream[];
-    groups?: Group[];
-    options?: Options;
-    systems?: System[];
-    tags?: Tag[];
+export interface Tag {
+    _id?: number;
+    label?: string;
 }
 
-export interface AdminEvent {
-    authenticated?: boolean;
-    config?: Config;
-    passwordNeedChange?: boolean;
+export interface Talkgroup {
+    frequency?: number | null;
+    groupId?: number;
+    id?: number;
+    label?: string;
+    led?: string | null;
+    name?: string;
+    order?: number;
+    tagId?: number;
+}
+
+export interface Unit {
+    id?: number | null;
+    label?: string;
+    order?: number;
 }
 
 enum url {
@@ -190,11 +192,17 @@ export class RdioScannerAdminService implements OnDestroy {
         return !!this.token;
     }
 
+    get docker() {
+        return this._docker;
+    }
+
     get passwordNeedChange() {
         return this._passwordNeedChange;
     }
 
     private configWebSocket: WebSocket | undefined;
+
+    private _docker = false;
 
     private _passwordNeedChange = false;
 
@@ -207,6 +215,7 @@ export class RdioScannerAdminService implements OnDestroy {
     }
 
     constructor(
+        appUpdateService: AppUpdateService,
         private matSnackBar: MatSnackBar,
         private ngFormBuilder: FormBuilder,
         private ngHttpClient: HttpClient,
@@ -222,11 +231,11 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async changePassword(currentPassword: string, newPassword: string): Promise<void> {
         try {
-            const res = await this.ngHttpClient.post<{ passwordNeedChange: boolean }>(
+            const res = await firstValueFrom(this.ngHttpClient.post<{ passwordNeedChange: boolean }>(
                 this.getUrl(url.password),
                 { currentPassword, newPassword },
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             this._passwordNeedChange = res.passwordNeedChange;
 
@@ -242,13 +251,20 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async getConfig(): Promise<Config> {
         try {
-            const res = await this.ngHttpClient.get<{
+            const res = await firstValueFrom(this.ngHttpClient.get<{
                 config: Config;
+                docker: boolean;
                 passwordNeedChange: boolean;
             }>(
                 this.getUrl(url.config),
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
+
+            if (res.docker !== this._docker) {
+                this._docker = res.docker;
+
+                this.event.emit({ docker: this.docker })
+            }
 
             if (res.passwordNeedChange !== this._passwordNeedChange) {
                 this._passwordNeedChange = res.passwordNeedChange;
@@ -260,42 +276,42 @@ export class RdioScannerAdminService implements OnDestroy {
 
         } catch (error) {
             this.errorHandler(error);
-
-            return {};
         }
+
+        return {};
     }
 
     getLeds(): string[] {
         return ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];
     }
 
-    async getLogs(options: LogsQueryOptions): Promise<LogsQuery | null> {
+    async getLogs(options: LogsQueryOptions): Promise<LogsQuery | undefined> {
         try {
-            const res = await this.ngHttpClient.post<LogsQuery>(
+            const res = await firstValueFrom(this.ngHttpClient.post<LogsQuery>(
                 this.getUrl(url.logs),
                 options,
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             return res;
 
         } catch (error) {
             this.errorHandler(error);
 
-            return null;
+            return undefined;
         }
     }
 
     async login(password: string): Promise<boolean> {
         try {
-            const res = await this.ngHttpClient.post<{
+            const res = await firstValueFrom(this.ngHttpClient.post<{
                 passwordNeedChange: boolean,
                 token: string
             }>(
                 this.getUrl(url.login),
                 { password },
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             this.token = res.token;
 
@@ -319,11 +335,11 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async logout(): Promise<boolean> {
         try {
-            await this.ngHttpClient.post(
+            this.ngHttpClient.post(
                 this.getUrl(url.logout),
                 null,
                 { headers: this.getHeaders(), responseType: 'text' },
-            ).toPromise();
+            );
 
             this.configWebSocketClose();
 
@@ -342,11 +358,11 @@ export class RdioScannerAdminService implements OnDestroy {
 
     async saveConfig(config: Config): Promise<Config> {
         try {
-            const res = await this.ngHttpClient.put<{ config: Config }>(
+            const res = await firstValueFrom(this.ngHttpClient.put<{ config: Config }>(
                 this.getUrl(url.config),
                 config,
                 { headers: this.getHeaders(), responseType: 'json' },
-            ).toPromise();
+            ));
 
             return res.config;
 
@@ -396,7 +412,6 @@ export class RdioScannerAdminService implements OnDestroy {
     newDirWatchForm(dirWatch?: DirWatch): FormGroup {
         return this.ngFormBuilder.group({
             _id: [dirWatch?._id],
-            delay: [dirWatch?.delay, Validators.min(0)],
             deleteAfter: [dirWatch?.deleteAfter],
             directory: [dirWatch?.directory, [Validators.required, this.validateDirectory()]],
             disabled: [dirWatch?.disabled],
@@ -407,7 +422,6 @@ export class RdioScannerAdminService implements OnDestroy {
             systemId: [dirWatch?.systemId, this.validateDirwatchSystemId()],
             talkgroupId: [dirWatch?.talkgroupId, this.validateDirwatchTalkgroupId()],
             type: [dirWatch?.type],
-            usePolling: [dirWatch?.usePolling],
         });
     }
 
@@ -441,7 +455,7 @@ export class RdioScannerAdminService implements OnDestroy {
             _id: [system?._id],
             autoPopulate: [system?.autoPopulate],
             blacklists: [system?.blacklists, this.validateBlacklists()],
-            id: [system?.id, [Validators.required, Validators.min(0), this.validateId()]],
+            id: [system?.id, [Validators.required, Validators.min(1), this.validateId()]],
             label: [system?.label, Validators.required],
             led: [system?.led],
             order: [system?.order],
@@ -454,11 +468,11 @@ export class RdioScannerAdminService implements OnDestroy {
         return this.ngFormBuilder.group({
             frequency: [talkgroup?.frequency, Validators.min(0)],
             groupId: [talkgroup?.groupId, [Validators.required, this.validateGroup()]],
-            id: [talkgroup?.id, [Validators.required, Validators.min(0), this.validateId()]],
+            id: [talkgroup?.id, [Validators.required, Validators.min(1), this.validateId()]],
             label: [talkgroup?.label, Validators.required],
             led: [talkgroup?.led],
             name: [talkgroup?.name, Validators.required],
-            patches: [talkgroup?.patches, this.validatePatches()],
+            order: [talkgroup?.order],
             tagId: [talkgroup?.tagId, [Validators.required, this.validateTag()]],
         });
     }
@@ -467,6 +481,7 @@ export class RdioScannerAdminService implements OnDestroy {
         return this.ngFormBuilder.group({
             id: [unit?.id, [Validators.required, Validators.min(0), this.validateId()]],
             label: [unit?.label, Validators.required],
+            order: [unit?.order],
         });
     }
 
@@ -479,7 +494,9 @@ export class RdioScannerAdminService implements OnDestroy {
             duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
             pruneDays: [options?.pruneDays, [Validators.required, Validators.min(0)]],
+			searchPatchedTalkgroups: [options?.searchPatchedTalkgroups],
             sortTalkgroups: [options?.sortTalkgroups],
+            tagsToggle: [options?.tagsToggle],
         });
     }
 
@@ -492,7 +509,7 @@ export class RdioScannerAdminService implements OnDestroy {
             this.configWebSocket.close();
 
             this.configWebSocket = undefined;
-        };
+        }
     }
 
     private configWebSocketReconnect(): void {
@@ -531,7 +548,11 @@ export class RdioScannerAdminService implements OnDestroy {
         }
     }
 
-    private errorHandler(error: HttpErrorResponse): void {
+    private errorHandler(error: unknown): void {
+        if (!(error instanceof HttpErrorResponse)) {
+            return;
+        }
+
         if (error.status === 401) {
             this.token = '';
 

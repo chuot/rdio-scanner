@@ -1,4 +1,75 @@
-# Version 5.2
+# Change log
+
+## Version 6.1
+
+- Calls now support patched talkgroups.
+- New search patched talkgroups option which is disabled by default.
+- Talkgroups and units are now stored in their own database table.
+- New units CSV importer.
+- Fix blacklisted talkgroups being created anyway when autopopulate is enabled.
+- Fix compatibility with mysql/mariadb (default sqlite is still recommended).
+
+## Version 6.0
+
+- Backend server rewritten in Go for better performance and ease of installation.
+- New toggle by tags option to toggle talkgroups by their tag in addition to their group.
+- Buttons on the select panel now sound differently depending on their state.
+- You can now filter calls by date and time on the search panel.
+- Installable as a service from the command line.
+- Let's Encrypt automatic generation of certificates from the command line.
+- A bunch of minor fixes and improvements.
+
+### BREAKING CHANGES SINCE V5
+
+[Rdio Scanner](https://github.com/chuot/rdio-scanner) is now distributed as a precompiled executable in a zip file, which also contains documentation on how it works.
+
+The backend server has been completely rewritten in GO language. Therefore, all the subpackages used in v5 had to be replaced with new ones. These new subpackages do not necessarily have the same functionality as those of v5.
+
+- No more polling mode for _dirwatch_, which in a way is a good thing as polling was disastrous for CPU consumption. The alternative is to install a local instance and use the downstream feature to feed your main instance.
+- Due to the polling situation, the Docker version of Rdio Scanner doesn't have the dirwatch feature.
+- Default database name changed from _database.sqlite_ to _rdio-scanner.db_. You will need to rename your database file with the new name if you want to convert it. Otherwise, a new database will be created.
+
+_v6.0.1_
+
+- Fix button sound on select panel for TG (beep state inverted)
+- Auto populate system units (issue #66)
+
+_v6.0.2_
+
+- Try to fix the SQL_BUSY error (issue #67).
+- Fix `-service stop` timing out before exiting.
+- Drop the ApiKey uniqueness of the downstreams database table.
+- Fix auto-populating the database with empty units tag.
+
+_v6.0.3_
+
+- Fix strconv.Atoi: invalid syntax for dirwatch type sdrtrunk.
+- Fix the new version available dialog opening more than once.
+
+_v6.0.4_
+
+- Fix wrong time calculation in prune scheduler.
+- More fix on the SQL_BUSY error (issue #67).
+- Support files (certs, db, ini) are now created in the same folder as the executable, if the folder is writable, or under a `Rdio Scanner` folder in the user's home folder.
+- Some code refactoring.
+
+_v6.0.5_
+
+- Force mime type to `application/javascript` for `.js` extensions. (see https://github.com/golang/go/issues/32350).
+- New `-base_dir` option to specify the directory where all data will be written.
+- New Docker container with disabled dirwatch.
+
+_v6.0.6_
+
+- Fix an issue with not closing the database when restarting the host platform (issue #71).
+- Fixed SDRTunk parser when artist tag contains CTCSS tones.
+- Platforms linux/amd64, linux/arm and linux/arm64 are now available for the Docker container.
+
+_v6.0.7_
+
+- Fix dropped connections when going through a proxy.
+
+## Version 5.2
 
 - Change to how the server reports version.
 - Fix cmd.js exiting on inexistant session token keystore.
@@ -53,7 +124,7 @@ _V5.2.9_
 - Fix bad code for server options parsing.
 - Increase dirwatch polling interval from 1000ms to 2500ms.
 
-# Version 5.1
+## Version 5.1
 
 This one is a big one... **Be sure to backup your config.json and your database.sqlite before updating.**
 
@@ -85,7 +156,7 @@ _v5.1.2_
 - Remove the autoJsonMap from the sequelize dialectOptions.
 - Client updated to angular 12.
 
-# Version 5.0
+## Version 5.0
 
 - Add rdioScanner.options.autoPopulate which by default is true. The configuration file will now be automatically populated from new received calls with unknown system/talkgroup.
 - Add rdioScanner.options.sortTalkgroupswhich by default is false. Sort talkgroups based on their ID.
@@ -118,7 +189,7 @@ _v5.0.5_
 - Improve documentation in regards to minimal Node.js LTS version.
 - Add python to build requirements (to be able to build SQLite node module).
 
-# Version 4.9
+## Version 4.9
 
 - Add basic duplicate call detection and rejection.
 - Add keyboard shortcuts for the main buttons.
@@ -136,7 +207,7 @@ _v4.9.2_
 
 - Add Config.options.disableKeyboardShortcuts to make everyone a happy camper.
 
-# Version 4.8
+## Version 4.8
 
 - Add downstream.system.id_as property to allow export system with a different id.
 - Add system.order for system list ordering on the client side.
@@ -174,7 +245,7 @@ _v4.8.5_
 - Fix broken dirwatch.delay.
 - Node modules update.
 
-# Version 4.7
+## Version 4.7
 
 - New dirWatch.type='sdr-trunk'.
 - New search panel layout with new group and tag filters.
@@ -212,7 +283,7 @@ _v4.7.6_
 - Skip next button no longer emit a denied beeps sequence when pushed while there's no audio playing.
 - Node modules update.
 
-# Version 4.6
+## Version 4.6
 
 - Fix documentation in regards to load-rrd in install-github.md.
 - Fix database absolute path in config.json.
@@ -221,12 +292,12 @@ _v4.7.6_
 - Config.options.keypadBeeps now with presets instead of full pattern declaration.
 - Bug fixes.
 
-# Version 4.5
+## Version 4.5
 
 - Config.options.keyBeep which by default is true.
 - Bug fixes.
 
-# Version 4.4
+## Version 4.4
 
 - Config.systems.talkgroups.patches to group many talkgroups (patches) into one talkgroup.id.
 - Config.options now groups allowDownloads, disableAudioConversion, pruneDays, useDimmer, useGroup and useLed options instead of having them spread all over the config file.
@@ -234,7 +305,7 @@ _v4.7.6_
 - Fix annoying bug when next call queued to play is still played even though offline continuous play mode is turned off.
 - Talkgroup ID is displayed no matter what and unit ID is displayed only if known.
 
-# Version 4.3
+## Version 4.3
 
 - Add metatags to converted audio files.
 - Automatic database migration on startup.
@@ -246,18 +317,18 @@ _v4.7.6_
 - Fix SSL certificate handling.
 - Rewritten documentation.
 
-# Version 4.2
+## Version 4.2
 
 - Fix possible race conditions....
 - Added websocket keepalive which helps mobile clients when switching from/to wifi/wan.
 - Better playback offline mode animations and queue count.
 - New dirWatch.mask option to simplify meta data import.
 
-# Version 4.1
+## Version 4.1
 
 - New offline playback mode.
 
-# Version 4.0
+## Version 4.0
 
 - GraphQL replaced by a pure websocket command and control system.
 - `server/.env` replaced by a `server/config.json`.
@@ -271,7 +342,7 @@ _v4.7.6_
 - Customizable LED colors by systems/talkgroups.
 - Dimmable display based on active call.
 
-## Upgrading from version 3
+### Upgrading from version 3
 
 - Your `server/.env` file will be used to create the new `server/config.json` file. Then the `server/.env` will be deleted.
 - The `rdioScannerSystems` table will be used to create the _rdioScanner.systems_ within `server/config.json`. Then the `rdioScannerSystems` table will be purged.
@@ -280,12 +351,12 @@ _v4.7.6_
 
 > YOU SHOULD BACKUP YOUR `SERVER/.ENV` FILE AND YOUR DATABASE PRIOR TO UPGRADING, JUST IN CASE. WE'VE TESTED THE UPGRADE PROCESS MANY TIMES, BUT WE CAN'T KNOW FOR SURE IF IT'S GOING TO WORK WELL ON YOUR SIDE.
 
-# Version 3.1
+## Version 3.1
 
 - Client now on Angular 9.
 - Display listeners count on the server's end.
 
-# Version 3.0
+## Version 3.0
 
 - Unit aliases support, display names instead of unit ID.
 - Download calls from the search panel.
@@ -293,18 +364,18 @@ _v4.7.6_
 
 > Note that you can only update from version 2.0 and above. You have to do a fresh install if your actual version is prior to version 2.0.
 
-# Version 2.5
+## Version 2.5
 
 - New group toggle on the select panel.
 
-# Version 2.1
+## Version 2.1
 
 - Various speed improvements for searching stored calls.
 
-# Version 2.0
+## Version 2.0
 
 - Ditched meteor in favour of GraphQL.
 
-# Version 1.0
+## Version 1.0
 
 - First public version.

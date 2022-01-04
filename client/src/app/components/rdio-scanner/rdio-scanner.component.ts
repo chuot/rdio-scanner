@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,17 +17,19 @@
  * ****************************************************************************
  */
 
-import { Component, ElementRef, HostListener, OnDestroy, ViewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
 import { RdioScannerService } from './rdio-scanner.service';
+import { RdioScannerNativeComponent } from './native/native.component';
 
 @Component({
     selector: 'rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
 })
-export class RdioScannerComponent implements OnDestroy {
+export class RdioScannerComponent implements OnDestroy, OnInit {
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
@@ -37,6 +39,7 @@ export class RdioScannerComponent implements OnDestroy {
     @ViewChild('selectPanel') private selectPanel: MatSidenav | undefined;
 
     constructor(
+        private matSnackBar: MatSnackBar,
         private ngElementRef: ElementRef,
         private rdioScannerService: RdioScannerService,
     ) { }
@@ -63,6 +66,29 @@ export class RdioScannerComponent implements OnDestroy {
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
+    }
+
+    ngOnInit(): void {
+        /*
+         * BEGIN OF RED TAPE:
+         * 
+         * By modifying, deleting or disabling the following lines, you are harming
+         * the open source project and its author.  Rdio Scanner represents a lot of
+         * investment in time, support, testing and hardware.
+         * 
+         * Be respectful, sponsor the project if you can, use native apps when possible.
+         * 
+         */
+        setTimeout(() => {
+            const ua: String = navigator.userAgent;
+
+            if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
+                this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });
+            }
+        }, 10000);
+        /**
+         * END OF RED TAPE.
+         */
     }
 
     toggleFullscreen(): void {

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import { AppSharedModule } from '../../shared/shared.module';
 import { RdioScannerComponent } from './rdio-scanner.component';
 import { RdioScannerService } from './rdio-scanner.service';
 import { RdioScannerMainComponent } from './main/main.component';
+import { RdioScannerNativeModule } from './native/native.module';
 import { RdioScannerSearchComponent } from './search/search.component';
 import { RdioScannerSelectComponent } from './select/select.component';
 
@@ -34,7 +35,7 @@ import { RdioScannerSelectComponent } from './select/select.component';
         RdioScannerSelectComponent,
     ],
     exports: [RdioScannerComponent],
-    imports: [AppSharedModule],
+    imports: [AppSharedModule, RdioScannerNativeModule],
     providers: [
         RdioScannerService,
         { provide: OverlayContainer, useClass: FullscreenOverlayContainer },

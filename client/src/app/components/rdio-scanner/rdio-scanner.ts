@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@ export interface RdioScannerCall {
     dateTime: Date;
     frequencies?: RdioScannerCallFrequency[];
     frequency?: number;
-    id: string;
+    id: number;
     source?: number;
     sources?: RdioScannerCallSource[];
     system: number;
@@ -70,20 +70,38 @@ export interface RdioScannerCallSource {
     src?: number;
 }
 
+export interface RdioScannerCategory {
+    label: string;
+    status: RdioScannerCategoryStatus;
+    type: RdioScannerCategoryType;
+}
+
+export enum RdioScannerCategoryStatus {
+    Off = 'off',
+    On = 'on',
+    Partial = 'partial',
+}
+
+export enum RdioScannerCategoryType {
+    Group = 'group',
+    Tag = 'tag',
+}
+
 export interface RdioScannerConfig {
     dimmerDelay: number | false;
     groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };
+    tagsToggle: boolean;
 }
 
 export interface RdioScannerEvent {
     auth?: boolean;
-    config?: RdioScannerConfig;
+    categories?: RdioScannerCategory[];
     call?: RdioScannerCall;
+    config?: RdioScannerConfig;
     expired?: boolean;
-    groups?: RdioScannerGroup[];
     holdSys?: boolean;
     holdTg?: boolean;
     linked?: boolean;
@@ -91,21 +109,10 @@ export interface RdioScannerEvent {
     map?: RdioScannerLivefeedMap;
     pause?: boolean;
     playbackList?: RdioScannerPlaybackList;
-    playbackPending?: string;
+    playbackPending?: number;
     queue?: number;
     time?: number;
     tooMany?: boolean;
-}
-
-export enum RdioScannerGroupStatus {
-    Off = 'off',
-    On = 'on',
-    Partial = 'partial',
-}
-
-export interface RdioScannerGroup {
-    label: string;
-    status: RdioScannerGroupStatus;
 }
 
 export interface RdioScannerKeypadBeeps {
