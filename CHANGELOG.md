@@ -9,6 +9,10 @@
 - Fix blacklisted talkgroups being created anyway when autopopulate is enabled.
 - Fix compatibility with mysql/mariadb (default sqlite is still recommended).
 
+_v6.1.1_
+
+- Fix `unknown datetime format sql.NullString` error.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

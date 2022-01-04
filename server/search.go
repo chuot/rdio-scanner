@@ -103,7 +103,7 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 	)
 
 	var (
-		dateTime sql.NullString
+		dateTime interface{}
 		err      error
 		id       sql.NullFloat64
 		limit    uint
@@ -203,21 +203,20 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime.Valid && len(dateTime.String) > 0 {
-		if t, err = db.ParseDateTime(dateTime.String); err == nil {
-			searchResults.DateStart = t
-		}
+	if dateTime == nil {
+		return searchResults, nil
 	}
 
+	if t, err = db.ParseDateTime(dateTime); err == nil {
+		searchResults.DateStart = t
+	}
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` desc", where)
 	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime.Valid && len(dateTime.String) > 0 {
-		if t, err = db.ParseDateTime(dateTime); err == nil {
-			searchResults.DateStop = t
-		}
+	if t, err = db.ParseDateTime(dateTime); err == nil {
+		searchResults.DateStop = t
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -283,12 +282,11 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 			searchResult.Id = uint(id.Float64)
 		}
 
-		if dateTime.Valid && len(dateTime.String) > 0 {
-			if t, err = db.ParseDateTime(dateTime); err == nil {
-				searchResult.DateTime = t
-			} else {
-				continue
-			}
+		if t, err = db.ParseDateTime(dateTime); err == nil {
+			searchResult.DateTime = t
+
+		} else {
+			continue
 		}
 
 		searchResults.Results = append(searchResults.Results, searchResult)
