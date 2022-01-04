@@ -20,6 +20,7 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | [RTLSDR-Airband](https://github.com/szpajder/RTLSDR-Airband)   |     | X        |
 | [sdrtrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
+| [ProScan](https://www.proscan.org/)                            |     | X        |
 
 # Improve your experience on the go
 
@@ -43,7 +44,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         C:\Users\rdio> cd rdio-scanner
 
         C:\Users\rdio\rdio-scanner> tar -xvf ^
-            ..\downloads\rdio-scanner-windows-amd64-v6.0.7.zip
+            ..\downloads\rdio-scanner-windows-amd64-v6.1.0.zip
         x rdio-scanner.exe
         x rdio-scanner.pdf
 
@@ -51,11 +52,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
     
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 13:48:48 server started
-        2021/12/16 13:48:48 main interface at http://pc-windows:3000
-        2021/12/16 13:48:48 admin interface at http://pc-windows:3000/admin
+        2022/01/04 13:48:48 server started
+        2022/01/04 13:48:48 main interface at http://pc-windows:3000
+        2022/01/04 13:48:48 admin interface at http://pc-windows:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -77,11 +78,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         C:\Users\rdio\rdio-scanner>rdio-scanner -listen :80
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 10:53:31 server started
-        2021/12/16 10:53:31 main interface at http://pc-windows
-        2021/12/16 10:53:31 admin interface at http://pc-windows/admin
+        2022/01/04 10:53:31 server started
+        2022/01/04 10:53:31 main interface at http://pc-windows
+        2022/01/04 10:53:31 admin interface at http://pc-windows/admin
 
 ## Listening with SSL with self-signed certificates
 
@@ -90,8 +91,8 @@ It is advised to share your [Rdio Scanner](https://github.com/chuot/rdio-scanner
 We can create such self-signed certificates by running [Rdio Scanner](https://github.com/chuot/rdio-scanner) with the **-ssl_create** argument.
 
         C:\Users\rdio\rdio-scanner>rdio-scanner -ssl_create
-        2021/12/16 10:58:51 generating ssl certificate files
-        2021/12/16 10:58:54 ssl files created
+        2022/01/04 10:58:51 generating ssl certificate files
+        2022/01/04 10:58:54 ssl files created
 
 This has generated these files in the same folder as your [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 
@@ -108,12 +109,12 @@ Now we use the self-signed server certificate to run our instance.
             -ssl_key_file server.key            ^
             -ssl_listen :443
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 11:05:43 server started
-        2021/12/16 11:05:43 main interface at http://pc-windows
-        2021/12/16 11:05:43 main interface at https://pc-windows
-        2021/12/16 11:05:43 admin interface at https://pc-windows/admin
+        2022/01/04 11:05:43 server started
+        2022/01/04 11:05:43 main interface at http://pc-windows
+        2022/01/04 11:05:43 main interface at https://pc-windows
+        2022/01/04 11:05:43 admin interface at https://pc-windows/admin
 
 ## Save your advanced configuration to a config file
 
@@ -125,7 +126,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
             -ssl_key_file server.key            ^
             -ssl_listen :443                    ^
             -config_save
-        2021/12/16 11:08:28 rdio-scanner.ini file created
+        2022/01/04 11:08:28 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -140,12 +141,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 11:11:28 server started
-        2021/12/16 11:11:28 main interface at http://pc-windows
-        2021/12/16 11:11:28 main interface at https://pc-windows
-        2021/12/16 11:11:28 admin interface at https://pc-windows/admin
+        2022/01/04 11:11:28 server started
+        2022/01/04 11:11:28 main interface at http://pc-windows
+        2022/01/04 11:11:28 main interface at https://pc-windows
+        2022/01/04 11:11:28 admin interface at https://pc-windows/admin
 
 \pagebreak{}
 
@@ -212,7 +213,7 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
 
 # Need help ?
 
-You can ask your questions or post your comments on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) at **[https://gitter.im/rdio-scanner/Lobby](https://gitter.im/rdio-scanner/Lobby)** where the community keeps growing.
+You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)** or on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) at **[https://gitter.im/rdio-scanner/Lobby](https://gitter.im/rdio-scanner/Lobby)**.
 
 # Show your appreciation, support the author
 

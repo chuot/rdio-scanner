@@ -100,18 +100,6 @@
             </mat-error>
         </mat-form-field>
     </div>
-    <div class="row">
-        <p>
-            <span class="mat-body">Patches</span><br>
-            <span class="mat-caption">A comma separated list of talkgroup id to patch in this one.</span>
-        </p>
-        <mat-form-field floatLabel="never">
-            <textarea type="text" matInput formControlName="patches" placeholder="Patches"></textarea>
-            <mat-error *ngIf="form?.get('patches')?.hasError('invalid')">
-                Comma separated list of talkgroup Ids
-            </mat-error>
-        </mat-form-field>
-    </div>
     <div class="row bottom">
         <button *ngIf="form.get('id')?.value" type="button" mat-button (click)="blacklist.emit()">
             Blacklist talkgroup

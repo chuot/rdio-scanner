@@ -17,6 +17,7 @@ $ curl https://other-rdio-scanner.example.com/api/call-upload \
     -F "frequencies=[]"                           \
     -F "frequency=774031250"                      \
     -F "key=d2079382-07df-4aa9-8940-8fb9e4ef5f2e" \
+    -F "patches=[]"                               \
     -F "source=4424000"                           \
     -F "sources=[]"                               \
     -F "system=11"                                \
@@ -44,6 +45,7 @@ Call imported successfully
 
 - **frequency** - [optional] the frequency on which the audio file was recorded.
 - **key** - API key on the receiving host.
+- **patches** - [optional] JSON array of objects for patched talkgroup IDs.
 - **source** - [optional] unit ID.
 - **sources** - [optional] JSON array of objects for unit ID changes throughout the conversation.
 

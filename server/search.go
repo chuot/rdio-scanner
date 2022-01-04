@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,14 +24,15 @@ import (
 )
 
 type SearchOptions struct {
-	Date      interface{} `json:"date,omitempty"`
-	Group     interface{} `json:"group,omitempty"`
-	Limit     interface{} `json:"limit,omitempty"`
-	Offset    interface{} `json:"offset,omitempty"`
-	Sort      interface{} `json:"sort,omitempty"`
-	System    interface{} `json:"system,omitempty"`
-	Tag       interface{} `json:"tag,omitempty"`
-	Talkgroup interface{} `json:"talkgroup,omitempty"`
+	Date                    interface{} `json:"date,omitempty"`
+	Group                   interface{} `json:"group,omitempty"`
+	Limit                   interface{} `json:"limit,omitempty"`
+	Offset                  interface{} `json:"offset,omitempty"`
+	Sort                    interface{} `json:"sort,omitempty"`
+	System                  interface{} `json:"system,omitempty"`
+	Tag                     interface{} `json:"tag,omitempty"`
+	Talkgroup               interface{} `json:"talkgroup,omitempty"`
+	searchPatchedTalkgroups bool
 }
 
 func (searchOptions *SearchOptions) fromMap(m map[string]interface{}) error {
@@ -102,8 +103,9 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 	)
 
 	var (
-		dateTime interface{}
+		dateTime sql.NullString
 		err      error
+		id       sql.NullFloat64
 		limit    uint
 		offset   uint
 		order    string
@@ -159,7 +161,11 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 		}
 		switch v := searchOptions.Talkgroup.(type) {
 		case uint:
-			a = append(a, fmt.Sprintf("`talkgroup` = %v", v))
+			if searchOptions.searchPatchedTalkgroups {
+				a = append(a, fmt.Sprintf("`talkgroup` = %v or patches = '%v' or patches like '[%v,%%' or patches like '%%,%v,%%' or patches like '%%,%v]'", v, v, v, v, v))
+			} else {
+				a = append(a, fmt.Sprintf("`talkgroup` = %v", v))
+			}
 		}
 		where += fmt.Sprintf(" and (%s)", strings.Join(a, " and "))
 	}
@@ -197,12 +203,10 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime == nil {
-		return searchResults, nil
-	}
-
-	if t, err = db.ParseDateTime(dateTime); err == nil {
-		searchResults.DateStart = t
+	if dateTime.Valid && len(dateTime.String) > 0 {
+		if t, err = db.ParseDateTime(dateTime.String); err == nil {
+			searchResults.DateStart = t
+		}
 	}
 
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` desc", where)
@@ -210,8 +214,10 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if t, err = db.ParseDateTime(dateTime); err == nil {
-		searchResults.DateStop = t
+	if dateTime.Valid && len(dateTime.String) > 0 {
+		if t, err = db.ParseDateTime(dateTime); err == nil {
+			searchResults.DateStop = t
+		}
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -269,15 +275,20 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 
 	for rows.Next() {
 		searchResult := SearchResult{}
-		if err = rows.Scan(&searchResult.Id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
+		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
 			continue
 		}
 
-		if t, err = db.ParseDateTime(dateTime); err == nil {
-			searchResult.DateTime = t
+		if id.Valid && id.Float64 > 0 {
+			searchResult.Id = uint(id.Float64)
+		}
 
-		} else {
-			continue
+		if dateTime.Valid && len(dateTime.String) > 0 {
+			if t, err = db.ParseDateTime(dateTime); err == nil {
+				searchResult.DateTime = t
+			} else {
+				continue
+			}
 		}
 
 		searchResults.Results = append(searchResults.Results, searchResult)

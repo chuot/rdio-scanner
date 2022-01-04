@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,14 +18,14 @@
  */
 
 import { Component, EventEmitter, Output } from '@angular/core';
-import { Config, Group, RdioScannerAdminService } from '../../admin.service';
+import { Config, RdioScannerAdminService } from '../../admin.service';
 
 @Component({
-    selector: 'rdio-scanner-admin-import-csv',
-    styleUrls: ['./import-csv.component.scss'],
-    templateUrl: './import-csv.component.html',
+    selector: 'rdio-scanner-admin-import-talkgroups',
+    styleUrls: ['./import-talkgroups.component.scss'],
+    templateUrl: './import-talkgroups.component.html',
 })
-export class RdioScannerAdminImportCsvComponent {
+export class RdioScannerAdminImportTalkgroupsComponent {
     @Output() config = new EventEmitter<Config>();
 
     csv: string[][] = [];

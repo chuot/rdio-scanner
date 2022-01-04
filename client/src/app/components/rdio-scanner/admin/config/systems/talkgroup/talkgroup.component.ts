@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,12 +36,6 @@ export class RdioScannerAdminTalkgroupComponent {
 
     get groups(): Group[] {
         return this.form?.root.get('groups')?.value as Group[];
-    }
-
-    get patches(): FormControl[] {
-        const patches = this.form?.get('patches') as FormArray;
-
-        return patches.controls as FormControl[];
     }
 
     get tags(): Tag[] {

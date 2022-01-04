@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -154,8 +155,10 @@ func (accesses *Accesses) IsRestricted() bool {
 func (accesses *Accesses) Read(db *Database) error {
 	var (
 		err        error
-		expiration interface{}
-		id         uint
+		expiration sql.NullString
+		id         sql.NullFloat64
+		limit      sql.NullFloat64
+		order      sql.NullFloat64
 		rows       *sql.Rows
 		systems    string
 		t          time.Time
@@ -173,26 +176,30 @@ func (accesses *Accesses) Read(db *Database) error {
 
 	for rows.Next() {
 		access := Access{}
-		if err = rows.Scan(&id, &access.Code, &expiration, &access.Ident, &access.Limit, &access.Order, &systems); err != nil {
+		if err = rows.Scan(&id, &access.Code, &expiration, &access.Ident, &limit, &order, &systems); err != nil {
 			break
 		}
 
-		access.Id = id
+		if id.Valid && id.Float64 > 0 {
+			access.Id = uint(id.Float64)
+		}
 
 		if len(access.Code) == 0 {
 			continue
 		}
 
-		if expiration != nil {
-			if t, err = db.ParseDateTime(expiration); err == nil {
+		if expiration.Valid && len(expiration.String) > 0 {
+			if t, err = db.ParseDateTime(expiration.String); err == nil {
 				access.Expiration = t
-			} else {
-				continue
 			}
 		}
 
 		if len(access.Ident) == 0 {
 			access.Ident = defaults.access.ident
+		}
+
+		if limit.Valid && limit.Float64 > 0 {
+			access.Limit = uint(limit.Float64)
 		}
 
 		if err = json.Unmarshal([]byte(systems), &access.Systems); err != nil {
@@ -216,6 +223,7 @@ func (accesses *Accesses) Write(db *Database) error {
 		count   uint
 		err     error
 		rows    *sql.Rows
+		rowIds  = []uint{}
 		systems interface{}
 	)
 
@@ -264,7 +272,7 @@ func (accesses *Accesses) Write(db *Database) error {
 			}
 		}
 		if remove {
-			_, err = db.Sql.Exec("delete from `rdioScannerAccesses` where `_id` = ?", id)
+			rowIds = append(rowIds, id)
 		}
 	}
 
@@ -272,6 +280,18 @@ func (accesses *Accesses) Write(db *Database) error {
 
 	if err != nil {
 		return formatError(err)
+	}
+
+	if len(rowIds) > 0 {
+		if b, err := json.Marshal(rowIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerAccesses` where `_id` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
 	}
 
 	return nil

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -112,11 +112,9 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
     reset(config = this.config, options?: { dirty?: boolean }): void {
         this.form = this.adminService.newConfigForm(config);
 
-        this.form.statusChanges.subscribe(() => this.ngChangeDetectorRef.markForCheck());
-
-        if (options?.dirty === true) {
-            this.form.markAsDirty();
-        }
+        this.form.statusChanges.subscribe(() => {
+            this.ngChangeDetectorRef.markForCheck();
+        });
 
         this.groups.valueChanges.subscribe(() => {
             this.systems.controls.forEach((system) => {
@@ -125,10 +123,10 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
                 talkgroups.controls.forEach((talkgroup) => {
                     const groupId = talkgroup.get('groupId') as FormControl;
 
-                    groupId.updateValueAndValidity();
+                    groupId.updateValueAndValidity({ onlySelf: true });
 
                     if (groupId.errors) {
-                        groupId.markAsTouched();
+                        groupId.markAsTouched({ onlySelf: true });
                     }
                 });
             });
@@ -141,14 +139,18 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
                 talkgroups.controls.forEach((talkgroup) => {
                     const tagId = talkgroup.get('tagId') as FormControl;
 
-                    tagId.updateValueAndValidity();
+                    tagId.updateValueAndValidity({ onlySelf: true });
 
                     if (tagId.errors) {
-                        tagId.markAsTouched();
+                        tagId.markAsTouched({ onlySelf: true });
                     }
                 });
             });
         });
+
+        if (options?.dirty === true) {
+            this.form.markAsDirty();
+        }
 
         this.ngChangeDetectorRef.markForCheck();
     }

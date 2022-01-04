@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,19 +16,23 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 type Unit struct {
-	Id    uint   `json:"id"`
+	Id    int    `json:"id"`
 	Label string `json:"label"`
+	Order uint   `json:"order"`
 }
 
 func (unit *Unit) FromMap(m map[string]interface{}) {
 	switch v := m["id"].(type) {
 	case float64:
-		unit.Id = uint(v)
+		unit.Id = int(v)
 	}
 
 	switch v := m["label"].(type) {
@@ -37,9 +41,9 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 	}
 }
 
-type Units []Unit
+type Units []*Unit
 
-func (units *Units) Add(id uint, label string) *Units {
+func (units *Units) Add(id int, label string) *Units {
 	found := false
 
 	for _, u := range *units {
@@ -50,53 +54,10 @@ func (units *Units) Add(id uint, label string) *Units {
 	}
 
 	if !found {
-		*units = append(*units, Unit{Id: id, Label: label})
+		*units = append(*units, &Unit{Id: id, Label: label})
 	}
 
 	return units
-}
-
-func (units *Units) FromJson(str string) error {
-	var v interface{}
-
-	*units = Units{}
-
-	formatError := func(err error) error {
-		return fmt.Errorf("units.fromjson")
-	}
-
-	if err := json.Unmarshal([]byte(str), &v); err != nil {
-		return formatError(err)
-	}
-
-	switch v.(type) {
-	case []interface{}:
-		for _, r := range v.([]interface{}) {
-			switch m := r.(type) {
-			case map[string]interface{}:
-				unit := Unit{}
-				unit.FromMap(m)
-				*units = append(*units, unit)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (u *Units) Merge(units *Units) {
-	for _, v := range *units {
-		u.Add(v.Id, v.Label)
-	}
-}
-
-func (units *Units) ToJson() (string, error) {
-	if b, err := json.Marshal(*units); err == nil {
-		return string(b), nil
-
-	} else {
-		return "", fmt.Errorf("units.tojson: %v", err)
-	}
 }
 
 func (units *Units) FromMap(f []interface{}) {
@@ -105,9 +66,124 @@ func (units *Units) FromMap(f []interface{}) {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			unit := Unit{}
+			unit := &Unit{}
 			unit.FromMap(m)
 			*units = append(*units, unit)
 		}
 	}
+}
+
+func (u *Units) Merge(units *Units) {
+	for _, v := range *units {
+		u.Add(v.Id, v.Label)
+	}
+}
+
+func (units *Units) Read(db *Database, systemId uint) error {
+	var (
+		err  error
+		rows *sql.Rows
+	)
+
+	*units = Units{}
+
+	formatError := func(err error) error {
+		return fmt.Errorf("units.read: %v", err)
+	}
+
+	if rows, err = db.Sql.Query("select `id`, `label`, `order` from `rdioScannerUnits` where `systemId` = ?", systemId); err != nil {
+		return formatError(err)
+	}
+
+	for rows.Next() {
+		unit := &Unit{}
+
+		if err = rows.Scan(&unit.Id, &unit.Label, &unit.Order); err != nil {
+			break
+		}
+
+		*units = append(*units, unit)
+	}
+
+	rows.Close()
+
+	if err != nil {
+		return formatError(err)
+	}
+
+	sort.Slice(*units, func(i int, j int) bool {
+		return (*units)[i].Order < (*units)[j].Order
+	})
+
+	return nil
+}
+
+func (units *Units) Write(db *Database, systemId uint) error {
+	var (
+		count uint
+		err   error
+		ids   = []int{}
+		rows  *sql.Rows
+	)
+
+	formatError := func(err error) error {
+		return fmt.Errorf("units.write: %v", err)
+	}
+
+	for _, unit := range *units {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
+	}
+
+	if rows, err = db.Sql.Query("select `id` from `rdioScannerUnits` where `systemId` = ?", systemId); err != nil {
+		return formatError(err)
+	}
+
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		remove := true
+		for _, unit := range *units {
+			if unit.Id == id {
+				remove = false
+				break
+			}
+		}
+		if remove {
+			ids = append(ids, id)
+		}
+	}
+
+	rows.Close()
+
+	if err != nil {
+		return formatError(err)
+	}
+
+	if len(ids) > 0 {
+		if b, err := json.Marshal(ids); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerUnits` where `id` in %v and `systemId` = %v", s, systemId)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
+	}
+	return nil
 }

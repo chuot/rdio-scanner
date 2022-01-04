@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,7 +17,9 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type Tag struct {
@@ -141,6 +143,7 @@ func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) *TagsMap {
 func (tags *Tags) Read(db *Database) error {
 	var (
 		err  error
+		id   sql.NullFloat64
 		rows *sql.Rows
 	)
 
@@ -155,13 +158,15 @@ func (tags *Tags) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		var id uint
-
 		tag := Tag{}
 
-		rows.Scan(&id, &tag.Label)
+		if err = rows.Scan(&id, &tag.Label); err != nil {
+			continue
+		}
 
-		tag.Id = id
+		if id.Valid && id.Float64 > 0 {
+			tag.Id = uint(id.Float64)
+		}
 
 		*tags = append(*tags, tag)
 	}
@@ -177,9 +182,10 @@ func (tags *Tags) Read(db *Database) error {
 
 func (tags *Tags) Write(db *Database) error {
 	var (
-		count uint
-		err   error
-		rows  *sql.Rows
+		count  uint
+		err    error
+		rows   *sql.Rows
+		rowIds = []uint{}
 	)
 
 	formatError := func(err error) error {
@@ -209,19 +215,17 @@ func (tags *Tags) Write(db *Database) error {
 	}
 
 	for rows.Next() {
-		var id uint
-		rows.Scan(&id)
+		var rowId uint
+		rows.Scan(&rowId)
 		remove := true
 		for _, tag := range *tags {
-			if tag.Id == nil || tag.Id == id {
+			if tag.Id == nil || tag.Id == rowId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			if _, err = db.Sql.Exec("delete from `rdioScannerTags` where `_id` = ?", id); err != nil {
-				break
-			}
+			rowIds = append(rowIds, rowId)
 		}
 	}
 
@@ -229,6 +233,18 @@ func (tags *Tags) Write(db *Database) error {
 
 	if err != nil {
 		return formatError(err)
+	}
+
+	if len(rowIds) > 0 {
+		if b, err := json.Marshal(rowIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerTags` where `_id` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
 	}
 
 	return nil

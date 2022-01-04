@@ -12,12 +12,15 @@
 </section>
 
 <section>
-    <p class="mat-body">step 2: select CSV style</p>
+    <p class="mat-body">step 2: select system</p>
     <p class="text-center">
-        <mat-radio-group [(ngModel)]="mode">
-            <mat-radio-button [value]="0">Trunk Recorder</mat-radio-button>
-            <mat-radio-button [value]="1">Radio Reference</mat-radio-button>
-        </mat-radio-group>
+        <mat-form-field floatLabel="never">
+            <mat-select [(ngModel)]="system">
+                <mat-option *ngFor="let system of baseConfig.systems" [value]="system">
+                    {{ system.label}}
+                </mat-option>
+            </mat-select>
+        </mat-form-field>
     </p>
 </section>
 
@@ -30,7 +33,7 @@
                     <span>Id</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][0]] }}</span>
+                    <span>{{ tg[0] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="label">
@@ -38,31 +41,7 @@
                     <span>Label</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][1]] }}</span>
-                </mat-cell>
-            </ng-container>
-            <ng-container matColumnDef="description">
-                <mat-header-cell *matHeaderCellDef>
-                    <span>Description</span>
-                </mat-header-cell>
-                <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][2]] }}</span>
-                </mat-cell>
-            </ng-container>
-            <ng-container matColumnDef="tag">
-                <mat-header-cell *matHeaderCellDef>
-                    <span>Tag</span>
-                </mat-header-cell>
-                <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][3]] }}</span>
-                </mat-cell>
-            </ng-container>
-            <ng-container matColumnDef="group">
-                <mat-header-cell *matHeaderCellDef>
-                    <span>Group</span>
-                </mat-header-cell>
-                <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][4]] }}</span>
+                    <span>{{ tg[1] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="action">
@@ -83,8 +62,13 @@
 <section>
     <p class="mat-body">step 4: import to configuration</p>
     <p class="text-center">
-        <button mat-raised-button [disabled]="!csv.length" (click)="import()">
+        <button mat-raised-button [disabled]="!csv.length || system === undefined" (click)="import()">
             Import to configuration
         </button>
+    </p>
+    <p *ngIf="csv.length > 1000" class="mat-caption mat-error text-center text-uppercase">
+        Warning, you are trying to import more than 1000 units, {{csv.length}} in this case. The graphic interface has
+        not designed for this number of units. You can continue, but expect Rdio Scanner to be quite slow, if not
+        unusable.
     </p>
 </section>

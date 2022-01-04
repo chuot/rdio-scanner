@@ -20,6 +20,7 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | [RTLSDR-Airband](https://github.com/szpajder/RTLSDR-Airband)   |     | X        |
 | [sdrtrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
+| [ProScan](https://www.proscan.org/)                            |     | X        |
 
 # Improve your experience on the go
 
@@ -41,8 +42,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         rdio@macos ~ % mkdir rdio-scanner
         rdio@macos ~ % cd rdio-scanner
         rdio@macos rdio-scanner % unzip \          
-        > ~/Downloads/rdio-scanner-darwin-arm64-v6.0.7.zip 
-        Archive:  /Users/rdio/Downloads/rdio-scanner-darwin-arm64-v6.0.7.zip
+        > ~/Downloads/rdio-scanner-darwin-arm64-v6.1.0.zip 
+        Archive:  /Users/rdio/Downloads/rdio-scanner-darwin-arm64-v6.1.0.zip
           inflating: rdio-scanner            
           inflating: rdio-scanner.pdf        
 
@@ -50,11 +51,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         rdio@macos rdio-scanner % ./rdio-scanner 
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 08:38:06 server started
-        2021/12/16 08:38:06 main interface at http://macos.local:3000
-        2021/12/16 08:38:06 admin interface at http://macos.local:3000/admin
+        2022/01/04 08:38:06 server started
+        2022/01/04 08:38:06 main interface at http://macos.local:3000
+        2022/01/04 08:38:06 admin interface at http://macos.local:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -76,11 +77,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         rdio@macos rdio-scanner % ./rdio-scanner --listen :80
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 08:48:03 server started
-        2021/12/16 08:48:03 main interface at http://macos.local
-        2021/12/16 08:48:03 admin interface at http://macos.local/admin
+        2022/01/04 08:48:03 server started
+        2022/01/04 08:48:03 main interface at http://macos.local
+        2022/01/04 08:48:03 admin interface at http://macos.local/admin
 
 ## Listening with SSL with self-signed certificates
 
@@ -89,8 +90,8 @@ It is advised to share your [Rdio Scanner](https://github.com/chuot/rdio-scanner
 We can create such self-signed certificates by running [Rdio Scanner](https://github.com/chuot/rdio-scanner) with the **-ssl_create** argument.
 
         rdio@macos rdio-scanner % ./rdio-scanner -ssl_create
-        2021/12/16 08:49:16 generating ssl certificate files
-        2021/12/16 08:49:17 ssl files created
+        2022/01/04 08:49:16 generating ssl certificate files
+        2022/01/04 08:49:17 ssl files created
 
 This has generated these files in the same folder as your [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 
@@ -107,12 +108,12 @@ Now we use the self-signed server certificate to run our instance.
         > -ssl_key_file server.key               \
         > -ssl_listen :443
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 08:50:58 server started
-        2021/12/16 08:50:58 main interface at http://macos.local
-        2021/12/16 08:50:58 main interface at https://macos.local
-        2021/12/16 08:50:58 admin interface at https://macos.local/admin
+        2022/01/04 08:50:58 server started
+        2022/01/04 08:50:58 main interface at http://macos.local
+        2022/01/04 08:50:58 main interface at https://macos.local
+        2022/01/04 08:50:58 admin interface at https://macos.local/admin
 
 ## Save your advanced configuration to a config file
 
@@ -124,7 +125,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
         > -ssl_key_file server.key               \
         > -ssl_listen :443                       \
         > -config_save
-        2021/12/16 08:52:24 rdio-scanner.ini file created
+        2022/01/04 08:52:24 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -139,12 +140,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         rdio@macos rdio-scanner % ./rdio-scanner
         
-        Rdio Scanner v6.0.7
+        Rdio Scanner v6.1.0
         ----------------------------------
-        2021/12/16 08:54:08 server started
-        2021/12/16 08:54:08 main interface at http://macos.local
-        2021/12/16 08:54:08 main interface at https://macos.local
-        2021/12/16 08:54:08 admin interface at https://macos.local/admin
+        2022/01/04 08:54:08 server started
+        2022/01/04 08:54:08 main interface at http://macos.local
+        2022/01/04 08:54:08 main interface at https://macos.local
+        2022/01/04 08:54:08 admin interface at https://macos.local/admin
 
 ## Install Rdio Scanner as a service
 
@@ -209,7 +210,7 @@ To get the whole list of arguments you can pass to [Rdio Scanner](https://github
 
 # Need help ?
 
-You can ask your questions or post your comments on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) at **[https://gitter.im/rdio-scanner/Lobby](https://gitter.im/rdio-scanner/Lobby)** where the community keeps growing.
+You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)** or on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) at **[https://gitter.im/rdio-scanner/Lobby](https://gitter.im/rdio-scanner/Lobby)**.
 
 # Show your appreciation, support the author
 

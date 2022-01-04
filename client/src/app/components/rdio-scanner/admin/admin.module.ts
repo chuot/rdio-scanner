@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,8 @@ import { RdioScannerAdminLogsComponent } from './logs/logs.component';
 import { RdioScannerAdminTodosComponent } from './todos/todos.component';
 import { RdioScannerAdminToolsComponent } from './tools/tools.component';
 import { RdioScannerAdminImportExportConfigComponent } from './tools/import-export-config/import-export-config.component';
-import { RdioScannerAdminImportCsvComponent } from './tools/import-csv/import-csv.component';
+import { RdioScannerAdminImportTalkgroupsComponent } from './tools/import-talkgroups/import-talkgroups.component';
+import { RdioScannerAdminImportUnitsComponent } from './tools/import-units/import-units.component';
 import { RdioScannerAdminPasswordComponent } from './tools/password/password.component';
 
 @NgModule({
@@ -53,7 +54,8 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminDownstreamsComponent,
         RdioScannerAdminGroupsComponent,
         RdioScannerAdminImportExportConfigComponent,
-        RdioScannerAdminImportCsvComponent,
+        RdioScannerAdminImportTalkgroupsComponent,
+        RdioScannerAdminImportUnitsComponent,
         RdioScannerAdminLoginComponent,
         RdioScannerAdminLogsComponent,
         RdioScannerAdminOptionsComponent,

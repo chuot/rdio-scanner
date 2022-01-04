@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -203,7 +204,11 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 
 	switch v := dirwatch.Extension.(type) {
 	case string:
-		ext = fmt.Sprintf(".%s", v)
+		if len(v) > 0 {
+			ext = fmt.Sprintf(".%s", v)
+		} else {
+			ext = ".mp3"
+		}
 	default:
 		ext = ".mp3"
 	}
@@ -254,7 +259,11 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 	switch v := dirwatch.Extension.(type) {
 	case string:
-		ext = fmt.Sprintf(".%s", v)
+		if len(v) > 0 {
+			ext = fmt.Sprintf(".%s", v)
+		} else {
+			ext = ".wav"
+		}
 	default:
 		ext = ".wav"
 	}
@@ -528,11 +537,11 @@ func (dirwatches *Dirwatches) FromMap(f []interface{}) {
 
 	*dirwatches = Dirwatches{}
 
-	for _, r := range f {
-		switch m := r.(type) {
+	for _, f := range f {
+		switch v := f.(type) {
 		case map[string]interface{}:
 			dirwatch := Dirwatch{}
-			dirwatch.FromMap(m)
+			dirwatch.FromMap(v)
 			*dirwatches = append(*dirwatches, dirwatch)
 		}
 	}
@@ -540,8 +549,17 @@ func (dirwatches *Dirwatches) FromMap(f []interface{}) {
 
 func (dirwatches *Dirwatches) Read(db *Database) error {
 	var (
-		err  error
-		rows *sql.Rows
+		delay       sql.NullFloat64
+		err         error
+		extension   sql.NullString
+		id          sql.NullFloat64
+		frequency   sql.NullFloat64
+		kind        sql.NullString
+		mask        sql.NullString
+		order       sql.NullFloat64
+		rows        *sql.Rows
+		systemId    sql.NullFloat64
+		talkgroupId sql.NullFloat64
 	)
 
 	dirwatches.Stop()
@@ -559,28 +577,44 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 	for rows.Next() {
 		dirwatch := Dirwatch{}
 
-		if err = rows.Scan(&dirwatch.Id, &dirwatch.Delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &dirwatch.Extension, &dirwatch.Frequency, &dirwatch.Mask, &dirwatch.Order, &dirwatch.SystemId, &dirwatch.TalkgroupId, &dirwatch.Kind, &dirwatch.UsePolling); err != nil {
+		if err = rows.Scan(&id, &delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &extension, &frequency, &mask, &order, &systemId, &talkgroupId, &kind, &dirwatch.UsePolling); err != nil {
 			break
 		}
 
-		switch v := dirwatch.Delay.(type) {
-		case int64:
-			dirwatch.Delay = uint(v)
+		if id.Valid && id.Float64 > 0 {
+			dirwatch.Id = uint(id.Float64)
 		}
 
-		switch v := dirwatch.Id.(type) {
-		case int64:
-			dirwatch.Id = uint(v)
+		if delay.Valid && id.Float64 > 0 {
+			dirwatch.Delay = uint(delay.Float64)
 		}
 
-		switch v := dirwatch.SystemId.(type) {
-		case int64:
-			dirwatch.SystemId = uint(v)
+		if extension.Valid && len(extension.String) > 0 {
+			dirwatch.Extension = extension.String
 		}
 
-		switch v := dirwatch.TalkgroupId.(type) {
-		case int64:
-			dirwatch.TalkgroupId = uint(v)
+		if frequency.Valid && frequency.Float64 > 0 {
+			dirwatch.Frequency = uint(frequency.Float64)
+		}
+
+		if mask.Valid && len(mask.String) > 0 {
+			dirwatch.Mask = mask.String
+		}
+
+		if order.Valid && order.Float64 > 0 {
+			dirwatch.Order = uint(order.Float64)
+		}
+
+		if systemId.Valid && systemId.Float64 > 0 {
+			dirwatch.SystemId = uint(systemId.Float64)
+		}
+
+		if talkgroupId.Valid && talkgroupId.Float64 > 0 {
+			dirwatch.TalkgroupId = uint(talkgroupId.Float64)
+		}
+
+		if kind.Valid && len(kind.String) > 0 {
+			dirwatch.Kind = kind.String
 		}
 
 		*dirwatches = append(*dirwatches, dirwatch)
@@ -615,9 +649,10 @@ func (dirwatches *Dirwatches) Stop() {
 
 func (dirwatches *Dirwatches) Write(db *Database) error {
 	var (
-		count uint
-		err   error
-		rows  *sql.Rows
+		count  uint
+		err    error
+		rows   *sql.Rows
+		rowIds = []uint{}
 	)
 
 	formatError := func(err error) error {
@@ -648,17 +683,17 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 	}
 
 	for rows.Next() {
-		var id uint
-		rows.Scan(&id)
+		var rowId uint
+		rows.Scan(&rowId)
 		remove := true
 		for _, dirwatch := range *dirwatches {
-			if dirwatch.Id == nil || dirwatch.Id == id {
+			if dirwatch.Id == nil || dirwatch.Id == rowId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			_, err = db.Sql.Exec("delete from `rdioScannerDirWatches` where `_id` = ?", id)
+			rowIds = append(rowIds, rowId)
 		}
 	}
 
@@ -666,6 +701,18 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 
 	if err != nil {
 		return formatError(err)
+	}
+
+	if len(rowIds) > 0 {
+		if b, err := json.Marshal(rowIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerDirwatches` where `_id` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
 	}
 
 	return nil

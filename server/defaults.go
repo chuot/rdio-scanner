@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -57,6 +57,7 @@ type DefaultOptions struct {
 	duplicateDetectionTimeFrame uint
 	keypadBeeps                 string
 	pruneDays                   uint
+	searchPatchedTalkgroups     bool
 	sortTalkgroups              bool
 	tagsToggle                  bool
 }
@@ -95,6 +96,7 @@ var defaults Defaults = Defaults{
 		duplicateDetectionTimeFrame: 500,
 		keypadBeeps:                 "uniden",
 		pruneDays:                   7,
+		searchPatchedTalkgroups:     false,
 		sortTalkgroups:              false,
 		tagsToggle:                  false,
 	},

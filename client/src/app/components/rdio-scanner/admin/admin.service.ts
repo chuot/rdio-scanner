@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,6 +39,13 @@ export interface Access {
     }[] | number[] | '*';
 }
 
+export interface AdminEvent {
+    authenticated?: boolean;
+    config?: Config;
+    docker?: boolean;
+    passwordNeedChange?: boolean;
+}
+
 export interface ApiKey {
     _id?: string;
     disabled?: boolean;
@@ -49,6 +56,17 @@ export interface ApiKey {
         id: number;
         talkgroups: number[] | '*';
     }[] | number[] | '*';
+}
+
+export interface Config {
+    access?: Access[];
+    apiKeys?: ApiKey[];
+    dirWatch?: DirWatch[];
+    downstreams?: Downstream[];
+    groups?: Group[];
+    options?: Options;
+    systems?: System[];
+    tags?: Tag[];
 }
 
 export interface DirWatch {
@@ -81,18 +99,6 @@ export interface Downstream {
     url?: string;
 }
 
-export interface Options {
-    autoPopulate?: boolean;
-    dimmerDelay?: number;
-    disableAudioConversion?: boolean;
-    disableDuplicateDetection?: boolean;
-    duplicateDetectionTimeFrame?: number;
-    keypadBeeps?: string;
-    pruneDays?: number;
-    sortTalkgroups?: boolean;
-    tagsToggle?: boolean;
-}
-
 export interface Group {
     _id?: number;
     label?: string;
@@ -121,25 +127,17 @@ export interface LogsQueryOptions {
     sort: number;
 }
 
-export interface Tag {
-    _id?: number;
-    label?: string;
-}
-
-export interface Talkgroup {
-    frequency?: number | null;
-    groupId?: number;
-    id?: number;
-    label?: string;
-    led?: string | null;
-    name?: string;
-    patches?: number[];
-    tagId?: number;
-}
-
-export interface Unit {
-    id?: number | null;
-    label?: string;
+export interface Options {
+    autoPopulate?: boolean;
+    dimmerDelay?: number;
+    disableAudioConversion?: boolean;
+    disableDuplicateDetection?: boolean;
+    duplicateDetectionTimeFrame?: number;
+    keypadBeeps?: string;
+    pruneDays?: number;
+    searchPatchedTalkgroups?: boolean;
+    sortTalkgroups?: boolean;
+    tagsToggle?: boolean;
 }
 
 export interface System {
@@ -154,22 +152,26 @@ export interface System {
     units?: Unit[];
 }
 
-export interface Config {
-    access?: Access[];
-    apiKeys?: ApiKey[];
-    dirWatch?: DirWatch[];
-    downstreams?: Downstream[];
-    groups?: Group[];
-    options?: Options;
-    systems?: System[];
-    tags?: Tag[];
+export interface Tag {
+    _id?: number;
+    label?: string;
 }
 
-export interface AdminEvent {
-    authenticated?: boolean;
-    config?: Config;
-    docker?: boolean;
-    passwordNeedChange?: boolean;
+export interface Talkgroup {
+    frequency?: number | null;
+    groupId?: number;
+    id?: number;
+    label?: string;
+    led?: string | null;
+    name?: string;
+    order?: number;
+    tagId?: number;
+}
+
+export interface Unit {
+    id?: number | null;
+    label?: string;
+    order?: number;
 }
 
 enum url {
@@ -470,7 +472,7 @@ export class RdioScannerAdminService implements OnDestroy {
             label: [talkgroup?.label, Validators.required],
             led: [talkgroup?.led],
             name: [talkgroup?.name, Validators.required],
-            patches: [talkgroup?.patches, this.validatePatches()],
+            order: [talkgroup?.order],
             tagId: [talkgroup?.tagId, [Validators.required, this.validateTag()]],
         });
     }
@@ -479,6 +481,7 @@ export class RdioScannerAdminService implements OnDestroy {
         return this.ngFormBuilder.group({
             id: [unit?.id, [Validators.required, Validators.min(0), this.validateId()]],
             label: [unit?.label, Validators.required],
+            order: [unit?.order],
         });
     }
 
@@ -491,6 +494,7 @@ export class RdioScannerAdminService implements OnDestroy {
             duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
             pruneDays: [options?.pruneDays, [Validators.required, Validators.min(0)]],
+			searchPatchedTalkgroups: [options?.searchPatchedTalkgroups],
             sortTalkgroups: [options?.sortTalkgroups],
             tagsToggle: [options?.tagsToggle],
         });

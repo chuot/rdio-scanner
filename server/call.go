@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ type Call struct {
 	DateTime       time.Time   `json:"dateTime"`
 	Frequencies    interface{} `json:"frequencies"`
 	Frequency      interface{} `json:"frequency"`
+	Patches        interface{} `json:"patches"`
 	Source         interface{} `json:"source"`
 	Sources        interface{} `json:"sources"`
 	System         uint        `json:"system"`
@@ -77,6 +78,7 @@ func (call *Call) MarshalJSON() ([]byte, error) {
 		"dateTime":    call.DateTime.Format(time.RFC3339),
 		"frequencies": call.Frequencies,
 		"frequency":   call.Frequency,
+		"patches":     call.Patches,
 		"source":      call.Source,
 		"sources":     call.Sources,
 		"system":      call.System,
@@ -98,6 +100,7 @@ func (call *Call) Write(db *Database) (uint, error) {
 		err         error
 		frequencies string
 		id          int64
+		patches     string
 		res         sql.Result
 		sources     string
 	)
@@ -115,6 +118,15 @@ func (call *Call) Write(db *Database) (uint, error) {
 		}
 	}
 
+	switch v := call.Patches.(type) {
+	case []uint:
+		if b, err = json.Marshal(v); err == nil {
+			patches = string(b)
+		} else {
+			return 0, formatError(err)
+		}
+	}
+
 	switch v := call.Sources.(type) {
 	case []map[string]interface{}:
 		if b, err = json.Marshal(v); err == nil {
@@ -124,7 +136,7 @@ func (call *Call) Write(db *Database) (uint, error) {
 		}
 	}
 
-	if res, err = db.Sql.Exec("insert into `rdioScannerCalls` (`id`, `audio`, `audioName`, `audioType`, `dateTime`, `frequencies`, `frequency`, `source`, `sources`, `system`, `talkgroup`) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", call.Id, call.Audio, call.AudioName, call.AudioType, call.DateTime, frequencies, call.Frequency, call.Source, sources, call.System, call.Talkgroup); err != nil {
+	if res, err = db.Sql.Exec("insert into `rdioScannerCalls` (`id`, `audio`, `audioName`, `audioType`, `dateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup`) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", call.Id, call.Audio, call.AudioName, call.AudioType, call.DateTime, frequencies, call.Frequency, patches, call.Source, sources, call.System, call.Talkgroup); err != nil {
 		return 0, formatError(err)
 	}
 
@@ -141,14 +153,15 @@ func GetCall(id uint, db *Database) (*Call, error) {
 	var (
 		dateTime    interface{}
 		frequencies string
+		patches     string
 		sources     string
 		t           time.Time
 	)
 
 	call := Call{}
 
-	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &call.Source, &sources, &call.System, &call.Talkgroup)
+	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
+	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
 	}
@@ -165,7 +178,13 @@ func GetCall(id uint, db *Database) (*Call, error) {
 		}
 	}
 
-	if len(frequencies) > 0 {
+	if len(patches) > 0 {
+		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
+			return nil, fmt.Errorf("getcall.unmarshal.patches: %v", err)
+		}
+	}
+
+	if len(sources) > 0 {
 		if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
 			return nil, fmt.Errorf("getcall.unmarshal.sources: %v", err)
 		}

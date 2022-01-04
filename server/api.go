@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -52,6 +52,7 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			frequencies    = []map[string]interface{}{}
 			frequency      interface{}
 			key            string
+			patches        = []uint{}
 			source         interface{}
 			sources        = []map[string]interface{}{}
 			system         uint
@@ -108,7 +109,6 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 					if i, err := strconv.Atoi(string(b)); err == nil {
 						dateTime = time.Unix(int64(i), 0).UTC()
 					}
-
 				} else {
 					dateTime, _ = time.Parse(time.RFC3339, string(b))
 					dateTime = dateTime.UTC()
@@ -121,29 +121,24 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 					case []interface{}:
 						for _, f := range v {
 							freq := map[string]interface{}{}
-
 							switch v := f.(type) {
 							case map[string]interface{}:
 								switch v := v["errorCount"].(type) {
 								case float64:
 									freq["errorCount"] = uint(v)
 								}
-
 								switch v := v["freq"].(type) {
 								case float64:
 									freq["freq"] = uint(v)
 								}
-
 								switch v := v["len"].(type) {
 								case float64:
 									freq["len"] = uint(v)
 								}
-
 								switch v := v["pos"].(type) {
 								case float64:
 									freq["pos"] = uint(v)
 								}
-
 								switch v := v["spikeCount"].(type) {
 								case float64:
 									freq["spikeCount"] = uint(v)
@@ -163,9 +158,25 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			case "key":
 				key = string(b)
 
+			case "patches", "patched_talkgroups":
+				var f interface{}
+				if err := json.Unmarshal(b, &f); err == nil {
+					switch v := f.(type) {
+					case []interface{}:
+						for _, patch := range v {
+							switch v := patch.(type) {
+							case float64:
+								if v > 0 {
+									patches = append(patches, uint(v))
+								}
+							}
+						}
+					}
+				}
+
 			case "source":
 				if i, err := strconv.Atoi(string(b)); err == nil {
-					source = uint(i)
+					source = int(i)
 				}
 
 			case "sources":
@@ -175,29 +186,28 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 					case []interface{}:
 						for _, f := range v {
 							src := map[string]interface{}{}
-
 							switch v := f.(type) {
 							case map[string]interface{}:
 								switch v := v["pos"].(type) {
 								case float64:
 									src["pos"] = uint(v)
 								}
-
 								switch s := v["src"].(type) {
 								case float64:
-									src["src"] = uint(s)
-
-									switch t := v["tag"].(type) {
-									case string:
-										var u Units
-										switch v := units.(type) {
-										case Units:
-											u = v
-										default:
-											u = Units{}
+									if s > 0 {
+										src["src"] = uint(s)
+										switch t := v["tag"].(type) {
+										case string:
+											var u Units
+											switch v := units.(type) {
+											case Units:
+												u = v
+											default:
+												u = Units{}
+											}
+											u.Add(int(s), t)
+											units = u
 										}
-										u.Add(uint(s), t)
-										units = u
 									}
 								}
 							}
@@ -244,6 +254,7 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			DateTime:       dateTime,
 			Frequencies:    frequencies,
 			Frequency:      frequency,
+			Patches:        patches,
 			Source:         source,
 			Sources:        sources,
 			System:         system,

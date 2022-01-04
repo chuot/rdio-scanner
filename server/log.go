@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -110,8 +110,9 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 	)
 
 	var (
-		dateTime interface{}
+		dateTime sql.NullString
 		err      error
+		id       sql.NullFloat64
 		limit    uint
 		offset   uint
 		order    string
@@ -182,14 +183,12 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime == nil {
-		return logResults, nil
-	}
-
-	if t, err := db.ParseDateTime(dateTime); err == nil {
-		logResults.DateStart = t
-	} else {
-		return nil, err
+	if dateTime.Valid && len(dateTime.String) > 0 {
+		if t, err := db.ParseDateTime(dateTime.String); err == nil {
+			logResults.DateStart = t
+		} else {
+			return nil, err
+		}
 	}
 
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
@@ -197,10 +196,12 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if t, err := db.ParseDateTime(dateTime); err == nil {
-		logResults.DateStop = t
-	} else {
-		return nil, err
+	if dateTime.Valid && len(dateTime.String) > 0 {
+		if t, err := db.ParseDateTime(dateTime.String); err == nil {
+			logResults.DateStop = t
+		} else {
+			return nil, err
+		}
 	}
 
 	query = fmt.Sprintf("select count(*) from `rdioScannerLogs` where %v", where)
@@ -216,14 +217,20 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 	for rows.Next() {
 		log := Log{}
 
-		if err = rows.Scan(&log.Id, &dateTime, &log.Level, &log.Message); err != nil {
-			break
+		if err = rows.Scan(&id, &dateTime, &log.Level, &log.Message); err != nil {
+			continue
 		}
 
-		if t, err := db.ParseDateTime(dateTime); err == nil {
-			log.DateTime = t
-		} else {
-			continue
+		if id.Valid && id.Float64 > 0 {
+			log.Id = uint(id.Float64)
+		}
+
+		if dateTime.Valid && len(dateTime.String) > 0 {
+			if t, err := db.ParseDateTime(dateTime.String); err == nil {
+				log.DateTime = t
+			} else {
+				continue
+			}
 		}
 
 		logResults.Logs = append(logResults.Logs, log)

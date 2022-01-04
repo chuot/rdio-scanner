@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -68,5 +68,17 @@ sys:
 }
 
 func (livefeedMap *LivefeedMap) IsEnabled(call *Call) bool {
-	return (*livefeedMap)[call.System][call.Talkgroup]
+	if (*livefeedMap)[call.System][call.Talkgroup] {
+		return true
+	} else {
+		switch v := call.Patches.(type) {
+		case []uint:
+			for _, p := range v {
+				if (*livefeedMap)[call.System][p] {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

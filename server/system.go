@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -29,7 +30,7 @@ type System struct {
 	Blacklists   Blacklists  `json:"blacklists"`
 	Label        string      `json:"label"`
 	Led          interface{} `json:"led"`
-	Order        interface{} `json:"order"`
+	Order        uint        `json:"order"`
 	RowId        interface{} `json:"_id"`
 	Talkgroups   Talkgroups  `json:"talkgroups"`
 	Units        Units       `json:"units"`
@@ -266,10 +267,6 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 			systemMap["led"] = rawSystem.Led
 		}
 
-		if rawSystem.Order != nil {
-			systemMap["order"] = rawSystem.Order
-		}
-
 		systemsMap = append(systemsMap, systemMap)
 	}
 
@@ -287,8 +284,12 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 
 func (systems *Systems) Read(db *Database) error {
 	var (
-		err  error
-		rows *sql.Rows
+		blacklists sql.NullString
+		err        error
+		led        sql.NullString
+		order      sql.NullFloat64
+		rowId      sql.NullFloat64
+		rows       *sql.Rows
 	)
 
 	*systems = Systems{}
@@ -297,62 +298,44 @@ func (systems *Systems) Read(db *Database) error {
 		return fmt.Errorf("systems.read: %v", err)
 	}
 
-	if rows, err = db.Sql.Query("select `_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`, `talkgroups`, `units` from `rdioScannerSystems`"); err != nil {
+	if rows, err = db.Sql.Query("select `_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order` from `rdioScannerSystems`"); err != nil {
 		return formatError(err)
 	}
 
 	for rows.Next() {
-		var (
-			blacklists interface{}
-			talkgroups interface{}
-			units      interface{}
-		)
-
-		system := &System{}
-		if err = rows.Scan(&system.RowId, &system.AutoPopulate, &blacklists, &system.Id, &system.Label, &system.Led, &system.Order, &talkgroups, &units); err != nil {
-			break
+		system := &System{
+			Talkgroups: Talkgroups{},
+			Units:      Units{},
 		}
 
-		switch v := blacklists.(type) {
-		case string:
-			v = strings.ReplaceAll(v, "[", "")
-			v = strings.ReplaceAll(v, "]", "")
-			system.Blacklists = Blacklists(v)
+		if err = rows.Scan(&rowId, &system.AutoPopulate, &blacklists, &system.Id, &system.Label, &led, &order); err != nil {
+			continue
 		}
 
-		switch v := system.RowId.(type) {
-		case int64:
-			system.RowId = uint(v)
+		if rowId.Valid && rowId.Float64 > 0 {
+			system.RowId = uint(rowId.Float64)
 		}
 
-		switch v := talkgroups.(type) {
-		case []uint8:
-			system.Talkgroups = Talkgroups{}
-			if err = system.Talkgroups.FromJson(string(v)); err != nil {
-				break
-			}
-		case string:
-			system.Talkgroups = Talkgroups{}
-			if err = system.Talkgroups.FromJson(v); err != nil {
-				break
-			}
-		default:
-			system.Talkgroups = Talkgroups{}
+		if blacklists.Valid && len(blacklists.String) > 0 {
+			blacklists.String = strings.ReplaceAll(blacklists.String, "[", "")
+			blacklists.String = strings.ReplaceAll(blacklists.String, "]", "")
+			system.Blacklists = Blacklists(blacklists.String)
 		}
 
-		switch v := units.(type) {
-		case []uint8:
-			system.Units = Units{}
-			if err = system.Units.FromJson(string(v)); err != nil {
-				break
-			}
-		case string:
-			system.Units = Units{}
-			if err = system.Units.FromJson(v); err != nil {
-				break
-			}
-		default:
-			system.Units = Units{}
+		if led.Valid && len(led.String) > 0 {
+			system.Led = led.String
+		}
+
+		if order.Valid && order.Float64 > 0 {
+			system.Order = uint(order.Float64)
+		}
+
+		if err = system.Talkgroups.Read(db, system.Id); err != nil {
+			return err
+		}
+
+		if err = system.Units.Read(db, system.Id); err != nil {
+			return err
 		}
 
 		*systems = append(*systems, system)
@@ -364,6 +347,10 @@ func (systems *Systems) Read(db *Database) error {
 		return formatError(err)
 	}
 
+	sort.Slice(*systems, func(i int, j int) bool {
+		return (*systems)[i].Order < (*systems)[j].Order
+	})
+
 	return nil
 }
 
@@ -373,8 +360,8 @@ func (systems *Systems) Write(db *Database) error {
 		count      uint
 		err        error
 		rows       *sql.Rows
-		talkgroups string
-		units      string
+		rowIds     = []uint{}
+		systemIds  = []uint{}
 	)
 
 	formatError := func(err error) error {
@@ -388,25 +375,25 @@ func (systems *Systems) Write(db *Database) error {
 			blacklists = "[]"
 		}
 
-		if talkgroups, err = system.Talkgroups.ToJson(); err != nil {
-			return formatError(err)
-		}
-
-		if units, err = system.Units.ToJson(); err != nil {
-			return formatError(err)
-		}
-
 		if err = db.Sql.QueryRow("select count(*) from `rdioScannerSystems` where `_id` = ?", system.RowId).Scan(&count); err != nil {
 			break
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`, `talkgroups`, `units`) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, talkgroups, units); err != nil {
+			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`) values (?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ?, `talkgroups` = ?, `units` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, talkgroups, units, system.RowId); err != nil {
+		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, system.RowId); err != nil {
 			break
+		}
+
+		if err = system.Talkgroups.Write(db, system.Id); err != nil {
+			return err
+		}
+
+		if err = system.Units.Write(db, system.Id); err != nil {
+			return err
 		}
 	}
 
@@ -414,13 +401,14 @@ func (systems *Systems) Write(db *Database) error {
 		return formatError(err)
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerSystems`"); err != nil {
+	if rows, err = db.Sql.Query("select `_id`, `id` from `rdioScannerSystems`"); err != nil {
 		return formatError(err)
 	}
 
 	for rows.Next() {
 		var rowId uint
-		rows.Scan(&rowId)
+		var systemId uint
+		rows.Scan(&rowId, &systemId)
 		remove := true
 		for _, system := range *systems {
 			if system.RowId == nil || system.RowId == rowId {
@@ -429,9 +417,8 @@ func (systems *Systems) Write(db *Database) error {
 			}
 		}
 		if remove {
-			if _, err = db.Sql.Exec("delete from `rdioScannerSystems` where `_id` = ?", rowId); err != nil {
-				break
-			}
+			rowIds = append(rowIds, rowId)
+			systemIds = append(systemIds, systemId)
 		}
 	}
 
@@ -439,6 +426,34 @@ func (systems *Systems) Write(db *Database) error {
 
 	if err != nil {
 		return formatError(err)
+	}
+
+	if len(rowIds) > 0 {
+		if b, err := json.Marshal(rowIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerSystems` where `_id` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
+	}
+
+	if len(systemIds) > 0 {
+		if b, err := json.Marshal(systemIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerTalkgroups` where `systemId` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+			q = fmt.Sprintf("delete from `rdioScannerUnits` where `systemId` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
 	}
 
 	return nil

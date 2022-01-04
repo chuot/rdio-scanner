@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -133,7 +134,8 @@ func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
 func (apikeys *Apikeys) Read(db *Database) error {
 	var (
 		err     error
-		id      uint
+		id      sql.NullFloat64
+		order   sql.NullFloat64
 		rows    *sql.Rows
 		systems string
 	)
@@ -150,11 +152,13 @@ func (apikeys *Apikeys) Read(db *Database) error {
 
 	for rows.Next() {
 		apikey := Apikey{}
-		if err = rows.Scan(&id, &apikey.Disabled, &apikey.Ident, &apikey.Key, &apikey.Order, &systems); err != nil {
+		if err = rows.Scan(&id, &apikey.Disabled, &apikey.Ident, &apikey.Key, &order, &systems); err != nil {
 			break
 		}
 
-		apikey.Id = id
+		if id.Valid && id.Float64 > 0 {
+			apikey.Id = uint(id.Float64)
+		}
 
 		if len(apikey.Ident) == 0 {
 			apikey.Ident = defaults.apikey.ident
@@ -162,6 +166,10 @@ func (apikeys *Apikeys) Read(db *Database) error {
 
 		if len(apikey.Key) == 0 {
 			apikey.Key = uuid.New().String()
+		}
+
+		if order.Valid && order.Float64 > 0 {
+			apikey.Order = uint(order.Float64)
 		}
 
 		if err = json.Unmarshal([]byte(systems), &apikey.Systems); err != nil {
@@ -185,6 +193,7 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		count   uint
 		err     error
 		rows    *sql.Rows
+		rowIds  = []uint{}
 		systems interface{}
 	)
 
@@ -233,9 +242,7 @@ func (apikeys *Apikeys) Write(db *Database) error {
 			}
 		}
 		if remove {
-			if _, err = db.Sql.Exec("delete from `rdioScannerApiKeys` where `_id` = ?", id); err != nil {
-				break
-			}
+			rowIds = append(rowIds, id)
 		}
 	}
 
@@ -243,6 +250,18 @@ func (apikeys *Apikeys) Write(db *Database) error {
 
 	if err != nil {
 		return formatError(err)
+	}
+
+	if len(rowIds) > 0 {
+		if b, err := json.Marshal(rowIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerApikeys` where `_id` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
 	}
 
 	return nil

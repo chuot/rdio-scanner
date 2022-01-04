@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,8 +16,11 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 type Talkgroup struct {
@@ -29,7 +32,6 @@ type Talkgroup struct {
 	Led       interface{} `json:"led"`
 	Name      string      `json:"name"`
 	Order     uint        `json:"order"`
-	Patches   string      `json:"patches"`
 	TagId     uint        `json:"tagId"`
 	tag       string
 }
@@ -75,11 +77,6 @@ func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
 		talkgroup.Order = uint(v)
 	}
 
-	switch v := m["patches"].(type) {
-	case string:
-		talkgroup.Patches = v
-	}
-
 	switch v := m["tag"].(type) {
 	case string:
 		talkgroup.tag = v
@@ -94,34 +91,6 @@ func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
 type TalkgroupMap map[string]interface{}
 
 type Talkgroups []*Talkgroup
-
-func (talkgroups *Talkgroups) FromJson(str string) error {
-	var f interface{}
-
-	*talkgroups = Talkgroups{}
-
-	formatError := func(err error) error {
-		return fmt.Errorf("talkgroups.fromjson")
-	}
-
-	if err := json.Unmarshal([]byte(str), &f); err != nil {
-		return formatError(err)
-	}
-
-	switch v := f.(type) {
-	case []interface{}:
-		for _, r := range v {
-			switch m := r.(type) {
-			case map[string]interface{}:
-				talkgroup := &Talkgroup{}
-				talkgroup.FromMap(m)
-				*talkgroups = append(*talkgroups, talkgroup)
-			}
-		}
-	}
-
-	return nil
-}
 
 func (talkgroups *Talkgroups) FromMap(f []interface{}) {
 	*talkgroups = Talkgroups{}
@@ -154,13 +123,124 @@ func (talkgroups *Talkgroups) GetTalkgroup(f interface{}) (system *Talkgroup, ok
 	return nil, false
 }
 
-func (talkgroups *Talkgroups) ToJson() (string, error) {
-	if b, err := json.Marshal(*talkgroups); err == nil {
-		return string(b), nil
+func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
+	var (
+		err       error
+		frequency sql.NullFloat64
+		led       sql.NullString
+		rows      *sql.Rows
+	)
 
-	} else {
-		return "", fmt.Errorf("talkgroups.tojson: %v", err)
+	*talkgroups = Talkgroups{}
+
+	formatError := func(err error) error {
+		return fmt.Errorf("talkgroups.read: %v", err)
 	}
+
+	if rows, err = db.Sql.Query("select `frequency`, `groupId`, `id`, `label`, `led`, `name`, `order`, `tagId` from `rdioScannerTalkgroups` where `systemId` = ?", systemId); err != nil {
+		return formatError(err)
+	}
+
+	for rows.Next() {
+		talkgroup := &Talkgroup{}
+
+		if err = rows.Scan(&frequency, &talkgroup.GroupId, &talkgroup.Id, &talkgroup.Label, &led, &talkgroup.Name, &talkgroup.Order, &talkgroup.TagId); err != nil {
+			continue
+		}
+
+		if frequency.Valid && frequency.Float64 > 0 {
+			talkgroup.Frequency = uint(frequency.Float64)
+		}
+
+		if led.Valid && len(led.String) > 0 {
+			talkgroup.Led = led.String
+		}
+
+		*talkgroups = append(*talkgroups, talkgroup)
+	}
+
+	rows.Close()
+
+	if err != nil {
+		return formatError(err)
+	}
+
+	sort.Slice(*talkgroups, func(i int, j int) bool {
+		return (*talkgroups)[i].Order < (*talkgroups)[j].Order
+	})
+
+	return nil
+}
+
+func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
+	var (
+		count uint
+		err   error
+		ids   = []uint{}
+		rows  *sql.Rows
+	)
+
+	formatError := func(err error) error {
+		return fmt.Errorf("talkgroups.write: %v", err)
+	}
+
+	for _, talkgroup := range *talkgroups {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTalkgroups` where `id` = ? and `systemId` = ?", talkgroup.Id, systemId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerTalkgroups` (`frequency`, `groupId`, `id`, `label`, `led`, `name`, `order`, `systemId`, `tagId`) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Id, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, systemId, talkgroup.TagId); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerTalkgroups` set `frequency` = ?, `groupId` = ?, `label` = ?, `led` = ?, `name` = ?, `order` = ?, `tagId` = ? where `id` = ? and `systemId` = ?", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, talkgroup.TagId, talkgroup.Id, systemId); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
+	}
+
+	if rows, err = db.Sql.Query("select `id` from `rdioScannerTalkgroups` where `systemId` = ?", systemId); err != nil {
+		return formatError(err)
+	}
+
+	for rows.Next() {
+		var id uint
+		rows.Scan(&id)
+		remove := true
+		for _, talkgroup := range *talkgroups {
+			if talkgroup.Id == id {
+				remove = false
+				break
+			}
+		}
+		if remove {
+			ids = append(ids, id)
+		}
+	}
+
+	rows.Close()
+
+	if err != nil {
+		return formatError(err)
+	}
+
+	if len(ids) > 0 {
+		if b, err := json.Marshal(ids); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerTalkgroups` where `id` in %v and `systemId` = %v", s, systemId)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
+	}
+
+	return nil
 }
 
 type TalkgroupsMap []TalkgroupMap

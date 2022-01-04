@@ -1,5 +1,14 @@
 # Change log
 
+## Version 6.1
+
+- Calls now support patched talkgroups.
+- New search patched talkgroups option which is disabled by default.
+- Talkgroups and units are now stored in their own database table.
+- New units CSV importer.
+- Fix blacklisted talkgroups being created anyway when autopopulate is enabled.
+- Fix compatibility with mysql/mariadb (default sqlite is still recommended).
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

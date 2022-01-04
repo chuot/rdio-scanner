@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -337,11 +338,10 @@ func (downstreams *Downstreams) FromMap(f []interface{}) {
 
 func (downstreams *Downstreams) Read(db *Database) error {
 	var (
-		apikey  interface{}
-		err     error
-		id      uint
-		rows    *sql.Rows
-		systems interface{}
+		err   error
+		id    sql.NullFloat64
+		order sql.NullFloat64
+		rows  *sql.Rows
 	)
 
 	*downstreams = Downstreams{}
@@ -356,29 +356,30 @@ func (downstreams *Downstreams) Read(db *Database) error {
 
 	for rows.Next() {
 		downstream := Downstream{}
-		if err = rows.Scan(&id, &apikey, &downstream.Disabled, &downstream.Order, &systems, &downstream.Url); err != nil {
+
+		if err = rows.Scan(&id, &downstream.Apikey, &downstream.Disabled, &order, &downstream.Systems, &downstream.Url); err != nil {
 			break
 		}
 
-		downstream.Id = id
-		switch v := apikey.(type) {
-		case string:
-			if len(apikey.(string)) > 0 {
-				downstream.Apikey = v
-			} else {
-				downstream.Apikey = uuid.New().String()
-			}
-		default:
+		if id.Valid && id.Float64 > 0 {
+			downstream.Id = uint(id.Float64)
+		}
+
+		if len(downstream.Apikey) == 0 {
 			downstream.Apikey = uuid.New().String()
 		}
 
-		switch v := systems.(type) {
+		switch v := downstream.Systems.(type) {
 		case string:
 			if err = json.Unmarshal([]byte(v), &downstream.Systems); err != nil {
 				downstream.Systems = defaults.downstream.systems
 			}
 		default:
 			downstream.Systems = defaults.downstream.systems
+		}
+
+		if len(downstream.Url) == 0 {
+			continue
 		}
 
 		*downstreams = append(*downstreams, downstream)
@@ -418,6 +419,7 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		count   uint
 		err     error
 		rows    *sql.Rows
+		rowIds  = []uint{}
 		systems interface{}
 	)
 
@@ -456,19 +458,17 @@ func (downstreams *Downstreams) Write(db *Database) error {
 	}
 
 	for rows.Next() {
-		var id uint
-		rows.Scan(&id)
+		var rowId uint
+		rows.Scan(&rowId)
 		remove := true
 		for _, downstream := range *downstreams {
-			if downstream.Id == nil || downstream.Id == id {
+			if downstream.Id == nil || downstream.Id == rowId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			if _, err = db.Sql.Exec("delete from `rdioScannerDownstreams` where `_id` = ?", id); err != nil {
-				break
-			}
+			rowIds = append(rowIds, rowId)
 		}
 	}
 
@@ -476,6 +476,18 @@ func (downstreams *Downstreams) Write(db *Database) error {
 
 	if err != nil {
 		return formatError(err)
+	}
+
+	if len(rowIds) > 0 {
+		if b, err := json.Marshal(rowIds); err == nil {
+			s := string(b)
+			s = strings.ReplaceAll(s, "[", "(")
+			s = strings.ReplaceAll(s, "]", ")")
+			q := fmt.Sprintf("delete from `rdioScannerDownstreams` where `_id` in %v", s)
+			if _, err = db.Sql.Exec(q); err != nil {
+				return formatError(err)
+			}
+		}
 	}
 
 	return nil

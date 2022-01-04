@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ type Options struct {
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
 	PruneDays                   uint   `json:"pruneDays"`
+	SearchPatchedTalkgroups     bool   `json:"searchPatchedTalkgroups"`
 	SortTalkgroups              bool   `json:"sortTalkgroups"`
 	TagsToggle                  bool   `json:"tagsToggle"`
 	adminPassword               string
@@ -88,11 +89,11 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.PruneDays = defaults.options.pruneDays
 	}
 
-	switch v := m["sortTalkgroups"].(type) {
+	switch v := m["searchPatchedTalkgroups"].(type) {
 	case bool:
-		options.SortTalkgroups = v
+		options.SearchPatchedTalkgroups = v
 	default:
-		options.SortTalkgroups = defaults.options.sortTalkgroups
+		options.SearchPatchedTalkgroups = defaults.options.searchPatchedTalkgroups
 	}
 
 	switch v := m["sortTalkgroups"].(type) {
@@ -128,6 +129,7 @@ func (options *Options) Read(db *Database) error {
 	options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	options.KeypadBeeps = defaults.options.keypadBeeps
 	options.PruneDays = defaults.options.pruneDays
+	options.SearchPatchedTalkgroups = defaults.options.searchPatchedTalkgroups
 	options.SortTalkgroups = defaults.options.sortTalkgroups
 	options.TagsToggle = defaults.options.tagsToggle
 
@@ -195,6 +197,11 @@ func (options *Options) Read(db *Database) error {
 						options.PruneDays = uint(v)
 					}
 
+					switch v := v["searchPatchedTalkgroups"].(type) {
+					case bool:
+						options.SearchPatchedTalkgroups = v
+					}
+
 					switch v := v["sortTalkgroups"].(type) {
 					case bool:
 						options.SortTalkgroups = v
@@ -244,9 +251,7 @@ func (options *Options) Write(db *Database) error {
 	}
 
 	if i, err = res.RowsAffected(); err == nil && i == 0 {
-		if _, err = db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "adminPassword", string(b)); err != nil {
-			return formatError(err)
-		}
+		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "adminPassword", string(b))
 	}
 
 	if b, err = json.Marshal(options.adminPasswordNeedChange); err != nil {
@@ -258,9 +263,7 @@ func (options *Options) Write(db *Database) error {
 	}
 
 	if i, err = res.RowsAffected(); err == nil && i == 0 {
-		if _, err = db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "adminPasswordNeedChange", string(b)); err != nil {
-			return formatError(err)
-		}
+		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "adminPasswordNeedChange", string(b))
 	}
 
 	if b, err = json.Marshal(map[string]interface{}{
@@ -271,6 +274,7 @@ func (options *Options) Write(db *Database) error {
 		"duplicateDetectionTimeFrame": options.DuplicateDetectionTimeFrame,
 		"keypadBeeps":                 options.KeypadBeeps,
 		"pruneDays":                   options.PruneDays,
+		"searchPatchedTalkgroups":     options.SearchPatchedTalkgroups,
 		"sortTalkgroups":              options.SortTalkgroups,
 		"tagsToggle":                  options.TagsToggle,
 	}); err != nil {
@@ -282,9 +286,7 @@ func (options *Options) Write(db *Database) error {
 	}
 
 	if i, err = res.RowsAffected(); err == nil && i == 0 {
-		if _, err = db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "options", string(b)); err != nil {
-			return formatError(err)
-		}
+		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "options", string(b))
 	}
 
 	return nil

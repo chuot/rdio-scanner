@@ -1,5 +1,5 @@
 ################################################################################
-## Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+## Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -16,14 +16,14 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2021/12/16
-ver := 6.0.7
+date := 2022/01/04
+ver := 6.1.0
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
 
 build = @cd server && GOOS=$(1) GOARCH=$(2) go build -o ../dist/$(1)-$(2)/$(3)
-pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md CHANGELOG.md
+pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/webapp.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
 .PHONY: all clean container dist sed
@@ -38,8 +38,8 @@ clean:
 	@rm -fr client/node_modules dist server/webapp
 
 container: webapp linux-amd64
-	@podman build --platform linux/amd64,linux/arm,linux/arm64 --manifest rdio-scanner:latest-beta .
-	@podman manifest push --format v2s2 localhost/rdio-scanner:latest-beta docker://docker.io/chuot/rdio-scanner:latest-beta
+	@podman build --platform linux/amd64,linux/arm,linux/arm64 --manifest rdio-scanner:latest .
+	@podman manifest push --format v2s2 localhost/rdio-scanner:latest docker://docker.io/chuot/rdio-scanner:latest
 
 dist: darwin freebsd linux windows
 

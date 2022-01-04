@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,13 +43,15 @@ export class RdioScannerAdminSystemComponent {
     get talkgroups(): FormGroup[] {
         const talkgroups = this.form.get('talkgroups') as FormArray;
 
-        return talkgroups.controls as FormGroup[];
+        return talkgroups.controls
+            .sort((a, b) => (a.value.order || 0) - (b.value.order || 0)) as FormGroup[];
     }
 
     get units(): FormGroup[] {
         const units = this.form.get('units') as FormArray;
 
-        return units.controls as FormGroup[];
+        return units.controls
+            .sort((a, b) => (a.value.order || 0) - (b.value.order || 0)) as FormGroup[];
     }
 
     @ViewChildren(MatExpansionPanel) private panels: QueryList<MatExpansionPanel> | undefined;
@@ -95,6 +97,8 @@ export class RdioScannerAdminSystemComponent {
     drop(event: CdkDragDrop<FormGroup[]>): void {
         if (event.previousIndex !== event.currentIndex) {
             moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
+
+            event.container.data.forEach((dat, idx) => dat.get('order')?.setValue(idx + 1, { emitEvent: false }));
 
             this.form.markAsDirty();
         }

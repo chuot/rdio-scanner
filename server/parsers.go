@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -73,12 +73,34 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		}
 	}
 
-	s = regexp.MustCompile(`^([0-9]+)`).FindStringSubmatch(m.Title())
+	s = regexp.MustCompile(`^(?:P:)*([0-9]+)`).FindStringSubmatch(m.Title())
 	if len(s) > 1 && len(s[1]) > 0 {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
 		call.Talkgroup = uint(i)
+	}
+
+	s = regexp.MustCompile(`(\[.+\])`).FindStringSubmatch(m.Title())
+	if len(s) > 1 && len(s[1]) > 0 {
+		var f interface{}
+		if err = json.Unmarshal([]byte(s[1]), &f); err == nil {
+			switch v := f.(type) {
+			case []interface{}:
+				patches := []uint{}
+				for _, patch := range v {
+					switch v := patch.(type) {
+					case float64:
+						if v > 0 {
+							patches = append(patches, uint(v))
+						}
+					}
+				}
+				if len(patches) > 0 {
+					call.Patches = patches
+				}
+			}
+		}
 	}
 
 	s = regexp.MustCompile(`"([[:alnum:]]+)"`).FindStringSubmatch(m.Title())
@@ -139,6 +161,22 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 		call.Frequencies = freqs
 	}
 
+	switch v := m["patched_talkgroups"].(type) {
+	case []interface{}:
+		patches := []uint{}
+		for _, f := range v {
+			switch v := f.(type) {
+			case float64:
+				if v > 0 {
+					patches = append(patches, uint(v))
+				}
+			}
+		}
+		if len(patches) > 0 {
+			call.Patches = patches
+		}
+	}
+
 	switch v := m["srcList"].(type) {
 	case []interface{}:
 		sources := []map[string]interface{}{}
@@ -150,35 +188,32 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 				case float64:
 					source["pos"] = uint(v)
 				}
-
 				switch s := v["src"].(type) {
 				case float64:
-					source["src"] = uint(s)
-
-					switch t := v["tag"].(type) {
-					case string:
-						if len(t) > 0 {
-							var units Units
-							switch v := call.units.(type) {
-							case Units:
-								units = v
-							default:
-								units = Units{}
+					if s > 0 {
+						source["src"] = uint(s)
+						switch t := v["tag"].(type) {
+						case string:
+							if len(t) > 0 {
+								var units Units
+								switch v := call.units.(type) {
+								case Units:
+									units = v
+								default:
+									units = Units{}
+								}
+								units.Add(int(s), t)
+								call.units = units
 							}
-							units.Add(uint(s), t)
-							call.units = units
 						}
 					}
 				}
-
 				sources = append(sources, source)
 			}
 		}
-
 		if len(sources) > 0 {
 			call.Source = sources[0]["src"]
 		}
-
 		call.Sources = sources
 	}
 

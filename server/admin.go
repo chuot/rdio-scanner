@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -407,7 +407,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			LogEvent(
 				admin.Controller.Database,
 				LogLevelWarn,
-				fmt.Sprintf("invalid login attempt for ip=\"%v\"", r.RemoteAddr),
+				fmt.Sprintf("invalid login attempt for ip=%v", r.RemoteAddr),
 			)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -529,12 +529,21 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (admin *Admin) SendConfig(w http.ResponseWriter) {
+	var m map[string]interface{}
 	_, docker := os.LookupEnv("DOCKER")
-	if b, err := json.Marshal(map[string]interface{}{
-		"config":             admin.GetConfig(),
-		"docker":             docker,
-		"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
-	}); err == nil {
+	if docker {
+		m = map[string]interface{}{
+			"config":             admin.GetConfig(),
+			"docker":             docker,
+			"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
+		}
+	} else {
+		m = map[string]interface{}{
+			"config":             admin.GetConfig(),
+			"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
+		}
+	}
+	if b, err := json.Marshal(m); err == nil {
 		w.Write(b)
 	} else {
 		w.WriteHeader(http.StatusExpectationFailed)

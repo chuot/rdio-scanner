@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -200,12 +200,11 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 
 	if system, ok = controller.Systems.GetSystem(call.System); ok {
-		if talkgroup, ok = system.Talkgroups.GetTalkgroup(call.Talkgroup); ok {
-			if system.Blacklists.IsBlacklisted(talkgroup.Id) {
-				logCall(call, LogLevelInfo, "blacklisted")
-				return
-			}
+		if system.Blacklists.IsBlacklisted(call.Talkgroup) {
+			logCall(call, LogLevelInfo, "blacklisted")
+			return
 		}
+		talkgroup, _ = system.Talkgroups.GetTalkgroup(call.Talkgroup)
 	}
 
 	if system == nil && controller.Options.AutoPopulate {
@@ -437,7 +436,7 @@ func (controller *Controller) ProcessMessageCommandCall(client *Client, message 
 func (controller *Controller) ProcessMessageCommandListCall(client *Client, message *Message) error {
 	switch v := message.Payload.(type) {
 	case map[string]interface{}:
-		searchOptions := SearchOptions{}
+		searchOptions := SearchOptions{searchPatchedTalkgroups: controller.Options.SearchPatchedTalkgroups}
 		searchOptions.fromMap(v)
 		if searchResults, err := NewSearchResults(&searchOptions, client); err == nil {
 			client.Send <- &Message{Command: MessageCommandListCall, Payload: searchResults}
@@ -561,7 +560,7 @@ func (controller *Controller) Start() error {
 	LogEvent(controller.Database, LogLevelWarn, "server started")
 
 	if len(controller.Config.BaseDir) > 0 {
-		LogEvent(controller.Database, LogLevelWarn, fmt.Sprintf("base folder is %s", controller.Config.BaseDir))
+		log.Printf("base folder is %s\n", controller.Config.BaseDir)
 	}
 
 	if err = controller.Accesses.Read(controller.Database); err != nil {
