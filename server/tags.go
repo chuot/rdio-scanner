@@ -161,7 +161,7 @@ func (tags *Tags) Read(db *Database) error {
 		tag := Tag{}
 
 		if err = rows.Scan(&id, &tag.Label); err != nil {
-			continue
+			break
 		}
 
 		if id.Valid && id.Float64 > 0 {

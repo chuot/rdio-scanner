@@ -296,14 +296,14 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 	if call.IsValid() {
 		dirwatch.controller.Ingest <- &call
+	}
 
-		if dirwatch.DeleteAfter {
-			if err = os.Remove(p); err != nil {
-				return err
-			}
-			if err = os.Remove(audioName); err != nil {
-				return err
-			}
+	if dirwatch.DeleteAfter {
+		if err = os.Remove(p); err != nil {
+			return err
+		}
+		if err = os.Remove(audioName); err != nil {
+			return err
 		}
 	}
 

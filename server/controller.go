@@ -315,10 +315,13 @@ func (controller *Controller) IngestCall(call *Call) {
 		system.Talkgroups = append(system.Talkgroups, talkgroup)
 	}
 
-	if controller.Options.AutoPopulate || system.AutoPopulate {
+	if controller.Options.AutoPopulate || (system != nil && system.AutoPopulate) {
 		switch v := call.units.(type) {
 		case Units:
 			populated = true
+			if system.Units == nil {
+				system.Units = Units{}
+			}
 			system.Units.Merge(&v)
 		}
 	}

@@ -32,7 +32,7 @@ export class AppUpdateService {
   ) {
     if (swUpdate.isEnabled) {
       swUpdate.versionUpdates.subscribe(() => this.prompt());
-      setInterval(() => swUpdate.checkForUpdate(), 5 * 60 * 1000);
+      setInterval(() => swUpdate.checkForUpdate(), 60 * 60 * 1000);
     }
   }
 

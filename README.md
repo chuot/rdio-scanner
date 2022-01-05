@@ -30,6 +30,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
 More detailed instructions are available in the `rdio-scanner.pdf` file provided in the precompiled archives.
 
+If you are updating from version 5, please refer to [docs/update-from-v5.md](docs/update-from-v5.md) before proceeding.
+
 # Need help ?
 
 You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)** or on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) at **[https://gitter.im/rdio-scanner/Lobby](https://gitter.im/rdio-scanner/Lobby)**.

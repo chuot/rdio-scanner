@@ -161,7 +161,7 @@ func (groups *Groups) Read(db *Database) error {
 		group := Group{}
 
 		if err = rows.Scan(&id, &group.Label); err != nil {
-			continue
+			break
 		}
 
 		if id.Valid && id.Float64 > 0 {

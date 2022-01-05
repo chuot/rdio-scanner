@@ -13,6 +13,14 @@ _v6.1.1_
 
 - Fix `unknown datetime format sql.NullString` error.
 
+_v6.1.2_
+
+- Fix image links in webapp.md (issue #76).
+- Fix SIGSEGV when trying to autopopulate (issue #77).
+- Fix parsing SDRTrunk meta data.
+- Dirwatch type trunk-recorder now deletes json files without audio (when deleteAfter is set).
+- Add a new `docs/update-from-v5.md` document.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

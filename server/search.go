@@ -275,7 +275,7 @@ func NewSearchResults(searchOptions *SearchOptions, client *Client) (*SearchResu
 	for rows.Next() {
 		searchResult := SearchResult{}
 		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
-			continue
+			break
 		}
 
 		if id.Valid && id.Float64 > 0 {

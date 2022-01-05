@@ -145,7 +145,7 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 		talkgroup := &Talkgroup{}
 
 		if err = rows.Scan(&frequency, &talkgroup.GroupId, &talkgroup.Id, &talkgroup.Label, &led, &talkgroup.Name, &talkgroup.Order, &talkgroup.TagId); err != nil {
-			continue
+			break
 		}
 
 		if frequency.Valid && frequency.Float64 > 0 {

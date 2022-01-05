@@ -309,7 +309,7 @@ func (systems *Systems) Read(db *Database) error {
 		}
 
 		if err = rows.Scan(&rowId, &system.AutoPopulate, &blacklists, &system.Id, &system.Label, &led, &order); err != nil {
-			continue
+			break
 		}
 
 		if rowId.Valid && rowId.Float64 > 0 {

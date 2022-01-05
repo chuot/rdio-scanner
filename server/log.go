@@ -218,7 +218,7 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		log := Log{}
 
 		if err = rows.Scan(&id, &dateTime, &log.Level, &log.Message); err != nil {
-			continue
+			break
 		}
 
 		if id.Valid && id.Float64 > 0 {

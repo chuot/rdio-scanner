@@ -73,7 +73,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		}
 	}
 
-	s = regexp.MustCompile(`^(?:P:)*([0-9]+)`).FindStringSubmatch(m.Title())
+	s = regexp.MustCompile(`([0-9]+)`).FindStringSubmatch(m.Title())
 	if len(s) > 1 && len(s[1]) > 0 {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
