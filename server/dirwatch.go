@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -161,16 +162,16 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 	}
 
 	if strings.EqualFold(path.Ext(p), ext) {
-		call := Call{
-			AudioName: path.Base(p),
-			AudioType: mime.TypeByExtension(path.Ext(p)),
-		}
+		call := NewCall()
+
+		call.AudioName = path.Base(p)
+		call.AudioType = mime.TypeByExtension(path.Ext(p))
 
 		if call.Audio, err = os.ReadFile(p); err != nil {
 			return err
 		}
 
-		dirwatch.parseMask(&call)
+		dirwatch.parseMask(call)
 
 		switch v := dirwatch.SystemId.(type) {
 		case uint:
@@ -183,7 +184,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 		}
 
 		if call.IsValid() {
-			dirwatch.controller.Ingest <- &call
+			dirwatch.controller.Ingest <- call
 
 			if dirwatch.DeleteAfter {
 				if err = os.Remove(p); err != nil {
@@ -217,23 +218,23 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 		return nil
 	}
 
-	call := Call{
-		AudioName: path.Base(p),
-		AudioType: mime.TypeByExtension(path.Ext(p)),
-	}
+	call := NewCall()
+
+	call.AudioName = path.Base(p)
+	call.AudioType = mime.TypeByExtension(path.Ext(p))
 
 	if call.Audio, err = os.ReadFile(p); err != nil {
 		fmt.Println("err1")
 		return err
 	}
 
-	if err = ParseSdrTrunkMeta(&call, dirwatch.controller); err != nil {
+	if err = ParseSdrTrunkMeta(call, dirwatch.controller); err != nil {
 		fmt.Println("err2")
 		return err
 	}
 
 	if call.IsValid() {
-		dirwatch.controller.Ingest <- &call
+		dirwatch.controller.Ingest <- call
 
 		if dirwatch.DeleteAfter {
 			if err = os.Remove(p); err != nil {
@@ -272,10 +273,10 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 	audioName := base + ext
 
-	call := Call{
-		AudioName: path.Base(audioName),
-		AudioType: mime.TypeByExtension(path.Ext(audioName)),
-	}
+	call := NewCall()
+
+	call.AudioName = path.Base(audioName)
+	call.AudioType = mime.TypeByExtension(path.Ext(audioName))
 
 	switch v := dirwatch.SystemId.(type) {
 	case uint:
@@ -290,12 +291,12 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 		return err
 	}
 
-	if err = ParseTrunkRecorderMeta(&call, b); err != nil {
+	if err = ParseTrunkRecorderMeta(call, b); err != nil {
 		return err
 	}
 
 	if call.IsValid() {
-		dirwatch.controller.Ingest <- &call
+		dirwatch.controller.Ingest <- call
 	}
 
 	if dirwatch.DeleteAfter {
@@ -428,7 +429,10 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := metaval["unit"].(type) {
 	case string:
 		if i, err := strconv.Atoi(v); err == nil {
-			call.Sources = map[string]interface{}{"pos": 0, "src": uint(i)}
+			switch sources := call.Sources.(type) {
+			case []map[string]interface{}:
+				call.Sources = append(sources, map[string]interface{}{"pos": 0, "src": uint(i)})
+			}
 		}
 	}
 }
@@ -530,19 +534,22 @@ func (dirwatch *Dirwatch) Stop() {
 	}
 }
 
-type Dirwatches []Dirwatch
+type Dirwatches struct {
+	List  []*Dirwatch
+	mutex sync.Mutex
+}
 
 func (dirwatches *Dirwatches) FromMap(f []interface{}) {
 	dirwatches.Stop()
 
-	*dirwatches = Dirwatches{}
+	dirwatches.List = []*Dirwatch{}
 
 	for _, f := range f {
 		switch v := f.(type) {
 		case map[string]interface{}:
-			dirwatch := Dirwatch{}
+			dirwatch := &Dirwatch{}
 			dirwatch.FromMap(v)
-			*dirwatches = append(*dirwatches, dirwatch)
+			dirwatches.List = append(dirwatches.List, dirwatch)
 		}
 	}
 }
@@ -575,7 +582,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		dirwatch := Dirwatch{}
+		dirwatch := &Dirwatch{}
 
 		if err = rows.Scan(&id, &delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &extension, &frequency, &mask, &order, &systemId, &talkgroupId, &kind, &dirwatch.UsePolling); err != nil {
 			break
@@ -617,7 +624,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 			dirwatch.Kind = kind.String
 		}
 
-		*dirwatches = append(*dirwatches, dirwatch)
+		dirwatches.List = append(dirwatches.List, dirwatch)
 	}
 
 	rows.Close()
@@ -630,8 +637,8 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 }
 
 func (dirwatches *Dirwatches) Start(controller *Controller) {
-	for i := range *dirwatches {
-		if err := (*dirwatches)[i].Start(controller); err != nil {
+	for i := range dirwatches.List {
+		if err := dirwatches.List[i].Start(controller); err != nil {
 			LogEvent(
 				controller.Database,
 				LogLevelError,
@@ -642,8 +649,8 @@ func (dirwatches *Dirwatches) Start(controller *Controller) {
 }
 
 func (dirwatches *Dirwatches) Stop() {
-	for i := range *dirwatches {
-		(*dirwatches)[i].Stop()
+	for i := range dirwatches.List {
+		dirwatches.List[i].Stop()
 	}
 }
 
@@ -655,11 +662,13 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		rowIds = []uint{}
 	)
 
+	dirwatches.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("dirwatches.write: %v", err)
 	}
 
-	for _, dirwatch := range *dirwatches {
+	for _, dirwatch := range dirwatches.List {
 		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDirWatches` where `_id` = ?", dirwatch.Id).Scan(&count); err != nil {
 			break
 		}
@@ -686,7 +695,7 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		var rowId uint
 		rows.Scan(&rowId)
 		remove := true
-		for _, dirwatch := range *dirwatches {
+		for _, dirwatch := range dirwatches.List {
 			if dirwatch.Id == nil || dirwatch.Id == rowId {
 				remove = false
 				break
@@ -714,6 +723,8 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 			}
 		}
 	}
+
+	dirwatches.mutex.Unlock()
 
 	return nil
 }

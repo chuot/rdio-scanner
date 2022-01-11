@@ -81,30 +81,36 @@ func (admin *Admin) BroadcastConfig() {
 }
 
 func (admin *Admin) ChangePassword(currentPassword string, newPassword string) error {
-	if len(currentPassword) > 0 {
-		if err := bcrypt.CompareHashAndPassword([]byte(admin.Controller.Options.adminPassword), []byte(currentPassword)); err == nil {
-			var hash []byte
-			if hash, err = bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost); err != nil {
-				return err
-			}
+	var (
+		err  error
+		hash []byte
+	)
 
-			admin.Controller.Options.adminPassword = string(hash)
-			admin.Controller.Options.adminPasswordNeedChange = newPassword == defaults.adminPassword
-
-			if err := admin.Controller.Options.Write(admin.Controller.Database); err != nil {
-				return err
-			}
-
-			if err := admin.Controller.Options.Read(admin.Controller.Database); err != nil {
-				return err
-			}
-
-			LogEvent(admin.Controller.Database, LogLevelInfo, "admin password changed.")
-
-		} else {
-			return err
-		}
+	if len(newPassword) == 0 {
+		return errors.New("newPassword is empty")
 	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(admin.Controller.Options.adminPassword), []byte(currentPassword)); err != nil {
+		return err
+	}
+
+	if hash, err = bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost); err != nil {
+		return err
+	}
+
+	admin.Controller.Options.adminPassword = string(hash)
+	admin.Controller.Options.adminPasswordNeedChange = newPassword == defaults.adminPassword
+
+	if err := admin.Controller.Options.Write(admin.Controller.Database); err != nil {
+		return err
+	}
+
+	if err := admin.Controller.Options.Read(admin.Controller.Database); err != nil {
+		return err
+	}
+
+	LogEvent(admin.Controller.Database, LogLevelInfo, "admin password changed.")
+
 	return nil
 }
 
@@ -287,7 +293,7 @@ func (admin *Admin) GetAuthorization(r *http.Request) string {
 
 func (admin *Admin) GetConfig() map[string]interface{} {
 	systems := []map[string]interface{}{}
-	for _, system := range *admin.Controller.Systems {
+	for _, system := range admin.Controller.Systems.List {
 		systems = append(systems, map[string]interface{}{
 			"_id":          system.RowId,
 			"autoPopulate": system.AutoPopulate,
@@ -302,14 +308,14 @@ func (admin *Admin) GetConfig() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"access":      *admin.Controller.Accesses,
-		"apiKeys":     *admin.Controller.Apikeys,
-		"dirWatch":    *admin.Controller.Dirwatches,
-		"downstreams": *admin.Controller.Downstreams,
-		"groups":      *admin.Controller.Groups,
-		"options":     *admin.Controller.Options,
+		"access":      admin.Controller.Accesses.List,
+		"apiKeys":     admin.Controller.Apikeys.List,
+		"dirWatch":    admin.Controller.Dirwatches.List,
+		"downstreams": admin.Controller.Downstreams.List,
+		"groups":      admin.Controller.Groups.List,
+		"options":     admin.Controller.Options,
 		"systems":     systems,
-		"tags":        *admin.Controller.Tags,
+		"tags":        admin.Controller.Tags.List,
 	}
 }
 

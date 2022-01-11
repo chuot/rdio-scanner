@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type System struct {
@@ -85,17 +86,20 @@ func (system *System) FromMap(m map[string]interface{}) {
 
 type SystemMap map[string]interface{}
 
-type Systems []*System
+type Systems struct {
+	List  []*System
+	mutex sync.Mutex
+}
 
 func (systems *Systems) FromMap(f []interface{}) {
-	*systems = Systems{}
+	systems.List = []*System{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
 			system := &System{}
 			system.FromMap(m)
-			*systems = append(*systems, system)
+			systems.List = append(systems.List, system)
 		}
 	}
 }
@@ -103,7 +107,7 @@ func (systems *Systems) FromMap(f []interface{}) {
 func (systems *Systems) GetNewSystemId() uint {
 NextId:
 	for i := uint(1); i < 65535; i++ {
-		for _, s := range *systems {
+		for _, s := range systems.List {
 			if s.Id == i {
 				continue NextId
 			}
@@ -116,13 +120,13 @@ NextId:
 func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
 	switch v := f.(type) {
 	case uint:
-		for _, system := range *systems {
+		for _, system := range systems.List {
 			if system.Id == v {
 				return system, true
 			}
 		}
 	case string:
-		for _, system := range *systems {
+		for _, system := range systems.List {
 			if system.Label == v {
 				return system, true
 			}
@@ -133,21 +137,21 @@ func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
 
 func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *Tags, sortTalkgroups bool) *SystemsMap {
 	var (
-		rawSystems = Systems{}
+		rawSystems = []*System{}
 		systemsMap = SystemsMap{}
 	)
 
 	if client.Access == nil {
-		rawSystems = append(rawSystems, *systems...)
+		rawSystems = append(rawSystems, systems.List...)
 
 	} else {
 		switch v := client.Access.Systems.(type) {
 		case nil:
-			rawSystems = append(rawSystems, *systems...)
+			rawSystems = append(rawSystems, systems.List...)
 
 		case string:
 			if v == "*" {
-				rawSystems = append(rawSystems, *systems...)
+				rawSystems = append(rawSystems, systems.List...)
 			}
 
 		case []interface{}:
@@ -338,7 +342,7 @@ func (systems *Systems) Read(db *Database) error {
 			return err
 		}
 
-		*systems = append(*systems, system)
+		systems.List = append(systems.List, system)
 	}
 
 	rows.Close()
@@ -347,8 +351,8 @@ func (systems *Systems) Read(db *Database) error {
 		return formatError(err)
 	}
 
-	sort.Slice(*systems, func(i int, j int) bool {
-		return (*systems)[i].Order < (*systems)[j].Order
+	sort.Slice(systems.List, func(i int, j int) bool {
+		return systems.List[i].Order < systems.List[j].Order
 	})
 
 	return nil
@@ -364,11 +368,13 @@ func (systems *Systems) Write(db *Database) error {
 		systemIds  = []uint{}
 	)
 
+	systems.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("systems.write: %v", err)
 	}
 
-	for _, system := range *systems {
+	for _, system := range systems.List {
 		if len(system.Blacklists) > 0 {
 			blacklists = strings.Join([]string{"[", system.Blacklists.String(), "]"}, "")
 		} else {
@@ -410,7 +416,7 @@ func (systems *Systems) Write(db *Database) error {
 		var systemId uint
 		rows.Scan(&rowId, &systemId)
 		remove := true
-		for _, system := range *systems {
+		for _, system := range systems.List {
 			if system.RowId == nil || system.RowId == rowId {
 				remove = false
 				break
@@ -455,6 +461,8 @@ func (systems *Systems) Write(db *Database) error {
 			}
 		}
 	}
+
+	systems.mutex.Unlock()
 
 	return nil
 }

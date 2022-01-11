@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type Group struct {
@@ -39,17 +40,20 @@ func (group *Group) FromMap(m map[string]interface{}) {
 	}
 }
 
-type Groups []Group
+type Groups struct {
+	List  []*Group
+	mutex sync.Mutex
+}
 
 func (groups *Groups) FromMap(f []interface{}) {
-	*groups = Groups{}
+	groups.List = []*Group{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			group := Group{}
+			group := &Group{}
 			group.FromMap(m)
-			*groups = append(*groups, group)
+			groups.List = append(groups.List, group)
 		}
 	}
 }
@@ -57,15 +61,15 @@ func (groups *Groups) FromMap(f []interface{}) {
 func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
 	switch v := f.(type) {
 	case uint:
-		for _, group := range *groups {
+		for _, group := range groups.List {
 			if group.Id == v {
-				return &group, true
+				return group, true
 			}
 		}
 	case string:
-		for _, group := range *groups {
+		for _, group := range groups.List {
 			if group.Label == v {
-				return &group, true
+				return group, true
 			}
 		}
 	}
@@ -147,7 +151,7 @@ func (groups *Groups) Read(db *Database) error {
 		rows *sql.Rows
 	)
 
-	*groups = Groups{}
+	groups.List = []*Group{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("groups.read: %v", err)
@@ -158,7 +162,7 @@ func (groups *Groups) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		group := Group{}
+		group := &Group{}
 
 		if err = rows.Scan(&id, &group.Label); err != nil {
 			break
@@ -172,7 +176,7 @@ func (groups *Groups) Read(db *Database) error {
 			continue
 		}
 
-		*groups = append(*groups, group)
+		groups.List = append(groups.List, group)
 	}
 
 	rows.Close()
@@ -192,11 +196,13 @@ func (groups *Groups) Write(db *Database) error {
 		rowIds = []uint{}
 	)
 
+	groups.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("groups.write %v", err)
 	}
 
-	for _, group := range *groups {
+	for _, group := range groups.List {
 		if err = db.Sql.QueryRow("select count(*) from `rdioScannerGroups` where `_id` = ?", group.Id).Scan(&count); err != nil {
 			break
 		}
@@ -223,7 +229,7 @@ func (groups *Groups) Write(db *Database) error {
 		var rowId uint
 		rows.Scan(&rowId)
 		remove := true
-		for _, group := range *groups {
+		for _, group := range groups.List {
 			if group.Id == nil || group.Id == rowId {
 				remove = false
 				break
@@ -251,6 +257,9 @@ func (groups *Groups) Write(db *Database) error {
 			}
 		}
 	}
+
+	groups.mutex.Unlock()
+
 	return nil
 }
 

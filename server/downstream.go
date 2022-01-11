@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -321,7 +322,10 @@ func (downstream *Downstream) Send(call *Call) error {
 	return nil
 }
 
-type Downstreams []Downstream
+type Downstreams struct {
+	List  []*Downstream
+	mutex sync.Mutex
+}
 
 func (downstreams *Downstreams) FromMap(f []interface{}) {
 	*downstreams = Downstreams{}
@@ -329,9 +333,9 @@ func (downstreams *Downstreams) FromMap(f []interface{}) {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			downstream := Downstream{}
+			downstream := &Downstream{}
 			downstream.FromMap(m)
-			*downstreams = append(*downstreams, downstream)
+			downstreams.List = append(downstreams.List, downstream)
 		}
 	}
 }
@@ -344,7 +348,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 		rows  *sql.Rows
 	)
 
-	*downstreams = Downstreams{}
+	downstreams.List = []*Downstream{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("downstreams.read: %v", err)
@@ -355,7 +359,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		downstream := Downstream{}
+		downstream := &Downstream{}
 
 		if err = rows.Scan(&id, &downstream.Apikey, &downstream.Disabled, &order, &downstream.Systems, &downstream.Url); err != nil {
 			break
@@ -382,7 +386,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 			continue
 		}
 
-		*downstreams = append(*downstreams, downstream)
+		downstreams.List = append(downstreams.List, downstream)
 	}
 
 	rows.Close()
@@ -395,7 +399,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 }
 
 func (downstreams *Downstreams) Send(controller *Controller, call *Call) {
-	for _, downstream := range *downstreams {
+	for _, downstream := range downstreams.List {
 		logEvent := func(logLevel string, message string) {
 			LogEvent(
 				controller.Database,
@@ -423,11 +427,13 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		systems interface{}
 	)
 
+	downstreams.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("downstreams.write: %v", err)
 	}
 
-	for _, downstream := range *downstreams {
+	for _, downstream := range downstreams.List {
 		switch downstream.Systems {
 		case "*":
 			systems = `"*"`
@@ -461,7 +467,7 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		var rowId uint
 		rows.Scan(&rowId)
 		remove := true
-		for _, downstream := range *downstreams {
+		for _, downstream := range downstreams.List {
 			if downstream.Id == nil || downstream.Id == rowId {
 				remove = false
 				break
@@ -489,6 +495,8 @@ func (downstreams *Downstreams) Write(db *Database) error {
 			}
 		}
 	}
+
+	downstreams.mutex.Unlock()
 
 	return nil
 }

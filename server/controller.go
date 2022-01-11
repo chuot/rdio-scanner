@@ -219,7 +219,7 @@ func (controller *Controller) IngestCall(call *Call) {
 			system.Label = fmt.Sprintf("System %v", call.System)
 		}
 
-		*controller.Systems = append(*controller.Systems, system)
+		controller.Systems.List = append(controller.Systems.List, system)
 	}
 
 	if system != nil && talkgroup == nil && (controller.Options.AutoPopulate || system.AutoPopulate) {
@@ -242,7 +242,7 @@ func (controller *Controller) IngestCall(call *Call) {
 		if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
 			group = &Group{Label: groupLabel}
 
-			*controller.Groups = append(*controller.Groups, *group)
+			controller.Groups.List = append(controller.Groups.List, group)
 
 			if err = controller.Groups.Write(controller.Database); err != nil {
 				logError(err)
@@ -271,7 +271,7 @@ func (controller *Controller) IngestCall(call *Call) {
 		if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
 			tag = &Tag{Label: tagLabel}
 
-			*controller.Tags = append(*controller.Tags, *tag)
+			controller.Tags.List = append(controller.Tags.List, tag)
 
 			if err = controller.Tags.Write(controller.Database); err != nil {
 				logError(err)
@@ -508,8 +508,8 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			switch v := client.Access.Limit.(type) {
 			case uint:
 				count := uint(0)
-				for _, acc := range *controller.Accesses {
-					if acc == *client.Access {
+				for _, acc := range controller.Accesses.List {
+					if acc == client.Access {
 						count++
 					}
 				}

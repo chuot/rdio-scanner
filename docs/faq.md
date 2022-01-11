@@ -16,4 +16,8 @@ A: No problem, just drop us a line at **[rdio-scanner@saubeo.solutions](mailto:r
 
 A: First, don't use the update.js script, it won't work since the server portion of version 6 as been completely rewritten in GO. Simply unzip the archive that contains the Rdio Scanner executable and its PDF document to a new folder, then copy the database.sqlite from version 5 to the new folder that contains version 6 and make sure to rename it to _rdio-scanner.db_.
 
+**Q: The web app keeps displaying a dialog telling me that a new version is available**
+
+A: Force a refresh of the web application from the browser (usually with ctrl-shift-r) to resolve the issue. Alternatively, you can click on the icon just to the left of the URL address and select website settings, then clear all website data.
+
 \pagebreak{}

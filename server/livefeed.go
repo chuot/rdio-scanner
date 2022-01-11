@@ -68,7 +68,9 @@ sys:
 }
 
 func (livefeedMap *LivefeedMap) IsEnabled(call *Call) bool {
-	if (*livefeedMap)[call.System][call.Talkgroup] {
+	if livefeedMap == nil {
+		return false
+	} else if (*livefeedMap)[call.System][call.Talkgroup] {
 		return true
 	} else {
 		switch v := call.Patches.(type) {

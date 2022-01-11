@@ -17,42 +17,45 @@
  * ****************************************************************************
  */
 
-import { Injectable } from '@angular/core';
+import { ApplicationRef, Injectable } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { SwUpdate } from '@angular/service-worker';
+import { SwUpdate, VersionEvent } from '@angular/service-worker';
 import { AppUpdateComponent } from './update.component';
+import { concat, interval } from 'rxjs';
+import { first } from 'rxjs/operators';
 
 @Injectable()
 export class AppUpdateService {
-  private prompted: boolean = false;
-
   constructor(
     private matDialog: MatDialog,
-    private swUpdate: SwUpdate,
+    private ngAppRef: ApplicationRef,
+    private ngSwUpdate: SwUpdate,
   ) {
-    if (swUpdate.isEnabled) {
-      swUpdate.versionUpdates.subscribe(() => this.prompt());
-      setInterval(() => swUpdate.checkForUpdate(), 60 * 60 * 1000);
-    }
-  }
-
-  prompt(): void {
-    if (this.prompted) {
+    if (!ngSwUpdate.isEnabled) {
       return;
     }
 
-    this.prompted = true
+    concat(
+      this.ngAppRef.isStable.pipe(first((stable) => stable === true)),
+      interval(10 * 60 * 1000),
+    ).subscribe(() => this.ngSwUpdate.checkForUpdate());
 
+    this.ngSwUpdate.versionUpdates.subscribe((event: VersionEvent) => {
+      if (event.type === 'VERSION_READY') {
+        this.prompt();
+      }
+    });
+  }
+
+  prompt(): void {
     this.matDialog.open(AppUpdateComponent).afterClosed().subscribe((doUpdate) => {
       if (doUpdate) {
-        if (this.swUpdate.isEnabled) {
-          this.swUpdate.activateUpdate().then(() => document.location.reload());
+        if (this.ngSwUpdate.isEnabled) {
+          this.ngSwUpdate.activateUpdate().then(() => document.location.reload());
         } else {
           document.location.reload();
         }
       }
-
-      this.prompted = false;
     });
   }
 }

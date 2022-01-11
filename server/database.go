@@ -206,7 +206,7 @@ func (db *Database) migration20191028144433(verbose bool) error {
 		}
 	} else {
 		queries = []string{
-			"create table `rdioScannerSystems` (`id` integer primary key auto_increment, `createdAt` datetime not null, `updatedAt` datetime not null, `name` varchar(255) not null, `system` integer not null, `talkgroups` json not null default '[]')",
+			"create table `rdioScannerSystems` (`id` integer primary key auto_increment, `createdAt` datetime not null, `updatedAt` datetime not null, `name` varchar(255) not null, `system` integer not null, `talkgroups` json not null)",
 			"create unique index `rdio_scanner_systems_system` on `rdioScannerSystems` (`system`)",
 		}
 	}
@@ -261,7 +261,7 @@ func (db *Database) migration20191220093214(verbose bool) error {
 		queries = []string{
 			"alter table `rdioScannerCalls` add column `audioName` varchar(255)",
 			"alter table `rdioScannerCalls` add column `audioType` varchar(255)",
-			"alter table `rdioScannerSystems` add column `aliases` json not null default '[]'",
+			"alter table `rdioScannerSystems` add column `aliases` json not null",
 		}
 	}
 	return db.migrateWithSchema("20191220093214-new-v3-tables", queries, verbose)
@@ -297,7 +297,7 @@ func (db *Database) migration20200428132918(verbose bool) error {
 	} else {
 		queries = []string{
 			"drop table `rdioScannerSystems`",
-			"create table `rdioScannerCalls2` (`id` integer primary key auto_increment, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` json not null default '[]', `frequency` integer, `source` integer, `sources` json not null default '[]', `system` integer not null, `talkgroup` integer not null)",
+			"create table `rdioScannerCalls2` (`id` integer primary key auto_increment, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` json not null, `frequency` integer, `source` integer, `sources` json not null, `system` integer not null, `talkgroup` integer not null)",
 			"insert into `rdioScannerCalls2` select `id`, `audio`, `audioName`, `audioType`, `startTime`, `freqList`, `freq`, null, `srcList`, `system`, `talkgroup` from `rdioScannerCalls`",
 			"drop table `rdioScannerCalls`",
 			"alter table `rdioScannerCalls2` rename to `rdioScannerCalls`",

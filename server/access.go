@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -124,7 +125,10 @@ func (access *Access) HasExpired() bool {
 	return false
 }
 
-type Accesses []Access
+type Accesses struct {
+	List  []*Access
+	mutex sync.Mutex
+}
 
 func (accesses *Accesses) FromMap(f []interface{}) {
 	*accesses = Accesses{}
@@ -132,24 +136,24 @@ func (accesses *Accesses) FromMap(f []interface{}) {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			access := Access{}
+			access := &Access{}
 			access.FromMap(m)
-			*accesses = append(*accesses, access)
+			accesses.List = append(accesses.List, access)
 		}
 	}
 }
 
 func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
-	for _, access := range *accesses {
+	for _, access := range accesses.List {
 		if access.Code == code {
-			return &access, true
+			return access, true
 		}
 	}
 	return nil, false
 }
 
 func (accesses *Accesses) IsRestricted() bool {
-	return len(*accesses) > 0
+	return len(accesses.List) > 0
 }
 
 func (accesses *Accesses) Read(db *Database) error {
@@ -164,7 +168,7 @@ func (accesses *Accesses) Read(db *Database) error {
 		t          time.Time
 	)
 
-	*accesses = Accesses{}
+	accesses.List = []*Access{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("accesses.read: %v", err)
@@ -175,7 +179,8 @@ func (accesses *Accesses) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		access := Access{}
+		access := &Access{}
+
 		if err = rows.Scan(&id, &access.Code, &expiration, &access.Ident, &limit, &order, &systems); err != nil {
 			break
 		}
@@ -206,7 +211,7 @@ func (accesses *Accesses) Read(db *Database) error {
 			access.Systems = []interface{}{}
 		}
 
-		*accesses = append(*accesses, access)
+		accesses.List = append(accesses.List, access)
 	}
 
 	rows.Close()
@@ -227,11 +232,13 @@ func (accesses *Accesses) Write(db *Database) error {
 		systems interface{}
 	)
 
+	accesses.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("accesses.write: %v", err)
 	}
 
-	for _, access := range *accesses {
+	for _, access := range accesses.List {
 		switch access.Systems {
 		case "*":
 			systems = `"*"`
@@ -265,7 +272,7 @@ func (accesses *Accesses) Write(db *Database) error {
 		var id uint
 		rows.Scan(&id)
 		remove := true
-		for _, access := range *accesses {
+		for _, access := range accesses.List {
 			if access.Id == nil || access.Id == id {
 				remove = false
 				break
@@ -293,6 +300,8 @@ func (accesses *Accesses) Write(db *Database) error {
 			}
 		}
 	}
+
+	accesses.mutex.Unlock()
 
 	return nil
 }

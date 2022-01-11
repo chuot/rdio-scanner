@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type Tag struct {
@@ -39,17 +40,20 @@ func (tag *Tag) FromMap(m map[string]interface{}) {
 	}
 }
 
-type Tags []Tag
+type Tags struct {
+	List  []*Tag
+	mutex sync.Mutex
+}
 
 func (tags *Tags) FromMap(f []interface{}) {
-	*tags = Tags{}
+	tags.List = []*Tag{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			tag := Tag{}
+			tag := &Tag{}
 			tag.FromMap(m)
-			*tags = append(*tags, tag)
+			tags.List = append(tags.List, tag)
 		}
 	}
 }
@@ -57,15 +61,15 @@ func (tags *Tags) FromMap(f []interface{}) {
 func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
 	switch v := f.(type) {
 	case uint:
-		for _, tag := range *tags {
+		for _, tag := range tags.List {
 			if tag.Id == v {
-				return &tag, true
+				return tag, true
 			}
 		}
 	case string:
-		for _, tag := range *tags {
+		for _, tag := range tags.List {
 			if tag.Label == v {
-				return &tag, true
+				return tag, true
 			}
 		}
 	}
@@ -147,7 +151,7 @@ func (tags *Tags) Read(db *Database) error {
 		rows *sql.Rows
 	)
 
-	*tags = Tags{}
+	tags.List = []*Tag{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("tags read: %v", err)
@@ -158,7 +162,7 @@ func (tags *Tags) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		tag := Tag{}
+		tag := &Tag{}
 
 		if err = rows.Scan(&id, &tag.Label); err != nil {
 			break
@@ -168,7 +172,7 @@ func (tags *Tags) Read(db *Database) error {
 			tag.Id = uint(id.Float64)
 		}
 
-		*tags = append(*tags, tag)
+		tags.List = append(tags.List, tag)
 	}
 
 	rows.Close()
@@ -188,11 +192,13 @@ func (tags *Tags) Write(db *Database) error {
 		rowIds = []uint{}
 	)
 
+	tags.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("tags write %v", err)
 	}
 
-	for _, tag := range *tags {
+	for _, tag := range tags.List {
 		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTags` where `_id` = ?", tag.Id).Scan(&count); err != nil {
 			break
 		}
@@ -218,7 +224,7 @@ func (tags *Tags) Write(db *Database) error {
 		var rowId uint
 		rows.Scan(&rowId)
 		remove := true
-		for _, tag := range *tags {
+		for _, tag := range tags.List {
 			if tag.Id == nil || tag.Id == rowId {
 				remove = false
 				break
@@ -246,6 +252,8 @@ func (tags *Tags) Write(db *Database) error {
 			}
 		}
 	}
+
+	tags.mutex.Unlock()
 
 	return nil
 }

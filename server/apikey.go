@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -107,25 +108,28 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 	return false
 }
 
-type Apikeys []Apikey
+type Apikeys struct {
+	List  []*Apikey
+	mutex sync.Mutex
+}
 
 func (apikeys *Apikeys) FromMap(f []interface{}) {
-	*apikeys = Apikeys{}
+	apikeys.List = []*Apikey{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			apikey := Apikey{}
+			apikey := &Apikey{}
 			apikey.FromMap(m)
-			*apikeys = append(*apikeys, apikey)
+			apikeys.List = append(apikeys.List, apikey)
 		}
 	}
 }
 
 func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
-	for _, apikey := range *apikeys {
+	for _, apikey := range apikeys.List {
 		if apikey.Key == key {
-			return &apikey, true
+			return apikey, true
 		}
 	}
 	return nil, false
@@ -140,7 +144,7 @@ func (apikeys *Apikeys) Read(db *Database) error {
 		systems string
 	)
 
-	*apikeys = Apikeys{}
+	apikeys.List = []*Apikey{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("apikeys.read: %v", err)
@@ -151,7 +155,8 @@ func (apikeys *Apikeys) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		apikey := Apikey{}
+		apikey := &Apikey{}
+
 		if err = rows.Scan(&id, &apikey.Disabled, &apikey.Ident, &apikey.Key, &order, &systems); err != nil {
 			break
 		}
@@ -176,7 +181,7 @@ func (apikeys *Apikeys) Read(db *Database) error {
 			apikey.Systems = []interface{}{}
 		}
 
-		*apikeys = append(*apikeys, apikey)
+		apikeys.List = append(apikeys.List, apikey)
 	}
 
 	rows.Close()
@@ -197,11 +202,13 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		systems interface{}
 	)
 
+	apikeys.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("apikeys.write %v", err)
 	}
 
-	for _, apikey := range *apikeys {
+	for _, apikey := range apikeys.List {
 		switch apikey.Systems {
 		case "*":
 			systems = `"*"`
@@ -235,7 +242,7 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		var id uint
 		rows.Scan(&id)
 		remove := true
-		for _, apikey := range *apikeys {
+		for _, apikey := range apikeys.List {
 			if apikey.Id == nil || apikey.Id == id {
 				remove = false
 				break
@@ -263,6 +270,8 @@ func (apikeys *Apikeys) Write(db *Database) error {
 			}
 		}
 	}
+
+	apikeys.mutex.Unlock()
 
 	return nil
 }

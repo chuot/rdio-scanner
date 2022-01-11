@@ -21,6 +21,14 @@ _v6.1.2_
 - Dirwatch type trunk-recorder now deletes json files without audio (when deleteAfter is set).
 - Add a new `docs/update-from-v5.md` document.
 
+_v6.1.3_
+
+- Fix concurrent config write when autopopulate is enabled (issue #77).
+- Fix API in regards to audio filename and audio type (issue #78).
+- Fix some calls not playing on the native app (issue #87).
+- Fix migration error on mysql database (issue #88).
+- Fix admin password not read from mysql.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

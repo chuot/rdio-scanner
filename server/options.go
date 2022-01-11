@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -36,6 +37,7 @@ type Options struct {
 	TagsToggle                  bool   `json:"tagsToggle"`
 	adminPassword               string
 	adminPasswordNeedChange     bool
+	mutex                       sync.Mutex
 	secret                      string
 }
 
@@ -136,6 +138,11 @@ func (options *Options) Read(db *Database) error {
 	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPassword'").Scan(&f)
 	if err == nil {
 		switch v := f.(type) {
+		case []uint8:
+			var f string
+			if err = json.Unmarshal(v, &f); err == nil {
+				options.adminPassword = f
+			}
 		case string:
 			var f string
 			if err = json.Unmarshal([]byte(v), &f); err == nil {
@@ -147,6 +154,11 @@ func (options *Options) Read(db *Database) error {
 	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPasswordNeedChange'").Scan(&f)
 	if err == nil {
 		switch v := f.(type) {
+		case []uint8:
+			var f bool
+			if err = json.Unmarshal(v, &f); err == nil {
+				options.adminPasswordNeedChange = f
+			}
 		case string:
 			var f bool
 			if err = json.Unmarshal([]byte(v), &f); err == nil {
@@ -238,6 +250,8 @@ func (options *Options) Write(db *Database) error {
 		res sql.Result
 	)
 
+	options.mutex.Lock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("options.write: %v", err)
 	}
@@ -288,6 +302,8 @@ func (options *Options) Write(db *Database) error {
 	if i, err = res.RowsAffected(); err == nil && i == 0 {
 		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "options", string(b))
 	}
+
+	options.mutex.Unlock()
 
 	return nil
 }

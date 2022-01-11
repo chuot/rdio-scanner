@@ -43,6 +43,14 @@ type Call struct {
 	units          interface{}
 }
 
+func NewCall() *Call {
+	return &Call{
+		Frequencies: []map[string]interface{}{},
+		Patches:     []uint{},
+		Sources:     []map[string]interface{}{},
+	}
+}
+
 func (call *Call) IsValid() bool {
 	if len(call.Audio) <= 44 {
 		return false

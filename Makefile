@@ -16,8 +16,8 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2022/01/05
-ver := 6.1.2
+date := 2022/01/11
+ver := 6.1.3
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
@@ -39,7 +39,7 @@ clean:
 
 container: webapp linux-amd64
 	@podman build --platform linux/amd64,linux/arm,linux/arm64 --manifest rdio-scanner:latest .
-	@podman manifest push --format v2s2 localhost/rdio-scanner:latest docker://docker.io/chuot/rdio-scanner:latest
+	@podman manifest push --format v2s2 --rm localhost/rdio-scanner:latest docker://docker.io/chuot/rdio-scanner:latest
 
 dist: darwin freebsd linux windows
 
