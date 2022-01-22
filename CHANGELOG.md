@@ -25,9 +25,18 @@ _v6.1.3_
 
 - Fix concurrent config write when autopopulate is enabled (issue #77).
 - Fix API in regards to audio filename and audio type (issue #78).
+- Fix migration error on mysql database (issue #86).
 - Fix some calls not playing on the native app (issue #87).
-- Fix migration error on mysql database (issue #88).
 - Fix admin password not read from mysql.
+
+_v6.1.4_
+
+- Talkgroup label now syncs with the talkgroup_tag from the API or dirwatch (issue #80).
+- Fix more migration errors on mysql database (issue #86).
+- Fix config export not working with non latin-1 characters (issue #89).
+- Fix talkgroup label from dirwatch type sdrtrunk (discussion #98).
+- Fix SIGSEGV (issue #100).
+- New `patch` indicator for patched talkgroups.
 
 ## Version 6.0
 

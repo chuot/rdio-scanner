@@ -49,10 +49,12 @@
             <span *ngIf="callUnit">UID: {{ callUnit }}</span>
         </div>
     </div>
-    <div class="row small">
-        <div></div>
+    <div class="row right small">
         <div>
-            <span class="avoid" [ngClass]="{ avoided: avoided }">AVOID</span>
+            <span class="flag" [ngClass]="{ flaged: avoided }">AVOID</span>
+        </div>
+        <div>
+            <span class="flag" [ngClass]="{ flaged: patched }">PATCH</span>
         </div>
     </div>
     <div class="wrapper">

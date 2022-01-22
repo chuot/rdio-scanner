@@ -211,6 +211,21 @@ func (downstream *Downstream) Send(call *Call) error {
 		return formatError(err)
 	}
 
+	switch v := call.Patches.(type) {
+	case []uint:
+		if w, err := mw.CreateFormField("patches"); err == nil {
+			if b, err := json.Marshal(v); err == nil {
+				if _, err = w.Write(b); err != nil {
+					return formatError(err)
+				}
+			} else {
+				return formatError(err)
+			}
+		} else {
+			return formatError(err)
+		}
+	}
+
 	switch v := call.Source.(type) {
 	case uint:
 		if w, err := mw.CreateFormField("source"); err == nil {
@@ -286,6 +301,17 @@ func (downstream *Downstream) Send(call *Call) error {
 		}
 	}
 
+	switch v := call.talkgroupName.(type) {
+	case string:
+		if w, err := mw.CreateFormField("talkgroupName"); err == nil {
+			if _, err = w.Write([]byte(v)); err != nil {
+				return formatError(err)
+			}
+		} else {
+			return formatError(err)
+		}
+	}
+
 	switch v := call.talkgroupTag.(type) {
 	case string:
 		if w, err := mw.CreateFormField("talkgroupTag"); err == nil {
@@ -324,11 +350,21 @@ func (downstream *Downstream) Send(call *Call) error {
 
 type Downstreams struct {
 	List  []*Downstream
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewDownstreams() *Downstreams {
+	return &Downstreams{
+		List:  []*Downstream{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (downstreams *Downstreams) FromMap(f []interface{}) {
-	*downstreams = Downstreams{}
+	downstreams.mutex.Lock()
+	defer downstreams.mutex.Unlock()
+
+	downstreams.List = []*Downstream{}
 
 	for _, r := range f {
 		switch m := r.(type) {
@@ -347,6 +383,9 @@ func (downstreams *Downstreams) Read(db *Database) error {
 		order sql.NullFloat64
 		rows  *sql.Rows
 	)
+
+	downstreams.mutex.RLock()
+	defer downstreams.mutex.RUnlock()
 
 	downstreams.List = []*Downstream{}
 
@@ -401,7 +440,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 func (downstreams *Downstreams) Send(controller *Controller, call *Call) {
 	for _, downstream := range downstreams.List {
 		logEvent := func(logLevel string, message string) {
-			LogEvent(
+			controller.Logs.LogEvent(
 				controller.Database,
 				logLevel,
 				fmt.Sprintf("downstream: system=%v talkgroup=%v file=%v to %v %v", call.System, call.Talkgroup, call.AudioName, downstream.Url, message),
@@ -428,6 +467,7 @@ func (downstreams *Downstreams) Write(db *Database) error {
 	)
 
 	downstreams.mutex.Lock()
+	defer downstreams.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("downstreams.write: %v", err)
@@ -495,8 +535,6 @@ func (downstreams *Downstreams) Write(db *Database) error {
 			}
 		}
 	}
-
-	downstreams.mutex.Unlock()
 
 	return nil
 }

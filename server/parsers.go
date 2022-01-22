@@ -23,7 +23,6 @@ import (
 	"path"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dhowden/tag"
@@ -44,10 +43,12 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`^([0-9]+)$`).FindStringSubmatch(m.Artist())
 	if len(s) == 2 {
-		if i, err = strconv.Atoi(s[1]); err != nil {
+		if i, err = strconv.Atoi(s[1]); err == nil {
 			return err
 		}
-		call.Source = uint(i)
+		if i > 0 {
+			call.Source = uint(i)
+		}
 	}
 
 	s = regexp.MustCompile(`Date:([^;]+);`).FindStringSubmatch(m.Comment())
@@ -63,7 +64,9 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
-		call.Frequency = uint(i)
+		if i > 0 {
+			call.Frequency = uint(i)
+		}
 	}
 
 	s = regexp.MustCompile(`System:([^;]+);`).FindStringSubmatch(m.Comment())
@@ -81,7 +84,9 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
-		call.Talkgroup = uint(i)
+		if i > 0 {
+			call.Talkgroup = uint(i)
+		}
 	}
 
 	s = regexp.MustCompile(`(\[.+\])`).FindStringSubmatch(m.Title())
@@ -106,9 +111,10 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		}
 	}
 
-	s = regexp.MustCompile(`"([[:alnum:]]+)"`).FindStringSubmatch(m.Title())
-	if len(s) > 1 && !strings.EqualFold(s[1], "all") {
+	s = regexp.MustCompile(`"([^"]+)"`).FindStringSubmatch(m.Title())
+	if len(s) > 1 {
 		call.talkgroupLabel = s[1]
+		call.talkgroupName = s[1]
 	}
 
 	return nil
@@ -146,23 +152,33 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 					case map[string]interface{}:
 						switch v := v["errorCount"].(type) {
 						case float64:
-							freq["errorCount"] = uint(v)
+							if v >= 0 {
+								freq["errorCount"] = uint(v)
+							}
 						}
 						switch v := v["freq"].(type) {
 						case float64:
-							freq["freq"] = uint(v)
+							if v > 0 {
+								freq["freq"] = uint(v)
+							}
 						}
 						switch v := v["len"].(type) {
 						case float64:
-							freq["len"] = uint(v)
+							if v >= 0 {
+								freq["len"] = uint(v)
+							}
 						}
 						switch v := v["pos"].(type) {
 						case float64:
-							freq["pos"] = uint(v)
+							if v >= 0 {
+								freq["pos"] = uint(v)
+							}
 						}
 						switch v := v["spikeCount"].(type) {
 						case float64:
-							freq["spikeCount"] = uint(v)
+							if v >= 0 {
+								freq["spikeCount"] = uint(v)
+							}
 						}
 					}
 					frequencies = append(frequencies, freq)
@@ -172,7 +188,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		}
 
 	case "frequency":
-		if i, err := strconv.Atoi(string(b)); err == nil {
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
 			call.Frequency = uint(i)
 		}
 
@@ -204,7 +220,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 	case "sources":
 		var (
 			f     interface{}
-			units interface{}
+			units *Units
 		)
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
@@ -216,7 +232,9 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 					case map[string]interface{}:
 						switch v := v["pos"].(type) {
 						case float64:
-							src["pos"] = uint(v)
+							if v >= 0 {
+								src["pos"] = uint(v)
+							}
 						}
 						switch s := v["src"].(type) {
 						case float64:
@@ -224,15 +242,10 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 								src["src"] = uint(s)
 								switch t := v["tag"].(type) {
 								case string:
-									var u Units
-									switch v := units.(type) {
-									case Units:
-										u = v
-									default:
-										u = Units{}
+									if units == nil {
+										units = NewUnits()
 									}
-									u.Add(int(s), t)
-									units = u
+									units.Add(uint(s), t)
 								}
 							}
 						}
@@ -245,7 +258,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		}
 
 	case "system", "systemId":
-		if i, err := strconv.Atoi(string(b)); err == nil {
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
 			call.System = uint(i)
 		}
 
@@ -253,7 +266,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		call.systemLabel = string(b)
 
 	case "talkgroup", "talkgroupId":
-		if i, err := strconv.Atoi(string(b)); err == nil {
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
 			call.Talkgroup = uint(i)
 		}
 
@@ -265,6 +278,11 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 	case "talkgroupLabel":
 		if s := string(b); len(s) > 1 {
 			call.talkgroupLabel = s
+		}
+
+	case "talkgroupName":
+		if s := string(b); len(s) > 1 {
+			call.talkgroupName = s
 		}
 
 	case "talkgroupTag":
@@ -283,7 +301,9 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 
 	switch v := m["freq"].(type) {
 	case float64:
-		call.Frequency = uint(v)
+		if v > 0 {
+			call.Frequency = uint(v)
+		}
 	}
 
 	switch v := m["freqList"].(type) {
@@ -295,27 +315,37 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 			case map[string]interface{}:
 				switch v := v["error_count"].(type) {
 				case float64:
-					freq["errorCount"] = uint(v)
+					if v >= 0 {
+						freq["errorCount"] = uint(v)
+					}
 				}
 
 				switch v := v["freq"].(type) {
 				case float64:
-					freq["freq"] = uint(v)
+					if v > 0 {
+						freq["freq"] = uint(v)
+					}
 				}
 
 				switch v := v["len"].(type) {
 				case float64:
-					freq["len"] = uint(v)
+					if v >= 0 {
+						freq["len"] = uint(v)
+					}
 				}
 
 				switch v := v["pos"].(type) {
 				case float64:
-					freq["pos"] = uint(v)
+					if v >= 0 {
+						freq["pos"] = uint(v)
+					}
 				}
 
 				switch v := v["spike_count"].(type) {
 				case float64:
-					freq["spikeCount"] = uint(v)
+					if v >= 0 {
+						freq["spikeCount"] = uint(v)
+					}
 				}
 
 				freqs = append(freqs, freq)
@@ -349,7 +379,9 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 			case map[string]interface{}:
 				switch v := v["pos"].(type) {
 				case float64:
-					source["pos"] = uint(v)
+					if v >= 0 {
+						source["pos"] = uint(v)
+					}
 				}
 				switch s := v["src"].(type) {
 				case float64:
@@ -358,15 +390,14 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 						switch t := v["tag"].(type) {
 						case string:
 							if len(t) > 0 {
-								var units Units
 								switch v := call.units.(type) {
 								case Units:
-									units = v
+									v.Add(uint(s), t)
 								default:
-									units = Units{}
+									var u = NewUnits()
+									u.Add(uint(s), t)
+									call.units = u
 								}
-								units.Add(int(s), t)
-								call.units = units
 							}
 						}
 					}
@@ -387,13 +418,16 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 
 	switch v := m["talkgroup"].(type) {
 	case float64:
-		call.Talkgroup = uint(v)
+		if v > 0 {
+			call.Talkgroup = uint(v)
+		}
 	}
 
 	switch v := m["talkgroup_tag"].(type) {
 	case string:
 		call.talkgroupTag = v
 		call.talkgroupLabel = v
+		call.talkgroupName = v
 	}
 
 	return nil

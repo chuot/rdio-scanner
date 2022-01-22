@@ -42,10 +42,20 @@ func (tag *Tag) FromMap(m map[string]interface{}) {
 
 type Tags struct {
 	List  []*Tag
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewTags() *Tags {
+	return &Tags{
+		List:  []*Tag{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (tags *Tags) FromMap(f []interface{}) {
+	tags.mutex.Lock()
+	defer tags.mutex.Unlock()
+
 	tags.List = []*Tag{}
 
 	for _, r := range f {
@@ -59,6 +69,9 @@ func (tags *Tags) FromMap(f []interface{}) {
 }
 
 func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
+	tags.mutex.RLock()
+	defer tags.mutex.RUnlock()
+
 	switch v := f.(type) {
 	case uint:
 		for _, tag := range tags.List {
@@ -73,6 +86,7 @@ func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
 			}
 		}
 	}
+
 	return nil, false
 }
 
@@ -151,6 +165,9 @@ func (tags *Tags) Read(db *Database) error {
 		rows *sql.Rows
 	)
 
+	tags.mutex.RLock()
+	defer tags.mutex.RUnlock()
+
 	tags.List = []*Tag{}
 
 	formatError := func(err error) error {
@@ -193,6 +210,7 @@ func (tags *Tags) Write(db *Database) error {
 	)
 
 	tags.mutex.Lock()
+	defer tags.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("tags write %v", err)
@@ -252,8 +270,6 @@ func (tags *Tags) Write(db *Database) error {
 			}
 		}
 	}
-
-	tags.mutex.Unlock()
 
 	return nil
 }

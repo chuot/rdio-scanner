@@ -19,7 +19,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -39,6 +41,7 @@ type Call struct {
 	systemLabel    interface{}
 	talkgroupGroup interface{}
 	talkgroupLabel interface{}
+	talkgroupName  interface{}
 	talkgroupTag   interface{}
 	units          interface{}
 }
@@ -102,7 +105,300 @@ func (call *Call) ToJson() (string, error) {
 	}
 }
 
-func (call *Call) Write(db *Database) (uint, error) {
+type Calls struct {
+	mutex sync.RWMutex
+}
+
+func NewCalls() *Calls {
+	return &Calls{
+		mutex: sync.RWMutex{},
+	}
+}
+
+func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) bool {
+	var count uint
+
+	calls.mutex.RLock()
+	defer calls.mutex.RUnlock()
+
+	d := time.Duration(msTimeFrame) * time.Millisecond
+	from := call.DateTime.Add(-d).Format(db.DateTimeFormat)
+	to := call.DateTime.Add(d).Format(db.DateTimeFormat)
+
+	query := fmt.Sprintf("select count(*) from `rdioScannerCalls` where (`dateTime` between '%v' and '%v') and `system` = %v and `talkgroup` = %v", from, to, call.System, call.Talkgroup)
+	if err := db.Sql.QueryRow(query).Scan(&count); err != nil {
+		return false
+	}
+
+	return count > 0
+}
+
+func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
+	var (
+		dateTime    interface{}
+		frequencies string
+		patches     string
+		sources     string
+		t           time.Time
+	)
+
+	calls.mutex.RLock()
+	defer calls.mutex.RUnlock()
+
+	call := Call{}
+
+	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
+	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("getcall: %v, %v", err, query)
+	}
+
+	if t, err = db.ParseDateTime(dateTime); err == nil {
+		call.DateTime = t
+	} else {
+		return nil, fmt.Errorf("getcall.parsedatetime: %v", err)
+	}
+
+	if len(frequencies) > 0 {
+		if err = json.Unmarshal([]byte(frequencies), &call.Frequencies); err != nil {
+			return nil, fmt.Errorf("getcall.unmarshal.frequencies: %v", err)
+		}
+	}
+
+	if len(patches) > 0 {
+		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
+			return nil, fmt.Errorf("getcall.unmarshal.patches: %v", err)
+		}
+	}
+
+	if len(sources) > 0 {
+		if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
+			return nil, fmt.Errorf("getcall.unmarshal.sources: %v", err)
+		}
+	}
+
+	return &call, nil
+}
+
+func (calls *Calls) Prune(db *Database, pruneDays uint) error {
+	calls.mutex.Lock()
+	defer calls.mutex.Unlock()
+
+	date := time.Now().Add(-24 * time.Hour * time.Duration(pruneDays)).Format(db.DateTimeFormat)
+	_, err := db.Sql.Exec("delete from `rdioScannerCalls` where `dateTime` < ?", date)
+
+	return err
+}
+
+func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*CallsSearchResults, error) {
+	const (
+		ascOrder  = "asc"
+		descOrder = "desc"
+	)
+
+	var (
+		dateTime interface{}
+		err      error
+		id       sql.NullFloat64
+		limit    uint
+		offset   uint
+		order    string
+		query    string
+		rows     *sql.Rows
+		t        time.Time
+		where    string = "true"
+	)
+
+	calls.mutex.RLock()
+	defer calls.mutex.RUnlock()
+
+	db := client.Controller.Database
+
+	formatError := func(err error) error {
+		return fmt.Errorf("newSearchResults: %v", err)
+	}
+
+	searchResults := &CallsSearchResults{
+		Options: searchOptions,
+		Results: []CallsSearchResult{},
+	}
+
+	if client.Access != nil {
+		switch v := client.Access.Systems.(type) {
+		case []interface{}:
+			a := []string{}
+			for _, scope := range v {
+				var c string
+				switch v := scope.(type) {
+				case map[string]interface{}:
+					switch v["talkgroups"].(type) {
+					case []interface{}:
+						b := strings.ReplaceAll(fmt.Sprintf("%v", v["talkgroups"]), " ", ", ")
+						b = strings.ReplaceAll(b, "[", "(")
+						b = strings.ReplaceAll(b, "]", ")")
+						c = fmt.Sprintf("(`system` = %v and `talkgroup` in %v)", v["id"], b)
+					case string:
+						if v["talkgroups"] == "*" {
+							c = fmt.Sprintf("`system` = %v", v["id"])
+						}
+					}
+				}
+				if len(c) > 0 {
+					a = append(a, c)
+				}
+			}
+			where = fmt.Sprintf("(%s)", strings.Join(a, " or "))
+		}
+	}
+
+	switch v := searchOptions.System.(type) {
+	case uint:
+		a := []string{
+			fmt.Sprintf("`system` = %v", v),
+		}
+		switch v := searchOptions.Talkgroup.(type) {
+		case uint:
+			if searchOptions.searchPatchedTalkgroups {
+				a = append(a, fmt.Sprintf("`talkgroup` = %v or patches = '%v' or patches like '[%v,%%' or patches like '%%,%v,%%' or patches like '%%,%v]'", v, v, v, v, v))
+			} else {
+				a = append(a, fmt.Sprintf("`talkgroup` = %v", v))
+			}
+		}
+		where += fmt.Sprintf(" and (%s)", strings.Join(a, " and "))
+	}
+
+	switch v := searchOptions.Group.(type) {
+	case string:
+		a := []string{}
+		for id, m := range client.GroupsMap[v] {
+			b := strings.ReplaceAll(fmt.Sprintf("%v", m), " ", ", ")
+			b = strings.ReplaceAll(b, "[", "(")
+			b = strings.ReplaceAll(b, "]", ")")
+			a = append(a, fmt.Sprintf("(`system` = %v and `talkgroup` in %v)", id, b))
+		}
+		if len(a) > 0 {
+			where += fmt.Sprintf(" and (%s)", strings.Join(a, " or "))
+		}
+	}
+
+	switch v := searchOptions.Tag.(type) {
+	case string:
+		a := []string{}
+		for id, m := range client.TagsMap[v] {
+			b := strings.ReplaceAll(fmt.Sprintf("%v", m), " ", ", ")
+			b = strings.ReplaceAll(b, "[", "(")
+			b = strings.ReplaceAll(b, "]", ")")
+			a = append(a, fmt.Sprintf("(`system` = %v and `talkgroup` in %v)", id, b))
+		}
+		if len(a) > 0 {
+			where += fmt.Sprintf(" and (%s)", strings.Join(a, " or "))
+		}
+	}
+
+	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` asc", where)
+	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
+		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+	}
+
+	if dateTime == nil {
+		return searchResults, nil
+	}
+
+	if t, err = db.ParseDateTime(dateTime); err == nil {
+		searchResults.DateStart = t
+	}
+	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` desc", where)
+	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
+		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+	}
+
+	if t, err = db.ParseDateTime(dateTime); err == nil {
+		searchResults.DateStop = t
+	}
+
+	switch v := searchOptions.Sort.(type) {
+	case int:
+		if v < 0 {
+			order = descOrder
+		} else {
+			order = ascOrder
+		}
+	default:
+		order = ascOrder
+	}
+
+	switch v := searchOptions.Date.(type) {
+	case time.Time:
+		var (
+			df    string = client.Controller.Database.DateTimeFormat
+			start time.Time
+			stop  time.Time
+		)
+
+		if order == ascOrder {
+			start = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC)
+			stop = start.Add(time.Hour*24 - time.Millisecond)
+
+		} else {
+			start = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC).Add(time.Hour*-24 - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
+			stop = start.Add(time.Hour*24 - time.Millisecond - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
+		}
+
+		where += fmt.Sprintf(" and (`dateTime` between '%v' and '%v')", start.Format(df), stop.Format(df))
+	}
+
+	switch v := searchOptions.Limit.(type) {
+	case uint:
+		limit = uint(math.Min(float64(500), float64(v)))
+	default:
+		limit = 200
+	}
+
+	switch v := searchOptions.Offset.(type) {
+	case uint:
+		offset = v
+	}
+
+	query = fmt.Sprintf("select count(*) from `rdioScannerCalls` where %v", where)
+	if err = db.Sql.QueryRow(query).Scan(&searchResults.Count); err != nil && err != sql.ErrNoRows {
+		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+	}
+
+	query = fmt.Sprintf("select `id`, `DateTime`, `system`, `talkgroup` from `rdioScannerCalls` where %v order by `dateTime` %v limit %v offset %v", where, order, limit, offset)
+	if rows, err = db.Sql.Query(query); err != nil && err != sql.ErrNoRows {
+		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+	}
+
+	for rows.Next() {
+		searchResult := CallsSearchResult{}
+		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
+			break
+		}
+
+		if id.Valid && id.Float64 > 0 {
+			searchResult.Id = uint(id.Float64)
+		}
+
+		if t, err = db.ParseDateTime(dateTime); err == nil {
+			searchResult.DateTime = t
+
+		} else {
+			continue
+		}
+
+		searchResults.Results = append(searchResults.Results, searchResult)
+	}
+
+	rows.Close()
+
+	if err != nil {
+		return nil, formatError(err)
+	}
+
+	return searchResults, err
+}
+
+func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 	var (
 		b           []byte
 		err         error
@@ -112,6 +408,9 @@ func (call *Call) Write(db *Database) (uint, error) {
 		res         sql.Result
 		sources     string
 	)
+
+	calls.mutex.Lock()
+	defer calls.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("call.write: %s", err.Error())
@@ -155,48 +454,75 @@ func (call *Call) Write(db *Database) (uint, error) {
 	}
 }
 
-type Calls []Call
+type CallsSearchOptions struct {
+	Date                    interface{} `json:"date,omitempty"`
+	Group                   interface{} `json:"group,omitempty"`
+	Limit                   interface{} `json:"limit,omitempty"`
+	Offset                  interface{} `json:"offset,omitempty"`
+	Sort                    interface{} `json:"sort,omitempty"`
+	System                  interface{} `json:"system,omitempty"`
+	Tag                     interface{} `json:"tag,omitempty"`
+	Talkgroup               interface{} `json:"talkgroup,omitempty"`
+	searchPatchedTalkgroups bool
+}
 
-func GetCall(id uint, db *Database) (*Call, error) {
-	var (
-		dateTime    interface{}
-		frequencies string
-		patches     string
-		sources     string
-		t           time.Time
-	)
-
-	call := Call{}
-
-	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("getcall: %v, %v", err, query)
-	}
-
-	if t, err = db.ParseDateTime(dateTime); err == nil {
-		call.DateTime = t
-	} else {
-		return nil, fmt.Errorf("getcall.parsedatetime: %v", err)
-	}
-
-	if len(frequencies) > 0 {
-		if err = json.Unmarshal([]byte(frequencies), &call.Frequencies); err != nil {
-			return nil, fmt.Errorf("getcall.unmarshal.frequencies: %v", err)
+func (searchOptions *CallsSearchOptions) fromMap(m map[string]interface{}) error {
+	switch v := m["date"].(type) {
+	case string:
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			searchOptions.Date = t
 		}
 	}
 
-	if len(patches) > 0 {
-		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
-			return nil, fmt.Errorf("getcall.unmarshal.patches: %v", err)
-		}
+	switch v := m["group"].(type) {
+	case string:
+		searchOptions.Group = v
 	}
 
-	if len(sources) > 0 {
-		if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
-			return nil, fmt.Errorf("getcall.unmarshal.sources: %v", err)
-		}
+	switch v := m["limit"].(type) {
+	case float64:
+		searchOptions.Limit = uint(v)
 	}
 
-	return &call, nil
+	switch v := m["offset"].(type) {
+	case float64:
+		searchOptions.Offset = uint(v)
+	}
+
+	switch v := m["sort"].(type) {
+	case float64:
+		searchOptions.Sort = int(v)
+	}
+
+	switch v := m["system"].(type) {
+	case float64:
+		searchOptions.System = uint(v)
+	}
+
+	switch v := m["tag"].(type) {
+	case string:
+		searchOptions.Tag = v
+	}
+
+	switch v := m["talkgroup"].(type) {
+	case float64:
+		searchOptions.Talkgroup = uint(v)
+	}
+
+	return nil
+}
+
+type CallsSearchResult struct {
+	Id        uint      `json:"id"`
+	DateTime  time.Time `json:"dateTime"`
+	System    uint      `json:"system"`
+	Talkgroup uint      `json:"talkgroup"`
+}
+
+type CallsSearchResults struct {
+	Count     uint                `json:"count"`
+	DateStart time.Time           `json:"dateStart"`
+	DateStop  time.Time           `json:"dateStop"`
+	Options   *CallsSearchOptions `json:"options"`
+	Results   []CallsSearchResult `json:"results"`
 }

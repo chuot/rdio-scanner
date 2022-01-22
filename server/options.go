@@ -37,11 +37,20 @@ type Options struct {
 	TagsToggle                  bool   `json:"tagsToggle"`
 	adminPassword               string
 	adminPasswordNeedChange     bool
-	mutex                       sync.Mutex
+	mutex                       sync.RWMutex
 	secret                      string
 }
 
+func NewOptions() *Options {
+	return &Options{
+		mutex: sync.RWMutex{},
+	}
+}
+
 func (options *Options) FromMap(m map[string]interface{}) {
+	options.mutex.Lock()
+	defer options.mutex.Unlock()
+
 	switch v := m["autoPopulate"].(type) {
 	case bool:
 		options.AutoPopulate = v
@@ -119,6 +128,9 @@ func (options *Options) Read(db *Database) error {
 		err             error
 		f               interface{}
 	)
+
+	options.mutex.RLock()
+	defer options.mutex.RUnlock()
 
 	defaultPassword, _ = bcrypt.GenerateFromPassword([]byte(defaults.adminPassword), bcrypt.DefaultCost)
 
@@ -251,6 +263,7 @@ func (options *Options) Write(db *Database) error {
 	)
 
 	options.mutex.Lock()
+	defer options.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("options.write: %v", err)
@@ -302,8 +315,6 @@ func (options *Options) Write(db *Database) error {
 	if i, err = res.RowsAffected(); err == nil && i == 0 {
 		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "options", string(b))
 	}
-
-	options.mutex.Unlock()
 
 	return nil
 }

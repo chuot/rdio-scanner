@@ -16,6 +16,7 @@
     margin-bottom: 12px;
 
     .rdio-button {
+      box-sizing: content-box;
       flex: 1;
       line-height: normal;
     }
@@ -44,18 +45,6 @@
     .avoid {
       color: rgb(190, 190, 174);
     }
-  }
-
-  .avoid {
-    background: rgba(0, 0, 0, 0.8);
-    border-radius: 3px;
-    color: rgb(209, 238, 238);
-    padding: 0 3px;
-    visibility: hidden;
-  }
-
-  .avoided {
-    visibility: visible;
   }
 
   * {
@@ -91,6 +80,19 @@
     }
   }
 
+  .flag {
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 3px;
+    color: rgb(209, 238, 238);
+    margin-left: 4px;
+    opacity: 0.12;
+    padding: 0 3px;
+  }
+
+  .flaged {
+    opacity: 0.87;
+  }
+
   .wrapper {
     position: relative;
   }
@@ -105,6 +107,10 @@
       font-size: 24px;
       height: 32px;
       line-height: 32px;
+    }
+
+    &.right {
+      justify-content: flex-end;
     }
 
     &.small {

@@ -127,11 +127,21 @@ func (access *Access) HasExpired() bool {
 
 type Accesses struct {
 	List  []*Access
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewAccesses() *Accesses {
+	return &Accesses{
+		List:  []*Access{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (accesses *Accesses) FromMap(f []interface{}) {
-	*accesses = Accesses{}
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	accesses.List = []*Access{}
 
 	for _, r := range f {
 		switch m := r.(type) {
@@ -144,22 +154,29 @@ func (accesses *Accesses) FromMap(f []interface{}) {
 }
 
 func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
+	accesses.mutex.RLock()
+	defer accesses.mutex.RUnlock()
+
 	for _, access := range accesses.List {
 		if access.Code == code {
 			return access, true
 		}
 	}
+
 	return nil, false
 }
 
 func (accesses *Accesses) IsRestricted() bool {
+	accesses.mutex.RLock()
+	defer accesses.mutex.RUnlock()
+
 	return len(accesses.List) > 0
 }
 
 func (accesses *Accesses) Read(db *Database) error {
 	var (
 		err        error
-		expiration sql.NullString
+		expiration interface{}
 		id         sql.NullFloat64
 		limit      sql.NullFloat64
 		order      sql.NullFloat64
@@ -167,6 +184,9 @@ func (accesses *Accesses) Read(db *Database) error {
 		systems    string
 		t          time.Time
 	)
+
+	accesses.mutex.RLock()
+	defer accesses.mutex.RUnlock()
 
 	accesses.List = []*Access{}
 
@@ -193,10 +213,8 @@ func (accesses *Accesses) Read(db *Database) error {
 			continue
 		}
 
-		if expiration.Valid && len(expiration.String) > 0 {
-			if t, err = db.ParseDateTime(expiration.String); err == nil {
-				access.Expiration = t
-			}
+		if t, err = db.ParseDateTime(expiration); err == nil {
+			access.Expiration = t
 		}
 
 		if len(access.Ident) == 0 {
@@ -233,6 +251,7 @@ func (accesses *Accesses) Write(db *Database) error {
 	)
 
 	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("accesses.write: %v", err)
@@ -300,8 +319,6 @@ func (accesses *Accesses) Write(db *Database) error {
 			}
 		}
 	}
-
-	accesses.mutex.Unlock()
 
 	return nil
 }

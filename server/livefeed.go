@@ -17,13 +17,27 @@ package main
 
 import (
 	"strconv"
+	"sync"
 )
 
-type LivefeedMap map[uint]map[uint]bool
+type Livefeed struct {
+	Matrix map[uint]map[uint]bool
+	mutex  sync.RWMutex
+}
 
-func (livefeedMap *LivefeedMap) FromMap(f interface{}) {
-	for s := range *livefeedMap {
-		delete(*livefeedMap, s)
+func NewLivefeed() *Livefeed {
+	return &Livefeed{
+		Matrix: map[uint]map[uint]bool{},
+		mutex:  sync.RWMutex{},
+	}
+}
+
+func (livefeed *Livefeed) FromMap(f interface{}) {
+	livefeed.mutex.Lock()
+	defer livefeed.mutex.Unlock()
+
+	for s := range livefeed.Matrix {
+		delete(livefeed.Matrix, s)
 	}
 
 	switch v := f.(type) {
@@ -38,10 +52,10 @@ func (livefeedMap *LivefeedMap) FromMap(f interface{}) {
 						case bool:
 							if tgId, err := strconv.Atoi(t); err == nil {
 								tgId := uint(tgId)
-								if (*livefeedMap)[sysId] == nil {
-									(*livefeedMap)[sysId] = map[uint]bool{}
+								if livefeed.Matrix[sysId] == nil {
+									livefeed.Matrix[sysId] = map[uint]bool{}
 								}
-								(*livefeedMap)[sysId][tgId] = v
+								livefeed.Matrix[sysId][tgId] = v
 							}
 						}
 					}
@@ -51,36 +65,39 @@ func (livefeedMap *LivefeedMap) FromMap(f interface{}) {
 	}
 }
 
-func (livefeedMap *LivefeedMap) IsAllOff() bool {
-	isAllOff := true
+func (livefeed *Livefeed) IsAllOff() bool {
+	livefeed.mutex.RLock()
+	defer livefeed.mutex.RUnlock()
 
-sys:
-	for _, sys := range *livefeedMap {
+	for _, sys := range livefeed.Matrix {
 		for _, tg := range sys {
 			if tg {
-				isAllOff = false
-				break sys
+				return false
 			}
 		}
 	}
 
-	return isAllOff
+	return true
 }
 
-func (livefeedMap *LivefeedMap) IsEnabled(call *Call) bool {
-	if livefeedMap == nil {
-		return false
-	} else if (*livefeedMap)[call.System][call.Talkgroup] {
-		return true
-	} else {
-		switch v := call.Patches.(type) {
-		case []uint:
-			for _, p := range v {
-				if (*livefeedMap)[call.System][p] {
-					return true
+func (livefeed *Livefeed) IsEnabled(call *Call) bool {
+	livefeed.mutex.RLock()
+	defer livefeed.mutex.RUnlock()
+
+	if call != nil {
+		if livefeed.Matrix[call.System][call.Talkgroup] {
+			return true
+		} else {
+			switch v := call.Patches.(type) {
+			case []uint:
+				for _, p := range v {
+					if livefeed.Matrix[call.System][p] {
+						return true
+					}
 				}
 			}
 		}
 	}
+
 	return false
 }

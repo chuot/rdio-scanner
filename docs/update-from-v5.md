@@ -8,6 +8,7 @@ You need to download the latest Rdio Scanner release from the [releases tab](htt
 
 ## Update steps for the standard sqlite database
 
+- Make sure your instance is at the [latest version 5](https://github.com/chuot/rdio-scanner/tree/3f2b184558e82317a010bd667ac3972f30998b1c) before trying to upgrade to version 6.
 - Stop your version 5 instance.
 - Copy your old version 5 `database.sqlite` to a new folder where version 6 will be installed.
 - Rename the database copy to `rdio-scanner.db`, the new default name.

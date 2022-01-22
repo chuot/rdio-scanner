@@ -33,8 +33,15 @@ type System struct {
 	Led          interface{} `json:"led"`
 	Order        uint        `json:"order"`
 	RowId        interface{} `json:"_id"`
-	Talkgroups   Talkgroups  `json:"talkgroups"`
-	Units        Units       `json:"units"`
+	Talkgroups   *Talkgroups `json:"talkgroups"`
+	Units        *Units      `json:"units"`
+}
+
+func NewSystem() *System {
+	return &System{
+		Talkgroups: NewTalkgroups(),
+		Units:      NewUnits(),
+	}
 }
 
 func (system *System) FromMap(m map[string]interface{}) {
@@ -88,16 +95,26 @@ type SystemMap map[string]interface{}
 
 type Systems struct {
 	List  []*System
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewSystems() *Systems {
+	return &Systems{
+		List:  []*System{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (systems *Systems) FromMap(f []interface{}) {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
 	systems.List = []*System{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
-			system := &System{}
+			system := NewSystem()
 			system.FromMap(m)
 			systems.List = append(systems.List, system)
 		}
@@ -105,6 +122,9 @@ func (systems *Systems) FromMap(f []interface{}) {
 }
 
 func (systems *Systems) GetNewSystemId() uint {
+	systems.mutex.RLock()
+	defer systems.mutex.RUnlock()
+
 NextId:
 	for i := uint(1); i < 65535; i++ {
 		for _, s := range systems.List {
@@ -118,6 +138,9 @@ NextId:
 }
 
 func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
+	systems.mutex.RLock()
+	defer systems.mutex.RUnlock()
+
 	switch v := f.(type) {
 	case uint:
 		for _, system := range systems.List {
@@ -185,7 +208,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 
 					case []interface{}:
 						rawSystem := system
-						rawSystem.Talkgroups = Talkgroups{}
+						rawSystem.Talkgroups = NewTalkgroups()
 						for _, fTalkgroupId := range v {
 							switch v := fTalkgroupId.(type) {
 							case float64:
@@ -194,7 +217,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 								if !ok {
 									continue
 								}
-								rawSystem.Talkgroups = append(rawSystem.Talkgroups, rawTalkgroup)
+								rawSystem.Talkgroups.List = append(rawSystem.Talkgroups.List, rawTalkgroup)
 							default:
 								continue
 							}
@@ -210,26 +233,26 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 		talkgroupsMap := TalkgroupsMap{}
 
 		if sortTalkgroups {
-			sort.Slice(rawSystem.Talkgroups, func(i int, j int) bool {
-				return rawSystem.Talkgroups[i].Label < rawSystem.Talkgroups[j].Label
+			sort.Slice(rawSystem.Talkgroups.List, func(i int, j int) bool {
+				return rawSystem.Talkgroups.List[i].Label < rawSystem.Talkgroups.List[j].Label
 			})
-			for i := range rawSystem.Talkgroups {
-				rawSystem.Talkgroups[i].Order = uint(i + 1)
+			for i := range rawSystem.Talkgroups.List {
+				rawSystem.Talkgroups.List[i].Order = uint(i + 1)
 			}
 		}
 
-		for j, rawTalkgroup := range rawSystem.Talkgroups {
+		for j, rawTalkgroup := range rawSystem.Talkgroups.List {
 			group, ok := groups.GetGroup(rawTalkgroup.GroupId)
 			if !ok {
 				continue
 			}
-			rawSystems[i].Talkgroups[j].group = group.Label
+			rawSystems[i].Talkgroups.List[j].group = group.Label
 
 			tag, ok := tags.GetTag(rawTalkgroup.TagId)
 			if !ok {
 				continue
 			}
-			rawSystems[i].Talkgroups[j].tag = tag.Label
+			rawSystems[i].Talkgroups.List[j].tag = tag.Label
 
 			talkgroupMap := TalkgroupMap{
 				"id":    rawTalkgroup.Id,
@@ -264,7 +287,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 			"id":         rawSystem.Id,
 			"label":      rawSystem.Label,
 			"talkgroups": talkgroupsMap,
-			"units":      rawSystem.Units,
+			"units":      rawSystem.Units.List,
 		}
 
 		if rawSystem.Led != nil {
@@ -296,7 +319,10 @@ func (systems *Systems) Read(db *Database) error {
 		rows       *sql.Rows
 	)
 
-	*systems = Systems{}
+	systems.mutex.RLock()
+	defer systems.mutex.RUnlock()
+
+	systems.List = []*System{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("systems.read: %v", err)
@@ -308,8 +334,8 @@ func (systems *Systems) Read(db *Database) error {
 
 	for rows.Next() {
 		system := &System{
-			Talkgroups: Talkgroups{},
-			Units:      Units{},
+			Talkgroups: NewTalkgroups(),
+			Units:      NewUnits(),
 		}
 
 		if err = rows.Scan(&rowId, &system.AutoPopulate, &blacklists, &system.Id, &system.Label, &led, &order); err != nil {
@@ -369,6 +395,7 @@ func (systems *Systems) Write(db *Database) error {
 	)
 
 	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("systems.write: %v", err)
@@ -461,8 +488,6 @@ func (systems *Systems) Write(db *Database) error {
 			}
 		}
 	}
-
-	systems.mutex.Unlock()
 
 	return nil
 }

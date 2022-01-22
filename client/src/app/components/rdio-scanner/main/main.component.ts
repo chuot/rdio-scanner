@@ -20,7 +20,6 @@
 import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
-import { Subscription, timer } from 'rxjs';
 import packageInfo from '../../../../../package.json';
 import {
     RdioScannerAvoidOptions,
@@ -47,7 +46,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
 
-    avoided = false;
+    avoided = true;
 
     call: RdioScannerCall | undefined;
     callError = '0';
@@ -82,6 +81,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     map: RdioScannerLivefeedMap = {};
 
+    patched = true;
+
     playbackMode = false;
 
     @Output() openSearchPanel = new EventEmitter<void>();
@@ -92,11 +93,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
-    private clockTimer: Subscription | undefined;
+    private clockTimer: number | undefined;
 
     private config: RdioScannerConfig | undefined;
 
-    private dimmerTimer: Subscription | undefined;
+    private dimmerTimer: number | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
@@ -193,7 +194,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     ngOnDestroy(): void {
-        this.clockTimer?.unsubscribe();
+        if (this.clockTimer) {
+            clearInterval(this.clockTimer);
+        }
 
         this.eventSubscription.unsubscribe();
     }
@@ -365,14 +368,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             this.linked = event.linked || false;
         }
 
-        if ('livefeedMode' in event && event.livefeedMode) {
-            this.livefeedOffline = event.livefeedMode === RdioScannerLivefeedMode.Offline;
-
-            this.livefeedOnline = event.livefeedMode === RdioScannerLivefeedMode.Online;
-
-            this.playbackMode = event.livefeedMode === RdioScannerLivefeedMode.Playback;
-        }
-
         if ('map' in event) {
             this.map = event.map || {};
         }
@@ -395,6 +390,16 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             this.authForm.get('password')?.setErrors({ tooMany: true });
         }
 
+        if ('livefeedMode' in event && event.livefeedMode) {
+            this.livefeedOffline = event.livefeedMode === RdioScannerLivefeedMode.Offline;
+
+            this.livefeedOnline = event.livefeedMode === RdioScannerLivefeedMode.Online;
+
+            this.playbackMode = event.livefeedMode === RdioScannerLivefeedMode.Playback;
+
+            return;
+        }
+
         this.updateDisplay();
     }
 
@@ -407,28 +412,34 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     private syncClock(): void {
-        this.clockTimer?.unsubscribe();
+        if (this.clockTimer) {
+            clearInterval(this.clockTimer);
+        }
 
         this.clock = new Date();
 
-        this.clockTimer = timer(1000 * (60 - this.clock.getSeconds())).subscribe(() => this.syncClock());
+        this.clockTimer = window.setInterval(() => this.syncClock(), 1000 * (60 - this.clock.getSeconds()));
     }
 
     private updateDimmer(): void {
         if (typeof this.config?.dimmerDelay === 'number') {
-            this.dimmerTimer?.unsubscribe();
+            if (this.dimmerTimer) {
+                clearTimeout(this.dimmerTimer);
+            }
 
             this.dimmer = true;
 
-            this.dimmerTimer = timer(this.config.dimmerDelay).subscribe(() => {
-                this.dimmerTimer?.unsubscribe();
+            this.dimmerTimer = window.setTimeout(() => {
+                if (this.dimmerTimer) {
+                    clearTimeout(this.dimmerTimer);
+                }
 
                 this.dimmerTimer = undefined;
 
                 this.dimmer = false;
 
                 this.ngChangeDetectorRef.detectChanges();
-            });
+            }, this.config.dimmerDelay);
         }
     }
 
@@ -493,15 +504,14 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
                 this.callHistory.unshift(this.callPrevious);
             }
-        }
 
-        const call = this.call || this.callPrevious;
+            if (this.map[this.call.system]) {
+                this.patched = this.livefeedOnline && !this.map[this.call.system][this.call.talkgroup];
+                this.avoided = !this.patched && !this.map[this.call.system][this.call.talkgroup];
+            }
 
-        if (call && this.map[call.system]) {
-            this.avoided = !this.map[call.system][call.talkgroup];
-
-        } else {
-            this.avoided = false;
+        } else if (this.callPrevious && !this.patched) {
+            this.avoided = this.map[this.callPrevious.system] && !this.map[this.callPrevious.system][this.callPrevious.talkgroup];
         }
 
         const colors = ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];

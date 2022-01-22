@@ -110,10 +110,20 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 
 type Apikeys struct {
 	List  []*Apikey
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewApikeys() *Apikeys {
+	return &Apikeys{
+		List:  []*Apikey{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (apikeys *Apikeys) FromMap(f []interface{}) {
+	apikeys.mutex.Lock()
+	defer apikeys.mutex.Unlock()
+
 	apikeys.List = []*Apikey{}
 
 	for _, r := range f {
@@ -127,8 +137,11 @@ func (apikeys *Apikeys) FromMap(f []interface{}) {
 }
 
 func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
+	apikeys.mutex.RLock()
+	defer apikeys.mutex.RUnlock()
+
 	for _, apikey := range apikeys.List {
-		if apikey.Key == key {
+		if apikey.Key == key && !apikey.Disabled {
 			return apikey, true
 		}
 	}
@@ -143,6 +156,9 @@ func (apikeys *Apikeys) Read(db *Database) error {
 		rows    *sql.Rows
 		systems string
 	)
+
+	apikeys.mutex.RLock()
+	defer apikeys.mutex.RUnlock()
 
 	apikeys.List = []*Apikey{}
 
@@ -203,6 +219,7 @@ func (apikeys *Apikeys) Write(db *Database) error {
 	)
 
 	apikeys.mutex.Lock()
+	defer apikeys.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("apikeys.write %v", err)
@@ -270,8 +287,6 @@ func (apikeys *Apikeys) Write(db *Database) error {
 			}
 		}
 	}
-
-	apikeys.mutex.Unlock()
 
 	return nil
 }

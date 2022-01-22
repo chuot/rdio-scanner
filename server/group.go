@@ -42,10 +42,20 @@ func (group *Group) FromMap(m map[string]interface{}) {
 
 type Groups struct {
 	List  []*Group
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewGroups() *Groups {
+	return &Groups{
+		List:  []*Group{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (groups *Groups) FromMap(f []interface{}) {
+	groups.mutex.Lock()
+	defer groups.mutex.Unlock()
+
 	groups.List = []*Group{}
 
 	for _, r := range f {
@@ -59,6 +69,9 @@ func (groups *Groups) FromMap(f []interface{}) {
 }
 
 func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
+	groups.mutex.RLock()
+	defer groups.mutex.RUnlock()
+
 	switch v := f.(type) {
 	case uint:
 		for _, group := range groups.List {
@@ -73,6 +86,7 @@ func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
 			}
 		}
 	}
+
 	return nil, false
 }
 
@@ -151,6 +165,9 @@ func (groups *Groups) Read(db *Database) error {
 		rows *sql.Rows
 	)
 
+	groups.mutex.RLock()
+	defer groups.mutex.RUnlock()
+
 	groups.List = []*Group{}
 
 	formatError := func(err error) error {
@@ -197,6 +214,7 @@ func (groups *Groups) Write(db *Database) error {
 	)
 
 	groups.mutex.Lock()
+	defer groups.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("groups.write %v", err)
@@ -257,8 +275,6 @@ func (groups *Groups) Write(db *Database) error {
 			}
 		}
 	}
-
-	groups.mutex.Unlock()
 
 	return nil
 }

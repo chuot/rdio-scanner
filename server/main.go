@@ -57,7 +57,7 @@ func main() {
 				log.Fatal(err)
 			}
 
-			LogEvent(controller.Database, LogLevelInfo, "admin password changed.")
+			controller.Logs.LogEvent(controller.Database, LogLevelInfo, "admin password changed.")
 
 			os.Exit(0)
 

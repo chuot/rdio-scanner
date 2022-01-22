@@ -21,7 +21,7 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { EventEmitter, Injectable, OnDestroy } from '@angular/core';
 import { AbstractControl, FormBuilder, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { firstValueFrom, timer } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { AppUpdateService } from '../../../shared/update/update.service';
 
 export interface Access {
@@ -533,7 +533,7 @@ export class RdioScannerAdminService implements OnDestroy {
 
                 this.event.emit({ authenticated: this.authenticated });
             } else {
-                timer(2000).subscribe(() => this.configWebSocketReconnect());
+                setTimeout(() => this.configWebSocketReconnect(), 2000);
             }
         };
 

@@ -37,7 +37,7 @@ export class AppUpdateService {
 
     concat(
       this.ngAppRef.isStable.pipe(first((stable) => stable === true)),
-      interval(10 * 60 * 1000),
+      interval(5 * 60 * 1000),
     ).subscribe(() => this.ngSwUpdate.checkForUpdate());
 
     this.ngSwUpdate.versionUpdates.subscribe((event: VersionEvent) => {

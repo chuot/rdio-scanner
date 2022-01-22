@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sync"
 	"time"
 )
 
@@ -36,74 +37,46 @@ type Log struct {
 	Message  string      `json:"message"`
 }
 
-func (log *Log) Write(db *Database) error {
-	if _, err := db.Sql.Exec("insert into `rdioScannerLogs` (`dateTime`, `level`, `message`) values (?, ?, ?)", log.DateTime, log.Level, log.Message); err != nil {
-		return fmt.Errorf("logs.write: %v", err)
-	}
-
-	return nil
+type Logs struct {
+	mutex sync.RWMutex
 }
 
-type LogOptions struct {
-	Date   interface{} `json:"date,omitempty"`
-	Level  interface{} `json:"level,omitempty"`
-	Limit  interface{} `json:"limit,omitempty"`
-	Offset interface{} `json:"offset,omitempty"`
-	Sort   interface{} `json:"sort,omitempty"`
+func NewLogs() *Logs {
+	return &Logs{
+		mutex: sync.RWMutex{},
+	}
 }
 
-func (logOptions *LogOptions) FromMap(m map[string]interface{}) error {
-	switch v := m["date"].(type) {
-	case string:
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			logOptions.Date = t
-		}
-	}
+func (logs *Logs) LogEvent(db *Database, level string, message string) error {
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
 
-	switch v := m["level"].(type) {
-	case string:
-		logOptions.Level = v
-	}
-
-	switch v := m["limit"].(type) {
-	case float64:
-		logOptions.Limit = uint(v)
-	}
-
-	switch v := m["offset"].(type) {
-	case float64:
-		logOptions.Offset = uint(v)
-	}
-
-	switch v := m["sort"].(type) {
-	case float64:
-		logOptions.Sort = int(v)
-	}
-
-	return nil
-}
-
-type LogResults struct {
-	Count     uint        `json:"count"`
-	DateStart time.Time   `json:"dateStart"`
-	DateStop  time.Time   `json:"dateStop"`
-	Options   *LogOptions `json:"options"`
-	Logs      []Log       `json:"logs"`
-}
-
-func LogEvent(db *Database, level string, message string) error {
 	log.Println(message)
 
-	log := Log{
+	l := Log{
 		DateTime: time.Now().UTC(),
 		Level:    level,
 		Message:  message,
 	}
 
-	return log.Write(db)
+	if _, err := db.Sql.Exec("insert into `rdioScannerLogs` (`dateTime`, `level`, `message`) values (?, ?, ?)", l.DateTime, l.Level, l.Message); err != nil {
+		return fmt.Errorf("logs.logevent: %v", err)
+	}
+
+	return nil
 }
 
-func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
+func (logs *Logs) Prune(db *Database, pruneDays uint) error {
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
+
+	date := time.Now().Add(-24 * time.Hour * time.Duration(pruneDays)).Format(db.DateTimeFormat)
+	_, err := db.Sql.Exec("delete from `rdioScannerLogs` where `dateTime` < ?", date)
+
+	return err
+}
+
+func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsSearchResults, error) {
 	const (
 		ascOrder  = "asc"
 		descOrder = "desc"
@@ -121,21 +94,24 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		where    string = "true"
 	)
 
+	logs.mutex.RLock()
+	defer logs.mutex.RUnlock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("newLogResults: %v", err)
 	}
 
-	logResults := &LogResults{
-		Options: logOptions,
+	logResults := &LogsSearchResults{
+		Options: searchOptions,
 		Logs:    []Log{},
 	}
 
-	switch v := logOptions.Level.(type) {
+	switch v := searchOptions.Level.(type) {
 	case string:
 		where += fmt.Sprintf(" and `level` == '%v'", v)
 	}
 
-	switch v := logOptions.Sort.(type) {
+	switch v := searchOptions.Sort.(type) {
 	case int:
 		if v < 0 {
 			order = descOrder
@@ -146,7 +122,7 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		order = ascOrder
 	}
 
-	switch v := logOptions.Date.(type) {
+	switch v := searchOptions.Date.(type) {
 	case time.Time:
 		var (
 			df    string = db.DateTimeFormat
@@ -166,14 +142,14 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 		where += fmt.Sprintf(" and (`dateTime` between '%v' and '%v')", start.Format(df), stop.Format(df))
 	}
 
-	switch v := logOptions.Limit.(type) {
+	switch v := searchOptions.Limit.(type) {
 	case uint:
 		limit = uint(math.Min(float64(500), float64(v)))
 	default:
 		limit = 200
 	}
 
-	switch v := logOptions.Offset.(type) {
+	switch v := searchOptions.Offset.(type) {
 	case uint:
 		offset = v
 	}
@@ -241,4 +217,51 @@ func NewLogResults(logOptions *LogOptions, db *Database) (*LogResults, error) {
 	}
 
 	return logResults, nil
+}
+
+type LogsSearchOptions struct {
+	Date   interface{} `json:"date,omitempty"`
+	Level  interface{} `json:"level,omitempty"`
+	Limit  interface{} `json:"limit,omitempty"`
+	Offset interface{} `json:"offset,omitempty"`
+	Sort   interface{} `json:"sort,omitempty"`
+}
+
+func (searchOptions *LogsSearchOptions) FromMap(m map[string]interface{}) error {
+	switch v := m["date"].(type) {
+	case string:
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			searchOptions.Date = t
+		}
+	}
+
+	switch v := m["level"].(type) {
+	case string:
+		searchOptions.Level = v
+	}
+
+	switch v := m["limit"].(type) {
+	case float64:
+		searchOptions.Limit = uint(v)
+	}
+
+	switch v := m["offset"].(type) {
+	case float64:
+		searchOptions.Offset = uint(v)
+	}
+
+	switch v := m["sort"].(type) {
+	case float64:
+		searchOptions.Sort = int(v)
+	}
+
+	return nil
+}
+
+type LogsSearchResults struct {
+	Count     uint               `json:"count"`
+	DateStart time.Time          `json:"dateStart"`
+	DateStop  time.Time          `json:"dateStop"`
+	Options   *LogsSearchOptions `json:"options"`
+	Logs      []Log              `json:"logs"`
 }

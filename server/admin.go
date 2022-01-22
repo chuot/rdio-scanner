@@ -109,7 +109,7 @@ func (admin *Admin) ChangePassword(currentPassword string, newPassword string) e
 		return err
 	}
 
-	LogEvent(admin.Controller.Database, LogLevelInfo, "admin password changed.")
+	admin.Controller.Logs.LogEvent(admin.Controller.Database, LogLevelWarn, "admin password changed.")
 
 	return nil
 }
@@ -146,7 +146,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		logError := func(err error) {
-			LogEvent(admin.Controller.Database, LogLevelError, fmt.Sprintf("admin.confighandler.put: %s", err.Error()))
+			admin.Controller.Logs.LogEvent(admin.Controller.Database, LogLevelError, fmt.Sprintf("admin.confighandler.put: %s", err.Error()))
 		}
 
 		t := admin.GetAuthorization(r)
@@ -279,7 +279,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 			admin.SendConfig(w)
 
-			LogEvent(admin.Controller.Database, LogLevelInfo, "configuration changed")
+			admin.Controller.Logs.LogEvent(admin.Controller.Database, LogLevelWarn, "configuration changed")
 
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -302,8 +302,8 @@ func (admin *Admin) GetConfig() map[string]interface{} {
 			"label":        system.Label,
 			"led":          system.Led,
 			"order":        system.Order,
-			"talkgroups":   system.Talkgroups,
-			"units":        system.Units,
+			"talkgroups":   system.Talkgroups.List,
+			"units":        system.Units.List,
 		})
 	}
 
@@ -335,14 +335,14 @@ func (admin *Admin) LogsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		logOptions := LogOptions{}
+		logOptions := LogsSearchOptions{}
 		err = logOptions.FromMap(m)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		r, err := NewLogResults(&logOptions, admin.Controller.Database)
+		r, err := admin.Controller.Logs.Search(&logOptions, admin.Controller.Database)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusExpectationFailed)
@@ -387,7 +387,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		if attempt.Count > admin.AttemptsMax || time.Since(attempt.Date) < admin.AttemptsMaxDelay {
 			if attempt.Count == admin.AttemptsMax+1 {
-				LogEvent(
+				admin.Controller.Logs.LogEvent(
 					admin.Controller.Database,
 					LogLevelWarn,
 					fmt.Sprintf("too many login attempts for ip=\"%v\"", r.RemoteAddr),
@@ -410,7 +410,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !ok {
-			LogEvent(
+			admin.Controller.Logs.LogEvent(
 				admin.Controller.Database,
 				LogLevelWarn,
 				fmt.Sprintf("invalid login attempt for ip=%v", r.RemoteAddr),
@@ -483,7 +483,7 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 		)
 
 		logError := func(err error) {
-			LogEvent(admin.Controller.Database, LogLevelError, fmt.Sprintf("admin.passwordhandler.post: %s", err.Error()))
+			admin.Controller.Logs.LogEvent(admin.Controller.Database, LogLevelError, fmt.Sprintf("admin.passwordhandler.post: %s", err.Error()))
 		}
 
 		t := admin.GetAuthorization(r)

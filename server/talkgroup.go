@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type Talkgroup struct {
@@ -90,36 +91,53 @@ func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
 
 type TalkgroupMap map[string]interface{}
 
-type Talkgroups []*Talkgroup
+type Talkgroups struct {
+	List  []*Talkgroup
+	mutex sync.RWMutex
+}
+
+func NewTalkgroups() *Talkgroups {
+	return &Talkgroups{
+		List:  []*Talkgroup{},
+		mutex: sync.RWMutex{},
+	}
+}
 
 func (talkgroups *Talkgroups) FromMap(f []interface{}) {
-	*talkgroups = Talkgroups{}
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
+
+	talkgroups.List = []*Talkgroup{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
 			talkgroup := &Talkgroup{}
 			talkgroup.FromMap(m)
-			*talkgroups = append(*talkgroups, talkgroup)
+			talkgroups.List = append(talkgroups.List, talkgroup)
 		}
 	}
 }
 
 func (talkgroups *Talkgroups) GetTalkgroup(f interface{}) (system *Talkgroup, ok bool) {
+	talkgroups.mutex.RLock()
+	defer talkgroups.mutex.RUnlock()
+
 	switch v := f.(type) {
 	case uint:
-		for _, talkgroup := range *talkgroups {
+		for _, talkgroup := range talkgroups.List {
 			if talkgroup.Id == v {
 				return talkgroup, true
 			}
 		}
 	case string:
-		for _, talkgroup := range *talkgroups {
+		for _, talkgroup := range talkgroups.List {
 			if talkgroup.Label == v {
 				return talkgroup, true
 			}
 		}
 	}
+
 	return nil, false
 }
 
@@ -131,7 +149,10 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 		rows      *sql.Rows
 	)
 
-	*talkgroups = Talkgroups{}
+	talkgroups.mutex.RLock()
+	defer talkgroups.mutex.RUnlock()
+
+	talkgroups.List = []*Talkgroup{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("talkgroups.read: %v", err)
@@ -156,7 +177,7 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 			talkgroup.Led = led.String
 		}
 
-		*talkgroups = append(*talkgroups, talkgroup)
+		talkgroups.List = append(talkgroups.List, talkgroup)
 	}
 
 	rows.Close()
@@ -165,8 +186,8 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 		return formatError(err)
 	}
 
-	sort.Slice(*talkgroups, func(i int, j int) bool {
-		return (*talkgroups)[i].Order < (*talkgroups)[j].Order
+	sort.Slice(talkgroups.List, func(i int, j int) bool {
+		return talkgroups.List[i].Order < talkgroups.List[j].Order
 	})
 
 	return nil
@@ -180,11 +201,14 @@ func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
 		rows  *sql.Rows
 	)
 
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
+
 	formatError := func(err error) error {
 		return fmt.Errorf("talkgroups.write: %v", err)
 	}
 
-	for _, talkgroup := range *talkgroups {
+	for _, talkgroup := range talkgroups.List {
 		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTalkgroups` where `id` = ? and `systemId` = ?", talkgroup.Id, systemId).Scan(&count); err != nil {
 			break
 		}
@@ -211,7 +235,7 @@ func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
 		var id uint
 		rows.Scan(&id)
 		remove := true
-		for _, talkgroup := range *talkgroups {
+		for _, talkgroup := range talkgroups.List {
 			if talkgroup.Id == id {
 				remove = false
 				break

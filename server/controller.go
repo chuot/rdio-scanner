@@ -27,12 +27,12 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Controller struct {
 	Admin        *Admin
 	Api          *Api
+	Calls        *Calls
 	Config       *Config
 	Database     *Database
 	Accesses     *Accesses
@@ -40,6 +40,7 @@ type Controller struct {
 	Dirwatches   *Dirwatches
 	Downstreams  *Downstreams
 	Groups       *Groups
+	Logs         *Logs
 	Options      *Options
 	Scheduler    *Scheduler
 	Systems      *Systems
@@ -56,14 +57,16 @@ type Controller struct {
 func NewController(config *Config) *Controller {
 	controller := &Controller{
 		Config:      config,
-		Accesses:    &Accesses{},
-		Apikeys:     &Apikeys{},
-		Dirwatches:  &Dirwatches{},
-		Downstreams: &Downstreams{},
-		Groups:      &Groups{},
-		Options:     &Options{},
-		Systems:     &Systems{},
-		Tags:        &Tags{},
+		Accesses:    NewAccesses(),
+		Apikeys:     NewApikeys(),
+		Calls:       NewCalls(),
+		Dirwatches:  NewDirwatches(),
+		Downstreams: NewDownstreams(),
+		Groups:      NewGroups(),
+		Logs:        NewLogs(),
+		Options:     NewOptions(),
+		Systems:     NewSystems(),
+		Tags:        NewTags(),
 		Clients:     make(map[*Client]bool),
 		Register:    make(chan *Client, 64),
 		Unregister:  make(chan *Client, 64),
@@ -79,18 +82,7 @@ func NewController(config *Config) *Controller {
 }
 
 func (controller *Controller) CheckDuplicate(call *Call) bool {
-	var count uint
-
-	d := time.Duration(controller.Options.DuplicateDetectionTimeFrame) * time.Millisecond
-	from := call.DateTime.Add(-d).Format(controller.Database.DateTimeFormat)
-	to := call.DateTime.Add(d).Format(controller.Database.DateTimeFormat)
-
-	query := fmt.Sprintf("select count(*) from `rdioScannerCalls` where (`dateTime` between '%v' and '%v') and `system` = %v and `talkgroup` = %v", from, to, call.System, call.Talkgroup)
-	if err := controller.Database.Sql.QueryRow(query).Scan(&count); err != nil {
-		return false
-	}
-
-	return count > 0
+	return controller.Calls.CheckDuplicate(call, controller.Options.DuplicateDetectionTimeFrame, controller.Database)
 }
 
 func (controller *Controller) ConvertAudio(call *Call) {
@@ -103,7 +95,7 @@ func (controller *Controller) ConvertAudio(call *Call) {
 		if !controller.ffmpegWarned {
 			controller.ffmpegWarned = true
 
-			LogEvent(controller.Database, LogLevelWarn, "ffmpeg is not accessible, no audio conversion will be performed.")
+			controller.Logs.LogEvent(controller.Database, LogLevelWarn, "ffmpeg is not accessible, no audio conversion will be performed.")
 		}
 		return
 	}
@@ -149,7 +141,7 @@ func (controller *Controller) ConvertAudio(call *Call) {
 
 func (controller *Controller) EmitCall(call *Call) {
 	for client := range controller.Clients {
-		if (!controller.Accesses.IsRestricted() || client.Access.HasAccess(call)) && client.LivefeedMap.IsEnabled(call) {
+		if (!controller.Accesses.IsRestricted() || client.Access.HasAccess(call)) && client.Livefeed.IsEnabled(call) {
 			client.Send <- &Message{Command: MessageCommandCall, Payload: call}
 		}
 	}
@@ -188,7 +180,7 @@ func (controller *Controller) IngestCall(call *Call) {
 	)
 
 	logCall := func(call *Call, level string, message string) {
-		LogEvent(
+		controller.Logs.LogEvent(
 			controller.Database,
 			level,
 			fmt.Sprintf("newcall: system=%v talkgroup=%v file=%v %v", call.System, call.Talkgroup, call.AudioName, message),
@@ -196,7 +188,7 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 
 	logError := func(err error) {
-		LogEvent(controller.Database, LogLevelError, fmt.Sprintf("controller.ingestcall: %v", err.Error()))
+		controller.Logs.LogEvent(controller.Database, LogLevelError, fmt.Sprintf("controller.ingestcall: %v", err.Error()))
 	}
 
 	if system, ok = controller.Systems.GetSystem(call.System); ok {
@@ -210,7 +202,8 @@ func (controller *Controller) IngestCall(call *Call) {
 	if system == nil && controller.Options.AutoPopulate {
 		populated = true
 
-		system = &System{Id: call.System}
+		system = NewSystem()
+		system.Id = call.System
 
 		switch v := call.systemLabel.(type) {
 		case string:
@@ -222,97 +215,108 @@ func (controller *Controller) IngestCall(call *Call) {
 		controller.Systems.List = append(controller.Systems.List, system)
 	}
 
-	if system != nil && talkgroup == nil && (controller.Options.AutoPopulate || system.AutoPopulate) {
-		populated = true
+	if controller.Options.AutoPopulate || system.AutoPopulate {
+		if system != nil && talkgroup == nil {
+			populated = true
 
-		switch v := call.talkgroupGroup.(type) {
-		case string:
-			groupLabel = v
-		default:
-			groupLabel = "Unknown"
-		}
-
-		switch v := call.talkgroupTag.(type) {
-		case string:
-			tagLabel = v
-		default:
-			tagLabel = "Untagged"
-		}
-
-		if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
-			group = &Group{Label: groupLabel}
-
-			controller.Groups.List = append(controller.Groups.List, group)
-
-			if err = controller.Groups.Write(controller.Database); err != nil {
-				logError(err)
-				return
+			switch v := call.talkgroupGroup.(type) {
+			case string:
+				groupLabel = v
+			default:
+				groupLabel = "Unknown"
 			}
 
-			if err = controller.Groups.Read(controller.Database); err != nil {
-				logError(err)
-				return
+			switch v := call.talkgroupTag.(type) {
+			case string:
+				tagLabel = v
+			default:
+				tagLabel = "Untagged"
 			}
 
 			if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
-				logError(fmt.Errorf("unable to get group %s", groupLabel))
-				return
-			}
-		}
+				group = &Group{Label: groupLabel}
 
-		switch v := group.Id.(type) {
-		case uint:
-			groupId = v
-		default:
-			logError(fmt.Errorf("unable to get group id for group %s", groupLabel))
-			return
-		}
+				controller.Groups.List = append(controller.Groups.List, group)
 
-		if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
-			tag = &Tag{Label: tagLabel}
+				if err = controller.Groups.Write(controller.Database); err != nil {
+					logError(err)
+					return
+				}
 
-			controller.Tags.List = append(controller.Tags.List, tag)
+				if err = controller.Groups.Read(controller.Database); err != nil {
+					logError(err)
+					return
+				}
 
-			if err = controller.Tags.Write(controller.Database); err != nil {
-				logError(err)
-				return
+				if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
+					logError(fmt.Errorf("unable to get group %s", groupLabel))
+					return
+				}
 			}
 
-			if err = controller.Tags.Read(controller.Database); err != nil {
-				logError(err)
+			switch v := group.Id.(type) {
+			case uint:
+				groupId = v
+			default:
+				logError(fmt.Errorf("unable to get group id for group %s", groupLabel))
 				return
 			}
 
 			if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
-				logError(fmt.Errorf("unable to get tag %s", tagLabel))
+				tag = &Tag{Label: tagLabel}
+
+				controller.Tags.List = append(controller.Tags.List, tag)
+
+				if err = controller.Tags.Write(controller.Database); err != nil {
+					logError(err)
+					return
+				}
+
+				if err = controller.Tags.Read(controller.Database); err != nil {
+					logError(err)
+					return
+				}
+
+				if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
+					logError(fmt.Errorf("unable to get tag %s", tagLabel))
+					return
+				}
+			}
+
+			switch v := tag.Id.(type) {
+			case uint:
+				tagId = v
+			default:
+				logError(fmt.Errorf("unable to get tag id for tag %s", tagLabel))
 				return
 			}
-		}
 
-		switch v := tag.Id.(type) {
-		case uint:
-			tagId = v
-		default:
-			logError(fmt.Errorf("unable to get tag id for tag %s", tagLabel))
-			return
-		}
+			talkgroup = &Talkgroup{
+				GroupId: groupId,
+				Id:      call.Talkgroup,
+				Label:   fmt.Sprintf("%d", call.Talkgroup),
+				Name:    fmt.Sprintf("Talkgroup %d", call.Talkgroup),
+				TagId:   tagId,
+			}
 
-		talkgroup = &Talkgroup{
-			GroupId: groupId,
-			Id:      call.Talkgroup,
-			TagId:   tagId,
+			system.Talkgroups.List = append(system.Talkgroups.List, talkgroup)
 		}
 
 		switch v := call.talkgroupLabel.(type) {
 		case string:
-			talkgroup.Label = v
-			talkgroup.Name = v
-		default:
-			talkgroup.Label = fmt.Sprintf("%d", call.Talkgroup)
-			talkgroup.Name = fmt.Sprintf("Talkgroup %d", call.Talkgroup)
+			if talkgroup.Label != v {
+				populated = true
+				talkgroup.Label = v
+			}
 		}
 
-		system.Talkgroups = append(system.Talkgroups, talkgroup)
+		switch v := call.talkgroupName.(type) {
+		case string:
+			if talkgroup.Name != v {
+				populated = true
+				talkgroup.Name = v
+			}
+		}
 	}
 
 	if controller.Options.AutoPopulate || (system != nil && system.AutoPopulate) {
@@ -320,7 +324,7 @@ func (controller *Controller) IngestCall(call *Call) {
 		case Units:
 			populated = true
 			if system.Units == nil {
-				system.Units = Units{}
+				system.Units = NewUnits()
 			}
 			system.Units.Merge(&v)
 		}
@@ -356,10 +360,27 @@ func (controller *Controller) IngestCall(call *Call) {
 		controller.ConvertAudio(call)
 	}
 
-	if id, err = call.Write(controller.Database); err == nil {
-		logCall(call, LogLevelInfo, "success")
+	if id, err = controller.Calls.WriteCall(call, controller.Database); err == nil {
 		call.Id = id
+		call.systemLabel = system.Label
+		call.talkgroupLabel = talkgroup.Label
+		call.talkgroupName = talkgroup.Name
+
+		if group == nil {
+			if group, ok = controller.Groups.GetGroup(talkgroup.GroupId); ok {
+				call.talkgroupGroup = group.Label
+			}
+		}
+
+		if tag == nil {
+			if tag, ok = controller.Tags.GetTag(talkgroup.TagId); ok {
+				call.talkgroupTag = tag.Label
+			}
+		}
+
 		controller.EmitCall(call)
+
+		logCall(call, LogLevelInfo, "success")
 
 	} else {
 		logError(err)
@@ -367,7 +388,7 @@ func (controller *Controller) IngestCall(call *Call) {
 }
 
 func (controller *Controller) LogClientsCount() {
-	LogEvent(
+	controller.Logs.LogEvent(
 		controller.Database,
 		LogLevelInfo,
 		fmt.Sprintf("listeners count is %v", len(controller.Clients)),
@@ -425,7 +446,7 @@ func (controller *Controller) ProcessMessageCommandCall(client *Client, message 
 		}
 	}
 
-	if call, err = GetCall(id, controller.Database); err != nil {
+	if call, err = controller.Calls.GetCall(id, controller.Database); err != nil {
 		return err
 	}
 
@@ -439,9 +460,9 @@ func (controller *Controller) ProcessMessageCommandCall(client *Client, message 
 func (controller *Controller) ProcessMessageCommandListCall(client *Client, message *Message) error {
 	switch v := message.Payload.(type) {
 	case map[string]interface{}:
-		searchOptions := SearchOptions{searchPatchedTalkgroups: controller.Options.SearchPatchedTalkgroups}
+		searchOptions := CallsSearchOptions{searchPatchedTalkgroups: controller.Options.SearchPatchedTalkgroups}
 		searchOptions.fromMap(v)
-		if searchResults, err := NewSearchResults(&searchOptions, client); err == nil {
+		if searchResults, err := controller.Calls.Search(&searchOptions, client); err == nil {
 			client.Send <- &Message{Command: MessageCommandListCall, Payload: searchResults}
 		} else {
 			return fmt.Errorf("controller.processmessage.commandlistcall: %v", err)
@@ -451,8 +472,8 @@ func (controller *Controller) ProcessMessageCommandListCall(client *Client, mess
 }
 
 func (controller *Controller) ProcessMessageCommandLivefeedMap(client *Client, message *Message) {
-	client.LivefeedMap.FromMap(message.Payload)
-	client.Send <- &Message{Command: MessageCommandLivefeedMap, Payload: !client.LivefeedMap.IsAllOff()}
+	client.Livefeed.FromMap(message.Payload)
+	client.Send <- &Message{Command: MessageCommandLivefeedMap, Payload: !client.Livefeed.IsAllOff()}
 }
 
 func (controller *Controller) ProcessMessageCommandPin(client *Client, message *Message) error {
@@ -476,7 +497,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			if access, ok := controller.Accesses.GetAccess(code); ok {
 				client.Access = access
 			} else {
-				LogEvent(
+				controller.Logs.LogEvent(
 					controller.Database,
 					LogLevelWarn,
 					fmt.Sprintf("invalid access code=\"%s\" address=\"%s\"", code, client.Conn.RemoteAddr().String()),
@@ -486,7 +507,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			}
 
 			if client.AuthCount == maxAuthCount {
-				LogEvent(
+				controller.Logs.LogEvent(
 					controller.Database,
 					LogLevelWarn,
 					fmt.Sprintf("access ident=\"%s\" locked", client.Access.Ident),
@@ -496,7 +517,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			}
 
 			if client.Access.HasExpired() {
-				LogEvent(
+				controller.Logs.LogEvent(
 					controller.Database,
 					LogLevelWarn,
 					fmt.Sprintf("access ident=\"%s\" expired", client.Access.Ident),
@@ -508,13 +529,13 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			switch v := client.Access.Limit.(type) {
 			case uint:
 				count := uint(0)
-				for _, acc := range controller.Accesses.List {
-					if acc == client.Access {
+				for c := range controller.Clients {
+					if c.Access == client.Access {
 						count++
 					}
 				}
-				if count >= v {
-					LogEvent(
+				if count > v {
+					controller.Logs.LogEvent(
 						controller.Database,
 						LogLevelWarn,
 						fmt.Sprintf("access ident=\"%s\" too many concurrent connections, limit is %d", client.Access.Ident, client.Access.Limit),
@@ -560,7 +581,7 @@ func (controller *Controller) Start() error {
 		controller.running = true
 	}
 
-	LogEvent(controller.Database, LogLevelWarn, "server started")
+	controller.Logs.LogEvent(controller.Database, LogLevelWarn, "server started")
 
 	if len(controller.Config.BaseDir) > 0 {
 		log.Printf("base folder is %s\n", controller.Config.BaseDir)

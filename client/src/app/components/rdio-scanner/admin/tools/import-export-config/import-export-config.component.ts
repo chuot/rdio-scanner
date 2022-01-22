@@ -39,10 +39,12 @@ export class RdioScannerAdminImportExportConfigComponent {
     async export(): Promise<void> {
         const config = await this.adminService.getConfig();
 
-        const file = JSON.stringify(config);
+        const file = encodeURIComponent(JSON.stringify(config)).replace(/%([0-9A-F]{2})/g, (_, c) => {
+            return String.fromCharCode(parseInt(c, 16));
+        });
         const fileName = 'rdio-scanner.json';
         const fileType = 'application/json';
-        const fileUri = `data:${fileType};base64,${btoa(file)}`;
+        const fileUri = `data:${fileType};base64,${window.btoa(file)}`;
 
         const el = this.document.createElement('a');
 
@@ -71,9 +73,11 @@ export class RdioScannerAdminImportExportConfigComponent {
             target.value = '';
 
             try {
-                const config = JSON.parse(reader.result as string);
+                const res = decodeURIComponent(Array.prototype.map.call(reader.result, (c) => {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                }).join(''));
 
-                this.config.emit(config);
+                this.config.emit(JSON.parse(res));
 
             } catch (error) {
                 this.matSnackBar.open(error as string, '', { duration: 5000 });

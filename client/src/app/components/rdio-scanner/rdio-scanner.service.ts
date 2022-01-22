@@ -19,7 +19,6 @@
 
 import { DOCUMENT } from '@angular/common';
 import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
-import { interval, Subscription, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 import { AppUpdateService } from '../../shared/update/update.service';
 import {
@@ -95,7 +94,7 @@ export class RdioScannerService implements OnDestroy {
     private playbackList: RdioScannerPlaybackList | undefined;
     private playbackPending: number | undefined;
 
-    private skipDelay: Subscription | undefined;
+    private skipDelay: number | undefined;
 
     private websocket: WebSocket | undefined;
 
@@ -351,7 +350,7 @@ export class RdioScannerService implements OnDestroy {
         }
 
         if (this.skipDelay) {
-            this.skipDelay.unsubscribe();
+            clearTimeout(this.skipDelay);
 
             this.skipDelay = undefined;
         }
@@ -447,7 +446,12 @@ export class RdioScannerService implements OnDestroy {
 
             this.event.emit({ call: this.call, queue });
 
-            interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
+            let interval = setInterval(() => {
+                if (!this.call) {
+                    clearInterval(interval);
+                    return;
+                }
+
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
                     if (isNaN(this.audioSourceStartTime)) {
                         this.audioSourceStartTime = this.audioContext.currentTime;
@@ -457,7 +461,7 @@ export class RdioScannerService implements OnDestroy {
                         this.event.emit({ time: this.audioContext.currentTime - this.audioSourceStartTime });
                     }
                 }
-            });
+            }, 500);
         }, () => {
             this.event.emit({ call: this.call, queue });
 
@@ -508,15 +512,15 @@ export class RdioScannerService implements OnDestroy {
         this.stop();
 
         if (options?.delay) {
-            this.skipDelay = timer(1000).subscribe(() => {
+            this.skipDelay = window.setTimeout(() => {
                 this.skipDelay = undefined;
 
                 play();
-            });
+            }, 1000);
 
         } else {
             if (this.skipDelay) {
-                this.skipDelay?.unsubscribe();
+                clearTimeout(this.skipDelay);
 
                 this.skipDelay = undefined;
             }
@@ -671,13 +675,23 @@ export class RdioScannerService implements OnDestroy {
     }
 
     private cleanQueue(): void {
-        this.callQueue = this.callQueue.filter((call: RdioScannerCall) => {
-            return this.livefeedMap && this.livefeedMap[call.system] && this.livefeedMap[call.system][call.talkgroup];
-        });
+        let isActive = (call: RdioScannerCall) => {
+            let lfm = (sys: number, tg: number) =>  this.livefeedMap && this.livefeedMap[sys] && this.livefeedMap[sys][tg];
+            let active = lfm(call.system, call.talkgroup);
+            if (!active && Array.isArray(call.patches)) {
+                for (let i = 0; i < call.patches.length; i++) {
+                    active = lfm(call.system, call.patches[i]);
+                    if (active) {
+                        break;
+                    }
+                }
+            }
+            return active;
+        };
 
-        if (this.call && !(this.livefeedMap && this.livefeedMap[this.call.system] &&
-            this.livefeedMap[this.call.system][this.call.talkgroup])) {
+        this.callQueue = this.callQueue.filter((call: RdioScannerCall) => isActive(call));
 
+        if (this.call && !isActive(this.call)) {
             this.skip();
         }
     }
@@ -753,7 +767,7 @@ export class RdioScannerService implements OnDestroy {
             this.event.emit({ linked: false });
 
             if (ev.code !== 1000) {
-                timer(2000).subscribe(() => this.reconnectWebsocket());
+                setTimeout(() => this.reconnectWebsocket(), 2000);
             }
         };
 

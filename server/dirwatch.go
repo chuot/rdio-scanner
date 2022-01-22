@@ -57,6 +57,7 @@ type Dirwatch struct {
 	UsePolling  bool        `json:"usePolling"`
 	controller  *Controller
 	dirs        map[string]bool
+	running     bool
 	watcher     *fsnotify.Watcher
 }
 
@@ -140,7 +141,7 @@ func (dirwatch *Dirwatch) Ingest(p string) {
 	}
 
 	if err != nil {
-		LogEvent(
+		dirwatch.controller.Logs.LogEvent(
 			dirwatch.controller.Database,
 			LogLevelError,
 			fmt.Sprintf("dirwatch.ingest: %v", err.Error()),
@@ -166,6 +167,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 
 		call.AudioName = path.Base(p)
 		call.AudioType = mime.TypeByExtension(path.Ext(p))
+		call.Frequency = dirwatch.Frequency
 
 		if call.Audio, err = os.ReadFile(p); err != nil {
 			return err
@@ -222,14 +224,13 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 
 	call.AudioName = path.Base(p)
 	call.AudioType = mime.TypeByExtension(path.Ext(p))
+	call.Frequency = dirwatch.Frequency
 
 	if call.Audio, err = os.ReadFile(p); err != nil {
-		fmt.Println("err1")
 		return err
 	}
 
 	if err = ParseSdrTrunkMeta(call, dirwatch.controller); err != nil {
-		fmt.Println("err2")
 		return err
 	}
 
@@ -238,7 +239,6 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 
 		if dirwatch.DeleteAfter {
 			if err = os.Remove(p); err != nil {
-				fmt.Println("err3")
 				return err
 			}
 		}
@@ -277,6 +277,7 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 	call.AudioName = path.Base(audioName)
 	call.AudioType = mime.TypeByExtension(path.Ext(audioName))
+	call.Frequency = dirwatch.Frequency
 
 	switch v := dirwatch.SystemId.(type) {
 	case uint:
@@ -455,9 +456,11 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 		return err
 	}
 
-	go func() {
+	dirwatch.running = true
+
+	watcher := func() {
 		logError := func(err error) {
-			LogEvent(controller.Database, LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
+			controller.Logs.LogEvent(controller.Database, LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
 		}
 
 		newTimer := func(eventName string) *time.Timer {
@@ -500,12 +503,19 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 					}
 				}
 
+			} else if dirwatch.running {
+				dirwatch.watcher.Close()
+				dirwatch.watcher, _ = fsnotify.NewWatcher()
+				time.Sleep(2 * time.Second)
+
 			} else {
 				dirwatch.Stop()
 				break
 			}
 		}
-	}()
+	}
+
+	go watcher()
 
 	go func() {
 		time.Sleep(2 * time.Second)
@@ -532,14 +542,26 @@ func (dirwatch *Dirwatch) Stop() {
 		dirwatch.watcher.Close()
 		dirwatch.watcher = nil
 	}
+
+	dirwatch.running = false
 }
 
 type Dirwatches struct {
 	List  []*Dirwatch
-	mutex sync.Mutex
+	mutex sync.RWMutex
+}
+
+func NewDirwatches() *Dirwatches {
+	return &Dirwatches{
+		List:  []*Dirwatch{},
+		mutex: sync.RWMutex{},
+	}
 }
 
 func (dirwatches *Dirwatches) FromMap(f []interface{}) {
+	dirwatches.mutex.Lock()
+	defer dirwatches.mutex.Unlock()
+
 	dirwatches.Stop()
 
 	dirwatches.List = []*Dirwatch{}
@@ -569,9 +591,12 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 		talkgroupId sql.NullFloat64
 	)
 
+	dirwatches.mutex.RLock()
+	defer dirwatches.mutex.RUnlock()
+
 	dirwatches.Stop()
 
-	*dirwatches = Dirwatches{}
+	dirwatches.List = []*Dirwatch{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("dirwatches.read: %v", err)
@@ -639,7 +664,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 func (dirwatches *Dirwatches) Start(controller *Controller) {
 	for i := range dirwatches.List {
 		if err := dirwatches.List[i].Start(controller); err != nil {
-			LogEvent(
+			controller.Logs.LogEvent(
 				controller.Database,
 				LogLevelError,
 				fmt.Sprintf("dirwatches.start: %s", err.Error()),
@@ -663,6 +688,7 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 	)
 
 	dirwatches.mutex.Lock()
+	defer dirwatches.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("dirwatches.write: %v", err)
@@ -723,8 +749,6 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 			}
 		}
 	}
-
-	dirwatches.mutex.Unlock()
 
 	return nil
 }

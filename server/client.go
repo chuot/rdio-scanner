@@ -34,7 +34,7 @@ type Client struct {
 	Systems     []System
 	GroupsMap   GroupsMap
 	TagsMap     TagsMap
-	LivefeedMap LivefeedMap
+	Livefeed    *Livefeed
 	SystemsMap  SystemsMap
 }
 
@@ -51,7 +51,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	client.Controller = controller
 	client.Conn = conn
 	client.Send = make(chan *Message, 8)
-	client.LivefeedMap = LivefeedMap{}
+	client.Livefeed = NewLivefeed()
 
 	controller.Register <- client
 

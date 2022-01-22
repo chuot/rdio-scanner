@@ -89,26 +89,6 @@ func (db *Database) ParseDateTime(f interface{}) (time.Time, error) {
 	}
 }
 
-func (db *Database) Prune(controller *Controller) error {
-	if controller.Options.PruneDays == 0 {
-		return nil
-	}
-
-	LogEvent(controller.Database, LogLevelInfo, "database pruning")
-
-	date := time.Now().Add(-24 * time.Hour * time.Duration(controller.Options.PruneDays)).Format(db.DateTimeFormat)
-
-	if _, err := controller.Database.Sql.Exec("delete from `rdioScannerCalls` where `dateTime` < ?", date); err != nil {
-		return err
-	}
-
-	if _, err := controller.Database.Sql.Exec("delete from `rdioScannerLogs` where `dateTime` < ?", date); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (db *Database) migrate() error {
 	var (
 		err     error
@@ -201,7 +181,7 @@ func (db *Database) migration20191028144433(verbose bool) error {
 	var queries []string
 	if db.Config.DbType == DbTypeSqlite {
 		queries = []string{
-			"create table `rdioScannerSystems` (`id` integer primary key autoincrement, `createdAt` datetime not null, `updatedAt` datetime not null, `name` varchar(255) not null, `system` integer not null, `talkgroups` json not null default '[]')",
+			"create table `rdioScannerSystems` (`id` integer primary key autoincrement, `createdAt` datetime not null, `updatedAt` datetime not null, `name` varchar(255) not null, `system` integer not null, `talkgroups` json not null)",
 			"create unique index `rdio_scanner_systems_system` on `rdioScannerSystems` (`system`)",
 		}
 	} else {
@@ -255,7 +235,7 @@ func (db *Database) migration20191220093214(verbose bool) error {
 		queries = []string{
 			"alter table `rdioScannerCalls` add column `audioName` varchar(255)",
 			"alter table `rdioScannerCalls` add column `audioType` varchar(255)",
-			"alter table `rdioScannerSystems` add column `aliases` json not null default '[]'",
+			"alter table `rdioScannerSystems` add column `aliases` json not null",
 		}
 	} else {
 		queries = []string{
@@ -288,7 +268,7 @@ func (db *Database) migration20200428132918(verbose bool) error {
 	if db.Config.DbType == DbTypeSqlite {
 		queries = []string{
 			"drop table `rdioScannerSystems`",
-			"create table `rdioScannerCalls2` (`id` integer primary key autoincrement, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` json not null default '[]', `frequency` integer, `source` integer, `sources` json not null default '[]', `system` integer not null, `talkgroup` integer not null)",
+			"create table `rdioScannerCalls2` (`id` integer primary key autoincrement, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` json not null, `frequency` integer, `source` integer, `sources` json not null, `system` integer not null, `talkgroup` integer not null)",
 			"insert into `rdioScannerCalls2` select `id`, `audio`, `audioName`, `audioType`, `startTime`, `freqList`, `freq`, null, `srcList`, `system`, `talkgroup` from `rdioScannerCalls`",
 			"drop table `rdioScannerCalls`",
 			"alter table `rdioScannerCalls2` rename to `rdioScannerCalls`",
@@ -313,7 +293,7 @@ func (db *Database) migration20210115105958(verbose bool) error {
 		queries = []string{
 			"create table `rdioScannerAccesses` (`_id` integer primary key autoincrement, `code` varchar(255) not null unique, `expiration` datetime, `ident` varchar(255), `limit` integer, `order` integer, `systems` text not null)",
 			"create table `rdioScannerApiKeys` (`_id` integer primary key autoincrement, `disabled` tinyint(1) default 0, `ident` varchar(255), `key` varchar(255) not null unique, `order` integer, `systems` text not null)",
-			"create table `rdioScannerCalls2` (`id` integer primary key autoincrement, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` text not null default '[]', `frequency` integer, `source` integer, `sources` text not null default '[]', `system` integer not null, `talkgroup` integer not null)",
+			"create table `rdioScannerCalls2` (`id` integer primary key autoincrement, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` text not null, `frequency` integer, `source` integer, `sources` text not null, `system` integer not null, `talkgroup` integer not null)",
 			"create index `rdio_scanner_calls2_date_time_system_talkgroup` on `rdioScannerCalls2` (`dateTime`, `system`, `talkgroup`)",
 			"insert into `rdioScannerCalls2` select `id`, `audio`, `audioName`, `audioType`, `dateTime`, `frequencies`, `frequency`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls`",
 			"drop table `rdioScannerCalls`",
@@ -325,14 +305,14 @@ func (db *Database) migration20210115105958(verbose bool) error {
 			"create table `rdioScannerGroups` (`_id` integer primary key autoincrement, `label` varchar(255) not null)",
 			"create table `rdioScannerLogs` (`_id` integer primary key autoincrement, `dateTime` datetime not null, `level` varchar(255) not null, `message` varchar(255) not null)",
 			"create index `rdio_scanner_logs_date_time_level` on `rdioScannerLogs` (`dateTime`, `level`)",
-			"create table `rdioScannerSystems` (`_id` integer primary key autoincrement, `autoPopulate` tinyint(1) default 0, `blacklists` text not null default '[]', `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer, `talkgroups` text not null default '[]', `units` text not null default '[]')",
+			"create table `rdioScannerSystems` (`_id` integer primary key autoincrement, `autoPopulate` tinyint(1) default 0, `blacklists` text not null, `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer, `talkgroups` text not null, `units` text not null)",
 			"create table `rdioScannerTags` (`_id` integer primary key autoincrement, `label` varchar(255) not null)",
 		}
 	} else {
 		queries = []string{
 			"create table `rdioScannerAccesses` (`_id` integer primary key auto_increment, `code` varchar(255) not null unique, `expiration` datetime, `ident` varchar(255), `limit` integer, `order` integer, `systems` text not null)",
 			"create table `rdioScannerApiKeys` (`_id` integer primary key auto_increment, `disabled` tinyint(1) default 0, `ident` varchar(255), `key` varchar(255) not null unique, `order` integer, `systems` text not null)",
-			"create table `rdioScannerCalls2` (`id` integer primary key auto_increment, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` text not null default '[]', `frequency` integer, `source` integer, `sources` text not null default '[]', `system` integer not null, `talkgroup` integer not null)",
+			"create table `rdioScannerCalls2` (`id` integer primary key auto_increment, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` text not null, `frequency` integer, `source` integer, `sources` text not null, `system` integer not null, `talkgroup` integer not null)",
 			"create index `rdio_scanner_calls2_date_time_system_talkgroup` on `rdioScannerCalls2` (`dateTime`, `system`, `talkgroup`)",
 			"insert into `rdioScannerCalls2` select `id`, `audio`, `audioName`, `audioType`, `dateTime`, `frequencies`, `frequency`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls`",
 			"drop table `rdioScannerCalls`",
@@ -344,7 +324,7 @@ func (db *Database) migration20210115105958(verbose bool) error {
 			"create table `rdioScannerGroups` (`_id` integer primary key auto_increment, `label` varchar(255) not null)",
 			"create table `rdioScannerLogs` (`_id` integer primary key auto_increment, `dateTime` datetime not null, `level` varchar(255) not null, `message` varchar(255) not null)",
 			"create index `rdio_scanner_logs_date_time_level` on `rdioScannerLogs` (`dateTime`, `level`)",
-			"create table `rdioScannerSystems` (`_id` integer primary key auto_increment, `autoPopulate` tinyint(1) default 0, `blacklists` text not null default '[]', `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer, `talkgroups` text not null default '[]', `units` text not null default '[]')",
+			"create table `rdioScannerSystems` (`_id` integer primary key auto_increment, `autoPopulate` tinyint(1) default 0, `blacklists` text not null, `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer, `talkgroups` text not null, `units` text not null)",
 			"create table `rdioScannerTags` (`_id` integer primary key auto_increment, `label` varchar(255) not null)",
 		}
 	}
@@ -355,7 +335,7 @@ func (db *Database) migration20210830092027(verbose bool) error {
 	var queries []string
 	if db.Config.DbType == DbTypeSqlite {
 		queries = []string{
-			"create table `rdioScannerSystems2` (`_id` integer primary key autoincrement, `autoPopulate` tinyint(1) default 0, `blacklists` text not null default '[]', `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer, `talkgroups` longtext not null, `units` longtext not null)",
+			"create table `rdioScannerSystems2` (`_id` integer primary key autoincrement, `autoPopulate` tinyint(1) default 0, `blacklists` text not null, `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer, `talkgroups` longtext not null, `units` longtext not null)",
 			"insert into `rdioScannerSystems2` select `_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`, `talkgroups`, `units` from `rdioScannerSystems`",
 			"drop table `rdioScannerSystems`",
 			"alter table `rdioScannerSystems2` rename to `rdioScannerSystems`",
@@ -396,27 +376,27 @@ func (db *Database) migration20211202094819(verbose bool) error {
 
 func (db *Database) migration20220101070000(verbose bool) error {
 	var (
-		err       error
-		frequency interface{}
-		id        uint
-		label     string
-		led       interface{}
-		name      string
-		queries   []string
-		rows      *sql.Rows
-		stra      string
-		strb      string
-		tgs       Talkgroups
-		units     Units
+		err        error
+		frequency  interface{}
+		id         uint
+		label      string
+		led        interface{}
+		name       string
+		queries    []string
+		rows       *sql.Rows
+		stra       string
+		strb       string
+		talkgroups []*Talkgroup
+		units      []*Unit
 	)
 	if db.Config.DbType == DbTypeSqlite {
 		queries = []string{
-			"create table `rdioScannerCalls2` (`id` integer primary key autoincrement, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` text not null default '[]', `frequency` integer, `patches` text not null default '[]', `source` integer, `sources` text not null default '[]', `system` integer not null, `talkgroup` integer not null)",
+			"create table `rdioScannerCalls2` (`id` integer primary key autoincrement, `audio` longblob not null, `audioName` varchar(255), `audioType` varchar(255), `dateTime` datetime not null, `frequencies` text not null, `frequency` integer, `patches` text not null, `source` integer, `sources` text not null, `system` integer not null, `talkgroup` integer not null)",
 			"insert into `rdioScannerCalls2` select `id`, `audio`, `audioName`, `audioType`, `dateTime`, `frequencies`, `frequency`, '[]', `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls`",
 			"drop table `rdioScannerCalls`",
 			"alter table `rdioScannerCalls2` rename to `rdioScannerCalls`",
 			"create index `rdio_scanner_calls_date_time_system_talkgroup` on `rdioScannerCalls` (`dateTime`, `system`, `talkgroup`)",
-			"create table `rdioScannerSystems2` (`_id` integer primary key autoincrement, `autoPopulate` tinyint(1) default 0, `blacklists` text not null default '[]', `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer)",
+			"create table `rdioScannerSystems2` (`_id` integer primary key autoincrement, `autoPopulate` tinyint(1) default 0, `blacklists` text not null, `id` integer not null unique, `label` varchar(255) not null, `led` varchar(255), `order` integer)",
 			"insert into `rdioScannerSystems2` select `_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order` from `rdioScannerSystems`",
 			"drop table `rdioScannerSystems`",
 			"alter table `rdioScannerSystems2` rename to `rdioScannerSystems`",
@@ -427,7 +407,7 @@ func (db *Database) migration20220101070000(verbose bool) error {
 		}
 	} else {
 		queries = []string{
-			"alter table `rdioScannerCalls` add column `patches` text not null default '[]'",
+			"alter table `rdioScannerCalls` add column `patches` text not null",
 			"alter table `rdioScannerSystems` drop column `talkgroups`",
 			"alter table `rdioScannerSystems` drop column `units`",
 			"create table `rdioScannerTalkgroups` (`_id` integer primary key auto_increment, `frequency` integer, `groupId` integer not null, `id` integer not null, `label` varchar(255) not null, `led` varchar(255), `name` varchar(255) not null, `order` integer, `systemId` integer not null, `tagId` integer not null)",
@@ -441,13 +421,13 @@ func (db *Database) migration20220101070000(verbose bool) error {
 			if err = rows.Scan(&id, &stra, &strb); err != nil {
 				break
 			}
-			if err = json.Unmarshal([]byte(stra), &tgs); err != nil {
+			if err = json.Unmarshal([]byte(stra), &talkgroups); err != nil {
 				break
 			}
 			if err = json.Unmarshal([]byte(strb), &units); err != nil {
 				break
 			}
-			for i, tg := range tgs {
+			for i, tg := range talkgroups {
 				switch v := tg.Frequency.(type) {
 				case uint:
 					frequency = v

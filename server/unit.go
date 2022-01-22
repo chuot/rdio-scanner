@@ -21,10 +21,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type Unit struct {
-	Id    int    `json:"id"`
+	Id    uint   `json:"id"`
 	Label string `json:"label"`
 	Order uint   `json:"order"`
 }
@@ -32,7 +33,7 @@ type Unit struct {
 func (unit *Unit) FromMap(m map[string]interface{}) {
 	switch v := m["id"].(type) {
 	case float64:
-		unit.Id = int(v)
+		unit.Id = uint(v)
 	}
 
 	switch v := m["label"].(type) {
@@ -41,12 +42,22 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 	}
 }
 
-type Units []*Unit
+type Units struct {
+	List  []*Unit
+	mutex sync.RWMutex
+}
 
-func (units *Units) Add(id int, label string) *Units {
+func NewUnits() *Units {
+	return &Units{
+		List:  []*Unit{},
+		mutex: sync.RWMutex{},
+	}
+}
+
+func (units *Units) Add(id uint, label string) *Units {
 	found := false
 
-	for _, u := range *units {
+	for _, u := range units.List {
 		if u.Id == id {
 			found = true
 			break
@@ -54,27 +65,30 @@ func (units *Units) Add(id int, label string) *Units {
 	}
 
 	if !found {
-		*units = append(*units, &Unit{Id: id, Label: label})
+		units.List = append(units.List, &Unit{Id: id, Label: label})
 	}
 
 	return units
 }
 
 func (units *Units) FromMap(f []interface{}) {
-	*units = Units{}
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
+
+	units.List = []*Unit{}
 
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]interface{}:
 			unit := &Unit{}
 			unit.FromMap(m)
-			*units = append(*units, unit)
+			units.List = append(units.List, unit)
 		}
 	}
 }
 
 func (u *Units) Merge(units *Units) {
-	for _, v := range *units {
+	for _, v := range units.List {
 		u.Add(v.Id, v.Label)
 	}
 }
@@ -85,7 +99,10 @@ func (units *Units) Read(db *Database, systemId uint) error {
 		rows *sql.Rows
 	)
 
-	*units = Units{}
+	units.mutex.RLock()
+	defer units.mutex.RUnlock()
+
+	units.List = []*Unit{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("units.read: %v", err)
@@ -102,7 +119,7 @@ func (units *Units) Read(db *Database, systemId uint) error {
 			break
 		}
 
-		*units = append(*units, unit)
+		units.List = append(units.List, unit)
 	}
 
 	rows.Close()
@@ -111,8 +128,8 @@ func (units *Units) Read(db *Database, systemId uint) error {
 		return formatError(err)
 	}
 
-	sort.Slice(*units, func(i int, j int) bool {
-		return (*units)[i].Order < (*units)[j].Order
+	sort.Slice(units.List, func(i int, j int) bool {
+		return units.List[i].Order < units.List[j].Order
 	})
 
 	return nil
@@ -122,15 +139,18 @@ func (units *Units) Write(db *Database, systemId uint) error {
 	var (
 		count uint
 		err   error
-		ids   = []int{}
+		ids   = []uint{}
 		rows  *sql.Rows
 	)
+
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("units.write: %v", err)
 	}
 
-	for _, unit := range *units {
+	for _, unit := range units.List {
 		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
 			break
 		}
@@ -154,10 +174,10 @@ func (units *Units) Write(db *Database, systemId uint) error {
 	}
 
 	for rows.Next() {
-		var id int
+		var id uint
 		rows.Scan(&id)
 		remove := true
-		for _, unit := range *units {
+		for _, unit := range units.List {
 			if unit.Id == id {
 				remove = false
 				break

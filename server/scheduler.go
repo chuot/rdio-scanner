@@ -18,6 +18,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -25,7 +26,8 @@ type Scheduler struct {
 	Controller *Controller
 	Ticker     *time.Ticker
 	cancel     chan interface{}
-	running    bool
+	mutex      sync.Mutex
+	started    bool
 }
 
 func NewScheduler(controller *Controller) *Scheduler {
@@ -35,25 +37,46 @@ func NewScheduler(controller *Controller) *Scheduler {
 	}
 }
 
+func (scheduler *Scheduler) pruneDatabase() error {
+	if scheduler.Controller.Options.PruneDays == 0 {
+		return nil
+	}
+
+	scheduler.Controller.Logs.LogEvent(scheduler.Controller.Database, LogLevelInfo, "database pruning")
+
+	if err := scheduler.Controller.Calls.Prune(scheduler.Controller.Database, scheduler.Controller.Options.PruneDays); err != nil {
+		return err
+	}
+
+	if err := scheduler.Controller.Logs.Prune(scheduler.Controller.Database, scheduler.Controller.Options.PruneDays); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (scheduler *Scheduler) run() {
+	scheduler.mutex.Lock()
+	defer scheduler.mutex.Unlock()
+
 	logError := func(err error) {
-		LogEvent(
+		scheduler.Controller.Logs.LogEvent(
 			scheduler.Controller.Database,
 			LogLevelError,
 			fmt.Sprintf("scheduler.run: %s", err.Error()),
 		)
 	}
 
-	if err := scheduler.Controller.Database.Prune(scheduler.Controller); err != nil {
+	if err := scheduler.pruneDatabase(); err != nil {
 		logError(err)
 	}
 }
 
 func (scheduler *Scheduler) Start() error {
-	if scheduler.running {
-		return errors.New("scheduler already running")
+	if scheduler.started {
+		return errors.New("scheduler already started")
 	} else {
-		scheduler.running = true
+		scheduler.started = true
 	}
 
 	scheduler.Ticker = time.NewTicker(time.Hour)
@@ -74,13 +97,13 @@ func (scheduler *Scheduler) Start() error {
 }
 
 func (scheduler *Scheduler) Stop() error {
-	if !scheduler.running {
-		return errors.New("scheduler not running")
+	if !scheduler.started {
+		return errors.New("scheduler not started")
 	}
 
 	scheduler.Ticker.Stop()
 	scheduler.Ticker = nil
-	scheduler.running = false
+	scheduler.started = false
 
 	return nil
 }
