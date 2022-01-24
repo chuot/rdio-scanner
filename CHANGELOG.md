@@ -38,6 +38,13 @@ _v6.1.4_
 - Fix SIGSEGV (issue #100).
 - New `patch` indicator for patched talkgroups.
 
+_v6.1.5_
+
+- Fix trunk-recorder API (issue #104).
+- Fix for avoid/patch flags on main display not beaving as expected.
+- Fix downstream not sending sources data.
+- Fix dirwatch crashing when config is updated.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

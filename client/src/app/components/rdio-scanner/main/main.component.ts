@@ -504,14 +504,18 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
                 this.callHistory.unshift(this.callPrevious);
             }
+        }
 
-            if (this.map[this.call.system]) {
-                this.patched = this.livefeedOnline && !this.map[this.call.system][this.call.talkgroup];
-                this.avoided = !this.patched && !this.map[this.call.system][this.call.talkgroup];
+        const call = this.call || this.callPrevious;
+
+        if (call) {
+            if (call.patched) {
+                this.avoided = false;
+                this.patched = true;
+            } else {
+                this.avoided = this.rdioScannerService.isAvoided(call);
+                this.patched = false;
             }
-
-        } else if (this.callPrevious && !this.patched) {
-            this.avoided = this.map[this.callPrevious.system] && !this.map[this.callPrevious.system][this.callPrevious.talkgroup];
         }
 
         const colors = ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];

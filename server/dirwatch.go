@@ -472,6 +472,9 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 		pending := map[string]*time.Timer{}
 
 		for {
+			if dirwatch.watcher == nil {
+				break
+			}
 			if event, ok := <-dirwatch.watcher.Events; ok {
 				switch event.Op {
 				case fsnotify.Create:

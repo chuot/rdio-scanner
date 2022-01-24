@@ -95,7 +95,7 @@ func (controller *Controller) ConvertAudio(call *Call) {
 		if !controller.ffmpegWarned {
 			controller.ffmpegWarned = true
 
-			controller.Logs.LogEvent(controller.Database, LogLevelWarn, "ffmpeg is not accessible, no audio conversion will be performed.")
+			controller.Logs.LogEvent(controller.Database, LogLevelWarn, "ffmpeg is not available, no audio conversion will be performed.")
 		}
 		return
 	}

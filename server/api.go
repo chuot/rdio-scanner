@@ -48,13 +48,13 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Invalid content-type"))
+			w.Write([]byte("Invalid content-type\n"))
 			return
 		}
 
 		if !strings.HasPrefix(mediaType, "multipart/") {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Not a multipart content"))
+			w.Write([]byte("Not a multipart content\n"))
 			return
 		}
 
@@ -85,12 +85,12 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			api.HandleCall(key, call, w)
 		} else {
 			w.WriteHeader(http.StatusExpectationFailed)
-			w.Write([]byte("Incomplete call data"))
+			w.Write([]byte("Incomplete call data\n"))
 		}
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Unsupported method"))
+		w.Write([]byte("Unsupported method\n"))
 	}
 }
 
@@ -127,17 +127,19 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Invalid content-type"))
+			w.Write([]byte("Invalid content-type\n"))
 			return
 		}
 
 		if !strings.HasPrefix(mediaType, "multipart/") {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Not a multipart content"))
+			w.Write([]byte("Not a multipart content\n"))
 			return
 		}
 
 		mr := multipart.NewReader(r.Body, params["boundary"])
+
+		parts := map[*multipart.Part][]byte{}
 
 		for {
 			p, err := mr.NextPart()
@@ -158,27 +160,15 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 			case "meta":
 				if err := ParseTrunkRecorderMeta(call, b); err != nil {
 					w.WriteHeader(http.StatusExpectationFailed)
-					w.Write([]byte("Invalid call data"))
+					w.Write([]byte("Invalid call data\n"))
 					return
 				}
+			default:
+				parts[p] = b
 			}
 		}
 
-		mr = multipart.NewReader(r.Body, params["boundary"])
-
-		for {
-			p, err := mr.NextPart()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				continue
-			}
-
-			b, err := io.ReadAll(p)
-			if err != nil {
-				continue
-			}
-
+		for p, b := range parts {
 			ParseMultipartContent(call, p, b)
 		}
 
@@ -187,11 +177,11 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 
 		} else {
 			w.WriteHeader(http.StatusExpectationFailed)
-			w.Write([]byte("Incomplete call data"))
+			w.Write([]byte("Incomplete call data\n"))
 		}
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Unsupported method"))
+		w.Write([]byte("Unsupported method\n"))
 	}
 }

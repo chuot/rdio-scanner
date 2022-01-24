@@ -19,7 +19,6 @@
 
 import { DOCUMENT } from '@angular/common';
 import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
-import { takeWhile } from 'rxjs/operators';
 import { AppUpdateService } from '../../shared/update/update.service';
 import {
     RdioScannerAvoidOptions,
@@ -322,6 +321,16 @@ export class RdioScannerService implements OnDestroy {
                 queue: this.callQueue.length,
             });
         }
+    }
+
+    isAvoided(call: RdioScannerCall): boolean {
+        return !!this.livefeedMap[call.system] && this.livefeedMap[call.system][call.talkgroup] === false;
+    }
+
+    isPatched(call: RdioScannerCall): boolean {
+        return this.isAvoided(call) && call.patches.some((tg) => {
+            return !!this.livefeedMap[call.system] && this.livefeedMap[call.system][tg];
+        });
     }
 
     livefeed(): void {
@@ -676,7 +685,7 @@ export class RdioScannerService implements OnDestroy {
 
     private cleanQueue(): void {
         let isActive = (call: RdioScannerCall) => {
-            let lfm = (sys: number, tg: number) =>  this.livefeedMap && this.livefeedMap[sys] && this.livefeedMap[sys][tg];
+            let lfm = (sys: number, tg: number) => this.livefeedMap && this.livefeedMap[sys] && this.livefeedMap[sys][tg];
             let active = lfm(call.system, call.talkgroup);
             if (!active && Array.isArray(call.patches)) {
                 for (let i = 0; i < call.patches.length; i++) {
@@ -794,16 +803,23 @@ export class RdioScannerService implements OnDestroy {
             switch (message[0]) {
                 case WebsocketCommand.Call:
                     if (message[1] !== null) {
-                        if (message[2] === WebsocketCallFlag.Download) {
+                        let call: RdioScannerCall = message[1];
+                        let flag: string = message[2];
+
+                        if (flag === WebsocketCallFlag.Download) {
                             this.download(message[1]);
 
-                        } else if (message[2] === WebsocketCallFlag.Play && message[1]?.id === this.playbackPending) {
+                        } else if (flag === WebsocketCallFlag.Play && call.id === this.playbackPending) {
                             this.playbackPending = undefined;
 
-                            this.queue(this.transformCall(message[1]), { priority: true });
+                            this.queue(this.transformCall(call), { priority: true });
 
                         } else {
-                            this.queue(this.transformCall(message[1]));
+                                console.log(call.id, this.isPatched(call));
+                            if (this.isPatched(call)) {
+                                call.patched = true;
+                            }
+                            this.queue(this.transformCall(call));
                         }
                     }
 

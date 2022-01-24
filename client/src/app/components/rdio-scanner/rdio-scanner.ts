@@ -49,6 +49,7 @@ export interface RdioScannerCall {
     frequencies?: RdioScannerCallFrequency[];
     frequency?: number;
     id: number;
+    patched?: boolean;
     patches: number[];
     source?: number;
     sources?: RdioScannerCallSource[];
