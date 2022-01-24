@@ -45,6 +45,10 @@ _v6.1.5_
 - Fix downstream not sending sources data.
 - Fix dirwatch crashing when config is updated.
 
+_v6.1.6_
+
+- Fix webapp not reporting the correct version.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.
