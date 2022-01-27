@@ -93,13 +93,13 @@ type TalkgroupMap map[string]interface{}
 
 type Talkgroups struct {
 	List  []*Talkgroup
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewTalkgroups() *Talkgroups {
 	return &Talkgroups{
 		List:  []*Talkgroup{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -120,8 +120,8 @@ func (talkgroups *Talkgroups) FromMap(f []interface{}) {
 }
 
 func (talkgroups *Talkgroups) GetTalkgroup(f interface{}) (system *Talkgroup, ok bool) {
-	talkgroups.mutex.RLock()
-	defer talkgroups.mutex.RUnlock()
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
 
 	switch v := f.(type) {
 	case uint:
@@ -149,8 +149,8 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 		rows      *sql.Rows
 	)
 
-	talkgroups.mutex.RLock()
-	defer talkgroups.mutex.RUnlock()
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
 
 	talkgroups.List = []*Talkgroup{}
 

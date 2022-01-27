@@ -106,20 +106,20 @@ func (call *Call) ToJson() (string, error) {
 }
 
 type Calls struct {
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewCalls() *Calls {
 	return &Calls{
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
 func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) bool {
 	var count uint
 
-	calls.mutex.RLock()
-	defer calls.mutex.RUnlock()
+	calls.mutex.Lock()
+	defer calls.mutex.Unlock()
 
 	d := time.Duration(msTimeFrame) * time.Millisecond
 	from := call.DateTime.Add(-d).Format(db.DateTimeFormat)
@@ -142,8 +142,8 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 		t           time.Time
 	)
 
-	calls.mutex.RLock()
-	defer calls.mutex.RUnlock()
+	calls.mutex.Lock()
+	defer calls.mutex.Unlock()
 
 	call := Call{}
 
@@ -209,8 +209,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		where    string = "true"
 	)
 
-	calls.mutex.RLock()
-	defer calls.mutex.RUnlock()
+	calls.mutex.Lock()
+	defer calls.mutex.Unlock()
 
 	db := client.Controller.Database
 

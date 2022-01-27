@@ -42,13 +42,13 @@ func (group *Group) FromMap(m map[string]interface{}) {
 
 type Groups struct {
 	List  []*Group
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewGroups() *Groups {
 	return &Groups{
 		List:  []*Group{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -69,8 +69,8 @@ func (groups *Groups) FromMap(f []interface{}) {
 }
 
 func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
-	groups.mutex.RLock()
-	defer groups.mutex.RUnlock()
+	groups.mutex.Lock()
+	defer groups.mutex.Unlock()
 
 	switch v := f.(type) {
 	case uint:
@@ -165,8 +165,8 @@ func (groups *Groups) Read(db *Database) error {
 		rows *sql.Rows
 	)
 
-	groups.mutex.RLock()
-	defer groups.mutex.RUnlock()
+	groups.mutex.Lock()
+	defer groups.mutex.Unlock()
 
 	groups.List = []*Group{}
 

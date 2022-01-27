@@ -43,7 +43,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`^([0-9]+)$`).FindStringSubmatch(m.Artist())
 	if len(s) == 2 {
-		if i, err = strconv.Atoi(s[1]); err == nil {
+		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
 		if i > 0 {
@@ -271,22 +271,22 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		}
 
 	case "talkgroupGroup":
-		if s := string(b); len(s) > 1 {
+		if s := string(b); len(s) > 0 && s != "-" {
 			call.talkgroupGroup = s
 		}
 
 	case "talkgroupLabel":
-		if s := string(b); len(s) > 1 {
+		if s := string(b); len(s) > 0 && s != "-" {
 			call.talkgroupLabel = s
 		}
 
 	case "talkgroupName":
-		if s := string(b); len(s) > 1 {
+		if s := string(b); len(s) > 0 && s != "-" {
 			call.talkgroupName = s
 		}
 
 	case "talkgroupTag":
-		if s := string(b); len(s) > 1 {
+		if s := string(b); len(s) > 0 && s != "-" {
 			call.talkgroupTag = s
 		}
 	}
@@ -425,9 +425,9 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 
 	switch v := m["talkgroup_tag"].(type) {
 	case string:
-		call.talkgroupTag = v
-		call.talkgroupLabel = v
-		call.talkgroupName = v
+		if len(v) > 0 && v != "-" {
+			call.talkgroupLabel = v
+		}
 	}
 
 	return nil

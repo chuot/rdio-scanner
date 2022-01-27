@@ -49,6 +49,14 @@ _v6.1.6_
 
 - Fix webapp not reporting the correct version.
 
+_v6.1.7_
+
+- More concurrency mutexes to resolve SQL_BUSY errors.
+- Better internal management of dirwatches.
+- Fix SDRTrunk files not being ingested (discussion #108).
+- Fix Trunk Recorder talkgroup_tag assign to the wrong property (issue #115).
+- Improved the way the talkgroup label and name are autopopulated. If Trunk Recorder sends a talkgroup_tag with an empty value or with a single `-`, it will not overwrite the talkgroup label.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

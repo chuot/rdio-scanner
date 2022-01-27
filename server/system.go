@@ -95,13 +95,13 @@ type SystemMap map[string]interface{}
 
 type Systems struct {
 	List  []*System
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewSystems() *Systems {
 	return &Systems{
 		List:  []*System{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -122,8 +122,8 @@ func (systems *Systems) FromMap(f []interface{}) {
 }
 
 func (systems *Systems) GetNewSystemId() uint {
-	systems.mutex.RLock()
-	defer systems.mutex.RUnlock()
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
 
 NextId:
 	for i := uint(1); i < 65535; i++ {
@@ -138,8 +138,8 @@ NextId:
 }
 
 func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
-	systems.mutex.RLock()
-	defer systems.mutex.RUnlock()
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
 
 	switch v := f.(type) {
 	case uint:
@@ -319,8 +319,8 @@ func (systems *Systems) Read(db *Database) error {
 		rows       *sql.Rows
 	)
 
-	systems.mutex.RLock()
-	defer systems.mutex.RUnlock()
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
 
 	systems.List = []*System{}
 

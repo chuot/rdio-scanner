@@ -350,13 +350,13 @@ func (downstream *Downstream) Send(call *Call) error {
 
 type Downstreams struct {
 	List  []*Downstream
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewDownstreams() *Downstreams {
 	return &Downstreams{
 		List:  []*Downstream{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -384,8 +384,8 @@ func (downstreams *Downstreams) Read(db *Database) error {
 		rows  *sql.Rows
 	)
 
-	downstreams.mutex.RLock()
-	defer downstreams.mutex.RUnlock()
+	downstreams.mutex.Lock()
+	defer downstreams.mutex.Unlock()
 
 	downstreams.List = []*Downstream{}
 

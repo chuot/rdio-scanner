@@ -110,13 +110,13 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 
 type Apikeys struct {
 	List  []*Apikey
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewApikeys() *Apikeys {
 	return &Apikeys{
 		List:  []*Apikey{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -137,8 +137,8 @@ func (apikeys *Apikeys) FromMap(f []interface{}) {
 }
 
 func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
-	apikeys.mutex.RLock()
-	defer apikeys.mutex.RUnlock()
+	apikeys.mutex.Lock()
+	defer apikeys.mutex.Unlock()
 
 	for _, apikey := range apikeys.List {
 		if apikey.Key == key && !apikey.Disabled {
@@ -157,8 +157,8 @@ func (apikeys *Apikeys) Read(db *Database) error {
 		systems string
 	)
 
-	apikeys.mutex.RLock()
-	defer apikeys.mutex.RUnlock()
+	apikeys.mutex.Lock()
+	defer apikeys.mutex.Unlock()
 
 	apikeys.List = []*Apikey{}
 

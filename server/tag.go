@@ -42,13 +42,13 @@ func (tag *Tag) FromMap(m map[string]interface{}) {
 
 type Tags struct {
 	List  []*Tag
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewTags() *Tags {
 	return &Tags{
 		List:  []*Tag{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -69,8 +69,8 @@ func (tags *Tags) FromMap(f []interface{}) {
 }
 
 func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
-	tags.mutex.RLock()
-	defer tags.mutex.RUnlock()
+	tags.mutex.Lock()
+	defer tags.mutex.Unlock()
 
 	switch v := f.(type) {
 	case uint:
@@ -165,8 +165,8 @@ func (tags *Tags) Read(db *Database) error {
 		rows *sql.Rows
 	)
 
-	tags.mutex.RLock()
-	defer tags.mutex.RUnlock()
+	tags.mutex.Lock()
+	defer tags.mutex.Unlock()
 
 	tags.List = []*Tag{}
 

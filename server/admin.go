@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -47,6 +48,7 @@ type Admin struct {
 	Register         chan *websocket.Conn
 	Tokens           []string
 	Unregister       chan *websocket.Conn
+	mutex            sync.Mutex
 	running          bool
 }
 
@@ -68,6 +70,7 @@ func NewAdmin(controller *Controller) *Admin {
 		Register:         make(chan *websocket.Conn, 100),
 		Tokens:           []string{},
 		Unregister:       make(chan *websocket.Conn, 100),
+		mutex:            sync.Mutex{},
 	}
 }
 
@@ -145,6 +148,11 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 		}()
 
 	} else {
+		admin.Controller.Calls.mutex.Lock()
+		admin.mutex.Lock()
+		defer admin.mutex.Unlock()
+		defer admin.Controller.Calls.mutex.Unlock()
+
 		logError := func(err error) {
 			admin.Controller.Logs.LogEvent(admin.Controller.Database, LogLevelError, fmt.Sprintf("admin.confighandler.put: %s", err.Error()))
 		}

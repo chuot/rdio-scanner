@@ -61,9 +61,10 @@ func NewDatabase(config *Config) *Database {
 		log.Fatalf("unknown database type %s\n", config.DbType)
 	}
 
+	database.Sql.SetConnMaxIdleTime(time.Second * 5)
 	database.Sql.SetConnMaxLifetime(0)
-	database.Sql.SetMaxIdleConns(10)
-	database.Sql.SetMaxOpenConns(10)
+	database.Sql.SetMaxIdleConns(64)
+	database.Sql.SetMaxOpenConns(64)
 
 	if err = database.migrate(); err != nil {
 		log.Fatal(err)

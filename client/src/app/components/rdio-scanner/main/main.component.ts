@@ -470,7 +470,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
                 this.callFrequency = typeof this.call.frequency === 'number'
                     ? this.formatFrequency(this.call.frequency)
-                    : this.call.audioName?.replace(/\..+$/, '') || '';
+                    : '';
 
                 this.callSpike = '';
             }

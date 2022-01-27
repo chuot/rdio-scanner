@@ -37,13 +37,13 @@ type Options struct {
 	TagsToggle                  bool   `json:"tagsToggle"`
 	adminPassword               string
 	adminPasswordNeedChange     bool
-	mutex                       sync.RWMutex
+	mutex                       sync.Mutex
 	secret                      string
 }
 
 func NewOptions() *Options {
 	return &Options{
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -129,8 +129,8 @@ func (options *Options) Read(db *Database) error {
 		f               interface{}
 	)
 
-	options.mutex.RLock()
-	defer options.mutex.RUnlock()
+	options.mutex.Lock()
+	defer options.mutex.Unlock()
 
 	defaultPassword, _ = bcrypt.GenerateFromPassword([]byte(defaults.adminPassword), bcrypt.DefaultCost)
 

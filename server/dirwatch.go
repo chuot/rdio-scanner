@@ -25,6 +25,7 @@ import (
 	"mime"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -57,6 +58,7 @@ type Dirwatch struct {
 	UsePolling  bool        `json:"usePolling"`
 	controller  *Controller
 	dirs        map[string]bool
+	pending     map[string]*time.Timer
 	running     bool
 	watcher     *fsnotify.Watcher
 }
@@ -465,7 +467,11 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 		newTimer := func(eventName string) *time.Timer {
 			return time.AfterFunc(2*time.Second, func() {
-				dirwatch.Ingest(eventName)
+				if dirwatch.running {
+					if _, err := os.Stat(eventName); err == nil {
+						dirwatch.Ingest(eventName)
+					}
+				}
 			})
 		}
 
@@ -475,6 +481,7 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 			if dirwatch.watcher == nil {
 				break
 			}
+
 			if event, ok := <-dirwatch.watcher.Events; ok {
 				switch event.Op {
 				case fsnotify.Create:
@@ -482,11 +489,16 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 					case uint:
 						time.Sleep(time.Duration(v) * time.Millisecond)
 					}
+
 					if dirwatch.isDir(event.Name) {
 						if err := dirwatch.walkDir(event.Name); err != nil {
 							logError(err)
 						}
+
 					} else {
+						if pending[event.Name] != nil {
+							pending[event.Name].Stop()
+						}
 						pending[event.Name] = newTimer(event.Name)
 					}
 
@@ -501,15 +513,27 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 				case fsnotify.Write:
 					if pending[event.Name] != nil {
-						pending[event.Name].Stop()
+						if pending[event.Name] != nil {
+							pending[event.Name].Stop()
+						}
 						pending[event.Name] = newTimer(event.Name)
 					}
 				}
 
 			} else if dirwatch.running {
-				dirwatch.watcher.Close()
-				dirwatch.watcher, _ = fsnotify.NewWatcher()
+				if dirwatch.watcher != nil {
+					dirwatch.watcher.Close()
+				}
+
 				time.Sleep(2 * time.Second)
+
+				if dirwatch.watcher, err = fsnotify.NewWatcher(); err != nil {
+					controller.Logs.LogEvent(
+						controller.Database,
+						LogLevelError,
+						fmt.Sprintf("dirwatch.watcher.restart: %s", err.Error()),
+					)
+				}
 
 			} else {
 				dirwatch.Stop()
@@ -521,10 +545,12 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	go watcher()
 
 	go func() {
-		time.Sleep(2 * time.Second)
+		if err := fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, d fs.DirEntry, err error) error {
+			if !dirwatch.running {
+				return nil
+			}
 
-		fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, d fs.DirEntry, err error) error {
-			fp := path.Join(dirwatch.Directory, p)
+			fp := filepath.Join(dirwatch.Directory, p)
 
 			if dirwatch.isDir(fp) {
 				dirwatch.dirs[fp] = true
@@ -533,31 +559,42 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 			} else if dirwatch.DeleteAfter {
 				dirwatch.Ingest(fp)
 			}
+
 			return err
-		})
+		}); err != nil {
+			controller.Logs.LogEvent(
+				controller.Database,
+				LogLevelError,
+				fmt.Sprintf("dirwatch.walkdir: %s", err.Error()),
+			)
+		}
 	}()
 
 	return nil
 }
 
 func (dirwatch *Dirwatch) Stop() {
+	dirwatch.running = false
+
+	for k := range dirwatch.pending {
+		dirwatch.pending[k].Stop()
+	}
+
 	if dirwatch.watcher != nil {
 		dirwatch.watcher.Close()
 		dirwatch.watcher = nil
 	}
-
-	dirwatch.running = false
 }
 
 type Dirwatches struct {
 	List  []*Dirwatch
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewDirwatches() *Dirwatches {
 	return &Dirwatches{
 		List:  []*Dirwatch{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -594,8 +631,8 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 		talkgroupId sql.NullFloat64
 	)
 
-	dirwatches.mutex.RLock()
-	defer dirwatches.mutex.RUnlock()
+	dirwatches.mutex.Lock()
+	defer dirwatches.mutex.Unlock()
 
 	dirwatches.Stop()
 
@@ -610,7 +647,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		dirwatch := &Dirwatch{}
+		dirwatch := &Dirwatch{pending: map[string]*time.Timer{}}
 
 		if err = rows.Scan(&id, &delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &extension, &frequency, &mask, &order, &systemId, &talkgroupId, &kind, &dirwatch.UsePolling); err != nil {
 			break
@@ -770,7 +807,7 @@ func (dirwatch *Dirwatch) walkDir(d string) error {
 	dfs := os.DirFS(d)
 
 	return fs.WalkDir(dfs, ".", func(p string, de fs.DirEntry, err error) error {
-		fp := path.Join(d, p)
+		fp := filepath.Join(d, p)
 		if dirwatch.isDir(fp) {
 			if !dirwatch.dirs[fp] {
 				dirwatch.dirs[fp] = true

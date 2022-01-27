@@ -209,7 +209,7 @@ func (config *Config) GetPath(p string) string {
 	if path.IsAbs(p) {
 		return p
 	}
-	return path.Join(config.BaseDir, p)
+	return filepath.Join(config.BaseDir, p)
 }
 
 func (config *Config) GetSslCaCertFilePath() string {

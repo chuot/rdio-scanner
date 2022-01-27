@@ -127,13 +127,13 @@ func (access *Access) HasExpired() bool {
 
 type Accesses struct {
 	List  []*Access
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewAccesses() *Accesses {
 	return &Accesses{
 		List:  []*Access{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -154,8 +154,8 @@ func (accesses *Accesses) FromMap(f []interface{}) {
 }
 
 func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
-	accesses.mutex.RLock()
-	defer accesses.mutex.RUnlock()
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
 
 	for _, access := range accesses.List {
 		if access.Code == code {
@@ -167,8 +167,8 @@ func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
 }
 
 func (accesses *Accesses) IsRestricted() bool {
-	accesses.mutex.RLock()
-	defer accesses.mutex.RUnlock()
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
 
 	return len(accesses.List) > 0
 }
@@ -185,8 +185,8 @@ func (accesses *Accesses) Read(db *Database) error {
 		t          time.Time
 	)
 
-	accesses.mutex.RLock()
-	defer accesses.mutex.RUnlock()
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
 
 	accesses.List = []*Access{}
 

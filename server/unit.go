@@ -44,13 +44,13 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 
 type Units struct {
 	List  []*Unit
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewUnits() *Units {
 	return &Units{
 		List:  []*Unit{},
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -88,6 +88,9 @@ func (units *Units) FromMap(f []interface{}) {
 }
 
 func (u *Units) Merge(units *Units) {
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
+
 	for _, v := range units.List {
 		u.Add(v.Id, v.Label)
 	}
@@ -99,8 +102,8 @@ func (units *Units) Read(db *Database, systemId uint) error {
 		rows *sql.Rows
 	)
 
-	units.mutex.RLock()
-	defer units.mutex.RUnlock()
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
 
 	units.List = []*Unit{}
 

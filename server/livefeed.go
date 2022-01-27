@@ -22,13 +22,13 @@ import (
 
 type Livefeed struct {
 	Matrix map[uint]map[uint]bool
-	mutex  sync.RWMutex
+	mutex  sync.Mutex
 }
 
 func NewLivefeed() *Livefeed {
 	return &Livefeed{
 		Matrix: map[uint]map[uint]bool{},
-		mutex:  sync.RWMutex{},
+		mutex:  sync.Mutex{},
 	}
 }
 
@@ -66,8 +66,8 @@ func (livefeed *Livefeed) FromMap(f interface{}) {
 }
 
 func (livefeed *Livefeed) IsAllOff() bool {
-	livefeed.mutex.RLock()
-	defer livefeed.mutex.RUnlock()
+	livefeed.mutex.Lock()
+	defer livefeed.mutex.Unlock()
 
 	for _, sys := range livefeed.Matrix {
 		for _, tg := range sys {
@@ -81,8 +81,8 @@ func (livefeed *Livefeed) IsAllOff() bool {
 }
 
 func (livefeed *Livefeed) IsEnabled(call *Call) bool {
-	livefeed.mutex.RLock()
-	defer livefeed.mutex.RUnlock()
+	livefeed.mutex.Lock()
+	defer livefeed.mutex.Unlock()
 
 	if call != nil {
 		if livefeed.Matrix[call.System][call.Talkgroup] {

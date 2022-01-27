@@ -38,12 +38,12 @@ type Log struct {
 }
 
 type Logs struct {
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 func NewLogs() *Logs {
 	return &Logs{
-		mutex: sync.RWMutex{},
+		mutex: sync.Mutex{},
 	}
 }
 
@@ -94,8 +94,8 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		where    string = "true"
 	)
 
-	logs.mutex.RLock()
-	defer logs.mutex.RUnlock()
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("newLogResults: %v", err)

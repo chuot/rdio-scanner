@@ -81,10 +81,6 @@ func NewController(config *Config) *Controller {
 	return controller
 }
 
-func (controller *Controller) CheckDuplicate(call *Call) bool {
-	return controller.Calls.CheckDuplicate(call, controller.Options.DuplicateDetectionTimeFrame, controller.Database)
-}
-
 func (controller *Controller) ConvertAudio(call *Call) {
 	var (
 		args = []string{"-i", "-"}
@@ -295,7 +291,6 @@ func (controller *Controller) IngestCall(call *Call) {
 				GroupId: groupId,
 				Id:      call.Talkgroup,
 				Label:   fmt.Sprintf("%d", call.Talkgroup),
-				Name:    fmt.Sprintf("Talkgroup %d", call.Talkgroup),
 				TagId:   tagId,
 			}
 
@@ -315,6 +310,11 @@ func (controller *Controller) IngestCall(call *Call) {
 			if talkgroup.Name != v {
 				populated = true
 				talkgroup.Name = v
+			}
+		default:
+			if len(talkgroup.Name) == 0 {
+				populated = true
+				talkgroup.Name = talkgroup.Label
 			}
 		}
 	}
@@ -350,7 +350,7 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 
 	if !controller.Options.DisableDuplicateDetection {
-		if controller.CheckDuplicate(call) {
+		if controller.Calls.CheckDuplicate(call, controller.Options.DuplicateDetectionTimeFrame, controller.Database) {
 			logCall(call, LogLevelWarn, "duplicate call rejected")
 			return
 		}

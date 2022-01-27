@@ -24,13 +24,13 @@ Clone the official repository on your computer and start the build process.
 
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 
-        rdio-scanner-darwin-amd64-v6.1.6.zip
-        rdio-scanner-darwin-arm64-v6.1.6.zip
-        rdio-scanner-freebsd-amd64-v6.1.6.zip
-        rdio-scanner-linux-386-v6.1.6.zip
-        rdio-scanner-linux-amd64-v6.1.6.zip
-        rdio-scanner-linux-arm64-v6.1.6.zip
-        rdio-scanner-linux-arm-v6.1.6.zip
-        rdio-scanner-windows-amd64-v6.1.6.zip
+        rdio-scanner-darwin-amd64-v6.1.7.zip
+        rdio-scanner-darwin-arm64-v6.1.7.zip
+        rdio-scanner-freebsd-amd64-v6.1.7.zip
+        rdio-scanner-linux-386-v6.1.7.zip
+        rdio-scanner-linux-amd64-v6.1.7.zip
+        rdio-scanner-linux-arm64-v6.1.7.zip
+        rdio-scanner-linux-arm-v6.1.7.zip
+        rdio-scanner-windows-amd64-v6.1.7.zip
 
 **Happy Rdio scanning !**
