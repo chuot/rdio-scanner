@@ -187,7 +187,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 			call.Talkgroup = v
 		}
 
-		if call.IsValid() {
+		if ok, err := call.IsValid(); ok {
 			dirwatch.controller.Ingest <- call
 
 			if dirwatch.DeleteAfter {
@@ -195,6 +195,9 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 					return err
 				}
 			}
+
+		} else {
+			return err
 		}
 	}
 
@@ -236,7 +239,7 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 		return err
 	}
 
-	if call.IsValid() {
+	if ok, err := call.IsValid(); ok {
 		dirwatch.controller.Ingest <- call
 
 		if dirwatch.DeleteAfter {
@@ -244,6 +247,9 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 				return err
 			}
 		}
+
+	} else {
+		return err
 	}
 
 	return nil
@@ -298,8 +304,11 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 		return err
 	}
 
-	if call.IsValid() {
+	if ok, err := call.IsValid(); ok {
 		dirwatch.controller.Ingest <- call
+
+	} else {
+		return err
 	}
 
 	if dirwatch.DeleteAfter {
@@ -315,22 +324,24 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 }
 
 func (dirwatch *Dirwatch) parseMask(call *Call) {
-	var meta = map[string][]string{
-		"date":      {"#DATE", `[\d-_]+`},
-		"hz":        {"#HZ", `[\d]+`},
-		"khz":       {"#KHZ", `[\d\.]+`},
-		"mhz":       {"#MHZ", `[\d\.]+`},
-		"time":      {"#TIME", `[\d-:]+`},
-		"system":    {"#SYS", `\d+`},
-		"talkgroup": {"#TG", `\d+`},
-		"unit":      {"#UNIT", `\d+`},
-		"ztime":     {"#ZTIME", `[\d-:]+`},
+	var meta = [][]string{
+		{"date", "#DATE", `[\d-_]+`},
+		{"hz", "#HZ", `[\d]+`},
+		{"khz", "#KHZ", `[\d\.]+`},
+		{"mhz", "#MHZ", `[\d\.]+`},
+		{"system", "#SYS", `\d+`},
+		{"time", "#TIME", `[\d-:]+`},
+		{"tghz", "#TGHZ", `\d+`},
+		{"tgkhz", "#TGKHZ", `[\d\.]+`},
+		{"tgmhz", "#TGMHZ", `[\d\.]+`},
+		{"talkgroup", "#TG", `\d+`},
+		{"unit", "#UNIT", `\d+`},
+		{"ztime", "#ZTIME", `[\d-:]+`},
 	}
 
 	var (
 		filename string
 		mask     string
-		maskre   string
 		metapos  = [][]interface{}{}
 		metaval  = map[string]interface{}{}
 	)
@@ -338,7 +349,6 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := dirwatch.Mask.(type) {
 	case string:
 		mask = v
-		maskre = v
 	default:
 		return
 	}
@@ -350,10 +360,10 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		return
 	}
 
-	for k, v := range meta {
-		if i := strings.Index(mask, v[0]); i != -1 {
-			metapos = append(metapos, []interface{}{k, i})
-			maskre = strings.Replace(maskre, v[0], fmt.Sprintf("(%v)", v[1]), 1)
+	for _, v := range meta {
+		if i := strings.Index(mask, v[1]); i != -1 {
+			metapos = append(metapos, []interface{}{v[0], i})
+			mask = strings.Replace(mask, v[1], fmt.Sprintf("(%v)", v[2]), 1)
 		}
 	}
 
@@ -362,7 +372,7 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	})
 
 	base := strings.TrimSuffix(filename, path.Ext(filename))
-	for i, s := range regexp.MustCompile(maskre).FindStringSubmatch(base) {
+	for i, s := range regexp.MustCompile(mask).FindStringSubmatch(base) {
 		if i > 0 {
 			v := fmt.Sprintf("%v", metapos[i-1][0])
 			metaval[v] = s
@@ -426,6 +436,30 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	case string:
 		if i, err := strconv.Atoi(v); err == nil {
 			call.Talkgroup = uint(i)
+		}
+	}
+
+	switch v := metaval["tghz"].(type) {
+	case string:
+		if hz, err := strconv.ParseFloat(v, 64); err == nil {
+			call.Frequency = uint(hz)
+			call.Talkgroup = uint(hz / 1e3)
+		}
+	default:
+		switch v := metaval["tgkhz"].(type) {
+		case string:
+			if khz, err := strconv.ParseFloat(v, 64); err == nil {
+				call.Frequency = uint(khz * 1e3)
+				call.Talkgroup = uint(khz)
+			}
+		default:
+			switch v := metaval["tgmhz"].(type) {
+			case string:
+				if mhz, err := strconv.ParseFloat(v, 64); err == nil {
+					call.Frequency = uint(mhz * 1e6)
+					call.Talkgroup = uint(mhz * 1e3)
+				}
+			}
 		}
 	}
 

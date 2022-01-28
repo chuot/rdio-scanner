@@ -81,11 +81,11 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if call.IsValid() {
+		if ok, err := call.IsValid(); ok {
 			api.HandleCall(key, call, w)
 		} else {
 			w.WriteHeader(http.StatusExpectationFailed)
-			w.Write([]byte("Incomplete call data\n"))
+			w.Write([]byte(fmt.Sprintf("Incomplete call data: %s\n", err.Error())))
 		}
 
 	default:
@@ -172,12 +172,12 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 			ParseMultipartContent(call, p, b)
 		}
 
-		if call.IsValid() {
+		if ok, err := call.IsValid(); ok {
 			api.HandleCall(key, call, w)
 
 		} else {
 			w.WriteHeader(http.StatusExpectationFailed)
-			w.Write([]byte("Incomplete call data\n"))
+			w.Write([]byte(fmt.Sprintf("Incomplete call data: %s\n", err.Error())))
 		}
 
 	default:

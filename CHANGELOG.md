@@ -57,6 +57,10 @@ _v6.1.7_
 - Fix Trunk Recorder talkgroup_tag assign to the wrong property (issue #115).
 - Improved the way the talkgroup label and name are autopopulated. If Trunk Recorder sends a talkgroup_tag with an empty value or with a single `-`, it will not overwrite the talkgroup label.
 
+_v6.1.8_
+
+- New dirwatch masks #TGHZ, #TGKHZ and #TGMHZ which allow to set talkgroup id based on frequency.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

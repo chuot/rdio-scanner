@@ -18,6 +18,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -54,24 +55,30 @@ func NewCall() *Call {
 	}
 }
 
-func (call *Call) IsValid() bool {
+func (call *Call) IsValid() (ok bool, err error) {
+	ok = true
+
 	if len(call.Audio) <= 44 {
-		return false
+		ok = false
+		err = errors.New("no audio")
 	}
 
 	if call.DateTime.Unix() == 0 {
-		return false
+		ok = false
+		err = errors.New("no datetime")
 	}
 
 	if call.System < 1 {
-		return false
+		ok = false
+		err = errors.New("no system")
 	}
 
 	if call.Talkgroup < 1 {
-		return false
+		ok = false
+		err = errors.New("no talkgroup")
 	}
 
-	return true
+	return ok, err
 }
 
 func (call *Call) MarshalJSON() ([]byte, error) {

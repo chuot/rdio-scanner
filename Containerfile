@@ -2,7 +2,6 @@ FROM docker.io/alpine:latest
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 WORKDIR /app
 ENV DOCKER=1
-COPY dist/linux-amd64/rdio-scanner.pdf .
 COPY server/. server/.
 RUN mkdir -p /app/data && \
     apk --no-cache --no-progress --virtual .build add go && \
