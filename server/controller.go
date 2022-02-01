@@ -195,7 +195,7 @@ func (controller *Controller) IngestCall(call *Call) {
 		talkgroup, _ = system.Talkgroups.GetTalkgroup(call.Talkgroup)
 	}
 
-	if system == nil && controller.Options.AutoPopulate {
+	if controller.Options.AutoPopulate && system == nil {
 		populated = true
 
 		system = NewSystem()
@@ -211,7 +211,7 @@ func (controller *Controller) IngestCall(call *Call) {
 		controller.Systems.List = append(controller.Systems.List, system)
 	}
 
-	if controller.Options.AutoPopulate || system.AutoPopulate {
+	if controller.Options.AutoPopulate || (system != nil && system.AutoPopulate) {
 		if system != nil && talkgroup == nil {
 			populated = true
 
@@ -317,9 +317,7 @@ func (controller *Controller) IngestCall(call *Call) {
 				talkgroup.Name = talkgroup.Label
 			}
 		}
-	}
 
-	if controller.Options.AutoPopulate || (system != nil && system.AutoPopulate) {
 		switch v := call.units.(type) {
 		case Units:
 			populated = true

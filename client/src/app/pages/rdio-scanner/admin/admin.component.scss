@@ -6,17 +6,14 @@
   padding: 16px;
 
   > div {
-    margin: auto;
+    margin: 16px auto;
     max-width: 1200px;
   }
 
   > h1 {
-    color: #2d2d2d;
-    letter-spacing: 0.01rem;
+    color: #ccc;
     margin: 0;
-    padding: 16px 0;
     text-align: center;
-    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.83);
   }
 }
 

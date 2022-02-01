@@ -61,6 +61,11 @@ _v6.1.8_
 
 - New dirwatch masks #TGHZ, #TGKHZ and #TGMHZ which allow to set talkgroup id based on frequency.
 
+_v6.1.9_
+
+- Fix talkgroup sorting issue when importing from a CSV file (issue #119).
+- Fix SIGSEGV (issue #120).
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

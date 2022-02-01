@@ -40,6 +40,12 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 	case string:
 		unit.Label = v
 	}
+
+	switch v := m["order"].(type) {
+	case float64:
+		unit.Order = uint(v)
+	}
+
 }
 
 type Units struct {

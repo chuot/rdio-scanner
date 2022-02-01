@@ -63,7 +63,7 @@ export class RdioScannerAdminImportTalkgroupsComponent {
             }
         });
 
-        const talkgroups = this.csv.map((csv) => {
+        const talkgroups = this.csv.map((csv, idx) => {
             const groupId = config.groups?.find((g) => g.label === csv[this.fields[this.mode][4]])?._id;
             const tagId = config.tags?.find((t) => t.label === csv[this.fields[this.mode][3]])?._id;
 
@@ -71,6 +71,7 @@ export class RdioScannerAdminImportTalkgroupsComponent {
                 id: +csv[this.fields[this.mode][0]],
                 label: csv[this.fields[this.mode][1]],
                 name: csv[this.fields[this.mode][2]],
+                order: idx + 1,
                 tagId,
                 groupId,
             };

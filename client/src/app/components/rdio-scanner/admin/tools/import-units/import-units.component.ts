@@ -49,9 +49,10 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
     async import(): Promise<void> {
         if (this.system === undefined) return;
 
-        const units = this.csv.map((csv) => ({
+        const units = this.csv.map((csv, idx) => ({
             id: +csv[0],
             label: csv[1],
+            order: idx + 1,
         }));
 
         this.system!.units = this.system!.units!.concat(units);
