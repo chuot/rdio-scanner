@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
+	"math"
 	"mime"
 	"os"
 	"path"
@@ -475,7 +476,10 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 }
 
 func (dirwatch *Dirwatch) Start(controller *Controller) error {
-	var err error
+	var (
+		delay time.Duration
+		err   error
+	)
 
 	if dirwatch.Disabled {
 		return nil
@@ -494,13 +498,20 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 	dirwatch.running = true
 
+	switch v := dirwatch.Delay.(type) {
+	case uint:
+		delay = time.Duration(math.Max(float64(v), 2000)) * time.Millisecond
+	default:
+		delay = time.Duration(2000) * time.Millisecond
+	}
+
 	watcher := func() {
 		logError := func(err error) {
 			controller.Logs.LogEvent(controller.Database, LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
 		}
 
 		newTimer := func(eventName string) *time.Timer {
-			return time.AfterFunc(2*time.Second, func() {
+			return time.AfterFunc(delay, func() {
 				if dirwatch.running {
 					if _, err := os.Stat(eventName); err == nil {
 						dirwatch.Ingest(eventName)
@@ -519,11 +530,6 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 			if event, ok := <-dirwatch.watcher.Events; ok {
 				switch event.Op {
 				case fsnotify.Create:
-					switch v := dirwatch.Delay.(type) {
-					case uint:
-						time.Sleep(time.Duration(v) * time.Millisecond)
-					}
-
 					if dirwatch.isDir(event.Name) {
 						if err := dirwatch.walkDir(event.Name); err != nil {
 							logError(err)
@@ -579,6 +585,8 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	go watcher()
 
 	go func() {
+		time.Sleep(delay)
+
 		if err := fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, d fs.DirEntry, err error) error {
 			if !dirwatch.running {
 				return nil

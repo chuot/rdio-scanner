@@ -66,6 +66,10 @@ _v6.1.9_
 - Fix talkgroup sorting issue when importing from a CSV file (issue #119).
 - Fix SIGSEGV (issue #120).
 
+_v6.1.10_
+
+- Backport dirwatch delay value from v5.1.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

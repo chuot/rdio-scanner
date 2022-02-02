@@ -16,8 +16,8 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2022/02/01
-ver := 6.1.9
+date := 2022/02/02
+ver := 6.1.10
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
@@ -47,7 +47,7 @@ dist: darwin freebsd linux windows
 sed:
 	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" client/package.json
 	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" server/version.go
-	@sed -i -re "s|v[0-9]\.[0-9]\.[0-9]|v$(ver)|" COMPILING.md docs/platforms/*.md
+	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/platforms/*.md
 
 webapp: server/webapp/index.html

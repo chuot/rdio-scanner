@@ -71,6 +71,7 @@ export interface Config {
 
 export interface DirWatch {
     _id?: string;
+    delay?: number;
     deleteAfter?: boolean;
     directory?: string;
     disabled?: boolean;
@@ -412,6 +413,7 @@ export class RdioScannerAdminService implements OnDestroy {
     newDirWatchForm(dirWatch?: DirWatch): FormGroup {
         return this.ngFormBuilder.group({
             _id: [dirWatch?._id],
+            delay: [typeof dirWatch?.delay === 'number' ? dirWatch?.delay : 2000],
             deleteAfter: [dirWatch?.deleteAfter],
             directory: [dirWatch?.directory, [Validators.required, this.validateDirectory()]],
             disabled: [dirWatch?.disabled],

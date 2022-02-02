@@ -155,6 +155,20 @@
                     </mat-error>
                 </mat-form-field>
             </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Delay</span><br>
+                    <span class="mat-caption">Depending on the recorder, audio files can be ingested too soon after the
+                        recorder has created the file. You can set a delay value in milliseconds for the audio file to
+                        settle before ingesting it.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="number" matInput formControlName="delay" min="2000" placeholder="Delay">
+                    <mat-error *ngIf="dirWatch.get('delay')?.hasError('min')">
+                        Delay value cannot be less than 2000 milliseconds.
+                    </mat-error>
+                </mat-form-field>
+            </div>
             <div class="row bottom">
                 <button type="button" mat-button color="warn" (click)="remove(i)">
                     Delete dirwatch

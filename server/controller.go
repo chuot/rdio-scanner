@@ -27,6 +27,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Controller struct {
@@ -51,6 +52,7 @@ type Controller struct {
 	Ingest       chan *Call
 	ffmpeg       bool
 	ffmpegWarned bool
+	ingestMutex  sync.Mutex
 	running      bool
 }
 
@@ -71,6 +73,7 @@ func NewController(config *Config) *Controller {
 		Register:    make(chan *Client, 64),
 		Unregister:  make(chan *Client, 64),
 		Ingest:      make(chan *Call, 64),
+		ingestMutex: sync.Mutex{},
 	}
 
 	controller.Admin = NewAdmin(controller)
@@ -174,6 +177,9 @@ func (controller *Controller) IngestCall(call *Call) {
 		tagLabel   string
 		talkgroup  *Talkgroup
 	)
+
+	controller.ingestMutex.Lock()
+	defer controller.ingestMutex.Unlock()
 
 	logCall := func(call *Call, level string, message string) {
 		controller.Logs.LogEvent(
@@ -383,6 +389,14 @@ func (controller *Controller) IngestCall(call *Call) {
 	} else {
 		logError(err)
 	}
+}
+
+func (controller *Controller) IngestLock() {
+	controller.ingestMutex.Lock()
+}
+
+func (controller *Controller) IngestUnlock() {
+	controller.ingestMutex.Unlock()
 }
 
 func (controller *Controller) LogClientsCount() {

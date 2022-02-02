@@ -62,7 +62,10 @@ export class RdioScannerAdminDirWatchComponent implements OnChanges {
     }
 
     add(): void {
-        const dirWatch = this.adminService.newDirWatchForm({ deleteAfter: true });
+        const dirWatch = this.adminService.newDirWatchForm({
+            delay: 2000,
+            deleteAfter: true,
+        });
 
         dirWatch.markAllAsTouched();
 
