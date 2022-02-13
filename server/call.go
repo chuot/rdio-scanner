@@ -163,24 +163,24 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	if t, err = db.ParseDateTime(dateTime); err == nil {
 		call.DateTime = t
 	} else {
-		return nil, fmt.Errorf("getcall.parsedatetime: %v", err)
+		call.DateTime = time.Time{}
 	}
 
 	if len(frequencies) > 0 {
 		if err = json.Unmarshal([]byte(frequencies), &call.Frequencies); err != nil {
-			return nil, fmt.Errorf("getcall.unmarshal.frequencies: %v", err)
+			call.Frequencies = []interface{}{}
 		}
 	}
 
 	if len(patches) > 0 {
 		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
-			return nil, fmt.Errorf("getcall.unmarshal.patches: %v", err)
+			call.Patches = []interface{}{}
 		}
 	}
 
 	if len(sources) > 0 {
 		if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
-			return nil, fmt.Errorf("getcall.unmarshal.sources: %v", err)
+			call.Sources = []interface{}{}
 		}
 	}
 

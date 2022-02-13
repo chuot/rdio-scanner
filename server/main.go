@@ -128,7 +128,11 @@ func main() {
 
 		default:
 			if strings.EqualFold(r.Header.Get("upgrade"), "websocket") {
-				upgrader := websocket.Upgrader{}
+				upgrader := websocket.Upgrader{
+					CheckOrigin: func(r *http.Request) bool {
+						return true
+					},
+				}
 
 				conn, err := upgrader.Upgrade(w, r, nil)
 				if err != nil {

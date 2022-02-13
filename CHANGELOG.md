@@ -70,6 +70,11 @@ _v6.1.10_
 
 - Backport dirwatch delay value from v5.1.
 
+_v6.1.11_
+
+- Fix connection errors when behind a reverse-proxy.
+- Fix disappearing talkgroups (issue #127).
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

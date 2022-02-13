@@ -289,7 +289,9 @@ func (accesses *Accesses) Write(db *Database) error {
 
 	for rows.Next() {
 		var id uint
-		rows.Scan(&id)
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
 		remove := true
 		for _, access := range accesses.List {
 			if access.Id == nil || access.Id == id {

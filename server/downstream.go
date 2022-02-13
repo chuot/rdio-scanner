@@ -505,7 +505,9 @@ func (downstreams *Downstreams) Write(db *Database) error {
 
 	for rows.Next() {
 		var rowId uint
-		rows.Scan(&rowId)
+		if err = rows.Scan(&rowId); err != nil {
+			break
+		}
 		remove := true
 		for _, downstream := range downstreams.List {
 			if downstream.Id == nil || downstream.Id == rowId {

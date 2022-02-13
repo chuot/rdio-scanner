@@ -80,7 +80,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(5 * time.Second)
 
 		defer func() {
 			ticker.Stop()

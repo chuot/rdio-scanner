@@ -257,7 +257,9 @@ func (apikeys *Apikeys) Write(db *Database) error {
 
 	for rows.Next() {
 		var id uint
-		rows.Scan(&id)
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
 		remove := true
 		for _, apikey := range apikeys.List {
 			if apikey.Id == nil || apikey.Id == id {

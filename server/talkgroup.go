@@ -233,7 +233,9 @@ func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
 
 	for rows.Next() {
 		var id uint
-		rows.Scan(&id)
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
 		remove := true
 		for _, talkgroup := range talkgroups.List {
 			if talkgroup.Id == id {

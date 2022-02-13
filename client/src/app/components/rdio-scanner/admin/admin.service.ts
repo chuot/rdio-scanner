@@ -413,7 +413,7 @@ export class RdioScannerAdminService implements OnDestroy {
     newDirWatchForm(dirWatch?: DirWatch): FormGroup {
         return this.ngFormBuilder.group({
             _id: [dirWatch?._id],
-            delay: [typeof dirWatch?.delay === 'number' ? dirWatch?.delay : 2000],
+            delay: [typeof dirWatch?.delay === 'number' ? Math.max(2000, dirWatch?.delay) : 2000],
             deleteAfter: [dirWatch?.deleteAfter],
             directory: [dirWatch?.directory, [Validators.required, this.validateDirectory()]],
             disabled: [dirWatch?.disabled],
@@ -718,12 +718,6 @@ export class RdioScannerAdminService implements OnDestroy {
             }, 0);
 
             return count ? null : { invalid: true };
-        };
-    }
-
-    private validatePatches(): ValidatorFn {
-        return (control: AbstractControl): ValidationErrors | null => {
-            return typeof control.value === 'string' && control.value.length ? /^[0-9]+(,[0-9]+)*$/.test(control.value) ? null : { invalid: true } : null;
         };
     }
 

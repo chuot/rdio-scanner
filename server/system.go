@@ -160,21 +160,27 @@ func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
 
 func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *Tags, sortTalkgroups bool) *SystemsMap {
 	var (
-		rawSystems = []*System{}
+		rawSystems = []System{}
 		systemsMap = SystemsMap{}
 	)
 
 	if client.Access == nil {
-		rawSystems = append(rawSystems, systems.List...)
+		for _, system := range systems.List {
+			rawSystems = append(rawSystems, *system)
+		}
 
 	} else {
 		switch v := client.Access.Systems.(type) {
 		case nil:
-			rawSystems = append(rawSystems, systems.List...)
+			for _, system := range systems.List {
+				rawSystems = append(rawSystems, *system)
+			}
 
 		case string:
 			if v == "*" {
-				rawSystems = append(rawSystems, systems.List...)
+				for _, system := range systems.List {
+					rawSystems = append(rawSystems, *system)
+				}
 			}
 
 		case []interface{}:
@@ -202,12 +208,12 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 					switch v := mTalkgroups.(type) {
 					case string:
 						if mTalkgroups == "*" {
-							rawSystems = append(rawSystems, system)
+							rawSystems = append(rawSystems, *system)
 							continue
 						}
 
 					case []interface{}:
-						rawSystem := system
+						rawSystem := *system
 						rawSystem.Talkgroups = NewTalkgroups()
 						for _, fTalkgroupId := range v {
 							switch v := fTalkgroupId.(type) {
@@ -441,7 +447,9 @@ func (systems *Systems) Write(db *Database) error {
 	for rows.Next() {
 		var rowId uint
 		var systemId uint
-		rows.Scan(&rowId, &systemId)
+		if err = rows.Scan(&rowId, &systemId); err != nil {
+			break
+		}
 		remove := true
 		for _, system := range systems.List {
 			if system.RowId == nil || system.RowId == rowId {

@@ -815,7 +815,6 @@ export class RdioScannerService implements OnDestroy {
                             this.queue(this.transformCall(call), { priority: true });
 
                         } else {
-                                console.log(call.id, this.isPatched(call));
                             if (this.isPatched(call)) {
                                 call.patched = true;
                             }

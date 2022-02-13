@@ -240,7 +240,9 @@ func (tags *Tags) Write(db *Database) error {
 
 	for rows.Next() {
 		var rowId uint
-		rows.Scan(&rowId)
+		if err = rows.Scan(&rowId); err != nil {
+			break
+		}
 		remove := true
 		for _, tag := range tags.List {
 			if tag.Id == nil || tag.Id == rowId {

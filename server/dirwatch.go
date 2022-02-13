@@ -801,7 +801,9 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 
 	for rows.Next() {
 		var rowId uint
-		rows.Scan(&rowId)
+		if err = rows.Scan(&rowId); err != nil {
+			break
+		}
 		remove := true
 		for _, dirwatch := range dirwatches.List {
 			if dirwatch.Id == nil || dirwatch.Id == rowId {

@@ -245,7 +245,9 @@ func (groups *Groups) Write(db *Database) error {
 
 	for rows.Next() {
 		var rowId uint
-		rows.Scan(&rowId)
+		if err = rows.Scan(&rowId); err != nil {
+			break
+		}
 		remove := true
 		for _, group := range groups.List {
 			if group.Id == nil || group.Id == rowId {

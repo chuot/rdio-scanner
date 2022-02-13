@@ -184,7 +184,9 @@ func (units *Units) Write(db *Database, systemId uint) error {
 
 	for rows.Next() {
 		var id uint
-		rows.Scan(&id)
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
 		remove := true
 		for _, unit := range units.List {
 			if unit.Id == id {
