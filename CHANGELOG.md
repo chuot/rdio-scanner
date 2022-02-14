@@ -75,6 +75,11 @@ _v6.1.11_
 - Fix connection errors when behind a reverse-proxy.
 - Fix disappearing talkgroups (issue #127).
 
+_v6.1.12_
+
+- Fix too many open files (issue #129).
+- Cosmetic: AVOID and PATCH flags now only appear when needed.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

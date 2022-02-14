@@ -42,7 +42,8 @@
   &.idle {
     background: rgb(190, 190, 174);
 
-    .avoid {
+    .avoid,
+    .patched {
       color: rgb(190, 190, 174);
     }
   }
@@ -84,13 +85,14 @@
     background: rgba(0, 0, 0, 0.8);
     border-radius: 3px;
     color: rgb(209, 238, 238);
+    display: none;
     margin-left: 4px;
-    opacity: 0.12;
+    opacity: 0.87;
     padding: 0 3px;
   }
 
   .flaged {
-    opacity: 0.87;
+    display: block;
   }
 
   .wrapper {

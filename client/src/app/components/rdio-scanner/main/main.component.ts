@@ -46,7 +46,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     auth = false;
     authForm = this.ngFormBuilder.group({ password: [] });
 
-    avoided = true;
+    avoided = false;
 
     call: RdioScannerCall | undefined;
     callError = '0';
@@ -81,7 +81,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     map: RdioScannerLivefeedMap = {};
 
-    patched = true;
+    patched = false;
 
     playbackMode = false;
 

@@ -80,22 +80,23 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(30 * time.Second)
 
 		defer func() {
 			ticker.Stop()
 			controller.Unregister <- client
+			client.Conn.Close()
 		}()
 
 		for {
 			select {
 			case message, ok := <-client.Send:
 				if !ok {
-					break
+					return
 				}
 
 				if client.Conn == nil {
-					break
+					return
 				}
 
 				b, err := message.ToJson()
@@ -106,8 +107,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 					client.Conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 
 					if err = client.Conn.WriteMessage(websocket.TextMessage, b); err != nil {
-						log.Println(fmt.Errorf("client.conn.writemessage: %v", err))
-						break
+						return
 					}
 				}
 

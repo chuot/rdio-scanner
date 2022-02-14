@@ -1,4 +1,5 @@
 /*.db
+/*.db-journal
 /*.crt
 /*.json
 /*.key
