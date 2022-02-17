@@ -30,14 +30,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	AdminUrlConfig   = "api/admin/config"
-	AdminUrlLogin    = "api/admin/login"
-	AdminUrlLogout   = "api/admin/logout"
-	AdminUrlLogs     = "api/admin/logs"
-	AdminUrlPassword = "api/admin/password"
-)
-
 type Admin struct {
 	Attempts         AdminLoginAttempts
 	AttemptsMax      uint

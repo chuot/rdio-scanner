@@ -16,13 +16,16 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"mime"
 	"net/http"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/acme/autocert"
@@ -101,76 +104,66 @@ func main() {
 		sslAddr = defaultAddr
 	}
 
+	http.HandleFunc("/api/admin/config", controller.Admin.ConfigHandler)
+
+	http.HandleFunc("/api/admin/login", controller.Admin.LoginHandler)
+
+	http.HandleFunc("/api/admin/logout", controller.Admin.LogoutHandler)
+
+	http.HandleFunc("/api/admin/logs", controller.Admin.LogsHandler)
+
+	http.HandleFunc("/api/admin/password", controller.Admin.PasswordHandler)
+
+	http.HandleFunc("/api/call-upload", controller.Api.CallUploadHandler)
+
+	http.HandleFunc("/api/trunk-recorder-call-upload", controller.Api.TrunkRecorderCallUploadHandler)
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path[1:]
 
-		switch url {
-		case AdminUrlConfig:
-			controller.Admin.ConfigHandler(w, r)
+		if strings.EqualFold(r.Header.Get("upgrade"), "websocket") {
+			upgrader := websocket.Upgrader{
+				CheckOrigin: func(r *http.Request) bool {
+					return true
+				},
+			}
 
-		case AdminUrlLogin:
-			controller.Admin.LoginHandler(w, r)
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				log.Println(err)
+			}
 
-		case AdminUrlLogout:
-			controller.Admin.LogoutHandler(w, r)
+			client := &Client{}
+			if err = client.Init(controller, conn); err != nil {
+				log.Println(err)
+			}
 
-		case AdminUrlLogs:
-			controller.Admin.LogsHandler(w, r)
+		} else {
+			if url == "" {
+				url = "index.html"
+			}
 
-		case AdminUrlPassword:
-			controller.Admin.PasswordHandler(w, r)
-
-		case ApiUrlCallUpload:
-			controller.Api.CallUploadHandler(w, r)
-
-		case ApiUrlTrunkRecorderCallUpload:
-			controller.Api.TrunkRecorderCallUploadHandler(w, r)
-
-		default:
-			if strings.EqualFold(r.Header.Get("upgrade"), "websocket") {
-				upgrader := websocket.Upgrader{
-					CheckOrigin: func(r *http.Request) bool {
-						return true
-					},
+			if b, err := webapp.ReadFile(path.Join("webapp", url)); err == nil {
+				var t string
+				switch path.Ext(url) {
+				case ".js":
+					t = "text/javascript" // see https://github.com/golang/go/issues/32350
+				default:
+					t = mime.TypeByExtension(path.Ext(url))
 				}
+				w.Header().Set("Content-Type", t)
+				w.Write(b)
 
-				conn, err := upgrader.Upgrade(w, r, nil)
-				if err != nil {
-					log.Println(err)
-				}
-
-				client := &Client{}
-				if err = client.Init(controller, conn); err != nil {
-					log.Println(err)
-				}
-
-			} else {
-				if url == "" {
-					url = "index.html"
-				}
-
-				if b, err := webapp.ReadFile(path.Join("webapp", url)); err == nil {
-					var t string
-					switch path.Ext(url) {
-					case ".js":
-						t = "text/javascript" // see https://github.com/golang/go/issues/32350
-					default:
-						t = mime.TypeByExtension(path.Ext(url))
-					}
-					w.Header().Set("Content-Type", t)
+			} else if url[:len(url)-1] != "/" {
+				if b, err := webapp.ReadFile("webapp/index.html"); err == nil {
 					w.Write(b)
-
-				} else if url[:len(url)-1] != "/" {
-					if b, err := webapp.ReadFile("webapp/index.html"); err == nil {
-						w.Write(b)
-
-					} else {
-						w.WriteHeader(http.StatusNotFound)
-					}
 
 				} else {
 					w.WriteHeader(http.StatusNotFound)
 				}
+
+			} else {
+				w.WriteHeader(http.StatusNotFound)
 			}
 		}
 	})
@@ -192,6 +185,21 @@ func main() {
 		}
 	}
 
+	newServer := func(addr string, tlsConfig *tls.Config) *http.Server {
+		s := &http.Server{
+			Addr:         addr,
+			TLSConfig:    tlsConfig,
+			ReadTimeout:  60 * time.Second,
+			WriteTimeout: 60 * time.Second,
+			IdleTimeout:  120 * time.Second,
+			ErrorLog:     log.New(ioutil.Discard, "", 0),
+		}
+
+		s.SetKeepAlivesEnabled(true)
+
+		return s
+	}
+
 	if len(controller.Config.SslCertFile) > 0 && len(controller.Config.SslKeyFile) > 0 {
 		go func() {
 			sslPrintInfo()
@@ -199,7 +207,9 @@ func main() {
 			sslCert := controller.Config.GetSslCertFilePath()
 			sslKey := controller.Config.GetSslKeyFilePath()
 
-			if err := http.ListenAndServeTLS(fmt.Sprintf("%s:%s", sslAddr, sslPort), sslCert, sslKey, nil); err != nil {
+			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), nil)
+
+			if err := server.ListenAndServeTLS(sslCert, sslKey); err != nil {
 				log.Fatal(err)
 			}
 		}()
@@ -214,10 +224,7 @@ func main() {
 				HostPolicy: autocert.HostWhitelist(controller.Config.SslAutoCert),
 			}
 
-			server := &http.Server{
-				Addr:      fmt.Sprintf("%s:%s", sslAddr, sslPort),
-				TLSConfig: manager.TLSConfig(),
-			}
+			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), manager.TLSConfig())
 
 			if err := server.ListenAndServeTLS("", ""); err != nil {
 				log.Fatal(err)
@@ -231,7 +238,9 @@ func main() {
 		log.Printf("admin interface at http://%s:%s/admin", hostname, port)
 	}
 
-	if err := http.ListenAndServe(fmt.Sprintf("%s:%s", addr, port), nil); err != nil {
+	server := newServer(fmt.Sprintf("%s:%s", addr, port), nil)
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

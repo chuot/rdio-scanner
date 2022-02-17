@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Controller struct {
@@ -647,6 +648,15 @@ func (controller *Controller) Start() error {
 	}()
 
 	go func() {
+		var timer *time.Timer
+
+		logClientsCount := func() {
+			if timer != nil {
+				timer.Stop()
+			}
+			timer = time.AfterFunc(time.Second, controller.LogClientsCount)
+		}
+
 		for {
 			select {
 			case call := <-controller.Ingest:
@@ -654,13 +664,13 @@ func (controller *Controller) Start() error {
 
 			case client := <-controller.Register:
 				controller.Clients[client] = true
-				controller.LogClientsCount()
+				logClientsCount()
 
 			case client := <-controller.Unregister:
 				if _, ok := controller.Clients[client]; ok {
 					delete(controller.Clients, client)
 					close(client.Send)
-					controller.LogClientsCount()
+					logClientsCount()
 				}
 			}
 		}

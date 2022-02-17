@@ -42,7 +42,7 @@ func NewDatabase(config *Config) *Database {
 	case DbTypeSqlite:
 		database.DateTimeFormat = "2006-01-02 15:04:05.000 -07:00"
 
-		dsn := fmt.Sprintf("file:%s", config.GetDbFilePath())
+		dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout%%3d10000", config.GetDbFilePath())
 
 		if database.Sql, err = sql.Open("sqlite", dsn); err != nil {
 			log.Fatal(err)
@@ -61,10 +61,9 @@ func NewDatabase(config *Config) *Database {
 		log.Fatalf("unknown database type %s\n", config.DbType)
 	}
 
-	database.Sql.SetConnMaxIdleTime(time.Second * 5)
-	database.Sql.SetConnMaxLifetime(0)
-	database.Sql.SetMaxIdleConns(64)
-	database.Sql.SetMaxOpenConns(64)
+	database.Sql.SetConnMaxLifetime(5 * time.Minute)
+	database.Sql.SetMaxIdleConns(25)
+	database.Sql.SetMaxOpenConns(25)
 
 	if err = database.migrate(); err != nil {
 		log.Fatal(err)

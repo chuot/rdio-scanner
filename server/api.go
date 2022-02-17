@@ -24,11 +24,6 @@ import (
 	"strings"
 )
 
-const (
-	ApiUrlCallUpload              = "api/call-upload"
-	ApiUrlTrunkRecorderCallUpload = "api/trunk-recorder-call-upload"
-)
-
 type Api struct {
 	Controller *Controller
 }

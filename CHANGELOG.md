@@ -80,6 +80,12 @@ _v6.1.12_
 - Fix too many open files (issue #129).
 - Cosmetic: AVOID and PATCH flags now only appear when needed.
 
+_v6.1.13_
+
+- Better handling of dead client connections.
+- Fix too many open files (issue #129).
+- Remove net.http error messages from the output (issue #131).
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

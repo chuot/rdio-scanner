@@ -39,6 +39,13 @@ type Client struct {
 }
 
 func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
+	const (
+		pongWait   = 60 * time.Second
+		pingPeriod = pongWait / 10 * 9
+		writeWait  = 10 * time.Second
+		closeWait  = 10 * time.Second
+	)
+
 	if client.initialized {
 		return errors.New("client.init: already initialized")
 	}
@@ -56,7 +63,17 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	controller.Register <- client
 
 	go func() {
-		client.Conn.SetReadDeadline(time.Time{})
+		defer func() {
+			controller.Unregister <- client
+			client.Conn.Close()
+		}()
+
+		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
+
+		client.Conn.SetPongHandler(func(string) error {
+			client.Conn.SetReadDeadline(time.Now().Add(pongWait))
+			return nil
+		})
 
 		for {
 			_, b, err := client.Conn.ReadMessage()
@@ -75,28 +92,43 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 				continue
 			}
 		}
-
-		controller.Unregister <- client
 	}()
 
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(pingPeriod)
+
+		timer := time.AfterFunc(writeWait, func() {
+			client.Conn.Close()
+		})
 
 		defer func() {
-			ticker.Stop()
 			controller.Unregister <- client
+
+			ticker.Stop()
+			timer.Stop()
+
+			client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			client.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+
+			time.Sleep(closeWait)
+
 			client.Conn.Close()
 		}()
 
+	Loop:
 		for {
 			select {
 			case message, ok := <-client.Send:
 				if !ok {
-					return
+					break Loop
 				}
 
 				if client.Conn == nil {
-					return
+					break Loop
+				}
+
+				if message.Command == MessageCommandConfig {
+					timer.Stop()
 				}
 
 				b, err := message.ToJson()
@@ -104,18 +136,16 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 					log.Println(fmt.Errorf("client.message.tojson: %v", err))
 
 				} else {
-					client.Conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+					client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 
 					if err = client.Conn.WriteMessage(websocket.TextMessage, b); err != nil {
-						return
+						break Loop
 					}
 				}
 
 			case <-ticker.C:
-				client.Conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
-
-				if err := client.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
+				if err := client.Conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+					break Loop
 				}
 			}
 		}
