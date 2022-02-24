@@ -4,7 +4,7 @@ Please follow these simple guidelines to contribute to [Rdio Scanner](https://gi
 
 ## Support requests or general question
 
-Support requests or general questions are welcome on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) or on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby). Do not create an issue for this, it will be rejected and closed immediately.
+Support requests or general questions are welcome on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions). Do not create an issue for this, it will be rejected and closed immediately.
 
 Helping others on the (https://github.com/chuot/rdio-scanner/wiki) is a good way for contributing to the project.
 

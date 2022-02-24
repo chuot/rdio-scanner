@@ -35,7 +35,7 @@ If you are updating from version 5, please refer to [docs/update-from-v5.md](doc
 
 # Need help ?
 
-You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)** or on the [Gitter Rdio Scanner Lobby](https://gitter.im/rdio-scanner/Lobby) at **[https://gitter.im/rdio-scanner/Lobby](https://gitter.im/rdio-scanner/Lobby)**.
+You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
 
 # Show your appreciation, support the author
 

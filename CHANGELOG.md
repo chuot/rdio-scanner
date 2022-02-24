@@ -86,6 +86,12 @@ _v6.1.13_
 - Fix too many open files (issue #129).
 - Remove net.http error messages from the output (issue #131).
 
+_v6.1.14_
+
+- Fix FAQ section not being added to the PDF documents.
+- Bump delay before killing unauthenticated clients from 10 seconds to 60 seconds.
+- Remove the gitter.im support forum from the documentation and prefer github discussions.
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

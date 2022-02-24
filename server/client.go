@@ -97,7 +97,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	go func() {
 		ticker := time.NewTicker(pingPeriod)
 
-		timer := time.AfterFunc(writeWait, func() {
+		timer := time.AfterFunc(pongWait, func() {
 			client.Conn.Close()
 		})
 
