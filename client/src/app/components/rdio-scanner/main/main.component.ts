@@ -60,7 +60,20 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callTag = 'Tag';
     callTalkgroup = 'Talkgroup';
     callTalkgroupId = '0';
-    callTalkgroupName = `Rdio Scanner ${packageInfo.name === 'rdio-scanner' ? 'v'.concat(packageInfo.version) : ''}`;
+    /*
+        * BEGIN OF RED TAPE:
+        * 
+        * By modifying, deleting or disabling the following lines, you harm
+        * the open source project and its author.  Rdio Scanner represents a lot of
+        * investment in time, support, testing and hardware.
+        * 
+        * Be respectful, sponsor the project if you can, use native apps when possible.
+        * 
+        */
+    callTalkgroupName = `Rdio Scanner v${packageInfo.version}`;
+    /**
+     * END OF RED TAPE.
+     */
     callTime = 0;
     callUnit = '0';
 
@@ -509,7 +522,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         const call = this.call || this.callPrevious;
 
         if (call) {
-            if (call.patched) {
+            if (this.rdioScannerService.isPatched(call)) {
                 this.avoided = false;
                 this.patched = true;
             } else {

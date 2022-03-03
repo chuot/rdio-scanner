@@ -71,9 +71,9 @@ func NewController(config *Config) *Controller {
 		Systems:     NewSystems(),
 		Tags:        NewTags(),
 		Clients:     make(map[*Client]bool),
-		Register:    make(chan *Client, 64),
-		Unregister:  make(chan *Client, 64),
-		Ingest:      make(chan *Call, 64),
+		Register:    make(chan *Client, 128),
+		Unregister:  make(chan *Client, 128),
+		Ingest:      make(chan *Call, 128),
 		ingestMutex: sync.Mutex{},
 	}
 
@@ -179,8 +179,8 @@ func (controller *Controller) IngestCall(call *Call) {
 		talkgroup  *Talkgroup
 	)
 
-	controller.ingestMutex.Lock()
-	defer controller.ingestMutex.Unlock()
+	controller.IngestLock()
+	defer controller.IngestUnlock()
 
 	logCall := func(call *Call, level string, message string) {
 		controller.Logs.LogEvent(
@@ -383,9 +383,9 @@ func (controller *Controller) IngestCall(call *Call) {
 			}
 		}
 
-		controller.EmitCall(call)
-
 		logCall(call, LogLevelInfo, "success")
+
+		controller.EmitCall(call)
 
 	} else {
 		logError(err)
@@ -648,6 +648,13 @@ func (controller *Controller) Start() error {
 	}()
 
 	go func() {
+		for {
+			call := <-controller.Ingest
+			controller.IngestCall(call)
+		}
+	}()
+
+	go func() {
 		var timer *time.Timer
 
 		logClientsCount := func() {
@@ -659,9 +666,6 @@ func (controller *Controller) Start() error {
 
 		for {
 			select {
-			case call := <-controller.Ingest:
-				controller.IngestCall(call)
-
 			case client := <-controller.Register:
 				controller.Clients[client] = true
 				logClientsCount()
@@ -669,7 +673,6 @@ func (controller *Controller) Start() error {
 			case client := <-controller.Unregister:
 				if _, ok := controller.Clients[client]; ok {
 					delete(controller.Clients, client)
-					close(client.Send)
 					logClientsCount()
 				}
 			}

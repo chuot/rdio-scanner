@@ -225,6 +225,10 @@ func (accesses *Accesses) Read(db *Database) error {
 			access.Limit = uint(limit.Float64)
 		}
 
+		if order.Valid && order.Float64 > 0 {
+			access.Order = uint(order.Float64)
+		}
+
 		if err = json.Unmarshal([]byte(systems), &access.Systems); err != nil {
 			access.Systems = []interface{}{}
 		}

@@ -92,6 +92,13 @@ _v6.1.14_
 - Bump delay before killing unauthenticated clients from 10 seconds to 60 seconds.
 - Remove the gitter.im support forum from the documentation and prefer github discussions.
 
+_v6.1.15_
+
+- Fix access and downstreams order not retained.
+- Remove the self-signed certificate generator (-ssl create) as it was causing more problems than solutions.
+- Client handling and call ingestion now run on 2 different threads (Issue #135).
+- Fix downstream talkgroup select keeps reverting to all talkgroups (issue #136).
+
 ## Version 6.0
 
 - Backend server rewritten in Go for better performance and ease of installation.

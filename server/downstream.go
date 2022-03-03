@@ -378,10 +378,11 @@ func (downstreams *Downstreams) FromMap(f []interface{}) {
 
 func (downstreams *Downstreams) Read(db *Database) error {
 	var (
-		err   error
-		id    sql.NullFloat64
-		order sql.NullFloat64
-		rows  *sql.Rows
+		err     error
+		id      sql.NullFloat64
+		order   sql.NullFloat64
+		rows    *sql.Rows
+		systems string
 	)
 
 	downstreams.mutex.Lock()
@@ -400,7 +401,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 	for rows.Next() {
 		downstream := &Downstream{}
 
-		if err = rows.Scan(&id, &downstream.Apikey, &downstream.Disabled, &order, &downstream.Systems, &downstream.Url); err != nil {
+		if err = rows.Scan(&id, &downstream.Apikey, &downstream.Disabled, &order, &systems, &downstream.Url); err != nil {
 			break
 		}
 
@@ -412,13 +413,12 @@ func (downstreams *Downstreams) Read(db *Database) error {
 			downstream.Apikey = uuid.New().String()
 		}
 
-		switch v := downstream.Systems.(type) {
-		case string:
-			if err = json.Unmarshal([]byte(v), &downstream.Systems); err != nil {
-				downstream.Systems = defaults.downstream.systems
-			}
-		default:
-			downstream.Systems = defaults.downstream.systems
+		if order.Valid && order.Float64 > 0 {
+			downstream.Order = uint(order.Float64)
+		}
+
+		if err = json.Unmarshal([]byte(systems), &downstream.Systems); err != nil {
+			downstream.Systems = []interface{}{}
 		}
 
 		if len(downstream.Url) == 0 {

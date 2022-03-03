@@ -727,7 +727,7 @@ export class RdioScannerService implements OnDestroy {
             const file = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
             const fileName = call.audioName || 'unknown.dat';
             const fileType = call.audioType || 'audio/*';
-            const fileUri = `data:${fileType};base64,${btoa(file)}`;
+            const fileUri = `data:${fileType};base64,${window.btoa(file)}`;
 
             const el = this.document.createElement('a');
 
@@ -815,9 +815,6 @@ export class RdioScannerService implements OnDestroy {
                             this.queue(this.transformCall(call), { priority: true });
 
                         } else {
-                            if (this.isPatched(call)) {
-                                call.patched = true;
-                            }
                             this.queue(this.transformCall(call));
                         }
                     }

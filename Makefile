@@ -16,8 +16,8 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2022/02/24
-ver := 6.1.14
+date := 2022/03/03
+ver := 6.1.15
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)

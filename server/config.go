@@ -69,7 +69,6 @@ func NewConfig() *Config {
 		config        = &Config{}
 		configSave    = flag.Bool("config_save", false, fmt.Sprintf("save configuration to %s", defaultConfigFile))
 		serviceAction = flag.String("service", "", "service command, one of start, stop, restart, install, uninstall")
-		sslCreate     = flag.Bool("ssl_create", false, "create self-signed certificates")
 		version       = flag.Bool("version", false, "show application version")
 	)
 
@@ -115,17 +114,6 @@ func NewConfig() *Config {
 			os.Exit(0)
 		} else {
 			fmt.Printf("error: %s\n", err.Error())
-			os.Exit(-1)
-		}
-
-	case *sslCreate:
-		fmt.Println("generating ssl certificate files")
-
-		if err := CreateSelfSignedCert(config); err == nil {
-			fmt.Println("ssl files created")
-			os.Exit(0)
-		} else {
-			fmt.Printf("error: %s", err.Error())
 			os.Exit(-1)
 		}
 

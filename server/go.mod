@@ -12,7 +12,7 @@ require (
 	github.com/kardianos/service v1.2.1
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	gopkg.in/ini.v1 v1.66.4
-	modernc.org/sqlite v1.14.6
+	modernc.org/sqlite v1.14.7
 )
 
 require (
@@ -21,7 +21,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	golang.org/x/mod v0.5.1 // indirect
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
+	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
 	golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.9 // indirect

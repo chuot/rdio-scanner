@@ -142,8 +142,10 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		admin.Controller.IngestLock()
 		admin.mutex.Lock()
-		defer admin.mutex.Unlock()
-		defer admin.Controller.IngestUnlock()
+		defer func() {
+			admin.mutex.Unlock()
+			admin.Controller.IngestUnlock()
+		}()
 
 		logError := func(err error) {
 			admin.Controller.Logs.LogEvent(admin.Controller.Database, LogLevelError, fmt.Sprintf("admin.confighandler.put: %s", err.Error()))

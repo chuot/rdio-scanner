@@ -72,7 +72,7 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
         /*
          * BEGIN OF RED TAPE:
          * 
-         * By modifying, deleting or disabling the following lines, you are harming
+         * By modifying, deleting or disabling the following lines, you harm
          * the open source project and its author.  Rdio Scanner represents a lot of
          * investment in time, support, testing and hardware.
          * 
