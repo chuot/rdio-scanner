@@ -96,8 +96,13 @@ _v6.1.15_
 
 - Fix access and downstreams order not retained.
 - Remove the self-signed certificate generator (-ssl create) as it was causing more problems than solutions.
-- Client handling and call ingestion now run on 2 different threads (Issue #135).
+- Client handling and call ingestion now run on 2 different threads (issue #135).
 - Fix downstream talkgroup select keeps reverting to all talkgroups (issue #136).
+
+_v6.1.16_
+
+- Fix concurrent map access for clients.
+- Some tweaks to websocket management.
 
 ## Version 6.0
 

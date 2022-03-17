@@ -90,7 +90,7 @@ func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
 	return nil, false
 }
 
-func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) *GroupsMap {
+func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) GroupsMap {
 	var groupsMap = GroupsMap{}
 
 	for _, system := range *systemsMap {
@@ -155,7 +155,7 @@ func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) *GroupsMap {
 		}
 	}
 
-	return &groupsMap
+	return groupsMap
 }
 
 func (groups *Groups) Read(db *Database) error {

@@ -47,7 +47,7 @@ type Controller struct {
 	Scheduler    *Scheduler
 	Systems      *Systems
 	Tags         *Tags
-	Clients      map[*Client]bool
+	Clients      *Clients
 	Register     chan *Client
 	Unregister   chan *Client
 	Ingest       chan *Call
@@ -70,7 +70,7 @@ func NewController(config *Config) *Controller {
 		Options:     NewOptions(),
 		Systems:     NewSystems(),
 		Tags:        NewTags(),
-		Clients:     make(map[*Client]bool),
+		Clients:     NewClients(),
 		Register:    make(chan *Client, 128),
 		Unregister:  make(chan *Client, 128),
 		Ingest:      make(chan *Call, 128),
@@ -140,26 +140,12 @@ func (controller *Controller) ConvertAudio(call *Call) {
 }
 
 func (controller *Controller) EmitCall(call *Call) {
-	for client := range controller.Clients {
-		if (!controller.Accesses.IsRestricted() || client.Access.HasAccess(call)) && client.Livefeed.IsEnabled(call) {
-			client.Send <- &Message{Command: MessageCommandCall, Payload: call}
-		}
-	}
-
+	controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
 	controller.Downstreams.Send(controller, call)
 }
 
 func (controller *Controller) EmitConfig() {
-	restricted := controller.Accesses.IsRestricted()
-
-	for client := range controller.Clients {
-		if restricted {
-			client.Send <- &Message{Command: MessageCommandPin}
-		} else {
-			controller.SendClientConfig(client)
-		}
-	}
-
+	controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
 	controller.Admin.BroadcastConfig()
 }
 
@@ -404,7 +390,7 @@ func (controller *Controller) LogClientsCount() {
 	controller.Logs.LogEvent(
 		controller.Database,
 		LogLevelInfo,
-		fmt.Sprintf("listeners count is %v", len(controller.Clients)),
+		fmt.Sprintf("listeners count is %v", controller.Clients.Count()),
 	)
 }
 
@@ -421,7 +407,7 @@ func (controller *Controller) ProcessMessage(client *Client, message *Message) e
 		}
 
 	} else if message.Command == MessageCommandConfig {
-		controller.SendClientConfig(client)
+		client.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
 
 	} else if message.Command == MessageCommandListCall {
 		if err := controller.ProcessMessageCommandListCall(client, message); err != nil {
@@ -541,13 +527,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 
 			switch v := client.Access.Limit.(type) {
 			case uint:
-				count := uint(0)
-				for c := range controller.Clients {
-					if c.Access == client.Access {
-						count++
-					}
-				}
-				if count > v {
+				if controller.Clients.AccessCount(client) > int(v) {
 					controller.Logs.LogEvent(
 						controller.Database,
 						LogLevelWarn,
@@ -561,28 +541,10 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 
 		client.AuthCount = 0
 
-		controller.SendClientConfig(client)
+		client.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
 	}
 
 	return nil
-}
-
-func (controller *Controller) SendClientConfig(client *Client) {
-	client.SystemsMap = *controller.Systems.GetScopedSystems(client, controller.Groups, controller.Tags, controller.Options.SortTalkgroups)
-	client.GroupsMap = *controller.Groups.GetGroupsMap(&client.SystemsMap)
-	client.TagsMap = *controller.Tags.GetTagsMap(&client.SystemsMap)
-
-	client.Send <- &Message{
-		Command: MessageCommandConfig,
-		Payload: map[string]interface{}{
-			"dimmerDelay": controller.Options.DimmerDelay,
-			"groups":      client.GroupsMap,
-			"keypadBeeps": GetKeypadBeeps(controller.Options),
-			"systems":     client.SystemsMap,
-			"tags":        client.TagsMap,
-			"tagsToggle":  controller.Options.TagsToggle,
-		},
-	}
 }
 
 func (controller *Controller) Start() error {
@@ -667,14 +629,12 @@ func (controller *Controller) Start() error {
 		for {
 			select {
 			case client := <-controller.Register:
-				controller.Clients[client] = true
+				controller.Clients.Add(client)
 				logClientsCount()
 
 			case client := <-controller.Unregister:
-				if _, ok := controller.Clients[client]; ok {
-					delete(controller.Clients, client)
-					logClientsCount()
-				}
+				controller.Clients.Remove(client)
+				logClientsCount()
 			}
 		}
 	}()
@@ -686,10 +646,6 @@ func (controller *Controller) Start() error {
 
 func (controller *Controller) Terminate() {
 	controller.Dirwatches.Stop()
-
-	for c := range controller.Clients {
-		c.Conn.Close()
-	}
 
 	if err := controller.Database.Sql.Close(); err != nil {
 		log.Println(err)

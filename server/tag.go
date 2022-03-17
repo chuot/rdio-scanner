@@ -90,7 +90,7 @@ func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
 	return nil, false
 }
 
-func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) *TagsMap {
+func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) TagsMap {
 	tagsMap := TagsMap{}
 
 	for _, system := range *systemsMap {
@@ -155,7 +155,7 @@ func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) *TagsMap {
 		}
 	}
 
-	return &tagsMap
+	return tagsMap
 }
 
 func (tags *Tags) Read(db *Database) error {

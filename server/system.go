@@ -158,7 +158,7 @@ func (systems *Systems) GetSystem(f interface{}) (system *System, ok bool) {
 	return nil, false
 }
 
-func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *Tags, sortTalkgroups bool) *SystemsMap {
+func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *Tags, sortTalkgroups bool) SystemsMap {
 	var (
 		rawSystems = []System{}
 		systemsMap = SystemsMap{}
@@ -312,7 +312,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 		return false
 	})
 
-	return &systemsMap
+	return systemsMap
 }
 
 func (systems *Systems) Read(db *Database) error {

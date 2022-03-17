@@ -126,6 +126,8 @@ func main() {
 				CheckOrigin: func(r *http.Request) bool {
 					return true
 				},
+				ReadBufferSize:  1024,
+				WriteBufferSize: 1024,
 			}
 
 			conn, err := upgrader.Upgrade(w, r, nil)
@@ -189,9 +191,8 @@ func main() {
 		s := &http.Server{
 			Addr:         addr,
 			TLSConfig:    tlsConfig,
-			ReadTimeout:  60 * time.Second,
-			WriteTimeout: 60 * time.Second,
-			IdleTimeout:  120 * time.Second,
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
 			ErrorLog:     log.New(ioutil.Discard, "", 0),
 		}
 

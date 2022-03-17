@@ -19,23 +19,23 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 type Client struct {
-	initialized bool
-	Access      *Access
-	AuthCount   int
-	Controller  *Controller
-	Conn        *websocket.Conn
-	Send        chan *Message
-	Systems     []System
-	GroupsMap   GroupsMap
-	TagsMap     TagsMap
-	Livefeed    *Livefeed
-	SystemsMap  SystemsMap
+	Access     *Access
+	AuthCount  int
+	Controller *Controller
+	Conn       *websocket.Conn
+	Send       chan *Message
+	Systems    []System
+	GroupsMap  GroupsMap
+	TagsMap    TagsMap
+	Livefeed   *Livefeed
+	SystemsMap SystemsMap
 }
 
 func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
@@ -43,12 +43,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 		pongWait   = 60 * time.Second
 		pingPeriod = pongWait / 10 * 9
 		writeWait  = 10 * time.Second
-		closeWait  = 10 * time.Second
 	)
-
-	if client.initialized {
-		return errors.New("client.init: already initialized")
-	}
 
 	if conn == nil {
 		return errors.New("client.init: no websocket connection")
@@ -65,7 +60,6 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	go func() {
 		defer func() {
 			controller.Unregister <- client
-			client.Conn.Close()
 		}()
 
 		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -102,29 +96,19 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 		})
 
 		defer func() {
-			controller.Unregister <- client
-
 			ticker.Stop()
 			timer.Stop()
-
-			client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
-			client.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-
-			time.Sleep(closeWait)
-
-			client.Conn.Close()
 		}()
 
-	Loop:
 		for {
 			select {
 			case message, ok := <-client.Send:
 				if !ok {
-					break Loop
+					return
 				}
 
 				if client.Conn == nil {
-					break Loop
+					return
 				}
 
 				if message.Command == MessageCommandConfig {
@@ -139,17 +123,114 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 					client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 
 					if err = client.Conn.WriteMessage(websocket.TextMessage, b); err != nil {
-						break Loop
+						return
 					}
 				}
 
 			case <-ticker.C:
-				if err := client.Conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
-					break Loop
+				client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+				if err := client.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
 				}
 			}
 		}
 	}()
 
 	return nil
+}
+
+func (client *Client) SendConfig(groups *Groups, options *Options, systems *Systems, tags *Tags) {
+	client.SystemsMap = systems.GetScopedSystems(client, groups, tags, options.SortTalkgroups)
+	client.GroupsMap = groups.GetGroupsMap(&client.SystemsMap)
+	client.TagsMap = tags.GetTagsMap(&client.SystemsMap)
+
+	client.Send <- &Message{
+		Command: MessageCommandConfig,
+		Payload: map[string]interface{}{
+			"dimmerDelay": options.DimmerDelay,
+			"groups":      client.GroupsMap,
+			"keypadBeeps": GetKeypadBeeps(options),
+			"systems":     client.SystemsMap,
+			"tags":        client.TagsMap,
+			"tagsToggle":  options.TagsToggle,
+		},
+	}
+}
+
+type Clients struct {
+	Map   map[*Client]bool
+	mutex sync.Mutex
+}
+
+func NewClients() *Clients {
+	return &Clients{
+		Map:   make(map[*Client]bool),
+		mutex: sync.Mutex{},
+	}
+}
+
+func (clients *Clients) AccessCount(client *Client) int {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	count := 0
+
+	for c := range clients.Map {
+		if c.Access == client.Access {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (clients *Clients) Add(client *Client) {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	clients.Map[client] = true
+}
+
+func (clients *Clients) Count() int {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	return len(clients.Map)
+}
+
+func (clients *Clients) EmitCall(call *Call, restricted bool) {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	for c := range clients.Map {
+		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
+			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
+		}
+	}
+}
+
+func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	for c := range clients.Map {
+		if restricted {
+			c.Send <- &Message{Command: MessageCommandPin}
+		} else {
+			c.SendConfig(groups, options, systems, tags)
+		}
+	}
+}
+
+func (clients *Clients) Remove(client *Client) {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	delete(clients.Map, client)
+
+	close(client.Send)
+
+	client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+	client.Conn.Close()
 }
