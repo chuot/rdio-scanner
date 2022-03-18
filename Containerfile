@@ -10,7 +10,7 @@ RUN mkdir -p /app/data && \
     cd .. && \
     rm -fr server /root/.cache /root/go && \
     apk del .build && \
-    apk --no-cache --no-progress add ffmpeg tzdata
+    apk --no-cache --no-progress add ffmpeg mailcap tzdata
 VOLUME [ "/app/data" ]
 EXPOSE 3000
 ENTRYPOINT [ "./rdio-scanner", "-base_dir", "/app/data" ]
