@@ -44,7 +44,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         C:\Users\rdio> cd rdio-scanner
 
         C:\Users\rdio\rdio-scanner> tar -xvf ^
-            ..\downloads\rdio-scanner-windows-amd64-v6.2.1.zip
+            ..\downloads\rdio-scanner-windows-amd64-v6.2.2.zip
         x rdio-scanner.exe
         x rdio-scanner.pdf
 
@@ -52,7 +52,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
     
-        Rdio Scanner v6.2.1
+        Rdio Scanner v6.2.2
         ----------------------------------
         2022/03/25 13:48:48 server started
         2022/03/25 13:48:48 main interface at http://pc-windows:3000
@@ -78,7 +78,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         C:\Users\rdio\rdio-scanner>rdio-scanner -listen :80
         
-        Rdio Scanner v6.2.1
+        Rdio Scanner v6.2.2
         ----------------------------------
         2022/03/25 10:53:31 server started
         2022/03/25 10:53:31 main interface at http://pc-windows
@@ -96,7 +96,7 @@ You can use your own SSL certificates that match your domain name with `-ssl_cer
             -ssl_key_file meykey.key            ^
             -ssl_listen :443
         
-        Rdio Scanner v6.2.1
+        Rdio Scanner v6.2.2
         ----------------------------------
         2022/03/25 11:05:43 server started
         2022/03/25 11:05:43 main interface at http://pc-windows
@@ -133,7 +133,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
         
-        Rdio Scanner v6.2.1
+        Rdio Scanner v6.2.2
         ----------------------------------
         2022/03/25 11:11:28 server started
         2022/03/25 11:11:28 main interface at http://pc-windows

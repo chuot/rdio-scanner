@@ -11,6 +11,10 @@ _v6.2.1_
 
 - Fix SIGSEGV error in Units.Merge (issue #151).
 
+_v6.2.2_
+
+- Fix another SIGSEGV error in Units.Merge (issue #151).
+
 ## Version 6.1
 
 - Calls now support patched talkgroups.

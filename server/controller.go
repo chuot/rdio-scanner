@@ -314,10 +314,9 @@ func (controller *Controller) IngestCall(call *Call) {
 		switch v := call.units.(type) {
 		case *Units:
 			populated = true
-			if system.Units == nil {
-				system.Units = NewUnits()
+			if v != nil {
+				system.Units.Merge(v)
 			}
-			system.Units.Merge(v)
 		}
 	}
 
