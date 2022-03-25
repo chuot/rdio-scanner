@@ -39,9 +39,11 @@ You can ask your questions or post your comments on the [Rdio Scanner Discussion
 
 # Show your appreciation, support the author
 
-If you like [Rdio Scanner](https://github.com/chuot/rdio-scanner), **[consider starring the GitHub repository](https://github.com/chuot/rdio-scanner)** to show you appreciation to the author for his hard work. It cost nothing but is really appreciated.
+If you like [Rdio Scanner](https://github.com/chuot/rdio-scanner), **[consider starring the GitHub repository](https://github.com/chuot/rdio-scanner/stargazers)** to show you appreciation to the author for his hard work. It cost nothing but is really appreciated.
 
-If you use [Rdio Scanner](https://github.com/chuot/rdio-scanner) for commercial purposes or derive income from it, **[consider sponsoring the project](https://github.com/sponsors/chuot)** to help support continued development.
+If you use [Rdio Scanner](https://github.com/chuot/rdio-scanner) for commercial purposes or derive income from it, **[sponsor the project](https://github.com/sponsors/chuot)** to help support continued development.
+
+[![Follow us on Twitter](./docs/images/twitter-badge.png?raw=true)](https://twitter.com/RdioScanner)
 
 # Improve your experience on the go
 

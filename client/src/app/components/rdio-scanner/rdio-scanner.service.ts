@@ -51,6 +51,7 @@ enum WebsocketCommand {
     Config = 'CFG',
     Expired = 'XPR',
     ListCall = 'LCL',
+    ListenersCount = 'LSC',
     LivefeedMap = 'LFM',
     Max = 'MAX',
     Pin = 'PIN',
@@ -79,6 +80,7 @@ export class RdioScannerService implements OnDestroy {
         dimmerDelay: false,
         groups: {},
         keypadBeeps: false,
+        showListenersCount: false,
         systems: [],
         tags: {},
         tagsToggle: false,
@@ -828,9 +830,10 @@ export class RdioScannerService implements OnDestroy {
                         dimmerDelay: typeof config.dimmerDelay === 'number' ? config.dimmerDelay : 5000,
                         groups: typeof config.groups !== null && typeof config.groups === 'object' ? config.groups : {},
                         keypadBeeps: config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
+                        showListenersCount: typeof config.showListenersCount === 'boolean' ? config.showListenersCount : false,
                         systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
-                        tagsToggle: typeof config.tagsToggle !== null && typeof config.tagsToggle === 'boolean' ? config.tagsToggle : false,
+                        tagsToggle: typeof config.tagsToggle === 'boolean' ? config.tagsToggle : false,
                     };
 
                     this.rebuildLivefeedMap();
@@ -868,6 +871,11 @@ export class RdioScannerService implements OnDestroy {
                             this.playbackNextCall();
                         }
                     }
+
+                    break;
+
+                case WebsocketCommand.ListenersCount:
+                    this.event.emit({ listeners: message[1] });
 
                     break;
 

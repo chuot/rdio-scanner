@@ -92,6 +92,7 @@ export interface RdioScannerConfig {
     dimmerDelay: number | false;
     groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
+    showListenersCount: boolean;
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };
     tagsToggle: boolean;
@@ -106,6 +107,7 @@ export interface RdioScannerEvent {
     holdSys?: boolean;
     holdTg?: boolean;
     linked?: boolean;
+    listeners?: number;
     livefeedMode?: RdioScannerLivefeedMode;
     map?: RdioScannerLivefeedMap;
     pause?: boolean;

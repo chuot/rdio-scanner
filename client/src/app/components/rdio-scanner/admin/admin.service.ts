@@ -135,8 +135,10 @@ export interface Options {
     disableDuplicateDetection?: boolean;
     duplicateDetectionTimeFrame?: number;
     keypadBeeps?: string;
+    maxClients?: number;
     pruneDays?: number;
     searchPatchedTalkgroups?: boolean;
+    showListenersCount?: boolean;
     sortTalkgroups?: boolean;
     tagsToggle?: boolean;
 }
@@ -495,8 +497,10 @@ export class RdioScannerAdminService implements OnDestroy {
             disableDuplicateDetection: [options?.disableDuplicateDetection],
             duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
+            maxClients: [options?.maxClients, [Validators.required, Validators.min(1)]],
             pruneDays: [options?.pruneDays, [Validators.required, Validators.min(0)]],
 			searchPatchedTalkgroups: [options?.searchPatchedTalkgroups],
+			showListenersCount: [options?.showListenersCount],
             sortTalkgroups: [options?.sortTalkgroups],
             tagsToggle: [options?.tagsToggle],
         });

@@ -49,6 +49,11 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 		return errors.New("client.init: no websocket connection")
 	}
 
+	if controller.Clients.Count() >= int(controller.Options.MaxClients) {
+		conn.Close()
+		return nil
+	}
+
 	client.Access = &Access{}
 	client.Controller = controller
 	client.Conn = conn
@@ -98,6 +103,9 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 		defer func() {
 			ticker.Stop()
 			timer.Stop()
+
+			client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+			client.Conn.Close()
 		}()
 
 		for {
@@ -148,13 +156,21 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 	client.Send <- &Message{
 		Command: MessageCommandConfig,
 		Payload: map[string]interface{}{
-			"dimmerDelay": options.DimmerDelay,
-			"groups":      client.GroupsMap,
-			"keypadBeeps": GetKeypadBeeps(options),
-			"systems":     client.SystemsMap,
-			"tags":        client.TagsMap,
-			"tagsToggle":  options.TagsToggle,
+			"dimmerDelay":        options.DimmerDelay,
+			"groups":             client.GroupsMap,
+			"keypadBeeps":        GetKeypadBeeps(options),
+			"showListenersCount": options.ShowListenersCount,
+			"systems":            client.SystemsMap,
+			"tags":               client.TagsMap,
+			"tagsToggle":         options.TagsToggle,
 		},
+	}
+}
+
+func (client *Client) SendListenersCount(count int) {
+	client.Send <- &Message{
+		Command: MessagecommandListenersCount,
+		Payload: count,
 	}
 }
 
@@ -220,6 +236,19 @@ func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Sy
 		} else {
 			c.SendConfig(groups, options, systems, tags)
 		}
+
+		if options.ShowListenersCount {
+			c.SendListenersCount(len(clients.Map))
+		}
+	}
+}
+
+func (clients *Clients) EmitListenersCount() {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	for c := range clients.Map {
+		c.SendListenersCount(len(clients.Map))
 	}
 }
 
@@ -230,7 +259,4 @@ func (clients *Clients) Remove(client *Client) {
 	delete(clients.Map, client)
 
 	close(client.Send)
-
-	client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
-	client.Conn.Close()
 }

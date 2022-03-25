@@ -74,6 +74,21 @@
     </div>
     <div class="row">
         <p>
+            <span class="mat-body">Max Clients</span><br>
+            <span class="mat-caption">Max number of simultaneous clients.</span>
+        </p>
+        <mat-form-field>
+            <input type="number" min="0" step="1" matInput formControlName="maxClients">
+            <mat-error *ngIf="form?.get('maxClients')?.hasError('required')">
+                Max clients is required
+            </mat-error>
+            <mat-error *ngIf="form?.get('maxClients')?.hasError('min')">
+                Max clients is invalid
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Prune Days</span><br>
             <span class="mat-caption">Prune the database for data older than the specified number of days. Set to 0 to
                 disable.</span>
@@ -95,6 +110,15 @@
         </p>
         <div>
             <mat-slide-toggle color="primary" formControlName="searchPatchedTalkgroups"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Show Listeners Count</span><br>
+            <span class="mat-caption">Show listeners count on main screen.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="showListenersCount"></mat-slide-toggle>
         </div>
     </div>
     <div class="row">

@@ -1,5 +1,12 @@
 # Change log
 
+## Version 6.2
+
+- New max clients options which is 200 by default.
+- New show listeners count options which is disabled by default (issue #125).
+- Fix panic: concurrent write to websocket connection on goroutine.
+- Fix units import from SDR Trunk (issue #150).
+
 ## Version 6.1
 
 - Calls now support patched talkgroups.

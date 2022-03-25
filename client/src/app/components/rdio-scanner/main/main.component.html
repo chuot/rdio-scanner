@@ -9,6 +9,9 @@
         <div *ngIf="!linked">
             <span>NO LINK</span>
         </div>
+        <div *ngIf="linked && showListenersCount">
+            <span>L: {{ listeners }}</span>
+        </div>
         <div>
             <span>Q: {{ callQueue }}</span>
         </div>

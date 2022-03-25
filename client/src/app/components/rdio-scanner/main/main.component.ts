@@ -88,6 +88,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     linked = false;
 
+    listeners = 0;
+
     livefeedOffline = true;
     livefeedOnline = false;
     livefeedPaused = false;
@@ -97,6 +99,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     patched = false;
 
     playbackMode = false;
+
+    get showListenersCount(): boolean {
+        return this.config?.showListenersCount || false;
+    }
 
     @Output() openSearchPanel = new EventEmitter<void>();
 
@@ -379,6 +385,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         if ('linked' in event) {
             this.linked = event.linked || false;
+        }
+
+        if ('listeners' in event) {
+            this.listeners = event.listeners || 0;
         }
 
         if ('map' in event) {

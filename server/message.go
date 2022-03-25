@@ -20,17 +20,18 @@ import (
 )
 
 const (
-	MessageCommandCall        = "CAL"
-	MessageCommandConfig      = "CFG"
-	MessageCommandExpired     = "XPR"
-	MessageCommandIOS         = "IOS"
-	MessageCommandListCall    = "LCL"
-	MessageCommandLivefeedMap = "LFM"
-	MessageCommandMax         = "MAX"
-	MessageCommandPin         = "PIN"
-	MessageCommandPushId      = "PID"
-	MessageCommandServer      = "SRV"
-	MessageCommandVersion     = "VER"
+	MessageCommandCall           = "CAL"
+	MessageCommandConfig         = "CFG"
+	MessageCommandExpired        = "XPR"
+	MessageCommandIOS            = "IOS"
+	MessageCommandListCall       = "LCL"
+	MessagecommandListenersCount = "LSC"
+	MessageCommandLivefeedMap    = "LFM"
+	MessageCommandMax            = "MAX"
+	MessageCommandPin            = "PIN"
+	MessageCommandPushId         = "PID"
+	MessageCommandServer         = "SRV"
+	MessageCommandVersion        = "VER"
 )
 
 type Message struct {

@@ -312,12 +312,12 @@ func (controller *Controller) IngestCall(call *Call) {
 		}
 
 		switch v := call.units.(type) {
-		case Units:
+		case *Units:
 			populated = true
 			if system.Units == nil {
 				system.Units = NewUnits()
 			}
-			system.Units.Merge(&v)
+			system.Units.Merge(v)
 		}
 	}
 
@@ -619,22 +619,28 @@ func (controller *Controller) Start() error {
 	go func() {
 		var timer *time.Timer
 
-		logClientsCount := func() {
+		doClientsCount := func() {
 			if timer != nil {
 				timer.Stop()
 			}
-			timer = time.AfterFunc(time.Second, controller.LogClientsCount)
+			timer = time.AfterFunc(time.Second, func() {
+				controller.LogClientsCount()
+
+				if controller.Options.ShowListenersCount {
+					controller.Clients.EmitListenersCount()
+				}
+			})
 		}
 
 		for {
 			select {
 			case client := <-controller.Register:
 				controller.Clients.Add(client)
-				logClientsCount()
+				doClientsCount()
 
 			case client := <-controller.Unregister:
 				controller.Clients.Remove(client)
-				logClientsCount()
+				doClientsCount()
 			}
 		}
 	}()

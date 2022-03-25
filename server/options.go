@@ -31,8 +31,10 @@ type Options struct {
 	DisableDuplicateDetection   bool   `json:"disableDuplicateDetection"`
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
+	MaxClients                  uint   `json:"maxClients"`
 	PruneDays                   uint   `json:"pruneDays"`
 	SearchPatchedTalkgroups     bool   `json:"searchPatchedTalkgroups"`
+	ShowListenersCount          bool   `json:"showListenersCount"`
 	SortTalkgroups              bool   `json:"sortTalkgroups"`
 	TagsToggle                  bool   `json:"tagsToggle"`
 	adminPassword               string
@@ -93,6 +95,13 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.KeypadBeeps = defaults.options.keypadBeeps
 	}
 
+	switch v := m["maxClients"].(type) {
+	case float64:
+		options.MaxClients = uint(v)
+	default:
+		options.MaxClients = defaults.options.maxClients
+	}
+
 	switch v := m["pruneDays"].(type) {
 	case float64:
 		options.PruneDays = uint(v)
@@ -105,6 +114,13 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.SearchPatchedTalkgroups = v
 	default:
 		options.SearchPatchedTalkgroups = defaults.options.searchPatchedTalkgroups
+	}
+
+	switch v := m["showListenersCount"].(type) {
+	case bool:
+		options.ShowListenersCount = v
+	default:
+		options.ShowListenersCount = defaults.options.showListenersCount
 	}
 
 	switch v := m["sortTalkgroups"].(type) {
@@ -142,8 +158,10 @@ func (options *Options) Read(db *Database) error {
 	options.DisableDuplicateDetection = defaults.options.disableDuplicateDetection
 	options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	options.KeypadBeeps = defaults.options.keypadBeeps
+	options.MaxClients = defaults.options.maxClients
 	options.PruneDays = defaults.options.pruneDays
 	options.SearchPatchedTalkgroups = defaults.options.searchPatchedTalkgroups
+	options.ShowListenersCount = defaults.options.showListenersCount
 	options.SortTalkgroups = defaults.options.sortTalkgroups
 	options.TagsToggle = defaults.options.tagsToggle
 
@@ -216,6 +234,11 @@ func (options *Options) Read(db *Database) error {
 						options.KeypadBeeps = v
 					}
 
+					switch v := v["maxClients"].(type) {
+					case float64:
+						options.MaxClients = uint(v)
+					}
+
 					switch v := v["pruneDays"].(type) {
 					case float64:
 						options.PruneDays = uint(v)
@@ -224,6 +247,11 @@ func (options *Options) Read(db *Database) error {
 					switch v := v["searchPatchedTalkgroups"].(type) {
 					case bool:
 						options.SearchPatchedTalkgroups = v
+					}
+
+					switch v := v["showListenersCount"].(type) {
+					case bool:
+						options.ShowListenersCount = v
 					}
 
 					switch v := v["sortTalkgroups"].(type) {
@@ -300,8 +328,10 @@ func (options *Options) Write(db *Database) error {
 		"disableDuplicateDetection":   options.DisableDuplicateDetection,
 		"duplicateDetectionTimeFrame": options.DuplicateDetectionTimeFrame,
 		"keypadBeeps":                 options.KeypadBeeps,
+		"maxClients":                  options.MaxClients,
 		"pruneDays":                   options.PruneDays,
 		"searchPatchedTalkgroups":     options.SearchPatchedTalkgroups,
+		"showListenersCount":          options.ShowListenersCount,
 		"sortTalkgroups":              options.SortTalkgroups,
 		"tagsToggle":                  options.TagsToggle,
 	}); err != nil {

@@ -41,13 +41,23 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		return err
 	}
 
-	s = regexp.MustCompile(`^([0-9]+)$`).FindStringSubmatch(m.Artist())
-	if len(s) == 2 {
+	s = regexp.MustCompile(`^([0-9]+) ?(.+)$`).FindStringSubmatch(m.Artist())
+	if len(s) >= 2 {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
 		if i > 0 {
 			call.Source = uint(i)
+
+			if len(s) == 3 {
+				if call.units == nil {
+					call.units = NewUnits()
+				}
+				switch units := call.units.(type) {
+				case *Units:
+					units.Add(uint(i), s[2])
+				}
+			}
 		}
 	}
 
