@@ -7,6 +7,10 @@
 - Fix panic: concurrent write to websocket connection on goroutine.
 - Fix units import from SDR Trunk (issue #150).
 
+_v6.2.1_
+
+- Fix SIGSEGV error in Units.Merge (issue #151).
+
 ## Version 6.1
 
 - Calls now support patched talkgroups.

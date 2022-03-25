@@ -401,7 +401,7 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 						case string:
 							if len(t) > 0 {
 								switch v := call.units.(type) {
-								case Units:
+								case *Units:
 									v.Add(uint(s), t)
 								default:
 									var u = NewUnits()

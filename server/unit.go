@@ -94,8 +94,8 @@ func (units *Units) FromMap(f []interface{}) {
 }
 
 func (u *Units) Merge(units *Units) {
-	units.mutex.Lock()
-	defer units.mutex.Unlock()
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
 
 	for _, v := range units.List {
 		u.Add(v.Id, v.Label)
