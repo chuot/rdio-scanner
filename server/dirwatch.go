@@ -759,6 +759,7 @@ func (dirwatches *Dirwatches) Stop() {
 	for i := range dirwatches.List {
 		dirwatches.List[i].Stop()
 	}
+	dirwatches.List = []*Dirwatch{}
 }
 
 func (dirwatches *Dirwatches) Write(db *Database) error {

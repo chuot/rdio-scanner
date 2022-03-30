@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -168,6 +169,8 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+
+			admin.Controller.Dirwatches.Stop()
 
 			switch v := m["access"].(type) {
 			case []interface{}:
@@ -421,7 +424,14 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		token := jwt.New(jwt.SigningMethodHS256)
+		id, err := uuid.NewRandom()
+
+		if err != nil {
+			w.WriteHeader(http.StatusExpectationFailed)
+			return
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{ID: id.String()})
 		sToken, err := token.SignedString([]byte(admin.Controller.Options.secret))
 
 		if err != nil {
@@ -470,6 +480,8 @@ func (admin *Admin) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 				admin.Tokens = append(admin.Tokens[:k], admin.Tokens[k+1:]...)
 			}
 		}
+		w.WriteHeader(http.StatusOK)
+
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}

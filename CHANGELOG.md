@@ -15,6 +15,16 @@ _v6.2.2_
 
 - Fix another SIGSEGV error in Units.Merge (issue #151).
 
+_v6.2.3_
+
+- New random UUID in the JSON-Web Token payload.
+- Fix dirwatch not properly shutting down when a new configuration is applied.
+- Fix dashboard logout not sending HTTP 200 OK status.
+- Clear the active dirwatch list when stopped.
+- Pauses calls ingestion before database pruning.
+- Fix regex for units in driwatch type SDRTrunk (discussion #155).
+- Update SQLite driver.
+
 ## Version 6.1
 
 - Calls now support patched talkgroups.

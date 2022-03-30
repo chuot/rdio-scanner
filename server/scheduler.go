@@ -42,6 +42,9 @@ func (scheduler *Scheduler) pruneDatabase() error {
 		return nil
 	}
 
+	scheduler.Controller.IngestLock()
+	defer scheduler.Controller.IngestUnlock()
+
 	scheduler.Controller.Logs.LogEvent(scheduler.Controller.Database, LogLevelInfo, "database pruning")
 
 	if err := scheduler.Controller.Calls.Prune(scheduler.Controller.Database, scheduler.Controller.Options.PruneDays); err != nil {

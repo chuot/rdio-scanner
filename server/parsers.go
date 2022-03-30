@@ -41,7 +41,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		return err
 	}
 
-	s = regexp.MustCompile(`^([0-9]+) ?(.+)$`).FindStringSubmatch(m.Artist())
+	s = regexp.MustCompile(`^([0-9]+) ?(.*)$`).FindStringSubmatch(m.Artist())
 	if len(s) >= 2 {
 		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
@@ -49,7 +49,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		if i > 0 {
 			call.Source = uint(i)
 
-			if len(s) == 3 && len(s[2]) > 0 {
+			if len(s) >= 3 && len(s[2]) > 0 {
 				if call.units == nil {
 					call.units = NewUnits()
 				}
