@@ -19,6 +19,7 @@
 
 import { Component, Optional, OnInit } from '@angular/core';
 import { MatSnackBarRef } from '@angular/material/snack-bar';
+import { timer } from 'rxjs';
 
 @Component({
     selector: 'RdioScannerNative',
@@ -55,7 +56,7 @@ export class RdioScannerNativeComponent implements OnInit {
     }
 
     private wait(): void {
-        setTimeout(() => {
+        timer(1000).subscribe(() => {
             this.countdown--;
 
             if (this.countdown < 1) {
@@ -64,6 +65,6 @@ export class RdioScannerNativeComponent implements OnInit {
             } else {
                 this.wait();
             }
-        }, 1000);
+        });
     }
 }

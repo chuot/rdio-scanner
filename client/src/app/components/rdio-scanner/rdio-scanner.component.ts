@@ -20,6 +20,7 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { timer } from 'rxjs';
 import { RdioScannerEvent, RdioScannerLivefeedMode } from './rdio-scanner';
 import { RdioScannerService } from './rdio-scanner.service';
 import { RdioScannerNativeComponent } from './native/native.component';
@@ -79,13 +80,13 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
          * Be respectful, sponsor the project if you can, use native apps when possible.
          * 
          */
-        setTimeout(() => {
+        timer(10000).subscribe(() => {
             const ua: String = navigator.userAgent;
 
             if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
                 this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });
             }
-        }, 10000);
+        });
         /**
          * END OF RED TAPE.
          */

@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, OnDestroy, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
@@ -38,7 +38,7 @@ import { RdioScannerService } from '../rdio-scanner.service';
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
 })
-export class RdioScannerSearchComponent implements OnDestroy {
+export class RdioScannerSearchComponent implements OnDestroy, OnInit {
     call: RdioScannerCall | undefined;
     callPending: number | undefined;
 
@@ -100,6 +100,10 @@ export class RdioScannerSearchComponent implements OnDestroy {
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
+    }
+
+    ngOnInit(): void {
+
     }
 
     play(id: number): void {
@@ -311,7 +315,6 @@ export class RdioScannerSearchComponent implements OnDestroy {
             this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
             this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
             this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
-            this.optionsTalkgroup = [];
         }
 
         if ('livefeedMode' in event) {

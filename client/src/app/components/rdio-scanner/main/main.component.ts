@@ -20,6 +20,7 @@
 import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
+import { Subscription, timer } from 'rxjs';
 import packageInfo from '../../../../../package.json';
 import {
     RdioScannerAvoidOptions,
@@ -112,11 +113,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     @ViewChild('password', { read: MatInput }) private authPassword: MatInput | undefined;
 
-    private clockTimer: number | undefined;
+    private clockTimer: Subscription | undefined;
 
     private config: RdioScannerConfig | undefined;
 
-    private dimmerTimer: number | undefined;
+    private dimmerTimer: Subscription | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
 
@@ -213,9 +214,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     ngOnDestroy(): void {
-        if (this.clockTimer) {
-            clearInterval(this.clockTimer);
-        }
+        this.clockTimer?.unsubscribe();
 
         this.eventSubscription.unsubscribe();
     }
@@ -435,34 +434,28 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     private syncClock(): void {
-        if (this.clockTimer) {
-            clearInterval(this.clockTimer);
-        }
+        this.clockTimer?.unsubscribe();
 
         this.clock = new Date();
 
-        this.clockTimer = window.setInterval(() => this.syncClock(), 1000 * (60 - this.clock.getSeconds()));
+        this.clockTimer = timer(1000 * (60 - this.clock.getSeconds())).subscribe(() => this.syncClock());
     }
 
     private updateDimmer(): void {
         if (typeof this.config?.dimmerDelay === 'number') {
-            if (this.dimmerTimer) {
-                clearTimeout(this.dimmerTimer);
-            }
+            this.dimmerTimer?.unsubscribe();
 
             this.dimmer = true;
 
-            this.dimmerTimer = window.setTimeout(() => {
-                if (this.dimmerTimer) {
-                    clearTimeout(this.dimmerTimer);
-                }
+            this.dimmerTimer = timer(this.config.dimmerDelay).subscribe(() => {
+                this.dimmerTimer?.unsubscribe();
 
                 this.dimmerTimer = undefined;
 
                 this.dimmer = false;
 
                 this.ngChangeDetectorRef.detectChanges();
-            }, this.config.dimmerDelay);
+            });
         }
     }
 

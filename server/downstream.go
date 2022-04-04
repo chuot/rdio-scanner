@@ -178,7 +178,7 @@ func (downstream *Downstream) Send(call *Call) error {
 	}
 
 	switch v := call.Frequencies.(type) {
-	case []interface{}:
+	case []map[string]interface{}:
 		if w, err := mw.CreateFormField("frequencies"); err == nil {
 			if b, err := json.Marshal(v); err == nil {
 				if _, err = w.Write(b); err != nil {

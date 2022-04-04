@@ -25,6 +25,12 @@ _v6.2.3_
 - Fix regex for units in driwatch type SDRTrunk (discussion #155).
 - Update SQLite driver.
 
+_v6.2.4_
+
+- Fix call frequencies table not being transmitted to downstream.
+- Avoid using setInterval and setTimeout in the webapp.
+- Fix talkgroup search filter upon new configuration (issue #158).
+
 ## Version 6.1
 
 - Calls now support patched talkgroups.
