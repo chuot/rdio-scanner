@@ -31,6 +31,10 @@ _v6.2.4_
 - Avoid using setInterval and setTimeout in the webapp.
 - Fix talkgroup search filter upon new configuration (issue #158).
 
+_v6.2.5_
+
+- Fix unnecessary auto populate of unit id/label (issue #160).
+
 ## Version 6.1
 
 - Calls now support patched talkgroups.
@@ -452,7 +456,7 @@ _v4.7.6_
 
 ## Version 4.1
 
-- New offline playback mode.
+- New playback mode.
 
 ## Version 4.0
 

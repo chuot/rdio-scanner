@@ -10,9 +10,9 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/kardianos/service v1.2.1
-	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
+	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
 	gopkg.in/ini.v1 v1.66.4
-	modernc.org/sqlite v1.15.4
+	modernc.org/sqlite v1.16.0
 )
 
 require (
@@ -21,8 +21,8 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/net v0.0.0-20220325170049-de3da57026de // indirect
-	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
+	golang.org/x/net v0.0.0-20220403103023-749bd193bc2b // indirect
+	golang.org/x/sys v0.0.0-20220405210540-1e041c57c461 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.10 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect

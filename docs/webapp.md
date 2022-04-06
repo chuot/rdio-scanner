@@ -44,9 +44,9 @@ The color is _green_ by default, but can be customized by the system or by the t
 
 ![control Area](./images/webapp-controls.png?raw=true)\
 
-| Button                                                               | Description                                                                                                                                                                                                                                                                                                                                              |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![LIVE FEED](./images/webapp-control-livefeed-partial.png?raw=true) | When active, incoming audio will be played according to the active systems/talkgroups on the **SELECT TG** panel. The LED can also be _yellow_ if playing audio from the archive while **LIVE FEED** is inactive, this is called **offline playback mode**. Disabling **LIVE FEED** will also stop any playing audio and will clear the listening queue. |
+| Button                                                              | Description                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![LIVE FEED](./images/webapp-control-livefeed-partial.png?raw=true) | When active, incoming audio will be played according to the active systems/talkgroups on the **SELECT TG** panel. The LED can also be _yellow_ if playing audio from the archive while **LIVE FEED** is inactive, this is called **playback mode**. Disabling **LIVE FEED** will also stop any playing audio and will clear the listening queue.         |
 | ![HOLD SYS](./images/webapp-control-holdsys.png?raw=true)           | Temporarily maintain the current system in live feed mode.                                                                                                                                                                                                                                                                                               |
 | ![HOLD TG](./images/webapp-control-holdtg.png?raw=true)             | Temporarily maintain the current talkgroup in live feed mode.                                                                                                                                                                                                                                                                                            |
 | ![REPLAY LAST](./images/webapp-control-replay.png?raw=true)         | Replay the current audio from the beginning or the previous one if there is none active.                                                                                                                                                                                                                                                                 |
@@ -54,7 +54,7 @@ The color is _green_ by default, but can be customized by the system or by the t
 | ![AVOID](./images/webapp-control-avoid.png?raw=true)                | Activate and deactivate the talkgroup from the current or previous audio.                                                                                                                                                                                                                                                                                |
 | ![SEARCH CALL](./images/webapp-control-search.png?raw=true)         | Display the archived audio panel.                                                                                                                                                                                                                                                                                                                        |
 | ![PAUSE](./images/webapp-control-pause.png?raw=true)                | Stop playing queue audio. Useful if you have to answer the phone without losing what's queued up for playing.                                                                                                                                                                                                                                            |
-| ![SELECT TG](./images/webapp-control-select.png?raw=true)           | Display the systems/talkgroups selection panel where you decide which audio you want to listen to in _LIVE FEED_ mode, not in offline playback mode.                                                                                                                                                                                                     |
+| ![SELECT TG](./images/webapp-control-select.png?raw=true)           | Display the systems/talkgroups selection panel where you decide which audio you want to listen to in _LIVE FEED_ mode, not in playback mode.                                                                                                                                                                                                             |
 
 ## Select panel
 
@@ -82,8 +82,8 @@ The first section concerns group selection. This section can be disabled from th
 
 This is much like the group section, but for each system. There is also just two states for each button:
 
-| Button                                                   | State                                                                                                                |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Button                                                  | State                                                                                                                |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | ![ON](./images/webapp-select-system-on.png?raw=true)    | The talkgroup from this system is active. If you press it while it is active, it will make the talkgroup inactive.   |
 | ![OFF](./images/webapp-select-system-off.png?raw=true)  | The talkgroup from this system is inactive. If you press it while it is inactive, it will make the talkgroup active. |
 | ![ALL OFF](./images/webapp-select-all-off.png?raw=true) | Make inactive every talkgroups from this system.                                                                     |
@@ -99,17 +99,17 @@ This is much like the group section, but for each system. There is also just two
 
 This section presents the list of archived audio files stored in the database. Depending on the _LIVE FEED_ mode you are at, the replay function behaves differently:
 
-| Mode                                                                         | Function                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mode                                                                        | Function                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![LIVE FEED ON](./images/webapp-control-livefeed-on.png?raw=true)           | while **LIVE FEED** is active, press the **PLAY** button to play this audio file. If another audio file is playing, it will be stopped and the one you just selected will be played instead. After playback finishes, the listening queue will resume as normal.                                                           |
-| ![LIVE FEED PARTIAL](./images/webapp-control-livefeed-partial.png?raw=true) | This is the **offline playback mode** which can be activated only if **LIVE FEED** is inactive. Press the **PLAY** button to play this audio file. After playback is finishes, the next audio file from in list is played. While the audio is playing, pressing the **STOP** button will cancel the offline playback mode. |
+| ![LIVE FEED PARTIAL](./images/webapp-control-livefeed-partial.png?raw=true) | This is the **playback mode** which can be activated only if **LIVE FEED** is inactive. Press the **PLAY** button to play this audio file. After playback is finishes, the next audio file from in list is played. While the audio is playing, pressing the **STOP** button will cancel the playback mode.                 |
 
 \pagebreak{}
 At the bottom left of this section is the toggle switch which allows you to toggle between play buttons and download buttons. The later ones allows you to download locally the audio file.
 
-At the bottom right of this section is the _paginator_ to browse the whole database. This _paginator_ is disabled while in offline playback mode.
+At the bottom right of this section is the _paginator_ to browse the whole database. This _paginator_ is disabled while in playback mode.
 
-> Note that offline playback mode always requires your web app to be online. It is called like that because it plays archived audio files from the database.
+> Note that playback mode always requires your web app to be online. It is called like that because it plays archived audio files from the database.
 
 ### Filters section
 
@@ -119,6 +119,6 @@ This is the section where you filter the archived audio to a specific date, syst
 
 There is also a small slider that changes the **PLAY** buttons to **DOWNLOAD** buttons. This allows you to download audio files individually regardless of the playback mode you use.
 
-> Note that if you change any filter while in offline playback mode, it will deactivate it.
+> Note that if you change any filter while in playback mode, it will deactivate it.
 
 \pagebreak{}
