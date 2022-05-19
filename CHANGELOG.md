@@ -1,5 +1,13 @@
 # Change log
 
+## Version 6.3
+
+- Change scroll speed when drag droping talkgroups or units in a system (discussion #170).
+- System Ids listed in the `Config / Options / AFS Systems` will have their talkgroup Ids displayed in AFS format (issue #163).
+- New dirwatch meta tags #GROUP #SYSLBL #TAG #TGAFS and #UNIT for better ProScan compatibility (issue #164).
+- Playback mode will now catch up to live (issue #175).
+- Dirwatch code rewrite (issue #177).
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.

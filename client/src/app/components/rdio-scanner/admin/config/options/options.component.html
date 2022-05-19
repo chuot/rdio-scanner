@@ -106,7 +106,8 @@
     <div class="row">
         <p>
             <span class="mat-body">Search Patched Talkgroups</span><br>
-            <span class="mat-caption">Search for patched talkgroups when using the search panel. Be aware this has a negative impact on search response time.</span>
+            <span class="mat-caption">Search for patched talkgroups when using the search panel. Be aware this has a
+                negative impact on search response time.</span>
         </p>
         <div>
             <mat-slide-toggle color="primary" formControlName="searchPatchedTalkgroups"></mat-slide-toggle>
@@ -138,5 +139,17 @@
         <div>
             <mat-slide-toggle color="primary" formControlName="tagsToggle"></mat-slide-toggle>
         </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">AFS Systems</span><br>
+            <span class="mat-caption">A comma separated list of system Ids where talkgroup Ids should be displayed in AFS (agency-fleet-subfleet) format.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <textarea type="text" matInput formControlName="afsSystems" placeholder="AFS systems"></textarea>
+            <mat-error *ngIf="form?.get('afsSystems')?.hasError('invalid')">
+                Comma separated list of system Ids
+            </mat-error>
+        </mat-form-field>
     </div>
 </ng-container>

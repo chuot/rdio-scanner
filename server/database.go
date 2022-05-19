@@ -61,7 +61,7 @@ func NewDatabase(config *Config) *Database {
 		log.Fatalf("unknown database type %s\n", config.DbType)
 	}
 
-	database.Sql.SetConnMaxLifetime(0)
+	database.Sql.SetConnMaxLifetime(time.Minute)
 	database.Sql.SetMaxIdleConns(25)
 	database.Sql.SetMaxOpenConns(25)
 

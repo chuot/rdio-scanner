@@ -46,7 +46,7 @@ func NewDaemon() *Daemon {
 	p, _ := os.FindProcess(os.Getpid())
 
 	d := Daemon{
-		Errors:    make(chan error, 5),
+		Errors:    make(chan error),
 		Interface: &DaemonInterface{Process: p},
 	}
 

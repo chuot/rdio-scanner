@@ -6,7 +6,7 @@
 </div>
 <p *ngIf="!accesses.length" class="mat-small text-center">No access is defined, your instance is open and accessible to
     all</p>
-<mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="accesses" (cdkDropListDropped)="drop($event)">
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="accesses" (cdkDropListDropped)="drop($event)">
     <mat-expansion-panel *ngFor="let access of accesses; index as i" cdkDrag>
         <mat-expansion-panel-header>
             <mat-panel-title>

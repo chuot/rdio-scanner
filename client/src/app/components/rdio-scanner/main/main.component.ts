@@ -425,12 +425,24 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         this.updateDisplay();
     }
 
+    private formatAfs(n: number): string {
+        return `${(n >> 7 & 15).toString().padStart(2, '0')}-${(n >> 3 & 15).toString().padStart(2, '0')}${n & 7}`;
+    }
+
     private formatFrequency(frequency: number | undefined): string {
         return typeof frequency === 'number' ? frequency
             .toString()
             .padStart(9, '0')
             .replace(/(\d)(?=(\d{3})+$)/g, '$1 ')
             .concat(' Hz') : '';
+    }
+
+    private isAfsSystem(talkgroupId: number): boolean {
+        if (typeof this.config?.afs !== 'string') {
+            return false;
+        }
+
+        return this.config.afs.split(',').includes(talkgroupId.toString());
     }
 
     private syncClock(): void {
@@ -461,6 +473,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     private updateDisplay(time = this.callTime): void {
         if (this.call) {
+            let isAfs = this.isAfsSystem(this.call.system);
+
             this.callProgress = new Date(this.call.dateTime);
             this.callProgress.setSeconds(this.callProgress.getSeconds() + time);
 
@@ -468,7 +482,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
             this.callTag = this.call.talkgroupData?.tag || '';
 
-            this.callTalkgroup = this.call.talkgroupData?.label || `${this.call.talkgroup}`;
+            this.callTalkgroup = this.call.talkgroupData?.label || `${isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup}`;
 
             this.callTalkgroupName = this.call.talkgroupData?.name || this.formatFrequency(this.call?.frequency);
 
@@ -494,7 +508,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             if (Array.isArray(this.call.sources) && this.call.sources.length) {
                 const source = this.call.sources.reduce((p, v) => (v.pos || 0) <= time ? v : p, {});
 
-                this.callTalkgroupId = `${this.call.talkgroup}`;
+                this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
                 if (typeof source.src === 'number' && Array.isArray(this.call.systemData?.units)) {
                     const callUnit = this.call?.systemData?.units?.find((u) => u.id === source.src);
@@ -506,7 +520,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                 }
 
             } else {
-                this.callTalkgroupId = this.call.talkgroup.toString();
+                this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
                 this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
             }

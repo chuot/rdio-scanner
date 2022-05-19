@@ -57,7 +57,7 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	client.Access = &Access{}
 	client.Controller = controller
 	client.Conn = conn
-	client.Send = make(chan *Message, 8)
+	client.Send = make(chan *Message)
 	client.Livefeed = NewLivefeed()
 
 	controller.Register <- client
@@ -153,18 +153,21 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 	client.GroupsMap = groups.GetGroupsMap(&client.SystemsMap)
 	client.TagsMap = tags.GetTagsMap(&client.SystemsMap)
 
-	client.Send <- &Message{
-		Command: MessageCommandConfig,
-		Payload: map[string]interface{}{
-			"dimmerDelay":        options.DimmerDelay,
-			"groups":             client.GroupsMap,
-			"keypadBeeps":        GetKeypadBeeps(options),
-			"showListenersCount": options.ShowListenersCount,
-			"systems":            client.SystemsMap,
-			"tags":               client.TagsMap,
-			"tagsToggle":         options.TagsToggle,
-		},
+	var payload = map[string]interface{}{
+		"dimmerDelay":        options.DimmerDelay,
+		"groups":             client.GroupsMap,
+		"keypadBeeps":        GetKeypadBeeps(options),
+		"showListenersCount": options.ShowListenersCount,
+		"systems":            client.SystemsMap,
+		"tags":               client.TagsMap,
+		"tagsToggle":         options.TagsToggle,
 	}
+
+	if len(options.AfsSystems) > 0 {
+		payload["afs"] = options.AfsSystems
+	}
+
+	client.Send <- &Message{Command: MessageCommandConfig, Payload: payload}
 }
 
 func (client *Client) SendListenersCount(count int) {

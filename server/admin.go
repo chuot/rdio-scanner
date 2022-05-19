@@ -57,12 +57,12 @@ func NewAdmin(controller *Controller) *Admin {
 		Attempts:         AdminLoginAttempts{},
 		AttemptsMax:      uint(3),
 		AttemptsMaxDelay: time.Duration(time.Duration.Minutes(10)),
-		Broadcast:        make(chan *[]byte, 100),
+		Broadcast:        make(chan *[]byte),
 		Conns:            make(map[*websocket.Conn]bool),
 		Controller:       controller,
-		Register:         make(chan *websocket.Conn, 100),
+		Register:         make(chan *websocket.Conn),
 		Tokens:           []string{},
-		Unregister:       make(chan *websocket.Conn, 100),
+		Unregister:       make(chan *websocket.Conn),
 		mutex:            sync.Mutex{},
 	}
 }

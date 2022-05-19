@@ -4,7 +4,7 @@
         systems to rearrange their order.</p>
     <button type="button" mat-button color="accent" (click)="add()">New system</button>
 </div>
-<mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="systems" (cdkDropListDropped)="drop($event)">
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="systems" (cdkDropListDropped)="drop($event)">
     <mat-expansion-panel *ngFor="let system of systems; index as i" [formGroup]="system"
         (afterCollapse)="systemComponent.closeAll()" cdkDrag>
         <mat-expansion-panel-header>

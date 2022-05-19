@@ -44,7 +44,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         C:\Users\rdio> cd rdio-scanner
 
         C:\Users\rdio\rdio-scanner> tar -xvf ^
-            ..\downloads\rdio-scanner-windows-amd64-v6.2.5.zip
+            ..\downloads\rdio-scanner-windows-amd64-v6.3.0.zip
         x rdio-scanner.exe
         x rdio-scanner.pdf
 
@@ -52,11 +52,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
     
-        Rdio Scanner v6.2.5
+        Rdio Scanner v6.3.0
         ----------------------------------
-        2022/04/06 13:48:48 server started
-        2022/04/06 13:48:48 main interface at http://pc-windows:3000
-        2022/04/06 13:48:48 admin interface at http://pc-windows:3000/admin
+        2022/05/19 13:48:48 server started
+        2022/05/19 13:48:48 main interface at http://pc-windows:3000
+        2022/05/19 13:48:48 admin interface at http://pc-windows:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -78,11 +78,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
 
         C:\Users\rdio\rdio-scanner>rdio-scanner -listen :80
         
-        Rdio Scanner v6.2.5
+        Rdio Scanner v6.3.0
         ----------------------------------
-        2022/04/06 10:53:31 server started
-        2022/04/06 10:53:31 main interface at http://pc-windows
-        2022/04/06 10:53:31 admin interface at http://pc-windows/admin
+        2022/05/19 10:53:31 server started
+        2022/05/19 10:53:31 main interface at http://pc-windows
+        2022/05/19 10:53:31 admin interface at http://pc-windows/admin
 
 ## Listening on a SSL port
 
@@ -96,12 +96,12 @@ You can use your own SSL certificates that match your domain name with `-ssl_cer
             -ssl_key_file meykey.key            ^
             -ssl_listen :443
         
-        Rdio Scanner v6.2.5
+        Rdio Scanner v6.3.0
         ----------------------------------
-        2022/04/06 11:05:43 server started
-        2022/04/06 11:05:43 main interface at http://pc-windows
-        2022/04/06 11:05:43 main interface at https://pc-windows
-        2022/04/06 11:05:43 admin interface at https://pc-windows/admin
+        2022/05/19 11:05:43 server started
+        2022/05/19 11:05:43 main interface at http://pc-windows
+        2022/05/19 11:05:43 main interface at https://pc-windows
+        2022/05/19 11:05:43 admin interface at https://pc-windows/admin
 
 If you don't want to worry about SSL certificates, you can use the built-in Let's Encrypt auto-cert feature. This requires that you have both port 80 (HTTP) and port 443 (HTTPS) open to the world. Also, your domain name should point to your IP address where [Rdio Scanner](https://github.com/chuot/rdio-scanner/) is running. The advantage of this approach is that everything is done automatically, no certificate request, no certificate renewal.
 
@@ -119,7 +119,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
             -ssl_auto_cert mydomain.com         ^
             -ssl_listen :443                    ^
             -config_save
-        2022/04/06 11:08:28 rdio-scanner.ini file created
+        2022/05/19 11:08:28 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -133,12 +133,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
 
         C:\Users\rdio\rdio-scanner>rdio-scanner
         
-        Rdio Scanner v6.2.5
+        Rdio Scanner v6.3.0
         ----------------------------------
-        2022/04/06 11:11:28 server started
-        2022/04/06 11:11:28 main interface at http://pc-windows
-        2022/04/06 11:11:28 main interface at https://pc-windows
-        2022/04/06 11:11:28 admin interface at https://pc-windows/admin
+        2022/05/19 11:11:28 server started
+        2022/05/19 11:11:28 main interface at http://pc-windows
+        2022/05/19 11:11:28 main interface at https://pc-windows
+        2022/05/19 11:11:28 admin interface at https://pc-windows/admin
 
 \pagebreak{}
 

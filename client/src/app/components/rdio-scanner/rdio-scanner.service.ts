@@ -96,6 +96,7 @@ export class RdioScannerService implements OnDestroy {
 
     private playbackList: RdioScannerPlaybackList | undefined;
     private playbackPending: number | undefined;
+    private playbackRefreshing = false;
 
     private skipDelay: Subscription | undefined;
 
@@ -580,6 +581,8 @@ export class RdioScannerService implements OnDestroy {
     stopPlaybackMode(): void {
         this.livefeedMode = RdioScannerLivefeedMode.Offline;
 
+        this.playbackRefreshing = false;
+
         this.clearQueue();
 
         this.event.emit({ livefeedMode: this.livefeedMode, queue: 0 });
@@ -833,6 +836,10 @@ export class RdioScannerService implements OnDestroy {
                         tagsToggle: typeof config.tagsToggle === 'boolean' ? config.tagsToggle : false,
                     };
 
+                    if (typeof config.afs === 'string' && config.afs.length) {
+                        this.config['afs'] = config.afs;
+                    }
+
                     this.rebuildLivefeedMap();
 
                     if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
@@ -902,7 +909,12 @@ export class RdioScannerService implements OnDestroy {
 
             } else if (index === 0) {
                 if (this.playbackList.options.offset < this.playbackList.options.limit) {
-                    this.stopPlaybackMode();
+                    if (this.playbackRefreshing) {
+                        this.stopPlaybackMode();
+                    } else {
+                        this.playbackRefreshing = true;
+                        this.searchCalls(this.playbackList.options);
+                    }
 
                 } else {
                     this.searchCalls(Object.assign({}, this.playbackList.options, {
@@ -924,8 +936,12 @@ export class RdioScannerService implements OnDestroy {
                         offset: this.playbackList.options.offset + this.playbackList.options.limit,
                     }));
 
-                } else {
+                } else if (this.playbackRefreshing) {
                     this.stopPlaybackMode();
+
+                } else {
+                    this.playbackRefreshing = true;
+                    this.searchCalls(this.playbackList.options);
                 }
 
             } else {

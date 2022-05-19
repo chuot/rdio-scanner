@@ -4,7 +4,7 @@
     <button type="button" mat-button color="accent" (click)="add()">New API key</button>
 </div>
 <p *ngIf="!apiKeys.length" class="mat-small text-center">No defined API keys</p>
-<mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="apiKeys" (cdkDropListDropped)="drop($event)">
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="apiKeys" (cdkDropListDropped)="drop($event)">
     <mat-expansion-panel *ngFor="let apiKey of apiKeys; index as i" cdkDrag>
         <mat-expansion-panel-header>
             <mat-panel-title>

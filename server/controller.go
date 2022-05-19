@@ -71,9 +71,9 @@ func NewController(config *Config) *Controller {
 		Systems:     NewSystems(),
 		Tags:        NewTags(),
 		Clients:     NewClients(),
-		Register:    make(chan *Client, 128),
-		Unregister:  make(chan *Client, 128),
-		Ingest:      make(chan *Call, 128),
+		Register:    make(chan *Client),
+		Unregister:  make(chan *Client),
+		Ingest:      make(chan *Call),
 		ingestMutex: sync.Mutex{},
 	}
 
@@ -601,7 +601,7 @@ func (controller *Controller) Start() error {
 	}
 
 	go func() {
-		c := make(chan os.Signal, 1)
+		c := make(chan os.Signal)
 		signal.Notify(c, os.Interrupt)
 		<-c
 		controller.Terminate()

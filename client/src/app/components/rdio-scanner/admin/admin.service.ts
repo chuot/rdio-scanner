@@ -129,6 +129,7 @@ export interface LogsQueryOptions {
 }
 
 export interface Options {
+    afsSystems?: string;
     autoPopulate?: boolean;
     dimmerDelay?: number;
     disableAudioConversion?: boolean;
@@ -491,6 +492,7 @@ export class RdioScannerAdminService implements OnDestroy {
 
     newOptionsForm(options?: Options): FormGroup {
         return this.ngFormBuilder.group({
+            afsSystems: [options?.afsSystems, this.validateAfsSystems()],
             autoPopulate: [options?.autoPopulate],
             dimmerDelay: [options?.dimmerDelay, [Validators.required, Validators.min(0)]],
             disableAudioConversion: [options?.disableAudioConversion],
@@ -595,6 +597,12 @@ export class RdioScannerAdminService implements OnDestroy {
         };
     }
 
+    private validateAfsSystems(): ValidatorFn {
+        return (control: AbstractControl): ValidationErrors | null => {
+            return typeof control.value === 'string' && control.value.length ? /^[0-9]+(,[0-9]+)*$/.test(control.value) ? null : { invalid: true } : null;
+        };
+    }
+
     private validateApiKey(): ValidatorFn {
         return (control: AbstractControl): ValidationErrors | null => {
             if (typeof control.value !== 'string' || !control.value.length) {
@@ -629,20 +637,6 @@ export class RdioScannerAdminService implements OnDestroy {
         };
     }
 
-    private validateDownstreamUrl(): ValidatorFn {
-        return (control: AbstractControl): ValidationErrors | null => {
-            if (typeof control.value !== 'string' || !control.value.length) {
-                return null;
-            }
-
-            const downstream: Downstream[] = control.parent?.parent?.getRawValue() || [];
-
-            const count = downstream.reduce((c, a) => c += a.url === control.value ? 1 : 0, 0);
-
-            return count > 1 ? { duplicate: true } : null;
-        };
-    }
-
     private validateDirwatchSystemId(): ValidatorFn {
         return (control: AbstractControl): ValidationErrors | null => {
             const dirwatch = control.parent?.getRawValue() || {};
@@ -664,6 +658,20 @@ export class RdioScannerAdminService implements OnDestroy {
             const type = dirwatch.type;
 
             return ['trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#TG/.test(mask) ? null : { required: true };
+        };
+    }
+
+    private validateDownstreamUrl(): ValidatorFn {
+        return (control: AbstractControl): ValidationErrors | null => {
+            if (typeof control.value !== 'string' || !control.value.length) {
+                return null;
+            }
+
+            const downstream: Downstream[] = control.parent?.parent?.getRawValue() || [];
+
+            const count = downstream.reduce((c, a) => c += a.url === control.value ? 1 : 0, 0);
+
+            return count > 1 ? { duplicate: true } : null;
         };
     }
 
@@ -709,7 +717,7 @@ export class RdioScannerAdminService implements OnDestroy {
                 return null;
             }
 
-            const masks = ['#DATE', '#HZ', '#KHZ', '#MHZ', '#SYS', '#TIME', '#TG', '#TGHZ', '#TGKHZ', '#TGMHZ', '#UNIT', '#ZTIME'];
+            const masks = ['#DATE', '#GROUP', '#HZ', '#KHZ', '#MHZ', '#SYS', '#SYSLBL', '#TAG', '#TG', '#TGAFS', '#TGHZ', '#TGKHZ', '#TGMHZ', '#TIME', '#UNIT', '#ZTIME'];
 
             const metas = control.value.match(/(#[A-Z]+)/g) || [];
 

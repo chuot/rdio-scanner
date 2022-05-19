@@ -25,6 +25,7 @@ import (
 )
 
 type Options struct {
+	AfsSystems                  string `json:"afsSystems"`
 	AutoPopulate                bool   `json:"autoPopulate"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
 	DisableAudioConversion      bool   `json:"disableAudioConversion"`
@@ -86,6 +87,11 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.DuplicateDetectionTimeFrame = uint(v)
 	default:
 		options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
+	}
+
+	switch v := m["afsSystems"].(type) {
+	case string:
+		options.AfsSystems = v
 	}
 
 	switch v := m["keypadBeeps"].(type) {
@@ -204,6 +210,11 @@ func (options *Options) Read(db *Database) error {
 			if err = json.Unmarshal([]byte(v), &f); err == nil {
 				switch v := f.(type) {
 				case map[string]interface{}:
+					switch v := v["afsSystems"].(type) {
+					case string:
+						options.AfsSystems = v
+					}
+
 					switch v := v["autoPopulate"].(type) {
 					case bool:
 						options.AutoPopulate = v
@@ -322,6 +333,7 @@ func (options *Options) Write(db *Database) error {
 	}
 
 	if b, err = json.Marshal(map[string]interface{}{
+		"afsSystems":                  options.AfsSystems,
 		"autoPopulate":                options.AutoPopulate,
 		"dimmerDelay":                 options.DimmerDelay,
 		"disableAudioConversion":      options.DisableAudioConversion,

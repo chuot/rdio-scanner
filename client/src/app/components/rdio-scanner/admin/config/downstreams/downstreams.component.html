@@ -3,7 +3,7 @@
     <button type="button" mat-button color="accent" (click)="add()">New downstream</button>
 </div>
 <p *ngIf="!downstreams.length" class="mat-small text-center">No defined downstreams</p>
-<mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="downstreams" (cdkDropListDropped)="drop($event)">
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="downstreams" (cdkDropListDropped)="drop($event)">
     <mat-expansion-panel *ngFor="let downstream of downstreams; index as i" cdkDrag>
         <mat-expansion-panel-header>
             <mat-panel-title>

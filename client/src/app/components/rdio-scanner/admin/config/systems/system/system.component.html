@@ -79,7 +79,7 @@
                         option is enabled.</p>
                     <button type="button" mat-button color="accent" (click)="addTalkgroup()">New talkgroup</button>
                 </div>
-                <mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="talkgroups"
+                <mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="talkgroups"
                     (cdkDropListDropped)="drop($event)">
                     <mat-expansion-panel *ngFor="let talkgroup of talkgroups; index as i" [formGroup]="talkgroup"
                         cdkDrag>
@@ -114,7 +114,7 @@
                         screen.<br>You can drag and drop them to rearrange</p>
                     <button type="button" mat-button color="accent" (click)="addUnit()">New unit</button>
                 </div>
-                <mat-accordion displayMode="flat" cdkDropList [cdkDropListData]="units"
+                <mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="units"
                     (cdkDropListDropped)="drop($event)">
                     <mat-expansion-panel *ngFor="let unit of units; index as i" [formGroup]="unit" cdkDrag>
                         <mat-expansion-panel-header>

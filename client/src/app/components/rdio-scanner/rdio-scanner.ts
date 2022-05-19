@@ -89,6 +89,7 @@ export enum RdioScannerCategoryType {
 }
 
 export interface RdioScannerConfig {
+    afs?: string;
     dimmerDelay: number | false;
     groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
