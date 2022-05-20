@@ -911,6 +911,7 @@ export class RdioScannerService implements OnDestroy {
                 if (this.playbackList.options.offset < this.playbackList.options.limit) {
                     if (this.playbackRefreshing) {
                         this.stopPlaybackMode();
+                        this.startLivefeed();
                     } else {
                         this.playbackRefreshing = true;
                         this.searchCalls(this.playbackList.options);
@@ -938,6 +939,7 @@ export class RdioScannerService implements OnDestroy {
 
                 } else if (this.playbackRefreshing) {
                     this.stopPlaybackMode();
+                    this.startLivefeed();
 
                 } else {
                     this.playbackRefreshing = true;

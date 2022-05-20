@@ -212,9 +212,6 @@ func (clients *Clients) Add(client *Client) {
 }
 
 func (clients *Clients) Count() int {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	return len(clients.Map)
 }
 

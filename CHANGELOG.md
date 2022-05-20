@@ -8,6 +8,11 @@
 - Playback mode will now catch up to live (issue #175).
 - Dirwatch code rewrite (issue #177).
 
+_v6.3.1_
+
+- Playback mode catch up to live, then swith to livefeed mode.
+- Removed the mutex lock on Clients.Count which led to a deadlock and froze call ingestion.
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.
