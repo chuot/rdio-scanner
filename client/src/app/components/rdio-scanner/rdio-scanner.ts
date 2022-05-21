@@ -105,6 +105,7 @@ export interface RdioScannerEvent {
     call?: RdioScannerCall;
     config?: RdioScannerConfig;
     expired?: boolean;
+    history?: RdioScannerCall[];
     holdSys?: boolean;
     holdTg?: boolean;
     linked?: boolean;

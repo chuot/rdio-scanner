@@ -52,7 +52,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     call: RdioScannerCall | undefined;
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
-    callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
+    callHistory: RdioScannerCall[] | undefined;
     callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
     callQueue = 0;
@@ -125,7 +125,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
-    ) { }
+    ) {
+        this.callHistory = this.rdioScannerService.getHistory();
+    }
 
     authenticate(password = this.authForm.value.password): void {
         this.authForm.disable();
@@ -356,7 +358,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             const password = this.authForm.get('password')?.value;
 
             if (password) {
-                window?.localStorage?.setItem(LOCAL_STORAGE_KEY, btoa(password));
+                window?.localStorage?.setItem(LOCAL_STORAGE_KEY, window.btoa(password));
 
                 this.authForm.reset();
             }
@@ -372,6 +374,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         if ('expired' in event && event.expired === true) {
             this.authForm.get('password')?.setErrors({ expired: true });
+        }
+
+        if ('history' in event) {
+            this.callHistory = event.history || [];
         }
 
         if ('holdSys' in event) {
@@ -523,16 +529,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                 this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
                 this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
-            }
-
-            if (
-                this.callPrevious &&
-                this.callPrevious.id !== this.call.id &&
-                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious?.id)
-            ) {
-                this.callHistory.pop();
-
-                this.callHistory.unshift(this.callPrevious);
             }
         }
 

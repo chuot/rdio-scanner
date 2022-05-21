@@ -13,6 +13,12 @@ _v6.3.1_
 - Playback mode catch up to live, then swith to livefeed mode.
 - Removed the mutex lock on Clients.Count which led to a deadlock and froze call ingestion.
 
+_v6.3.2_
+
+- New #TGLBL metatag for dirwatch for ProScan (%C) or alike.
+- Fix `semacquire` lockup in Clients (issue #177, #181, #182).
+- Replay button now replays from history if pressed multiple times quickly (issue #186).
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.

@@ -42,8 +42,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         rdio@pc-freebsd:~ $ mkdir rdio-scanner
         rdio@pc-freebsd:~ $ cd rdio-scanner
         rdio@pc-freebsd:~/rdio-scanner $ unzip \
-        > ~/rdio-scanner-freebsd-amd64-v6.3.1.zip 
-        Archive:  ../rdio-scanner-freebsd-amd64-v6.3.1.zip
+        > ~/rdio-scanner-freebsd-amd64-v6.3.2.zip 
+        Archive:  ../rdio-scanner-freebsd-amd64-v6.3.2.zip
          extracting: rdio-scanner  
          extracting: rdio-scanner.pdf
 
@@ -51,11 +51,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         rdio@pc-freebsd:~/rdio-scanner $ ./rdio-scanner
         
-        Rdio Scanner v6.3.1
+        Rdio Scanner v6.3.2
         ----------------------------------
-        2022/05/19 08:16:36 server started
-        2022/05/19 08:16:36 main interface at http://pc-freebsd:3000
-        2022/05/19 08:16:36 admin interface at http://pc-freebsd:3000/admin
+        2022/05/21 08:16:36 server started
+        2022/05/21 08:16:36 main interface at http://pc-freebsd:3000
+        2022/05/21 08:16:36 admin interface at http://pc-freebsd:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -81,11 +81,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner -listen :80
         
-        Rdio Scanner v6.3.1
+        Rdio Scanner v6.3.2
         ----------------------------------
-        2022/05/19 08:19:38 server started
-        2022/05/19 08:19:38 main interface at http://pc-freebsd
-        2022/05/19 08:19:38 admin interface at http://pc-freebsd/admin
+        2022/05/21 08:19:38 server started
+        2022/05/21 08:19:38 main interface at http://pc-freebsd
+        2022/05/21 08:19:38 admin interface at http://pc-freebsd/admin
 
 ## Listening on a SSL port
 
@@ -101,12 +101,12 @@ You can use your own SSL certificates that match your domain name with `-ssl_cer
         > -ssl_key_file mykey.key                                     \
         > -ssl_listen :443
         
-        Rdio Scanner v6.3.1
+        Rdio Scanner v6.3.2
         ----------------------------------
-        2022/05/19 10:34:29 server started
-        2022/05/19 10:34:29 main interface at http://pc-freebsd
-        2022/05/19 10:34:29 main interface at https://pc-freebsd
-        2022/05/19 10:34:29 admin interface at https://pc-freebsd/admin
+        2022/05/21 10:34:29 server started
+        2022/05/21 10:34:29 main interface at http://pc-freebsd
+        2022/05/21 10:34:29 main interface at https://pc-freebsd
+        2022/05/21 10:34:29 admin interface at https://pc-freebsd/admin
 
 If you don't want to worry about SSL certificates, you can use the built-in Let's Encrypt auto-cert feature. This requires that you have both port 80 (HTTP) and port 443 (HTTPS) open to the world. Also, your domain name should point to your IP address where [Rdio Scanner](https://github.com/chuot/rdio-scanner/) is running. The advantage of this approach is that everything is done automatically, no certificate request, no certificate renewal.
 
@@ -126,7 +126,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
         > -ssl_auto_cert mydomain.com                         \
         > -ssl_listen :443                                    \
         > -config_save
-        2022/05/19 10:37:00 rdio-scanner.ini file created
+        2022/05/21 10:37:00 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -142,12 +142,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner
         
-        Rdio Scanner v6.3.1
+        Rdio Scanner v6.3.2
         ----------------------------------
-        2022/05/19 10:38:28 server started
-        2022/05/19 10:38:29 main interface at http://pc-freebsd
-        2022/05/19 10:38:29 main interface at https://pc-freebsd
-        2022/05/19 10:38:29 admin interface at https://pc-freebsd/admin
+        2022/05/21 10:38:28 server started
+        2022/05/21 10:38:29 main interface at http://pc-freebsd
+        2022/05/21 10:38:29 main interface at https://pc-freebsd
+        2022/05/21 10:38:29 admin interface at https://pc-freebsd/admin
 
 ## Install Rdio Scanner as a service
 

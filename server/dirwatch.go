@@ -326,16 +326,17 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 func (dirwatch *Dirwatch) parseMask(call *Call) {
 	var meta = [][]string{
 		{"date", "#DATE", `[\d-_]+`},
-		{"group", "#GROUP", `[a-zA-Z0-9\ \.-]+`},
+		{"group", "#GROUP", `[a-zA-Z0-9\.\ -]+`},
 		{"hz", "#HZ", `\d+`},
 		{"khz", "#KHZ", `[\d\.]+`},
 		{"mhz", "#MHZ", `[\d\.]+`},
-		{"syslbl", "#SYSLBL", `[a-zA-Z0-9\ \.-]+`},
+		{"syslbl", "#SYSLBL", `[a-zA-Z0-9,\.\ -]+`},
 		{"sys", "#SYS", `\d+`},
-		{"tag", "#TAG", `[a-zA-Z0-9\ \.-]+`},
+		{"tag", "#TAG", `[a-zA-Z0-9\.\ -]+`},
 		{"tgafs", "#TGAFS", `\d{2}-\d{3}`},
 		{"tghz", "#TGHZ", `\d+`},
 		{"tgkhz", "#TGKHZ", `[\d\.]+`},
+		{"tglbl", "#TGLBL", `[a-zA-Z0-9,\.\ -]+`},
 		{"tgmhz", "#TGMHZ", `[\d\.]+`},
 		{"tg", "#TG", `\d+`},
 		{"time", "#TIME", `[\d-:]+`},
@@ -456,7 +457,7 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := metaval["tag"].(type) {
 	case string:
 		if len(v) > 0 && v != "-" {
-			call.talkgroupGroup = v
+			call.talkgroupTag = v
 		}
 	}
 
@@ -501,6 +502,13 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 					}
 				}
 			}
+		}
+	}
+
+	switch v := metaval["tglbl"].(type) {
+	case string:
+		if len(v) > 0 {
+			call.talkgroupLabel = v
 		}
 	}
 

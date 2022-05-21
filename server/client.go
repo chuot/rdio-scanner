@@ -178,85 +178,94 @@ func (client *Client) SendListenersCount(count int) {
 }
 
 type Clients struct {
-	Map   map[*Client]bool
-	mutex sync.Mutex
+	Map sync.Map
 }
 
 func NewClients() *Clients {
-	return &Clients{
-		Map:   make(map[*Client]bool),
-		mutex: sync.Mutex{},
-	}
+	return &Clients{Map: sync.Map{}}
 }
 
 func (clients *Clients) AccessCount(client *Client) int {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	count := 0
 
-	for c := range clients.Map {
-		if c.Access == client.Access {
-			count++
+	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+		switch c := k.(type) {
+		case *Client:
+			if c.Access == client.Access {
+				count++
+			}
 		}
-	}
+		return true
+	})
 
 	return count
 }
 
 func (clients *Clients) Add(client *Client) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
-	clients.Map[client] = true
+	clients.Map.Store(client, true)
 }
 
 func (clients *Clients) Count() int {
-	return len(clients.Map)
+	count := 0
+
+	clients.Map.Range(func(k, v interface{}) bool {
+		count++
+
+		return true
+	})
+
+	return count
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
-	for c := range clients.Map {
-		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
-			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
+	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+		switch c := k.(type) {
+		case *Client:
+			if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
+				c.Send <- &Message{Command: MessageCommandCall, Payload: call}
+			}
 		}
-	}
+
+		return true
+	})
 }
 
 func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
+	count := clients.Count()
 
-	for c := range clients.Map {
-		if restricted {
-			c.Send <- &Message{Command: MessageCommandPin}
-		} else {
-			c.SendConfig(groups, options, systems, tags)
+	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+		switch c := k.(type) {
+		case *Client:
+			if restricted {
+				c.Send <- &Message{Command: MessageCommandPin}
+			} else {
+				c.SendConfig(groups, options, systems, tags)
+			}
+
+			if options.ShowListenersCount {
+				c.SendListenersCount(count)
+			}
 		}
 
-		if options.ShowListenersCount {
-			c.SendListenersCount(len(clients.Map))
-		}
-	}
+		return true
+	})
 }
 
 func (clients *Clients) EmitListenersCount() {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
+	count := clients.Count()
 
-	for c := range clients.Map {
-		c.SendListenersCount(len(clients.Map))
-	}
+	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+		switch c := k.(type) {
+		case *Client:
+			c.SendListenersCount(count)
+		}
+
+		return true
+	})
 }
 
 func (clients *Clients) Remove(client *Client) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
-	delete(clients.Map, client)
+	clients.Map.Delete(client)
 
 	close(client.Send)
 }

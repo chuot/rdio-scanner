@@ -717,7 +717,7 @@ export class RdioScannerAdminService implements OnDestroy {
                 return null;
             }
 
-            const masks = ['#DATE', '#GROUP', '#HZ', '#KHZ', '#MHZ', '#SYS', '#SYSLBL', '#TAG', '#TG', '#TGAFS', '#TGHZ', '#TGKHZ', '#TGMHZ', '#TIME', '#UNIT', '#ZTIME'];
+            const masks = ['#DATE', '#GROUP', '#HZ', '#KHZ', '#MHZ', '#SYS', '#SYSLBL', '#TAG', '#TG', '#TGAFS', '#TGHZ', '#TGKHZ', '#TGLBL', '#TGMHZ', '#TIME', '#UNIT', '#ZTIME'];
 
             const metas = control.value.match(/(#[A-Z]+)/g) || [];
 
