@@ -19,6 +19,15 @@ _v6.3.2_
 - Fix `semacquire` lockup in Clients (issue #177, #181, #182).
 - Replay button now replays from history if pressed multiple times quickly (issue #186).
 
+_v6.3.3_
+
+- Fix concurrent map writes fatal error in dirwatch (issue #187).
+- Brighter LED colors and new orange color.
+- Fix call id when retrieved from a MySQL database.
+- Add loudnorm audio filter to the ffmpeg audio conversion.
+- Show the real IP address in the logs taking into account if behind a proxy.
+- Fix panic when emitting a call to clients.
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.

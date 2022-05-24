@@ -114,7 +114,7 @@ func (controller *Controller) ConvertAudio(call *Call) {
 		}
 	}
 
-	args = append(args, "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
+	args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
 
 	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stdin = bytes.NewReader(call.Audio)
@@ -497,7 +497,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 				controller.Logs.LogEvent(
 					controller.Database,
 					LogLevelWarn,
-					fmt.Sprintf("invalid access code=\"%s\" address=\"%s\"", code, client.Conn.RemoteAddr().String()),
+					fmt.Sprintf("invalid access code=\"%s\" address=\"%s\"", code, client.GetRemoteAddr()),
 				)
 				client.Send <- &Message{Command: MessageCommandPin}
 				return nil

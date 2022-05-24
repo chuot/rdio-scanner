@@ -52,7 +52,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     call: RdioScannerCall | undefined;
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
-    callHistory: RdioScannerCall[] | undefined;
+    callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
     callPrevious: RdioScannerCall | undefined;
     callProgress = new Date(0, 0, 0, 0, 0, 0);
     callQueue = 0;
@@ -101,6 +101,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     playbackMode = false;
 
+    replayOffset = 0;
+    replayTimer: Subscription | undefined;
+
     get showListenersCount(): boolean {
         return this.config?.showListenersCount || false;
     }
@@ -125,9 +128,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
-    ) {
-        this.callHistory = this.rdioScannerService.getHistory();
-    }
+    ) { }
 
     authenticate(password = this.authForm.value.password): void {
         this.authForm.disable();
@@ -253,7 +254,27 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             if (!this.livefeedPaused && (this.call || this.callPrevious)) {
                 this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
 
-                this.rdioScannerService.replay();
+                if (this.replayTimer instanceof Subscription) {
+                    this.replayTimer.unsubscribe();
+                    this.replayOffset = Math.min(this.callHistory.length, this.replayOffset + 1);
+                }
+
+                this.replayTimer = timer(750).subscribe(() => {
+                    this.replayTimer = undefined;
+                    this.replayOffset = 0;
+                });
+
+                if (this.call && !this.replayOffset) {
+                    this.rdioScannerService.replay()
+                } else if (this.callPrevious !== this.callHistory[0]) {
+                    if (this.replayOffset) {
+                        this.rdioScannerService.play(this.callHistory[this.replayOffset - 1]);
+                    } else {
+                        this.rdioScannerService.replay()
+                    }
+                } else {
+                    this.rdioScannerService.play(this.callHistory[this.replayOffset]);
+                }
 
             } else {
                 this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
@@ -374,10 +395,6 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         if ('expired' in event && event.expired === true) {
             this.authForm.get('password')?.setErrors({ expired: true });
-        }
-
-        if ('history' in event) {
-            this.callHistory = event.history || [];
         }
 
         if ('holdSys' in event) {
@@ -530,6 +547,16 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
                 this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
             }
+
+            if (
+                this.callPrevious &&
+                this.callPrevious.id !== this.call.id &&
+                !this.callHistory.find((call: RdioScannerCall) => call?.id === this.callPrevious?.id)
+            ) {
+                this.callHistory.pop();
+
+                this.callHistory.unshift(this.callPrevious);
+            }
         }
 
         const call = this.call || this.callPrevious;
@@ -544,7 +571,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             }
         }
 
-        const colors = ['blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'];
+        const colors = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
 
         this.ledStyle = this.call && this.livefeedPaused ? 'on paused' : this.call ? 'on' : 'off';
 

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -36,9 +37,10 @@ type Client struct {
 	TagsMap    TagsMap
 	Livefeed   *Livefeed
 	SystemsMap SystemsMap
+	request    *http.Request
 }
 
-func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
+func (client *Client) Init(controller *Controller, request *http.Request, conn *websocket.Conn) error {
 	const (
 		pongWait   = 60 * time.Second
 		pingPeriod = pongWait / 10 * 9
@@ -57,8 +59,9 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	client.Access = &Access{}
 	client.Controller = controller
 	client.Conn = conn
-	client.Send = make(chan *Message)
 	client.Livefeed = NewLivefeed()
+	client.Send = make(chan *Message)
+	client.request = request
 
 	controller.Register <- client
 
@@ -148,7 +151,15 @@ func (client *Client) Init(controller *Controller, conn *websocket.Conn) error {
 	return nil
 }
 
+func (client *Client) GetRemoteAddr() string {
+	return GetRemoteAddr(client.request)
+}
+
 func (client *Client) SendConfig(groups *Groups, options *Options, systems *Systems, tags *Tags) {
+	defer func() {
+		recover()
+	}()
+
 	client.SystemsMap = systems.GetScopedSystems(client, groups, tags, options.SortTalkgroups)
 	client.GroupsMap = groups.GetGroupsMap(&client.SystemsMap)
 	client.TagsMap = tags.GetTagsMap(&client.SystemsMap)
@@ -171,6 +182,10 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 }
 
 func (client *Client) SendListenersCount(count int) {
+	defer func() {
+		recover()
+	}()
+
 	client.Send <- &Message{
 		Command: MessagecommandListenersCount,
 		Payload: count,
@@ -218,6 +233,10 @@ func (clients *Clients) Count() int {
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
+	defer func() {
+		recover()
+	}()
+
 	clients.Map.Range(func(k interface{}, _ interface{}) bool {
 		switch c := k.(type) {
 		case *Client:
@@ -231,6 +250,10 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 }
 
 func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
+	defer func() {
+		recover()
+	}()
+
 	count := clients.Count()
 
 	clients.Map.Range(func(k interface{}, _ interface{}) bool {
@@ -265,6 +288,10 @@ func (clients *Clients) EmitListenersCount() {
 }
 
 func (clients *Clients) Remove(client *Client) {
+	defer func() {
+		recover()
+	}()
+
 	clients.Map.Delete(client)
 
 	close(client.Send)

@@ -73,7 +73,7 @@ export class RdioScannerService implements OnDestroy {
     private beepContext: AudioContext | undefined;
 
     private call: RdioScannerCall | undefined;
-    private callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
+    private callPrevious: RdioScannerCall | undefined;
     private callQueue: RdioScannerCall[] = [];
 
     private categories: RdioScannerCategory[] = [];
@@ -99,7 +99,6 @@ export class RdioScannerService implements OnDestroy {
     private playbackRefreshing = false;
 
     private replayDelay: Subscription | undefined;
-    private replayOffset = 0;
 
     private skipDelay: Subscription | undefined;
 
@@ -156,7 +155,7 @@ export class RdioScannerService implements OnDestroy {
             });
 
         } else {
-            const call = this.call || this.callHistory[0];
+            const call = this.call || this.callPrevious;
 
             if (call) {
                 const sys = call.system;
@@ -225,12 +224,8 @@ export class RdioScannerService implements OnDestroy {
         });
     }
 
-    getHistory(): RdioScannerCall[] {
-        return this.callHistory;
-    }
-
     holdSystem(options?: { resubscribe?: boolean }): void {
-        const call = this.call || this.callHistory[0];
+        const call = this.call || this.callPrevious;
 
         if (call && this.livefeedMap) {
             if (this.livefeedMapPriorToHoldSystem) {
@@ -284,7 +279,7 @@ export class RdioScannerService implements OnDestroy {
     }
 
     holdTalkgroup(options?: { resubscribe?: boolean }): void {
-        const call = this.call || this.callHistory[0];
+        const call = this.call || this.callPrevious;
 
         if (call && this.livefeedMap) {
             if (this.livefeedMapPriorToHoldTalkgroup) {
@@ -508,17 +503,7 @@ export class RdioScannerService implements OnDestroy {
     }
 
     replay(): void {
-        if (this.replayDelay instanceof Subscription) {
-            this.replayDelay.unsubscribe();
-            this.replayOffset = Math.min(this.callHistory.length - 1, this.replayOffset + 1);
-        }
-
-        this.replayDelay = timer(750).subscribe(() => {
-            this.replayDelay = undefined;
-            this.replayOffset = 0;
-        });
-
-        this.play(this.replayOffset > 0 ? this.callHistory[this.replayOffset] : this.call || this.callHistory[0]);
+        this.play(this.call || this.callPrevious);
     }
 
     searchCalls(options: RdioScannerSearchOptions): void {
@@ -573,11 +558,7 @@ export class RdioScannerService implements OnDestroy {
         }
 
         if (this.call) {
-            if (!this.callHistory.find((call: RdioScannerCall) => call?.id === this.call?.id)) {
-                this.callHistory.pop();
-                this.callHistory.unshift(this.call);
-                this.event.emit({ history: this.callHistory });
-            }
+            this.callPrevious = this.call;
 
             this.call = undefined;
         }
@@ -771,7 +752,7 @@ export class RdioScannerService implements OnDestroy {
         this.sendtoWebsocket(WebsocketCommand.Call, `${id}`, flags);
     }
 
-    private getPlaybackQueueCount(id = this.call?.id || this.callHistory[0]?.id): number {
+    private getPlaybackQueueCount(id = this.call?.id || this.callPrevious?.id): number {
         let queueCount = 0;
 
         if (id && this.playbackList) {
@@ -922,7 +903,7 @@ export class RdioScannerService implements OnDestroy {
             return;
         }
 
-        const index = this.playbackList.results.findIndex((call) => call.id === this.callHistory[0]?.id);
+        const index = this.playbackList.results.findIndex((call) => call.id === this.callPrevious?.id);
 
         if (this.playbackList.options.sort === -1) {
             if (index === -1) {

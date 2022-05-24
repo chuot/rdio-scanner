@@ -371,20 +371,22 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		m := map[string]interface{}{}
-		err := json.NewDecoder(r.Body).Decode(&m)
-		if err != nil {
+
+		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		attempt := admin.Attempts[r.RemoteAddr]
+		remoteAddr := GetRemoteAddr(r)
+
+		attempt := admin.Attempts[remoteAddr]
 
 		if attempt == nil {
-			admin.Attempts[r.RemoteAddr] = &AdminLoginAttempt{
+			admin.Attempts[remoteAddr] = &AdminLoginAttempt{
 				Count: 1,
 				Date:  time.Now(),
 			}
-			attempt = admin.Attempts[r.RemoteAddr]
+			attempt = admin.Attempts[remoteAddr]
 		} else {
 			attempt.Count++
 			attempt.Date = time.Now()
@@ -395,7 +397,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 				admin.Controller.Logs.LogEvent(
 					admin.Controller.Database,
 					LogLevelWarn,
-					fmt.Sprintf("too many login attempts for ip=\"%v\"", r.RemoteAddr),
+					fmt.Sprintf("too many login attempts for ip=\"%v\"", remoteAddr),
 				)
 			}
 
@@ -418,7 +420,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			admin.Controller.Logs.LogEvent(
 				admin.Controller.Database,
 				LogLevelWarn,
-				fmt.Sprintf("invalid login attempt for ip=%v", r.RemoteAddr),
+				fmt.Sprintf("invalid login attempt for ip=%v", remoteAddr),
 			)
 			w.WriteHeader(http.StatusUnauthorized)
 			return

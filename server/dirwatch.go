@@ -59,7 +59,6 @@ type Dirwatch struct {
 	UsePolling  bool        `json:"usePolling"`
 	controller  *Controller
 	dirs        map[string]bool
-	pending     map[string]*time.Timer
 	watcher     *fsnotify.Watcher
 }
 
@@ -525,8 +524,9 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 
 func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	var (
-		delay time.Duration
-		err   error
+		delay  time.Duration
+		err    error
+		timers = map[string]*time.Timer{}
 	)
 
 	if dirwatch.Disabled {
@@ -558,13 +558,20 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 		newTimer := func(eventName string) *time.Timer {
 			return time.AfterFunc(delay, func() {
-				delete(dirwatch.pending, eventName)
+				delete(timers, eventName)
 
 				if _, err := os.Stat(eventName); err == nil {
 					dirwatch.Ingest(eventName)
 				}
 			})
 		}
+
+		defer func() {
+			for k := range timers {
+				timers[k].Stop()
+				delete(timers, k)
+			}
+		}()
 
 		for {
 			if dirwatch.watcher == nil {
@@ -582,10 +589,10 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 							}
 
 						} else {
-							if dirwatch.pending[event.Name] != nil {
-								dirwatch.pending[event.Name].Stop()
+							if timers[event.Name] != nil {
+								timers[event.Name].Stop()
 							}
-							dirwatch.pending[event.Name] = newTimer(event.Name)
+							timers[event.Name] = newTimer(event.Name)
 						}
 
 					case fsnotify.Remove:
@@ -598,11 +605,11 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 						}
 
 					case fsnotify.Write:
-						if dirwatch.pending[event.Name] != nil {
-							if dirwatch.pending[event.Name] != nil {
-								dirwatch.pending[event.Name].Stop()
+						if timers[event.Name] != nil {
+							if timers[event.Name] != nil {
+								timers[event.Name].Stop()
 							}
-							dirwatch.pending[event.Name] = newTimer(event.Name)
+							timers[event.Name] = newTimer(event.Name)
 						}
 					}
 				}
@@ -610,6 +617,8 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 			case err, ok := <-dirwatch.watcher.Errors:
 				if ok {
 					logError(err)
+
+					return
 				}
 			}
 		}
@@ -646,11 +655,6 @@ func (dirwatch *Dirwatch) Stop() {
 	if dirwatch.watcher != nil {
 		dirwatch.watcher.Close()
 		dirwatch.watcher = nil
-	}
-
-	for k := range dirwatch.pending {
-		dirwatch.pending[k].Stop()
-		delete(dirwatch.pending, k)
 	}
 }
 
@@ -715,7 +719,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		dirwatch := &Dirwatch{pending: map[string]*time.Timer{}}
+		dirwatch := &Dirwatch{}
 
 		if err = rows.Scan(&id, &delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &extension, &frequency, &mask, &order, &systemId, &talkgroupId, &kind, &dirwatch.UsePolling); err != nil {
 			break

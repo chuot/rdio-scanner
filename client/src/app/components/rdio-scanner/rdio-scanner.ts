@@ -105,7 +105,6 @@ export interface RdioScannerEvent {
     call?: RdioScannerCall;
     config?: RdioScannerConfig;
     expired?: boolean;
-    history?: RdioScannerCall[];
     holdSys?: boolean;
     holdTg?: boolean;
     linked?: boolean;
@@ -160,7 +159,7 @@ export interface RdioScannerSearchOptions {
 export interface RdioScannerSystem {
     id: number;
     label: string;
-    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
+    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'orange' | 'red' | 'white' | 'yellow';
     order?: number;
     talkgroups: RdioScannerTalkgroup[];
     units: RdioScannerUnit[];
@@ -171,7 +170,7 @@ export interface RdioScannerTalkgroup {
     group: string;
     id: number;
     label: string;
-    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'red' | 'white' | 'yellow';
+    led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'orange' | 'red' | 'white' | 'yellow';
     name: string;
     tag: string;
 }

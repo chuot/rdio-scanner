@@ -152,10 +152,10 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	calls.mutex.Lock()
 	defer calls.mutex.Unlock()
 
-	call := Call{}
+	call := Call{Id: id}
 
-	query := fmt.Sprintf("select `id`, `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Id, &call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
+	query := fmt.Sprintf("select `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
+	err := db.Sql.QueryRow(query).Scan(&call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
 	}

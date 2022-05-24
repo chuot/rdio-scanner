@@ -136,7 +136,7 @@ func main() {
 			}
 
 			client := &Client{}
-			if err = client.Init(controller, conn); err != nil {
+			if err = client.Init(controller, r, conn); err != nil {
 				log.Println(err)
 			}
 
@@ -244,4 +244,18 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func GetRemoteAddr(r *http.Request) string {
+	for _, addr := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
+		if ip := strings.Split(addr, ":"); len(ip[0]) > 0 {
+			return ip[0]
+		}
+	}
+
+	if ip := strings.Split(r.RemoteAddr, ":"); len(ip[0]) > 0 {
+		return ip[0]
+	}
+
+	return "unknown"
 }

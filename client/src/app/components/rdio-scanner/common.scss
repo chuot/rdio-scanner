@@ -44,21 +44,21 @@
   }
 
   &.off::after {
-    background: #e63232;
+    background: rgb(255, 23, 68);
     box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset,
-      0 0 3px 1px rgb(230, 50, 50);
+      0 0 3px 1px rgb(255, 23, 68);
   }
 
   &.on::after {
-    background: rgb(100, 230, 50);
+    background: rgb(0, 230, 118);;
     box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset,
-      0 0 3px 1px rgb(100, 230, 50);
+      0 0 3px 1px rgb(0, 230, 118);;
   }
 
   &.partial::after {
-    background: rgb(230, 165, 50);
+    background: rgb(255, 234, 0);
     box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset,
-      0 0 3px 1px rgb(230, 165, 50);
+      0 0 3px 1px rgb(255, 234, 0);
   }
 }
 
