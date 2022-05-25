@@ -272,7 +272,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                     } else {
                         this.rdioScannerService.replay()
                     }
-                } else {
+                } else if (this.replayOffset < this.callHistory.length) {
                     this.rdioScannerService.play(this.callHistory[this.replayOffset]);
                 }
 

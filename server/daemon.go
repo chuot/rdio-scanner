@@ -28,6 +28,7 @@ type Daemon struct {
 	Errors    chan error
 	Interface service.Interface
 	Service   service.Service
+	Logger    service.Logger
 }
 
 func NewDaemon() *Daemon {
@@ -61,12 +62,20 @@ func NewDaemon() *Daemon {
 		log.Fatal(err)
 	}
 
+	if d.Logger, err = d.Service.Logger(nil); err != nil {
+		log.Fatal(err)
+	}
+
 	return &d
 }
 
 func (d *Daemon) Control(action string) *Daemon {
 	if action == "run" {
-		go d.Service.Run()
+		go func() {
+			if err := d.Service.Run(); err != nil {
+				d.Logger.Error(err)
+			}
+		}()
 
 	} else if err := service.Control(d.Service, action); err == nil {
 		os.Exit(0)

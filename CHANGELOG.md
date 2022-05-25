@@ -28,6 +28,12 @@ _v6.3.3_
 - Show the real IP address in the logs taking into account if behind a proxy.
 - Fix panic when emitting a call to clients.
 
+_v6.3.4_
+
+- Fix ffmpeg audio filter not available on older version (issue #189).
+- Improved logging when run as a service, Windows users can now see these logs in the events viewer.
+- Dirwatch now catches panic errors and logs them.
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.

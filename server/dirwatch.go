@@ -142,11 +142,7 @@ func (dirwatch *Dirwatch) Ingest(p string) {
 	}
 
 	if err != nil {
-		dirwatch.controller.Logs.LogEvent(
-			dirwatch.controller.Database,
-			LogLevelError,
-			fmt.Sprintf("dirwatch.ingest: %v", err.Error()),
-		)
+		dirwatch.controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.ingest: %v", err.Error()))
 	}
 }
 
@@ -524,9 +520,8 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 
 func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	var (
-		delay  time.Duration
-		err    error
-		timers = map[string]*time.Timer{}
+		delay time.Duration
+		err   error
 	)
 
 	if dirwatch.Disabled {
@@ -552,8 +547,10 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	}
 
 	go func() {
+		var timers = map[string]*time.Timer{}
+
 		logError := func(err error) {
-			controller.Logs.LogEvent(controller.Database, LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
+			controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
 		}
 
 		newTimer := func(eventName string) *time.Timer {
@@ -570,6 +567,11 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 			for k := range timers {
 				timers[k].Stop()
 				delete(timers, k)
+			}
+
+			switch v := recover().(type) {
+			case error:
+				controller.Logs.LogEvent(LogLevelError, v.Error())
 			}
 		}()
 
@@ -625,6 +627,13 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	}()
 
 	go func() {
+		defer func() {
+			switch v := recover().(type) {
+			case error:
+				controller.Logs.LogEvent(LogLevelError, v.Error())
+			}
+		}()
+
 		time.Sleep(delay)
 
 		if err := fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, d fs.DirEntry, err error) error {
@@ -640,11 +649,7 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 			return err
 		}); err != nil {
-			controller.Logs.LogEvent(
-				controller.Database,
-				LogLevelError,
-				fmt.Sprintf("dirwatch.walkdir: %s", err.Error()),
-			)
+			controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.walkdir: %s", err.Error()))
 		}
 	}()
 
@@ -776,11 +781,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 func (dirwatches *Dirwatches) Start(controller *Controller) {
 	for i := range dirwatches.List {
 		if err := dirwatches.List[i].Start(controller); err != nil {
-			controller.Logs.LogEvent(
-				controller.Database,
-				LogLevelError,
-				fmt.Sprintf("dirwatches.start: %s", err.Error()),
-			)
+			controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatches.start: %s", err.Error()))
 		}
 	}
 }

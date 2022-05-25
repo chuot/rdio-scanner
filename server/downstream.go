@@ -440,11 +440,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 func (downstreams *Downstreams) Send(controller *Controller, call *Call) {
 	for _, downstream := range downstreams.List {
 		logEvent := func(logLevel string, message string) {
-			controller.Logs.LogEvent(
-				controller.Database,
-				logLevel,
-				fmt.Sprintf("downstream: system=%v talkgroup=%v file=%v to %v %v", call.System, call.Talkgroup, call.AudioName, downstream.Url, message),
-			)
+			controller.Logs.LogEvent(logLevel, fmt.Sprintf("downstream: system=%v talkgroup=%v file=%v to %v %v", call.System, call.Talkgroup, call.AudioName, downstream.Url, message))
 		}
 
 		if downstream.HasAccess(call) {

@@ -51,6 +51,7 @@ type Config struct {
 	SslCertFile      string
 	SslKeyFile       string
 	SslListen        string
+	daemon           *Daemon
 	newAdminPassword string
 }
 
@@ -179,7 +180,7 @@ func NewConfig() *Config {
 	}
 
 	if *serviceAction != "" {
-		NewDaemon().Control(*serviceAction)
+		config.daemon = NewDaemon().Control(*serviceAction)
 	}
 
 	return config

@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -60,7 +61,7 @@ func main() {
 				log.Fatal(err)
 			}
 
-			controller.Logs.LogEvent(controller.Database, LogLevelInfo, "admin password changed.")
+			controller.Logs.LogEvent(LogLevelInfo, "admin password changed.")
 
 			os.Exit(0)
 
@@ -247,14 +248,16 @@ func main() {
 }
 
 func GetRemoteAddr(r *http.Request) string {
+	re := regexp.MustCompile(`(\[[^\]]+\]|[^:]+):.*`)
+
 	for _, addr := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-		if ip := strings.Split(addr, ":"); len(ip[0]) > 0 {
-			return ip[0]
+		if ip := re.ReplaceAllString(addr, "$1"); len(ip) > 0 {
+			return ip
 		}
 	}
 
-	if ip := strings.Split(r.RemoteAddr, ":"); len(ip[0]) > 0 {
-		return ip[0]
+	if ip := re.ReplaceAllString(r.RemoteAddr, "$1"); len(ip) > 0 {
+		return ip
 	}
 
 	return "unknown"

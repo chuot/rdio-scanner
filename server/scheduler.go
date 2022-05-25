@@ -45,7 +45,7 @@ func (scheduler *Scheduler) pruneDatabase() error {
 	scheduler.Controller.IngestLock()
 	defer scheduler.Controller.IngestUnlock()
 
-	scheduler.Controller.Logs.LogEvent(scheduler.Controller.Database, LogLevelInfo, "database pruning")
+	scheduler.Controller.Logs.LogEvent(LogLevelInfo, "database pruning")
 
 	if err := scheduler.Controller.Calls.Prune(scheduler.Controller.Database, scheduler.Controller.Options.PruneDays); err != nil {
 		return err
@@ -63,11 +63,7 @@ func (scheduler *Scheduler) run() {
 	defer scheduler.mutex.Unlock()
 
 	logError := func(err error) {
-		scheduler.Controller.Logs.LogEvent(
-			scheduler.Controller.Database,
-			LogLevelError,
-			fmt.Sprintf("scheduler.run: %s", err.Error()),
-		)
+		scheduler.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("scheduler.run: %s", err.Error()))
 	}
 
 	if err := scheduler.pruneDatabase(); err != nil {
