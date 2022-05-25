@@ -148,7 +148,7 @@ func (options *Options) Read(db *Database) error {
 	var (
 		defaultPassword []byte
 		err             error
-		f               interface{}
+		s               string
 	)
 
 	options.mutex.Lock()
@@ -171,122 +171,98 @@ func (options *Options) Read(db *Database) error {
 	options.SortTalkgroups = defaults.options.sortTalkgroups
 	options.TagsToggle = defaults.options.tagsToggle
 
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPassword'").Scan(&f)
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPassword'").Scan(&s)
 	if err == nil {
-		switch v := f.(type) {
-		case []uint8:
-			var f string
-			if err = json.Unmarshal(v, &f); err == nil {
-				options.adminPassword = f
-			}
-		case string:
-			var f string
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				options.adminPassword = f
-			}
+		if err = json.Unmarshal([]byte(s), &s); err == nil {
+			options.adminPassword = s
 		}
 	}
 
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPasswordNeedChange'").Scan(&f)
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'adminPasswordNeedChange'").Scan(&s)
 	if err == nil {
-		switch v := f.(type) {
-		case []uint8:
-			var f bool
-			if err = json.Unmarshal(v, &f); err == nil {
-				options.adminPasswordNeedChange = f
-			}
-		case string:
-			var f bool
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				options.adminPasswordNeedChange = f
-			}
+		var b bool
+		if err = json.Unmarshal([]byte(s), &b); err == nil {
+			options.adminPasswordNeedChange = b
 		}
 	}
 
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'options'").Scan(&f)
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'options'").Scan(&s)
 	if err == nil {
-		switch v := f.(type) {
-		case string:
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				switch v := f.(type) {
-				case map[string]interface{}:
-					switch v := v["afsSystems"].(type) {
-					case string:
-						options.AfsSystems = v
-					}
+		var m map[string]interface{}
 
-					switch v := v["autoPopulate"].(type) {
-					case bool:
-						options.AutoPopulate = v
-					}
-
-					switch v := v["dimmerDelay"].(type) {
-					case float64:
-						options.DimmerDelay = uint(v)
-					}
-
-					switch v := v["disableAudioConversion"].(type) {
-					case bool:
-						options.DisableAudioConversion = v
-					}
-
-					switch v := v["disableDuplicateDetection"].(type) {
-					case bool:
-						options.DisableDuplicateDetection = v
-					}
-
-					switch v := v["duplicateDetectionTimeFrame"].(type) {
-					case float64:
-						options.DuplicateDetectionTimeFrame = uint(v)
-					}
-
-					switch v := v["keypadBeeps"].(type) {
-					case string:
-						options.KeypadBeeps = v
-					}
-
-					switch v := v["maxClients"].(type) {
-					case float64:
-						options.MaxClients = uint(v)
-					}
-
-					switch v := v["pruneDays"].(type) {
-					case float64:
-						options.PruneDays = uint(v)
-					}
-
-					switch v := v["searchPatchedTalkgroups"].(type) {
-					case bool:
-						options.SearchPatchedTalkgroups = v
-					}
-
-					switch v := v["showListenersCount"].(type) {
-					case bool:
-						options.ShowListenersCount = v
-					}
-
-					switch v := v["sortTalkgroups"].(type) {
-					case bool:
-						options.SortTalkgroups = v
-					}
-
-					switch v := v["tagsToggle"].(type) {
-					case bool:
-						options.TagsToggle = v
-					}
-				}
+		if err = json.Unmarshal([]byte(s), &m); err == nil {
+			switch v := m["afsSystems"].(type) {
+			case string:
+				options.AfsSystems = v
 			}
+
+			switch v := m["autoPopulate"].(type) {
+			case bool:
+				options.AutoPopulate = v
+			}
+
+			switch v := m["dimmerDelay"].(type) {
+			case float64:
+				options.DimmerDelay = uint(v)
+			}
+
+			switch v := m["disableAudioConversion"].(type) {
+			case bool:
+				options.DisableAudioConversion = v
+			}
+
+			switch v := m["disableDuplicateDetection"].(type) {
+			case bool:
+				options.DisableDuplicateDetection = v
+			}
+
+			switch v := m["duplicateDetectionTimeFrame"].(type) {
+			case float64:
+				options.DuplicateDetectionTimeFrame = uint(v)
+			}
+
+			switch v := m["keypadBeeps"].(type) {
+			case string:
+				options.KeypadBeeps = v
+			}
+
+			switch v := m["maxClients"].(type) {
+			case float64:
+				options.MaxClients = uint(v)
+			}
+
+			switch v := m["pruneDays"].(type) {
+			case float64:
+				options.PruneDays = uint(v)
+			}
+
+			switch v := m["searchPatchedTalkgroups"].(type) {
+			case bool:
+				options.SearchPatchedTalkgroups = v
+			}
+
+			switch v := m["showListenersCount"].(type) {
+			case bool:
+				options.ShowListenersCount = v
+			}
+
+			switch v := m["sortTalkgroups"].(type) {
+			case bool:
+				options.SortTalkgroups = v
+			}
+
+			switch v := m["tagsToggle"].(type) {
+			case bool:
+				options.TagsToggle = v
+			}
+
 		}
 	}
 
-	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'secret'").Scan(&f)
+	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'secret'").Scan(&s)
 	if err == nil {
-		switch v := f.(type) {
-		case string:
-			var f string
-			if err = json.Unmarshal([]byte(v), &f); err == nil {
-				options.secret = f
-			}
+		if err = json.Unmarshal([]byte(s), &s); err == nil {
+			options.secret = s
 		}
 	}
 

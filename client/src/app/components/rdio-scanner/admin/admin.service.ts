@@ -286,7 +286,7 @@ export class RdioScannerAdminService implements OnDestroy {
     }
 
     getLeds(): string[] {
-        return ['blue', 'cyan', 'green', 'magenta', 'orage', 'red', 'white', 'yellow'];
+        return ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
     }
 
     async getLogs(options: LogsQueryOptions): Promise<LogsQuery | undefined> {

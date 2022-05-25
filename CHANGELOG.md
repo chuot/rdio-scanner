@@ -34,6 +34,13 @@ _v6.3.4_
 - Improved logging when run as a service, Windows users can now see these logs in the events viewer.
 - Dirwatch now catches panic errors and logs them.
 
+_v6.3.5_
+
+- Replace standard map with sync.map in dirwatch.
+- Fix the ffmpeg version test.
+- Fix led color type, orage -> orange.
+- Fix incorrect options when reading from a mysql database (issue #190).
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.

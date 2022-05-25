@@ -49,7 +49,7 @@ func NewFFMpeg() *FFMpeg {
 			if len(v) > 1 {
 				if major, err := strconv.Atoi(v[0]); err == nil {
 					if minor, err := strconv.Atoi(v[1]); err == nil {
-						if major >= 4 || (major == 4 && minor >= 3) {
+						if major > 4 || (major == 4 && minor >= 3) {
 							ffmpeg.version43 = true
 						}
 					}

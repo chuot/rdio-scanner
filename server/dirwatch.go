@@ -547,7 +547,8 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	}
 
 	go func() {
-		var timers = map[string]*time.Timer{}
+		// var timers = map[string]*time.Timer{}
+		var timers = sync.Map{}
 
 		logError := func(err error) {
 			controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
@@ -555,7 +556,7 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 		newTimer := func(eventName string) *time.Timer {
 			return time.AfterFunc(delay, func() {
-				delete(timers, eventName)
+				timers.Delete(eventName)
 
 				if _, err := os.Stat(eventName); err == nil {
 					dirwatch.Ingest(eventName)
@@ -564,10 +565,16 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 		}
 
 		defer func() {
-			for k := range timers {
-				timers[k].Stop()
-				delete(timers, k)
-			}
+			timers.Range(func(k interface{}, t interface{}) bool {
+				switch v := t.(type) {
+				case *time.Timer:
+					v.Stop()
+				}
+
+				timers.Delete(k)
+
+				return true
+			})
 
 			switch v := recover().(type) {
 			case error:
@@ -591,10 +598,13 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 							}
 
 						} else {
-							if timers[event.Name] != nil {
-								timers[event.Name].Stop()
+							if f, ok := timers.LoadAndDelete(event.Name); ok {
+								switch v := f.(type) {
+								case *time.Timer:
+									v.Stop()
+								}
 							}
-							timers[event.Name] = newTimer(event.Name)
+							timers.Store(event.Name, newTimer(event.Name))
 						}
 
 					case fsnotify.Remove:
@@ -607,12 +617,13 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 						}
 
 					case fsnotify.Write:
-						if timers[event.Name] != nil {
-							if timers[event.Name] != nil {
-								timers[event.Name].Stop()
+						if f, ok := timers.LoadAndDelete(event.Name); ok {
+							switch v := f.(type) {
+							case *time.Timer:
+								v.Stop()
 							}
-							timers[event.Name] = newTimer(event.Name)
 						}
+						timers.Store(event.Name, newTimer(event.Name))
 					}
 				}
 

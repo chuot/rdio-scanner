@@ -338,7 +338,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             password = window?.localStorage?.getItem(LOCAL_STORAGE_KEY);
 
             if (password) {
-                password = atob(password);
+                password = window.atob(password);
 
                 window.localStorage.removeItem(LOCAL_STORAGE_KEY);
             }
