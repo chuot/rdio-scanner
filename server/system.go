@@ -292,6 +292,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 		systemMap := SystemMap{
 			"id":         rawSystem.Id,
 			"label":      rawSystem.Label,
+			"order":      rawSystem.Order,
 			"talkgroups": talkgroupsMap,
 			"units":      rawSystem.Units.List,
 		}

@@ -33,8 +33,8 @@
     </mat-sidenav>
     <mat-sidenav-content>
         <rdio-scanner-main
-            (openSearchPanel)="scrollableSearch.scrollTo(0, 0); searchPanel.open(); searchComponent.searchCalls()"
-            (openSelectPanel)="scrollableSelect.scrollTo(0, 0); selectPanel.open();"
+            (openSearchPanel)="scrollTop(scrollableSearch); searchPanel.open(); searchComponent.searchCalls()"
+            (openSelectPanel)="scrollTop(scrollableSelect); selectPanel.open();"
             (toggleFullscreen)="toggleFullscreen()">
         </rdio-scanner-main>
     </mat-sidenav-content>

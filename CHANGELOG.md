@@ -41,6 +41,11 @@ _v6.3.5_
 - Fix led color type, orage -> orange.
 - Fix incorrect options when reading from a mysql database (issue #190).
 
+_v6.3.6_
+
+- Fix systems order properties not sent to clients.
+- Fix side panels not scrolling to top when opened.
+
 ## Version 6.2
 
 - New max clients options which is 200 by default.
