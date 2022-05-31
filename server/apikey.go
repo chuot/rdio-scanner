@@ -34,7 +34,7 @@ type Apikey struct {
 	Systems  interface{} `json:"systems"`
 }
 
-func (apikey *Apikey) FromMap(m map[string]interface{}) {
+func (apikey *Apikey) FromMap(m map[string]interface{}) *Apikey {
 	switch v := m["_id"].(type) {
 	case float64:
 		apikey.Id = uint(v)
@@ -68,6 +68,8 @@ func (apikey *Apikey) FromMap(m map[string]interface{}) {
 	case string:
 		apikey.Systems = v
 	}
+
+	return apikey
 }
 
 func (apikey *Apikey) HasAccess(call *Call) bool {
@@ -120,7 +122,7 @@ func NewApikeys() *Apikeys {
 	}
 }
 
-func (apikeys *Apikeys) FromMap(f []interface{}) {
+func (apikeys *Apikeys) FromMap(f []interface{}) *Apikeys {
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
@@ -134,6 +136,8 @@ func (apikeys *Apikeys) FromMap(f []interface{}) {
 			apikeys.List = append(apikeys.List, apikey)
 		}
 	}
+
+	return apikeys
 }
 
 func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {

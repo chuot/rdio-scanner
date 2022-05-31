@@ -259,7 +259,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                     this.replayOffset = Math.min(this.callHistory.length, this.replayOffset + 1);
                 }
 
-                this.replayTimer = timer(750).subscribe(() => {
+                this.replayTimer = timer(1000).subscribe(() => {
                     this.replayTimer = undefined;
                     this.replayOffset = 0;
                 });

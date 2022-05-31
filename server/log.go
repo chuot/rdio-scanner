@@ -114,7 +114,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	defer logs.mutex.Unlock()
 
 	formatError := func(err error) error {
-		return fmt.Errorf("newLogResults: %v", err)
+		return fmt.Errorf("logs.search: %v", err)
 	}
 
 	logResults := &LogsSearchResults{
@@ -124,7 +124,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 	switch v := searchOptions.Level.(type) {
 	case string:
-		where += fmt.Sprintf(" and `level` == '%v'", v)
+		where += fmt.Sprintf(" and `level` = '%v'", v)
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -173,10 +173,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
 	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
-	}
-
-	if dateTime == nil {
-		return logResults, nil
 	}
 
 	if t, err := db.ParseDateTime(dateTime); err == nil {

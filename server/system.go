@@ -44,7 +44,7 @@ func NewSystem() *System {
 	}
 }
 
-func (system *System) FromMap(m map[string]interface{}) {
+func (system *System) FromMap(m map[string]interface{}) *System {
 	switch v := m["_id"].(type) {
 	case float64:
 		system.RowId = uint(v)
@@ -89,6 +89,8 @@ func (system *System) FromMap(m map[string]interface{}) {
 	case []interface{}:
 		system.Units.FromMap(v)
 	}
+
+	return system
 }
 
 type SystemMap map[string]interface{}
@@ -105,7 +107,7 @@ func NewSystems() *Systems {
 	}
 }
 
-func (systems *Systems) FromMap(f []interface{}) {
+func (systems *Systems) FromMap(f []interface{}) *Systems {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
@@ -119,6 +121,8 @@ func (systems *Systems) FromMap(f []interface{}) {
 			systems.List = append(systems.List, system)
 		}
 	}
+
+	return systems
 }
 
 func (systems *Systems) GetNewSystemId() uint {

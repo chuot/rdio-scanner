@@ -32,7 +32,7 @@ func NewLivefeed() *Livefeed {
 	}
 }
 
-func (livefeed *Livefeed) FromMap(f interface{}) {
+func (livefeed *Livefeed) FromMap(f interface{}) *Livefeed {
 	livefeed.mutex.Lock()
 	defer livefeed.mutex.Unlock()
 
@@ -63,6 +63,8 @@ func (livefeed *Livefeed) FromMap(f interface{}) {
 			}
 		}
 	}
+
+	return livefeed
 }
 
 func (livefeed *Livefeed) IsAllOff() bool {

@@ -40,7 +40,7 @@ type Downstream struct {
 	Url      string      `json:"url"`
 }
 
-func (downstream *Downstream) FromMap(m map[string]interface{}) {
+func (downstream *Downstream) FromMap(m map[string]interface{}) *Downstream {
 	switch v := m["_id"].(type) {
 	case float64:
 		downstream.Id = uint(v)
@@ -74,6 +74,8 @@ func (downstream *Downstream) FromMap(m map[string]interface{}) {
 	case string:
 		downstream.Url = v
 	}
+
+	return downstream
 }
 
 func (downstream *Downstream) HasAccess(call *Call) bool {
@@ -113,6 +115,7 @@ func (downstream *Downstream) HasAccess(call *Call) bool {
 		if v == "*" {
 			return true
 		}
+
 	}
 
 	return false
@@ -360,7 +363,7 @@ func NewDownstreams() *Downstreams {
 	}
 }
 
-func (downstreams *Downstreams) FromMap(f []interface{}) {
+func (downstreams *Downstreams) FromMap(f []interface{}) *Downstreams {
 	downstreams.mutex.Lock()
 	defer downstreams.mutex.Unlock()
 
@@ -374,6 +377,8 @@ func (downstreams *Downstreams) FromMap(f []interface{}) {
 			downstreams.List = append(downstreams.List, downstream)
 		}
 	}
+
+	return downstreams
 }
 
 func (downstreams *Downstreams) Read(db *Database) error {

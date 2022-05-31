@@ -62,7 +62,7 @@ type Dirwatch struct {
 	watcher     *fsnotify.Watcher
 }
 
-func (dirwatch *Dirwatch) FromMap(m map[string]interface{}) {
+func (dirwatch *Dirwatch) FromMap(m map[string]interface{}) *Dirwatch {
 	switch v := m["_id"].(type) {
 	case float64:
 		dirwatch.Id = uint(v)
@@ -127,6 +127,8 @@ func (dirwatch *Dirwatch) FromMap(m map[string]interface{}) {
 	case bool:
 		dirwatch.UsePolling = v
 	}
+
+	return dirwatch
 }
 
 func (dirwatch *Dirwatch) Ingest(p string) {
@@ -686,7 +688,7 @@ func NewDirwatches() *Dirwatches {
 	}
 }
 
-func (dirwatches *Dirwatches) FromMap(f []interface{}) {
+func (dirwatches *Dirwatches) FromMap(f []interface{}) *Dirwatches {
 	dirwatches.mutex.Lock()
 	defer dirwatches.mutex.Unlock()
 
@@ -702,6 +704,8 @@ func (dirwatches *Dirwatches) FromMap(f []interface{}) {
 			dirwatches.List = append(dirwatches.List, dirwatch)
 		}
 	}
+
+	return dirwatches
 }
 
 func (dirwatches *Dirwatches) Read(db *Database) error {

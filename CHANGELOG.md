@@ -1,5 +1,13 @@
 # Change log
 
+## Version 6.4
+
+- New `-cmd` command line options to allow advanced administrative tasks.
+- New playback mode goes live options which is not enabled by default (issue #175).
+- Fix logs retrieval from administrative dashboard (issue #193).
+- Improved field conversions when retrieving calls from a mysql/mariadb database (issue #194, #198).
+- Highlight replayed call on the history list (issue #196).
+
 ## Version 6.3
 
 - Change scroll speed when drag droping talkgroups or units in a system (discussion #170).

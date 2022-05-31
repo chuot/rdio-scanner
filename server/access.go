@@ -34,7 +34,11 @@ type Access struct {
 	Systems    interface{} `json:"systems"`
 }
 
-func (access *Access) FromMap(m map[string]interface{}) {
+func NewAccess() *Access {
+	return &Access{Systems: "*"}
+}
+
+func (access *Access) FromMap(m map[string]interface{}) *Access {
 	switch v := m["_id"].(type) {
 	case float64:
 		access.Id = uint(v)
@@ -75,6 +79,8 @@ func (access *Access) FromMap(m map[string]interface{}) {
 	case string:
 		access.Systems = v
 	}
+
+	return access
 }
 
 func (access *Access) HasAccess(call *Call) bool {
@@ -137,7 +143,30 @@ func NewAccesses() *Accesses {
 	}
 }
 
-func (accesses *Accesses) FromMap(f []interface{}) {
+func (accesses *Accesses) Add(access *Access) (*Accesses, bool) {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	added := true
+
+	for _, a := range accesses.List {
+		if a.Code == access.Code {
+			a.Expiration = access.Expiration
+			a.Ident = access.Ident
+			a.Limit = access.Limit
+			a.Systems = access.Systems
+			added = false
+		}
+	}
+
+	if added {
+		accesses.List = append(accesses.List, access)
+	}
+
+	return accesses, added
+}
+
+func (accesses *Accesses) FromMap(f []interface{}) *Accesses {
 	accesses.mutex.Lock()
 	defer accesses.mutex.Unlock()
 
@@ -151,6 +180,8 @@ func (accesses *Accesses) FromMap(f []interface{}) {
 			accesses.List = append(accesses.List, access)
 		}
 	}
+
+	return accesses
 }
 
 func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
@@ -243,6 +274,22 @@ func (accesses *Accesses) Read(db *Database) error {
 	}
 
 	return nil
+}
+
+func (accesses *Accesses) Remove(access *Access) (*Accesses, bool) {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	removed := false
+
+	for i, a := range accesses.List {
+		if a.Ident == access.Ident {
+			accesses.List = append(accesses.List[:i], accesses.List[i+1:]...)
+			removed = true
+		}
+	}
+
+	return accesses, removed
 }
 
 func (accesses *Accesses) Write(db *Database) error {

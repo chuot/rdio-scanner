@@ -30,7 +30,7 @@ type Unit struct {
 	Order uint   `json:"order"`
 }
 
-func (unit *Unit) FromMap(m map[string]interface{}) {
+func (unit *Unit) FromMap(m map[string]interface{}) *Unit {
 	switch v := m["id"].(type) {
 	case float64:
 		unit.Id = uint(v)
@@ -46,6 +46,7 @@ func (unit *Unit) FromMap(m map[string]interface{}) {
 		unit.Order = uint(v)
 	}
 
+	return unit
 }
 
 type Units struct {
@@ -77,7 +78,7 @@ func (units *Units) Add(id uint, label string) (*Units, bool) {
 	return units, added
 }
 
-func (units *Units) FromMap(f []interface{}) {
+func (units *Units) FromMap(f []interface{}) *Units {
 	units.mutex.Lock()
 	defer units.mutex.Unlock()
 
@@ -91,6 +92,8 @@ func (units *Units) FromMap(f []interface{}) {
 			units.List = append(units.List, unit)
 		}
 	}
+
+	return units
 }
 
 func (u *Units) Merge(units *Units) bool {

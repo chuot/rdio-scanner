@@ -82,6 +82,7 @@ export class RdioScannerService implements OnDestroy {
         dimmerDelay: false,
         groups: {},
         keypadBeeps: false,
+        playbackGoesLive: false,
         showListenersCount: false,
         systems: [],
         tags: {},
@@ -832,6 +833,7 @@ export class RdioScannerService implements OnDestroy {
                         dimmerDelay: typeof config.dimmerDelay === 'number' ? config.dimmerDelay : 5000,
                         groups: typeof config.groups !== null && typeof config.groups === 'object' ? config.groups : {},
                         keypadBeeps: config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
+                        playbackGoesLive: typeof config.playbackGoesLive === 'boolean' ? config.playbackGoesLive : false,
                         showListenersCount: typeof config.showListenersCount === 'boolean' ? config.showListenersCount : false,
                         systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
@@ -913,7 +915,11 @@ export class RdioScannerService implements OnDestroy {
                 if (this.playbackList.options.offset < this.playbackList.options.limit) {
                     if (this.playbackRefreshing) {
                         this.stopPlaybackMode();
-                        this.startLivefeed();
+
+                        if (this.config.playbackGoesLive) {
+                            this.startLivefeed();
+                        }
+
                     } else {
                         this.playbackRefreshing = true;
                         this.searchCalls(this.playbackList.options);
@@ -941,7 +947,10 @@ export class RdioScannerService implements OnDestroy {
 
                 } else if (this.playbackRefreshing) {
                     this.stopPlaybackMode();
-                    this.startLivefeed();
+                    
+                    if (this.config.playbackGoesLive) {
+                        this.startLivefeed();
+                    }
 
                 } else {
                     this.playbackRefreshing = true;

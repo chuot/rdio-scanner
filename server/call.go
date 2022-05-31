@@ -142,7 +142,11 @@ func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) b
 
 func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	var (
+		audioName   sql.NullString
+		audioType   sql.NullString
 		dateTime    interface{}
+		frequency   sql.NullFloat64
+		source      sql.NullFloat64
 		frequencies string
 		patches     string
 		sources     string
@@ -155,9 +159,21 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	call := Call{Id: id}
 
 	query := fmt.Sprintf("select `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Audio, &call.AudioName, &call.AudioType, &dateTime, &frequencies, &call.Frequency, &patches, &call.Source, &sources, &call.System, &call.Talkgroup)
+	err := db.Sql.QueryRow(query).Scan(&call.Audio, &audioName, &audioType, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
+	}
+
+	if audioName.Valid {
+		call.AudioName = audioName.String
+	}
+
+	if audioType.Valid {
+		call.AudioType = audioType.String
+	}
+
+	if frequency.Valid && frequency.Float64 > 0 {
+		call.Frequency = uint(frequency.Float64)
 	}
 
 	if t, err = db.ParseDateTime(dateTime); err == nil {
@@ -176,6 +192,10 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
 			call.Patches = []interface{}{}
 		}
+	}
+
+	if source.Valid && source.Float64 > 0 {
+		call.Source = uint(source.Float64)
 	}
 
 	if len(sources) > 0 {
@@ -222,7 +242,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	db := client.Controller.Database
 
 	formatError := func(err error) error {
-		return fmt.Errorf("newSearchResults: %v", err)
+		return fmt.Errorf("calls.search: %v", err)
 	}
 
 	searchResults := &CallsSearchResults{
@@ -305,10 +325,6 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` asc", where)
 	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
-	}
-
-	if dateTime == nil {
-		return searchResults, nil
 	}
 
 	if t, err = db.ParseDateTime(dateTime); err == nil {

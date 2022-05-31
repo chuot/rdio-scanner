@@ -33,6 +33,7 @@ type Options struct {
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
 	MaxClients                  uint   `json:"maxClients"`
+	PlaybackGoesLive            bool   `json:"playbackGoesLive"`
 	PruneDays                   uint   `json:"pruneDays"`
 	SearchPatchedTalkgroups     bool   `json:"searchPatchedTalkgroups"`
 	ShowListenersCount          bool   `json:"showListenersCount"`
@@ -50,9 +51,14 @@ func NewOptions() *Options {
 	}
 }
 
-func (options *Options) FromMap(m map[string]interface{}) {
+func (options *Options) FromMap(m map[string]interface{}) *Options {
 	options.mutex.Lock()
 	defer options.mutex.Unlock()
+
+	switch v := m["afsSystems"].(type) {
+	case string:
+		options.AfsSystems = v
+	}
 
 	switch v := m["autoPopulate"].(type) {
 	case bool:
@@ -89,11 +95,6 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	}
 
-	switch v := m["afsSystems"].(type) {
-	case string:
-		options.AfsSystems = v
-	}
-
 	switch v := m["keypadBeeps"].(type) {
 	case string:
 		options.KeypadBeeps = v
@@ -106,6 +107,11 @@ func (options *Options) FromMap(m map[string]interface{}) {
 		options.MaxClients = uint(v)
 	default:
 		options.MaxClients = defaults.options.maxClients
+	}
+
+	switch v := m["playbackGoesLive"].(type) {
+	case bool:
+		options.PlaybackGoesLive = v
 	}
 
 	switch v := m["pruneDays"].(type) {
@@ -142,6 +148,8 @@ func (options *Options) FromMap(m map[string]interface{}) {
 	default:
 		options.TagsToggle = defaults.options.tagsToggle
 	}
+
+	return options
 }
 
 func (options *Options) Read(db *Database) error {
@@ -165,6 +173,7 @@ func (options *Options) Read(db *Database) error {
 	options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	options.KeypadBeeps = defaults.options.keypadBeeps
 	options.MaxClients = defaults.options.maxClients
+	options.PlaybackGoesLive = defaults.options.playbackGoesLive
 	options.PruneDays = defaults.options.pruneDays
 	options.SearchPatchedTalkgroups = defaults.options.searchPatchedTalkgroups
 	options.ShowListenersCount = defaults.options.showListenersCount
@@ -229,6 +238,11 @@ func (options *Options) Read(db *Database) error {
 			switch v := m["maxClients"].(type) {
 			case float64:
 				options.MaxClients = uint(v)
+			}
+
+			switch v := m["playbackGoesLive"].(type) {
+			case bool:
+				options.PlaybackGoesLive = v
 			}
 
 			switch v := m["pruneDays"].(type) {
@@ -317,6 +331,7 @@ func (options *Options) Write(db *Database) error {
 		"duplicateDetectionTimeFrame": options.DuplicateDetectionTimeFrame,
 		"keypadBeeps":                 options.KeypadBeeps,
 		"maxClients":                  options.MaxClients,
+		"playbackGoesLive":            options.PlaybackGoesLive,
 		"pruneDays":                   options.PruneDays,
 		"searchPatchedTalkgroups":     options.SearchPatchedTalkgroups,
 		"showListenersCount":          options.ShowListenersCount,

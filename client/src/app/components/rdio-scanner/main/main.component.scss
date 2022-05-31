@@ -158,6 +158,10 @@
 
     tr {
       height: 21px;
+
+      &.replaying {
+        font-weight: 700;
+      }
     }
 
     tbody > tr {

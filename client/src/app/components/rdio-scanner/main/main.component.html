@@ -93,7 +93,8 @@
                 </tr>
             </thead>
             <tbody>
-                <tr *ngFor="let previousCall of callHistory">
+                <tr *ngFor="let previousCall of callHistory"
+                    [ngClass]="{ 'replaying': previousCall?.id !== null && previousCall?.id === call?.id} ">
                     <td>
                         <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
                     </td>

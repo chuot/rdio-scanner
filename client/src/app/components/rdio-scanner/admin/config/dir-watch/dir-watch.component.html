@@ -2,7 +2,8 @@
     <p class="mat-body">Define a dirwatch to monitor new audio files from any directory.</p>
     <button type="button" mat-button color="accent" (click)="add()">New dir watch</button>
 </div>
-<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="dirWatches" (cdkDropListDropped)="drop($event)">
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="dirWatches"
+    (cdkDropListDropped)="drop($event)">
     <mat-expansion-panel *ngFor="let dirWatch of dirWatches; index as i" cdkDrag>
         <mat-expansion-panel-header>
             <mat-panel-title>
@@ -36,7 +37,8 @@
                 <p>
                     <span class="mat-body">Directory</span><br>
                     <span class="mat-caption">
-                        Absolute or relatives to the server, path of the directory to be monitored.
+                        Path of a local directory to monitor for file ingestion. Note that dirwatch is not compatible
+                        with networked disk.
                     </span>
                 </p>
                 <mat-form-field floatLabel="never">
@@ -129,14 +131,20 @@
                             <li><b>#SYSLBL</b> - extract the system label.</li>
                             <li><b>#TAG</b> - extract the tag label.</li>
                             <li><b>#TG</b> - extract the talkgroup id like 1457 in decimal format.</li>
-                            <li><b>#TGAFS</b> - extract the talkgroup id like 11-061 in AFS (agency-fleet-subfleet) format.</li>
-                            <li><b>#TGHZ</b> - extract the frequency in hertz like 119100000 and set the talkgroup id to 119100.</li>
-                            <li><b>#TGKHZ</b> - extract the frequency in kilohertz like 119100.000 or 119100 and set the talkgroup id to 119100.</li>
+                            <li><b>#TGAFS</b> - extract the talkgroup id like 11-061 in AFS (agency-fleet-subfleet)
+                                format.</li>
+                            <li><b>#TGHZ</b> - extract the frequency in hertz like 119100000 and set the talkgroup id to
+                                119100.</li>
+                            <li><b>#TGKHZ</b> - extract the frequency in kilohertz like 119100.000 or 119100 and set the
+                                talkgroup id to 119100.</li>
                             <li><b>#TGLBL</b> - extract the talkgroup label.</li>
-                            <li><b>#TGMHZ</b> - extract the frequency in megahertz like 119.100000 or 119 and set the talkgroup id to 119100.</li>
-                            <li><b>#TIME</b> - extract the local time like 0853439&nbsp;(HHMMSS), 08-34-39&nbsp;(HH-MM-SS) or 08:34:39&nbsp;(HH:MM:SS).</li>
+                            <li><b>#TGMHZ</b> - extract the frequency in megahertz like 119.100000 or 119 and set the
+                                talkgroup id to 119100.</li>
+                            <li><b>#TIME</b> - extract the local time like 0853439&nbsp;(HHMMSS),
+                                08-34-39&nbsp;(HH-MM-SS) or 08:34:39&nbsp;(HH:MM:SS).</li>
                             <li><b>#UNIT</b> - extract the unit id like 4424001.</li>
-                            <li><b>#ZTIME</b> - extract the zulu time like 0453439&nbsp;(HHMMSS), 08-34-39&nbsp;(HH-MM-SS) or 04:34:39&nbsp;(HH:MM:SS).</li>
+                            <li><b>#ZTIME</b> - extract the zulu time like 0453439&nbsp;(HHMMSS),
+                                08-34-39&nbsp;(HH-MM-SS) or 04:34:39&nbsp;(HH:MM:SS).</li>
                         </ul>
                         Example: cymx_#TG_#DATE_#TIME_#HZ
                     </span>

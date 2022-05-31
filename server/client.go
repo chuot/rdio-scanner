@@ -67,6 +67,8 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 
 	go func() {
 		defer func() {
+			recover()
+
 			controller.Unregister <- client
 		}()
 
@@ -80,7 +82,7 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		for {
 			_, b, err := client.Conn.ReadMessage()
 			if err != nil {
-				break
+				return
 			}
 
 			message := &Message{}
@@ -104,6 +106,8 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		})
 
 		defer func() {
+			recover()
+
 			ticker.Stop()
 			timer.Stop()
 
@@ -115,10 +119,6 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 			select {
 			case message, ok := <-client.Send:
 				if !ok {
-					return
-				}
-
-				if client.Conn == nil {
 					return
 				}
 
@@ -168,6 +168,7 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 		"dimmerDelay":        options.DimmerDelay,
 		"groups":             client.GroupsMap,
 		"keypadBeeps":        GetKeypadBeeps(options),
+		"playbackGoesLive":   options.PlaybackGoesLive,
 		"showListenersCount": options.ShowListenersCount,
 		"systems":            client.SystemsMap,
 		"tags":               client.TagsMap,

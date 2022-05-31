@@ -35,24 +35,23 @@ const (
 )
 
 type Config struct {
-	BaseDir          string
-	ConfigFile       string
-	DbType           string
-	DbFile           string
-	DbHost           string
-	DbPort           uint
-	DbName           string
-	DbUsername       string
-	DbPassword       string
-	Listen           string
-	SslAutoCert      string
-	SslCaCertFile    string
-	SslCaKeyFile     string
-	SslCertFile      string
-	SslKeyFile       string
-	SslListen        string
-	daemon           *Daemon
-	newAdminPassword string
+	BaseDir       string
+	ConfigFile    string
+	DbType        string
+	DbFile        string
+	DbHost        string
+	DbPort        uint
+	DbName        string
+	DbUsername    string
+	DbPassword    string
+	Listen        string
+	SslAutoCert   string
+	SslCaCertFile string
+	SslCaKeyFile  string
+	SslCertFile   string
+	SslKeyFile    string
+	SslListen     string
+	daemon        *Daemon
 }
 
 func NewConfig() *Config {
@@ -67,6 +66,7 @@ func NewConfig() *Config {
 	)
 
 	var (
+		command       = flag.String(COMMAND_ARG, "", fmt.Sprintf("advanced administrative tasks (use -%s %s for usage)", COMMAND_ARG, COMMAND_HELP))
 		config        = &Config{}
 		configSave    = flag.Bool("config_save", false, fmt.Sprintf("save configuration to %s", defaultConfigFile))
 		serviceAction = flag.String("service", "", "service command, one of start, stop, restart, install, uninstall")
@@ -101,7 +101,6 @@ func NewConfig() *Config {
 	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
 	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
-	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
 	flag.Parse()
 
 	if !config.isBaseDirWritable() {
@@ -177,6 +176,10 @@ func NewConfig() *Config {
 			fmt.Printf("unknown database type %s\n", config.DbType)
 			return nil
 		}
+	}
+
+	if *command != "" {
+		NewCommand(config.BaseDir).Do(*command)
 	}
 
 	if *serviceAction != "" {

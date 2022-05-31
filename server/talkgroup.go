@@ -37,7 +37,7 @@ type Talkgroup struct {
 	tag       string
 }
 
-func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
+func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) *Talkgroup {
 	switch v := m["id"].(type) {
 	case float64:
 		talkgroup.Id = uint(v)
@@ -87,6 +87,8 @@ func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) {
 	case float64:
 		talkgroup.TagId = uint(v)
 	}
+
+	return talkgroup
 }
 
 type TalkgroupMap map[string]interface{}
@@ -103,7 +105,7 @@ func NewTalkgroups() *Talkgroups {
 	}
 }
 
-func (talkgroups *Talkgroups) FromMap(f []interface{}) {
+func (talkgroups *Talkgroups) FromMap(f []interface{}) *Talkgroups {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
@@ -117,6 +119,8 @@ func (talkgroups *Talkgroups) FromMap(f []interface{}) {
 			talkgroups.List = append(talkgroups.List, talkgroup)
 		}
 	}
+
+	return talkgroups
 }
 
 func (talkgroups *Talkgroups) GetTalkgroup(f interface{}) (system *Talkgroup, ok bool) {
