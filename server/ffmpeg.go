@@ -61,11 +61,15 @@ func NewFFMpeg() *FFMpeg {
 	return ffmpeg
 }
 
-func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags) error {
+func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uint) error {
 	var (
 		args = []string{"-i", "-"}
 		err  error
 	)
+
+	if mode == AUDIO_CONVERSION_DISABLED {
+		return nil
+	}
 
 	if !ffmpeg.available {
 		if !ffmpeg.warned {
@@ -91,7 +95,11 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags) error {
 	}
 
 	if ffmpeg.version43 {
-		args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
+		if mode == AUDIO_CONVERSION_ENABLED_NORM {
+			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
+		} else if mode == AUDIO_CONVERSION_ENABLED_LOUD_NORM {
+			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
+		}
 	}
 
 	args = append(args, "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")

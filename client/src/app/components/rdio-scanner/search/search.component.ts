@@ -66,6 +66,8 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit {
     results = new BehaviorSubject(new Array<RdioScannerCall | null>(10));
     resultsPending = false;
 
+    time12h = false;
+
     private config: RdioScannerConfig | undefined;
 
     private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
@@ -315,6 +317,8 @@ export class RdioScannerSearchComponent implements OnDestroy, OnInit {
             this.optionsGroup = Object.keys(this.config?.groups || []).sort((a, b) => a.localeCompare(b));
             this.optionsSystem = (this.config?.systems || []).map((system) => system.label);
             this.optionsTag = Object.keys(this.config?.tags || []).sort((a, b) => a.localeCompare(b));
+
+            this.time12h = this.config?.time12hFormat || false;
         }
 
         if ('livefeedMode' in event) {

@@ -98,6 +98,7 @@ export interface RdioScannerConfig {
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };
     tagsToggle: boolean;
+    time12hFormat: boolean;
 }
 
 export interface RdioScannerEvent {

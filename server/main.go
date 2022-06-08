@@ -173,8 +173,8 @@ func main() {
 		s := &http.Server{
 			Addr:         addr,
 			TLSConfig:    tlsConfig,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
 			ErrorLog:     log.New(ioutil.Discard, "", 0),
 		}
 

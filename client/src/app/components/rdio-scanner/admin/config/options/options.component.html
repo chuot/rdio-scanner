@@ -1,6 +1,42 @@
 <ng-container *ngIf="form" [formGroup]="form">
     <div class="row">
         <p>
+            <span class="mat-body">12-Hour Time Format</span><br>
+            <span class="mat-caption">Display time stamp in 12-hour format.</span>
+        </p>
+        <div>
+            <mat-slide-toggle color="primary" formControlName="time12hFormat"></mat-slide-toggle>
+        </div>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">AFS Systems</span><br>
+            <span class="mat-caption">A comma separated list of system Ids where talkgroup Ids should be displayed in
+                AFS (agency-fleet-subfleet) format.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <textarea type="text" matInput formControlName="afsSystems" placeholder="AFS systems"></textarea>
+            <mat-error *ngIf="form?.get('afsSystems')?.hasError('invalid')">
+                Comma separated list of system Ids
+            </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Audio Conversion</span><br>
+            <span class="mat-caption">Convert incoming audio files to H.264 m4a with ffmpeg.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <mat-select formControlName="audioConversion" placeholder="Audio Conversion">
+                <mat-option [value]="0">Disabled</mat-option>
+                <mat-option [value]="1">Enabled without normalization</mat-option>
+                <mat-option [value]="2">Enabled with normalization</mat-option>
+                <mat-option [value]="3">Enabled with loud normalization</mat-option>
+            </mat-select>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Auto Populate</span><br>
             <span class="mat-caption">Globaly allows the automatic creation of unconfigured systems and
                 talkgroups.</span>
@@ -24,16 +60,6 @@
                 Dimmer delay is invalid
             </mat-error>
         </mat-form-field>
-    </div>
-    <div class="row">
-        <p>
-            <span class="mat-body">Disable Audio Conversion</span><br>
-            <span class="mat-caption">Disable the audio format conversion to m4a/aac. This is usefull if another Rdio
-                Scanner instance is feeding this instance where audio has already been converted.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="disableAudioConversion"></mat-slide-toggle>
-        </div>
     </div>
     <div class="row">
         <p>
@@ -90,7 +116,8 @@
     <div class="row">
         <p>
             <span class="mat-body">Playback Mode Goes Live</span><br>
-            <span class="mat-caption">Playback mode changes to live stream mode when the search list is exhausted.</span>
+            <span class="mat-caption">Playback mode changes to live stream mode when the search list is
+                exhausted.</span>
         </p>
         <div>
             <mat-slide-toggle color="primary" formControlName="playbackGoesLive"></mat-slide-toggle>
@@ -148,17 +175,5 @@
         <div>
             <mat-slide-toggle color="primary" formControlName="tagsToggle"></mat-slide-toggle>
         </div>
-    </div>
-    <div class="row">
-        <p>
-            <span class="mat-body">AFS Systems</span><br>
-            <span class="mat-caption">A comma separated list of system Ids where talkgroup Ids should be displayed in AFS (agency-fleet-subfleet) format.</span>
-        </p>
-        <mat-form-field floatLabel="never">
-            <textarea type="text" matInput formControlName="afsSystems" placeholder="AFS systems"></textarea>
-            <mat-error *ngIf="form?.get('afsSystems')?.hasError('invalid')">
-                Comma separated list of system Ids
-            </mat-error>
-        </mat-form-field>
     </div>
 </ng-container>

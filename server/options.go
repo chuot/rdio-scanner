@@ -26,9 +26,9 @@ import (
 
 type Options struct {
 	AfsSystems                  string `json:"afsSystems"`
+	AudioConversion             uint   `json:"audioConversion"`
 	AutoPopulate                bool   `json:"autoPopulate"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
-	DisableAudioConversion      bool   `json:"disableAudioConversion"`
 	DisableDuplicateDetection   bool   `json:"disableDuplicateDetection"`
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
@@ -39,11 +39,19 @@ type Options struct {
 	ShowListenersCount          bool   `json:"showListenersCount"`
 	SortTalkgroups              bool   `json:"sortTalkgroups"`
 	TagsToggle                  bool   `json:"tagsToggle"`
+	Time12hFormat               bool   `json:"time12hFormat"`
 	adminPassword               string
 	adminPasswordNeedChange     bool
 	mutex                       sync.Mutex
 	secret                      string
 }
+
+const (
+	AUDIO_CONVERSION_DISABLED          = 0
+	AUDIO_CONVERSION_ENABLED           = 1
+	AUDIO_CONVERSION_ENABLED_NORM      = 2
+	AUDIO_CONVERSION_ENABLED_LOUD_NORM = 3
+)
 
 func NewOptions() *Options {
 	return &Options{
@@ -58,6 +66,13 @@ func (options *Options) FromMap(m map[string]interface{}) *Options {
 	switch v := m["afsSystems"].(type) {
 	case string:
 		options.AfsSystems = v
+	}
+
+	switch v := m["audioConversion"].(type) {
+	case float64:
+		options.AudioConversion = uint(v)
+	default:
+		options.MaxClients = defaults.options.audioConversion
 	}
 
 	switch v := m["autoPopulate"].(type) {
@@ -76,9 +91,11 @@ func (options *Options) FromMap(m map[string]interface{}) *Options {
 
 	switch v := m["disableAudioConversion"].(type) {
 	case bool:
-		options.DisableAudioConversion = v
-	default:
-		options.DisableAudioConversion = defaults.options.disableAudioConversion
+		if v {
+			options.AudioConversion = 2
+		} else {
+			options.AudioConversion = 0
+		}
 	}
 
 	switch v := m["disableDuplicateDetection"].(type) {
@@ -149,6 +166,13 @@ func (options *Options) FromMap(m map[string]interface{}) *Options {
 		options.TagsToggle = defaults.options.tagsToggle
 	}
 
+	switch v := m["time12hFormat"].(type) {
+	case bool:
+		options.Time12hFormat = v
+	default:
+		options.Time12hFormat = defaults.options.time12hFormat
+	}
+
 	return options
 }
 
@@ -166,9 +190,9 @@ func (options *Options) Read(db *Database) error {
 
 	options.adminPassword = string(defaultPassword)
 	options.adminPasswordNeedChange = defaults.adminPasswordNeedChange
+	options.AudioConversion = defaults.options.audioConversion
 	options.AutoPopulate = defaults.options.autoPopulate
 	options.DimmerDelay = defaults.options.dimmerDelay
-	options.DisableAudioConversion = defaults.options.disableAudioConversion
 	options.DisableDuplicateDetection = defaults.options.disableDuplicateDetection
 	options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
 	options.KeypadBeeps = defaults.options.keypadBeeps
@@ -205,6 +229,11 @@ func (options *Options) Read(db *Database) error {
 				options.AfsSystems = v
 			}
 
+			switch v := m["audioConversion"].(type) {
+			case float64:
+				options.AudioConversion = uint(v)
+			}
+
 			switch v := m["autoPopulate"].(type) {
 			case bool:
 				options.AutoPopulate = v
@@ -213,11 +242,6 @@ func (options *Options) Read(db *Database) error {
 			switch v := m["dimmerDelay"].(type) {
 			case float64:
 				options.DimmerDelay = uint(v)
-			}
-
-			switch v := m["disableAudioConversion"].(type) {
-			case bool:
-				options.DisableAudioConversion = v
 			}
 
 			switch v := m["disableDuplicateDetection"].(type) {
@@ -270,6 +294,10 @@ func (options *Options) Read(db *Database) error {
 				options.TagsToggle = v
 			}
 
+			switch v := m["time12hFormat"].(type) {
+			case bool:
+				options.Time12hFormat = v
+			}
 		}
 	}
 
@@ -324,9 +352,9 @@ func (options *Options) Write(db *Database) error {
 
 	if b, err = json.Marshal(map[string]interface{}{
 		"afsSystems":                  options.AfsSystems,
+		"audioConversion":             options.AudioConversion,
 		"autoPopulate":                options.AutoPopulate,
 		"dimmerDelay":                 options.DimmerDelay,
-		"disableAudioConversion":      options.DisableAudioConversion,
 		"disableDuplicateDetection":   options.DisableDuplicateDetection,
 		"duplicateDetectionTimeFrame": options.DuplicateDetectionTimeFrame,
 		"keypadBeeps":                 options.KeypadBeeps,
@@ -337,6 +365,7 @@ func (options *Options) Write(db *Database) error {
 		"showListenersCount":          options.ShowListenersCount,
 		"sortTalkgroups":              options.SortTalkgroups,
 		"tagsToggle":                  options.TagsToggle,
+		"time12hFormat":               options.Time12hFormat,
 	}); err != nil {
 		return formatError(err)
 	}

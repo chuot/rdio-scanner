@@ -47,9 +47,16 @@
       flex: 0 0 40px;
     }
 
-    &:nth-child(2),
-    &:nth-child(3) {
+    &:nth-child(2) {
       flex: 0 0 50px;
+    }
+
+    &:nth-child(3):not(.time12h) {
+      flex: 0 0 50px;
+    }
+
+    &:nth-child(3).time12h {
+      flex: 0 0 70px;
     }
 
     &:nth-child(4),

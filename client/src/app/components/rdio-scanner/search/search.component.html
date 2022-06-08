@@ -27,11 +27,11 @@
             </mat-cell>
         </ng-container>
         <ng-container matColumnDef="time">
-            <mat-header-cell *matHeaderCellDef>
+            <mat-header-cell *matHeaderCellDef [ngClass]="{'time12h': time12h}">
                 <span>Time</span>
             </mat-header-cell>
-            <mat-cell *matCellDef="let row">
-                <span>{{ row?.dateTime | date:'HH:mm' }}</span>
+            <mat-cell *matCellDef="let row" [ngClass]="{'time12h': time12h}">
+                <span>{{ row?.dateTime | date: time12h ? 'h:mm a' : 'HH:mm' }}</span>
             </mat-cell>
         </ng-container>
         <ng-container matColumnDef="system">

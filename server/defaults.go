@@ -51,8 +51,8 @@ type DefaultDownstream struct {
 
 type DefaultOptions struct {
 	autoPopulate                bool
+	audioConversion             uint
 	dimmerDelay                 uint
-	disableAudioConversion      bool
 	disableDuplicateDetection   bool
 	duplicateDetectionTimeFrame uint
 	keypadBeeps                 string
@@ -63,6 +63,7 @@ type DefaultOptions struct {
 	showListenersCount          bool
 	sortTalkgroups              bool
 	tagsToggle                  bool
+	time12hFormat               bool
 }
 
 var defaults Defaults = Defaults{
@@ -93,9 +94,9 @@ var defaults Defaults = Defaults{
 	},
 	keypadBeeps: "uniden",
 	options: DefaultOptions{
+		audioConversion:             AUDIO_CONVERSION_ENABLED,
 		autoPopulate:                true,
 		dimmerDelay:                 5000,
-		disableAudioConversion:      false,
 		disableDuplicateDetection:   false,
 		duplicateDetectionTimeFrame: 500,
 		keypadBeeps:                 "uniden",
@@ -106,6 +107,7 @@ var defaults Defaults = Defaults{
 		showListenersCount:          false,
 		sortTalkgroups:              false,
 		tagsToggle:                  false,
+		time12hFormat:               false,
 	},
 	systems: []System{},
 	tags: []string{

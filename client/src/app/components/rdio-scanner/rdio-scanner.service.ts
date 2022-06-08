@@ -87,6 +87,7 @@ export class RdioScannerService implements OnDestroy {
         systems: [],
         tags: {},
         tagsToggle: false,
+        time12hFormat: false,
     };
 
     private livefeedMap = {} as RdioScannerLivefeedMap;
@@ -838,6 +839,7 @@ export class RdioScannerService implements OnDestroy {
                         systems: Array.isArray(config.systems) ? config.systems.slice() : [],
                         tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
                         tagsToggle: typeof config.tagsToggle === 'boolean' ? config.tagsToggle : false,
+                        time12hFormat: typeof config.time12hFormat === 'boolean' ? config.time12hFormat : false,
                     };
 
                     if (typeof config.afs === 'string' && config.afs.length) {

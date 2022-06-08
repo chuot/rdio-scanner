@@ -415,7 +415,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !ok {
-			admin.Controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid login attempt for ip=%v", remoteAddr))
+			admin.Controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid login attempt for ip %v", remoteAddr))
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

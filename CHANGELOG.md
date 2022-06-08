@@ -8,6 +8,15 @@
 - Improved field conversions when retrieving calls from a mysql/mariadb database (issue #194, #198).
 - Highlight replayed call on the history list (issue #196).
 
+_v6.4.1_
+
+- New 12-Hour time format option (issue #205).
+- New audio conversion options which replace the disable audio conversion option.
+- Keep database connections open and don't close them when idle.
+- Log the origin of listeners.
+- Fix timestamp format when checking for call duplicates.
+- Fix http timeouts on call ingestions or admin config save when dowstream takes too long (issue #197).
+
 ## Version 6.3
 
 - Change scroll speed when drag droping talkgroups or units in a system (discussion #170).

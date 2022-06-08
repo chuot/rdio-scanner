@@ -65,11 +65,15 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 
 	controller.Register <- client
 
+	controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %v", client.GetRemoteAddr()))
+
 	go func() {
 		defer func() {
 			recover()
 
 			controller.Unregister <- client
+
+			controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listener disconnected from ip %v", client.GetRemoteAddr()))
 		}()
 
 		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -173,6 +177,7 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 		"systems":            client.SystemsMap,
 		"tags":               client.TagsMap,
 		"tagsToggle":         options.TagsToggle,
+		"time12hFormat":      options.Time12hFormat,
 	}
 
 	if len(options.AfsSystems) > 0 {

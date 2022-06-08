@@ -130,9 +130,9 @@ export interface LogsQueryOptions {
 
 export interface Options {
     afsSystems?: string;
+    audioConversion?: 0 | 1 | 2 | 3;
     autoPopulate?: boolean;
     dimmerDelay?: number;
-    disableAudioConversion?: boolean;
     disableDuplicateDetection?: boolean;
     duplicateDetectionTimeFrame?: number;
     keypadBeeps?: string;
@@ -143,6 +143,7 @@ export interface Options {
     showListenersCount?: boolean;
     sortTalkgroups?: boolean;
     tagsToggle?: boolean;
+    time12hFormat?: boolean;
 }
 
 export interface System {
@@ -494,9 +495,9 @@ export class RdioScannerAdminService implements OnDestroy {
     newOptionsForm(options?: Options): FormGroup {
         return this.ngFormBuilder.group({
             afsSystems: [options?.afsSystems, this.validateAfsSystems()],
+            audioConversion: [options?.audioConversion],
             autoPopulate: [options?.autoPopulate],
             dimmerDelay: [options?.dimmerDelay, [Validators.required, Validators.min(0)]],
-            disableAudioConversion: [options?.disableAudioConversion],
             disableDuplicateDetection: [options?.disableDuplicateDetection],
             duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
@@ -507,6 +508,7 @@ export class RdioScannerAdminService implements OnDestroy {
 			showListenersCount: [options?.showListenersCount],
             sortTalkgroups: [options?.sortTalkgroups],
             tagsToggle: [options?.tagsToggle],
+            time12hFormat: [options?.time12hFormat],
         });
     }
 

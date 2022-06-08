@@ -333,7 +333,7 @@ func (downstream *Downstream) Send(call *Call) error {
 	if u, err := url.Parse(downstream.Url); err == nil {
 		u.Path = path.Join(u.Path, "/api/call-upload")
 
-		c := http.Client{Timeout: 10 * time.Second}
+		c := http.Client{Timeout: 30 * time.Second}
 
 		if res, err := c.Post(u.String(), mw.FormDataContentType(), &buf); err == nil {
 			if res.StatusCode != http.StatusOK {

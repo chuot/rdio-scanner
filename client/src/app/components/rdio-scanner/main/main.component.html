@@ -4,7 +4,7 @@
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
     <div class="row">
         <div>
-            <span>{{ clock | date:'HH:mm' }}</span>
+            <span>{{ clock | date:timeFormat }}</span>
         </div>
         <div *ngIf="!linked">
             <span>NO LINK</span>
@@ -30,7 +30,7 @@
             <span>{{ callTalkgroup }}</span>
         </div>
         <div>
-            <span>{{ callProgress | date:'HH:mm' }}</span>
+            <span>{{ callProgress | date:timeFormat }}</span>
         </div>
     </div>
     <div class="row big">
@@ -96,7 +96,7 @@
                 <tr *ngFor="let previousCall of callHistory"
                     [ngClass]="{ 'replaying': previousCall?.id !== null && previousCall?.id === call?.id} ">
                     <td>
-                        <span>{{ previousCall?.dateTime | date:'HH:mm' }}</span>
+                        <span>{{ previousCall?.dateTime | date:timeFormat }}</span>
                     </td>
                     <td>
                         <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>

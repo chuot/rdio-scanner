@@ -85,13 +85,13 @@ func NewController(config *Config) *Controller {
 }
 
 func (controller *Controller) EmitCall(call *Call) {
-	controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
-	controller.Downstreams.Send(controller, call)
+	go controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
+	go controller.Downstreams.Send(controller, call)
 }
 
 func (controller *Controller) EmitConfig() {
-	controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
-	controller.Admin.BroadcastConfig()
+	go controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
+	go controller.Admin.BroadcastConfig()
 }
 
 func (controller *Controller) IngestCall(call *Call) {
@@ -286,10 +286,8 @@ func (controller *Controller) IngestCall(call *Call) {
 		}
 	}
 
-	if !controller.Options.DisableAudioConversion {
-		if err := controller.FFMpeg.Convert(call, controller.Systems, controller.Tags); err != nil {
-			controller.Logs.LogEvent(LogLevelWarn, err.Error())
-		}
+	if err := controller.FFMpeg.Convert(call, controller.Systems, controller.Tags, controller.Options.AudioConversion); err != nil {
+		controller.Logs.LogEvent(LogLevelWarn, err.Error())
 	}
 
 	if id, err = controller.Calls.WriteCall(call, controller.Database); err == nil {
@@ -345,6 +343,7 @@ func (controller *Controller) ProcessMessage(client *Client, message *Message) e
 
 	} else if message.Command == MessageCommandConfig {
 		client.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
+		client.SendListenersCount(controller.Clients.Count())
 
 	} else if message.Command == MessageCommandListCall {
 		if err := controller.ProcessMessageCommandListCall(client, message); err != nil {

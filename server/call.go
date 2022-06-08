@@ -129,8 +129,8 @@ func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) b
 	defer calls.mutex.Unlock()
 
 	d := time.Duration(msTimeFrame) * time.Millisecond
-	from := call.DateTime.Add(-d).Format(db.DateTimeFormat)
-	to := call.DateTime.Add(d).Format(db.DateTimeFormat)
+	from := call.DateTime.Add(-d)
+	to := call.DateTime.Add(d)
 
 	query := fmt.Sprintf("select count(*) from `rdioScannerCalls` where (`dateTime` between '%v' and '%v') and `system` = %v and `talkgroup` = %v", from, to, call.System, call.Talkgroup)
 	if err := db.Sql.QueryRow(query).Scan(&count); err != nil {
@@ -330,6 +330,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	if t, err = db.ParseDateTime(dateTime); err == nil {
 		searchResults.DateStart = t
 	}
+
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerCalls` where %v order by `dateTime` desc", where)
 	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
@@ -392,6 +393,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
+	defer rows.Close()
+
 	for rows.Next() {
 		searchResult := CallsSearchResult{}
 		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
@@ -411,8 +414,6 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 		searchResults.Results = append(searchResults.Results, searchResult)
 	}
-
-	rows.Close()
 
 	if err != nil {
 		return nil, formatError(err)

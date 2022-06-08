@@ -175,10 +175,12 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
+	if dateTime == nil {
+		return nil, nil
+	}
+
 	if t, err := db.ParseDateTime(dateTime); err == nil {
 		logResults.DateStart = t
-	} else {
-		return nil, err
 	}
 
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
@@ -188,8 +190,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 	if t, err := db.ParseDateTime(dateTime); err == nil {
 		logResults.DateStop = t
-	} else {
-		return nil, err
 	}
 
 	query = fmt.Sprintf("select count(*) from `rdioScannerLogs` where %v", where)
@@ -201,6 +201,8 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	if rows, err = db.Sql.Query(query); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
+
+	defer rows.Close()
 
 	for rows.Next() {
 		log := Log{}
@@ -221,8 +223,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 		logResults.Logs = append(logResults.Logs, log)
 	}
-
-	rows.Close()
 
 	if err != nil {
 		return nil, formatError(err)

@@ -104,6 +104,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     replayOffset = 0;
     replayTimer: Subscription | undefined;
 
+    timeFormat = 'HH:mm';
+
     get showListenersCount(): boolean {
         return this.config?.showListenersCount || false;
     }
@@ -375,6 +377,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         if ('config' in event) {
             this.config = event.config;
+
+            this.timeFormat = this.config?.time12hFormat ? 'h:mm a' : 'HH:mm';
 
             const password = this.authForm.get('password')?.value;
 
