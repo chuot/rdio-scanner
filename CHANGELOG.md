@@ -17,7 +17,7 @@ _v6.4.1_
 - Fix timestamp format when checking for call duplicates.
 - Fix http timeouts on call ingestions or admin config save when dowstream takes too long (issue #197).
 
-_v6.4.1_
+_v6.4.2_
 
 - Revert the last changes to the SDR Trunk parser (issue #206).
 
