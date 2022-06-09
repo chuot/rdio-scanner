@@ -17,6 +17,10 @@ _v6.4.1_
 - Fix timestamp format when checking for call duplicates.
 - Fix http timeouts on call ingestions or admin config save when dowstream takes too long (issue #197).
 
+_v6.4.1_
+
+- Revert the last changes to the SDR Trunk parser (issue #206).
+
 ## Version 6.3
 
 - Change scroll speed when drag droping talkgroups or units in a system (discussion #170).

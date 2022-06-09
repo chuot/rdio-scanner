@@ -127,11 +127,6 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		call.talkgroupName = s[1]
 	}
 
-	s = regexp.MustCompile(`"?([^"]+)"?`).FindStringSubmatch(m.Album())
-	if len(s) > 1 {
-		call.talkgroupName = s[1]
-	}
-
 	return nil
 }
 
