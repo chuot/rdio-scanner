@@ -63,10 +63,6 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 	client.Send = make(chan *Message)
 	client.request = request
 
-	controller.Register <- client
-
-	controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %v", client.GetRemoteAddr()))
-
 	go func() {
 		defer func() {
 			recover()
@@ -151,6 +147,10 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 			}
 		}
 	}()
+
+	controller.Register <- client
+
+	controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %v", client.GetRemoteAddr()))
 
 	return nil
 }

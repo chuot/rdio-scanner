@@ -21,6 +21,11 @@ _v6.4.2_
 
 - Revert the last changes to the SDR Trunk parser (issue #206).
 
+_v6.4.3_
+
+- Add a note on the dirwatch admin screen about sdr-trunk.
+- Starts client read/write pumps before registering with the controller (issue #181, #212).
+
 ## Version 6.3
 
 - Change scroll speed when drag droping talkgroups or units in a system (discussion #170).
