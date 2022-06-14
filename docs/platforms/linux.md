@@ -42,8 +42,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         [rdio@pc-linux ~]$ mkdir rdio-scanner
         [rdio@pc-linux ~]$ cd rdio-scanner
         [rdio@pc-linux rdio-scanner]$ unzip \
-        > ~/Downloads/rdio-scanner-linux-amd64-v6.4.4.zip 
-        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.4.4.zip
+        > ~/Downloads/rdio-scanner-linux-amd64-v6.4.5.zip 
+        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.4.5.zip
           inflating: rdio-scanner            
           inflating: rdio-scanner.pdf     
 
@@ -51,7 +51,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         [rdio@pc-linux rdio-scanner]$ ./rdio-scanner 
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 09:11:48 server started
         2022/06/14 09:11:48 main interface at http://pc-linux:3000
@@ -78,7 +78,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner -listen :80
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 09:14:00 server started
         2022/06/14 09:14:00 main interface at http://pc-linux
@@ -97,7 +97,7 @@ You can use your own SSL certificates that match your domain name with `-ssl_cer
         > -ssl_listen :443
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 09:16:47 server started
         2022/06/14 09:16:47 main interface at http://pc-linux
@@ -135,7 +135,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner 
         [sudo] Mot de passe de rdio : 
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 09:20:40 server started
         2022/06/14 09:20:40 main interface at http://pc-linux

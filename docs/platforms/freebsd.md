@@ -42,8 +42,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         rdio@pc-freebsd:~ $ mkdir rdio-scanner
         rdio@pc-freebsd:~ $ cd rdio-scanner
         rdio@pc-freebsd:~/rdio-scanner $ unzip \
-        > ~/rdio-scanner-freebsd-amd64-v6.4.4.zip 
-        Archive:  ../rdio-scanner-freebsd-amd64-v6.4.4.zip
+        > ~/rdio-scanner-freebsd-amd64-v6.4.5.zip 
+        Archive:  ../rdio-scanner-freebsd-amd64-v6.4.5.zip
          extracting: rdio-scanner  
          extracting: rdio-scanner.pdf
 
@@ -51,7 +51,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         rdio@pc-freebsd:~/rdio-scanner $ ./rdio-scanner
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 08:16:36 server started
         2022/06/14 08:16:36 main interface at http://pc-freebsd:3000
@@ -81,7 +81,7 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner -listen :80
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 08:19:38 server started
         2022/06/14 08:19:38 main interface at http://pc-freebsd
@@ -101,7 +101,7 @@ You can use your own SSL certificates that match your domain name with `-ssl_cer
         > -ssl_key_file mykey.key                                     \
         > -ssl_listen :443
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 10:34:29 server started
         2022/06/14 10:34:29 main interface at http://pc-freebsd
@@ -142,7 +142,7 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         Password:
         root@pc-freebsd:/home/rdio/rdio-scanner # ./rdio-scanner
         
-        Rdio Scanner v6.4.4
+        Rdio Scanner v6.4.5
         ----------------------------------
         2022/06/14 10:38:28 server started
         2022/06/14 10:38:29 main interface at http://pc-freebsd

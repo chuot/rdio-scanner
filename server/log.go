@@ -202,8 +202,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	defer rows.Close()
-
 	for rows.Next() {
 		log := Log{}
 
@@ -223,6 +221,8 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 		logResults.Logs = append(logResults.Logs, log)
 	}
+
+	rows.Close()
 
 	if err != nil {
 		return nil, formatError(err)

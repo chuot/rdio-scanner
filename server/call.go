@@ -393,8 +393,6 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	defer rows.Close()
-
 	for rows.Next() {
 		searchResult := CallsSearchResult{}
 		if err = rows.Scan(&id, &dateTime, &searchResult.System, &searchResult.Talkgroup); err != nil {
@@ -414,6 +412,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 		searchResults.Results = append(searchResults.Results, searchResult)
 	}
+
+	rows.Close()
 
 	if err != nil {
 		return nil, formatError(err)

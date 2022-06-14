@@ -30,6 +30,11 @@ _v6.4.4_
 
 - Don't emit calls to listeners in separate GO routine to stay in sync with call ingestion.
 
+_v6.4.5_
+
+- SQL idle connections now expiring after 1 minute.
+- Revert defer rows.Close() to simple rows.Close().
+
 ## Version 6.3
 
 - Change scroll speed when drag droping talkgroups or units in a system (discussion #170).

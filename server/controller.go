@@ -343,6 +343,7 @@ func (controller *Controller) ProcessMessage(client *Client, message *Message) e
 
 	} else if message.Command == MessageCommandConfig {
 		client.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
+		client.SendListenersCount(controller.Clients.Count())
 
 	} else if message.Command == MessageCommandListCall {
 		if err := controller.ProcessMessageCommandListCall(client, message); err != nil {
