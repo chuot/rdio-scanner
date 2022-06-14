@@ -26,6 +26,10 @@ _v6.4.3_
 - Add a note on the dirwatch admin screen about sdr-trunk.
 - Starts client read/write pumps before registering with the controller (issue #181, #212).
 
+_v6.4.4_
+
+- Don't emit calls to listeners in separate GO routine to stay in sync with call ingestion.
+
 ## Version 6.3
 
 - Change scroll speed when drag droping talkgroups or units in a system (discussion #170).

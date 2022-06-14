@@ -85,13 +85,13 @@ func NewController(config *Config) *Controller {
 }
 
 func (controller *Controller) EmitCall(call *Call) {
-	go controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
 	go controller.Downstreams.Send(controller, call)
+	controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
 }
 
 func (controller *Controller) EmitConfig() {
-	go controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
-	go controller.Admin.BroadcastConfig()
+	controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
+	controller.Admin.BroadcastConfig()
 }
 
 func (controller *Controller) IngestCall(call *Call) {
@@ -343,7 +343,6 @@ func (controller *Controller) ProcessMessage(client *Client, message *Message) e
 
 	} else if message.Command == MessageCommandConfig {
 		client.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
-		client.SendListenersCount(controller.Clients.Count())
 
 	} else if message.Command == MessageCommandListCall {
 		if err := controller.ProcessMessageCommandListCall(client, message); err != nil {
