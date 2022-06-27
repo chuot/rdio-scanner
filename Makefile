@@ -16,14 +16,14 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2022/06/14
-ver := 6.4.5
+date := 2022/06/27
+ver := 6.5.0
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
 
 build = @cd server && GOOS=$(1) GOARCH=$(2) go build -o ../dist/$(1)-$(2)/$(3)
-pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/webapp.md docs/faq.md CHANGELOG.md
+pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
 .PHONY: all clean container dist sed

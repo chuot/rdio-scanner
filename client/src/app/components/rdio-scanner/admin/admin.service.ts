@@ -132,9 +132,11 @@ export interface Options {
     afsSystems?: string;
     audioConversion?: 0 | 1 | 2 | 3;
     autoPopulate?: boolean;
+    branding?: string;
     dimmerDelay?: number;
     disableDuplicateDetection?: boolean;
     duplicateDetectionTimeFrame?: number;
+    email?: string;
     keypadBeeps?: string;
     maxClients?: number;
     playbackGoesLive?: boolean;
@@ -497,9 +499,11 @@ export class RdioScannerAdminService implements OnDestroy {
             afsSystems: [options?.afsSystems, this.validateAfsSystems()],
             audioConversion: [options?.audioConversion],
             autoPopulate: [options?.autoPopulate],
+            branding: [options?.branding],
             dimmerDelay: [options?.dimmerDelay, [Validators.required, Validators.min(0)]],
             disableDuplicateDetection: [options?.disableDuplicateDetection],
             duplicateDetectionTimeFrame: [options?.duplicateDetectionTimeFrame, [Validators.required, Validators.min(0)]],
+            email: [options?.email],
             keypadBeeps: [options?.keypadBeeps, Validators.required],
             maxClients: [options?.maxClients, [Validators.required, Validators.min(1)]],
             playbackGoesLive: [options?.playbackGoesLive],

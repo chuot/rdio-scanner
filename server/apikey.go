@@ -26,15 +26,15 @@ import (
 )
 
 type Apikey struct {
-	Id       interface{} `json:"_id"`
-	Disabled bool        `json:"disabled"`
-	Ident    string      `json:"ident"`
-	Key      string      `json:"key"`
-	Order    interface{} `json:"order"`
-	Systems  interface{} `json:"systems"`
+	Id       any    `json:"_id"`
+	Disabled bool   `json:"disabled"`
+	Ident    string `json:"ident"`
+	Key      string `json:"key"`
+	Order    any    `json:"order"`
+	Systems  any    `json:"systems"`
 }
 
-func (apikey *Apikey) FromMap(m map[string]interface{}) *Apikey {
+func (apikey *Apikey) FromMap(m map[string]any) *Apikey {
 	switch v := m["_id"].(type) {
 	case float64:
 		apikey.Id = uint(v)
@@ -61,7 +61,7 @@ func (apikey *Apikey) FromMap(m map[string]interface{}) *Apikey {
 	}
 
 	switch v := m["systems"].(type) {
-	case []interface{}:
+	case []any:
 		if b, err := json.Marshal(v); err == nil {
 			apikey.Systems = string(b)
 		}
@@ -74,10 +74,10 @@ func (apikey *Apikey) FromMap(m map[string]interface{}) *Apikey {
 
 func (apikey *Apikey) HasAccess(call *Call) bool {
 	switch v := apikey.Systems.(type) {
-	case []interface{}:
+	case []any:
 		for _, f := range v {
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch id := v["id"].(type) {
 				case float64:
 					if id == float64(call.System) {
@@ -86,7 +86,7 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 							if tg == "*" {
 								return true
 							}
-						case []interface{}:
+						case []any:
 							for _, f := range tg {
 								switch tg := f.(type) {
 								case float64:
@@ -122,7 +122,7 @@ func NewApikeys() *Apikeys {
 	}
 }
 
-func (apikeys *Apikeys) FromMap(f []interface{}) *Apikeys {
+func (apikeys *Apikeys) FromMap(f []any) *Apikeys {
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
@@ -130,7 +130,7 @@ func (apikeys *Apikeys) FromMap(f []interface{}) *Apikeys {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			apikey := &Apikey{}
 			apikey.FromMap(m)
 			apikeys.List = append(apikeys.List, apikey)
@@ -198,7 +198,7 @@ func (apikeys *Apikeys) Read(db *Database) error {
 		}
 
 		if err = json.Unmarshal([]byte(systems), &apikey.Systems); err != nil {
-			apikey.Systems = []interface{}{}
+			apikey.Systems = []any{}
 		}
 
 		apikeys.List = append(apikeys.List, apikey)
@@ -219,7 +219,7 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		err     error
 		rows    *sql.Rows
 		rowIds  = []uint{}
-		systems interface{}
+		systems any
 	)
 
 	apikeys.mutex.Lock()

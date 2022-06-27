@@ -35,15 +35,15 @@ const (
 )
 
 type Message struct {
-	Command interface{}
-	Payload interface{}
-	Flag    interface{}
+	Command any
+	Payload any
+	Flag    any
 }
 
 func (message *Message) FromJson(b []byte) error {
 	var (
 		err error
-		f   []interface{}
+		f   []any
 	)
 
 	if err = json.Unmarshal(b, &f); err != nil {
@@ -68,7 +68,7 @@ func (message *Message) FromJson(b []byte) error {
 }
 
 func (message *Message) ToJson() ([]byte, error) {
-	str := []interface{}{message.Command}
+	str := []any{message.Command}
 
 	if message.Payload != nil && message.Payload != "" {
 		str = append(str, message.Payload)

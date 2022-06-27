@@ -31,10 +31,10 @@ const (
 )
 
 type Log struct {
-	Id       interface{} `json:"_id"`
-	DateTime time.Time   `json:"dateTime"`
-	Level    string      `json:"level"`
-	Message  string      `json:"message"`
+	Id       any       `json:"_id"`
+	DateTime time.Time `json:"dateTime"`
+	Level    string    `json:"level"`
+	Message  string    `json:"message"`
 }
 
 type Logs struct {
@@ -99,7 +99,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	)
 
 	var (
-		dateTime interface{}
+		dateTime any
 		err      error
 		id       sql.NullFloat64
 		limit    uint
@@ -240,14 +240,14 @@ func (logs *Logs) setDatabase(d *Database) {
 }
 
 type LogsSearchOptions struct {
-	Date   interface{} `json:"date,omitempty"`
-	Level  interface{} `json:"level,omitempty"`
-	Limit  interface{} `json:"limit,omitempty"`
-	Offset interface{} `json:"offset,omitempty"`
-	Sort   interface{} `json:"sort,omitempty"`
+	Date   any `json:"date,omitempty"`
+	Level  any `json:"level,omitempty"`
+	Limit  any `json:"limit,omitempty"`
+	Offset any `json:"offset,omitempty"`
+	Sort   any `json:"sort,omitempty"`
 }
 
-func (searchOptions *LogsSearchOptions) FromMap(m map[string]interface{}) error {
+func (searchOptions *LogsSearchOptions) FromMap(m map[string]any) error {
 	switch v := m["date"].(type) {
 	case string:
 		if t, err := time.Parse(time.RFC3339, v); err == nil {

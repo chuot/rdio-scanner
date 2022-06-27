@@ -23,7 +23,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -81,10 +81,10 @@ func NewCommand(baseDir string) *Command {
 	}
 
 	return &Command{
-		app:       path.Base(app),
+		app:       filepath.Base(app),
 		command:   COMMAND_HELP,
 		password:  pass,
-		tokenFile: baseDir + path.Base(app) + ".token",
+		tokenFile: baseDir + filepath.Base(app) + ".token",
 		url:       COMMAND_DEF_URL,
 	}
 }
@@ -224,7 +224,7 @@ func (command *Command) adminPassword() {
 		command.exitWithError(fmt.Sprintf("Missing %s <password> arguments.", COMMAND_ARG_PASSWORD))
 	}
 
-	if body, err := command.writeBody(map[string]interface{}{"newPassword": command.password}); err == nil {
+	if body, err := command.writeBody(map[string]any{"newPassword": command.password}); err == nil {
 		if res, err := command.submit(http.MethodPost, "/api/admin/password", body, true); err == nil {
 			if res.StatusCode == http.StatusOK {
 				fmt.Println("New admin password applied")
@@ -246,9 +246,9 @@ func (command *Command) configGet() {
 		if res.StatusCode == http.StatusOK {
 			if data, err := command.readBody(res.Body); err == nil {
 				switch v := data.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					switch v := v["config"].(type) {
-					case map[string]interface{}:
+					case map[string]any:
 						if f, err := os.Create(command.out); err == nil {
 							j := json.NewEncoder(f)
 							j.SetIndent("", "  ")
@@ -276,10 +276,10 @@ func (command *Command) configSet() {
 	}
 
 	if f, err := os.Open(command.in); err == nil {
-		var d interface{}
+		var d any
 		json.NewDecoder(f).Decode(&d)
 		switch v := d.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if body, err := command.writeBody(v); err == nil {
 				if res, err := command.submit(http.MethodPut, "/api/admin/config", body, true); err == nil {
 					if res.StatusCode == http.StatusOK {
@@ -300,12 +300,12 @@ func (command *Command) configSet() {
 }
 
 func (command *Command) login() {
-	if body, err := command.writeBody(map[string]interface{}{"password": command.password}); err == nil {
+	if body, err := command.writeBody(map[string]any{"password": command.password}); err == nil {
 		if res, err := command.submit(http.MethodPost, "/api/admin/login", body, false); err == nil {
 			if res.StatusCode == http.StatusOK {
 				if data, err := command.readBody(res.Body); err == nil {
 					switch v := data.(type) {
-					case map[string]interface{}:
+					case map[string]any:
 						switch v := v["token"].(type) {
 						case string:
 							command.token = v
@@ -360,7 +360,7 @@ func (command *Command) userAdd() {
 		command.exitWithError(fmt.Sprintf("Missing %s <code> arguments.", COMMAND_ARG_CODE))
 	}
 
-	u := map[string]interface{}{
+	u := map[string]any{
 		"code":    command.code,
 		"ident":   command.ident,
 		"systems": "*",
@@ -392,9 +392,9 @@ func (command *Command) userAdd() {
 			}
 		}
 		if len(s) > 0 {
-			systems := []map[string]interface{}{}
+			systems := []map[string]any{}
 			for _, i := range s {
-				systems = append(systems, map[string]interface{}{"id": i, "talkgroups": "*"})
+				systems = append(systems, map[string]any{"id": i, "talkgroups": "*"})
 			}
 			u["systems"] = systems
 		} else {
@@ -419,7 +419,7 @@ func (command *Command) userRemove() {
 		command.exitWithError(fmt.Sprintf("Missing %s <ident> arguments.", COMMAND_ARG_IDENT))
 	}
 
-	if body, err := command.writeBody(map[string]interface{}{"ident": command.ident}); err == nil {
+	if body, err := command.writeBody(map[string]any{"ident": command.ident}); err == nil {
 		if res, err := command.submit(http.MethodPost, "/api/admin/user-remove", body, true); err == nil {
 			if res.StatusCode == http.StatusOK {
 				fmt.Printf("User %s removed.\n", command.ident)
@@ -432,12 +432,12 @@ func (command *Command) userRemove() {
 	}
 }
 
-func (c *Command) readBody(body io.ReadCloser) (data interface{}, err error) {
+func (c *Command) readBody(body io.ReadCloser) (data any, err error) {
 	err = json.NewDecoder(body).Decode(&data)
 	return data, err
 }
 
-func (c *Command) writeBody(data interface{}) (body io.Reader, err error) {
+func (c *Command) writeBody(data any) (body io.Reader, err error) {
 	var b []byte
 	if b, err = json.Marshal(data); err == nil {
 		body = bytes.NewReader(b)
@@ -464,7 +464,7 @@ func (c *Command) submit(method string, url string, body io.Reader, auth bool) (
 	return res, err
 }
 
-func (c *Command) exitWithError(err interface{}) {
+func (c *Command) exitWithError(err any) {
 	fmt.Printf("%v\n", err)
 	os.Exit(1)
 }

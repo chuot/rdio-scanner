@@ -32,15 +32,15 @@ import (
 )
 
 type Downstream struct {
-	Id       interface{} `json:"_id"`
-	Apikey   string      `json:"apiKey"`
-	Disabled bool        `json:"disabled"`
-	Order    interface{} `json:"order"`
-	Systems  interface{} `json:"systems"`
-	Url      string      `json:"url"`
+	Id       any    `json:"_id"`
+	Apikey   string `json:"apiKey"`
+	Disabled bool   `json:"disabled"`
+	Order    any    `json:"order"`
+	Systems  any    `json:"systems"`
+	Url      string `json:"url"`
 }
 
-func (downstream *Downstream) FromMap(m map[string]interface{}) *Downstream {
+func (downstream *Downstream) FromMap(m map[string]any) *Downstream {
 	switch v := m["_id"].(type) {
 	case float64:
 		downstream.Id = uint(v)
@@ -62,7 +62,7 @@ func (downstream *Downstream) FromMap(m map[string]interface{}) *Downstream {
 	}
 
 	switch v := m["systems"].(type) {
-	case []interface{}:
+	case []any:
 		if b, err := json.Marshal(v); err == nil {
 			downstream.Systems = string(b)
 		}
@@ -84,10 +84,10 @@ func (downstream *Downstream) HasAccess(call *Call) bool {
 	}
 
 	switch v := downstream.Systems.(type) {
-	case []interface{}:
+	case []any:
 		for _, f := range v {
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch id := v["id"].(type) {
 				case float64:
 					if id == float64(call.System) {
@@ -96,7 +96,7 @@ func (downstream *Downstream) HasAccess(call *Call) bool {
 							if tg == "*" {
 								return true
 							}
-						case []interface{}:
+						case []any:
 							for _, f := range tg {
 								switch tg := f.(type) {
 								case float64:
@@ -181,7 +181,7 @@ func (downstream *Downstream) Send(call *Call) error {
 	}
 
 	switch v := call.Frequencies.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if w, err := mw.CreateFormField("frequencies"); err == nil {
 			if b, err := json.Marshal(v); err == nil {
 				if _, err = w.Write(b); err != nil {
@@ -241,7 +241,7 @@ func (downstream *Downstream) Send(call *Call) error {
 	}
 
 	switch v := call.Sources.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if w, err := mw.CreateFormField("sources"); err == nil {
 			if b, err := json.Marshal(v); err == nil {
 				if _, err = w.Write(b); err != nil {
@@ -363,7 +363,7 @@ func NewDownstreams() *Downstreams {
 	}
 }
 
-func (downstreams *Downstreams) FromMap(f []interface{}) *Downstreams {
+func (downstreams *Downstreams) FromMap(f []any) *Downstreams {
 	downstreams.mutex.Lock()
 	defer downstreams.mutex.Unlock()
 
@@ -371,7 +371,7 @@ func (downstreams *Downstreams) FromMap(f []interface{}) *Downstreams {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			downstream := &Downstream{}
 			downstream.FromMap(m)
 			downstreams.List = append(downstreams.List, downstream)
@@ -423,7 +423,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 		}
 
 		if err = json.Unmarshal([]byte(systems), &downstream.Systems); err != nil {
-			downstream.Systems = []interface{}{}
+			downstream.Systems = []any{}
 		}
 
 		if len(downstream.Url) == 0 {
@@ -464,7 +464,7 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		err     error
 		rows    *sql.Rows
 		rowIds  = []uint{}
-		systems interface{}
+		systems any
 	)
 
 	downstreams.mutex.Lock()

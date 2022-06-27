@@ -25,20 +25,20 @@ import (
 )
 
 type Access struct {
-	Id         interface{} `json:"_id"`
-	Code       string      `json:"code"`
-	Expiration interface{} `json:"expiration"`
-	Ident      string      `json:"ident"`
-	Limit      interface{} `json:"limit"`
-	Order      interface{} `json:"order"`
-	Systems    interface{} `json:"systems"`
+	Id         any    `json:"_id"`
+	Code       string `json:"code"`
+	Expiration any    `json:"expiration"`
+	Ident      string `json:"ident"`
+	Limit      any    `json:"limit"`
+	Order      any    `json:"order"`
+	Systems    any    `json:"systems"`
 }
 
 func NewAccess() *Access {
 	return &Access{Systems: "*"}
 }
 
-func (access *Access) FromMap(m map[string]interface{}) *Access {
+func (access *Access) FromMap(m map[string]any) *Access {
 	switch v := m["_id"].(type) {
 	case float64:
 		access.Id = uint(v)
@@ -72,7 +72,7 @@ func (access *Access) FromMap(m map[string]interface{}) *Access {
 	}
 
 	switch v := m["systems"].(type) {
-	case []interface{}:
+	case []any:
 		if b, err := json.Marshal(v); err == nil {
 			access.Systems = string(b)
 		}
@@ -86,10 +86,10 @@ func (access *Access) FromMap(m map[string]interface{}) *Access {
 func (access *Access) HasAccess(call *Call) bool {
 	if access.Systems != nil {
 		switch v := access.Systems.(type) {
-		case []interface{}:
+		case []any:
 			for _, f := range v {
 				switch v := f.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					switch id := v["id"].(type) {
 					case float64:
 						if id == float64(call.System) {
@@ -98,7 +98,7 @@ func (access *Access) HasAccess(call *Call) bool {
 								if tg == "*" {
 									return true
 								}
-							case []interface{}:
+							case []any:
 								for _, f := range tg {
 									switch tg := f.(type) {
 									case float64:
@@ -166,7 +166,7 @@ func (accesses *Accesses) Add(access *Access) (*Accesses, bool) {
 	return accesses, added
 }
 
-func (accesses *Accesses) FromMap(f []interface{}) *Accesses {
+func (accesses *Accesses) FromMap(f []any) *Accesses {
 	accesses.mutex.Lock()
 	defer accesses.mutex.Unlock()
 
@@ -174,7 +174,7 @@ func (accesses *Accesses) FromMap(f []interface{}) *Accesses {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			access := &Access{}
 			access.FromMap(m)
 			accesses.List = append(accesses.List, access)
@@ -207,7 +207,7 @@ func (accesses *Accesses) IsRestricted() bool {
 func (accesses *Accesses) Read(db *Database) error {
 	var (
 		err        error
-		expiration interface{}
+		expiration any
 		id         sql.NullFloat64
 		limit      sql.NullFloat64
 		order      sql.NullFloat64
@@ -261,7 +261,7 @@ func (accesses *Accesses) Read(db *Database) error {
 		}
 
 		if err = json.Unmarshal([]byte(systems), &access.Systems); err != nil {
-			access.Systems = []interface{}{}
+			access.Systems = []any{}
 		}
 
 		accesses.List = append(accesses.List, access)
@@ -298,7 +298,7 @@ func (accesses *Accesses) Write(db *Database) error {
 		err     error
 		rows    *sql.Rows
 		rowIds  = []uint{}
-		systems interface{}
+		systems any
 	)
 
 	accesses.mutex.Lock()

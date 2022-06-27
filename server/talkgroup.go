@@ -25,19 +25,19 @@ import (
 )
 
 type Talkgroup struct {
-	Frequency interface{} `json:"frequency"`
+	Frequency any `json:"frequency"`
 	group     string
-	GroupId   uint        `json:"groupId"`
-	Id        uint        `json:"id"`
-	Label     string      `json:"label"`
-	Led       interface{} `json:"led"`
-	Name      string      `json:"name"`
-	Order     uint        `json:"order"`
-	TagId     uint        `json:"tagId"`
+	GroupId   uint   `json:"groupId"`
+	Id        uint   `json:"id"`
+	Label     string `json:"label"`
+	Led       any    `json:"led"`
+	Name      string `json:"name"`
+	Order     uint   `json:"order"`
+	TagId     uint   `json:"tagId"`
 	tag       string
 }
 
-func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) *Talkgroup {
+func (talkgroup *Talkgroup) FromMap(m map[string]any) *Talkgroup {
 	switch v := m["id"].(type) {
 	case float64:
 		talkgroup.Id = uint(v)
@@ -91,7 +91,7 @@ func (talkgroup *Talkgroup) FromMap(m map[string]interface{}) *Talkgroup {
 	return talkgroup
 }
 
-type TalkgroupMap map[string]interface{}
+type TalkgroupMap map[string]any
 
 type Talkgroups struct {
 	List  []*Talkgroup
@@ -105,7 +105,7 @@ func NewTalkgroups() *Talkgroups {
 	}
 }
 
-func (talkgroups *Talkgroups) FromMap(f []interface{}) *Talkgroups {
+func (talkgroups *Talkgroups) FromMap(f []any) *Talkgroups {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
@@ -113,7 +113,7 @@ func (talkgroups *Talkgroups) FromMap(f []interface{}) *Talkgroups {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			talkgroup := &Talkgroup{}
 			talkgroup.FromMap(m)
 			talkgroups.List = append(talkgroups.List, talkgroup)
@@ -123,7 +123,7 @@ func (talkgroups *Talkgroups) FromMap(f []interface{}) *Talkgroups {
 	return talkgroups
 }
 
-func (talkgroups *Talkgroups) GetTalkgroup(f interface{}) (system *Talkgroup, ok bool) {
+func (talkgroups *Talkgroups) GetTalkgroup(f any) (system *Talkgroup, ok bool) {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 

@@ -25,7 +25,7 @@ import (
 type Scheduler struct {
 	Controller *Controller
 	Ticker     *time.Ticker
-	cancel     chan interface{}
+	cancel     chan any
 	mutex      sync.Mutex
 	started    bool
 }
@@ -33,7 +33,7 @@ type Scheduler struct {
 func NewScheduler(controller *Controller) *Scheduler {
 	return &Scheduler{
 		Controller: controller,
-		cancel:     make(chan interface{}),
+		cancel:     make(chan any),
 	}
 }
 
@@ -41,9 +41,6 @@ func (scheduler *Scheduler) pruneDatabase() error {
 	if scheduler.Controller.Options.PruneDays == 0 {
 		return nil
 	}
-
-	scheduler.Controller.IngestLock()
-	defer scheduler.Controller.IngestUnlock()
 
 	scheduler.Controller.Logs.LogEvent(LogLevelInfo, "database pruning")
 

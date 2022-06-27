@@ -24,11 +24,11 @@ import (
 )
 
 type Tag struct {
-	Id    interface{} `json:"_id"`
-	Label string      `json:"label"`
+	Id    any    `json:"_id"`
+	Label string `json:"label"`
 }
 
-func (tag *Tag) FromMap(m map[string]interface{}) *Tag {
+func (tag *Tag) FromMap(m map[string]any) *Tag {
 	switch v := m["_id"].(type) {
 	case float64:
 		tag.Id = uint(v)
@@ -54,7 +54,7 @@ func NewTags() *Tags {
 	}
 }
 
-func (tags *Tags) FromMap(f []interface{}) *Tags {
+func (tags *Tags) FromMap(f []any) *Tags {
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
 
@@ -62,7 +62,7 @@ func (tags *Tags) FromMap(f []interface{}) *Tags {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			tag := &Tag{}
 			tag.FromMap(m)
 			tags.List = append(tags.List, tag)
@@ -72,7 +72,7 @@ func (tags *Tags) FromMap(f []interface{}) *Tags {
 	return tags
 }
 
-func (tags *Tags) GetTag(f interface{}) (tag *Tag, ok bool) {
+func (tags *Tags) GetTag(f any) (tag *Tag, ok bool) {
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
 

@@ -27,31 +27,31 @@ import (
 )
 
 type Call struct {
-	Id             interface{} `json:"id"`
-	Audio          []byte      `json:"audio"`
-	AudioName      interface{} `json:"audioName"`
-	AudioType      interface{} `json:"audioType"`
-	DateTime       time.Time   `json:"dateTime"`
-	Frequencies    interface{} `json:"frequencies"`
-	Frequency      interface{} `json:"frequency"`
-	Patches        interface{} `json:"patches"`
-	Source         interface{} `json:"source"`
-	Sources        interface{} `json:"sources"`
-	System         uint        `json:"system"`
-	Talkgroup      uint        `json:"talkgroup"`
-	systemLabel    interface{}
-	talkgroupGroup interface{}
-	talkgroupLabel interface{}
-	talkgroupName  interface{}
-	talkgroupTag   interface{}
-	units          interface{}
+	Id             any       `json:"id"`
+	Audio          []byte    `json:"audio"`
+	AudioName      any       `json:"audioName"`
+	AudioType      any       `json:"audioType"`
+	DateTime       time.Time `json:"dateTime"`
+	Frequencies    any       `json:"frequencies"`
+	Frequency      any       `json:"frequency"`
+	Patches        any       `json:"patches"`
+	Source         any       `json:"source"`
+	Sources        any       `json:"sources"`
+	System         uint      `json:"system"`
+	Talkgroup      uint      `json:"talkgroup"`
+	systemLabel    any
+	talkgroupGroup any
+	talkgroupLabel any
+	talkgroupName  any
+	talkgroupTag   any
+	units          any
 }
 
 func NewCall() *Call {
 	return &Call{
-		Frequencies: []map[string]interface{}{},
+		Frequencies: []map[string]any{},
 		Patches:     []uint{},
-		Sources:     []map[string]interface{}{},
+		Sources:     []map[string]any{},
 	}
 }
 
@@ -85,9 +85,9 @@ func (call *Call) MarshalJSON() ([]byte, error) {
 	audio := fmt.Sprintf("%v", call.Audio)
 	audio = strings.ReplaceAll(audio, " ", ",")
 
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"id": call.Id,
-		"audio": map[string]interface{}{
+		"audio": map[string]any{
 			"data": json.RawMessage(audio),
 			"type": "Buffer",
 		},
@@ -144,7 +144,7 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 	var (
 		audioName   sql.NullString
 		audioType   sql.NullString
-		dateTime    interface{}
+		dateTime    any
 		frequency   sql.NullFloat64
 		source      sql.NullFloat64
 		frequencies string
@@ -184,13 +184,13 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 
 	if len(frequencies) > 0 {
 		if err = json.Unmarshal([]byte(frequencies), &call.Frequencies); err != nil {
-			call.Frequencies = []interface{}{}
+			call.Frequencies = []any{}
 		}
 	}
 
 	if len(patches) > 0 {
 		if err = json.Unmarshal([]byte(patches), &call.Patches); err != nil {
-			call.Patches = []interface{}{}
+			call.Patches = []any{}
 		}
 	}
 
@@ -200,7 +200,7 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 
 	if len(sources) > 0 {
 		if err = json.Unmarshal([]byte(sources), &call.Sources); err != nil {
-			call.Sources = []interface{}{}
+			call.Sources = []any{}
 		}
 	}
 
@@ -224,7 +224,7 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 	)
 
 	var (
-		dateTime interface{}
+		dateTime any
 		err      error
 		id       sql.NullFloat64
 		limit    uint
@@ -252,14 +252,14 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 	if client.Access != nil {
 		switch v := client.Access.Systems.(type) {
-		case []interface{}:
+		case []any:
 			a := []string{}
 			for _, scope := range v {
 				var c string
 				switch v := scope.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					switch v["talkgroups"].(type) {
-					case []interface{}:
+					case []any:
 						b := strings.ReplaceAll(fmt.Sprintf("%v", v["talkgroups"]), " ", ", ")
 						b = strings.ReplaceAll(b, "[", "(")
 						b = strings.ReplaceAll(b, "]", ")")
@@ -441,7 +441,7 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 	}
 
 	switch v := call.Frequencies.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if b, err = json.Marshal(v); err == nil {
 			frequencies = string(b)
 		} else {
@@ -459,7 +459,7 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 	}
 
 	switch v := call.Sources.(type) {
-	case []map[string]interface{}:
+	case []map[string]any:
 		if b, err = json.Marshal(v); err == nil {
 			sources = string(b)
 		} else {
@@ -479,18 +479,18 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 }
 
 type CallsSearchOptions struct {
-	Date                    interface{} `json:"date,omitempty"`
-	Group                   interface{} `json:"group,omitempty"`
-	Limit                   interface{} `json:"limit,omitempty"`
-	Offset                  interface{} `json:"offset,omitempty"`
-	Sort                    interface{} `json:"sort,omitempty"`
-	System                  interface{} `json:"system,omitempty"`
-	Tag                     interface{} `json:"tag,omitempty"`
-	Talkgroup               interface{} `json:"talkgroup,omitempty"`
+	Date                    any `json:"date,omitempty"`
+	Group                   any `json:"group,omitempty"`
+	Limit                   any `json:"limit,omitempty"`
+	Offset                  any `json:"offset,omitempty"`
+	Sort                    any `json:"sort,omitempty"`
+	System                  any `json:"system,omitempty"`
+	Tag                     any `json:"tag,omitempty"`
+	Talkgroup               any `json:"talkgroup,omitempty"`
 	searchPatchedTalkgroups bool
 }
 
-func (searchOptions *CallsSearchOptions) fromMap(m map[string]interface{}) error {
+func (searchOptions *CallsSearchOptions) fromMap(m map[string]any) error {
 	switch v := m["date"].(type) {
 	case string:
 		if t, err := time.Parse(time.RFC3339, v); err == nil {

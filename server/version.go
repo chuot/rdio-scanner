@@ -15,4 +15,4 @@
 
 package main
 
-const Version = "6.4.5"
+const Version = "6.5.0"

@@ -229,7 +229,7 @@ func main() {
 }
 
 func GetRemoteAddr(r *http.Request) string {
-	re := regexp.MustCompile(`(\[[^\]]+\]|[^:]+):.*`)
+	re := regexp.MustCompile(`(.+):.*$`)
 
 	for _, addr := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
 		if ip := re.ReplaceAllString(addr, "$1"); len(ip) > 0 {
@@ -241,5 +241,5 @@ func GetRemoteAddr(r *http.Request) string {
 		return ip
 	}
 
-	return "unknown"
+	return r.RemoteAddr
 }

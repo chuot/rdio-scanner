@@ -75,7 +75,7 @@ func (admin *Admin) BroadcastConfig() {
 	}
 }
 
-func (admin *Admin) ChangePassword(currentPassword interface{}, newPassword string) error {
+func (admin *Admin) ChangePassword(currentPassword any, newPassword string) error {
 	var (
 		err  error
 		hash []byte
@@ -158,20 +158,20 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			admin.SendConfig(w)
 
 		case http.MethodPut:
-			m := map[string]interface{}{}
+			m := map[string]any{}
 			err := json.NewDecoder(r.Body).Decode(&m)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
-			admin.Controller.IngestLock()
 			admin.mutex.Lock()
+			defer admin.mutex.Unlock()
 
 			admin.Controller.Dirwatches.Stop()
 
 			switch v := m["access"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Accesses.FromMap(v)
 				err := admin.Controller.Accesses.Write(admin.Controller.Database)
 				if err != nil {
@@ -185,7 +185,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["apiKeys"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Apikeys.FromMap(v)
 				err = admin.Controller.Apikeys.Write(admin.Controller.Database)
 				if err != nil {
@@ -199,7 +199,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["dirWatch"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Dirwatches.FromMap(v)
 				err = admin.Controller.Dirwatches.Write(admin.Controller.Database)
 				if err != nil {
@@ -213,7 +213,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["downstreams"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Downstreams.FromMap(v)
 				err = admin.Controller.Downstreams.Write(admin.Controller.Database)
 				if err != nil {
@@ -227,7 +227,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["groups"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Groups.FromMap(v)
 				err = admin.Controller.Groups.Write(admin.Controller.Database)
 				if err != nil {
@@ -241,7 +241,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["options"].(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				admin.Controller.Options.FromMap(v)
 				err = admin.Controller.Options.Write(admin.Controller.Database)
 				if err != nil {
@@ -250,7 +250,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["systems"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Systems.FromMap(v)
 				err = admin.Controller.Systems.Write(admin.Controller.Database)
 				if err != nil {
@@ -264,7 +264,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			switch v := m["tags"].(type) {
-			case []interface{}:
+			case []any:
 				admin.Controller.Tags.FromMap(v)
 				err = admin.Controller.Tags.Write(admin.Controller.Database)
 				if err != nil {
@@ -276,9 +276,6 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-
-			admin.mutex.Unlock()
-			admin.Controller.IngestUnlock()
 
 			admin.Controller.EmitConfig()
 			admin.Controller.Dirwatches.Start(admin.Controller)
@@ -297,10 +294,10 @@ func (admin *Admin) GetAuthorization(r *http.Request) string {
 	return r.Header.Get("Authorization")
 }
 
-func (admin *Admin) GetConfig() map[string]interface{} {
-	systems := []map[string]interface{}{}
+func (admin *Admin) GetConfig() map[string]any {
+	systems := []map[string]any{}
 	for _, system := range admin.Controller.Systems.List {
-		systems = append(systems, map[string]interface{}{
+		systems = append(systems, map[string]any{
 			"_id":          system.RowId,
 			"autoPopulate": system.AutoPopulate,
 			"blacklists":   system.Blacklists,
@@ -313,7 +310,7 @@ func (admin *Admin) GetConfig() map[string]interface{} {
 		})
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"access":      admin.Controller.Accesses.List,
 		"apiKeys":     admin.Controller.Apikeys.List,
 		"dirWatch":    admin.Controller.Dirwatches.List,
@@ -334,7 +331,7 @@ func (admin *Admin) LogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPost:
-		m := map[string]interface{}{}
+		m := map[string]any{}
 		err := json.NewDecoder(r.Body).Decode(&m)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -372,7 +369,7 @@ func (admin *Admin) LogsHandler(w http.ResponseWriter, r *http.Request) {
 func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		m := map[string]interface{}{}
+		m := map[string]any{}
 
 		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -441,7 +438,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			admin.Tokens = append(admin.Tokens[1:], sToken)
 		}
 
-		b, err := json.Marshal(map[string]interface{}{
+		b, err := json.Marshal(map[string]any{
 			"passwordNeedChange": true,
 			"token":              sToken,
 		})
@@ -488,7 +485,7 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var (
 			b               []byte
-			currentPassword interface{}
+			currentPassword any
 			newPassword     string
 		)
 
@@ -502,7 +499,7 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		m := map[string]interface{}{}
+		m := map[string]any{}
 		err := json.NewDecoder(r.Body).Decode(&m)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -528,7 +525,7 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if b, err = json.Marshal(map[string]interface{}{"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange}); err == nil {
+		if b, err = json.Marshal(map[string]any{"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange}); err == nil {
 			w.Write(b)
 		} else {
 			w.WriteHeader(http.StatusExpectationFailed)
@@ -540,16 +537,16 @@ func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (admin *Admin) SendConfig(w http.ResponseWriter) {
-	var m map[string]interface{}
+	var m map[string]any
 	_, docker := os.LookupEnv("DOCKER")
 	if docker {
-		m = map[string]interface{}{
+		m = map[string]any{
 			"config":             admin.GetConfig(),
 			"docker":             docker,
 			"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
 		}
 	} else {
-		m = map[string]interface{}{
+		m = map[string]any{
 			"config":             admin.GetConfig(),
 			"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
 		}
@@ -611,7 +608,7 @@ func (admin *Admin) UserAddHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		m := map[string]interface{}{}
+		m := map[string]any{}
 		err := json.NewDecoder(r.Body).Decode(&m)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -651,7 +648,7 @@ func (admin *Admin) UserRemoveHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		m := map[string]interface{}{}
+		m := map[string]any{}
 		err := json.NewDecoder(r.Body).Decode(&m)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -690,7 +687,7 @@ func (admin *Admin) ValidateToken(sToken string) bool {
 		return false
 	}
 
-	token, err := jwt.Parse(sToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(sToken, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

@@ -20,6 +20,7 @@
 import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subscription, timer } from 'rxjs';
 import packageInfo from '../../../../../package.json';
 import {
@@ -32,6 +33,7 @@ import {
     RdioScannerLivefeedMode,
 } from '../rdio-scanner';
 import { RdioScannerService } from '../rdio-scanner.service';
+import { RdioScannerSupportComponent } from './support/support.component';
 
 const LOCAL_STORAGE_KEY = RdioScannerService.LOCAL_STORAGE_KEY + '-pin';
 
@@ -49,6 +51,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     avoided = false;
 
+    branding = '';
+
     call: RdioScannerCall | undefined;
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
@@ -61,26 +65,29 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callTag = 'Tag';
     callTalkgroup = 'Talkgroup';
     callTalkgroupId = '0';
-    /*
-        * BEGIN OF RED TAPE:
-        * 
-        * By modifying, deleting or disabling the following lines, you harm
-        * the open source project and its author.  Rdio Scanner represents a lot of
-        * investment in time, support, testing and hardware.
-        * 
-        * Be respectful, sponsor the project if you can, use native apps when possible.
-        * 
-        */
+
+    //
+    // BEGIN OF RED TAPE:
+    //
+    // By modifying, deleting or disabling the following lines, you harm
+    // the open source project and its author.  Rdio Scanner represents a lot of
+    // investment in time, support, testing and hardware.
+    //
+    // Be respectful, sponsor the project if you can, use native apps when possible.
+    //
     callTalkgroupName = `Rdio Scanner v${packageInfo.version}`;
-    /**
-     * END OF RED TAPE.
-     */
+    //
+    // END OF RED TAPE.
+    //
+
     callTime = 0;
     callUnit = '0';
 
     clock = new Date();
 
     dimmer = false;
+
+    email = '';
 
     holdSys = false;
     holdTg = false;
@@ -103,6 +110,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     replayOffset = 0;
     replayTimer: Subscription | undefined;
+
+    tempAvoid = 0;
 
     timeFormat = 'HH:mm';
 
@@ -128,6 +137,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     constructor(
         private rdioScannerService: RdioScannerService,
+        private matSnackBar: MatSnackBar,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) { }
@@ -145,28 +155,43 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     avoid(options?: RdioScannerAvoidOptions): void {
+        const call = this.call || this.callPrevious;
+
         if (this.auth) {
             this.authFocus();
 
-        } else {
-            const call = this.call || this.callPrevious;
-
-            if (options || call) {
+        } else if (options || call) {
+            if (options) {
                 this.rdioScannerService.avoid(options);
+            } else if (call) {
+                const avoided = this.rdioScannerService.isAvoided(call);
+                const minutes = this.rdioScannerService.isAvoidedTimer(call);
 
-                if (call && !this.map[call.system][call.talkgroup]) {
-                    this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
-
+                if (!avoided) {
+                    this.rdioScannerService.avoid({ status: false });
+                } else if (!minutes) {
+                    this.rdioScannerService.avoid({ minutes: 30, status: false });
+                } else if (minutes === 30) {
+                    this.rdioScannerService.avoid({ minutes: 60, status: false });
+                } else if (minutes === 60) {
+                    this.rdioScannerService.avoid({ minutes: 120, status: false });
                 } else {
-                    this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
+                    this.rdioScannerService.avoid({ status: true });
                 }
+            }
 
+            if (call && this.rdioScannerService.isAvoided(call)) {
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Activate);
             } else {
-                this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
+                this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
             }
 
             this.updateDimmer();
+
+        } else {
+            this.rdioScannerService.beep(RdioScannerBeepStyle.Denied);
         }
+
     }
 
     holdSystem(): void {
@@ -286,6 +311,13 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         }
     }
 
+    showHelp(): void {
+        this.matSnackBar.openFromComponent(RdioScannerSupportComponent, {
+            data: { email: this.email },
+            panelClass: 'snackbar-white',
+        });
+    }
+
     showSearchPanel(): void {
         if (!this.config) {
             return;
@@ -377,6 +409,10 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         if ('config' in event) {
             this.config = event.config;
+
+            this.branding = this.config?.branding ?? '';
+
+            this.email = this.config?.email ?? '';
 
             this.timeFormat = this.config?.time12hFormat ? 'h:mm a' : 'HH:mm';
 
@@ -566,9 +602,12 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         const call = this.call || this.callPrevious;
 
         if (call) {
+            this.tempAvoid = this.rdioScannerService.isAvoidedTimer(call);
+
             if (this.rdioScannerService.isPatched(call)) {
                 this.avoided = false;
                 this.patched = true;
+
             } else {
                 this.avoided = this.rdioScannerService.isAvoided(call);
                 this.patched = false;

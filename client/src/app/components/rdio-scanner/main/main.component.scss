@@ -171,11 +171,30 @@
 }
 
 .rdio-status {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  min-height: 1.5rem;
+
+  .branding {
+    color: rgb(64, 64, 64);
+    flex: 1;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 0.25rem;
+    line-height: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: -1px -1px 1px rgb(0, 0, 0), 1px 1px 1px rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
   .led {
     background: rgb(80, 80, 80);
     display: block;
     height: 12px;
-    margin-left: auto;
+    margin-left: 24px;
     width: 24px;
 
     &.on {
@@ -239,4 +258,11 @@
 .rdio-display,
 .rdio-status {
   margin-bottom: 24px;
+}
+
+.rdio-help {
+  bottom: 24px;
+  opacity: 0.3;
+  position: absolute;
+  right: 24px;
 }

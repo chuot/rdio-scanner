@@ -28,9 +28,11 @@ type Options struct {
 	AfsSystems                  string `json:"afsSystems"`
 	AudioConversion             uint   `json:"audioConversion"`
 	AutoPopulate                bool   `json:"autoPopulate"`
+	Branding                    string `json:"branding"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
 	DisableDuplicateDetection   bool   `json:"disableDuplicateDetection"`
 	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
+	Email                       string `json:"email"`
 	KeypadBeeps                 string `json:"keypadBeeps"`
 	MaxClients                  uint   `json:"maxClients"`
 	PlaybackGoesLive            bool   `json:"playbackGoesLive"`
@@ -59,7 +61,7 @@ func NewOptions() *Options {
 	}
 }
 
-func (options *Options) FromMap(m map[string]interface{}) *Options {
+func (options *Options) FromMap(m map[string]any) *Options {
 	options.mutex.Lock()
 	defer options.mutex.Unlock()
 
@@ -80,6 +82,11 @@ func (options *Options) FromMap(m map[string]interface{}) *Options {
 		options.AutoPopulate = v
 	default:
 		options.AutoPopulate = defaults.options.autoPopulate
+	}
+
+	switch v := m["branding"].(type) {
+	case string:
+		options.Branding = v
 	}
 
 	switch v := m["dimmerDelay"].(type) {
@@ -110,6 +117,11 @@ func (options *Options) FromMap(m map[string]interface{}) *Options {
 		options.DuplicateDetectionTimeFrame = uint(v)
 	default:
 		options.DuplicateDetectionTimeFrame = defaults.options.duplicateDetectionTimeFrame
+	}
+
+	switch v := m["email"].(type) {
+	case string:
+		options.Email = v
 	}
 
 	switch v := m["keypadBeeps"].(type) {
@@ -221,7 +233,7 @@ func (options *Options) Read(db *Database) error {
 
 	err = db.Sql.QueryRow("select `val` from `rdioScannerConfigs` where `key` = 'options'").Scan(&s)
 	if err == nil {
-		var m map[string]interface{}
+		var m map[string]any
 
 		if err = json.Unmarshal([]byte(s), &m); err == nil {
 			switch v := m["afsSystems"].(type) {
@@ -239,6 +251,11 @@ func (options *Options) Read(db *Database) error {
 				options.AutoPopulate = v
 			}
 
+			switch v := m["branding"].(type) {
+			case string:
+				options.Branding = v
+			}
+
 			switch v := m["dimmerDelay"].(type) {
 			case float64:
 				options.DimmerDelay = uint(v)
@@ -252,6 +269,11 @@ func (options *Options) Read(db *Database) error {
 			switch v := m["duplicateDetectionTimeFrame"].(type) {
 			case float64:
 				options.DuplicateDetectionTimeFrame = uint(v)
+			}
+
+			switch v := m["email"].(type) {
+			case string:
+				options.Email = v
 			}
 
 			switch v := m["keypadBeeps"].(type) {
@@ -350,13 +372,15 @@ func (options *Options) Write(db *Database) error {
 		db.Sql.Exec("insert into `rdioScannerConfigs` (`key`, `val`) values (?, ?)", "adminPasswordNeedChange", string(b))
 	}
 
-	if b, err = json.Marshal(map[string]interface{}{
+	if b, err = json.Marshal(map[string]any{
 		"afsSystems":                  options.AfsSystems,
 		"audioConversion":             options.AudioConversion,
 		"autoPopulate":                options.AutoPopulate,
+		"branding":                    options.Branding,
 		"dimmerDelay":                 options.DimmerDelay,
 		"disableDuplicateDetection":   options.DisableDuplicateDetection,
 		"duplicateDetectionTimeFrame": options.DuplicateDetectionTimeFrame,
+		"email":                       options.Email,
 		"keypadBeeps":                 options.KeypadBeeps,
 		"maxClients":                  options.MaxClients,
 		"playbackGoesLive":            options.PlaybackGoesLive,

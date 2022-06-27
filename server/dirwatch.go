@@ -44,25 +44,25 @@ const (
 )
 
 type Dirwatch struct {
-	Id          interface{} `json:"_id"`
-	Delay       interface{} `json:"delay"`
-	DeleteAfter bool        `json:"deleteAfter"`
-	Directory   string      `json:"directory"`
-	Disabled    bool        `json:"disabled"`
-	Extension   interface{} `json:"extension"`
-	Frequency   interface{} `json:"frequency"`
-	Mask        interface{} `json:"mask"`
-	Order       interface{} `json:"order"`
-	SystemId    interface{} `json:"systemId"`
-	TalkgroupId interface{} `json:"talkgroupId"`
-	Kind        interface{} `json:"type"`
-	UsePolling  bool        `json:"usePolling"`
+	Id          any    `json:"_id"`
+	Delay       any    `json:"delay"`
+	DeleteAfter bool   `json:"deleteAfter"`
+	Directory   string `json:"directory"`
+	Disabled    bool   `json:"disabled"`
+	Extension   any    `json:"extension"`
+	Frequency   any    `json:"frequency"`
+	Mask        any    `json:"mask"`
+	Order       any    `json:"order"`
+	SystemId    any    `json:"systemId"`
+	TalkgroupId any    `json:"talkgroupId"`
+	Kind        any    `json:"type"`
+	UsePolling  bool   `json:"usePolling"`
 	controller  *Controller
 	dirs        map[string]bool
 	watcher     *fsnotify.Watcher
 }
 
-func (dirwatch *Dirwatch) FromMap(m map[string]interface{}) *Dirwatch {
+func (dirwatch *Dirwatch) FromMap(m map[string]any) *Dirwatch {
 	switch v := m["_id"].(type) {
 	case float64:
 		dirwatch.Id = uint(v)
@@ -164,7 +164,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 	if strings.EqualFold(path.Ext(p), ext) {
 		call := NewCall()
 
-		call.AudioName = path.Base(p)
+		call.AudioName = filepath.Base(p)
 		call.AudioType = mime.TypeByExtension(path.Ext(p))
 		call.Frequency = dirwatch.Frequency
 
@@ -224,7 +224,7 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 
 	call := NewCall()
 
-	call.AudioName = path.Base(p)
+	call.AudioName = filepath.Base(p)
 	call.AudioType = mime.TypeByExtension(path.Ext(p))
 	call.Frequency = dirwatch.Frequency
 
@@ -280,7 +280,7 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 	call := NewCall()
 
-	call.AudioName = path.Base(audioName)
+	call.AudioName = filepath.Base(audioName)
 	call.AudioType = mime.TypeByExtension(path.Ext(audioName))
 	call.Frequency = dirwatch.Frequency
 
@@ -344,8 +344,8 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	var (
 		filename string
 		mask     string
-		metapos  = [][]interface{}{}
-		metaval  = map[string]interface{}{}
+		metapos  = [][]any{}
+		metaval  = map[string]any{}
 	)
 
 	switch v := dirwatch.Mask.(type) {
@@ -364,7 +364,7 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 
 	for _, v := range meta {
 		if i := strings.Index(mask, v[1]); i != -1 {
-			metapos = append(metapos, []interface{}{v[0], i})
+			metapos = append(metapos, []any{v[0], i})
 			mask = strings.Replace(mask, v[1], fmt.Sprintf("(%v)", v[2]), 1)
 		}
 	}
@@ -513,8 +513,8 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	case string:
 		if i, err := strconv.Atoi(v); err == nil {
 			switch sources := call.Sources.(type) {
-			case []map[string]interface{}:
-				call.Sources = append(sources, map[string]interface{}{"pos": 0, "src": uint(i)})
+			case []map[string]any:
+				call.Sources = append(sources, map[string]any{"pos": 0, "src": uint(i)})
 			}
 		}
 	}
@@ -549,7 +549,6 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	}
 
 	go func() {
-		// var timers = map[string]*time.Timer{}
 		var timers = sync.Map{}
 
 		logError := func(err error) {
@@ -567,7 +566,7 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 		}
 
 		defer func() {
-			timers.Range(func(k interface{}, t interface{}) bool {
+			timers.Range(func(k any, t any) bool {
 				switch v := t.(type) {
 				case *time.Timer:
 					v.Stop()
@@ -688,7 +687,7 @@ func NewDirwatches() *Dirwatches {
 	}
 }
 
-func (dirwatches *Dirwatches) FromMap(f []interface{}) *Dirwatches {
+func (dirwatches *Dirwatches) FromMap(f []any) *Dirwatches {
 	dirwatches.mutex.Lock()
 	defer dirwatches.mutex.Unlock()
 
@@ -698,7 +697,7 @@ func (dirwatches *Dirwatches) FromMap(f []interface{}) *Dirwatches {
 
 	for _, f := range f {
 		switch v := f.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			dirwatch := &Dirwatch{}
 			dirwatch.FromMap(v)
 			dirwatches.List = append(dirwatches.List, dirwatch)

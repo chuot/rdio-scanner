@@ -47,6 +47,16 @@
     </div>
     <div class="row">
         <p>
+            <span class="mat-body">Branding Label</span><br>
+            <span class="mat-caption">A simple line of text displayed above the main screen to help identify the Rdio
+                Scanner instance.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <input type="text" matInput formControlName="branding" placeholder="Branding">
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Dimmer Delay</span><br>
             <span class="mat-caption">Delay in milliseconds before turning off the screen backlight when
                 inactive.</span>
@@ -84,6 +94,15 @@
             <mat-error *ngIf="form?.get('duplicateDetectionTimeFrame')?.hasError('min')">
                 Duplicate call time frame is invalid
             </mat-error>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
+            <span class="mat-body">Email Support</span><br>
+            <span class="mat-caption">Email address where users can write to to get support.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <input type="text" matInput formControlName="email" placeholder="Email">
         </mat-form-field>
     </div>
     <div class="row">

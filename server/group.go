@@ -24,11 +24,11 @@ import (
 )
 
 type Group struct {
-	Id    interface{} `json:"_id"`
-	Label string      `json:"label"`
+	Id    any    `json:"_id"`
+	Label string `json:"label"`
 }
 
-func (group *Group) FromMap(m map[string]interface{}) *Group {
+func (group *Group) FromMap(m map[string]any) *Group {
 	switch v := m["_id"].(type) {
 	case float64:
 		group.Id = uint(v)
@@ -54,7 +54,7 @@ func NewGroups() *Groups {
 	}
 }
 
-func (groups *Groups) FromMap(f []interface{}) *Groups {
+func (groups *Groups) FromMap(f []any) *Groups {
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()
 
@@ -62,7 +62,7 @@ func (groups *Groups) FromMap(f []interface{}) *Groups {
 
 	for _, r := range f {
 		switch m := r.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			group := &Group{}
 			group.FromMap(m)
 			groups.List = append(groups.List, group)
@@ -72,7 +72,7 @@ func (groups *Groups) FromMap(f []interface{}) *Groups {
 	return groups
 }
 
-func (groups *Groups) GetGroup(f interface{}) (group *Group, ok bool) {
+func (groups *Groups) GetGroup(f any) (group *Group, ok bool) {
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()
 

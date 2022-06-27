@@ -60,16 +60,21 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 	client.Controller = controller
 	client.Conn = conn
 	client.Livefeed = NewLivefeed()
-	client.Send = make(chan *Message)
+	client.Send = make(chan *Message, 1024)
 	client.request = request
 
 	go func() {
 		defer func() {
-			recover()
-
 			controller.Unregister <- client
 
-			controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listener disconnected from ip %v", client.GetRemoteAddr()))
+			if len(client.Access.Ident) > 0 {
+				controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listener disconnected from ip %s with ident %s", client.GetRemoteAddr(), client.Access.Ident))
+
+			} else {
+				controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listener disconnected from ip %s", client.GetRemoteAddr()))
+			}
+
+			client.Conn.Close()
 		}()
 
 		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -106,12 +111,9 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		})
 
 		defer func() {
-			recover()
-
 			ticker.Stop()
 			timer.Stop()
 
-			client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 			client.Conn.Close()
 		}()
 
@@ -124,6 +126,16 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 
 				if message.Command == MessageCommandConfig {
 					timer.Stop()
+
+					controller.Register <- client
+
+					if len(client.Access.Ident) > 0 {
+						controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s with ident %s", client.GetRemoteAddr(), client.Access.Ident))
+
+					} else {
+						controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s", client.GetRemoteAddr()))
+					}
+
 				}
 
 				b, err := message.ToJson()
@@ -148,10 +160,6 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		}
 	}()
 
-	controller.Register <- client
-
-	controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %v", client.GetRemoteAddr()))
-
 	return nil
 }
 
@@ -160,16 +168,14 @@ func (client *Client) GetRemoteAddr() string {
 }
 
 func (client *Client) SendConfig(groups *Groups, options *Options, systems *Systems, tags *Tags) {
-	defer func() {
-		recover()
-	}()
-
 	client.SystemsMap = systems.GetScopedSystems(client, groups, tags, options.SortTalkgroups)
 	client.GroupsMap = groups.GetGroupsMap(&client.SystemsMap)
 	client.TagsMap = tags.GetTagsMap(&client.SystemsMap)
 
-	var payload = map[string]interface{}{
+	var payload = map[string]any{
+		"branding":           options.Branding,
 		"dimmerDelay":        options.DimmerDelay,
+		"email":              options.Email,
 		"groups":             client.GroupsMap,
 		"keypadBeeps":        GetKeypadBeeps(options),
 		"playbackGoesLive":   options.PlaybackGoesLive,
@@ -188,10 +194,6 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 }
 
 func (client *Client) SendListenersCount(count int) {
-	defer func() {
-		recover()
-	}()
-
 	client.Send <- &Message{
 		Command: MessagecommandListenersCount,
 		Payload: count,
@@ -209,7 +211,7 @@ func NewClients() *Clients {
 func (clients *Clients) AccessCount(client *Client) int {
 	count := 0
 
-	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+	clients.Map.Range(func(k any, _ any) bool {
 		switch c := k.(type) {
 		case *Client:
 			if c.Access == client.Access {
@@ -229,7 +231,7 @@ func (clients *Clients) Add(client *Client) {
 func (clients *Clients) Count() int {
 	count := 0
 
-	clients.Map.Range(func(k, v interface{}) bool {
+	clients.Map.Range(func(k, v any) bool {
 		count++
 
 		return true
@@ -239,11 +241,7 @@ func (clients *Clients) Count() int {
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
-	defer func() {
-		recover()
-	}()
-
-	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+	clients.Map.Range(func(k any, _ any) bool {
 		switch c := k.(type) {
 		case *Client:
 			if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
@@ -256,13 +254,9 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 }
 
 func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
-	defer func() {
-		recover()
-	}()
-
 	count := clients.Count()
 
-	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+	clients.Map.Range(func(k any, _ any) bool {
 		switch c := k.(type) {
 		case *Client:
 			if restricted {
@@ -283,7 +277,7 @@ func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Sy
 func (clients *Clients) EmitListenersCount() {
 	count := clients.Count()
 
-	clients.Map.Range(func(k interface{}, _ interface{}) bool {
+	clients.Map.Range(func(k any, _ any) bool {
 		switch c := k.(type) {
 		case *Client:
 			c.SendListenersCount(count)
@@ -294,11 +288,5 @@ func (clients *Clients) EmitListenersCount() {
 }
 
 func (clients *Clients) Remove(client *Client) {
-	defer func() {
-		recover()
-	}()
-
 	clients.Map.Delete(client)
-
-	close(client.Send)
 }

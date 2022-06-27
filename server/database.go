@@ -76,7 +76,7 @@ func NewDatabase(config *Config) *Database {
 	return database
 }
 
-func (db *Database) ParseDateTime(f interface{}) (time.Time, error) {
+func (db *Database) ParseDateTime(f any) (time.Time, error) {
 	switch v := f.(type) {
 	case []uint8:
 		return time.Parse(db.DateTimeFormat, string(v))
@@ -377,10 +377,10 @@ func (db *Database) migration20211202094819(verbose bool) error {
 func (db *Database) migration20220101070000(verbose bool) error {
 	var (
 		err        error
-		frequency  interface{}
+		frequency  any
 		id         uint
 		label      string
-		led        interface{}
+		led        any
 		name       string
 		queries    []string
 		rows       *sql.Rows

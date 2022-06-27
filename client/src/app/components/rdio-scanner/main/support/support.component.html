@@ -1,0 +1,10 @@
+<div>
+    <ng-container *ngIf="email">
+        For further assistance please contact <b><a href="mailto:{{ email }}" target="_blank">{{ email }}</a></b>
+    </ng-container>
+    <ng-container *ngIf="!email">
+        For further assistance please go to <b><a href="https://github.com/chuot/rdio-scanner/discussions"
+            target="_blank">Rdio&nbsp;Scanner&nbsp;discussions</a></b>
+    </ng-container>
+</div>
+<div class="countdown">{{ countdown }}</div>

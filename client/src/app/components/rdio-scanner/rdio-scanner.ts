@@ -17,12 +17,15 @@
  * ****************************************************************************
  */
 
+import { Subscription } from "rxjs";
+
 export interface RdioScannerAvoidOptions {
     all?: boolean;
     call?: RdioScannerCall;
+    minutes?: number;
+    status?: boolean;
     system?: RdioScannerSystem;
     talkgroup?: RdioScannerTalkgroup;
-    status?: boolean;
 }
 
 export interface RdioScannerBeep {
@@ -90,7 +93,9 @@ export enum RdioScannerCategoryType {
 
 export interface RdioScannerConfig {
     afs?: string;
+    branding?: string;
     dimmerDelay: number | false;
+    email?: string;
     groups: { [key: string]: { [key: number]: number[] } };
     keypadBeeps: RdioScannerKeypadBeeps | false;
     playbackGoesLive: boolean;
@@ -127,9 +132,15 @@ export interface RdioScannerKeypadBeeps {
     [RdioScannerBeepStyle.Denied]: RdioScannerBeep[];
 }
 
+export interface RdioScannerLivefeed {
+    active: boolean;
+    minutes: number | undefined;
+    timer: Subscription | undefined;
+}
+
 export interface RdioScannerLivefeedMap {
-    [key: string]: {
-        [key: string]: boolean;
+    [key: number]: {
+        [key: number]: RdioScannerLivefeed;
     };
 }
 

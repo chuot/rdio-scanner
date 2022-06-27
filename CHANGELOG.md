@@ -1,5 +1,18 @@
 # Change log
 
+## Version 6.5
+
+- Fixed API looping on malformed or invalid multipart content (issue #181, #212).
+- Source code updated to GO 1.18 with `interface{}` replaced by `any`.
+- Removed ingest mutex for performance reasons.
+- Replaced all `path.Base()` by `filepath.Base()` to fix an issue with audio filenames on Windows.
+- New `Branding Label` and `Email Support` options to show on main screen (issue #220).
+- New temporary avoid feature (discussion #218).
+- Fix remote address regexp (issue #225).
+- Add the `ident` to `new listener` log message (discussion #226).
+- New populated talkgroups won't be activated on the client if its group (or tag) is turned off (issue #227).
+- Removed the duplicated webapp section from the PDF document.
+
 ## Version 6.4
 
 - New `-cmd` command line options to allow advanced administrative tasks.

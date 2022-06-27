@@ -17,41 +17,27 @@
  * ****************************************************************************
  */
 
-import { Component, Optional, OnInit } from '@angular/core';
-import { MatSnackBarRef } from '@angular/material/snack-bar';
+import { Component, Inject, Optional } from '@angular/core';
+import { MAT_SNACK_BAR_DATA, MatSnackBarRef } from '@angular/material/snack-bar';
 import { timer } from 'rxjs';
 
 @Component({
-    selector: 'RdioScannerNative',
-    styleUrls: ['./native.component.scss'],
-    templateUrl: './native.component.html',
+    selector: 'RdioScannerSupport',
+    styleUrls: ['./support.component.scss'],
+    templateUrl: './support.component.html',
 })
-export class RdioScannerNativeComponent implements OnInit {
+export class RdioScannerSupportComponent {
     countdown: number = 10;
 
-    deviceType: string = 'mobile';
+    email: string | undefined;
 
-    isAndroid: boolean = false;
-    isApple: boolean = false;
+    constructor(
+        @Optional() private matSnackBarRef: MatSnackBarRef<RdioScannerSupportComponent>,
+        @Inject(MAT_SNACK_BAR_DATA) public data: { email: string },
+    ) {
+        this.email = data?.email;
 
-    constructor(@Optional() private matSnackBarRef: MatSnackBarRef<RdioScannerNativeComponent>) { }
-
-    ngOnInit(): void {
-        const ua = navigator.userAgent;
-
-        if (ua.includes('Android')) {
-            this.deviceType = 'Android';
-            this.isAndroid = true;
-            this.wait();
-
-        } else if (ua.includes('iPad') || ua.includes('iPhone')) {
-            this.deviceType = 'Apple';
-            this.isApple = true;
-            this.wait();
-
-        } else {
-            this.matSnackBarRef?.dismiss();
-        }
+        this.wait();
     }
 
     private wait(): void {

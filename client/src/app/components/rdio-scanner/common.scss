@@ -1,6 +1,11 @@
 .rdio-button,
 .rdio-button-mini {
-  background: rgb(45, 45, 45);
+  --def: rgb(45, 45, 45);
+  --green: rgb(0, 230, 118);
+  --red: rgb(255, 23, 68);
+  --yellow: rgb(255, 234, 0);
+
+  background: var(--def);
   border-style: solid;
   border-width: 1px;
   border-bottom-color: rgba(0, 0, 0, 0.87);
@@ -41,24 +46,71 @@
     right: 4px;
     top: 4px;
     width: 6px;
+
+    animation: blink 1s linear infinite both;
   }
 
   &.off::after {
-    background: rgb(255, 23, 68);
-    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset,
-      0 0 3px 1px rgb(255, 23, 68);
+    background: var(--red);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--red);
+  }
+
+  &.off.blink::after {
+    animation: blink-off 500ms linear infinite;
+  }
+
+  @keyframes blink-off {
+    0%, 50% {
+      background: var(--def);
+      box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 0px 0px var(--def);
+    }
+
+    50%, 100% {
+      background: var(--red);
+      box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--red);
+    }
   }
 
   &.on::after {
-    background: rgb(0, 230, 118);;
-    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset,
-      0 0 3px 1px rgb(0, 230, 118);;
+    background: var(--green);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--green);
+  }
+
+  &.on.blink::after {
+    animation: blink-on 500ms linear infinite;
+  }
+
+  @keyframes blink-on {
+    0%, 50% {
+      background: var(--def);
+      box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 0px 0px var(--def);
+    }
+
+    50%, 100% {
+      background: var(--def);
+      box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--green);
+    }
   }
 
   &.partial::after {
-    background: rgb(255, 234, 0);
-    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset,
-      0 0 3px 1px rgb(255, 234, 0);
+    background: var(--yellow);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--yellow);
+  }
+
+  &.partial.blink::after {
+    animation: blink-partial 500ms linear infinite;
+  }
+
+  @keyframes blink-partial {
+    0%, 50% {
+      background: var(--def);
+      box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 0px 0px var(--def);
+    }
+
+    50%, 100% {
+      background: var(--yellow);
+      box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--yellow);
+    }
   }
 }
 

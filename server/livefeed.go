@@ -32,7 +32,7 @@ func NewLivefeed() *Livefeed {
 	}
 }
 
-func (livefeed *Livefeed) FromMap(f interface{}) *Livefeed {
+func (livefeed *Livefeed) FromMap(f any) *Livefeed {
 	livefeed.mutex.Lock()
 	defer livefeed.mutex.Unlock()
 
@@ -41,12 +41,12 @@ func (livefeed *Livefeed) FromMap(f interface{}) *Livefeed {
 	}
 
 	switch v := f.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for s, n := range v {
 			if sysId, err := strconv.Atoi(s); err == nil {
 				sysId := uint(sysId)
 				switch v := n.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					for t, b := range v {
 						switch v := b.(type) {
 						case bool:

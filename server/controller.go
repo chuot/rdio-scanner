@@ -67,10 +67,9 @@ func NewController(config *Config) *Controller {
 		Systems:     NewSystems(),
 		Tags:        NewTags(),
 		Clients:     NewClients(),
-		Register:    make(chan *Client),
-		Unregister:  make(chan *Client),
-		Ingest:      make(chan *Call),
-		ingestMutex: sync.Mutex{},
+		Register:    make(chan *Client, 4096),
+		Unregister:  make(chan *Client, 4096),
+		Ingest:      make(chan *Call, 4096),
 	}
 
 	controller.Admin = NewAdmin(controller)
@@ -109,9 +108,6 @@ func (controller *Controller) IngestCall(call *Call) {
 		tagLabel   string
 		talkgroup  *Talkgroup
 	)
-
-	controller.IngestLock()
-	defer controller.IngestUnlock()
 
 	logCall := func(call *Call, level string, message string) {
 		controller.Logs.LogEvent(level, fmt.Sprintf("newcall: system=%v talkgroup=%v file=%v %v", call.System, call.Talkgroup, call.AudioName, message))
@@ -317,21 +313,13 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 }
 
-func (controller *Controller) IngestLock() {
-	controller.ingestMutex.Lock()
-}
-
-func (controller *Controller) IngestUnlock() {
-	controller.ingestMutex.Unlock()
-}
-
 func (controller *Controller) LogClientsCount() {
 	controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("listeners count is %v", controller.Clients.Count()))
 }
 
 func (controller *Controller) ProcessMessage(client *Client, message *Message) error {
 	if message.Command == MessageCommandVersion {
-		client.Send <- &Message{Command: MessageCommandVersion, Payload: Version}
+		controller.ProcessMessageCommandVersion(client)
 
 	} else if controller.Accesses.IsRestricted() && client.Access.Systems == nil && message.Command != MessageCommandPin {
 		client.Send <- &Message{Command: MessageCommandPin}
@@ -394,7 +382,7 @@ func (controller *Controller) ProcessMessageCommandCall(client *Client, message 
 
 func (controller *Controller) ProcessMessageCommandListCall(client *Client, message *Message) error {
 	switch v := message.Payload.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		searchOptions := CallsSearchOptions{searchPatchedTalkgroups: controller.Options.SearchPatchedTalkgroups}
 		searchOptions.fromMap(v)
 		if searchResults, err := controller.Calls.Search(&searchOptions, client); err == nil {
@@ -465,6 +453,20 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 	}
 
 	return nil
+}
+
+func (controller *Controller) ProcessMessageCommandVersion(client *Client) {
+	p := map[string]string{"version": Version}
+
+	if len(controller.Options.Branding) > 0 {
+		p["branding"] = controller.Options.Branding
+	}
+
+	if len(controller.Options.Email) > 0 {
+		p["email"] = controller.Options.Email
+	}
+
+	client.Send <- &Message{Command: MessageCommandVersion, Payload: p}
 }
 
 func (controller *Controller) Start() error {

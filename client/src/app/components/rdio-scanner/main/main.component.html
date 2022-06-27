@@ -1,4 +1,5 @@
 <div class="rdio-status">
+    <div class="branding">{{ branding }}</div>
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
@@ -53,6 +54,9 @@
         </div>
     </div>
     <div class="row right small">
+        <div *ngIf="tempAvoid">
+            <span class="flag" [ngClass]="{ flaged: avoided || patched }">&#9202; {{ tempAvoid }}M</span>
+        </div>
         <div>
             <span class="flag" [ngClass]="{ flaged: avoided }">AVOID</span>
         </div>
@@ -153,4 +157,9 @@
             SELECT<br>TG
         </button>
     </div>
+</div>
+<div class="rdio-help" *ngIf="email">
+    <button mat-icon-button (click)="showHelp()">
+        <mat-icon>help_center</mat-icon>
+    </button>
 </div>

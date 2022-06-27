@@ -1,0 +1,26 @@
+:host {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+
+    > div {
+        text-align: center;
+    }
+}
+
+a {
+    color: currentColor;
+    text-decoration: none;
+}
+
+b {
+    font-weight: 500;
+}
+
+.countdown {
+    bottom: 4px;
+    color: rgba(0, 0, 0, 0.67);
+    font-size: 12px;
+    position: absolute;
+    right: 4px;
+}

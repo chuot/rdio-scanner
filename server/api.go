@@ -42,14 +42,12 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Invalid content-type\n"))
+			api.exitWithError(w, http.StatusBadRequest, "Invalid content-type")
 			return
 		}
 
 		if !strings.HasPrefix(mediaType, "multipart/") {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Not a multipart content\n"))
+			api.exitWithError(w, http.StatusBadRequest, "Not a multipart content")
 			return
 		}
 
@@ -60,12 +58,14 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				continue
+				api.exitWithError(w, http.StatusExpectationFailed, fmt.Sprintf("multipart: %s\n", err.Error()))
+				return
 			}
 
 			b, err := io.ReadAll(p)
 			if err != nil {
-				continue
+				api.exitWithError(w, http.StatusExpectationFailed, fmt.Sprintf("ioread: %s\n", err.Error()))
+				return
 			}
 
 			switch p.FormName() {
@@ -79,8 +79,7 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 		if ok, err := call.IsValid(); ok {
 			api.HandleCall(key, call, w)
 		} else {
-			w.WriteHeader(http.StatusExpectationFailed)
-			w.Write([]byte(fmt.Sprintf("Incomplete call data: %s\n", err.Error())))
+			api.exitWithError(w, http.StatusExpectationFailed, fmt.Sprintf("Incomplete call data: %s\n", err.Error()))
 		}
 
 	default:
@@ -121,14 +120,12 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Invalid content-type\n"))
+			api.exitWithError(w, http.StatusBadRequest, "Invalid content-type")
 			return
 		}
 
 		if !strings.HasPrefix(mediaType, "multipart/") {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Not a multipart content\n"))
+			api.exitWithError(w, http.StatusBadRequest, "Not a multipart content")
 			return
 		}
 
@@ -141,12 +138,14 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				continue
+				api.exitWithError(w, http.StatusExpectationFailed, fmt.Sprintf("multipart: %s", err.Error()))
+				return
 			}
 
 			b, err := io.ReadAll(p)
 			if err != nil {
-				continue
+				api.exitWithError(w, http.StatusExpectationFailed, fmt.Sprintf("ioread: %s", err.Error()))
+				return
 			}
 
 			switch p.FormName() {
@@ -154,8 +153,7 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 				key = string(b)
 			case "meta":
 				if err := ParseTrunkRecorderMeta(call, b); err != nil {
-					w.WriteHeader(http.StatusExpectationFailed)
-					w.Write([]byte("Invalid call data\n"))
+					api.exitWithError(w, http.StatusExpectationFailed, "Invalid call data")
 					return
 				}
 			default:
@@ -171,12 +169,18 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 			api.HandleCall(key, call, w)
 
 		} else {
-			w.WriteHeader(http.StatusExpectationFailed)
-			w.Write([]byte(fmt.Sprintf("Incomplete call data: %s\n", err.Error())))
+			api.exitWithError(w, http.StatusExpectationFailed, fmt.Sprintf("Incomplete call data: %s\n", err.Error()))
 		}
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		w.Write([]byte("Unsupported method\n"))
 	}
+}
+
+func (api *Api) exitWithError(w http.ResponseWriter, status int, message string) {
+	api.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("api: %s", message))
+
+	w.WriteHeader(status)
+	w.Write([]byte(fmt.Sprintf("%s\n", message)))
 }

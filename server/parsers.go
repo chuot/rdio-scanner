@@ -101,10 +101,10 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`(\[.+\])`).FindStringSubmatch(m.Title())
 	if len(s) > 1 && len(s[1]) > 0 {
-		var f interface{}
+		var f any
 		if err = json.Unmarshal([]byte(s[1]), &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
+			case []any:
 				patches := []uint{}
 				for _, patch := range v {
 					switch v := patch.(type) {
@@ -151,15 +151,15 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		}
 
 	case "frequencies":
-		var f interface{}
+		var f any
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
-				var frequencies = []map[string]interface{}{}
+			case []any:
+				var frequencies = []map[string]any{}
 				for _, f := range v {
-					freq := map[string]interface{}{}
+					freq := map[string]any{}
 					switch v := f.(type) {
-					case map[string]interface{}:
+					case map[string]any:
 						switch v := v["errorCount"].(type) {
 						case float64:
 							if v >= 0 {
@@ -204,12 +204,12 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 
 	case "patches", "patched_talkgroups":
 		var (
-			f       interface{}
+			f       any
 			patches = []uint{}
 		)
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
+			case []any:
 				for _, patch := range v {
 					switch v := patch.(type) {
 					case float64:
@@ -229,17 +229,17 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 
 	case "sources":
 		var (
-			f     interface{}
+			f     any
 			units *Units
 		)
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
-			case []interface{}:
-				var sources = []map[string]interface{}{}
+			case []any:
+				var sources = []map[string]any{}
 				for _, f := range v {
-					src := map[string]interface{}{}
+					src := map[string]any{}
 					switch v := f.(type) {
-					case map[string]interface{}:
+					case map[string]any:
 						switch v := v["pos"].(type) {
 						case float64:
 							if v >= 0 {
@@ -306,7 +306,7 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 }
 
 func ParseTrunkRecorderMeta(call *Call, b []byte) error {
-	m := map[string]interface{}{}
+	m := map[string]any{}
 
 	if err := json.Unmarshal(b, &m); err != nil {
 		return err
@@ -320,12 +320,12 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	}
 
 	switch v := m["freqList"].(type) {
-	case []interface{}:
-		freqs := []map[string]interface{}{}
+	case []any:
+		freqs := []map[string]any{}
 		for _, f := range v {
-			freq := map[string]interface{}{}
+			freq := map[string]any{}
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch v := v["error_count"].(type) {
 				case float64:
 					if v >= 0 {
@@ -368,7 +368,7 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	}
 
 	switch v := m["patched_talkgroups"].(type) {
-	case []interface{}:
+	case []any:
 		patches := []uint{}
 		for _, f := range v {
 			switch v := f.(type) {
@@ -384,12 +384,12 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 	}
 
 	switch v := m["srcList"].(type) {
-	case []interface{}:
-		sources := []map[string]interface{}{}
+	case []any:
+		sources := []map[string]any{}
 		for _, f := range v {
-			source := map[string]interface{}{}
+			source := map[string]any{}
 			switch v := f.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				switch v := v["pos"].(type) {
 				case float64:
 					if v >= 0 {
