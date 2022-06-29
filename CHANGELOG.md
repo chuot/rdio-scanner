@@ -15,7 +15,7 @@
 
 _v6.5.1_
 
-- Fix broken functionnality for `HOLD SYS` and `HOLD TG` (issue #228).
+- Fix broken functionality for `HOLD SYS` and `HOLD TG` (issue #228).
 
 ## Version 6.4
 
