@@ -13,6 +13,10 @@
 - New populated talkgroups won't be activated on the client if its group (or tag) is turned off (issue #227).
 - Removed the duplicated webapp section from the PDF document.
 
+_v6.5.1_
+
+- Fix broken functionnality for `HOLD SYS` and `HOLD TG` (issue #228).
+
 ## Version 6.4
 
 - New `-cmd` command line options to allow advanced administrative tasks.

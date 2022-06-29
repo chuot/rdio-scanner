@@ -271,14 +271,11 @@ export class RdioScannerService implements OnDestroy {
                     const allOn = Object.keys(this.livefeedMap[sys]).map((tg) => +tg).every((tg) => !this.livefeedMap[sys][tg]);
 
                     sysMap[sys] = Object.keys(this.livefeedMap[sys]).map((tg) => +tg).reduce((tgMap, tg) => {
-                        tgMap[tg].minutes = undefined;
-                        tgMap[tg].timer?.unsubscribe();
-                        tgMap[tg].timer = undefined;
+                        this.livefeedMap[sys][tg].timer?.unsubscribe();
 
-                        if (sys === call.system)
-                            tgMap[tg].active = allOn || this.livefeedMap[sys][tg].active;
-                        else
-                            tgMap[tg].active = false;
+                        tgMap[tg] = {
+                            active: sys === call.system ? allOn || this.livefeedMap[sys][tg].active : false,
+                        } as RdioScannerLivefeed;
 
                         return tgMap;
                     }, {} as { [key: number]: RdioScannerLivefeed });
@@ -325,14 +322,11 @@ export class RdioScannerService implements OnDestroy {
 
                 this.livefeedMap = Object.keys(this.livefeedMap).map((sys) => +sys).reduce((sysMap, sys) => {
                     sysMap[sys] = Object.keys(this.livefeedMap[sys]).map((tg) => +tg).reduce((tgMap, tg) => {
-                        tgMap[tg].minutes = undefined;
-                        tgMap[tg].timer?.unsubscribe();
-                        tgMap[tg].timer = undefined;
+                        this.livefeedMap[sys][tg].timer?.unsubscribe();
 
-                        if (sys === call.system)
-                            tgMap[tg].active = tg === call.talkgroup;
-                        else
-                            tgMap[tg].active = false;
+                        tgMap[tg] = {
+                            active: sys === call.system ? tg === call.talkgroup : false,
+                        } as RdioScannerLivefeed;
 
                         return tgMap;
                     }, {} as { [key: number]: RdioScannerLivefeed });
