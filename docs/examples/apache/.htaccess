@@ -1,0 +1,11 @@
+# Create a rdio-scanner subfolder under the DOCUMENT_ROOT and put this file in it.
+# Don't forget to change 127.0.0.1:3000 to the internal IP of your Rdio Scanner instance.
+
+DirectoryIndex index.html
+
+RewriteEngine on
+
+RewriteCond %{HTTP:CONNECTION} ^upgrade$ [NC,OR]
+RewriteCond %{HTTP:UPGRADE} ^websocket$ [NC]
+RewriteRule ^/?(.*)$ ws://127.0.0.1:3000/$1 [P,L]
+RewriteRule ^/?(.*)$ http://127.0.0.1:3000/$1 [P,L] 
