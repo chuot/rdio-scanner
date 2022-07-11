@@ -322,7 +322,7 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 func (dirwatch *Dirwatch) parseMask(call *Call) {
 	var meta = [][]string{
-		{"date", "#DATE", `[\d-_]+`},
+		{"date", "#DATE", `\d{4}[-_]{0,1}\d{2}[-_]{0,1}\d{2}`},
 		{"group", "#GROUP", `[a-zA-Z0-9\.\ -]+`},
 		{"hz", "#HZ", `\d+`},
 		{"khz", "#KHZ", `[\d\.]+`},
@@ -336,9 +336,9 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		{"tglbl", "#TGLBL", `[a-zA-Z0-9,\.\ -]+`},
 		{"tgmhz", "#TGMHZ", `[\d\.]+`},
 		{"tg", "#TG", `\d+`},
-		{"time", "#TIME", `[\d-:]+`},
+		{"time", "#TIME", `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 		{"unit", "#UNIT", `\d+`},
-		{"ztime", "#ZTIME", `[\d-:]+`},
+		{"ztime", "#ZTIME", `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 	}
 
 	var (

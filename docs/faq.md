@@ -12,8 +12,16 @@ A: Due to the ACME protocol used by Let's Encrypt, ports 80 and 443 must be open
 
 A: Force a refresh of the web application from the browser (usually with ctrl-shift-r) to resolve the issue. Alternatively, you can click on the icon just to the left of the URL address and select website settings, then clear all website data.
 
+**Q: How do I install FFMPEG on Windows**
+
+A: Please follow instructions at this address: [https://www.wikihow.com/Install-FFmpeg-on-Windows](https://www.wikihow.com/Install-FFmpeg-on-Windows)
+
+**Q: How do I configure a reverse-proxy in front of Rdio Scanner**
+
+A: There are so many reverse proxy technologies out there that it's hard the cover them all. One thing to keep in mind is that Rdio Scanner works with websockets, so the reverse proxy must also supports websockets to work properly with Rdio Scanner. For some examples, take a look at the [https://github.com/chuot/rdio-scanner/tree/master/docs/examples/apache](https://github.com/chuot/rdio-scanner/tree/master/docs/examples/apache) for `Apache HTTP` or [https://github.com/chuot/rdio-scanner/tree/master/docs/examples/nginx](https://github.com/chuot/rdio-scanner/tree/master/docs/examples/nginx) for `nginx`.
+
 **Q: I did not find an answer to my question in this FAQ**
 
-A: No problem, just drop us a line at **[rdio-scanner@saubeo.solutions](mailto:rdio-scanner@saubeo.solutions)** and we'll make sure to add the relevant information in this document in the next release. In the meantime, You can ask your questions on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
+A: No problem, just drop us a line at [rdio-scanner@saubeo.solutions](mailto:rdio-scanner@saubeo.solutions) and we'll make sure to add the relevant information in this document in the next release. In the meantime, You can ask your questions on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at [https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions).
 
 \pagebreak{}

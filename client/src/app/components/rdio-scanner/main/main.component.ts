@@ -54,6 +54,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     branding = '';
 
     call: RdioScannerCall | undefined;
+    callDate: Date | undefined;
     callError = '0';
     callFrequency: string = this.formatFrequency(0);
     callHistory: RdioScannerCall[] = new Array<RdioScannerCall>(5);
@@ -540,6 +541,12 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
             this.callProgress = new Date(this.call.dateTime);
             this.callProgress.setSeconds(this.callProgress.getSeconds() + time);
+
+            if (Date.now() - this.callProgress.getTime() >= 86400000) {
+                this.callDate = this.call.dateTime;
+            } else {
+                this.callDate = undefined;
+            }
 
             this.callSystem = this.call.systemData?.label || `${this.call.system}`;
 

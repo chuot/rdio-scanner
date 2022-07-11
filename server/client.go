@@ -112,7 +112,10 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 
 		defer func() {
 			ticker.Stop()
-			timer.Stop()
+
+			if timer != nil {
+				timer.Stop()
+			}
 
 			client.Conn.Close()
 		}()
@@ -125,17 +128,19 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 				}
 
 				if message.Command == MessageCommandConfig {
-					timer.Stop()
+					if timer != nil {
+						timer.Stop()
+						timer = nil
 
-					controller.Register <- client
+						controller.Register <- client
 
-					if len(client.Access.Ident) > 0 {
-						controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s with ident %s", client.GetRemoteAddr(), client.Access.Ident))
+						if len(client.Access.Ident) > 0 {
+							controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s with ident %s", client.GetRemoteAddr(), client.Access.Ident))
 
-					} else {
-						controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s", client.GetRemoteAddr()))
+						} else {
+							controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("new listener from ip %s", client.GetRemoteAddr()))
+						}
 					}
-
 				}
 
 				b, err := message.ToJson()
@@ -201,11 +206,15 @@ func (client *Client) SendListenersCount(count int) {
 }
 
 type Clients struct {
-	Map sync.Map
+	Map   sync.Map
+	count int
 }
 
 func NewClients() *Clients {
-	return &Clients{Map: sync.Map{}}
+	return &Clients{
+		Map:   sync.Map{},
+		count: 0,
+	}
 }
 
 func (clients *Clients) AccessCount(client *Client) int {
@@ -225,19 +234,12 @@ func (clients *Clients) AccessCount(client *Client) int {
 }
 
 func (clients *Clients) Add(client *Client) {
+	clients.count = clients.count + 1
 	clients.Map.Store(client, true)
 }
 
 func (clients *Clients) Count() int {
-	count := 0
-
-	clients.Map.Range(func(k, v any) bool {
-		count++
-
-		return true
-	})
-
-	return count
+	return clients.count
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
@@ -288,5 +290,7 @@ func (clients *Clients) EmitListenersCount() {
 }
 
 func (clients *Clients) Remove(client *Client) {
-	clients.Map.Delete(client)
+	if _, loaded := clients.Map.LoadAndDelete(client); loaded {
+		clients.count = clients.count - 1
+	}
 }
