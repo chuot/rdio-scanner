@@ -229,32 +229,6 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		return fmt.Errorf("apikeys.write %v", err)
 	}
 
-	for _, apikey := range apikeys.List {
-		switch apikey.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = apikey.Systems
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerApiKeys` where `_id` = ?", apikey.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerApiKeys` (`_id`, `disabled`, `ident`, `key`, `order`, `systems`) values (?, ?, ?, ?, ?, ?)", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerApiKeys` set `_id` = ?, `disabled` = ?, `ident` = ?, `key` = ?, `order` = ?, `systems` = ? where `_id` = ?", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerApiKeys`"); err != nil {
 		return formatError(err)
 	}
@@ -292,6 +266,32 @@ func (apikeys *Apikeys) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, apikey := range apikeys.List {
+		switch apikey.Systems {
+		case "*":
+			systems = `"*"`
+		default:
+			systems = apikey.Systems
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerApiKeys` where `_id` = ?", apikey.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerApiKeys` (`_id`, `disabled`, `ident`, `key`, `order`, `systems`) values (?, ?, ?, ?, ?, ?)", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerApiKeys` set `_id` = ?, `disabled` = ?, `ident` = ?, `key` = ?, `order` = ?, `systems` = ? where `_id` = ?", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

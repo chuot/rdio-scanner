@@ -170,25 +170,6 @@ func (units *Units) Write(db *Database, systemId uint) error {
 		return fmt.Errorf("units.write: %v", err)
 	}
 
-	for _, unit := range units.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `id` from `rdioScannerUnits` where `systemId` = ?", systemId); err != nil {
 		return formatError(err)
 	}
@@ -227,5 +208,25 @@ func (units *Units) Write(db *Database, systemId uint) error {
 			}
 		}
 	}
+
+	for _, unit := range units.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
+	}
+
 	return nil
 }

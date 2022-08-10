@@ -412,39 +412,6 @@ func (systems *Systems) Write(db *Database) error {
 		return fmt.Errorf("systems.write: %v", err)
 	}
 
-	for _, system := range systems.List {
-		if len(system.Blacklists) > 0 {
-			blacklists = strings.Join([]string{"[", system.Blacklists.String(), "]"}, "")
-		} else {
-			blacklists = "[]"
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerSystems` where `_id` = ?", system.RowId).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`) values (?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, system.RowId); err != nil {
-			break
-		}
-
-		if err = system.Talkgroups.Write(db, system.Id); err != nil {
-			return err
-		}
-
-		if err = system.Units.Write(db, system.Id); err != nil {
-			return err
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id`, `id` from `rdioScannerSystems`"); err != nil {
 		return formatError(err)
 	}
@@ -457,7 +424,7 @@ func (systems *Systems) Write(db *Database) error {
 		}
 		remove := true
 		for _, system := range systems.List {
-			if system.RowId == nil || system.RowId == rowId {
+			if system.RowId == nil || (system.RowId == rowId && system.Id == systemId) {
 				remove = false
 				break
 			}
@@ -500,6 +467,39 @@ func (systems *Systems) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, system := range systems.List {
+		if len(system.Blacklists) > 0 {
+			blacklists = strings.Join([]string{"[", system.Blacklists.String(), "]"}, "")
+		} else {
+			blacklists = "[]"
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerSystems` where `_id` = ?", system.RowId).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`) values (?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, system.RowId); err != nil {
+			break
+		}
+
+		if err = system.Talkgroups.Write(db, system.Id); err != nil {
+			return err
+		}
+
+		if err = system.Units.Write(db, system.Id); err != nil {
+			return err
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

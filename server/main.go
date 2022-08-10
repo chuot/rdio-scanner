@@ -30,6 +30,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/acme/autocert"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -46,6 +47,28 @@ func main() {
 	config := NewConfig()
 
 	controller := NewController(config)
+
+	if config.newAdminPassword != "" {
+		if hash, err := bcrypt.GenerateFromPassword([]byte(config.newAdminPassword), bcrypt.DefaultCost); err == nil {
+			if err := controller.Options.Read(controller.Database); err != nil {
+				log.Fatal(err)
+			}
+
+			controller.Options.adminPassword = string(hash)
+			controller.Options.adminPasswordNeedChange = config.newAdminPassword == defaults.adminPassword
+
+			if err := controller.Options.Write(controller.Database); err != nil {
+				log.Fatal(err)
+			}
+
+			controller.Logs.LogEvent(LogLevelInfo, "admin password changed.")
+
+			os.Exit(0)
+
+		} else {
+			log.Fatal(err)
+		}
+	}
 
 	fmt.Printf("\nRdio Scanner v%s\n", Version)
 	fmt.Printf("----------------------------------\n")

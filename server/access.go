@@ -308,32 +308,6 @@ func (accesses *Accesses) Write(db *Database) error {
 		return fmt.Errorf("accesses.write: %v", err)
 	}
 
-	for _, access := range accesses.List {
-		switch access.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = access.Systems
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerAccesses` where `_id` = ?", access.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerAccesses` (`_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems`) values (?, ?, ?, ?, ?, ?, ?)", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerAccesses` set `_id` = ?, `code` = ?, `expiration` = ?, `ident` = ?, `limit` = ?, `order` = ?, `systems` = ? where `_id` = ?", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems, access.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerAccesses`"); err != nil {
 		return formatError(err)
 	}
@@ -371,6 +345,32 @@ func (accesses *Accesses) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, access := range accesses.List {
+		switch access.Systems {
+		case "*":
+			systems = `"*"`
+		default:
+			systems = access.Systems
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerAccesses` where `_id` = ?", access.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerAccesses` (`_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems`) values (?, ?, ?, ?, ?, ?, ?)", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerAccesses` set `_id` = ?, `code` = ?, `expiration` = ?, `ident` = ?, `limit` = ?, `order` = ?, `systems` = ? where `_id` = ?", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems, access.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

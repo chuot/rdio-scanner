@@ -35,23 +35,24 @@ const (
 )
 
 type Config struct {
-	BaseDir       string
-	ConfigFile    string
-	DbType        string
-	DbFile        string
-	DbHost        string
-	DbPort        uint
-	DbName        string
-	DbUsername    string
-	DbPassword    string
-	Listen        string
-	SslAutoCert   string
-	SslCaCertFile string
-	SslCaKeyFile  string
-	SslCertFile   string
-	SslKeyFile    string
-	SslListen     string
-	daemon        *Daemon
+	BaseDir          string
+	ConfigFile       string
+	DbType           string
+	DbFile           string
+	DbHost           string
+	DbPort           uint
+	DbName           string
+	DbUsername       string
+	DbPassword       string
+	Listen           string
+	SslAutoCert      string
+	SslCaCertFile    string
+	SslCaKeyFile     string
+	SslCertFile      string
+	SslKeyFile       string
+	SslListen        string
+	daemon           *Daemon
+	newAdminPassword string
 }
 
 func NewConfig() *Config {
@@ -97,6 +98,7 @@ func NewConfig() *Config {
 	flag.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
 	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
+	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
 	flag.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
 	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")

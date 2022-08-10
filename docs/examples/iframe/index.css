@@ -1,0 +1,43 @@
+html {
+    min-height: 100%;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+}
+
+body,
+.outer-container {
+    min-height: inherit;
+}
+
+.outer-container {
+    background-color: #1e1e1e;
+    color: #fafafa;
+}
+
+.outer-container,
+.inner-container {
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    height: inherit;
+    justify-content: center;
+}
+
+.inner-container {
+    flex-wrap: wrap;
+}
+
+.inner-container>div {
+    box-sizing: border-box;
+    max-width: 720px;
+    min-height: calc(608px + 1rem);
+    min-width: 410px;
+    padding: 1rem;
+}
+
+.inner-container iframe {
+    border: none;
+}

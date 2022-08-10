@@ -179,13 +179,13 @@
   .branding {
     color: rgb(64, 64, 64);
     flex: 1;
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 0.25rem;
+    font-size: 16px;
+    font-weight: normal;
+    letter-spacing: 2px;
     line-height: 1;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: -1px -1px 1px rgb(0, 0, 0), 1px 1px 1px rgba(255, 255, 255, 0.5);
+    text-shadow: -1px -1px 1px rgba(0, 0, 0, 0.7), 1px 1px 1px rgba(255, 255, 255, 0.3);
     text-transform: uppercase;
     white-space: nowrap;
   }

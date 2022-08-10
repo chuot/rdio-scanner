@@ -224,25 +224,6 @@ func (groups *Groups) Write(db *Database) error {
 		return fmt.Errorf("groups.write %v", err)
 	}
 
-	for _, group := range groups.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerGroups` where `_id` = ?", group.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerGroups` (`_id`, `label`) values (?, ?)", group.Id, group.Label); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerGroups` set `_id` = ?, `label` = ? where `_id` = ?", group.Id, group.Label, group.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerGroups`"); err != nil {
 		return formatError(err)
 	}
@@ -280,6 +261,25 @@ func (groups *Groups) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, group := range groups.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerGroups` where `_id` = ?", group.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerGroups` (`_id`, `label`) values (?, ?)", group.Id, group.Label); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerGroups` set `_id` = ?, `label` = ? where `_id` = ?", group.Id, group.Label, group.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

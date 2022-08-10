@@ -474,32 +474,6 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		return fmt.Errorf("downstreams.write: %v", err)
 	}
 
-	for _, downstream := range downstreams.List {
-		switch downstream.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = downstream.Systems
-		}
-
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDownstreams` where `_id` = ?", downstream.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerDownstreams` (`_id`, `apiKey`, `disabled`, `order`, `systems`, `url`) values (?, ?, ?, ?, ?, ?)", downstream.Id, downstream.Apikey, downstream.Disabled, downstream.Order, systems, downstream.Url); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerDownstreams` set `_id` = ?, `apiKey` = ?, `disabled` = ?, `order` = ?, `systems` = ?, `url` = ? where `_id` = ?", downstream.Id, downstream.Apikey, downstream.Disabled, downstream.Order, systems, downstream.Url, downstream.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerDownstreams`"); err != nil {
 		return formatError(err)
 	}
@@ -537,6 +511,32 @@ func (downstreams *Downstreams) Write(db *Database) error {
 				return formatError(err)
 			}
 		}
+	}
+
+	for _, downstream := range downstreams.List {
+		switch downstream.Systems {
+		case "*":
+			systems = `"*"`
+		default:
+			systems = downstream.Systems
+		}
+
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDownstreams` where `_id` = ?", downstream.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerDownstreams` (`_id`, `apiKey`, `disabled`, `order`, `systems`, `url`) values (?, ?, ?, ?, ?, ?)", downstream.Id, downstream.Apikey, downstream.Disabled, downstream.Order, systems, downstream.Url); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerDownstreams` set `_id` = ?, `apiKey` = ?, `disabled` = ?, `order` = ?, `systems` = ?, `url` = ? where `_id` = ?", downstream.Id, downstream.Apikey, downstream.Disabled, downstream.Order, systems, downstream.Url, downstream.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
 	}
 
 	return nil

@@ -23,6 +23,14 @@ _v6.5.2_
 - Show call date on main screen when call is older than one day (issue #229).
 - Fixed dirwatch #DATE, #TIME and #ZTIME regexp to accomodate filenames like 20220711082833 (issue #235).
 
+_v6.5.3_
+
+- Return of the -admin_password option to reset the administrator password in case of forgetting.
+- New `<iframe>` wrapper in `docs/examples/iframe` for those who want to give more information to their users.
+- Fixed systems.write constraint failed (issue #241).
+- Add filename to dirwatch error messages (issue #248).
+- Dirwatch.type=default now defaults to the current date and time if none are provided by the metatags (discussion #250).
+
 ## Version 6.4
 
 - New `-cmd` command line options to allow advanced administrative tasks.

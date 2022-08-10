@@ -85,12 +85,12 @@ func NewController(config *Config) *Controller {
 
 func (controller *Controller) EmitCall(call *Call) {
 	go controller.Downstreams.Send(controller, call)
-	controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
+	go controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
 }
 
 func (controller *Controller) EmitConfig() {
-	controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
-	controller.Admin.BroadcastConfig()
+	go controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
+	go controller.Admin.BroadcastConfig()
 }
 
 func (controller *Controller) IngestCall(call *Call) {
@@ -419,19 +419,19 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			if access, ok := controller.Accesses.GetAccess(code); ok {
 				client.Access = access
 			} else {
-				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid access code=\"%s\" address=\"%s\"", code, client.GetRemoteAddr()))
+				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid access code %s for ip %s", code, client.GetRemoteAddr()))
 				client.Send <- &Message{Command: MessageCommandPin}
 				return nil
 			}
 
 			if client.AuthCount == maxAuthCount {
-				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("access ident=\"%s\" locked", client.Access.Ident))
+				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("locked access for ident %s locked", client.Access.Ident))
 				client.Send <- &Message{Command: MessageCommandPin}
 				return nil
 			}
 
 			if client.Access.HasExpired() {
-				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("access ident=\"%s\" expired", client.Access.Ident))
+				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("expired access for ident %s", client.Access.Ident))
 				client.Send <- &Message{Command: MessageCommandExpired}
 				return nil
 			}
@@ -439,7 +439,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			switch v := client.Access.Limit.(type) {
 			case uint:
 				if controller.Clients.AccessCount(client) > int(v) {
-					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("access ident=\"%s\" too many concurrent connections, limit is %d", client.Access.Ident, client.Access.Limit))
+					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many concurrent connections for ident %s, limit is %d", client.Access.Ident, client.Access.Limit))
 					client.Send <- &Message{Command: MessageCommandMax}
 					return nil
 				}

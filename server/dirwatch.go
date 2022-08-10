@@ -144,7 +144,7 @@ func (dirwatch *Dirwatch) Ingest(p string) {
 	}
 
 	if err != nil {
-		dirwatch.controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.ingest: %v", err.Error()))
+		dirwatch.controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.ingest: %s, %s", err.Error(), p))
 	}
 }
 
@@ -167,6 +167,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 		call.AudioName = filepath.Base(p)
 		call.AudioType = mime.TypeByExtension(path.Ext(p))
 		call.Frequency = dirwatch.Frequency
+		call.DateTime = time.Now().UTC()
 
 		if call.Audio, err = os.ReadFile(p); err != nil {
 			return err
@@ -648,7 +649,7 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 		time.Sleep(delay)
 
-		if err := fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, d fs.DirEntry, err error) error {
+		if err := fs.WalkDir(os.DirFS(dirwatch.Directory), ".", func(p string, _ fs.DirEntry, err error) error {
 			fp := filepath.Join(dirwatch.Directory, p)
 
 			if dirwatch.isDir(fp) {
@@ -822,25 +823,6 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		return fmt.Errorf("dirwatches.write: %v", err)
 	}
 
-	for _, dirwatch := range dirwatches.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDirWatches` where `_id` = ?", dirwatch.Id).Scan(&count); err != nil {
-			break
-		}
-
-		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerDirWatches` (`_id`, `delay`, `deleteAfter`, `directory`, `disabled`, `extension`, `frequency`, `mask`, `order`, `systemId`, `talkgroupId`, `type`, `usePolling`) values (?, ?, ?, ?, ?, ?, ?, ?, ? ,? ,? ,? ,?)", dirwatch.Id, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.UsePolling); err != nil {
-				break
-			}
-
-		} else if _, err = db.Sql.Exec("update `rdioScannerDirWatches` set `_id` = ?, `delay` = ?, `deleteAfter` = ?, `directory` = ?, `disabled` = ?, `extension` = ?, `frequency` = ?, `mask` = ?, `order` = ?, `systemId` = ?, `talkgroupId` = ?, `type` = ?, `usePolling` = ? where `_id` = ?", dirwatch.Id, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.UsePolling, dirwatch.Id); err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		return formatError(err)
-	}
-
 	if rows, err = db.Sql.Query("select `_id` from `rdioScannerDirWatches`"); err != nil {
 		return formatError(err)
 	}
@@ -880,6 +862,25 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		}
 	}
 
+	for _, dirwatch := range dirwatches.List {
+		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDirWatches` where `_id` = ?", dirwatch.Id).Scan(&count); err != nil {
+			break
+		}
+
+		if count == 0 {
+			if _, err = db.Sql.Exec("insert into `rdioScannerDirWatches` (`_id`, `delay`, `deleteAfter`, `directory`, `disabled`, `extension`, `frequency`, `mask`, `order`, `systemId`, `talkgroupId`, `type`, `usePolling`) values (?, ?, ?, ?, ?, ?, ?, ?, ? ,? ,? ,? ,?)", dirwatch.Id, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.UsePolling); err != nil {
+				break
+			}
+
+		} else if _, err = db.Sql.Exec("update `rdioScannerDirWatches` set `_id` = ?, `delay` = ?, `deleteAfter` = ?, `directory` = ?, `disabled` = ?, `extension` = ?, `frequency` = ?, `mask` = ?, `order` = ?, `systemId` = ?, `talkgroupId` = ?, `type` = ?, `usePolling` = ? where `_id` = ?", dirwatch.Id, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.UsePolling, dirwatch.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return formatError(err)
+	}
+
 	return nil
 }
 
@@ -896,7 +897,7 @@ func (dirwatch *Dirwatch) isDir(d string) bool {
 func (dirwatch *Dirwatch) walkDir(d string) error {
 	dfs := os.DirFS(d)
 
-	return fs.WalkDir(dfs, ".", func(p string, de fs.DirEntry, err error) error {
+	return fs.WalkDir(dfs, ".", func(p string, _ fs.DirEntry, err error) error {
 		fp := filepath.Join(d, p)
 		if dirwatch.isDir(fp) {
 			if !dirwatch.dirs[fp] {
