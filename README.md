@@ -33,6 +33,10 @@ More detailed instructions are available in the `rdio-scanner.pdf` file provided
 
 If you are updating from version 5, please refer to [docs/update-from-v5.md](docs/update-from-v5.md) before proceeding.
 
+# Docker
+
+As a courtesy to Docker users, [Rdio Scanner](https://github.com/chuot/rdio-scanner) is also distributed as a Docker image where a new version is generated with each new release. More information available at **[https://hub.docker.com/repository/docker/chuot/rdio-scanner](https://hub.docker.com/repository/docker/chuot/rdio-scanner)**.
+
 # Need help ?
 
 You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.

@@ -9,4 +9,3 @@ services:
       - "3000:3000"
     volumes:
       - /home/radio/rdio-scanner:/app/data:z
-      - /home/radio/SDRTrunk/recordings:/recordings:z

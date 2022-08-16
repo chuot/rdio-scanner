@@ -48,8 +48,8 @@ dist: darwin freebsd linux windows
 sed:
 	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" client/package.json
 	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" server/version.go
-	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md docs/platforms/*.md
-	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/platforms/*.md
+	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md docs/docker/README.md docs/platforms/*.md
+	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
 
 webapp: server/webapp/index.html
 
