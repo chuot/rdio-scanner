@@ -18,7 +18,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"mime"
 	"net/http"
@@ -198,7 +198,7 @@ func main() {
 			TLSConfig:    tlsConfig,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
-			ErrorLog:     log.New(ioutil.Discard, "", 0),
+			ErrorLog:     log.New(io.Discard, "", 0),
 		}
 
 		s.SetKeepAlivesEnabled(true)

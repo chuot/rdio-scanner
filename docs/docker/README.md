@@ -53,12 +53,12 @@ $ docker run --detach --env TZ=America/Toronto --name rdio-scanner --publish 300
 520cdbf51fca11d8bacea12d81245f1cb4d984f80d2be2e3039727b59533a6a9
 
 $ docker logs rdio-scanner
-Rdio Scanner v6.5.3
+Rdio Scanner v6.5.4
 ----------------------------------
-2022/08/10 08:57:23 server started
-2022/08/10 08:57:23 base folder is /app/data
-2022/08/10 08:57:23 main interface at http://6d87e8dc37a0:3000
-2022/08/10 08:57:23 admin interface at http://6d87e8dc37a0:3000/admin
+2022/09/09 08:57:23 server started
+2022/09/09 08:57:23 base folder is /app/data
+2022/09/09 08:57:23 main interface at http://6d87e8dc37a0:3000
+2022/09/09 08:57:23 admin interface at http://6d87e8dc37a0:3000/admin
 ```
 
 You can also use docker-compose to start the server with this simple `docker-compose.yml`:

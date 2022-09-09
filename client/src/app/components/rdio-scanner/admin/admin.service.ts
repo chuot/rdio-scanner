@@ -637,6 +637,10 @@ export class RdioScannerAdminService implements OnDestroy {
                 return null;
             }
 
+            if (control.value.startsWith('\\')) {
+                return { network: true }
+            }
+
             const dirWatch: DirWatch[] = control.parent?.parent?.getRawValue() || [];
 
             const count = dirWatch.reduce((c, a) => c += a.directory === control.value ? 1 : 0, 0);
@@ -653,7 +657,7 @@ export class RdioScannerAdminService implements OnDestroy {
 
             const type = dirwatch.type;
 
-            return ['sdr-trunk'].includes(type) || control.value !== null || /#SYS/.test(mask) ? null : { required: true };
+            return ['dsdplus', 'sdr-trunk'].includes(type) || control.value !== null || /#SYS/.test(mask) ? null : { required: true };
         };
     }
 
@@ -665,7 +669,7 @@ export class RdioScannerAdminService implements OnDestroy {
 
             const type = dirwatch.type;
 
-            return ['trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#TG/.test(mask) ? null : { required: true };
+            return ['dsdplus', 'trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#TG/.test(mask) ? null : { required: true };
         };
     }
 

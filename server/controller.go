@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -48,7 +47,6 @@ type Controller struct {
 	Register    chan *Client
 	Unregister  chan *Client
 	Ingest      chan *Call
-	ingestMutex sync.Mutex
 	running     bool
 }
 
@@ -271,7 +269,7 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 
 	if system == nil || talkgroup == nil {
-		logCall(call, LogLevelInfo, "no matching system/talkgroup")
+		logCall(call, LogLevelWarn, "no matching system/talkgroup")
 		return
 	}
 
@@ -516,7 +514,7 @@ func (controller *Controller) Start() error {
 	}
 
 	go func() {
-		c := make(chan os.Signal)
+		c := make(chan os.Signal, 8)
 		signal.Notify(c, os.Interrupt)
 		<-c
 		controller.Terminate()
@@ -536,7 +534,10 @@ func (controller *Controller) Start() error {
 			if timer != nil {
 				timer.Stop()
 			}
+
 			timer = time.AfterFunc(time.Second, func() {
+				timer = nil
+
 				controller.LogClientsCount()
 
 				if controller.Options.ShowListenersCount {

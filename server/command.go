@@ -138,7 +138,7 @@ func (command *Command) Do(action string) {
 			command.url = readVal()
 
 			if err != nil || !regexp.MustCompile(`^https?://`).Match([]byte(command.url)) {
-				command.exitWithError(errors.New("Invalid URL"))
+				command.exitWithError(errors.New("invalid URL"))
 			}
 		}
 
@@ -259,7 +259,7 @@ func (command *Command) configGet() {
 						}
 					}
 				default:
-					command.exitWithError(errors.New("Invalid response"))
+					command.exitWithError(errors.New("invalid response"))
 				}
 			} else {
 				command.exitWithError(err)
@@ -314,10 +314,10 @@ func (command *Command) login() {
 							}
 							fmt.Println("Logged in.")
 						default:
-							command.exitWithError(errors.New("No token in response"))
+							command.exitWithError(errors.New("no token in response"))
 						}
 					default:
-						command.exitWithError(errors.New("Invalid response"))
+						command.exitWithError(errors.New("invalid response"))
 					}
 				} else {
 					command.exitWithError(err)

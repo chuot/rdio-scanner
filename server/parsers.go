@@ -21,12 +21,69 @@ import (
 	"mime"
 	"mime/multipart"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dhowden/tag"
 )
+
+func ParseDSDPlusMeta(call *Call, fp string) error {
+	dir := filepath.Dir(fp)
+	base := strings.TrimSuffix(filepath.Base(fp), filepath.Ext(fp))
+
+	if d := regexp.MustCompile(`([0-9]+)$`).FindStringSubmatch(dir); len(d) == 2 && len(d[1]) == 8 {
+		if t := regexp.MustCompile(`^([0-9]+)`).FindStringSubmatch(base); len(t) == 2 && len(t[1]) == 6 {
+			if dy, err := strconv.Atoi(d[1][0:4]); err == nil {
+				if dm, err := strconv.Atoi(d[1][4:6]); err == nil {
+					if dd, err := strconv.Atoi(d[1][6:8]); err == nil {
+						if th, err := strconv.Atoi(t[1][0:2]); err == nil {
+							if tm, err := strconv.Atoi(t[1][2:4]); err == nil {
+								if ts, err := strconv.Atoi(t[1][4:6]); err == nil {
+									call.DateTime = time.Date(dy, time.Month(dm), dd, th, tm, ts, 0, time.Now().Location()).UTC()
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if s := regexp.MustCompile(`^[0-9]+_[0-9]+_[^_]+_([0-9]+)-([0-9]+)_`).FindStringSubmatch(base); len(s) == 3 {
+		if sys, err := strconv.Atoi(s[1]); err == nil && sys > 0 {
+			call.System = uint(sys)
+		}
+	}
+
+	tu := regexp.MustCompile(`([0-9]+)_([0-9]+)$|([0-9]+)_([0-9]+)\[([^\]]*)\]$`).FindStringSubmatch(base)
+
+	if len(tu[3]) > 0 {
+		tu[1] = tu[3]
+	}
+
+	if len(tu[4]) > 0 {
+		tu[2] = tu[4]
+	}
+
+	if tg, err := strconv.Atoi(tu[1]); err == nil && tg > 0 {
+		call.Talkgroup = uint(tg)
+		if src, err := strconv.Atoi(tu[2]); err == nil && src > 0 {
+			call.Source = uint(src)
+			if len(tu[5]) > 0 && strings.TrimSpace(tu[5]) != strings.TrimSpace(tu[2]) {
+				if b := regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(tu[5]); !b {
+					units := NewUnits()
+					units.Add(uint(src), tu[5])
+					call.units = units
+				}
+			}
+		}
+	}
+
+	return nil
+}
 
 func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 	var (
@@ -43,7 +100,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`^([0-9]+) ?(.*)$`).FindStringSubmatch(m.Artist())
 	if len(s) >= 2 {
-		if i, err = strconv.Atoi(s[1]); err != nil {
+		if i, err = strconv.Atoi(s[1][0:1]); err != nil {
 			return err
 		}
 		if i > 0 {

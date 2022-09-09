@@ -338,6 +338,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 
 	if t, err = db.ParseDateTime(dateTime); err == nil {
 		searchResults.DateStop = t
+	} else {
+		searchResults.DateStop = time.Now()
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -364,8 +366,8 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 			stop = start.Add(time.Hour*24 - time.Millisecond)
 
 		} else {
-			start = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC).Add(time.Hour*-24 - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
-			stop = start.Add(time.Hour*24 - time.Millisecond - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
+			start = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC).Add(time.Hour*-24 + time.Millisecond)
+			stop = time.Date(v.Year(), v.Month(), v.Day(), v.Hour(), v.Minute(), 0, 0, time.UTC)
 		}
 
 		where += fmt.Sprintf(" and (`dateTime` between '%v' and '%v')", start.Format(df), stop.Format(df))

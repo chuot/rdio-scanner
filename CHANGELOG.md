@@ -31,6 +31,14 @@ _v6.5.3_
 - Add filename to dirwatch error messages (issue #248).
 - Dirwatch.type=default now defaults to the current date and time if none are provided by the metatags (discussion #250).
 
+_v6.5.4_
+
+- Fixed some warnings when linting server code.
+- New dirwatch type `DSDPlus Fast Lane` (discussion #244).
+- Added new error catches on dirwatch (issue 254).
+- Fixed search by inaccurate time (issue #258).
+- Reverted sync.Map to regular map with sync.Mutex.
+
 ## Version 6.4
 
 - New `-cmd` command line options to allow advanced administrative tasks.

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"math"
 	"mime"
 	"os"
@@ -38,9 +37,10 @@ import (
 )
 
 const (
-	DirwatchKindDefault       = "default"
-	DirwatchKindSdrTrunk      = "sdr-trunk"
-	DirwatchKindTrunkRecorder = "trunk-recorder"
+	DirwatchTypeDefault       = "default"
+	DirwatchTypeDSDPlus       = "dsdplus"
+	DirwatchTypeSdrTrunk      = "sdr-trunk"
+	DirwatchTypeTrunkRecorder = "trunk-recorder"
 )
 
 type Dirwatch struct {
@@ -59,7 +59,17 @@ type Dirwatch struct {
 	UsePolling  bool   `json:"usePolling"`
 	controller  *Controller
 	dirs        map[string]bool
+	mutex       sync.Mutex
+	timers      map[string]*time.Timer
 	watcher     *fsnotify.Watcher
+}
+
+func NewDirwatch() *Dirwatch {
+	return &Dirwatch{
+		dirs:   map[string]bool{},
+		mutex:  sync.Mutex{},
+		timers: map[string]*time.Timer{},
+	}
 }
 
 func (dirwatch *Dirwatch) FromMap(m map[string]any) *Dirwatch {
@@ -135,16 +145,18 @@ func (dirwatch *Dirwatch) Ingest(p string) {
 	var err error
 
 	switch dirwatch.Kind {
-	case DirwatchKindTrunkRecorder:
+	case DirwatchTypeDSDPlus:
+		err = dirwatch.ingestDSDPlus(p)
+	case DirwatchTypeTrunkRecorder:
 		err = dirwatch.ingestTrunkRecorder(p)
-	case DirwatchKindSdrTrunk:
+	case DirwatchTypeSdrTrunk:
 		err = dirwatch.ingestSdrTrunk(p)
 	default:
 		err = dirwatch.ingestDefault(p)
 	}
 
 	if err != nil {
-		dirwatch.controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.ingest: %s, %s", err.Error(), p))
+		dirwatch.controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("dirwatch.ingest: %s, %s", err.Error(), p))
 	}
 }
 
@@ -156,7 +168,11 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 
 	switch v := dirwatch.Extension.(type) {
 	case string:
-		ext = fmt.Sprintf(".%s", v)
+		if len(v) > 0 {
+			ext = fmt.Sprintf(".%s", v)
+		} else {
+			ext = ".wav"
+		}
 	default:
 		ext = ".wav"
 	}
@@ -202,7 +218,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 	return err
 }
 
-func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
+func (dirwatch *Dirwatch) ingestDSDPlus(p string) error {
 	var (
 		err error
 		ext string
@@ -220,6 +236,48 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 	}
 
 	if !strings.EqualFold(path.Ext(p), ext) {
+		return nil
+	}
+
+	call := NewCall()
+
+	call.AudioName = filepath.Base(p)
+	call.AudioType = mime.TypeByExtension(path.Ext(p))
+	call.Frequency = dirwatch.Frequency
+
+	switch v := dirwatch.SystemId.(type) {
+	case uint:
+		call.System = v
+	}
+
+	if call.Audio, err = os.ReadFile(p); err != nil {
+		return err
+	}
+
+	if err = ParseDSDPlusMeta(call, p); err != nil {
+		return err
+	}
+
+	if ok, err := call.IsValid(); ok {
+		dirwatch.controller.Ingest <- call
+
+		if dirwatch.DeleteAfter {
+			if err = os.Remove(p); err != nil {
+				return err
+			}
+		}
+
+	} else {
+		return err
+	}
+
+	return nil
+}
+
+func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
+	var err error
+
+	if !strings.EqualFold(path.Ext(p), ".mp3") {
 		return nil
 	}
 
@@ -290,11 +348,11 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 		call.System = v
 	}
 
-	if call.Audio, err = ioutil.ReadFile(audioName); err != nil {
+	if call.Audio, err = os.ReadFile(audioName); err != nil {
 		return nil
 	}
 
-	if b, err = ioutil.ReadFile(p); err != nil {
+	if b, err = os.ReadFile(p); err != nil {
 		return err
 	}
 
@@ -550,15 +608,16 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	}
 
 	go func() {
-		var timers = sync.Map{}
-
 		logError := func(err error) {
 			controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.watcher: %v", err.Error()))
 		}
 
 		newTimer := func(eventName string) *time.Timer {
 			return time.AfterFunc(delay, func() {
-				timers.Delete(eventName)
+				dirwatch.mutex.Lock()
+				defer dirwatch.mutex.Unlock()
+
+				delete(dirwatch.timers, eventName)
 
 				if _, err := os.Stat(eventName); err == nil {
 					dirwatch.Ingest(eventName)
@@ -567,74 +626,71 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 		}
 
 		defer func() {
-			timers.Range(func(k any, t any) bool {
-				switch v := t.(type) {
-				case *time.Timer:
-					v.Stop()
-				}
-
-				timers.Delete(k)
-
-				return true
-			})
-
 			switch v := recover().(type) {
 			case error:
 				controller.Logs.LogEvent(LogLevelError, v.Error())
+			}
+
+			dirwatch.mutex.Lock()
+			defer dirwatch.mutex.Unlock()
+
+			for e, t := range dirwatch.timers {
+				t.Stop()
+				delete(dirwatch.timers, e)
+			}
+
+			if dirwatch.watcher != nil {
+				dirwatch.Start(controller)
 			}
 		}()
 
 		for {
 			if dirwatch.watcher == nil {
-				break
+				return
 			}
 
 			select {
 			case event, ok := <-dirwatch.watcher.Events:
-				if ok {
-					switch event.Op {
-					case fsnotify.Create:
-						if dirwatch.isDir(event.Name) {
-							if err := dirwatch.walkDir(event.Name); err != nil {
-								logError(err)
-							}
+				if !ok {
+					return
+				}
 
-						} else {
-							if f, ok := timers.LoadAndDelete(event.Name); ok {
-								switch v := f.(type) {
-								case *time.Timer:
-									v.Stop()
-								}
-							}
-							timers.Store(event.Name, newTimer(event.Name))
+				switch event.Op {
+				case fsnotify.Create:
+					if dirwatch.isDir(event.Name) {
+						if err := dirwatch.walkDir(event.Name); err != nil {
+							logError(err)
 						}
 
-					case fsnotify.Remove:
-						if dirwatch.dirs[event.Name] {
-							if err := dirwatch.watcher.Remove(event.Name); err == nil {
-								delete(dirwatch.dirs, event.Name)
-							} else {
-								logError(err)
-							}
+					} else {
+						if dirwatch.timers[event.Name] != nil {
+							dirwatch.timers[event.Name].Stop()
 						}
-
-					case fsnotify.Write:
-						if f, ok := timers.LoadAndDelete(event.Name); ok {
-							switch v := f.(type) {
-							case *time.Timer:
-								v.Stop()
-							}
-						}
-						timers.Store(event.Name, newTimer(event.Name))
+						dirwatch.timers[event.Name] = newTimer(event.Name)
 					}
+
+				case fsnotify.Remove:
+					if dirwatch.dirs[event.Name] {
+						if err := dirwatch.watcher.Remove(event.Name); err == nil {
+							delete(dirwatch.dirs, event.Name)
+						} else {
+							logError(err)
+						}
+					}
+
+				case fsnotify.Write:
+					if dirwatch.timers[event.Name] != nil {
+						dirwatch.timers[event.Name].Stop()
+					}
+					dirwatch.timers[event.Name] = newTimer(event.Name)
 				}
 
 			case err, ok := <-dirwatch.watcher.Errors:
 				if ok {
 					logError(err)
-
-					return
 				}
+
+				return
 			}
 		}
 	}()
@@ -671,8 +727,9 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 func (dirwatch *Dirwatch) Stop() {
 	if dirwatch.watcher != nil {
-		dirwatch.watcher.Close()
+		w := dirwatch.watcher
 		dirwatch.watcher = nil
+		w.Close()
 	}
 }
 
@@ -699,8 +756,7 @@ func (dirwatches *Dirwatches) FromMap(f []any) *Dirwatches {
 	for _, f := range f {
 		switch v := f.(type) {
 		case map[string]any:
-			dirwatch := &Dirwatch{}
-			dirwatch.FromMap(v)
+			dirwatch := NewDirwatch().FromMap(v)
 			dirwatches.List = append(dirwatches.List, dirwatch)
 		}
 	}
@@ -739,7 +795,7 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 	}
 
 	for rows.Next() {
-		dirwatch := &Dirwatch{}
+		dirwatch := NewDirwatch()
 
 		if err = rows.Scan(&id, &delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &extension, &frequency, &mask, &order, &systemId, &talkgroupId, &kind, &dirwatch.UsePolling); err != nil {
 			break

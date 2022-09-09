@@ -75,7 +75,7 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		if !ffmpeg.warned {
 			ffmpeg.warned = true
 
-			return errors.New("ffmpeg is not available, no audio conversion will be performed.")
+			return errors.New("ffmpeg is not available, no audio conversion will be performed")
 		}
 		return nil
 	}

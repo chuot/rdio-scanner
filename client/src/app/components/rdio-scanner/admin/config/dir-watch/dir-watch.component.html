@@ -35,6 +35,28 @@
             </div>
             <div class="row">
                 <p>
+                    <span class="mat-body">Type</span><br>
+                    <span class="mat-caption">
+                        Dirwatch type defines how the metadata are obtained.
+                        <ul>
+                            <li><b>Default</b> - Extract the metadata from a custom mask.</li>
+                            <li><b>DSDPlus Fast Lane</b> - Extract the metadata from the file path.</li>
+                            <li><b>Trunk Recorder</b> - Extract the metadata from the json file.</li>
+                            <li><b>SDR Trunk</b> - Extract the metadata from the MP3 tags defined on the SDR Trunk's aliases tab.</li>
+                        </ul>
+                    </span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <mat-select formControlName="type" placeholder="Type">
+                        <mat-option value="default">Default</mat-option>
+                        <mat-option value="dsdplus">DSDPlus Fast Lane</mat-option>
+                        <mat-option value="trunk-recorder">Trunk Recorder</mat-option>
+                        <mat-option value="sdr-trunk">SDR Trunk</mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
                     <span class="mat-body">Directory</span><br>
                     <span class="mat-caption">
                         Path of a local directory to monitor for file ingestion. Note that dirwatch is not compatible
@@ -49,9 +71,12 @@
                     <mat-error *ngIf="dirWatch.get('directory')?.hasError('duplicate')">
                         Directory is already defined
                     </mat-error>
+                    <mat-error *ngIf="dirWatch.get('directory')?.hasError('network')">
+                        Incompatible network folder
+                    </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
+            <div class="row" *ngIf="['default','dsdplus','trunk-recorder'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">Extension</span><br>
                     <span class="mat-caption">The audio call extension to monitor without the period. Ex.: "mp3",
@@ -64,29 +89,14 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">Type</span><br>
-                    <span class="mat-caption">When SDR Trunk, metadata are obtained from the MP3 tags. Note that
-                        the label of the SDR Trunk system must match the label of the Rdio Scanner system label. When
-                        trunk-recorder, metadata are obtained from the JSON file.</span>
-                </p>
-                <mat-form-field floatLabel="never">
-                    <mat-select formControlName="type" placeholder="Type">
-                        <mat-option [value]="null">Default</mat-option>
-                        <mat-option value="trunk-recorder">Trunk Recorder</mat-option>
-                        <mat-option value="sdr-trunk">SDR Trunk (aliases tab only)</mat-option>
-                    </mat-select>
-                </mat-form-field>
-            </div>
-            <div class="row">
+            <div class="row" *ngIf="['default','dsdplus'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">System</span><br>
                     <span class="mat-caption">System to where the audio files should go.</span>
                 </p>
                 <mat-form-field floatLabel="never">
                     <mat-select #sysId formControlName="systemId" placeholder="System">
-                        <mat-option [value]="null">Metatag #SYS</mat-option>
+                        <mat-option [value]="null"></mat-option>
                         <mat-option *ngFor="let system of systems" [value]="system.value.id">
                             {{ system.value.label }}
                         </mat-option>
@@ -96,14 +106,14 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
+            <div class="row" *ngIf="['default'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">Talkgroup</span><br>
                     <span class="mat-caption">Talkgroup to where the audio files should go.</span>
                 </p>
                 <mat-form-field floatLabel="never">
                     <mat-select formControlName="talkgroupId" placeholder="Talkgroup">
-                        <mat-option [value]="null">Metatag #TG</mat-option>
+                        <mat-option [value]="null"></mat-option>
                         <mat-option *ngFor="let talkgroup of talkgroups[dirWatch.value.systemId] || []"
                             [value]="talkgroup.value.id">
                             {{ talkgroup.value.label }}
@@ -114,7 +124,7 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
+            <div class="row" *ngIf="['default'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">Mask</span><br>
                     <span class="mat-caption">Some metadata can be extracted from the file name of the audio file using
@@ -156,7 +166,7 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
+            <div class="row" *ngIf="['default'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">Frequency</span><br>
                     <span class="mat-caption">Fake frequency in hertz displayed on the main screen.</span>
@@ -168,7 +178,7 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row">
+            <div class="row" *ngIf="['default'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">Delay</span><br>
                     <span class="mat-caption">Depending on the recorder, audio files can be ingested too soon after the

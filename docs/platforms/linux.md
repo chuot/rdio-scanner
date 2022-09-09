@@ -18,9 +18,10 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | -------------------------------------------------------------- | --- | -------- |
 | [Trunk Recorder](https://github.com/robotastic/trunk-recorder) | X   | X        |
 | [RTLSDR-Airband](https://github.com/szpajder/RTLSDR-Airband)   |     | X        |
-| [sdrtrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
+| [SDRTrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
 | [ProScan](https://www.proscan.org/)                            |     | X        |
+| [DSDPlus Fast Lane](https://https://www.dsdplus.com/)          |     | X        |
 
 # Improve your experience on the go
 
@@ -42,8 +43,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         [rdio@pc-linux ~]$ mkdir rdio-scanner
         [rdio@pc-linux ~]$ cd rdio-scanner
         [rdio@pc-linux rdio-scanner]$ unzip \
-        > ~/Downloads/rdio-scanner-linux-amd64-v6.5.3.zip 
-        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.5.3.zip
+        > ~/Downloads/rdio-scanner-linux-amd64-v6.5.4.zip 
+        Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v6.5.4.zip
           inflating: rdio-scanner            
           inflating: rdio-scanner.pdf     
 
@@ -51,11 +52,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
         [rdio@pc-linux rdio-scanner]$ ./rdio-scanner 
         
-        Rdio Scanner v6.5.3
+        Rdio Scanner v6.5.4
         ----------------------------------
-        2022/08/10 09:11:48 server started
-        2022/08/10 09:11:48 main interface at http://pc-linux:3000
-        2022/08/10 09:11:48 admin interface at http://pc-linux:3000/admin
+        2022/09/09 09:11:48 server started
+        2022/09/09 09:11:48 main interface at http://pc-linux:3000
+        2022/09/09 09:11:48 admin interface at http://pc-linux:3000/admin
 
 4. Access the administrative dashboard to finalize the configuration.
 
@@ -78,11 +79,11 @@ Here we want our [Rdio Scanner](https://guthub.com/chuot/rdio-scanner) instance 
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner -listen :80
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.5.3
+        Rdio Scanner v6.5.4
         ----------------------------------
-        2022/08/10 09:14:00 server started
-        2022/08/10 09:14:00 main interface at http://pc-linux
-        2022/08/10 09:14:00 admin interface at http://pc-linux/admin
+        2022/09/09 09:14:00 server started
+        2022/09/09 09:14:00 main interface at http://pc-linux
+        2022/09/09 09:14:00 admin interface at http://pc-linux/admin
 
 ## Listening on a SSL port
 
@@ -97,12 +98,12 @@ You can use your own SSL certificates that match your domain name with `-ssl_cer
         > -ssl_listen :443
         [sudo] password for rdio: 
         
-        Rdio Scanner v6.5.3
+        Rdio Scanner v6.5.4
         ----------------------------------
-        2022/08/10 09:16:47 server started
-        2022/08/10 09:16:47 main interface at http://pc-linux
-        2022/08/10 09:16:47 main interface at https://pc-linux
-        2022/08/10 09:16:47 admin interface at https://pc-linux/admin
+        2022/09/09 09:16:47 server started
+        2022/09/09 09:16:47 main interface at http://pc-linux
+        2022/09/09 09:16:47 main interface at https://pc-linux
+        2022/09/09 09:16:47 admin interface at https://pc-linux/admin
 
 If you don't want to worry about SSL certificates, you can use the built-in Let's Encrypt auto-cert feature. This requires that you have both port 80 (HTTP) and port 443 (HTTPS) open to the world. Also, your domain name should point to your IP address where [Rdio Scanner](https://github.com/chuot/rdio-scanner/) is running. The advantage of this approach is that everything is done automatically, no certificate request, no certificate renewal.
 
@@ -120,7 +121,7 @@ You don't want to have to type everytime a long list of arguments. No problem, y
         > -ssl_auto_cert mydomain.com                \
         > -ssl_listen :443                           \
         > -config_save
-        2022/08/10 09:19:29 rdio-scanner.ini file created
+        2022/09/09 09:19:29 rdio-scanner.ini file created
 
 All of your parameters passed as arguments to [Rdio Scanner](https://github.com/chuot/rdio-scanner) have been saved to an INI file which has the same arguments/values list.
 
@@ -135,12 +136,12 @@ Then simply run [Rdio Scanner](https://github.com/chuot/rdio-scanner) without an
         [rdio@pc-linux rdio-scanner]$ sudo ./rdio-scanner 
         [sudo] Mot de passe de rdio : 
         
-        Rdio Scanner v6.5.3
+        Rdio Scanner v6.5.4
         ----------------------------------
-        2022/08/10 09:20:40 server started
-        2022/08/10 09:20:40 main interface at http://pc-linux
-        2022/08/10 09:20:40 main interface at https://pc-linux
-        2022/08/10 09:20:40 admin interface at https://pc-linux/admin
+        2022/09/09 09:20:40 server started
+        2022/09/09 09:20:40 main interface at http://pc-linux
+        2022/09/09 09:20:40 main interface at https://pc-linux
+        2022/09/09 09:20:40 admin interface at https://pc-linux/admin
 
 ## Install Rdio Scanner as a service
 
