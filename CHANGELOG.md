@@ -39,6 +39,10 @@ _v6.5.4_
 - Fixed search by inaccurate time (issue #258).
 - Reverted sync.Map to regular map with sync.Mutex.
 
+_v6.5.5_
+
+- Fixed concurrent map read and map write on dirwatch.
+
 ## Version 6.4
 
 - New `-cmd` command line options to allow advanced administrative tasks.

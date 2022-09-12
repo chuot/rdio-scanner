@@ -41,8 +41,8 @@
                         <ul>
                             <li><b>Default</b> - Extract the metadata from a custom mask.</li>
                             <li><b>DSDPlus Fast Lane</b> - Extract the metadata from the file path.</li>
-                            <li><b>Trunk Recorder</b> - Extract the metadata from the json file.</li>
                             <li><b>SDR Trunk</b> - Extract the metadata from the MP3 tags defined on the SDR Trunk's aliases tab.</li>
+                            <li><b>Trunk Recorder</b> - Extract the metadata from the json file.</li>
                         </ul>
                     </span>
                 </p>
@@ -50,8 +50,8 @@
                     <mat-select formControlName="type" placeholder="Type">
                         <mat-option value="default">Default</mat-option>
                         <mat-option value="dsdplus">DSDPlus Fast Lane</mat-option>
-                        <mat-option value="trunk-recorder">Trunk Recorder</mat-option>
                         <mat-option value="sdr-trunk">SDR Trunk</mat-option>
+                        <mat-option value="trunk-recorder">Trunk Recorder</mat-option>
                     </mat-select>
                 </mat-form-field>
             </div>
@@ -59,8 +59,22 @@
                 <p>
                     <span class="mat-body">Directory</span><br>
                     <span class="mat-caption">
-                        Path of a local directory to monitor for file ingestion. Note that dirwatch is not compatible
-                        with networked disk.
+                        Path of a
+                        <ng-container [ngSwitch]="dirWatch.get('type')?.value">
+                            <ng-container *ngSwitchCase="'dsdplus'">
+                                <b>1R-Record</b>
+                            </ng-container>
+                            <ng-container *ngSwitchCase="'sdr-trunk'">
+                                <b>Recordings</b>
+                            </ng-container>
+                            <ng-container *ngSwitchCase="'trunk-recorder'">
+                                <b>captureDir</b>
+                            </ng-container>
+                            <ng-container *ngSwitchDefault>
+                                local
+                            </ng-container>
+                        </ng-container>
+                        directory to monitor for file ingestion.  Note that dirwatch is not compatible with networked disk.
                     </span>
                 </p>
                 <mat-form-field floatLabel="never">

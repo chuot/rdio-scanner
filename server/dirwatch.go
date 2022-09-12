@@ -663,10 +663,12 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 						}
 
 					} else {
+						dirwatch.mutex.Lock()
 						if dirwatch.timers[event.Name] != nil {
 							dirwatch.timers[event.Name].Stop()
 						}
 						dirwatch.timers[event.Name] = newTimer(event.Name)
+						dirwatch.mutex.Unlock()
 					}
 
 				case fsnotify.Remove:
@@ -679,10 +681,12 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 					}
 
 				case fsnotify.Write:
+					dirwatch.mutex.Lock()
 					if dirwatch.timers[event.Name] != nil {
 						dirwatch.timers[event.Name].Stop()
 					}
 					dirwatch.timers[event.Name] = newTimer(event.Name)
+					dirwatch.mutex.Unlock()
 				}
 
 			case err, ok := <-dirwatch.watcher.Errors:
