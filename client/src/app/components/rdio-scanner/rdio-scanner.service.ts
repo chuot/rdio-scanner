@@ -736,8 +736,8 @@ export class RdioScannerService implements OnDestroy {
     }
 
     private cleanQueue(): void {
-        let isActive = (call: RdioScannerCall) => {
-            let lfm = (sys: number, tg: number): boolean => this.livefeedMap && this.livefeedMap[sys] && this.livefeedMap[sys][tg]?.active;
+        const isActive = (call: RdioScannerCall) => {
+            const lfm = (sys: number, tg: number): boolean => this.livefeedMap && this.livefeedMap[sys] && this.livefeedMap[sys][tg]?.active;
             let active = lfm(call.system, call.talkgroup);
             if (!active && Array.isArray(call.patches)) {
                 for (let i = 0; i < call.patches.length; i++) {
@@ -856,8 +856,8 @@ export class RdioScannerService implements OnDestroy {
             switch (message[0]) {
                 case WebsocketCommand.Call:
                     if (message[1] !== null) {
-                        let call: RdioScannerCall = message[1];
-                        let flag: string = message[2];
+                        const call: RdioScannerCall = message[1];
+                        const flag: string = message[2];
 
                         if (flag === WebsocketCallFlag.Download) {
                             this.download(message[1]);
@@ -948,12 +948,12 @@ export class RdioScannerService implements OnDestroy {
 
                     break;
 
-                case WebsocketCommand.Version:
-                    var data = message[1];
+                case WebsocketCommand.Version: {
+                    const data = message[1];
 
                     if (data !== null && typeof data === 'object') {
-                        var branding = data['branding'];
-                        var email = data['email'];
+                        const branding = data['branding'];
+                        const email = data['email'];
 
                         if (typeof branding === 'string') {
                             this.config.branding = branding;
@@ -969,6 +969,7 @@ export class RdioScannerService implements OnDestroy {
                     }
 
                     break;
+                }
             }
         }
     }
@@ -1117,7 +1118,9 @@ export class RdioScannerService implements OnDestroy {
                     this.livefeedMap[+sys][+tg].active = lfm[sys][tg];
                 });
             });
-        } catch (_) { }
+        } catch (_) {
+            //
+        }
     }
 
     private sendtoWebsocket(command: string, payload?: unknown, flags?: string): void {

@@ -59,10 +59,10 @@
                 <p>
                     <span class="mat-body">Directory</span><br>
                     <span class="mat-caption">
-                        Path of a
+                        Path of the
                         <ng-container [ngSwitch]="dirWatch.get('type')?.value">
                             <ng-container *ngSwitchCase="'dsdplus'">
-                                <b>1R-Record</b>
+                                <b>Record</b>, <b>1R-Record</b> or <b>VC-Record</b>
                             </ng-container>
                             <ng-container *ngSwitchCase="'sdr-trunk'">
                                 <b>Recordings</b>
@@ -120,7 +120,7 @@
                     </mat-error>
                 </mat-form-field>
             </div>
-            <div class="row" *ngIf="['default'].includes(dirWatch.get('type')?.value)">
+            <div class="row" *ngIf="['default','dsdplus'].includes(dirWatch.get('type')?.value)">
                 <p>
                     <span class="mat-body">Talkgroup</span><br>
                     <span class="mat-caption">Talkgroup to where the audio files should go.</span>

@@ -91,6 +91,7 @@ var defaults Defaults = Defaults{
 		"Fire",
 		"Interop",
 		"Law",
+		"Unknown",
 	},
 	keypadBeeps: "uniden",
 	options: DefaultOptions{
@@ -119,5 +120,6 @@ var defaults Defaults = Defaults{
 		"Interop",
 		"Security",
 		"Service",
+		"Untagged",
 	},
 }

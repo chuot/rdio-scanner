@@ -218,9 +218,6 @@ func NewClients() *Clients {
 }
 
 func (clients *Clients) AccessCount(client *Client) int {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	count := 0
 
 	for c := range clients.Map {
@@ -240,16 +237,10 @@ func (clients *Clients) Add(client *Client) {
 }
 
 func (clients *Clients) Count() int {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	return len(clients.Map)
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	for c := range clients.Map {
 		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
 			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
@@ -258,9 +249,6 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 }
 
 func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	count := len(clients.Map)
 
 	for c := range clients.Map {
@@ -277,9 +265,6 @@ func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Sy
 }
 
 func (clients *Clients) EmitListenersCount() {
-	clients.mutex.Lock()
-	defer clients.mutex.Unlock()
-
 	count := len(clients.Map)
 
 	for c := range clients.Map {

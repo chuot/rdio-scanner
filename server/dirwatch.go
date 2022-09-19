@@ -250,6 +250,11 @@ func (dirwatch *Dirwatch) ingestDSDPlus(p string) error {
 		call.System = v
 	}
 
+	switch v := dirwatch.TalkgroupId.(type) {
+	case uint:
+		call.Talkgroup = v
+	}
+
 	if call.Audio, err = os.ReadFile(p); err != nil {
 		return err
 	}

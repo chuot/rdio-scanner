@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime"
 	"mime/multipart"
 	"path"
@@ -33,6 +34,23 @@ import (
 func ParseDSDPlusMeta(call *Call, fp string) error {
 	dir := filepath.Dir(fp)
 	base := strings.TrimSuffix(filepath.Base(fp), filepath.Ext(fp))
+	meta := []string{""}
+
+	lbl := false
+	ptr := 0
+	for i := 0; i < len(base); i++ {
+		if base[i] == '[' {
+			lbl = true
+		} else if base[i] == ']' {
+			lbl = false
+		}
+		if !lbl && base[i] == '_' {
+			ptr++
+			meta = append(meta, "")
+		} else {
+			meta[ptr] += string(base[i])
+		}
+	}
 
 	if d := regexp.MustCompile(`([0-9]+)$`).FindStringSubmatch(dir); len(d) == 2 && len(d[1]) == 8 {
 		if t := regexp.MustCompile(`^([0-9]+)`).FindStringSubmatch(base); len(t) == 2 && len(t[1]) == 6 {
@@ -52,31 +70,60 @@ func ParseDSDPlusMeta(call *Call, fp string) error {
 		}
 	}
 
-	if s := regexp.MustCompile(`^[0-9]+_[0-9]+_[^_]+_([0-9]+)-([0-9]+)_`).FindStringSubmatch(base); len(s) == 3 {
-		if sys, err := strconv.Atoi(s[1]); err == nil && sys > 0 {
-			call.System = uint(sys)
+	if len(meta) > 3 {
+		switch meta[2] {
+		case "ConP(BS)", "DMR(BS)", "P25(BS)":
+			if s := regexp.MustCompile(`^([0-9]+)-.+$`).FindStringSubmatch(meta[3]); len(s) > 1 {
+				if i, err := strconv.Atoi(s[1]); err == nil {
+					call.System = uint(i)
+				}
+			}
+
+		case "NEXEDGE48(CB)", "NEXEDGE48(CS)", "NEXEDGE48(TB)", "NEXEDGE96(CB)", "NEXEDGE96(CS)", "NEXEDGE96(TB)":
+			if s := regexp.MustCompile(`^.([0-9]+)-[0-9]+$`).FindStringSubmatch(meta[3]); len(s) > 1 {
+				if i, err := strconv.Atoi(s[1]); err == nil && i > 0 {
+					call.System = uint(i)
+				}
+
+			} else if len(meta) > 4 {
+				if s := regexp.MustCompile(`RAN([0-9]+)`).FindStringSubmatch(meta[4]); len(s) > 1 {
+					if i, err := strconv.Atoi(s[1]); err == nil && i > 0 {
+						call.System = uint(i)
+					}
+				}
+			}
+
+		case "P25":
+			if s := regexp.MustCompile(`^[^\.]+\.([^-]+)`).FindStringSubmatch(meta[3]); len(s) > 1 {
+				if i, err := strconv.ParseInt(s[1], 16, 64); err == nil && i > 0 {
+					call.System = uint(i)
+				}
+			}
 		}
 	}
 
-	tu := regexp.MustCompile(`([0-9]+)_([0-9]+)$|([0-9]+)_([0-9]+)\[([^\]]*)\]$`).FindStringSubmatch(base)
+	if s := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-2], -1); len(s) > 0 {
+		if i, err := strconv.Atoi(s[0]); err == nil && i > 0 {
+			call.Talkgroup = uint(i)
+		}
 
-	if len(tu[3]) > 0 {
-		tu[1] = tu[3]
+		if len(s) > 1 && len(s[1]) > 0 {
+			if !regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(s[1]) {
+				call.talkgroupLabel = s[1]
+			}
+		}
 	}
 
-	if len(tu[4]) > 0 {
-		tu[2] = tu[4]
-	}
-
-	if tg, err := strconv.Atoi(tu[1]); err == nil && tg > 0 {
-		call.Talkgroup = uint(tg)
-		if src, err := strconv.Atoi(tu[2]); err == nil && src > 0 {
+	if s := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-1], -1); len(s) > 0 {
+		if src, err := strconv.Atoi(s[0]); err == nil && src > 0 {
 			call.Source = uint(src)
-			if len(tu[5]) > 0 && strings.TrimSpace(tu[5]) != strings.TrimSpace(tu[2]) {
-				if b := regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(tu[5]); !b {
-					units := NewUnits()
-					units.Add(uint(src), tu[5])
-					call.units = units
+			if len(s) > 1 && len(s[1]) > 0 {
+				if strings.TrimSpace(s[1]) != fmt.Sprintf("%v", call.Source) {
+					if !regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(s[1]) {
+						units := NewUnits()
+						units.Add(uint(src), strings.TrimSpace(s[1]))
+						call.units = units
+					}
 				}
 			}
 		}

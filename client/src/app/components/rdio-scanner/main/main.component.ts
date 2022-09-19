@@ -537,7 +537,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     private updateDisplay(time = this.callTime): void {
         if (this.call) {
-            let isAfs = this.isAfsSystem(this.call.system);
+            const isAfs = this.isAfsSystem(this.call.system);
 
             this.callProgress = new Date(this.call.dateTime);
             this.callProgress.setSeconds(this.callProgress.getSeconds() + time);
@@ -581,9 +581,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                 this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
                 if (typeof source.src === 'number' && Array.isArray(this.call.systemData?.units)) {
-                    const callUnit = this.call?.systemData?.units?.find((u) => u.id === source.src);
-
-                    this.callUnit = callUnit ? callUnit.label : `${source.src}`;
+                    this.callUnit = this.call.systemData?.units?.find((u) => u.id === source.src)?.label ?? `${source.src}`;
 
                 } else {
                     this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
@@ -592,7 +590,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             } else {
                 this.callTalkgroupId = isAfs ? this.formatAfs(this.call.talkgroup) : this.call.talkgroup.toString();
 
-                this.callUnit = typeof this.call.source === 'number' ? `${this.call.source}` : '';
+                this.callUnit = this.call.systemData?.units?.find((u) => u.id === this.call?.source)?.label ?? `${this.call.source ?? ''}`;
             }
 
             if (

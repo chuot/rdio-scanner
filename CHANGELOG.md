@@ -43,6 +43,12 @@ _v6.5.5_
 
 - Fixed concurrent map read and map write on dirwatch.
 
+_v6.5.6_
+
+- Fixed Clients lockup by removing mutex on some unecessary Clients methods.
+- Better `DSDPlus Fast Lane` parser. Tested with `ConP(BS)`, `DMR(BS)`, `NEXEDGE48(CS)`, `NEXEDGE48(CB)`, `NEXEDGE48(TB)`, `NEXEDGE96(CB)`, `NEXEDGE96(CS)`, `NEXEDGE96(TB)`, `P25(BS)` and `P25`.
+- Fixed unit aliases not displaying on the main screen under certain circumstances.
+
 ## Version 6.4
 
 - New `-cmd` command line options to allow advanced administrative tasks.
