@@ -1,5 +1,14 @@
 # Change log
 
+## Version 6.6
+
+- From now on precompiled versions of macOS will be named as such instead of darwin.
+- Better example for rtlsdr-airband that leverage the new #TGHZ, #TGKHZ and #TGMHZ meta tags for dirwatch.
+- Fixed dirwatch definition not always showing mask field when type is default.
+- Fixed truncated source ids with SDRTrunk parser (issue #265).
+- Fixed admin logs not updating if no results are found.
+- New parameter http://host:port/?id=xyz added to URL that allows multiple client instances with different talkgroup selections to be retained accross sessions.
+
 ## Version 6.5
 
 - Fixed API looping on malformed or invalid multipart content (issue #181, #212).
@@ -48,6 +57,7 @@ _v6.5.6_
 - Fixed Clients lockup by removing mutex on some unecessary Clients methods.
 - Better `DSDPlus Fast Lane` parser. Tested with `ConP(BS)`, `DMR(BS)`, `NEXEDGE48(CS)`, `NEXEDGE48(CB)`, `NEXEDGE48(TB)`, `NEXEDGE96(CB)`, `NEXEDGE96(CS)`, `NEXEDGE96(TB)`, `P25(BS)` and `P25`.
 - Fixed unit aliases not displaying on the main screen under certain circumstances.
+- New incremental debouncer for emitting listeners count.
 
 ## Version 6.4
 

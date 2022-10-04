@@ -175,10 +175,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
-	if dateTime == nil {
-		return nil, nil
-	}
-
 	if t, err := db.ParseDateTime(dateTime); err == nil {
 		logResults.DateStart = t
 	}
@@ -247,7 +243,11 @@ type LogsSearchOptions struct {
 	Sort   any `json:"sort,omitempty"`
 }
 
-func (searchOptions *LogsSearchOptions) FromMap(m map[string]any) error {
+func NewLogSearchOptions() *LogsSearchOptions {
+	return &LogsSearchOptions{}
+}
+
+func (searchOptions *LogsSearchOptions) FromMap(m map[string]any) *LogsSearchOptions {
 	switch v := m["date"].(type) {
 	case string:
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
@@ -275,7 +275,7 @@ func (searchOptions *LogsSearchOptions) FromMap(m map[string]any) error {
 		searchOptions.Sort = int(v)
 	}
 
-	return nil
+	return searchOptions
 }
 
 type LogsSearchResults struct {

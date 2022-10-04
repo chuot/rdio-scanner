@@ -70,7 +70,7 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
          * 
          */
         timer(10000).subscribe(() => {
-            const ua: String = navigator.userAgent;
+            const ua: string = navigator.userAgent;
 
             if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
                 this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });

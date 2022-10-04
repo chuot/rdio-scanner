@@ -82,9 +82,9 @@
         </mat-expansion-panel>
     </mat-accordion>
     <div class="row bottom">
-        <button type="button" mat-raised-button [disabled]="form?.disabled || form?.pristine"
+        <button type="button" mat-raised-button [disabled]="form.disabled || form.pristine"
             (click)="reset()">Reset</button>
         <button type="submit" mat-raised-button color="primary"
-            [disabled]="form?.disabled || form?.pristine || !form?.valid">Save</button>
+            [disabled]="form.disabled || form.pristine || !form.valid">Save</button>
     </div>
 </form>

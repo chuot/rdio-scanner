@@ -19,7 +19,7 @@
         </legend>
         <div>
             <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
-                [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id])?.active, on: map[system.id] && map[system.id][talkgroup.id]?.active, blink: map[system.id][talkgroup.id]?.minutes }"
+                [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]).active, on: map[system.id] && map[system.id][talkgroup.id].active, blink: map[system.id][talkgroup.id].minutes }"
                 (click)="avoid({ system: system, talkgroup: talkgroup })">
                 {{ talkgroup.label }}
             </button>

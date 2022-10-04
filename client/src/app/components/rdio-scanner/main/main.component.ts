@@ -35,8 +35,6 @@ import {
 import { RdioScannerService } from '../rdio-scanner.service';
 import { RdioScannerSupportComponent } from './support/support.component';
 
-const LOCAL_STORAGE_KEY = RdioScannerService.LOCAL_STORAGE_KEY + '-pin';
-
 @Component({
     selector: 'rdio-scanner-main',
     styleUrls: [
@@ -368,15 +366,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     private eventHandler(event: RdioScannerEvent): void {
         if ('auth' in event && event.auth) {
-            let password: string | null = null;
-
-            password = window?.localStorage?.getItem(LOCAL_STORAGE_KEY);
-
-            if (password) {
-                password = window.atob(password);
-
-                window.localStorage.removeItem(LOCAL_STORAGE_KEY);
-            }
+            const password = this.rdioScannerService.readPin();
 
             if (password) {
                 this.authForm.get('password')?.setValue(password);
@@ -420,7 +410,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             const password = this.authForm.get('password')?.value;
 
             if (password) {
-                window?.localStorage?.setItem(LOCAL_STORAGE_KEY, window.btoa(password));
+                this.rdioScannerService.savePin(password);
 
                 this.authForm.reset();
             }

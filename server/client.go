@@ -60,7 +60,7 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 	client.Controller = controller
 	client.Conn = conn
 	client.Livefeed = NewLivefeed()
-	client.Send = make(chan *Message, 4096)
+	client.Send = make(chan *Message, 8192)
 	client.request = request
 
 	go func() {

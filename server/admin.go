@@ -338,14 +338,13 @@ func (admin *Admin) LogsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		logOptions := LogsSearchOptions{}
-		err = logOptions.FromMap(m)
+		logOptions := NewLogSearchOptions().FromMap(m)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		r, err := admin.Controller.Logs.Search(&logOptions, admin.Controller.Database)
+		r, err := admin.Controller.Logs.Search(logOptions, admin.Controller.Database)
 		if err != nil {
 			admin.Controller.Logs.LogEvent(LogLevelError, err.Error())
 			w.WriteHeader(http.StatusExpectationFailed)

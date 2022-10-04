@@ -65,9 +65,9 @@ func NewController(config *Config) *Controller {
 		Systems:     NewSystems(),
 		Tags:        NewTags(),
 		Clients:     NewClients(),
-		Register:    make(chan *Client, 4096),
-		Unregister:  make(chan *Client, 4096),
-		Ingest:      make(chan *Call, 4096),
+		Register:    make(chan *Client, 8192),
+		Unregister:  make(chan *Client, 8192),
+		Ingest:      make(chan *Call, 8192),
 	}
 
 	controller.Admin = NewAdmin(controller)
@@ -528,15 +528,29 @@ func (controller *Controller) Start() error {
 	}()
 
 	go func() {
-		var timer *time.Timer
+		const (
+			minTimeout = 3
+			maxTimeout = 15
+		)
+
+		var (
+			timeout time.Duration = minTimeout
+			timer   *time.Timer
+		)
 
 		doClientsCount := func() {
 			if timer != nil {
 				timer.Stop()
+
+				timeout++
+				if timeout > maxTimeout {
+					timeout = maxTimeout
+				}
 			}
 
-			timer = time.AfterFunc(time.Second, func() {
+			timer = time.AfterFunc(timeout*time.Second, func() {
 				timer = nil
+				timeout = minTimeout
 
 				controller.LogClientsCount()
 

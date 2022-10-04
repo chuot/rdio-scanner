@@ -147,7 +147,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`^([0-9]+) ?(.*)$`).FindStringSubmatch(m.Artist())
 	if len(s) >= 2 {
-		if i, err = strconv.Atoi(s[1][0:1]); err != nil {
+		if i, err = strconv.Atoi(s[1]); err != nil {
 			return err
 		}
 		if i > 0 {

@@ -16,20 +16,20 @@
 ################################################################################
 
 app := rdio-scanner
-date := 2022/09/19
-ver := 6.5.6
+date := 2022/10/04
+ver := 6.6.0
 
 client := $(wildcard client/*.json client/*.ts)
 server := $(wildcard server/*.go)
 
-build = @cd server && GOOS=$(1) GOARCH=$(2) go build -o ../dist/$(1)-$(2)/$(3)
+build = @cd server && GOOS=$(1) GOARCH=$(3) go build -o ../dist/$(2)-$(3)/$(4)
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
 .PHONY: all clean container dist sed
-.PHONY: darwin darwin-amd64 darwin-arm64
 .PHONY: freebsd freebsd-amd64
 .PHONY: linux linux-386 linux-amd64 linux-arm linux-arm64
+.PHONY: macos macos-amd64 macos-arm64
 .PHONY: windows windows-amd64
 
 all: clean dist
@@ -43,12 +43,12 @@ container: webapp linux-amd64
 	@podman build --platform linux/amd64,linux/arm,linux/arm64 --pull --manifest rdio-scanner:latest .
 	@podman manifest push --format v2s2 localhost/rdio-scanner:latest docker://docker.io/chuot/rdio-scanner:latest
 
-dist: darwin freebsd linux windows
+dist: freebsd linux macos windows
 
 sed:
 	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" client/package.json
 	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" server/version.go
-	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md docs/docker/README.md docs/platforms/*.md
+	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
 
 webapp: server/webapp/index.html
@@ -57,26 +57,12 @@ server/webapp/index.html: $(client)
 	@cd client && test -d node_modules || npm ci --loglevel=error --no-progress
 	@cd client && npm run build
 
-darwin: darwin-amd64 darwin-arm64
-darwin-amd64: webapp dist/$(app)-darwin-amd64-v$(ver).zip
-darwin-arm64: webapp dist/$(app)-darwin-arm64-v$(ver).zip
-
-dist/$(app)-darwin-amd64-v$(ver).zip: $(server)
-	$(call pandoc,darwin,amd64,rdio-scanner.pdf,docs/platforms/darwin.md)
-	$(call build,darwin,amd64,$(app))
-	$(call zip,darwin,amd64,$(app))
-
-dist/$(app)-darwin-arm64-v$(ver).zip: $(server)
-	$(call pandoc,darwin,arm64,rdio-scanner.pdf,docs/platforms/darwin.md)
-	$(call build,darwin,arm64,$(app))
-	$(call zip,darwin,arm64,$(app))
-
 freebsd: freebsd-amd64
 freebsd-amd64: webapp dist/$(app)-freebsd-amd64-v$(ver).zip
 
 dist/$(app)-freebsd-amd64-v$(ver).zip: $(server)
 	$(call pandoc,freebsd,amd64,rdio-scanner.pdf,docs/platforms/freebsd.md)
-	$(call build,freebsd,amd64,$(app))
+	$(call build,freebsd,freebsd,amd64,$(app))
 	$(call zip,freebsd,amd64,$(app))
 
 linux: linux-386 linux-amd64 linux-arm linux-arm64
@@ -87,28 +73,42 @@ linux-arm64: webapp dist/$(app)-linux-arm64-v$(ver).zip
 
 dist/$(app)-linux-386-v$(ver).zip: $(server)
 	$(call pandoc,linux,386,rdio-scanner.pdf,docs/platforms/linux.md)
-	$(call build,linux,386,$(app))
+	$(call build,linux,linux,386,$(app))
 	$(call zip,linux,386,$(app))
 
 dist/$(app)-linux-amd64-v$(ver).zip: $(server)
 	$(call pandoc,linux,amd64,rdio-scanner.pdf,docs/platforms/linux.md)
-	$(call build,linux,amd64,$(app))
+	$(call build,linux,linux,amd64,$(app))
 	$(call zip,linux,amd64,$(app))
 
 dist/$(app)-linux-arm-v$(ver).zip: $(server)
 	$(call pandoc,linux,arm,rdio-scanner.pdf,docs/platforms/linux.md)
-	$(call build,linux,arm,$(app))
+	$(call build,linux,linux,arm,$(app))
 	$(call zip,linux,arm,$(app))
 
 dist/$(app)-linux-arm64-v$(ver).zip: $(server)
 	$(call pandoc,linux,arm64,rdio-scanner.pdf,docs/platforms/linux.md)
-	$(call build,linux,arm64,$(app))
+	$(call build,linux,linux,arm64,$(app))
 	$(call zip,linux,arm64,$(app))
+
+macos: macos-amd64 macos-arm64
+macos-amd64: webapp dist/$(app)-macos-amd64-v$(ver).zip
+macos-arm64: webapp dist/$(app)-macos-arm64-v$(ver).zip
+
+dist/$(app)-macos-amd64-v$(ver).zip: $(server)
+	$(call pandoc,macos,amd64,rdio-scanner.pdf,docs/platforms/macos.md)
+	$(call build,darwin,macos,amd64,$(app))
+	$(call zip,macos,amd64,$(app))
+
+dist/$(app)-macos-arm64-v$(ver).zip: $(server)
+	$(call pandoc,macos,arm64,rdio-scanner.pdf,docs/platforms/macos.md)
+	$(call build,darwin,macos,arm64,$(app))
+	$(call zip,macos,arm64,$(app))
 
 windows: windows-amd64
 windows-amd64: webapp dist/$(app)-windows-amd64-v$(ver).zip
 
 dist/$(app)-windows-amd64-v$(ver).zip: $(server)
 	$(call pandoc,windows,amd64,rdio-scanner.pdf,docs/platforms/windows.md)
-	$(call build,windows,amd64,$(app).exe)
+	$(call build,windows,windows,amd64,$(app).exe)
 	$(call zip,windows,amd64,$(app))

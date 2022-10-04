@@ -25,14 +25,24 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 
 ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rdio-scanner) FROM ITS OFFICIAL REPOSITORY AT **[HTTPS://GITHUB.COM/CHUOT/RDIO-SCANNER](https://github.com/chuot/rdio-scanner)**.
 
-1. Download the the latest precompiled version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) from the [releases tab](https://github.com/chuot/rdio-scanner/releases).
+1. Download the latest precompiled version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) from the [releases tab](https://github.com/chuot/rdio-scanner/releases).
+
+   | Operating system | Architecture | Use package                           |
+   | -----------------| ------------ | ------------------------------------- |
+   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.0.zip |
+   | Linux            | 386          | rdio-scanner-linux-386-v6.6.0.zip     |
+   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.0.zip   |
+   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.0.zip     |
+   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.0.zip   |
+   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.0.zip   |
+   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.0.zip   |
+   | Windows          | amd64        | rdio-scanner-macos-amd64-v6.6.0.zip   |
+
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 4. Access the administrative dashboard to finalize the configuration.
 
 More detailed instructions are available in the `rdio-scanner.pdf` file provided in the precompiled archives.
-
-If you are updating from version 5, please refer to [docs/update-from-v5.md](docs/update-from-v5.md) before proceeding.
 
 # Docker
 

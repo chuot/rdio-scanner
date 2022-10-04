@@ -10,8 +10,8 @@ See the `rtl_airband.conf` file for an example.
 
 In you Rdio Scanner dirwatch configuration, use those parameters:
 
-- Directory: `/tmp/radio/CYMX`
+- Directory: `/tmp/radio/Laurentides`
 - Extension: `mp3`
 - Type: `Default`
 - System: _choose the appropriate one_
-- Mask: `cymx_#TG_#DATE_#TIME_#HZ`
+- Mask: `laurentides_#DATE_#TIME_#TGHZ`

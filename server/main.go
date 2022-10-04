@@ -83,7 +83,7 @@ func main() {
 		hostname = defaultAddr
 	}
 
-	if s := strings.Split(controller.Config.Listen, ":"); len(s) > 1 {
+	if s := strings.Split(config.Listen, ":"); len(s) > 1 {
 		addr = s[0]
 		port = s[1]
 	} else {
@@ -94,7 +94,7 @@ func main() {
 		addr = defaultAddr
 	}
 
-	if s := strings.Split(controller.Config.SslListen, ":"); len(s) > 1 {
+	if s := strings.Split(config.SslListen, ":"); len(s) > 1 {
 		sslAddr = s[0]
 		sslPort = s[1]
 	} else {
@@ -206,12 +206,12 @@ func main() {
 		return s
 	}
 
-	if len(controller.Config.SslCertFile) > 0 && len(controller.Config.SslKeyFile) > 0 {
+	if len(config.SslCertFile) > 0 && len(config.SslKeyFile) > 0 {
 		go func() {
 			sslPrintInfo()
 
-			sslCert := controller.Config.GetSslCertFilePath()
-			sslKey := controller.Config.GetSslKeyFilePath()
+			sslCert := config.GetSslCertFilePath()
+			sslKey := config.GetSslKeyFilePath()
 
 			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), nil)
 
@@ -220,14 +220,14 @@ func main() {
 			}
 		}()
 
-	} else if controller.Config.SslAutoCert != "" {
+	} else if config.SslAutoCert != "" {
 		go func() {
 			sslPrintInfo()
 
 			manager := &autocert.Manager{
 				Cache:      autocert.DirCache("autocert"),
 				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(controller.Config.SslAutoCert),
+				HostPolicy: autocert.HostWhitelist(config.SslAutoCert),
 			}
 
 			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), manager.TLSConfig())

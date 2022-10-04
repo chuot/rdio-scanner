@@ -19,6 +19,7 @@
 
 import { DOCUMENT } from '@angular/common';
 import { EventEmitter, Inject, Injectable, OnDestroy } from '@angular/core';
+import { Router } from '@angular/router';
 import { interval, Subscription, timer } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 import { AppUpdateService } from '../../shared/update/update.service';
@@ -63,7 +64,9 @@ enum WebsocketCommand {
 
 @Injectable()
 export class RdioScannerService implements OnDestroy {
-    static LOCAL_STORAGE_KEY = 'rdio-scanner';
+    static LOCAL_STORAGE_KEY_LEGACY = 'rdio-scanner';
+    static LOCAL_STORAGE_KEY_LFM = 'rdio-scanner-lfm';
+    static LOCAL_STORAGE_KEY_PIN = 'rdio-scanner-pin';
 
     event = new EventEmitter<RdioScannerEvent>();
 
@@ -92,6 +95,8 @@ export class RdioScannerService implements OnDestroy {
         time12hFormat: false,
     };
 
+    private instanceId = 'default';
+
     private livefeedMap = {} as RdioScannerLivefeedMap;
     private livefeedMapPriorToHoldSystem: RdioScannerLivefeedMap | undefined;
     private livefeedMapPriorToHoldTalkgroup: RdioScannerLivefeedMap | undefined;
@@ -108,11 +113,14 @@ export class RdioScannerService implements OnDestroy {
 
     constructor(
         appUpdateService: AppUpdateService,
+        private router: Router,
         @Inject(DOCUMENT) private document: Document,
     ) {
         this.bootstrapAudio();
 
-        this.restoreLivefeed();
+        this.initializeInstanceId();
+
+        this.readLivefeedMap();
 
         this.openWebsocket();
     }
@@ -136,7 +144,7 @@ export class RdioScannerService implements OnDestroy {
                 lfm.timer = undefined;
 
                 this.rebuildCategories();
-                this.storeLivefeedMap();
+                this.saveLivefeedMap();
 
                 this.event.emit({
                     categories: this.categories,
@@ -198,7 +206,7 @@ export class RdioScannerService implements OnDestroy {
 
         this.rebuildCategories();
 
-        this.storeLivefeedMap();
+        this.saveLivefeedMap();
 
         if (this.livefeedMode === RdioScannerLivefeedMode.Online) {
             this.startLivefeed();
@@ -249,6 +257,12 @@ export class RdioScannerService implements OnDestroy {
                 osc.stop(context.currentTime + beep.end);
             });
         });
+    }
+
+    ngOnDestroy(): void {
+        this.closeWebsocket();
+
+        this.stop();
     }
 
     holdSystem(options?: { resubscribe?: boolean }): void {
@@ -427,12 +441,6 @@ export class RdioScannerService implements OnDestroy {
         this.getCall(id, WebsocketCallFlag.Play);
     }
 
-    ngOnDestroy(): void {
-        this.closeWebsocket();
-
-        this.stop();
-    }
-
     pause(status = !this.livefeedPaused): void {
         this.livefeedPaused = status;
 
@@ -536,6 +544,16 @@ export class RdioScannerService implements OnDestroy {
 
     replay(): void {
         this.play(this.call || this.callPrevious);
+    }
+
+    readPin(): string | undefined {
+        const pin = window?.localStorage?.getItem(`${RdioScannerService.LOCAL_STORAGE_KEY_PIN}`);
+
+        return pin ? window.atob(pin) : undefined;
+    }
+
+    savePin(pin: string): void {
+        window?.localStorage?.setItem(`${RdioScannerService.LOCAL_STORAGE_KEY_PIN}`, window.btoa(pin));
     }
 
     searchCalls(options: RdioScannerSearchOptions): void {
@@ -675,7 +693,7 @@ export class RdioScannerService implements OnDestroy {
                 this.startLivefeed();
             }
 
-            this.storeLivefeedMap();
+            this.saveLivefeedMap();
 
             this.cleanQueue();
 
@@ -817,6 +835,10 @@ export class RdioScannerService implements OnDestroy {
         }
 
         return queueCount;
+    }
+
+    private initializeInstanceId(): void {
+        this.instanceId = this.router.parseUrl(this.router.url).queryParams['id'] || this.instanceId;
     }
 
     private openWebsocket(): void {
@@ -1037,6 +1059,36 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
+    private readLivefeedMap(): void {
+        try {
+            let lfm: { [key: number]: { [key: number]: boolean } } = {};
+
+            let store = window?.localStorage?.getItem(`${RdioScannerService.LOCAL_STORAGE_KEY_LFM}-${this.instanceId}`);
+
+            if (store !== null) {
+                lfm = JSON.parse(store);
+
+            } else {
+                store = window?.localStorage?.getItem(RdioScannerService.LOCAL_STORAGE_KEY_LEGACY);
+
+                if (store !== null) {
+                    lfm = JSON.parse(store);
+                }
+            }
+
+            Object.keys(lfm ?? {}).forEach((sys: string) => {
+                Object.keys(lfm[+sys]).forEach((tg) => {
+                    if (!this.livefeedMap[+sys]) this.livefeedMap[+sys] = {};
+                    if (!this.livefeedMap[+sys][+tg]) this.livefeedMap[+sys][+tg] = {} as RdioScannerLivefeed;
+                    this.livefeedMap[+sys][+tg].active = lfm[+sys][+tg];
+                });
+            });
+
+        } catch (_) {
+            //
+        }
+    }
+
     private rebuildCategories(): void {
         this.categories = Object.keys(this.config.groups || []).map((label) => {
             const allOff = Object.keys(this.config.groups[label]).map((sys) => +sys)
@@ -1096,7 +1148,7 @@ export class RdioScannerService implements OnDestroy {
             this.livefeedMap = lfm;
         }
 
-        this.storeLivefeedMap();
+        this.saveLivefeedMap();
 
         this.rebuildCategories();
     }
@@ -1107,20 +1159,16 @@ export class RdioScannerService implements OnDestroy {
         this.openWebsocket();
     }
 
-    private restoreLivefeed(): void {
-        try {
-            const lfm = JSON.parse(window?.localStorage?.getItem(RdioScannerService.LOCAL_STORAGE_KEY) || "{}");
+    private saveLivefeedMap(): void {
+        const lfm = Object.keys(this.livefeedMap).reduce((sysMap: { [key: number]: { [key: number]: boolean } }, sys: string) => {
+            sysMap[+sys] = Object.keys(this.livefeedMap[+sys]).reduce((tgMap: { [key: number]: boolean }, tg: string) => {
+                tgMap[+tg] = this.livefeedMap[+sys][+tg].active;
+                return tgMap;
+            }, {});
+            return sysMap;
+        }, {});
 
-            Object.keys(lfm).forEach((sys) => {
-                Object.keys(lfm[sys]).forEach((tg) => {
-                    if (!this.livefeedMap[+sys]) this.livefeedMap[+sys] = {};
-                    if (!this.livefeedMap[+sys][+tg]) this.livefeedMap[+sys][+tg] = {} as RdioScannerLivefeed;
-                    this.livefeedMap[+sys][+tg].active = lfm[sys][tg];
-                });
-            });
-        } catch (_) {
-            //
-        }
+        window?.localStorage?.setItem(`${RdioScannerService.LOCAL_STORAGE_KEY_LFM}-${this.instanceId}`, JSON.stringify(lfm));
     }
 
     private sendtoWebsocket(command: string, payload?: unknown, flags?: string): void {
@@ -1139,17 +1187,6 @@ export class RdioScannerService implements OnDestroy {
         }
     }
 
-    private storeLivefeedMap(): void {
-        const lfm = Object.keys(this.livefeedMap).reduce((sysMap: { [key: number]: { [key: number]: boolean } }, sys: string) => {
-            sysMap[+sys] = Object.keys(this.livefeedMap[+sys]).reduce((tgMap: { [key: number]: boolean }, tg: string) => {
-                tgMap[+tg] = this.livefeedMap[+sys][+tg].active;
-                return tgMap;
-            }, {});
-            return sysMap;
-        }, {});
-
-        window?.localStorage?.setItem(RdioScannerService.LOCAL_STORAGE_KEY, JSON.stringify(lfm));
-    }
 
     private transformCall(call: RdioScannerCall): RdioScannerCall {
         if (call && Array.isArray(this.config?.systems)) {
