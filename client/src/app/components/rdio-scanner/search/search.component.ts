@@ -230,14 +230,14 @@ export class RdioScannerSearchComponent implements OnDestroy {
         const options: RdioScannerSearchOptions = {
             limit: this.limit,
             offset: this.offset,
-            sort: this.form.value.sort ?? -1,
+            sort: this.form.value.sort,
         };
 
         if (typeof this.form.value.date === 'string') {
             options.date = new Date(Date.parse(this.form.value.date));
         }
 
-        if (this.form.value.group ?? 0 >= 0) {
+        if (this.form.value.group >= 0) {
             const group = this.getSelectedGroup();
 
             if (group) {
@@ -245,7 +245,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             }
         }
 
-        if (this.form.value.system ?? 0 >= 0) {
+        if (this.form.value.system >= 0) {
             const system = this.getSelectedSystem();
 
             if (system) {
@@ -253,7 +253,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             }
         }
 
-        if (this.form.value.tag ?? 0 >= 0) {
+        if (this.form.value.tag >= 0) {
             const tag = this.getSelectedTag();
 
             if (tag) {
@@ -261,7 +261,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             }
         }
 
-        if (this.form.value.talkgroup ?? 0 >= 0) {
+        if (this.form.value.talkgroup >= 0) {
             const talkgroup = this.getSelectedTalkgroup();
 
             if (talkgroup) {
@@ -345,22 +345,22 @@ export class RdioScannerSearchComponent implements OnDestroy {
     }
 
     private getSelectedGroup(): string | undefined {
-        return this.optionsGroup[this.form.value.group ?? 0];
+        return this.optionsGroup[this.form.value.group];
     }
 
     private getSelectedSystem(): RdioScannerSystem | undefined {
-        return this.config?.systems.find((system) => system.label === this.optionsSystem[this.form.value.system ?? 0]);
+        return this.config?.systems.find((system) => system.label === this.optionsSystem[this.form.value.system]);
     }
 
     private getSelectedTag(): string | undefined {
-        return this.optionsTag[this.form.value.tag ?? 0];
+        return this.optionsTag[this.form.value.tag];
     }
 
     private getSelectedTalkgroup(): RdioScannerTalkgroup | undefined {
         const system = this.getSelectedSystem();
 
         return system
-            ? system.talkgroups.find((talkgroup) => talkgroup.label === this.optionsTalkgroup[this.form.value.talkgroup ?? 0])
+            ? system.talkgroups.find((talkgroup) => talkgroup.label === this.optionsTalkgroup[this.form.value.talkgroup])
             : undefined;
     }
 }

@@ -9,6 +9,10 @@
 - Fixed admin logs not updating if no results are found.
 - New parameter http://host:port/?id=xyz added to URL that allows multiple client instances with different talkgroup selections to be retained accross sessions.
 
+_v6.6.1_
+
+- Fixed search issue (issue #267).
+
 ## Version 6.5
 
 - Fixed API looping on malformed or invalid multipart content (issue #181, #212).
