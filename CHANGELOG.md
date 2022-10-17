@@ -13,6 +13,10 @@ _v6.6.1_
 
 - Fixed search issue (issue #267).
 
+_v6.6.2_
+
+- Fixed authentication endless loop if wrong access code is entered.
+
 ## Version 6.5
 
 - Fixed API looping on malformed or invalid multipart content (issue #181, #212).

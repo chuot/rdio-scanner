@@ -259,6 +259,10 @@ export class RdioScannerService implements OnDestroy {
         });
     }
 
+    clearPin(): void {
+        window?.localStorage.removeItem(RdioScannerService.LOCAL_STORAGE_KEY_PIN);
+    }
+
     ngOnDestroy(): void {
         this.closeWebsocket();
 
@@ -547,13 +551,13 @@ export class RdioScannerService implements OnDestroy {
     }
 
     readPin(): string | undefined {
-        const pin = window?.localStorage?.getItem(`${RdioScannerService.LOCAL_STORAGE_KEY_PIN}`);
+        const pin = window?.localStorage?.getItem(RdioScannerService.LOCAL_STORAGE_KEY_PIN);
 
         return pin ? window.atob(pin) : undefined;
     }
 
     savePin(pin: string): void {
-        window?.localStorage?.setItem(`${RdioScannerService.LOCAL_STORAGE_KEY_PIN}`, window.btoa(pin));
+        window?.localStorage?.setItem(RdioScannerService.LOCAL_STORAGE_KEY_PIN, window.btoa(pin));
     }
 
     searchCalls(options: RdioScannerSearchOptions): void {

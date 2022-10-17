@@ -369,6 +369,8 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
             const password = this.rdioScannerService.readPin();
 
             if (password) {
+                this.rdioScannerService.clearPin();
+
                 this.authForm.get('password')?.setValue(password);
 
                 this.rdioScannerService.authenticate(password);
