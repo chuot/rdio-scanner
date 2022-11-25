@@ -17,6 +17,10 @@ _v6.6.2_
 
 - Fixed authentication endless loop if wrong access code is entered.
 
+_v6.6.3_
+
+- Fixed dirwatch validation for type trunk-recorder (issue #280).
+
 ## Version 6.5
 
 - Fixed API looping on malformed or invalid multipart content (issue #181, #212).

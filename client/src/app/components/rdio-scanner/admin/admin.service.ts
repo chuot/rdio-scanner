@@ -657,7 +657,7 @@ export class RdioScannerAdminService implements OnDestroy {
 
             const type = dirwatch.type;
 
-            return ['dsdplus', 'sdr-trunk'].includes(type) || control.value !== null || /#SYS/.test(mask) ? null : { required: true };
+            return ['dsdplus', 'trunk-recorder', 'sdr-trunk'].includes(type) || control.value !== null || /#SYS/.test(mask) ? null : { required: true };
         };
     }
 
