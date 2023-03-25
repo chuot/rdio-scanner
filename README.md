@@ -19,7 +19,7 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | [SDRTrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
 | [ProScan](https://www.proscan.org/)                            |     | X        |
-| [DSDPlus Fast Lane](https://https://www.dsdplus.com/)          |     | X        |
+| [DSDPlus Fast Lane](https://www.dsdplus.com/)          |     | X        |
 
 # Quick start
 
