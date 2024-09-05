@@ -12,7 +12,7 @@
 - Select **Cloudflared** to create a tunnel.
 
 ### 4. Choose Your Environment
-- Follow the instructions for your environment (tested with **Windows**).
+- Follow the instructions for your environment (only tested with **Windows**).
 
 ### 5. Route Your Traffic
 - Fill out the **hostname** (example: `rdioscanner.yourdomain.tld`).
