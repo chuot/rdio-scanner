@@ -8,7 +8,7 @@
 - Update your domain's nameservers to those provided by Cloudflare.
 
 ### 3. Set Up and Configure the Tunnel
-- Go to the **Tunnels** page in the Cloudflare dashboard.
+- Go to the **Tunnels** page in the Cloudflare dashboard. (located under "Zero Trust" > "Networks")
 - Select **Cloudflared** to create a tunnel.
 
 ### 4. Choose Your Environment
