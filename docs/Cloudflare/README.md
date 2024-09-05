@@ -9,7 +9,9 @@
 
 ### 3. Set Up and Configure the Tunnel
 - Go to the **Tunnels** page in the Cloudflare dashboard. (located under "Zero Trust" > "Networks")
+- Create a **Tunnel**
 - Select **Cloudflared** to create a tunnel.
+- Name your **Tunnel**
 
 ### 4. Choose Your Environment
 - Follow the instructions for your environment (only tested with **Windows**).
