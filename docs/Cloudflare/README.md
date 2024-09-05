@@ -13,7 +13,7 @@ Here's how to set up a Cloudflare Tunnel on **Windows**:
 
 ### 3. **Setup And configure the tunnel**
 
-(https://one.dash.cloudflare.com/e07280f09998741f418999112bab721d/networks/tunnels/)
+[Tunnel Page](https://one.dash.cloudflare.com/e07280f09998741f418999112bab721d/networks/tunnels/)
 
 -Select "Cloudflared"
 
