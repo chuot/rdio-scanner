@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,15 +25,23 @@ import (
 )
 
 type Unit struct {
-	Id    uint   `json:"id"`
-	Label string `json:"label"`
-	Order uint   `json:"order"`
+	Id       uint64
+	Label    string
+	Order    uint
+	SystemId uint64
+	UnitRef  uint
+	UnitFrom uint
+	UnitTo   uint
+}
+
+func NewUnit() *Unit {
+	return &Unit{}
 }
 
 func (unit *Unit) FromMap(m map[string]any) *Unit {
 	switch v := m["id"].(type) {
 	case float64:
-		unit.Id = uint(v)
+		unit.Id = uint64(v)
 	}
 
 	switch v := m["label"].(type) {
@@ -46,12 +54,58 @@ func (unit *Unit) FromMap(m map[string]any) *Unit {
 		unit.Order = uint(v)
 	}
 
+	switch v := m["systemId"].(type) {
+	case float64:
+		unit.SystemId = uint64(v)
+	}
+
+	switch v := m["unitRef"].(type) {
+	case float64:
+		unit.UnitRef = uint(v)
+	}
+
+	switch v := m["unitFrom"].(type) {
+	case float64:
+		unit.UnitFrom = uint(v)
+	}
+
+	switch v := m["unitTo"].(type) {
+	case float64:
+		unit.UnitTo = uint(v)
+	}
+
 	return unit
 }
 
+func (unit *Unit) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":    unit.UnitRef,
+		"label": unit.Label,
+	}
+
+	if unit.Order > 0 {
+		m["order"] = unit.Order
+	}
+
+	if unit.UnitRef > 0 {
+		m["unitRef"] = unit.UnitRef
+	}
+
+	if unit.UnitFrom > 0 {
+		m["unitFrom"] = unit.UnitFrom
+	}
+
+	if unit.UnitTo > 0 {
+		m["unitTo"] = unit.UnitTo
+	}
+
+	return json.Marshal(m)
+}
+
 type Units struct {
-	List  []*Unit
-	mutex sync.Mutex
+	List     []*Unit
+	SystemId uint64
+	mutex    sync.Mutex
 }
 
 func NewUnits() *Units {
@@ -61,18 +115,18 @@ func NewUnits() *Units {
 	}
 }
 
-func (units *Units) Add(id uint, label string) (*Units, bool) {
+func (units *Units) Add(unitRef uint, label string) (*Units, bool) {
 	added := true
 
 	for _, u := range units.List {
-		if u.Id == id {
+		if u.UnitRef == unitRef {
 			added = false
 			break
 		}
 	}
 
 	if added {
-		units.List = append(units.List, &Unit{Id: id, Label: label})
+		units.List = append(units.List, &Unit{Label: label, UnitRef: unitRef})
 	}
 
 	return units, added
@@ -87,8 +141,7 @@ func (units *Units) FromMap(f []any) *Units {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			unit := &Unit{}
-			unit.FromMap(m)
+			unit := NewUnit().FromMap(m)
 			units.List = append(units.List, unit)
 		}
 	}
@@ -103,8 +156,8 @@ func (u *Units) Merge(units *Units) bool {
 		u.mutex.Lock()
 		defer u.mutex.Unlock()
 
-		for _, v := range units.List {
-			if _, added := u.Add(v.Id, v.Label); added {
+		for _, unit := range units.List {
+			if _, added := u.Add(unit.UnitRef, unit.Label); added {
 				merged = added
 			}
 		}
@@ -113,10 +166,11 @@ func (u *Units) Merge(units *Units) bool {
 	return merged
 }
 
-func (units *Units) Read(db *Database, systemId uint) error {
+func (units *Units) ReadTx(tx *sql.Tx, systemId uint64) error {
 	var (
-		err  error
-		rows *sql.Rows
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	units.mutex.Lock()
@@ -124,19 +178,18 @@ func (units *Units) Read(db *Database, systemId uint) error {
 
 	units.List = []*Unit{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("units.read: %v", err)
-	}
+	formatError := errorFormatter("units", "read")
 
-	if rows, err = db.Sql.Query("select `id`, `label`, `order` from `rdioScannerUnits` where `systemId` = ?", systemId); err != nil {
-		return formatError(err)
+	query = fmt.Sprintf(`SELECT "unitId", "label", "order", "unitRef", "unitFrom", "unitTo" FROM "units" WHERE "systemId" = %d`, systemId)
+	if rows, err = tx.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		unit := &Unit{}
+		unit := NewUnit()
 
-		if err = rows.Scan(&unit.Id, &unit.Label, &unit.Order); err != nil {
-			break
+		if err = rows.Scan(&unit.Id, &unit.Label, &unit.Order, &unit.UnitRef, &unit.UnitFrom, &unit.UnitTo); err != nil {
+			continue
 		}
 
 		units.List = append(units.List, unit)
@@ -145,7 +198,7 @@ func (units *Units) Read(db *Database, systemId uint) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
 
 	sort.Slice(units.List, func(i int, j int) bool {
@@ -155,77 +208,83 @@ func (units *Units) Read(db *Database, systemId uint) error {
 	return nil
 }
 
-func (units *Units) Write(db *Database, systemId uint) error {
+func (units *Units) WriteTx(tx *sql.Tx, systemId uint64) error {
 	var (
-		count uint
-		err   error
-		ids   = []uint{}
-		rows  *sql.Rows
+		err     error
+		query   string
+		rows    *sql.Rows
+		unitIds = []uint64{}
 	)
 
 	units.mutex.Lock()
 	defer units.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("units.write: %v", err)
-	}
+	formatError := errorFormatter("units", "writetx")
 
-	if rows, err = db.Sql.Query("select `id` from `rdioScannerUnits` where `systemId` = ?", systemId); err != nil {
-		return formatError(err)
+	query = fmt.Sprintf(`SELECT "unitId" FROM "units" WHERE "systemId" = %d`, systemId)
+	if rows, err = tx.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var id uint
-		if err = rows.Scan(&id); err != nil {
+		var unitId uint64
+		if err = rows.Scan(&unitId); err != nil {
 			break
 		}
 		remove := true
 		for _, unit := range units.List {
-			if unit.Id == id {
+			if unit.Id == 0 || unit.Id == unitId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			ids = append(ids, id)
+			unitIds = append(unitIds, unitId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
 
-	if len(ids) > 0 {
-		if b, err := json.Marshal(ids); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerUnits` where `id` in %v and `systemId` = %v", s, systemId)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(unitIds) > 0 {
+		if b, err := json.Marshal(unitIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "units" WHERE "unitId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, unit := range units.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerUnits` where `id` = ? and `systemId` = ?", unit.Id, systemId).Scan(&count); err != nil {
-			break
+		var count uint
+
+		if unit.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "units" WHERE "unitId" = %d`, unit.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerUnits` (`id`, `label`, `order`, `systemId`) values (?, ?, ?, ?)", unit.Id, unit.Label, unit.Order, systemId); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "units" ("label", "order", "systemId", "unitRef", "unitFrom", "unitTo") VALUES ('%s', %d, %d, %d, %d, %d)`, escapeQuotes(unit.Label), unit.Order, systemId, unit.UnitRef, unit.UnitFrom, unit.UnitTo)
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerUnits` set `label` = ?, `order` = ? where `id` = ? and `systemId` = ?", unit.Label, unit.Order, unit.Id, systemId); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "units" SET "label" = '%s', "order" = %d, "unitRef" = %d, "unitFrom" = %d, "unitTo" = %d WHERE "unitId" = %d`, escapeQuotes(unit.Label), unit.Order, unit.UnitRef, unit.UnitFrom, unit.UnitTo, unit.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, query)
 	}
 
 	return nil

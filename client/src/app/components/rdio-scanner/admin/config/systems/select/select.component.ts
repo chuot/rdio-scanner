@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, Inject, ViewEncapsulation } from '@angular/core';
+import { Component, Inject, ViewEncapsulation } from '@angular/core';
 import { FormArray, FormBuilder, FormControl, FormGroup } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Access } from '../../../admin.service';
@@ -47,18 +47,9 @@ export class RdioScannerAdminSystemsSelectComponent {
         tags: [] as boolean[],
     };
 
-    select = this.ngFormBuilder.group({
-        all: this.ngFormBuilder.control(false),
-        groups: this.ngFormBuilder.array([]),
-        tags: this.ngFormBuilder.array([]),
-        systems: this.ngFormBuilder.array([]),
-    });
+    select: FormGroup;
 
-    configTalkgroups = this.configSystems.map((fgSystem) => {
-        const faTalkgroups = fgSystem.get('talkgroups') as FormArray;
-
-        return faTalkgroups.controls as FormGroup[];
-    });
+    configTalkgroups: FormGroup[][];
 
     get configGroups(): FormGroup[] {
         const faGroups = this.access.root.get('groups') as FormArray;
@@ -81,9 +72,21 @@ export class RdioScannerAdminSystemsSelectComponent {
     constructor(
         @Inject(MAT_DIALOG_DATA) public access: FormGroup,
         private matDialogRef: MatDialogRef<RdioScannerAdminSystemsSelectComponent>,
-        private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
     ) {
+        this.configTalkgroups = this.configSystems.map((fgSystem) => {
+            const faTalkgroups = fgSystem.get('talkgroups') as FormArray;
+
+            return faTalkgroups.controls as FormGroup[];
+        });
+
+        this.select = this.ngFormBuilder.group({
+            all: this.ngFormBuilder.nonNullable.control(false),
+            groups: this.ngFormBuilder.nonNullable.array<FormGroup>([]),
+            tags: this.ngFormBuilder.nonNullable.array<FormGroup>([]),
+            systems: this.ngFormBuilder.nonNullable.array<FormGroup>([]),
+        });
+
         const fcAll = this.select.get('all') as FormControl;
         const faGroups = this.select.get('groups') as FormArray;
         const faSystems = this.select.get('systems') as FormArray;
@@ -91,8 +94,8 @@ export class RdioScannerAdminSystemsSelectComponent {
 
         this.configGroups.forEach((configGroup) => {
             const fgGroup = this.ngFormBuilder.group({
-                _id: [configGroup.value._id],
-                checked: [false],
+                id: this.ngFormBuilder.control(configGroup.get('id')?.value),
+                checked: this.ngFormBuilder.control(false),
             });
 
             faGroups.push(fgGroup);
@@ -102,7 +105,7 @@ export class RdioScannerAdminSystemsSelectComponent {
                     const faTalkgroups = fgSystem.get('talkgroups') as FormArray;
 
                     faTalkgroups.controls.forEach((fgTalkgroup) => {
-                        if (fgTalkgroup.value.groupId === vGroup._id && fgTalkgroup.value.checked !== vGroup.checked) {
+                        if (fgTalkgroup.get('groupIds')?.value.includes(vGroup.id) && fgTalkgroup.get('checked')?.value !== vGroup.checked) {
                             fgTalkgroup.get('checked')?.setValue(vGroup.checked);
                         }
                     });
@@ -113,26 +116,31 @@ export class RdioScannerAdminSystemsSelectComponent {
         this.configSystems.forEach((configSystem, index) => {
             const fcSystemAll = this.ngFormBuilder.control(false);
 
-            const faSystemTalkgroups = this.ngFormBuilder.array([]);
+            const faSystemTalkgroups = this.ngFormBuilder.array<FormGroup<{
+                checked: FormControl<boolean>;
+                groupIds: FormControl<number[]>;
+                id: FormControl<number>;
+                tagId: FormControl<number>;
+            }>>([]);
 
             const fgSystem = this.ngFormBuilder.group({
                 all: fcSystemAll,
-                id: configSystem.value.id,
+                id: this.ngFormBuilder.control(configSystem.get('systemRef')?.value),
                 talkgroups: faSystemTalkgroups
             });
 
             this.configTalkgroups[index].forEach((configTalkgroup) => {
                 const fgSystemTalkgroup = this.ngFormBuilder.group({
-                    checked: [false],
-                    groupId: configTalkgroup.value.groupId,
-                    id: configTalkgroup.value.id,
-                    tagId: configTalkgroup.value.tagId
+                    checked: this.ngFormBuilder.nonNullable.control(false),
+                    groupIds: this.ngFormBuilder.nonNullable.control(configTalkgroup.get('groupIds')?.value),
+                    id: this.ngFormBuilder.nonNullable.control(configTalkgroup.get('talkgroupRef')?.value),
+                    tagId: this.ngFormBuilder.nonNullable.control(configTalkgroup.get('tagId')?.value),
                 });
 
                 faSystemTalkgroups.push(fgSystemTalkgroup);
 
                 fgSystemTalkgroup.valueChanges.subscribe(() => {
-                    const vAll = faSystemTalkgroups.controls.every((systemTalkgroup) => systemTalkgroup.value.checked);
+                    const vAll = faSystemTalkgroups.controls.every((systemTalkgroup) => systemTalkgroup.get('checked')?.value);
 
                     fcSystemAll.setValue(vAll, { emitEvent: false });
                 });
@@ -158,7 +166,7 @@ export class RdioScannerAdminSystemsSelectComponent {
                 let off = 0;
                 let on = 0;
 
-                vSystemTalkgroups.forEach((vSystemTalkgroup: Talkgroup) => {
+                vSystemTalkgroups.forEach((vSystemTalkgroup) => {
                     if (vSystemTalkgroup.checked) {
                         on++;
 
@@ -175,8 +183,8 @@ export class RdioScannerAdminSystemsSelectComponent {
 
         this.configTags.forEach((configTag) => {
             const fgTag = this.ngFormBuilder.group({
-                _id: [configTag.value._id],
-                checked: [false],
+                id: this.ngFormBuilder.control(configTag.value.id),
+                checked: this.ngFormBuilder.control(false),
             });
 
             faTags.push(fgTag);
@@ -186,7 +194,7 @@ export class RdioScannerAdminSystemsSelectComponent {
                     const faTalkgroups = fgSystem.get('talkgroups') as FormArray;
 
                     faTalkgroups.controls.forEach((fgTalkgroup) => {
-                        if (fgTalkgroup.value.tagId === vTag._id && fgTalkgroup.value.checked !== vTag.checked) {
+                        if (fgTalkgroup.value.tagId === vTag.id && fgTalkgroup.value.checked !== vTag.checked) {
                             fgTalkgroup.get('checked')?.setValue(vTag.checked);
                         }
                     });
@@ -228,12 +236,14 @@ export class RdioScannerAdminSystemsSelectComponent {
             this.select.get('all')?.setValue(true);
 
         } else if (Array.isArray(vAccess.systems)) {
-            vAccess.systems.forEach((vSystem: { id: number; talkgroups: { id: number }[] | number[] | '*' } | number) => {
+            vAccess.systems.forEach((vSystem) => {
                 if (typeof vSystem === 'number') {
-                    faSystems.controls.find((fgSystem) => fgSystem.value.id === vSystem)?.get('all')?.setValue(true);
+                    faSystems.controls.find((fgSystem) => fgSystem.get('id')?.value === vSystem)?.get('all')?.setValue(true);
 
                 } else if (vSystem !== null && typeof vSystem === 'object') {
-                    const fgSystem = faSystems.controls.find((fg) => fg.value.id === vSystem.id);
+                    const fgSystem = faSystems.controls.find((fg) => {
+                        return fg.get('id')?.value === vSystem.id;
+                    });
 
                     if (fgSystem) {
                         if (vSystem.talkgroups === '*') {
@@ -245,7 +255,7 @@ export class RdioScannerAdminSystemsSelectComponent {
                             vSystem.talkgroups.forEach((talkgroup: { id: number } | number) => {
                                 const talkgroupId = typeof talkgroup === 'number' ? talkgroup : talkgroup.id;
 
-                                const fgTalkgroup = faTalkgroups.controls.find((fg) => fg.value.id === talkgroupId);
+                                const fgTalkgroup = faTalkgroups.controls.find((fg) => fg.get('id')?.value === talkgroupId);
 
                                 fgTalkgroup?.get('checked')?.setValue(true);
                             });
@@ -259,21 +269,19 @@ export class RdioScannerAdminSystemsSelectComponent {
     }
 
     accept(): void {
-        const select = this.select.value;
-
-        const access: Access['systems'] = select.all ? '*' : select.systems.filter((system: System) => {
-            return system.all || system.talkgroups.some((talkgroup: Talkgroup) => talkgroup.checked);
+        const access: Access['systems'] = this.select.get('all')?.value ? '*' : this.select.get('systems')?.value.filter((system: System) => {
+            return system['all'] || system['talkgroups'].some((talkgroup: Talkgroup) => talkgroup.checked);
         }).map((system: System) => {
-            if (system.all) {
+            if (system['all']) {
                 return {
-                    id: system.id,
+                    id: system['id'],
                     talkgroups: '*',
                 };
 
             } else {
                 return {
-                    id: system.id,
-                    talkgroups: system.talkgroups
+                    id: system['id'],
+                    talkgroups: system['talkgroups']
                         .filter((talkgroup: Talkgroup) => talkgroup.checked)
                         .map((talkgroup: Talkgroup) => talkgroup.id),
                 };
@@ -300,8 +308,8 @@ export class RdioScannerAdminSystemsSelectComponent {
                 const faTalkgroups = fgSystem.get('talkgroups') as FormArray;
 
                 faTalkgroups.controls.forEach((fgTalkgroup) => {
-                    if (fgTalkgroup.value.groupId === fgGroup.value._id) {
-                        if (fgTalkgroup.value.checked) {
+                    if (fgTalkgroup.get('groupIds')?.value.includes(fgGroup.get('id')?.value)) {
+                        if (fgTalkgroup.get('checked')?.value) {
                             on++;
 
                         } else {
@@ -330,7 +338,7 @@ export class RdioScannerAdminSystemsSelectComponent {
                 const faTalkgroups = fgSystem.get('talkgroups') as FormArray;
 
                 faTalkgroups.controls.forEach((fgTalkgroup) => {
-                    if (fgTalkgroup.value.tagId === fgTag.value._id) {
+                    if (fgTalkgroup.value.tagId === fgTag.value.id) {
                         if (fgTalkgroup.value.checked) {
                             on++;
 

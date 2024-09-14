@@ -28,6 +28,10 @@ A: Use the GitHub `watch` feature. This requires you to have a GitHub account, w
 
 A: Simply open a new browser tab to the same URL with a special `id` parameter that will distinguish each instance from the other. This allows you to remember the selection of talkgroups for each of the instances. Without the `id` parameter, only the last talkgroups selection is remembered across all instances. For example: `http://localhost:3000/?id=instance2`.
 
+**Q: How can I reset/change the previously entered access code**
+
+A: Rdio Scanner stores this information in the local storage section of the browser where you can manually delete the passcode. As a handy url, you can append the path "/reset" to the url so that Rdio Scanner clears the contents of local storage and reloads the page to the main url. Example: http://localhost:3000/reset.
+
 **Q: I did not find an answer to my question in this FAQ**
 
 A: No problem, just drop us a line at [rdio-scanner@saubeo.solutions](mailto:rdio-scanner@saubeo.solutions) and we'll make sure to add the relevant information in this document in the next release. In the meantime, You can ask your questions on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at [https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions).

@@ -29,14 +29,14 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
    | Operating system | Architecture | Use package                           |
    | -----------------| ------------ | ------------------------------------- |
-   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3.zip |
-   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3.zip     |
-   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3.zip   |
-   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3.zip     |
-   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3.zip   |
-   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
-   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3.zip   |
-   | Windows          | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
+   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v7.0.0.zip |
+   | Linux            | 386          | rdio-scanner-linux-386-v7.0.0.zip     |
+   | Linux            | amd64        | rdio-scanner-linux-amd64-v7.0.0.zip   |
+   | Linux            | arm          | rdio-scanner-linux-arm-v7.0.0.zip     |
+   | Linux            | arm64        | rdio-scanner-linux-arm64-v7.0.0.zip   |
+   | macOS            | amd64        | rdio-scanner-macos-amd64-v7.0.0.zip   |
+   | macOS            | arm64        | rdio-scanner-macos-arm64-v7.0.0.zip   |
+   | Windows          | amd64        | rdio-scanner-macos-amd64-v7.0.0.zip   |
 
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
@@ -66,9 +66,5 @@ You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the 
 
 [![Available on the App Store](./docs/images/app-store-badge.png?raw=true)](https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone)
 [![Get it on Google Play](./docs/images/google-play-badge.png?raw=true)](https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner)
-
-# Commercial support
-
-Commercial support is available at **[https://saubeo.solutions/](https://saubeo.solutions)**.
 
 **Happy Rdio scanning !**

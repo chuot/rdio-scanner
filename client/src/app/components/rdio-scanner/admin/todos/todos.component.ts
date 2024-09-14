@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ import { AdminEvent, Config, RdioScannerAdminService } from '../admin.service';
 
 interface Todo {
     level: 'info' | 'warn';
-    message: String;
+    message: string;
 }
 
 @Component({
@@ -35,21 +35,25 @@ export class RdioScannerAdminTodosComponent implements OnDestroy, OnInit {
 
     private config: Config | undefined;
 
-    private eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
-        if ('config' in event) {
-            this.config = event.config;
-        }
+    private eventSubscription;
 
-        if ('passwordNeedChange' in event) {
-            this.passwordNeedChange = event.passwordNeedChange || false;
-        }
+    private passwordNeedChange;
 
-        this.rebuildTodos();
-    });
+    constructor(private adminService: RdioScannerAdminService) {
+        this.eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
+            if ('config' in event) {
+                this.config = event.config;
+            }
 
-    private passwordNeedChange = this.adminService.passwordNeedChange;
+            if ('passwordNeedChange' in event) {
+                this.passwordNeedChange = event.passwordNeedChange || false;
+            }
 
-    constructor(private adminService: RdioScannerAdminService) { }
+            this.rebuildTodos();
+        });
+
+        this.passwordNeedChange = this.adminService.passwordNeedChange;
+    }
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
@@ -76,14 +80,14 @@ export class RdioScannerAdminTodosComponent implements OnDestroy, OnInit {
         if (!this.config?.systems?.length) {
             todos.push({
                 level: 'info',
-                message: 'No systems defined. You can define one from the systems menu, or import one from a CSV file from the tools menu, or turn on the global auto populate option from the options menu.',
+                message: 'No systems defined. You can define one from the systems menu, or let the auto populate feature create it for you if the global option is turned on.',
             });
         }
 
-        if (!this.config?.apiKeys?.length && !this.config?.dirWatch?.length) {
+        if (!this.config?.apikeys?.length && !this.config?.dirwatch?.length) {
             todos.push({
                 level: 'info',
-                message: 'No apikeys or dirwatch defined. Please set at least one to allow ingesting audio files.',
+                message: 'No apikeys or dirwatch defined. Set at least one to allow ingesting audio files.',
             });
         }
 

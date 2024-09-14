@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -44,19 +44,19 @@ const (
 )
 
 type Dirwatch struct {
-	Id          any    `json:"_id"`
-	Delay       any    `json:"delay"`
-	DeleteAfter bool   `json:"deleteAfter"`
-	Directory   string `json:"directory"`
-	Disabled    bool   `json:"disabled"`
-	Extension   any    `json:"extension"`
-	Frequency   any    `json:"frequency"`
-	Mask        any    `json:"mask"`
-	Order       any    `json:"order"`
-	SystemId    any    `json:"systemId"`
-	TalkgroupId any    `json:"talkgroupId"`
-	Kind        any    `json:"type"`
-	UsePolling  bool   `json:"usePolling"`
+	Id          uint64
+	Delay       uint
+	DeleteAfter bool
+	Directory   string
+	Disabled    bool
+	Extension   string
+	Frequency   uint
+	Kind        string
+	Mask        string
+	Order       uint
+	SiteId      uint64
+	SystemId    uint64
+	TalkgroupId uint64
 	controller  *Controller
 	dirs        map[string]bool
 	mutex       sync.Mutex
@@ -66,16 +66,19 @@ type Dirwatch struct {
 
 func NewDirwatch() *Dirwatch {
 	return &Dirwatch{
-		dirs:   map[string]bool{},
-		mutex:  sync.Mutex{},
-		timers: map[string]*time.Timer{},
+		Delay:       defaults.dirwatch.delay,
+		DeleteAfter: defaults.dirwatch.deleteAfter,
+		Kind:        defaults.dirwatch.kind,
+		dirs:        map[string]bool{},
+		mutex:       sync.Mutex{},
+		timers:      map[string]*time.Timer{},
 	}
 }
 
 func (dirwatch *Dirwatch) FromMap(m map[string]any) *Dirwatch {
-	switch v := m["_id"].(type) {
+	switch v := m["id"].(type) {
 	case float64:
-		dirwatch.Id = uint(v)
+		dirwatch.Id = uint64(v)
 	}
 
 	switch v := m["delay"].(type) {
@@ -108,6 +111,11 @@ func (dirwatch *Dirwatch) FromMap(m map[string]any) *Dirwatch {
 		dirwatch.Frequency = uint(v)
 	}
 
+	switch v := m["type"].(type) {
+	case string:
+		dirwatch.Kind = v
+	}
+
 	switch v := m["mask"].(type) {
 	case string:
 		dirwatch.Mask = v
@@ -118,24 +126,19 @@ func (dirwatch *Dirwatch) FromMap(m map[string]any) *Dirwatch {
 		dirwatch.Order = uint(v)
 	}
 
+	switch v := m["siteId"].(type) {
+	case float64:
+		dirwatch.SiteId = uint64(v)
+	}
+
 	switch v := m["systemId"].(type) {
 	case float64:
-		dirwatch.SystemId = uint(v)
+		dirwatch.SystemId = uint64(v)
 	}
 
 	switch v := m["talkgroupId"].(type) {
 	case float64:
-		dirwatch.TalkgroupId = uint(v)
-	}
-
-	switch v := m["type"].(type) {
-	case string:
-		dirwatch.Kind = v
-	}
-
-	switch v := m["usePolling"].(type) {
-	case bool:
-		dirwatch.UsePolling = v
+		dirwatch.TalkgroupId = uint64(v)
 	}
 
 	return dirwatch
@@ -166,24 +169,25 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 		ext string
 	)
 
-	switch v := dirwatch.Extension.(type) {
-	case string:
-		if len(v) > 0 {
-			ext = fmt.Sprintf(".%s", v)
-		} else {
-			ext = ".wav"
-		}
-	default:
+	if len(dirwatch.Extension) > 0 {
+		ext = fmt.Sprintf(".%s", dirwatch.Extension)
+	} else {
 		ext = ".wav"
 	}
 
 	if strings.EqualFold(path.Ext(p), ext) {
 		call := NewCall()
 
-		call.AudioName = filepath.Base(p)
-		call.AudioType = mime.TypeByExtension(path.Ext(p))
-		call.Frequency = dirwatch.Frequency
-		call.DateTime = time.Now().UTC()
+		call.AudioFilename = filepath.Base(p)
+		call.AudioMime = mime.TypeByExtension(path.Ext(p))
+		call.Timestamp = time.Now().UTC()
+
+		if dirwatch.Frequency > 0 {
+			call.Frequencies = append(call.Frequencies, CallFrequency{
+				Frequency: dirwatch.Frequency,
+				Offset:    0,
+			})
+		}
 
 		if call.Audio, err = os.ReadFile(p); err != nil {
 			return err
@@ -191,14 +195,12 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 
 		dirwatch.parseMask(call)
 
-		switch v := dirwatch.SystemId.(type) {
-		case uint:
-			call.System = v
+		if dirwatch.SystemId > 0 {
+			call.Meta.SystemId = dirwatch.SystemId
 		}
 
-		switch v := dirwatch.TalkgroupId.(type) {
-		case uint:
-			call.Talkgroup = v
+		if dirwatch.TalkgroupId > 0 {
+			call.Meta.TalkgroupId = dirwatch.TalkgroupId
 		}
 
 		if ok, err := call.IsValid(); ok {
@@ -224,14 +226,9 @@ func (dirwatch *Dirwatch) ingestDSDPlus(p string) error {
 		ext string
 	)
 
-	switch v := dirwatch.Extension.(type) {
-	case string:
-		if len(v) > 0 {
-			ext = fmt.Sprintf(".%s", v)
-		} else {
-			ext = ".mp3"
-		}
-	default:
+	if len(dirwatch.Extension) > 0 {
+		ext = fmt.Sprintf(".%s", dirwatch.Extension)
+	} else {
 		ext = ".mp3"
 	}
 
@@ -241,18 +238,26 @@ func (dirwatch *Dirwatch) ingestDSDPlus(p string) error {
 
 	call := NewCall()
 
-	call.AudioName = filepath.Base(p)
-	call.AudioType = mime.TypeByExtension(path.Ext(p))
-	call.Frequency = dirwatch.Frequency
+	call.AudioFilename = filepath.Base(p)
+	call.AudioMime = mime.TypeByExtension(path.Ext(p))
 
-	switch v := dirwatch.SystemId.(type) {
-	case uint:
-		call.System = v
+	if dirwatch.Frequency > 0 {
+		call.Frequencies = append(call.Frequencies, CallFrequency{
+			Frequency: dirwatch.Frequency,
+			Offset:    0,
+		})
 	}
 
-	switch v := dirwatch.TalkgroupId.(type) {
-	case uint:
-		call.Talkgroup = v
+	if dirwatch.SiteId > 0 {
+		call.Meta.SiteId = dirwatch.SiteId
+	}
+
+	if dirwatch.SystemId > 0 {
+		call.Meta.SystemId = dirwatch.SystemId
+	}
+
+	if dirwatch.TalkgroupId > 0 {
+		call.Meta.TalkgroupId = dirwatch.TalkgroupId
 	}
 
 	if call.Audio, err = os.ReadFile(p); err != nil {
@@ -288,9 +293,15 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 
 	call := NewCall()
 
-	call.AudioName = filepath.Base(p)
-	call.AudioType = mime.TypeByExtension(path.Ext(p))
-	call.Frequency = dirwatch.Frequency
+	call.AudioFilename = filepath.Base(p)
+	call.AudioMime = mime.TypeByExtension(path.Ext(p))
+
+	if dirwatch.Frequency > 0 {
+		call.Frequencies = append(call.Frequencies, CallFrequency{
+			Frequency: dirwatch.Frequency,
+			Offset:    0,
+		})
+	}
 
 	if call.Audio, err = os.ReadFile(p); err != nil {
 		return err
@@ -327,14 +338,9 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 		return nil
 	}
 
-	switch v := dirwatch.Extension.(type) {
-	case string:
-		if len(v) > 0 {
-			ext = fmt.Sprintf(".%s", v)
-		} else {
-			ext = ".wav"
-		}
-	default:
+	if len(dirwatch.Extension) > 0 {
+		ext = fmt.Sprintf(".%s", dirwatch.Extension)
+	} else {
 		ext = ".wav"
 	}
 
@@ -344,13 +350,14 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 
 	call := NewCall()
 
-	call.AudioName = filepath.Base(audioName)
-	call.AudioType = mime.TypeByExtension(path.Ext(audioName))
-	call.Frequency = dirwatch.Frequency
+	call.AudioFilename = filepath.Base(audioName)
+	call.AudioMime = mime.TypeByExtension(path.Ext(audioName))
 
-	switch v := dirwatch.SystemId.(type) {
-	case uint:
-		call.System = v
+	if dirwatch.Frequency > 0 {
+		call.Frequencies = append(call.Frequencies, CallFrequency{
+			Frequency: dirwatch.Frequency,
+			Offset:    0,
+		})
 	}
 
 	if call.Audio, err = os.ReadFile(audioName); err != nil {
@@ -384,6 +391,50 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 	return nil
 }
 
+func (dirwatch *Dirwatch) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":          dirwatch.Id,
+		"delay":       dirwatch.Delay,
+		"deleteAfter": dirwatch.DeleteAfter,
+		"directory":   dirwatch.Directory,
+		"disabled":    dirwatch.Disabled,
+	}
+
+	if len(dirwatch.Extension) > 0 {
+		m["extension"] = dirwatch.Extension
+	}
+
+	if dirwatch.Frequency > 0 {
+		m["frequency"] = dirwatch.Frequency
+	}
+
+	if len(dirwatch.Kind) > 0 {
+		m["type"] = dirwatch.Kind
+	}
+
+	if len(dirwatch.Mask) > 0 {
+		m["mask"] = dirwatch.Mask
+	}
+
+	if dirwatch.Order > 0 {
+		m["order"] = dirwatch.Order
+	}
+
+	if dirwatch.SiteId > 0 {
+		m["siteId"] = dirwatch.SiteId
+	}
+
+	if dirwatch.SystemId > 0 {
+		m["systemId"] = dirwatch.SystemId
+	}
+
+	if dirwatch.TalkgroupId > 0 {
+		m["talkgroupId"] = dirwatch.TalkgroupId
+	}
+
+	return json.Marshal(m)
+}
+
 func (dirwatch *Dirwatch) parseMask(call *Call) {
 	var meta = [][]string{
 		{"date", "#DATE", `\d{4}[-_]{0,1}\d{2}[-_]{0,1}\d{2}`},
@@ -391,6 +442,8 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		{"hz", "#HZ", `\d+`},
 		{"khz", "#KHZ", `[\d\.]+`},
 		{"mhz", "#MHZ", `[\d\.]+`},
+		{"sitelbl", "#SITELBL", `[a-zA-Z0-9,\.\ -]+`},
+		{"site", "#SITE", `\d+`},
 		{"syslbl", "#SYSLBL", `[a-zA-Z0-9,\.\ -]+`},
 		{"sys", "#SYS", `\d+`},
 		{"tag", "#TAG", `[a-zA-Z0-9\.\ -]+`},
@@ -402,27 +455,19 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		{"tg", "#TG", `\d+`},
 		{"time", "#TIME", `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 		{"unit", "#UNIT", `\d+`},
+		{"unitbl", "#UNITLBL", `[a-zA-Z0-9,\.\ -]+`},
 		{"ztime", "#ZTIME", `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 	}
 
 	var (
-		filename string
-		mask     string
-		metapos  = [][]any{}
-		metaval  = map[string]any{}
+		mask    string
+		metapos = [][]any{}
+		metaval = map[string]any{}
 	)
 
-	switch v := dirwatch.Mask.(type) {
-	case string:
-		mask = v
-	default:
-		return
-	}
-
-	switch v := call.AudioName.(type) {
-	case string:
-		filename = v
-	default:
+	if len(dirwatch.Mask) > 0 {
+		mask = dirwatch.Mask
+	} else {
 		return
 	}
 
@@ -437,7 +482,7 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		return metapos[i][1].(int) < metapos[j][1].(int)
 	})
 
-	base := strings.TrimSuffix(filename, path.Ext(filename))
+	base := strings.TrimSuffix(call.AudioFilename, path.Ext(call.AudioFilename))
 	for i, s := range regexp.MustCompile(mask).FindStringSubmatch(base) {
 		if i > 0 {
 			v := fmt.Sprintf("%v", metapos[i-1][0])
@@ -452,19 +497,19 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		case string:
 			vTime = regexp.MustCompile(`(\d{2})[^\d]*(\d{2})[^\d]*(\d{2})`).ReplaceAllString(vTime, "$1:$2:$3")
 			if dateTime, err := time.ParseInLocation("2006-01-02T15:04:05", fmt.Sprintf("%vT%v", vDate, vTime), time.Now().Location()); err == nil {
-				call.DateTime = dateTime.UTC()
+				call.Timestamp = dateTime.UTC()
 			}
 		default:
 			switch vZtime := metaval["ztime"].(type) {
 			case string:
 				vZtime = regexp.MustCompile(`(\d{2})[^\d]*(\d{2})[^\d]*(\d{2})`).ReplaceAllString(vZtime, "$1:$2:$3")
 				if dateTime, err := time.Parse("2006-01-02T15:04:05", fmt.Sprintf("%vT%v", vDate, vZtime)); err == nil {
-					call.DateTime = dateTime.UTC()
+					call.Timestamp = dateTime.UTC()
 				}
 			default:
 				vDate = regexp.MustCompile(`[^\d]`).ReplaceAllString(vDate, "")
 				if sec, err := strconv.Atoi(vDate); err == nil {
-					call.DateTime = time.Unix(int64(sec), 0).UTC()
+					call.Timestamp = time.Unix(int64(sec), 0).UTC()
 				}
 			}
 		}
@@ -473,26 +518,35 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := metaval["group"].(type) {
 	case string:
 		if len(v) > 0 && v != "-" {
-			call.talkgroupGroup = v
+			call.Meta.TalkgroupGroups = []string{v}
 		}
 	}
 
 	switch v := metaval["hz"].(type) {
 	case string:
-		if hz, err := strconv.ParseFloat(v, 64); err == nil {
-			call.Frequency = uint(hz)
+		if hz, err := strconv.ParseFloat(v, 32); err == nil {
+			call.Frequencies = append(call.Frequencies, CallFrequency{
+				Frequency: uint(hz),
+				Offset:    0,
+			})
 		}
 	default:
 		switch v := metaval["khz"].(type) {
 		case string:
-			if khz, err := strconv.ParseFloat(v, 64); err == nil {
-				call.Frequency = uint(khz * 1e3)
+			if khz, err := strconv.ParseFloat(v, 32); err == nil {
+				call.Frequencies = append(call.Frequencies, CallFrequency{
+					Frequency: uint(khz * 1e3),
+					Offset:    0,
+				})
 			}
 		default:
 			switch v := metaval["mhz"].(type) {
 			case string:
-				if mhz, err := strconv.ParseFloat(v, 64); err == nil {
-					call.Frequency = uint(mhz * 1e6)
+				if mhz, err := strconv.ParseFloat(v, 32); err == nil {
+					call.Frequencies = append(call.Frequencies, CallFrequency{
+						Frequency: uint(mhz * 1e6),
+						Offset:    0,
+					})
 				}
 			}
 		}
@@ -501,16 +555,38 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := metaval["sys"].(type) {
 	case string:
 		if i, err := strconv.Atoi(v); err == nil {
-			call.System = uint(i)
+			call.Meta.SystemRef = uint(i)
 		}
 	default:
 		switch v := metaval["syslbl"].(type) {
 		case string:
-			if system, ok := dirwatch.controller.Systems.GetSystem(v); ok {
-				call.System = system.Id
+			if system, ok := dirwatch.controller.Systems.GetSystemByLabel(v); ok {
+				call.System = system
 			} else {
-				call.System = dirwatch.controller.Systems.GetNewSystemId()
-				call.systemLabel = v
+				call.Meta.SystemRef = dirwatch.controller.Systems.GetNewSystemRef()
+				call.Meta.SystemLabel = v
+			}
+		}
+	}
+
+	switch v := metaval["site"].(type) {
+	case string:
+		if i, err := strconv.Atoi(v); err == nil {
+			if call.System != nil {
+				if site, ok := call.System.Sites.GetSiteByRef(uint(i)); ok {
+					call.SiteRef = site.SiteRef
+				}
+			} else {
+				call.Meta.SiteRef = uint(i)
+			}
+		}
+	default:
+		switch v := metaval["sitelbl"].(type) {
+		case string:
+			if call.System != nil {
+				if site, ok := call.System.Sites.GetSiteByLabel(v); ok {
+					call.SiteRef = site.SiteRef
+				}
 			}
 		}
 	}
@@ -518,14 +594,14 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := metaval["tag"].(type) {
 	case string:
 		if len(v) > 0 && v != "-" {
-			call.talkgroupTag = v
+			call.Meta.TalkgroupTag = v
 		}
 	}
 
 	switch v := metaval["tg"].(type) {
 	case string:
 		if i, err := strconv.Atoi(v); err == nil {
-			call.Talkgroup = uint(i)
+			call.Meta.TalkgroupRef = uint(i)
 		}
 	default:
 		switch v := metaval["tgafs"].(type) {
@@ -534,7 +610,7 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 				if a, err := strconv.Atoi(v[:2]); err == nil {
 					if b, err := strconv.Atoi(v[3:5]); err == nil {
 						if c, err := strconv.Atoi(v[5:]); err == nil {
-							call.Talkgroup = uint(a<<7 | b<<3 | c)
+							call.Meta.TalkgroupRef = uint(a<<7 | b<<3 | c)
 						}
 					}
 				}
@@ -542,23 +618,32 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		default:
 			switch v := metaval["tghz"].(type) {
 			case string:
-				if hz, err := strconv.ParseFloat(v, 64); err == nil {
-					call.Frequency = uint(hz)
-					call.Talkgroup = uint(hz / 1e3)
+				if hz, err := strconv.ParseFloat(v, 32); err == nil {
+					call.Frequencies = append(call.Frequencies, CallFrequency{
+						Frequency: uint(hz),
+						Offset:    0,
+					})
+					call.Meta.TalkgroupRef = uint(hz / 1e3)
 				}
 			default:
 				switch v := metaval["tgkhz"].(type) {
 				case string:
-					if khz, err := strconv.ParseFloat(v, 64); err == nil {
-						call.Frequency = uint(khz * 1e3)
-						call.Talkgroup = uint(khz)
+					if khz, err := strconv.ParseFloat(v, 32); err == nil {
+						call.Frequencies = append(call.Frequencies, CallFrequency{
+							Frequency: uint(khz * 1e3),
+							Offset:    0,
+						})
+						call.Meta.TalkgroupRef = uint(khz)
 					}
 				default:
 					switch v := metaval["tgmhz"].(type) {
 					case string:
-						if mhz, err := strconv.ParseFloat(v, 64); err == nil {
-							call.Frequency = uint(mhz * 1e6)
-							call.Talkgroup = uint(mhz * 1e3)
+						if mhz, err := strconv.ParseFloat(v, 32); err == nil {
+							call.Frequencies = append(call.Frequencies, CallFrequency{
+								Frequency: uint(mhz * 1e6),
+								Offset:    0,
+							})
+							call.Meta.TalkgroupRef = uint(mhz * 1e3)
 						}
 					}
 				}
@@ -569,24 +654,32 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 	switch v := metaval["tglbl"].(type) {
 	case string:
 		if len(v) > 0 {
-			call.talkgroupLabel = v
+			call.Meta.TalkgroupLabel = v
 		}
 	}
 
 	switch v := metaval["unit"].(type) {
 	case string:
 		if i, err := strconv.Atoi(v); err == nil {
-			switch sources := call.Sources.(type) {
-			case []map[string]any:
-				call.Sources = append(sources, map[string]any{"pos": 0, "src": uint(i)})
-			}
+			call.Units = append(call.Units, CallUnit{
+				UnitRef: uint(i),
+				Offset:  0,
+			})
+		}
+	}
+
+	switch v := metaval["unitlbl"].(type) {
+	case string:
+		if len(v) > 0 && len(call.Units) > 0 {
+			call.Meta.UnitLabels = []string{v}
+			call.Meta.UnitRefs = []uint{call.Units[0].UnitRef}
 		}
 	}
 }
 
 func (dirwatch *Dirwatch) Start(controller *Controller) error {
 	var (
-		delay time.Duration
+		delay = time.Duration(math.Max(float64(dirwatch.Delay), 2000)) * time.Millisecond
 		err   error
 	)
 
@@ -603,13 +696,6 @@ func (dirwatch *Dirwatch) Start(controller *Controller) error {
 
 	if dirwatch.watcher, err = fsnotify.NewWatcher(); err != nil {
 		return err
-	}
-
-	switch v := dirwatch.Delay.(type) {
-	case uint:
-		delay = time.Duration(math.Max(float64(v), 2000)) * time.Millisecond
-	default:
-		delay = time.Duration(2000) * time.Millisecond
 	}
 
 	go func() {
@@ -742,6 +828,31 @@ func (dirwatch *Dirwatch) Stop() {
 	}
 }
 
+func (dirwatch *Dirwatch) isDir(d string) bool {
+	if fi, err := os.Stat(d); err == nil {
+		if fi.IsDir() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (dirwatch *Dirwatch) walkDir(d string) error {
+	dfs := os.DirFS(d)
+
+	return fs.WalkDir(dfs, ".", func(p string, _ fs.DirEntry, err error) error {
+		fp := filepath.Join(d, p)
+		if dirwatch.isDir(fp) {
+			if !dirwatch.dirs[fp] {
+				dirwatch.dirs[fp] = true
+				dirwatch.watcher.Add(fp)
+			}
+		}
+		return err
+	})
+}
+
 type Dirwatches struct {
 	List  []*Dirwatch
 	mutex sync.Mutex
@@ -775,17 +886,9 @@ func (dirwatches *Dirwatches) FromMap(f []any) *Dirwatches {
 
 func (dirwatches *Dirwatches) Read(db *Database) error {
 	var (
-		delay       sql.NullFloat64
-		err         error
-		extension   sql.NullString
-		id          sql.NullFloat64
-		frequency   sql.NullFloat64
-		kind        sql.NullString
-		mask        sql.NullString
-		order       sql.NullFloat64
-		rows        *sql.Rows
-		systemId    sql.NullFloat64
-		talkgroupId sql.NullFloat64
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	dirwatches.mutex.Lock()
@@ -795,55 +898,18 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 
 	dirwatches.List = []*Dirwatch{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("dirwatches.read: %v", err)
-	}
+	formatError := dirwatches.errorFormatter("read")
 
-	if rows, err = db.Sql.Query("select `_id`, `delay`, `deleteAfter`, `directory`, `disabled`, `extension`, `frequency`, `mask`, `order`, `systemId`, `talkgroupId`, `type`, `usePolling` from `rdioScannerDirWatches`"); err != nil {
-		return formatError(err)
+	query = `SELECT "dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type" FROM "dirwatches"`
+	if rows, err = db.Sql.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
 		dirwatch := NewDirwatch()
 
-		if err = rows.Scan(&id, &delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &extension, &frequency, &mask, &order, &systemId, &talkgroupId, &kind, &dirwatch.UsePolling); err != nil {
+		if err = rows.Scan(&dirwatch.Id, &dirwatch.Delay, &dirwatch.DeleteAfter, &dirwatch.Directory, &dirwatch.Disabled, &dirwatch.Extension, &dirwatch.Frequency, &dirwatch.Mask, &dirwatch.Order, &dirwatch.SiteId, &dirwatch.SystemId, &dirwatch.TalkgroupId, &dirwatch.Kind); err != nil {
 			break
-		}
-
-		if id.Valid && id.Float64 > 0 {
-			dirwatch.Id = uint(id.Float64)
-		}
-
-		if delay.Valid && id.Float64 > 0 {
-			dirwatch.Delay = uint(delay.Float64)
-		}
-
-		if extension.Valid && len(extension.String) > 0 {
-			dirwatch.Extension = extension.String
-		}
-
-		if frequency.Valid && frequency.Float64 > 0 {
-			dirwatch.Frequency = uint(frequency.Float64)
-		}
-
-		if mask.Valid && len(mask.String) > 0 {
-			dirwatch.Mask = mask.String
-		}
-
-		if order.Valid && order.Float64 > 0 {
-			dirwatch.Order = uint(order.Float64)
-		}
-
-		if systemId.Valid && systemId.Float64 > 0 {
-			dirwatch.SystemId = uint(systemId.Float64)
-		}
-
-		if talkgroupId.Valid && talkgroupId.Float64 > 0 {
-			dirwatch.TalkgroupId = uint(talkgroupId.Float64)
-		}
-
-		if kind.Valid && len(kind.String) > 0 {
-			dirwatch.Kind = kind.String
 		}
 
 		dirwatches.List = append(dirwatches.List, dirwatch)
@@ -852,8 +918,12 @@ func (dirwatches *Dirwatches) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
+
+	sort.Slice(dirwatches.List, func(i int, j int) bool {
+		return dirwatches.List[i].Order < dirwatches.List[j].Order
+	})
 
 	return nil
 }
@@ -875,101 +945,106 @@ func (dirwatches *Dirwatches) Stop() {
 
 func (dirwatches *Dirwatches) Write(db *Database) error {
 	var (
-		count  uint
-		err    error
-		rows   *sql.Rows
-		rowIds = []uint{}
+		dirwatchIds = []uint64{}
+		err         error
+		query       string
+		rows        *sql.Rows
+		tx          *sql.Tx
 	)
 
 	dirwatches.mutex.Lock()
 	defer dirwatches.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("dirwatches.write: %v", err)
+	formatError := dirwatches.errorFormatter("write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerDirWatches`"); err != nil {
-		return formatError(err)
+	query = `SELECT "dirwatchId" FROM "dirwatches"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var rowId uint
-		if err = rows.Scan(&rowId); err != nil {
+		var dirwatchId uint64
+		if err = rows.Scan(&dirwatchId); err != nil {
 			break
 		}
 		remove := true
 		for _, dirwatch := range dirwatches.List {
-			if dirwatch.Id == nil || dirwatch.Id == rowId {
+			if dirwatch.Id == 0 || dirwatch.Id == dirwatchId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, rowId)
+			dirwatchIds = append(dirwatchIds, dirwatchId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerDirwatches` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(dirwatchIds) > 0 {
+		if b, err := json.Marshal(dirwatchIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "dirwatches" WHERE "dirwatchId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, dirwatch := range dirwatches.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDirWatches` where `_id` = ?", dirwatch.Id).Scan(&count); err != nil {
+		var count uint
+
+		query = fmt.Sprintf(`SELECT COUNT(*) FROM "dirwatches" WHERE "dirwatchId" = %d`, dirwatch.Id)
+		if err = tx.QueryRow(query).Scan(&count); err != nil {
 			break
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerDirWatches` (`_id`, `delay`, `deleteAfter`, `directory`, `disabled`, `extension`, `frequency`, `mask`, `order`, `systemId`, `talkgroupId`, `type`, `usePolling`) values (?, ?, ?, ?, ?, ?, ?, ?, ? ,? ,? ,? ,?)", dirwatch.Id, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.UsePolling); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (%d, %t, '%s', %t, '%s', %d, '%s', %d, %d, %d, %d, '%s')`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind)
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerDirWatches` set `_id` = ?, `delay` = ?, `deleteAfter` = ?, `directory` = ?, `disabled` = ?, `extension` = ?, `frequency` = ?, `mask` = ?, `order` = ?, `systemId` = ?, `talkgroupId` = ?, `type` = ?, `usePolling` = ? where `_id` = ?", dirwatch.Id, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.UsePolling, dirwatch.Id); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "dirwatches" SET "delay" = %d, "deleteAfter" = %t, "directory" = '%s', "disabled" = %t, "extension" = '%s', "frequency" = %d, "mask" = '%s', "order" = %d, "siteId" = %d, "systemId" = %d, "talkgroupId" = %d, "type" = '%s' WHERE "dirwatchId" = %d`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	return nil
 }
 
-func (dirwatch *Dirwatch) isDir(d string) bool {
-	if fi, err := os.Stat(d); err == nil {
-		if fi.IsDir() {
-			return true
+func (dirwatches *Dirwatches) errorFormatter(label string) func(err error, query string) error {
+	return func(err error, query string) error {
+		s := fmt.Sprintf("dirwatches.%s: %s", label, err.Error())
+
+		if len(query) > 0 {
+			s = fmt.Sprintf("%s in %s", s, query)
 		}
+
+		return errors.New(s)
 	}
-
-	return false
-}
-
-func (dirwatch *Dirwatch) walkDir(d string) error {
-	dfs := os.DirFS(d)
-
-	return fs.WalkDir(dfs, ".", func(p string, _ fs.DirEntry, err error) error {
-		fp := filepath.Join(d, p)
-		if dirwatch.isDir(fp) {
-			if !dirwatch.dirs[fp] {
-				dirwatch.dirs[fp] = true
-				dirwatch.watcher.Add(fp)
-			}
-		}
-		return err
-	})
 }

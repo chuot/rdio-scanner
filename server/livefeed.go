@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -87,15 +87,12 @@ func (livefeed *Livefeed) IsEnabled(call *Call) bool {
 	defer livefeed.mutex.Unlock()
 
 	if call != nil {
-		if livefeed.Matrix[call.System][call.Talkgroup] {
+		if livefeed.Matrix[call.System.SystemRef][call.Talkgroup.TalkgroupRef] {
 			return true
 		} else {
-			switch v := call.Patches.(type) {
-			case []uint:
-				for _, p := range v {
-					if livefeed.Matrix[call.System][p] {
-						return true
-					}
+			for _, p := range call.Patches {
+				if livefeed.Matrix[call.System.SystemRef][p] {
+					return true
 				}
 			}
 		}

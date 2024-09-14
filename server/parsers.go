@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ func ParseDSDPlusMeta(call *Call, fp string) error {
 						if th, err := strconv.Atoi(t[1][0:2]); err == nil {
 							if tm, err := strconv.Atoi(t[1][2:4]); err == nil {
 								if ts, err := strconv.Atoi(t[1][4:6]); err == nil {
-									call.DateTime = time.Date(dy, time.Month(dm), dd, th, tm, ts, 0, time.Now().Location()).UTC()
+									call.Timestamp = time.Date(dy, time.Month(dm), dd, th, tm, ts, 0, time.Now().Location()).UTC()
 								}
 							}
 						}
@@ -75,20 +75,20 @@ func ParseDSDPlusMeta(call *Call, fp string) error {
 		case "ConP(BS)", "DMR(BS)", "P25(BS)":
 			if s := regexp.MustCompile(`^([0-9]+)-.+$`).FindStringSubmatch(meta[3]); len(s) > 1 {
 				if i, err := strconv.Atoi(s[1]); err == nil {
-					call.System = uint(i)
+					call.Meta.SystemRef = uint(i)
 				}
 			}
 
 		case "NEXEDGE48(CB)", "NEXEDGE48(CS)", "NEXEDGE48(TB)", "NEXEDGE96(CB)", "NEXEDGE96(CS)", "NEXEDGE96(TB)":
 			if s := regexp.MustCompile(`^.([0-9]+)-[0-9]+$`).FindStringSubmatch(meta[3]); len(s) > 1 {
 				if i, err := strconv.Atoi(s[1]); err == nil && i > 0 {
-					call.System = uint(i)
+					call.Meta.SystemRef = uint(i)
 				}
 
 			} else if len(meta) > 4 {
 				if s := regexp.MustCompile(`RAN([0-9]+)`).FindStringSubmatch(meta[4]); len(s) > 1 {
 					if i, err := strconv.Atoi(s[1]); err == nil && i > 0 {
-						call.System = uint(i)
+						call.Meta.SystemRef = uint(i)
 					}
 				}
 			}
@@ -96,7 +96,7 @@ func ParseDSDPlusMeta(call *Call, fp string) error {
 		case "P25":
 			if s := regexp.MustCompile(`^[^\.]+\.([^-]+)`).FindStringSubmatch(meta[3]); len(s) > 1 {
 				if i, err := strconv.ParseInt(s[1], 16, 64); err == nil && i > 0 {
-					call.System = uint(i)
+					call.Meta.SystemRef = uint(i)
 				}
 			}
 		}
@@ -104,25 +104,29 @@ func ParseDSDPlusMeta(call *Call, fp string) error {
 
 	if s := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-2], -1); len(s) > 0 {
 		if i, err := strconv.Atoi(s[0]); err == nil && i > 0 {
-			call.Talkgroup = uint(i)
+			call.Meta.TalkgroupRef = uint(i)
 		}
 
 		if len(s) > 1 && len(s[1]) > 0 {
 			if !regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(s[1]) {
-				call.talkgroupLabel = s[1]
+				call.Meta.TalkgroupLabel = s[1]
 			}
 		}
 	}
 
 	if s := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-1], -1); len(s) > 0 {
 		if src, err := strconv.Atoi(s[0]); err == nil && src > 0 {
-			call.Source = uint(src)
+			call.Units = append(call.Units, CallUnit{
+				UnitRef: uint(src),
+				Offset:  0,
+			})
+
 			if len(s) > 1 && len(s[1]) > 0 {
-				if strings.TrimSpace(s[1]) != fmt.Sprintf("%v", call.Source) {
+				l := strings.TrimSpace(s[1])
+				if l != fmt.Sprintf("%v", src) {
 					if !regexp.MustCompile(`^([\.\-\ ,_]+)$`).MatchString(s[1]) {
-						units := NewUnits()
-						units.Add(uint(src), strings.TrimSpace(s[1]))
-						call.units = units
+						call.Meta.UnitLabels = append(call.Meta.UnitLabels, l)
+						call.Meta.UnitRefs = append(call.Meta.UnitRefs, uint(src))
 					}
 				}
 			}
@@ -151,26 +155,25 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 			return err
 		}
 		if i > 0 {
-			call.Source = uint(i)
+			call.Units = append(call.Units, CallUnit{
+				UnitRef: uint(i),
+				Offset:  0,
+			})
 
 			if len(s) >= 3 && len(s[2]) > 0 {
-				if call.units == nil {
-					call.units = NewUnits()
-				}
-				switch units := call.units.(type) {
-				case *Units:
-					units.Add(uint(i), s[2])
-				}
+				call.Meta.UnitLabels = append(call.Meta.UnitLabels, strings.TrimSpace(s[2]))
+				call.Meta.UnitRefs = append(call.Meta.UnitRefs, uint(i))
 			}
 		}
 	}
 
 	s = regexp.MustCompile(`Date:([^;]+);`).FindStringSubmatch(m.Comment())
 	if len(s) == 2 {
-		if t, err = time.ParseInLocation("2006-01-02 15:04:05.999", s[1], time.Now().Location()); err != nil {
+		if t, err = time.ParseInLocation("2006-01-02 15:04:05.999", s[1], time.Now().Location()); err == nil {
+			call.Timestamp = t
+		} else {
 			return err
 		}
-		call.DateTime = t.UTC()
 	}
 
 	s = regexp.MustCompile(`Frequency:([0-9]+);`).FindStringSubmatch(m.Comment())
@@ -179,17 +182,23 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 			return err
 		}
 		if i > 0 {
-			call.Frequency = uint(i)
+			call.Frequencies = []CallFrequency{
+				{
+					Frequency: uint(i),
+					Offset:    0,
+				},
+			}
 		}
 	}
 
 	s = regexp.MustCompile(`System:([^;]+);`).FindStringSubmatch(m.Comment())
 	if len(s) == 2 {
-		if system, ok := controller.Systems.GetSystem(s[1]); ok {
-			call.System = system.Id
+		if system, ok := controller.Systems.GetSystemByLabel(s[1]); ok {
+			call.System = system
+
 		} else {
-			call.System = controller.Systems.GetNewSystemId()
-			call.systemLabel = s[1]
+			call.Meta.SystemRef = controller.Systems.GetNewSystemRef()
+			call.Meta.SystemLabel = s[1]
 		}
 	}
 
@@ -199,7 +208,7 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 			return err
 		}
 		if i > 0 {
-			call.Talkgroup = uint(i)
+			call.Meta.TalkgroupRef = uint(i)
 		}
 	}
 
@@ -209,17 +218,13 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		if err = json.Unmarshal([]byte(s[1]), &f); err == nil {
 			switch v := f.(type) {
 			case []any:
-				patches := []uint{}
 				for _, patch := range v {
 					switch v := patch.(type) {
 					case float64:
 						if v > 0 {
-							patches = append(patches, uint(v))
+							call.Patches = append(call.Patches, uint(v))
 						}
 					}
-				}
-				if len(patches) > 0 {
-					call.Patches = patches
 				}
 			}
 		}
@@ -227,8 +232,8 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 
 	s = regexp.MustCompile(`"([^"]+)"`).FindStringSubmatch(m.Title())
 	if len(s) > 1 {
-		call.talkgroupLabel = s[1]
-		call.talkgroupName = s[1]
+		call.Meta.TalkgroupLabel = s[1]
+		call.Meta.TalkgroupName = s[1]
 	}
 
 	return nil
@@ -238,20 +243,24 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 	switch p.FormName() {
 	case "audio":
 		call.Audio = b
-		call.AudioName = p.FileName()
+		call.AudioFilename = p.FileName()
 
-	case "audioName":
-		call.AudioName = string(b)
-		call.AudioType = mime.TypeByExtension(path.Ext(string(b)))
+	case "audioFilename", "audioName":
+		call.AudioFilename = string(b)
+		call.AudioMime = mime.TypeByExtension(path.Ext(string(b)))
+
+	case "audioMime", "audioType":
+		call.AudioMime = string(b)
 
 	case "dateTime":
 		if regexp.MustCompile(`^[0-9]+$`).Match(b) {
 			if i, err := strconv.Atoi(string(b)); err == nil {
-				call.DateTime = time.Unix(int64(i), 0).UTC()
+				call.Timestamp = time.Unix(int64(i), 0)
 			}
 		} else {
-			call.DateTime, _ = time.Parse(time.RFC3339, string(b))
-			call.DateTime = call.DateTime.UTC()
+			if t, err := time.Parse(time.RFC3339, string(b)); err == nil {
+				call.Timestamp = t
+			}
 		}
 
 	case "frequencies":
@@ -259,58 +268,59 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
 			case []any:
-				var frequencies = []map[string]any{}
+				call.Frequencies = []CallFrequency{}
 				for _, f := range v {
-					freq := map[string]any{}
+					freq := CallFrequency{}
 					switch v := f.(type) {
 					case map[string]any:
+						switch v := v["dbm"].(type) {
+						case float64:
+							if v >= 0 {
+								freq.Dbm = int(v)
+							}
+						}
 						switch v := v["errorCount"].(type) {
 						case float64:
 							if v >= 0 {
-								freq["errorCount"] = uint(v)
+								freq.Errors = uint(v)
 							}
 						}
 						switch v := v["freq"].(type) {
 						case float64:
 							if v > 0 {
-								freq["freq"] = uint(v)
-							}
-						}
-						switch v := v["len"].(type) {
-						case float64:
-							if v >= 0 {
-								freq["len"] = uint(v)
+								freq.Frequency = uint(v)
 							}
 						}
 						switch v := v["pos"].(type) {
 						case float64:
 							if v >= 0 {
-								freq["pos"] = uint(v)
+								freq.Offset = float32(v)
 							}
 						}
 						switch v := v["spikeCount"].(type) {
 						case float64:
 							if v >= 0 {
-								freq["spikeCount"] = uint(v)
+								freq.Spikes = uint(v)
 							}
 						}
 					}
-					frequencies = append(frequencies, freq)
+					call.Frequencies = append(call.Frequencies, freq)
 				}
-				call.Frequencies = frequencies
 			}
 		}
 
 	case "frequency":
 		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
-			call.Frequency = uint(i)
+			call.Frequencies = []CallFrequency{
+				{
+					Frequency: uint(i),
+					Offset:    0,
+				},
+			}
 		}
 
 	case "patches", "patched_talkgroups":
-		var (
-			f       any
-			patches = []uint{}
-		)
+		var f any
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
 			case []any:
@@ -318,94 +328,143 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 					switch v := patch.(type) {
 					case float64:
 						if v > 0 {
-							patches = append(patches, uint(v))
+							call.Patches = append(call.Patches, uint(v))
 						}
 					}
 				}
 			}
-			call.Patches = patches
 		}
 
-	case "source":
-		if i, err := strconv.Atoi(string(b)); err == nil {
-			call.Source = int(i)
+	case "site":
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
+			call.SiteRef = uint(i)
 		}
 
 	case "sources":
-		var (
-			f     any
-			units *Units
-		)
+		var f any
 		if err := json.Unmarshal(b, &f); err == nil {
 			switch v := f.(type) {
 			case []any:
-				var sources = []map[string]any{}
 				for _, f := range v {
-					src := map[string]any{}
+					unit := CallUnit{}
 					switch v := f.(type) {
 					case map[string]any:
 						switch v := v["pos"].(type) {
 						case float64:
 							if v >= 0 {
-								src["pos"] = uint(v)
+								unit.Offset = float32(v)
 							}
 						}
 						switch s := v["src"].(type) {
 						case float64:
 							if s > 0 {
-								src["src"] = uint(s)
-								switch t := v["tag"].(type) {
-								case string:
-									if units == nil {
-										units = NewUnits()
-									}
-									switch units := call.units.(type) {
-									case *Units:
-										units.Add(uint(s), t)
-									}
-								}
+								unit.UnitRef = uint(s)
+							}
+						}
+						switch s := v["tag"].(type) {
+						case string:
+							if len(s) > 0 {
+								call.Meta.UnitLabels = []string{s}
 							}
 						}
 					}
-					sources = append(sources, src)
+					call.Units = append(call.Units, unit)
 				}
-				call.Sources = sources
-				call.units = units
 			}
 		}
 
-	case "system", "systemId":
+	case "source":
 		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
-			call.System = uint(i)
+			call.Units = append(call.Units, CallUnit{
+				Offset:  0,
+				UnitRef: uint(i),
+			})
+		}
+
+	case "system":
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
+			call.Meta.SystemRef = uint(i)
 		}
 
 	case "systemLabel":
-		call.systemLabel = string(b)
+		call.Meta.SystemLabel = string(b)
 
-	case "talkgroup", "talkgroupId":
+	case "talkgroup":
 		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
-			call.Talkgroup = uint(i)
+			call.Meta.TalkgroupRef = uint(i)
 		}
 
 	case "talkgroupGroup":
 		if s := string(b); len(s) > 0 && s != "-" {
-			call.talkgroupGroup = s
+			call.Meta.TalkgroupGroups = []string{s}
+		}
+
+	case "talkgroupGroups":
+		if s := string(b); len(s) > 0 && s != "-" {
+			call.Meta.TalkgroupGroups = strings.Split(s, ",")
 		}
 
 	case "talkgroupLabel":
 		if s := string(b); len(s) > 0 && s != "-" {
-			call.talkgroupLabel = s
+			call.Meta.TalkgroupLabel = s
 		}
 
 	case "talkgroupName":
 		if s := string(b); len(s) > 0 && s != "-" {
-			call.talkgroupName = s
+			call.Meta.TalkgroupName = s
 		}
 
 	case "talkgroupTag":
 		if s := string(b); len(s) > 0 && s != "-" {
-			call.talkgroupTag = s
+			call.Meta.TalkgroupTag = s
 		}
+
+	case "timestamp":
+		if i, err := strconv.Atoi(string(b)); err == nil {
+			call.Timestamp = time.UnixMilli(int64(i))
+		}
+
+	case "units":
+		var f any
+		if err := json.Unmarshal(b, &f); err == nil {
+			switch v := f.(type) {
+			case []any:
+				for _, f := range v {
+					unit := CallUnit{}
+					switch v := f.(type) {
+					case map[string]any:
+						switch s := v["id"].(type) {
+						case float64:
+							if s > 0 {
+								unit.UnitRef = uint(s)
+							}
+						}
+						switch s := v["label"].(type) {
+						case string:
+							if len(s) > 0 {
+								call.Meta.UnitLabels = []string{s}
+							}
+						}
+						switch v := v["offset"].(type) {
+						case float64:
+							if v >= 0 {
+								unit.Offset = float32(v)
+							}
+						}
+					}
+					call.Units = append(call.Units, unit)
+				}
+			}
+		}
+
+	case "unit":
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
+			call.Units = append(call.Units, CallUnit{
+				Offset:  0,
+				UnitRef: uint(i),
+			})
+		}
+
 	}
 }
 
@@ -416,134 +475,131 @@ func ParseTrunkRecorderMeta(call *Call, b []byte) error {
 		return err
 	}
 
-	switch v := m["freq"].(type) {
-	case float64:
-		if v > 0 {
-			call.Frequency = uint(v)
-		}
-	}
-
 	switch v := m["freqList"].(type) {
 	case []any:
-		freqs := []map[string]any{}
 		for _, f := range v {
-			freq := map[string]any{}
+			freq := CallFrequency{}
 			switch v := f.(type) {
 			case map[string]any:
 				switch v := v["error_count"].(type) {
 				case float64:
 					if v >= 0 {
-						freq["errorCount"] = uint(v)
+						freq.Errors = uint(v)
 					}
 				}
 
 				switch v := v["freq"].(type) {
 				case float64:
 					if v > 0 {
-						freq["freq"] = uint(v)
-					}
-				}
-
-				switch v := v["len"].(type) {
-				case float64:
-					if v >= 0 {
-						freq["len"] = uint(v)
+						freq.Frequency = uint(v)
 					}
 				}
 
 				switch v := v["pos"].(type) {
 				case float64:
 					if v >= 0 {
-						freq["pos"] = uint(v)
+						freq.Offset = float32(v)
 					}
 				}
 
 				switch v := v["spike_count"].(type) {
 				case float64:
 					if v >= 0 {
-						freq["spikeCount"] = uint(v)
+						freq.Spikes = uint(v)
 					}
 				}
 
-				freqs = append(freqs, freq)
+				call.Frequencies = append(call.Frequencies, freq)
 			}
 		}
-		call.Frequencies = freqs
 	}
 
 	switch v := m["patched_talkgroups"].(type) {
 	case []any:
-		patches := []uint{}
 		for _, f := range v {
 			switch v := f.(type) {
 			case float64:
 				if v > 0 {
-					patches = append(patches, uint(v))
+					call.Patches = append(call.Patches, uint(v))
 				}
 			}
-		}
-		if len(patches) > 0 {
-			call.Patches = patches
 		}
 	}
 
 	switch v := m["srcList"].(type) {
 	case []any:
-		sources := []map[string]any{}
 		for _, f := range v {
-			source := map[string]any{}
+			unit := CallUnit{}
 			switch v := f.(type) {
 			case map[string]any:
 				switch v := v["pos"].(type) {
 				case float64:
 					if v >= 0 {
-						source["pos"] = uint(v)
+						unit.Offset = float32(v)
 					}
 				}
 				switch s := v["src"].(type) {
 				case float64:
 					if s > 0 {
-						source["src"] = uint(s)
-						switch t := v["tag"].(type) {
-						case string:
-							if len(t) > 0 {
-								if call.units == nil {
-									call.units = NewUnits()
-								}
-								switch v := call.units.(type) {
-								case *Units:
-									v.Add(uint(s), t)
-								}
-							}
-						}
+						unit.UnitRef = uint(s)
 					}
 				}
-				sources = append(sources, source)
+				call.Units = append(call.Units, unit)
 			}
 		}
-		if len(sources) > 0 {
-			call.Source = sources[0]["src"]
-		}
-		call.Sources = sources
 	}
 
 	switch v := m["start_time"].(type) {
 	case float64:
-		call.DateTime = time.Unix(int64(v), 0).UTC()
+		call.Timestamp = time.Unix(int64(v), 0)
+		call.Timestamp = time.Now() // DBEUG
+	}
+
+	switch v := m["short_name"].(type) {
+	case string:
+		if len(v) > 0 && v != "-" {
+			call.Meta.SystemLabel = v
+		}
 	}
 
 	switch v := m["talkgroup"].(type) {
 	case float64:
 		if v > 0 {
-			call.Talkgroup = uint(v)
+			call.Meta.TalkgroupRef = uint(v)
+		}
+	}
+
+	switch v := m["talkgroup_description"].(type) {
+	case string:
+		if len(v) > 0 && v != "-" {
+			call.Meta.TalkgroupName = v
+		}
+	}
+
+	switch v := m["talkgroup_group"].(type) {
+	case string:
+		if len(v) > 0 && v != "-" {
+			call.Meta.TalkgroupGroups = append(call.Meta.TalkgroupGroups, v)
+		}
+	}
+
+	switch v := m["talkgroup_group_tag"].(type) {
+	case string:
+		if len(v) > 0 && v != "-" {
+			call.Meta.TalkgroupTag = v
 		}
 	}
 
 	switch v := m["talkgroup_tag"].(type) {
 	case string:
 		if len(v) > 0 && v != "-" {
-			call.talkgroupLabel = v
+			call.Meta.TalkgroupLabel = v
 		}
+	}
+
+	switch v := m["timestamp"].(type) {
+	case float64:
+		call.Timestamp = time.UnixMilli(int64(v))
 	}
 
 	return nil

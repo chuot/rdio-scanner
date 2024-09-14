@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,26 +18,30 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
-
-	"github.com/google/uuid"
 )
 
 type Apikey struct {
-	Id       any    `json:"_id"`
-	Disabled bool   `json:"disabled"`
-	Ident    string `json:"ident"`
-	Key      string `json:"key"`
-	Order    any    `json:"order"`
-	Systems  any    `json:"systems"`
+	Id       uint64
+	Disabled bool
+	Ident    string
+	Key      string
+	Order    uint
+	Systems  any
+}
+
+func NewApikey() *Apikey {
+	return &Apikey{Systems: "*"}
 }
 
 func (apikey *Apikey) FromMap(m map[string]any) *Apikey {
-	switch v := m["_id"].(type) {
+	switch v := m["id"].(type) {
 	case float64:
-		apikey.Id = uint(v)
+		apikey.Id = uint64(v)
 	}
 
 	switch v := m["disabled"].(type) {
@@ -60,14 +64,7 @@ func (apikey *Apikey) FromMap(m map[string]any) *Apikey {
 		apikey.Order = uint(v)
 	}
 
-	switch v := m["systems"].(type) {
-	case []any:
-		if b, err := json.Marshal(v); err == nil {
-			apikey.Systems = string(b)
-		}
-	case string:
-		apikey.Systems = v
-	}
+	apikey.Systems = m["systems"]
 
 	return apikey
 }
@@ -80,7 +77,7 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 			case map[string]any:
 				switch id := v["id"].(type) {
 				case float64:
-					if id == float64(call.System) {
+					if id == float64(call.System.SystemRef) {
 						switch tg := v["talkgroups"].(type) {
 						case string:
 							if tg == "*" {
@@ -90,7 +87,7 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 							for _, f := range tg {
 								switch tg := f.(type) {
 								case float64:
-									if tg == float64(call.Talkgroup) {
+									if tg == float64(call.Talkgroup.TalkgroupRef) {
 										return true
 									}
 								}
@@ -108,6 +105,22 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 	}
 
 	return false
+}
+
+func (apikey *Apikey) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":       apikey.Id,
+		"disabled": apikey.Disabled,
+		"ident":    apikey.Ident,
+		"key":      apikey.Key,
+		"systems":  apikey.Systems,
+	}
+
+	if apikey.Order > 0 {
+		m["order"] = apikey.Order
+	}
+
+	return json.Marshal(m)
 }
 
 type Apikeys struct {
@@ -131,8 +144,7 @@ func (apikeys *Apikeys) FromMap(f []any) *Apikeys {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			apikey := &Apikey{}
-			apikey.FromMap(m)
+			apikey := NewApikey().FromMap(m)
 			apikeys.List = append(apikeys.List, apikey)
 		}
 	}
@@ -154,11 +166,9 @@ func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
 
 func (apikeys *Apikeys) Read(db *Database) error {
 	var (
-		err     error
-		id      sql.NullFloat64
-		order   sql.NullFloat64
-		rows    *sql.Rows
-		systems string
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	apikeys.mutex.Lock()
@@ -166,39 +176,25 @@ func (apikeys *Apikeys) Read(db *Database) error {
 
 	apikeys.List = []*Apikey{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("apikeys.read: %v", err)
-	}
+	formatError := apikeys.errorFormatter("read")
 
-	if rows, err = db.Sql.Query("select `_id`, `disabled`, `ident`, `key`, `order`, `systems` from `rdioScannerApiKeys`"); err != nil {
-		return formatError(err)
+	query = `SELECT "apikeyId", "disabled", "ident", "key", "order", "systems" FROM "apikeys"`
+	if rows, err = db.Sql.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		apikey := &Apikey{}
+		var (
+			apikey  = NewApikey()
+			systems string
+		)
 
-		if err = rows.Scan(&id, &apikey.Disabled, &apikey.Ident, &apikey.Key, &order, &systems); err != nil {
+		if err = rows.Scan(&apikey.Id, &apikey.Disabled, &apikey.Ident, &apikey.Key, &apikey.Order, &systems); err != nil {
 			break
 		}
 
-		if id.Valid && id.Float64 > 0 {
-			apikey.Id = uint(id.Float64)
-		}
-
-		if len(apikey.Ident) == 0 {
-			apikey.Ident = defaults.apikey.ident
-		}
-
-		if len(apikey.Key) == 0 {
-			apikey.Key = uuid.New().String()
-		}
-
-		if order.Valid && order.Float64 > 0 {
-			apikey.Order = uint(order.Float64)
-		}
-
-		if err = json.Unmarshal([]byte(systems), &apikey.Systems); err != nil {
-			apikey.Systems = []any{}
+		if len(systems) > 0 {
+			json.Unmarshal([]byte(systems), &apikey.Systems)
 		}
 
 		apikeys.List = append(apikeys.List, apikey)
@@ -207,92 +203,129 @@ func (apikeys *Apikeys) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
+
+	sort.Slice(apikeys.List, func(i int, j int) bool {
+		return apikeys.List[i].Order < apikeys.List[j].Order
+	})
 
 	return nil
 }
 
 func (apikeys *Apikeys) Write(db *Database) error {
 	var (
-		count   uint
-		err     error
-		rows    *sql.Rows
-		rowIds  = []uint{}
-		systems any
+		apikeyIds = []uint64{}
+		err       error
+		query     string
+		rows      *sql.Rows
+		tx        *sql.Tx
 	)
 
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("apikeys.write %v", err)
+	formatError := apikeys.errorFormatter("write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerApiKeys`"); err != nil {
-		return formatError(err)
+	query = `SELECT "apikeyId" FROM "apikeys"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var id uint
-		if err = rows.Scan(&id); err != nil {
+		var apikeyId uint64
+		if err = rows.Scan(&apikeyId); err != nil {
 			break
 		}
 		remove := true
 		for _, apikey := range apikeys.List {
-			if apikey.Id == nil || apikey.Id == id {
+			if apikey.Id == 0 || apikey.Id == apikeyId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, id)
+			apikeyIds = append(apikeyIds, apikeyId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerApikeys` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(apikeyIds) > 0 {
+		if b, err := json.Marshal(apikeyIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "apikeys" WHERE "apikeyId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, apikey := range apikeys.List {
-		switch apikey.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = apikey.Systems
+		var (
+			count   uint
+			systems string
+		)
+
+		if apikey.Systems != nil {
+			if b, err := json.Marshal(apikey.Systems); err == nil {
+				systems = string(b)
+			}
 		}
 
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerApiKeys` where `_id` = ?", apikey.Id).Scan(&count); err != nil {
-			break
+		if apikey.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "apikeys" WHERE "apikeyId" = %d`, apikey.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerApiKeys` (`_id`, `disabled`, `ident`, `key`, `order`, `systems`) values (?, ?, ?, ?, ?, ?)", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, '%s', '%s', %d, '%s')`, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems)
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerApiKeys` set `_id` = ?, `disabled` = ?, `ident` = ?, `key` = ?, `order` = ?, `systems` = ? where `_id` = ?", apikey.Id, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = '%s', "key" = '%s', "order" = %d, "systems" = '%s' WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	return nil
+}
+
+func (apikeys *Apikeys) errorFormatter(label string) func(err error, query string) error {
+	return func(err error, query string) error {
+		s := fmt.Sprintf("apikeys.%s: %s", label, err.Error())
+
+		if len(query) > 0 {
+			s = fmt.Sprintf("%s in %s", s, query)
+		}
+
+		return errors.New(s)
+	}
 }

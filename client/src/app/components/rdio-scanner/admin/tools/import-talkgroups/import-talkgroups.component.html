@@ -1,9 +1,24 @@
+<p class="mat-body note">Before going any further, note that there is no need to preload talkgroups into a system as the
+    autopopulate feature will automatically create them as audio files are ingested. So give the autopopulate feature a
+    chance before trying to import talkgroups.</p>
+
 <section>
     <p class="mat-body">step 1: read the CSV file</p>
     <p class="text-center">
         <ng-container *ngIf="csv.length === 0">
             <button mat-raised-button (click)="input.click()">Read the CSV file</button>
             <input #input type="file" accept=".csv" style="display: none" (change)="read($event)">
+            <br>
+            <p>
+                <span class="mat-body-1">Column format is: </span>
+                <span class="mat-body-1">Id</span>,
+                <span>unused</span>,
+                <span class="mat-body-1">Label</span>,
+                <span>unused</span>,
+                <span class="mat-body-1">Name</span>,
+                <span class="mat-body-1">Tag</span>,
+                <span class="mat-body-1">Group</span>
+            </p>
         </ng-container>
         <ng-container *ngIf="csv.length !== 0">
             <button mat-raised-button (click)="csv=[]">Reset</button>
@@ -12,12 +27,15 @@
 </section>
 
 <section>
-    <p class="mat-body">step 2: select CSV style</p>
+    <p class="mat-body">step 2: select system</p>
     <p class="text-center">
-        <mat-radio-group [(ngModel)]="mode">
-            <mat-radio-button [value]="0">Trunk Recorder</mat-radio-button>
-            <mat-radio-button [value]="1">Radio Reference</mat-radio-button>
-        </mat-radio-group>
+        <mat-form-field floatLabel="auto">
+            <mat-select [(ngModel)]="system">
+                <mat-option *ngFor="let system of baseConfig.systems" [value]="system">
+                    {{ system.label}}
+                </mat-option>
+            </mat-select>
+        </mat-form-field>
     </p>
 </section>
 
@@ -30,7 +48,7 @@
                     <span>Id</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][0]] }}</span>
+                    <span>{{ tg[0] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="label">
@@ -38,7 +56,7 @@
                     <span>Label</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][1]] }}</span>
+                    <span>{{ tg[2] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="description">
@@ -46,7 +64,7 @@
                     <span>Description</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][2]] }}</span>
+                    <span>{{ tg[4] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="tag">
@@ -54,7 +72,7 @@
                     <span>Tag</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][3]] }}</span>
+                    <span>{{ tg[5] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="group">
@@ -62,7 +80,7 @@
                     <span>Group</span>
                 </mat-header-cell>
                 <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[fields[mode][4]] }}</span>
+                    <span>{{ tg[6] }}</span>
                 </mat-cell>
             </ng-container>
             <ng-container matColumnDef="action">
@@ -88,6 +106,8 @@
         </button>
     </p>
     <p *ngIf="csv.length > 800" class="mat-caption mat-error text-center text-uppercase">
-        Warning, you are trying to import more than 800 talkgroups, {{csv.length}} in this case. The graphic interface has not designed for this number of talkgroups. You can continue, but expect Rdio Scanner to be quite slow, if not unusable.
+        Warning, you are trying to import more than 800 talkgroups, {{csv.length}} in this case. The graphic interface
+        has not designed for this number of talkgroups. You can continue, but expect Rdio Scanner to be quite slow, if
+        not unusable.
     </p>
 </section>

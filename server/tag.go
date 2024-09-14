@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,19 +19,32 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
 
 type Tag struct {
-	Id    any    `json:"_id"`
-	Label string `json:"label"`
+	Id    uint64
+	Alert string
+	Label string
+	Led   string
+	Order uint
+}
+
+func NewTag() *Tag {
+	return &Tag{}
 }
 
 func (tag *Tag) FromMap(m map[string]any) *Tag {
-	switch v := m["_id"].(type) {
+	switch v := m["id"].(type) {
 	case float64:
-		tag.Id = uint(v)
+		tag.Id = uint64(v)
+	}
+
+	switch v := m["alert"].(type) {
+	case string:
+		tag.Alert = v
 	}
 
 	switch v := m["label"].(type) {
@@ -39,7 +52,38 @@ func (tag *Tag) FromMap(m map[string]any) *Tag {
 		tag.Label = v
 	}
 
+	switch v := m["led"].(type) {
+	case string:
+		tag.Led = v
+	}
+
+	switch v := m["order"].(type) {
+	case float64:
+		tag.Order = uint(v)
+	}
+
 	return tag
+}
+
+func (tag *Tag) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":    tag.Id,
+		"label": tag.Label,
+	}
+
+	if len(tag.Alert) > 0 {
+		m["alert"] = tag.Alert
+	}
+
+	if len(tag.Led) > 0 {
+		m["led"] = tag.Led
+	}
+
+	if tag.Order > 0 {
+		m["order"] = tag.Order
+	}
+
+	return json.Marshal(m)
 }
 
 type Tags struct {
@@ -63,8 +107,7 @@ func (tags *Tags) FromMap(f []any) *Tags {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			tag := &Tag{}
-			tag.FromMap(m)
+			tag := NewTag().FromMap(m)
 			tags.List = append(tags.List, tag)
 		}
 	}
@@ -72,26 +115,59 @@ func (tags *Tags) FromMap(f []any) *Tags {
 	return tags
 }
 
-func (tags *Tags) GetTag(f any) (tag *Tag, ok bool) {
+func (tags *Tags) GetTagById(id uint64) (tag *Tag, ok bool) {
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
 
-	switch v := f.(type) {
-	case uint:
-		for _, tag := range tags.List {
-			if tag.Id == v {
-				return tag, true
-			}
-		}
-	case string:
-		for _, tag := range tags.List {
-			if tag.Label == v {
-				return tag, true
-			}
+	for _, tag := range tags.List {
+		if tag.Id == id {
+			return tag, true
 		}
 	}
 
 	return nil, false
+}
+
+func (tags *Tags) GetTagByLabel(label string) (tag *Tag, ok bool) {
+	tags.mutex.Lock()
+	defer tags.mutex.Unlock()
+
+	for _, tag := range tags.List {
+		if tag.Label == label {
+			return tag, true
+		}
+	}
+
+	return nil, false
+}
+
+func (tags *Tags) GetTagsData(systemsMap *SystemsMap) []Tag {
+	var list = []Tag{}
+
+	for _, systemMap := range *systemsMap {
+		switch talkgroupsMap := systemMap["talkgroups"].(type) {
+		case TalkgroupsMap:
+			for _, talkgroupMap := range talkgroupsMap {
+				switch label := talkgroupMap["tag"].(type) {
+				case string:
+					if tag, ok := tags.GetTagByLabel(label); ok {
+						add := true
+						for _, l := range list {
+							if l == *tag {
+								add = false
+								break
+							}
+						}
+						if add {
+							list = append(list, *tag)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return list
 }
 
 func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) TagsMap {
@@ -133,7 +209,7 @@ func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) TagsMap {
 				talkgroupId = v
 			}
 
-			tag, ok := tags.GetTag(talkgroupTag)
+			tag, ok := tags.GetTagByLabel(talkgroupTag)
 			if !ok {
 				continue
 			}
@@ -164,9 +240,9 @@ func (tags *Tags) GetTagsMap(systemsMap *SystemsMap) TagsMap {
 
 func (tags *Tags) Read(db *Database) error {
 	var (
-		err  error
-		id   sql.NullFloat64
-		rows *sql.Rows
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	tags.mutex.Lock()
@@ -174,23 +250,18 @@ func (tags *Tags) Read(db *Database) error {
 
 	tags.List = []*Tag{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("tags read: %v", err)
-	}
+	formatError := errorFormatter("tags", "read")
 
-	if rows, err = db.Sql.Query("select `_id`, `label` from `rdioScannerTags`"); err != nil {
-		return formatError(err)
+	query = `SELECT "tagId", "alert", "label", "led", "order" FROM "tags"`
+	if rows, err = db.Sql.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		tag := &Tag{}
+		tag := NewTag()
 
-		if err = rows.Scan(&id, &tag.Label); err != nil {
+		if err = rows.Scan(&tag.Id, &tag.Alert, &tag.Label, &tag.Led, &tag.Order); err != nil {
 			break
-		}
-
-		if id.Valid && id.Float64 > 0 {
-			tag.Id = uint(id.Float64)
 		}
 
 		tags.List = append(tags.List, tag)
@@ -199,82 +270,106 @@ func (tags *Tags) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
+
+	sort.Slice(tags.List, func(i int, j int) bool {
+		return tags.List[i].Order < tags.List[j].Order
+	})
 
 	return nil
 }
 
 func (tags *Tags) Write(db *Database) error {
 	var (
-		count  uint
 		err    error
+		query  string
 		rows   *sql.Rows
-		rowIds = []uint{}
+		tagIds = []uint64{}
+		tx     *sql.Tx
 	)
 
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("tags write %v", err)
+	formatError := errorFormatter("tags", "write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerTags`"); err != nil {
-		return formatError(err)
+	query = `SELECT "tagId" FROM "tags"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var rowId uint
-		if err = rows.Scan(&rowId); err != nil {
+		var tagId uint64
+		if err = rows.Scan(&tagId); err != nil {
 			break
 		}
 		remove := true
 		for _, tag := range tags.List {
-			if tag.Id == nil || tag.Id == rowId {
+			if tag.Id == 0 || tag.Id == tagId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, rowId)
+			tagIds = append(tagIds, tagId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerTags` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(tagIds) > 0 {
+		if b, err := json.Marshal(tagIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "tags" WHERE "tagId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, tag := range tags.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTags` where `_id` = ?", tag.Id).Scan(&count); err != nil {
-			break
+		var count uint
+
+		if tag.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "tags" WHERE "tagId" = %d`, tag.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerTags` (`_id`, `label`) values (?, ?)", tag.Id, tag.Label); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "tags" ("alert", "label", "led", "order") VALUES ('%s', '%s', '%s', %d)`, tag.Alert, escapeQuotes(tag.Label), tag.Led, tag.Order)
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
-		} else if _, err = db.Sql.Exec("update `rdioScannerTags` set `_id` = ?, `label` = ? where `_id` = ?", tag.Id, tag.Label, tag.Id); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "tags" SET "alert" = '%s', "label" = '%s', "led" = '%s', "order" = %d WHERE "tagId" = %d`, tag.Alert, escapeQuotes(tag.Label), tag.Led, tag.Order, tag.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	return nil

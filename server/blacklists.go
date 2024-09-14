@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -22,9 +22,9 @@ import (
 
 type Blacklists string
 
-func (blacklists *Blacklists) IsBlacklisted(id uint) bool {
+func (blacklists *Blacklists) IsBlacklisted(ref uint) bool {
 	for _, i := range strings.Split(blacklists.String(), ",") {
-		if fmt.Sprintf("%v", i) == fmt.Sprintf("%v", id) {
+		if fmt.Sprintf("%v", i) == fmt.Sprintf("%v", ref) {
 			return true
 		}
 	}

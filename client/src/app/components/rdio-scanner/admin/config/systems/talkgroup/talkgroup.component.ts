@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,8 @@
  */
 
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormArray, FormControl, FormGroup } from '@angular/forms';
+import { FormGroup } from '@angular/forms';
+import { MatSelectChange } from '@angular/material/select';
 import { RdioScannerAdminService, Group, Tag } from '../../../admin.service';
 
 @Component({
@@ -32,7 +33,11 @@ export class RdioScannerAdminTalkgroupComponent {
 
     @Output() remove = new EventEmitter<void>();
 
-    leds = this.adminService.getLeds();
+    leds: string[];
+
+    get alerts(): string[] {
+        return Object.keys(this.adminService.Alerts || {});
+    }
 
     get groups(): Group[] {
         return this.form?.root.get('groups')?.value as Group[];
@@ -42,5 +47,11 @@ export class RdioScannerAdminTalkgroupComponent {
         return this.form?.root.get('tags')?.value as Tag[];
     }
 
-    constructor(private adminService: RdioScannerAdminService) { }
+    constructor(private adminService: RdioScannerAdminService) {
+        this.leds = this.adminService.getLeds();
+    }
+
+    async playAlert(event: MatSelectChange): Promise<void> {
+        if (event.value) await this.adminService.playAlert(event.value);
+    }
 }

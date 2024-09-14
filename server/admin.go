@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -64,6 +64,26 @@ func NewAdmin(controller *Controller) *Admin {
 		Tokens:           []string{},
 		Unregister:       make(chan *websocket.Conn),
 		mutex:            sync.Mutex{},
+	}
+}
+
+func (admin *Admin) AlertsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		t := admin.GetAuthorization(r)
+		if !admin.ValidateToken(t) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if b, err := json.Marshal(Alerts); err == nil {
+			w.Write(b)
+		} else {
+			w.WriteHeader(http.StatusExpectationFailed)
+		}
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -184,7 +204,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			switch v := m["apiKeys"].(type) {
+			switch v := m["apikeys"].(type) {
 			case []any:
 				admin.Controller.Apikeys.FromMap(v)
 				err = admin.Controller.Apikeys.Write(admin.Controller.Database)
@@ -198,7 +218,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			switch v := m["dirWatch"].(type) {
+			switch v := m["dirwatch"].(type) {
 			case []any:
 				admin.Controller.Dirwatches.FromMap(v)
 				err = admin.Controller.Dirwatches.Write(admin.Controller.Database)
@@ -295,30 +315,16 @@ func (admin *Admin) GetAuthorization(r *http.Request) string {
 }
 
 func (admin *Admin) GetConfig() map[string]any {
-	systems := []map[string]any{}
-	for _, system := range admin.Controller.Systems.List {
-		systems = append(systems, map[string]any{
-			"_id":          system.RowId,
-			"autoPopulate": system.AutoPopulate,
-			"blacklists":   system.Blacklists,
-			"id":           system.Id,
-			"label":        system.Label,
-			"led":          system.Led,
-			"order":        system.Order,
-			"talkgroups":   system.Talkgroups.List,
-			"units":        system.Units.List,
-		})
-	}
-
 	return map[string]any{
 		"access":      admin.Controller.Accesses.List,
-		"apiKeys":     admin.Controller.Apikeys.List,
-		"dirWatch":    admin.Controller.Dirwatches.List,
+		"apikeys":     admin.Controller.Apikeys.List,
+		"dirwatch":    admin.Controller.Dirwatches.List,
 		"downstreams": admin.Controller.Downstreams.List,
 		"groups":      admin.Controller.Groups.List,
 		"options":     admin.Controller.Options,
-		"systems":     systems,
+		"systems":     admin.Controller.Systems.List,
 		"tags":        admin.Controller.Tags.List,
+		"version":     Version,
 	}
 }
 

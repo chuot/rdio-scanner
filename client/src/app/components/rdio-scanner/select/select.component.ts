@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,11 +44,11 @@ export class RdioScannerSelectComponent implements OnDestroy {
 
     systems: RdioScannerSystem[] | undefined;
 
-    tagsToggle: boolean | undefined;
+    private eventSubscription;
 
-    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
-
-    constructor(private rdioScannerService: RdioScannerService) { }
+    constructor(private rdioScannerService: RdioScannerService) {
+        this.eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    }
 
     avoid(options?: RdioScannerAvoidOptions): void {
         if (options?.all == true) {
@@ -58,7 +58,7 @@ export class RdioScannerSelectComponent implements OnDestroy {
             this.rdioScannerService.beep(RdioScannerBeepStyle.Deactivate);
 
         } else if (options?.system !== undefined && options?.talkgroup !== undefined) {
-            this.rdioScannerService.beep(this.map[options!.system.id][options!.talkgroup.id].active
+            this.rdioScannerService.beep(this.map[options.system.id][options.talkgroup.id].active
                 ? RdioScannerBeepStyle.Deactivate
                 : RdioScannerBeepStyle.Activate
             );
@@ -84,10 +84,7 @@ export class RdioScannerSelectComponent implements OnDestroy {
     }
 
     private eventHandler(event: RdioScannerEvent): void {
-        if (event.config) {
-            this.tagsToggle = event.config.tagsToggle;
-            this.systems = event.config.systems;
-        }
+        if (event.config) this.systems = event.config.systems;
         if (event.categories) this.categories = event.categories;
         if (event.map) this.map = event.map;
     }

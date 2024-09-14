@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  */
 
 import { ChangeDetectorRef, Component, OnDestroy, ViewChild } from '@angular/core';
-import { FormBuilder } from '@angular/forms';
+import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
 import {
@@ -42,14 +42,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
     call: RdioScannerCall | undefined;
     callPending: number | undefined;
 
-    form = this.ngFormBuilder.group({
-        date: [null],
-        group: [-1],
-        sort: [-1],
-        system: [-1],
-        tag: [-1],
-        talkgroup: [-1],
-    });
+    form: FormGroup;
 
     livefeedOnline = false;
     livefeedPlayback = false;
@@ -70,7 +63,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
 
     private config: RdioScannerConfig | undefined;
 
-    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription;
 
     private limit = 200;
 
@@ -82,7 +75,27 @@ export class RdioScannerSearchComponent implements OnDestroy {
         private rdioScannerService: RdioScannerService,
         private ngChangeDetectorRef: ChangeDetectorRef,
         private ngFormBuilder: FormBuilder,
-    ) { }
+    ) {
+        this.form = this.ngFormBuilder.group<{
+            date: string | null;
+            group: number;
+            sort: number;
+            system: number;
+            tag: number;
+            talkgroup: number;
+            unit: number;
+        }>({
+            date: null,
+            group: -1,
+            sort: -1,
+            system: -1,
+            tag: -1,
+            talkgroup: -1,
+            unit: -1,
+        });
+
+        this.eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    }
 
     download(id: number): void {
         this.rdioScannerService.loadAndDownload(id);
@@ -121,7 +134,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
         this.optionsSystem = this.config.systems
             .filter((system) => {
                 const group = selectedGroup === undefined ||
-                    system.talkgroups.some((talkgroup) => talkgroup.group === selectedGroup);
+                    system.talkgroups.some((talkgroup) => talkgroup.groups.includes(selectedGroup));
                 const tag = selectedTag === undefined ||
                     system.talkgroups.some((talkgroup) => talkgroup.tag === selectedTag);
                 return group && tag;
@@ -133,7 +146,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             : selectedSystem.talkgroups
                 .filter((talkgroup) => {
                     const group = selectedGroup == undefined ||
-                        talkgroup.group === selectedGroup;
+                        talkgroup.groups.includes(selectedGroup);
                     const tag = selectedTag == undefined ||
                         talkgroup.tag === selectedTag;
                     return group && tag;
@@ -143,14 +156,14 @@ export class RdioScannerSearchComponent implements OnDestroy {
         this.optionsGroup = Object.keys(this.config.groups)
             .filter((group) => {
                 const system: boolean = selectedSystem === undefined ||
-                    selectedSystem.talkgroups.some((talkgroup) => talkgroup.group === group)
+                    selectedSystem.talkgroups.some((talkgroup) => talkgroup.groups.includes(group))
                 const talkgroup: boolean = selectedTalkgroup === undefined ||
-                    selectedTalkgroup.group === group;
+                    selectedTalkgroup.groups.includes(group);
                 const tag: boolean = selectedTag === undefined ||
                     (selectedTalkgroup !== undefined && selectedTalkgroup.tag === selectedTag) ||
                     (this.config !== undefined && this.config.systems
                         .flatMap((system) => system.talkgroups)
-                        .some((talkgroup) => talkgroup.group === group && talkgroup.tag === selectedTag))
+                        .some((talkgroup) => talkgroup.groups.includes(group) && talkgroup.tag === selectedTag))
                 return system && talkgroup && tag;
             })
             .sort((a, b) => a.localeCompare(b))
@@ -162,10 +175,10 @@ export class RdioScannerSearchComponent implements OnDestroy {
                 const talkgroup: boolean = selectedTalkgroup === undefined ||
                     selectedTalkgroup.tag === tag;
                 const group: boolean = selectedGroup === undefined ||
-                    (selectedTalkgroup !== undefined && selectedTalkgroup.group === selectedGroup) ||
+                    (selectedTalkgroup !== undefined && selectedTalkgroup.groups.includes(selectedGroup)) ||
                     (this.config !== undefined && this.config.systems
                         .flatMap((system) => system.talkgroups)
-                        .some((talkgroup) => talkgroup.tag === tag && talkgroup.group === selectedGroup))
+                        .some((talkgroup) => talkgroup.tag === tag && talkgroup.groups.includes(selectedGroup)))
                 return system && talkgroup && group;
             })
             .sort((a, b) => a.localeCompare(b))
@@ -209,6 +222,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             system: -1,
             tag: -1,
             talkgroup: -1,
+            unit: -1,
         });
 
         this.paginator?.firstPage();
@@ -230,14 +244,14 @@ export class RdioScannerSearchComponent implements OnDestroy {
         const options: RdioScannerSearchOptions = {
             limit: this.limit,
             offset: this.offset,
-            sort: this.form.value.sort,
+            sort: this.form.get('sort')?.value ?? -1,
         };
 
         if (typeof this.form.value.date === 'string') {
             options.date = new Date(Date.parse(this.form.value.date));
         }
 
-        if (this.form.value.group >= 0) {
+        if ((this.form.get('group')?.value ?? -1) >= 0) {
             const group = this.getSelectedGroup();
 
             if (group) {
@@ -245,7 +259,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             }
         }
 
-        if (this.form.value.system >= 0) {
+        if ((this.form.get('system')?.value ?? -1) >= 0) {
             const system = this.getSelectedSystem();
 
             if (system) {
@@ -253,7 +267,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             }
         }
 
-        if (this.form.value.tag >= 0) {
+        if ((this.form.get('tag')?.value ?? -1) >= 0) {
             const tag = this.getSelectedTag();
 
             if (tag) {
@@ -261,7 +275,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
             }
         }
 
-        if (this.form.value.talkgroup >= 0) {
+        if ((this.form.get('talkgroup')?.value ?? -1) >= 0) {
             const talkgroup = this.getSelectedTalkgroup();
 
             if (talkgroup) {
@@ -293,7 +307,7 @@ export class RdioScannerSearchComponent implements OnDestroy {
                 const index = this.results.value.findIndex((call) => call?.id === this.callPending);
 
                 if (index === -1) {
-                    if (this.form.value.sort === -1) {
+                    if (this.form.get('sort')?.value === -1) {
                         this.paginator?.previousPage();
 
                     } else {
@@ -345,22 +359,22 @@ export class RdioScannerSearchComponent implements OnDestroy {
     }
 
     private getSelectedGroup(): string | undefined {
-        return this.optionsGroup[this.form.value.group];
+        return this.optionsGroup[this.form.get('group')?.value ?? -1];
     }
 
     private getSelectedSystem(): RdioScannerSystem | undefined {
-        return this.config?.systems.find((system) => system.label === this.optionsSystem[this.form.value.system]);
+        return this.config?.systems.find((system) => system.label === this.optionsSystem[this.form.get('system')?.value ?? -1]);
     }
 
     private getSelectedTag(): string | undefined {
-        return this.optionsTag[this.form.value.tag];
+        return this.optionsTag[this.form.get('tag')?.value ?? -1];
     }
 
     private getSelectedTalkgroup(): RdioScannerTalkgroup | undefined {
         const system = this.getSelectedSystem();
 
         return system
-            ? system.talkgroups.find((talkgroup) => talkgroup.label === this.optionsTalkgroup[this.form.value.talkgroup])
+            ? system.talkgroups.find((talkgroup) => talkgroup.label === this.optionsTalkgroup[this.form.get('talkgroup')?.value ?? -1])
             : undefined;
     }
 }

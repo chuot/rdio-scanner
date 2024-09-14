@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,34 +19,41 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Downstream struct {
-	Id       any    `json:"_id"`
-	Apikey   string `json:"apiKey"`
-	Disabled bool   `json:"disabled"`
-	Order    any    `json:"order"`
-	Systems  any    `json:"systems"`
-	Url      string `json:"url"`
+	Id         uint64
+	Apikey     string
+	Disabled   bool
+	Order      uint
+	Systems    any
+	Url        string
+	controller *Controller
+}
+
+func NewDownstream(controller *Controller) *Downstream {
+	return &Downstream{
+		controller: controller,
+	}
 }
 
 func (downstream *Downstream) FromMap(m map[string]any) *Downstream {
-	switch v := m["_id"].(type) {
+	switch v := m["id"].(type) {
 	case float64:
-		downstream.Id = uint(v)
+		downstream.Id = uint64(v)
 	}
 
-	switch v := m["apiKey"].(type) {
+	switch v := m["apikey"].(type) {
 	case string:
 		downstream.Apikey = v
 	}
@@ -61,14 +68,7 @@ func (downstream *Downstream) FromMap(m map[string]any) *Downstream {
 		downstream.Order = uint(v)
 	}
 
-	switch v := m["systems"].(type) {
-	case []any:
-		if b, err := json.Marshal(v); err == nil {
-			downstream.Systems = string(b)
-		}
-	case string:
-		downstream.Systems = v
-	}
+	downstream.Systems = m["systems"]
 
 	switch v := m["url"].(type) {
 	case string:
@@ -90,7 +90,7 @@ func (downstream *Downstream) HasAccess(call *Call) bool {
 			case map[string]any:
 				switch id := v["id"].(type) {
 				case float64:
-					if id == float64(call.System) {
+					if id == float64(call.System.SystemRef) {
 						switch tg := v["talkgroups"].(type) {
 						case string:
 							if tg == "*" {
@@ -100,7 +100,7 @@ func (downstream *Downstream) HasAccess(call *Call) bool {
 							for _, f := range tg {
 								switch tg := f.(type) {
 								case float64:
-									if tg == float64(call.Talkgroup) {
+									if tg == float64(call.Talkgroup.TalkgroupRef) {
 										return true
 									}
 								}
@@ -121,28 +121,40 @@ func (downstream *Downstream) HasAccess(call *Call) bool {
 	return false
 }
 
-func (downstream *Downstream) Send(call *Call) error {
-	var (
-		audioName string
-		buf       = bytes.Buffer{}
-	)
-
-	if downstream.Disabled {
-		return nil
+func (downstream *Downstream) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":       downstream.Id,
+		"apikey":   downstream.Apikey,
+		"disabled": downstream.Disabled,
+		"systems":  downstream.Systems,
+		"url":      downstream.Url,
 	}
+
+	if downstream.Order > 0 {
+		m["order"] = downstream.Order
+	}
+
+	return json.Marshal(m)
+}
+
+func (downstream *Downstream) Send(call *Call) error {
+	var buf = bytes.Buffer{}
 
 	formatError := func(err error) error {
 		return fmt.Errorf("downstream.send: %s", err.Error())
 	}
 
-	mw := multipart.NewWriter(&buf)
-
-	switch v := call.AudioName.(type) {
-	case string:
-		audioName = v
+	if downstream.controller == nil {
+		return formatError(errors.New("no controller available"))
 	}
 
-	if w, err := mw.CreateFormFile("audio", audioName); err == nil {
+	if downstream.Disabled {
+		return nil
+	}
+
+	mw := multipart.NewWriter(&buf)
+
+	if w, err := mw.CreateFormFile("audio", call.AudioFilename); err == nil {
 		if _, err = w.Write(call.Audio); err != nil {
 			return formatError(err)
 		}
@@ -150,60 +162,41 @@ func (downstream *Downstream) Send(call *Call) error {
 		return formatError(err)
 	}
 
-	switch v := call.AudioName.(type) {
-	case string:
-		if w, err := mw.CreateFormField("audioName"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
-				return formatError(err)
-			}
-		} else {
-			return formatError(err)
-		}
-	}
-
-	switch v := call.AudioType.(type) {
-	case string:
-		if w, err := mw.CreateFormField("audioType"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
-				return formatError(err)
-			}
-		} else {
-			return formatError(err)
-		}
-	}
-
-	if w, err := mw.CreateFormField("dateTime"); err == nil {
-		if _, err = w.Write([]byte(call.DateTime.Format(time.RFC3339))); err != nil {
+	if w, err := mw.CreateFormField("audioFilename"); err == nil {
+		if _, err = w.Write([]byte(call.AudioFilename)); err != nil {
 			return formatError(err)
 		}
 	} else {
 		return formatError(err)
 	}
 
-	switch v := call.Frequencies.(type) {
-	case []map[string]any:
-		if w, err := mw.CreateFormField("frequencies"); err == nil {
-			if b, err := json.Marshal(v); err == nil {
-				if _, err = w.Write(b); err != nil {
-					return formatError(err)
-				}
-			} else {
-				return formatError(err)
-			}
-		} else {
+	if w, err := mw.CreateFormField("audioMime"); err == nil {
+		if _, err = w.Write([]byte(call.AudioMime)); err != nil {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
-	switch v := call.Frequency.(type) {
-	case uint:
-		if w, err := mw.CreateFormField("frequency"); err == nil {
-			if _, err = w.Write([]byte(fmt.Sprintf("%v", v))); err != nil {
+	// pre v7 comptability
+	if w, err := mw.CreateFormField("dateTime"); err == nil {
+		if _, err = w.Write([]byte(call.Timestamp.Format(time.RFC3339))); err != nil {
+			return formatError(err)
+		}
+	} else {
+		return formatError(err)
+	}
+
+	if w, err := mw.CreateFormField("frequencies"); err == nil {
+		if b, err := json.Marshal(call.Frequencies); err == nil {
+			if _, err = w.Write(b); err != nil {
 				return formatError(err)
 			}
 		} else {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
 	if w, err := mw.CreateFormField("key"); err == nil {
@@ -214,116 +207,100 @@ func (downstream *Downstream) Send(call *Call) error {
 		return formatError(err)
 	}
 
-	switch v := call.Patches.(type) {
-	case []uint:
-		if w, err := mw.CreateFormField("patches"); err == nil {
-			if b, err := json.Marshal(v); err == nil {
-				if _, err = w.Write(b); err != nil {
-					return formatError(err)
-				}
-			} else {
+	if w, err := mw.CreateFormField("patches"); err == nil {
+		if b, err := json.Marshal(call.Patches); err == nil {
+			if _, err = w.Write(b); err != nil {
 				return formatError(err)
 			}
 		} else {
 			return formatError(err)
 		}
-	}
-
-	switch v := call.Source.(type) {
-	case uint:
-		if w, err := mw.CreateFormField("source"); err == nil {
-			if _, err = w.Write([]byte(fmt.Sprintf("%v", v))); err != nil {
-				return formatError(err)
-			}
-		} else {
-			return formatError(err)
-		}
-	}
-
-	switch v := call.Sources.(type) {
-	case []map[string]any:
-		if w, err := mw.CreateFormField("sources"); err == nil {
-			if b, err := json.Marshal(v); err == nil {
-				if _, err = w.Write(b); err != nil {
-					return formatError(err)
-				}
-			} else {
-				return formatError(err)
-			}
-		} else {
-			return formatError(err)
-		}
+	} else {
+		return formatError(err)
 	}
 
 	if w, err := mw.CreateFormField("system"); err == nil {
-		if _, err = w.Write([]byte(fmt.Sprintf("%v", call.System))); err != nil {
+		if _, err = w.Write([]byte(fmt.Sprintf("%v", call.System.SystemRef))); err != nil {
 			return formatError(err)
 		}
 	} else {
 		return formatError(err)
 	}
 
-	switch v := call.systemLabel.(type) {
-	case string:
-		if w, err := mw.CreateFormField("systemLabel"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
-				return formatError(err)
-			}
-		} else {
+	if w, err := mw.CreateFormField("systemLabel"); err == nil {
+		if _, err = w.Write([]byte(call.System.Label)); err != nil {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
 	if w, err := mw.CreateFormField("talkgroup"); err == nil {
-		if _, err = w.Write([]byte(fmt.Sprintf("%v", call.Talkgroup))); err != nil {
+		if _, err = w.Write([]byte(fmt.Sprintf("%v", call.Talkgroup.TalkgroupRef))); err != nil {
 			return formatError(err)
 		}
 	} else {
 		return formatError(err)
 	}
 
-	switch v := call.talkgroupGroup.(type) {
-	case string:
-		if w, err := mw.CreateFormField("talkgroupGroup"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
-				return formatError(err)
+	if w, err := mw.CreateFormField("talkgroupGroups"); err == nil {
+		var labels = []string{}
+		for _, id := range call.Talkgroup.GroupIds {
+			if group, ok := downstream.controller.Groups.GetGroupById(id); ok {
+				labels = append(labels, group.Label)
 			}
-		} else {
+		}
+		if _, err = w.Write([]byte(strings.Join(labels, ","))); err != nil {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
-	switch v := call.talkgroupLabel.(type) {
-	case string:
-		if w, err := mw.CreateFormField("talkgroupLabel"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
-				return formatError(err)
-			}
-		} else {
+	if w, err := mw.CreateFormField("talkgroupLabel"); err == nil {
+		if _, err = w.Write([]byte(call.Talkgroup.Label)); err != nil {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
-	switch v := call.talkgroupName.(type) {
-	case string:
-		if w, err := mw.CreateFormField("talkgroupName"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
-				return formatError(err)
-			}
-		} else {
+	if w, err := mw.CreateFormField("talkgroupName"); err == nil {
+		if _, err = w.Write([]byte(call.Talkgroup.Name)); err != nil {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
-	switch v := call.talkgroupTag.(type) {
-	case string:
-		if w, err := mw.CreateFormField("talkgroupTag"); err == nil {
-			if _, err = w.Write([]byte(v)); err != nil {
+	if w, err := mw.CreateFormField("talkgroupTag"); err == nil {
+		if tag, ok := downstream.controller.Tags.GetTagById(call.Talkgroup.TagId); ok {
+			if _, err = w.Write([]byte(tag.Label)); err != nil {
+				return formatError(err)
+			}
+		}
+	} else {
+		return formatError(err)
+	}
+
+	if w, err := mw.CreateFormField("timestamp"); err == nil {
+		if _, err = w.Write([]byte(fmt.Sprintf("%d", call.Timestamp.UnixMilli()))); err != nil {
+			return formatError(err)
+		}
+	} else {
+		return formatError(err)
+	}
+
+	if w, err := mw.CreateFormField("units"); err == nil {
+		if b, err := json.Marshal(call.Units); err == nil {
+			if _, err = w.Write(b); err != nil {
 				return formatError(err)
 			}
 		} else {
 			return formatError(err)
 		}
+	} else {
+		return formatError(err)
 	}
 
 	if err := mw.Close(); err != nil {
@@ -352,14 +329,16 @@ func (downstream *Downstream) Send(call *Call) error {
 }
 
 type Downstreams struct {
-	List  []*Downstream
-	mutex sync.Mutex
+	List       []*Downstream
+	controller *Controller
+	mutex      sync.Mutex
 }
 
-func NewDownstreams() *Downstreams {
+func NewDownstreams(controller *Controller) *Downstreams {
 	return &Downstreams{
-		List:  []*Downstream{},
-		mutex: sync.Mutex{},
+		List:       []*Downstream{},
+		controller: controller,
+		mutex:      sync.Mutex{},
 	}
 }
 
@@ -372,8 +351,7 @@ func (downstreams *Downstreams) FromMap(f []any) *Downstreams {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			downstream := &Downstream{}
-			downstream.FromMap(m)
+			downstream := NewDownstream(downstreams.controller).FromMap(m)
 			downstreams.List = append(downstreams.List, downstream)
 		}
 	}
@@ -383,11 +361,9 @@ func (downstreams *Downstreams) FromMap(f []any) *Downstreams {
 
 func (downstreams *Downstreams) Read(db *Database) error {
 	var (
-		err     error
-		id      sql.NullFloat64
-		order   sql.NullFloat64
-		rows    *sql.Rows
-		systems string
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	downstreams.mutex.Lock()
@@ -395,39 +371,25 @@ func (downstreams *Downstreams) Read(db *Database) error {
 
 	downstreams.List = []*Downstream{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("downstreams.read: %v", err)
-	}
+	formatError := downstreams.errorFormatter("read")
 
-	if rows, err = db.Sql.Query("select `_id`, `apiKey`, `disabled`, `order`, `systems`, `url` from `rdioScannerDownstreams`"); err != nil {
-		return formatError(err)
+	query = `SELECT "downstreamId", "apikey", "disabled", "order", "systems", "url" FROM "downstreams"`
+	if rows, err = db.Sql.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		downstream := &Downstream{}
+		var (
+			downstream = NewDownstream(downstreams.controller)
+			systems    string
+		)
 
-		if err = rows.Scan(&id, &downstream.Apikey, &downstream.Disabled, &order, &systems, &downstream.Url); err != nil {
+		if err = rows.Scan(&downstream.Id, &downstream.Apikey, &downstream.Disabled, &downstream.Order, &systems, &downstream.Url); err != nil {
 			break
 		}
 
-		if id.Valid && id.Float64 > 0 {
-			downstream.Id = uint(id.Float64)
-		}
-
-		if len(downstream.Apikey) == 0 {
-			downstream.Apikey = uuid.New().String()
-		}
-
-		if order.Valid && order.Float64 > 0 {
-			downstream.Order = uint(order.Float64)
-		}
-
-		if err = json.Unmarshal([]byte(systems), &downstream.Systems); err != nil {
-			downstream.Systems = []any{}
-		}
-
-		if len(downstream.Url) == 0 {
-			continue
+		if len(systems) > 0 {
+			json.Unmarshal([]byte(systems), &downstream.Systems)
 		}
 
 		downstreams.List = append(downstreams.List, downstream)
@@ -436,8 +398,12 @@ func (downstreams *Downstreams) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
+
+	sort.Slice(downstreams.List, func(i int, j int) bool {
+		return downstreams.List[i].Order < downstreams.List[j].Order
+	})
 
 	return nil
 }
@@ -445,7 +411,7 @@ func (downstreams *Downstreams) Read(db *Database) error {
 func (downstreams *Downstreams) Send(controller *Controller, call *Call) {
 	for _, downstream := range downstreams.List {
 		logEvent := func(logLevel string, message string) {
-			controller.Logs.LogEvent(logLevel, fmt.Sprintf("downstream: system=%v talkgroup=%v file=%v to %v %v", call.System, call.Talkgroup, call.AudioName, downstream.Url, message))
+			controller.Logs.LogEvent(logLevel, fmt.Sprintf("downstream: system=%d talkgroup=%d file=%s to %s %s", call.System.SystemRef, call.Talkgroup.TalkgroupRef, call.AudioFilename, downstream.Url, message))
 		}
 
 		if downstream.HasAccess(call) {
@@ -460,84 +426,117 @@ func (downstreams *Downstreams) Send(controller *Controller, call *Call) {
 
 func (downstreams *Downstreams) Write(db *Database) error {
 	var (
-		count   uint
-		err     error
-		rows    *sql.Rows
-		rowIds  = []uint{}
-		systems any
+		downstreamIds = []uint64{}
+		err           error
+		query         string
+		rows          *sql.Rows
+		tx            *sql.Tx
 	)
 
 	downstreams.mutex.Lock()
 	defer downstreams.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("downstreams.write: %v", err)
+	formatError := downstreams.errorFormatter("write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerDownstreams`"); err != nil {
-		return formatError(err)
+	query = `SELECT "downstreamId" FROM "downstreams"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var rowId uint
-		if err = rows.Scan(&rowId); err != nil {
+		var downstreamId uint64
+		if err = rows.Scan(&downstreamId); err != nil {
 			break
 		}
 		remove := true
 		for _, downstream := range downstreams.List {
-			if downstream.Id == nil || downstream.Id == rowId {
+			if downstream.Id == 0 || downstream.Id == downstreamId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, rowId)
+			downstreamIds = append(downstreamIds, downstreamId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerDownstreams` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(downstreamIds) > 0 {
+		if b, err := json.Marshal(downstreamIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "downstreams" WHERE "downstreamId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, downstream := range downstreams.List {
-		switch downstream.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = downstream.Systems
+		var (
+			count   uint
+			systems string
+		)
+
+		if downstream.Systems != nil {
+			if b, err := json.Marshal(downstream.Systems); err == nil {
+				systems = string(b)
+			}
 		}
 
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerDownstreams` where `_id` = ?", downstream.Id).Scan(&count); err != nil {
-			break
+		if downstream.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "downstreams" WHERE "downstreamId" = %d`, downstream.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerDownstreams` (`_id`, `apiKey`, `disabled`, `order`, `systems`, `url`) values (?, ?, ?, ?, ?, ?)", downstream.Id, downstream.Apikey, downstream.Disabled, downstream.Order, systems, downstream.Url); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ('%s', %t, %d, '%s', '%s')`, escapeQuotes(downstream.Apikey), downstream.Disabled, downstream.Order, systems, escapeQuotes(downstream.Url))
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerDownstreams` set `_id` = ?, `apiKey` = ?, `disabled` = ?, `order` = ?, `systems` = ?, `url` = ? where `_id` = ?", downstream.Id, downstream.Apikey, downstream.Disabled, downstream.Order, systems, downstream.Url, downstream.Id); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = '%s', "disabled" = %t, "order" = %d, "systems" = '%s', "url" = '%s' WHERE "downstreamId" = %d`, escapeQuotes(downstream.Apikey), downstream.Disabled, downstream.Order, systems, escapeQuotes(downstream.Url), downstream.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	return nil
+}
+
+func (downstreams *Downstreams) errorFormatter(label string) func(err error, query string) error {
+	return func(err error, query string) error {
+		s := fmt.Sprintf("downstreams.%s: %s", label, err.Error())
+
+		if len(query) > 0 {
+			s = fmt.Sprintf("%s in %s", s, query)
+		}
+
+		return errors.New(s)
+	}
 }

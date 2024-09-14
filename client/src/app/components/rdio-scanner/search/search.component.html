@@ -1,4 +1,4 @@
-<mat-card class="rdio-list">
+<mat-card appearance="outlined" class="rdio-list">
     <mat-table [dataSource]="results">
         <ng-container matColumnDef="control">
             <mat-header-cell *matHeaderCellDef></mat-header-cell>
@@ -75,7 +75,7 @@
         </mat-paginator>
     </div>
 </mat-card>
-<mat-card class="rdio-filters">
+<mat-card appearance="outlined" class="rdio-filters">
     <form autocomplete="off" [formGroup]="form">
         <mat-form-field>
             <mat-label>
@@ -148,6 +148,13 @@
                     {{ tag }}
                 </mat-option>
             </mat-select>
+        </mat-form-field>
+        <mat-form-field>
+            <mat-label>
+                Unit
+            </mat-label>
+            <input type="number" matInput>
+            <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
         <div class="reset">
             <button mat-raised-button type="button" [disabled]="resultsPending" (click)="resetForm()">

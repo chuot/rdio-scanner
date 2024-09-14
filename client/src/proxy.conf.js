@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ const server = 'http://localhost:3000';
 
 module.exports = [
     {
-        context: ['/**', '!/admin**', '!/ws**'],
+        context: ['/**', '!/admin**', '!/ng-cli-ws**', '!/reset**'],
         secure: false,
         target: server,
         ws: true

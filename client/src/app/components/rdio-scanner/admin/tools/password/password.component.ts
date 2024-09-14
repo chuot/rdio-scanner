@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  */
 
 import { Component } from '@angular/core';
-import { AbstractControl, FormBuilder, ValidatorFn, ValidationErrors, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, FormGroup, ValidatorFn, ValidationErrors, Validators } from '@angular/forms';
 import { MatSnackBar, MatSnackBarConfig } from '@angular/material/snack-bar';
 import { RdioScannerAdminService } from '../../admin.service';
 
@@ -28,17 +28,19 @@ import { RdioScannerAdminService } from '../../admin.service';
     templateUrl: './password.component.html',
 })
 export class RdioScannerAdminPasswordComponent {
-    form = this.ngFormBuilder.group({
-        currentPassword: [null, Validators.required],
-        newPassword: [null, [Validators.required, Validators.minLength(8)]],
-        verifyNewPassword: [null, [Validators.required, this.validatePassword()]],
-    });
+    form: FormGroup;
 
     constructor(
         private adminService: RdioScannerAdminService,
         private matSnackBar: MatSnackBar,
         private ngFormBuilder: FormBuilder,
-    ) { }
+    ) {
+        this.form = this.ngFormBuilder.group({
+            currentPassword: [null, Validators.required],
+            newPassword: [null, [Validators.required, Validators.minLength(8)]],
+            verifyNewPassword: [null, [Validators.required, this.validatePassword()]],
+        });
+    }
 
     private validatePassword(): ValidatorFn {
         return (control: AbstractControl): ValidationErrors | null => {
@@ -54,11 +56,15 @@ export class RdioScannerAdminPasswordComponent {
 
     async save(): Promise<void> {
         const config: MatSnackBarConfig = { duration: 5000 };
+        const currentPassword = this.form.get('currentPassword')?.value;
+        const newPassword = this.form.get('newPassword')?.value;
 
         this.form.disable();
 
         try {
-            await this.adminService.changePassword(this.form.value.currentPassword, this.form.value.newPassword);
+            if (currentPassword && newPassword) {
+                await this.adminService.changePassword(currentPassword, newPassword);
+            }
 
             this.matSnackBar.open('Password changed successfully', '', config);
 

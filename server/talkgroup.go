@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,27 +20,46 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
 
 type Talkgroup struct {
-	Frequency any `json:"frequency"`
-	group     string
-	GroupId   uint   `json:"groupId"`
-	Id        uint   `json:"id"`
-	Label     string `json:"label"`
-	Led       any    `json:"led"`
-	Name      string `json:"name"`
-	Order     uint   `json:"order"`
-	TagId     uint   `json:"tagId"`
-	tag       string
+	Id           uint64
+	Alert        string
+	Delay        uint
+	Frequency    uint
+	GroupIds     []uint64
+	Kind         string
+	Label        string
+	Led          string
+	Name         string
+	Order        uint
+	TagId        uint64
+	TalkgroupRef uint
+}
+
+func NewTalkgroup() *Talkgroup {
+	return &Talkgroup{
+		GroupIds: []uint64{},
+	}
 }
 
 func (talkgroup *Talkgroup) FromMap(m map[string]any) *Talkgroup {
 	switch v := m["id"].(type) {
 	case float64:
-		talkgroup.Id = uint(v)
+		talkgroup.Id = uint64(v)
+	}
+
+	switch v := m["alert"].(type) {
+	case string:
+		talkgroup.Alert = v
+	}
+
+	switch v := m["delay"].(type) {
+	case float64:
+		talkgroup.Delay = uint(v)
 	}
 
 	switch v := m["frequency"].(type) {
@@ -48,14 +67,20 @@ func (talkgroup *Talkgroup) FromMap(m map[string]any) *Talkgroup {
 		talkgroup.Frequency = uint(v)
 	}
 
-	switch v := m["group"].(type) {
-	case string:
-		talkgroup.group = v
+	switch v := m["groupIds"].(type) {
+	case []any:
+		talkgroup.GroupIds = []uint64{}
+		for _, v := range v {
+			switch i := v.(type) {
+			case float64:
+				talkgroup.GroupIds = append(talkgroup.GroupIds, uint64(i))
+			}
+		}
 	}
 
-	switch v := m["groupId"].(type) {
-	case float64:
-		talkgroup.GroupId = uint(v)
+	switch v := m["type"].(type) {
+	case string:
+		talkgroup.Kind = v
 	}
 
 	switch v := m["label"].(type) {
@@ -78,17 +103,57 @@ func (talkgroup *Talkgroup) FromMap(m map[string]any) *Talkgroup {
 		talkgroup.Order = uint(v)
 	}
 
-	switch v := m["tag"].(type) {
-	case string:
-		talkgroup.tag = v
-	}
-
 	switch v := m["tagId"].(type) {
 	case float64:
-		talkgroup.TagId = uint(v)
+		talkgroup.TagId = uint64(v)
+	}
+
+	switch v := m["talkgroupRef"].(type) {
+	case float64:
+		talkgroup.TalkgroupRef = uint(v)
 	}
 
 	return talkgroup
+}
+
+func (talkgroup *Talkgroup) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":           talkgroup.Id,
+		"groupIds":     talkgroup.GroupIds,
+		"label":        talkgroup.Label,
+		"name":         talkgroup.Name,
+		"talkgroupRef": talkgroup.TalkgroupRef,
+	}
+
+	if len(talkgroup.Alert) > 0 {
+		m["alert"] = talkgroup.Alert
+	}
+
+	if talkgroup.Delay > 0 {
+		m["delay"] = talkgroup.Delay
+	}
+
+	if talkgroup.Frequency > 0 {
+		m["frequency"] = talkgroup.Frequency
+	}
+
+	if len(talkgroup.Kind) > 0 {
+		m["type"] = talkgroup.Kind
+	}
+
+	if len(talkgroup.Led) > 0 {
+		m["led"] = talkgroup.Led
+	}
+
+	if talkgroup.Order > 0 {
+		m["talkgroup"] = talkgroup.Order
+	}
+
+	if talkgroup.TagId > 0 {
+		m["tagId"] = talkgroup.TagId
+	}
+
+	return json.Marshal(m)
 }
 
 type TalkgroupMap map[string]any
@@ -114,8 +179,7 @@ func (talkgroups *Talkgroups) FromMap(f []any) *Talkgroups {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			talkgroup := &Talkgroup{}
-			talkgroup.FromMap(m)
+			talkgroup := NewTalkgroup().FromMap(m)
 			talkgroups.List = append(talkgroups.List, talkgroup)
 		}
 	}
@@ -123,34 +187,52 @@ func (talkgroups *Talkgroups) FromMap(f []any) *Talkgroups {
 	return talkgroups
 }
 
-func (talkgroups *Talkgroups) GetTalkgroup(f any) (system *Talkgroup, ok bool) {
+func (talkgroups *Talkgroups) GetTalkgroupById(id uint64) (system *Talkgroup, ok bool) {
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
-	switch v := f.(type) {
-	case uint:
-		for _, talkgroup := range talkgroups.List {
-			if talkgroup.Id == v {
-				return talkgroup, true
-			}
-		}
-	case string:
-		for _, talkgroup := range talkgroups.List {
-			if talkgroup.Label == v {
-				return talkgroup, true
-			}
+	for _, talkgroup := range talkgroups.List {
+		if talkgroup.Id == id {
+			return talkgroup, true
 		}
 	}
 
 	return nil, false
 }
 
-func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
+func (talkgroups *Talkgroups) GetTalkgroupByLabel(label string) (talkgroup *Talkgroup, ok bool) {
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
+
+	for _, talkgroup := range talkgroups.List {
+		if talkgroup.Label == label {
+			return talkgroup, true
+		}
+	}
+
+	return nil, false
+}
+
+func (talkgroups *Talkgroups) GetTalkgroupByRef(ref uint) (talkgroup *Talkgroup, ok bool) {
+	talkgroups.mutex.Lock()
+	defer talkgroups.mutex.Unlock()
+
+	for _, talkgroup := range talkgroups.List {
+		if talkgroup.TalkgroupRef == ref {
+			return talkgroup, true
+		}
+	}
+
+	return nil, false
+}
+
+func (talkgroups *Talkgroups) ReadTx(tx *sql.Tx, systemId uint64, dbType string) error {
 	var (
-		err       error
-		frequency sql.NullFloat64
-		led       sql.NullString
-		rows      *sql.Rows
+		err   error
+		query string
+		rows  *sql.Rows
+
+		groupIds string
 	)
 
 	talkgroups.mutex.Lock()
@@ -158,27 +240,30 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 
 	talkgroups.List = []*Talkgroup{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("talkgroups.read: %v", err)
+	formatError := errorFormatter("talkgroups", "read")
+
+	if dbType == DbTypePostgresql {
+		query = fmt.Sprintf(`SELECT t."talkgroupId", t."alert", t."delay", t."frequency", t."label", t."led", t."name", t."order", t."tagId", t."talkgroupRef", t."type", STRING_AGG(CAST(COALESCE(tg."groupId", 0) AS text), ',') FROM "talkgroups" AS t LEFT JOIN "talkgroupGroups" AS tg ON tg."talkgroupId" = t."talkgroupId" WHERE t."systemId" = %d GROUP BY t."talkgroupId"`, systemId)
+
+	} else {
+		query = fmt.Sprintf(`SELECT t."talkgroupId", t."alert", t."delay", t."frequency", t."label", t."led", t."name", t."order", t."tagId", t."talkgroupRef", t."type", GROUP_CONCAT(COALESCE(tg."groupId", 0)) FROM "talkgroups" AS t LEFT JOIN "talkgroupGroups" AS tg ON tg."talkgroupId" = t."talkgroupId" WHERE t."systemId" = %d GROUP BY t."talkgroupId"`, systemId)
 	}
 
-	if rows, err = db.Sql.Query("select `frequency`, `groupId`, `id`, `label`, `led`, `name`, `order`, `tagId` from `rdioScannerTalkgroups` where `systemId` = ?", systemId); err != nil {
-		return formatError(err)
+	if rows, err = tx.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		talkgroup := &Talkgroup{}
+		talkgroup := NewTalkgroup()
 
-		if err = rows.Scan(&frequency, &talkgroup.GroupId, &talkgroup.Id, &talkgroup.Label, &led, &talkgroup.Name, &talkgroup.Order, &talkgroup.TagId); err != nil {
+		if err = rows.Scan(&talkgroup.Id, &talkgroup.Alert, &talkgroup.Delay, &talkgroup.Frequency, &talkgroup.Label, &talkgroup.Led, &talkgroup.Name, &talkgroup.Order, &talkgroup.TagId, &talkgroup.TalkgroupRef, &talkgroup.Kind, &groupIds); err != nil {
 			break
 		}
 
-		if frequency.Valid && frequency.Float64 > 0 {
-			talkgroup.Frequency = uint(frequency.Float64)
-		}
-
-		if led.Valid && len(led.String) > 0 {
-			talkgroup.Led = led.String
+		for _, s := range strings.Split(groupIds, ",") {
+			if i, err := strconv.Atoi(s); err == nil && i > 0 {
+				talkgroup.GroupIds = append(talkgroup.GroupIds, uint64(i))
+			}
 		}
 
 		talkgroups.List = append(talkgroups.List, talkgroup)
@@ -187,7 +272,7 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
 
 	sort.Slice(talkgroups.List, func(i int, j int) bool {
@@ -197,77 +282,161 @@ func (talkgroups *Talkgroups) Read(db *Database, systemId uint) error {
 	return nil
 }
 
-func (talkgroups *Talkgroups) Write(db *Database, systemId uint) error {
+func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string) error {
 	var (
-		count uint
 		err   error
-		ids   = []uint{}
+		query string
+		res   sql.Result
 		rows  *sql.Rows
+
+		talkgroupGroupIds = []uint64{}
+		talkgroupIds      = []uint64{}
 	)
 
 	talkgroups.mutex.Lock()
 	defer talkgroups.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("talkgroups.write: %v", err)
-	}
+	formatError := errorFormatter("talkgroups", "writetx")
 
-	if rows, err = db.Sql.Query("select `id` from `rdioScannerTalkgroups` where `systemId` = ?", systemId); err != nil {
-		return formatError(err)
+	query = fmt.Sprintf(`SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = %d`, systemId)
+	if rows, err = tx.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var id uint
-		if err = rows.Scan(&id); err != nil {
+		var talkgroupId uint64
+		if err = rows.Scan(&talkgroupId); err != nil {
 			break
 		}
 		remove := true
 		for _, talkgroup := range talkgroups.List {
-			if talkgroup.Id == id {
+			if talkgroupId == 0 || talkgroup.Id == talkgroupId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			ids = append(ids, id)
+			talkgroupIds = append(talkgroupIds, talkgroupId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
 
-	if len(ids) > 0 {
-		if b, err := json.Marshal(ids); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerTalkgroups` where `id` in %v and `systemId` = %v", s, systemId)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(talkgroupIds) > 0 {
+		if b, err := json.Marshal(talkgroupIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+
+			query = fmt.Sprintf(`DELETE FROM "talkgroups" WHERE "talkgroupId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				return formatError(err, query)
+			}
+
+			query = fmt.Sprintf(`DELETE FROM "talkgroupGroups" WHERE "talkgroupId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, talkgroup := range talkgroups.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerTalkgroups` where `id` = ? and `systemId` = ?", talkgroup.Id, systemId).Scan(&count); err != nil {
-			break
+		var count uint
+
+		if talkgroup.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "talkgroups" WHERE "talkgroupId" = %d`, talkgroup.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerTalkgroups` (`frequency`, `groupId`, `id`, `label`, `led`, `name`, `order`, `systemId`, `tagId`) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Id, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, systemId, talkgroup.TagId); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "talkgroups" ("alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES ('%s', %d, %d, '%s', '%s', '%s', %d, %d, %d, %d, '%s')`, talkgroup.Alert, talkgroup.Delay, talkgroup.Frequency, escapeQuotes(talkgroup.Label), talkgroup.Led, escapeQuotes(talkgroup.Name), talkgroup.Order, systemId, talkgroup.TagId, talkgroup.TalkgroupRef, talkgroup.Kind)
+
+			if dbType == DbTypePostgresql {
+				query = query + ` RETURNING "talkgroupId"`
+
+				if err = tx.QueryRow(query).Scan(&talkgroup.Id); err != nil {
+					break
+				}
+
+			} else {
+				if res, err = tx.Exec(query); err == nil {
+					if id, err := res.LastInsertId(); err == nil {
+						talkgroup.Id = uint64(id)
+					}
+				} else {
+					break
+				}
+			}
+
+		} else {
+			query = fmt.Sprintf(`UPDATE "talkgroups" SET "alert" = '%s', "delay" = %d, "frequency" = %d, "label" = '%s', "led" = '%s', "name" = '%s', "order" = %d, "tagId" = %d, "talkgroupRef" = %d, "type" = '%s' WHERE "talkgroupId" = %d`, talkgroup.Alert, talkgroup.Delay, talkgroup.Frequency, escapeQuotes(talkgroup.Label), talkgroup.Led, escapeQuotes(talkgroup.Name), talkgroup.Order, talkgroup.TagId, talkgroup.TalkgroupRef, talkgroup.Kind, talkgroup.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
+		}
+
+		query = fmt.Sprintf(`SELECT "groupId", "talkgroupGroupId" FROM "talkgroupGroups" WHERE "talkgroupId" = %d`, talkgroup.Id)
+		if rows, err = tx.Query(query); err != nil {
+			break
+		}
+
+		for rows.Next() {
+			var (
+				groupId          uint64
+				talkgroupGroupId uint64
+			)
+			if err = rows.Scan(&groupId, &talkgroupGroupId); err != nil {
+				break
+			}
+			remove := true
+			for _, id := range talkgroup.GroupIds {
+				if id == 0 || id == talkgroupGroupId {
+					remove = false
+					break
+				}
+			}
+			if remove {
+				talkgroupGroupIds = append(talkgroupGroupIds, talkgroupGroupId)
+			}
+		}
+
+		rows.Close()
+
+		if err != nil {
+			return formatError(err, "")
+		}
+
+		if len(talkgroupGroupIds) > 0 {
+			if b, err := json.Marshal(talkgroupGroupIds); err == nil {
+				in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+				query = fmt.Sprintf(`DELETE FROM "talkgroupGroups" WHERE "talkgroupGroupId" IN %s`, in)
+				if _, err = tx.Exec(query); err != nil {
+					return formatError(err, query)
+				}
+			}
+		}
+
+		for _, groupId := range talkgroup.GroupIds {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "talkgroupGroups" WHERE "talkgroupId" = %d AND "groupId" = %d`, talkgroup.Id, groupId)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerTalkgroups` set `frequency` = ?, `groupId` = ?, `label` = ?, `led` = ?, `name` = ?, `order` = ?, `tagId` = ? where `id` = ? and `systemId` = ?", talkgroup.Frequency, talkgroup.GroupId, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Order, talkgroup.TagId, talkgroup.Id, systemId); err != nil {
-			break
+			if count == 0 {
+				query = fmt.Sprintf(`INSERT INTO "talkgroupGroups" ("groupId", "talkgroupId") VALUES (%d, %d)`, groupId, talkgroup.Id)
+				if _, err = tx.Exec(query); err != nil {
+					break
+				}
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, query)
 	}
 
 	return nil

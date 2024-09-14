@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -31,10 +31,14 @@ const (
 )
 
 type Log struct {
-	Id       any       `json:"_id"`
+	Id       any       `json:"id"`
 	DateTime time.Time `json:"dateTime"`
 	Level    string    `json:"level"`
 	Message  string    `json:"message"`
+}
+
+func NewLog() *Log {
+	return &Log{}
 }
 
 type Logs struct {
@@ -74,8 +78,9 @@ func (logs *Logs) LogEvent(level string, message string) error {
 			Message:  message,
 		}
 
-		if _, err := logs.database.Sql.Exec("insert into `rdioScannerLogs` (`dateTime`, `level`, `message`) values (?, ?, ?)", l.DateTime, l.Level, l.Message); err != nil {
-			return fmt.Errorf("logs.logevent: %v", err)
+		query := fmt.Sprintf(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES ('%s', '%s', %d)`, l.Level, l.Message, l.DateTime.UnixMilli())
+		if _, err := logs.database.Sql.Exec(query); err != nil {
+			return fmt.Errorf("logs.logevent: %s in %s", err, query)
 		}
 	}
 
@@ -86,36 +91,42 @@ func (logs *Logs) Prune(db *Database, pruneDays uint) error {
 	logs.mutex.Lock()
 	defer logs.mutex.Unlock()
 
-	date := time.Now().Add(-24 * time.Hour * time.Duration(pruneDays)).Format(db.DateTimeFormat)
-	_, err := db.Sql.Exec("delete from `rdioScannerLogs` where `dateTime` < ?", date)
+	timestamp := time.Now().Add(-24 * time.Hour * time.Duration(pruneDays)).UnixMilli()
+	query := fmt.Sprintf(`DELETE FROM "logs" WHERE "timestamp" < %d`, timestamp)
 
-	return err
+	if _, err := db.Sql.Exec(query); err != nil {
+		return fmt.Errorf("%s in %s", err, query)
+	}
+
+	return nil
 }
 
 func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsSearchResults, error) {
 	const (
-		ascOrder  = "asc"
-		descOrder = "desc"
+		ascOrder  = "ASC"
+		descOrder = "DESC"
 	)
 
 	var (
-		dateTime any
-		err      error
-		id       sql.NullFloat64
-		limit    uint
-		offset   uint
-		order    string
-		query    string
-		rows     *sql.Rows
-		where    string = "true"
+		err  error
+		rows *sql.Rows
+
+		limit  uint
+		offset uint
+		order  string
+		query  string
+		where  string = "TRUE"
+
+		level     sql.NullString
+		logId     sql.NullInt64
+		message   sql.NullString
+		timestamp sql.NullInt64
 	)
 
 	logs.mutex.Lock()
 	defer logs.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("logs.search: %v", err)
-	}
+	formatError := errorFormatter("logs", "search")
 
 	logResults := &LogsSearchResults{
 		Options: searchOptions,
@@ -124,7 +135,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 	switch v := searchOptions.Level.(type) {
 	case string:
-		where += fmt.Sprintf(" and `level` = '%v'", v)
+		where += fmt.Sprintf(` AND "level" = '%s'`, v)
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -141,7 +152,6 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	switch v := searchOptions.Date.(type) {
 	case time.Time:
 		var (
-			df    string = db.DateTimeFormat
 			start time.Time
 			stop  time.Time
 		)
@@ -155,7 +165,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 			stop = start.Add(time.Hour*24 - time.Millisecond - time.Duration(v.Hour())).Add(time.Minute * time.Duration(-v.Minute()))
 		}
 
-		where += fmt.Sprintf(" and (`dateTime` between '%v' and '%v')", start.Format(df), stop.Format(df))
+		where += fmt.Sprintf(` AND ("timestamp" BETWEEN %d AND %d)`, start.UnixMilli(), stop.UnixMilli())
 	}
 
 	switch v := searchOptions.Limit.(type) {
@@ -170,59 +180,69 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		offset = v
 	}
 
-	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
-	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+	query = fmt.Sprintf(`SELECT "timestamp" FROM "logs" WHERE %s ORDER BY "timestamp" ASC`, where)
+	if err = db.Sql.QueryRow(query).Scan(&timestamp); err != nil && err != sql.ErrNoRows {
+		return nil, formatError(err, query)
 	}
 
-	if t, err := db.ParseDateTime(dateTime); err == nil {
-		logResults.DateStart = t
+	if timestamp.Valid {
+		logResults.DateStart = time.UnixMilli(timestamp.Int64)
 	}
 
-	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
-	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+	query = fmt.Sprintf(`SELECT "timestamp" FROM "logs" WHERE %s ORDER BY "timestamp" DESC`, where)
+	if err = db.Sql.QueryRow(query).Scan(&timestamp); err != nil && err != sql.ErrNoRows {
+		return nil, formatError(err, query)
 	}
 
-	if t, err := db.ParseDateTime(dateTime); err == nil {
-		logResults.DateStop = t
+	if timestamp.Valid {
+		logResults.DateStop = time.UnixMilli(timestamp.Int64)
 	}
 
-	query = fmt.Sprintf("select count(*) from `rdioScannerLogs` where %v", where)
+	query = fmt.Sprintf(`SELECT COUNT(*) FROM "logs" WHERE %s`, where)
 	if err = db.Sql.QueryRow(query).Scan(&logResults.Count); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+		return nil, formatError(err, query)
 	}
 
-	query = fmt.Sprintf("select `_id`, `DateTime`, `level`, `message` from `rdioScannerLogs` where %v order by `dateTime` %v limit %v offset %v", where, order, limit, offset)
+	query = fmt.Sprintf(`SELECT "logId", "level", "message", "timestamp" FROM "logs" WHERE %s ORDER BY "timestamp" %s limit %d offset %d`, where, order, limit, offset)
 	if rows, err = db.Sql.Query(query); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(fmt.Errorf("%v, %v", err, query))
+		return nil, formatError(err, query)
 	}
 
 	for rows.Next() {
-		log := Log{}
+		log := NewLog()
 
-		if err = rows.Scan(&id, &dateTime, &log.Level, &log.Message); err != nil {
-			break
+		if err = rows.Scan(&logId, &level, &message, &timestamp); err != nil {
+			continue
 		}
 
-		if id.Valid && id.Float64 > 0 {
-			log.Id = uint(id.Float64)
-		}
-
-		if t, err := db.ParseDateTime(dateTime); err == nil {
-			log.DateTime = t
+		if logId.Valid {
+			log.Id = uint64(logId.Int64)
 		} else {
 			continue
 		}
 
-		logResults.Logs = append(logResults.Logs, log)
+		if level.Valid && len(level.String) > 0 {
+			log.Level = level.String
+		} else {
+			continue
+		}
+
+		if message.Valid && len(message.String) > 0 {
+			log.Message = message.String
+		} else {
+			continue
+		}
+
+		if timestamp.Valid && timestamp.Int64 > 0 {
+			log.DateTime = time.UnixMilli(timestamp.Int64)
+		} else {
+			continue
+		}
+
+		logResults.Logs = append(logResults.Logs, *log)
 	}
 
 	rows.Close()
-
-	if err != nil {
-		return nil, formatError(err)
-	}
 
 	return logResults, nil
 }
@@ -279,7 +299,7 @@ func (searchOptions *LogsSearchOptions) FromMap(m map[string]any) *LogsSearchOpt
 }
 
 type LogsSearchResults struct {
-	Count     uint               `json:"count"`
+	Count     uint64             `json:"count"`
 	DateStart time.Time          `json:"dateStart"`
 	DateStop  time.Time          `json:"dateStop"`
 	Options   *LogsSearchOptions `json:"options"`

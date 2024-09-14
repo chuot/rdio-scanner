@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,20 +18,34 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
 
 type Group struct {
-	Id    any    `json:"_id"`
-	Label string `json:"label"`
+	Id    uint64
+	Alert string
+	Label string
+	Led   string
+	Order uint
+}
+
+func NewGroup() *Group {
+	return &Group{}
 }
 
 func (group *Group) FromMap(m map[string]any) *Group {
-	switch v := m["_id"].(type) {
+	switch v := m["id"].(type) {
 	case float64:
-		group.Id = uint(v)
+		group.Id = uint64(v)
+	}
+
+	switch v := m["alert"].(type) {
+	case string:
+		group.Alert = v
 	}
 
 	switch v := m["label"].(type) {
@@ -39,7 +53,38 @@ func (group *Group) FromMap(m map[string]any) *Group {
 		group.Label = v
 	}
 
+	switch v := m["led"].(type) {
+	case string:
+		group.Led = v
+	}
+
+	switch v := m["order"].(type) {
+	case float64:
+		group.Order = uint(v)
+	}
+
 	return group
+}
+
+func (group *Group) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":    group.Id,
+		"label": group.Label,
+	}
+
+	if len(group.Alert) > 0 {
+		m["alert"] = group.Alert
+	}
+
+	if len(group.Led) > 0 {
+		m["led"] = group.Led
+	}
+
+	if group.Order > 0 {
+		m["order"] = group.Order
+	}
+
+	return json.Marshal(m)
 }
 
 type Groups struct {
@@ -63,8 +108,7 @@ func (groups *Groups) FromMap(f []any) *Groups {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			group := &Group{}
-			group.FromMap(m)
+			group := NewGroup().FromMap(m)
 			groups.List = append(groups.List, group)
 		}
 	}
@@ -72,26 +116,71 @@ func (groups *Groups) FromMap(f []any) *Groups {
 	return groups
 }
 
-func (groups *Groups) GetGroup(f any) (group *Group, ok bool) {
+func (groups *Groups) GetGroupById(id uint64) (group *Group, ok bool) {
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()
 
-	switch v := f.(type) {
-	case uint:
-		for _, group := range groups.List {
-			if group.Id == v {
-				return group, true
-			}
-		}
-	case string:
-		for _, group := range groups.List {
-			if group.Label == v {
-				return group, true
-			}
+	for _, group := range groups.List {
+		if group.Id == id {
+			return group, true
 		}
 	}
 
 	return nil, false
+}
+
+func (groups *Groups) GetGroupByLabel(label string) (group *Group, ok bool) {
+	groups.mutex.Lock()
+	defer groups.mutex.Unlock()
+
+	for _, group := range groups.List {
+		if group.Label == label {
+			return group, true
+		}
+	}
+
+	return nil, false
+}
+
+func (groups *Groups) GetGroupsData(systemsMap *SystemsMap) []Group {
+	var list = []Group{}
+
+	for _, systemMap := range *systemsMap {
+		switch talkgroupsMap := systemMap["talkgroups"].(type) {
+		case TalkgroupsMap:
+			for _, talkgroupMap := range talkgroupsMap {
+				switch label := talkgroupMap["group"].(type) {
+				case string:
+					if group, ok := groups.GetGroupByLabel(label); ok {
+						add := true
+						for _, l := range list {
+							if l == *group {
+								add = false
+								break
+							}
+						}
+						if add {
+							list = append(list, *group)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return list
+}
+
+func (groups *Groups) GetGroupIds(labels []string) []uint64 {
+	var groupIds = []uint64{}
+
+	for _, label := range labels {
+		if group, ok := groups.GetGroupByLabel(label); ok {
+			groupIds = append(groupIds, group.Id)
+		}
+	}
+
+	return groupIds
 }
 
 func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) GroupsMap {
@@ -117,15 +206,15 @@ func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) GroupsMap {
 
 		for _, talkgroup := range talkgroupsMap {
 			var (
-				fTalkgroupGroup = talkgroup["group"]
-				fTalkgroupId    = talkgroup["id"]
-				talkgroupGroup  string
-				talkgroupId     uint
+				fTalkgroupGroups = talkgroup["groups"]
+				fTalkgroupId     = talkgroup["id"]
+				talkgroupGroups  []string
+				talkgroupId      uint
 			)
 
-			switch v := fTalkgroupGroup.(type) {
-			case string:
-				talkgroupGroup = v
+			switch v := fTalkgroupGroups.(type) {
+			case []string:
+				talkgroupGroups = v
 			}
 
 			switch v := fTalkgroupId.(type) {
@@ -133,28 +222,30 @@ func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) GroupsMap {
 				talkgroupId = v
 			}
 
-			group, ok := groups.GetGroup(talkgroupGroup)
-			if !ok {
-				continue
-			}
-
-			if groupsMap[group.Label] == nil {
-				groupsMap[group.Label] = map[uint][]uint{}
-			}
-
-			if groupsMap[group.Label][systemId] == nil {
-				groupsMap[group.Label][systemId] = []uint{}
-			}
-
-			found := false
-			for _, id := range groupsMap[group.Label][systemId] {
-				if id == talkgroupId {
-					found = true
-					break
+			for _, talkgroupGroup := range talkgroupGroups {
+				group, ok := groups.GetGroupByLabel(talkgroupGroup)
+				if !ok {
+					continue
 				}
-			}
-			if !found {
-				groupsMap[group.Label][systemId] = append(groupsMap[group.Label][systemId], talkgroupId)
+
+				if groupsMap[group.Label] == nil {
+					groupsMap[group.Label] = map[uint][]uint{}
+				}
+
+				if groupsMap[group.Label][systemId] == nil {
+					groupsMap[group.Label][systemId] = []uint{}
+				}
+
+				found := false
+				for _, id := range groupsMap[group.Label][systemId] {
+					if id == talkgroupId {
+						found = true
+						break
+					}
+				}
+				if !found {
+					groupsMap[group.Label][systemId] = append(groupsMap[group.Label][systemId], talkgroupId)
+				}
 			}
 		}
 	}
@@ -164,9 +255,9 @@ func (groups *Groups) GetGroupsMap(systemsMap *SystemsMap) GroupsMap {
 
 func (groups *Groups) Read(db *Database) error {
 	var (
-		err  error
-		id   sql.NullFloat64
-		rows *sql.Rows
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	groups.mutex.Lock()
@@ -174,27 +265,18 @@ func (groups *Groups) Read(db *Database) error {
 
 	groups.List = []*Group{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("groups.read: %v", err)
-	}
+	formatError := groups.errorFormatter("read")
 
-	if rows, err = db.Sql.Query("select `_id`, `label` from `rdioScannerGroups`"); err != nil {
-		return formatError(err)
+	query = `SELECT "groupId", "alert", "label", "led", "order" FROM "groups"`
+	if rows, err = db.Sql.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		group := &Group{}
+		group := NewGroup()
 
-		if err = rows.Scan(&id, &group.Label); err != nil {
+		if err = rows.Scan(&group.Id, &group.Alert, &group.Label, &group.Led, &group.Order); err != nil {
 			break
-		}
-
-		if id.Valid && id.Float64 > 0 {
-			group.Id = uint(id.Float64)
-		}
-
-		if len(group.Label) == 0 {
-			continue
 		}
 
 		groups.List = append(groups.List, group)
@@ -203,86 +285,122 @@ func (groups *Groups) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, query)
 	}
+
+	sort.Slice(groups.List, func(i int, j int) bool {
+		return groups.List[i].Order < groups.List[j].Order
+	})
 
 	return nil
 }
 
 func (groups *Groups) Write(db *Database) error {
 	var (
-		count  uint
-		err    error
-		rows   *sql.Rows
-		rowIds = []uint{}
+		err      error
+		groupIds = []uint64{}
+		query    string
+		rows     *sql.Rows
+		tx       *sql.Tx
 	)
 
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("groups.write %v", err)
+	formatError := groups.errorFormatter("write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerGroups`"); err != nil {
-		return formatError(err)
+	query = `SELECT "groupId" FROM "groups"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var rowId uint
-		if err = rows.Scan(&rowId); err != nil {
+		var groupId uint64
+		if err = rows.Scan(&groupId); err != nil {
 			break
 		}
 		remove := true
 		for _, group := range groups.List {
-			if group.Id == nil || group.Id == rowId {
+			if group.Id == 0 || group.Id == groupId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, rowId)
+			groupIds = append(groupIds, groupId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerGroups` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(groupIds) > 0 {
+		if b, err := json.Marshal(groupIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "groups" WHERE "groupId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, group := range groups.List {
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerGroups` where `_id` = ?", group.Id).Scan(&count); err != nil {
-			break
+		var count uint
+
+		if group.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "groups" WHERE "groupId" = %d`, group.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerGroups` (`_id`, `label`) values (?, ?)", group.Id, group.Label); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "groups" ("alert", "label", "led", "order") VALUES ('%s', '%s', '%s', %d)`, group.Alert, escapeQuotes(group.Label), group.Led, group.Order)
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerGroups` set `_id` = ?, `label` = ? where `_id` = ?", group.Id, group.Label, group.Id); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "groups" SET "alert" = '%s', "label" = '%s', "led" = '%s', "order" = %d where "groupId" = %d`, group.Alert, escapeQuotes(group.Label), group.Led, group.Order, group.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	return nil
+}
+
+func (groups *Groups) errorFormatter(label string) func(err error, query string) error {
+	return func(err error, query string) error {
+		s := fmt.Sprintf("groups.%s: %s", label, err.Error())
+
+		if len(query) > 0 {
+			s = fmt.Sprintf("%s in %s", s, query)
+		}
+
+		return errors.New(s)
+	}
 }
 
 type GroupsMap map[string]map[uint][]uint

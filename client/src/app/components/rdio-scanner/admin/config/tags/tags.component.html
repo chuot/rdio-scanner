@@ -1,18 +1,67 @@
 <div class="row top">
     <p class="mat-body">All system talkgroups must be associated with a tag, which is then used to search for calls
         based on their tag.</p>
-    <button type="button" mat-button color="accent" (click)="add()">New tag</button>
+    <button type="button" mat-button color="accent" (click)="add()">New Tag</button>
 </div>
-<div class="tags">
-    <div *ngFor="let tag of tags; index as i" [formGroup]="tag">
-        <button type="button" mat-icon-button color="warn" (click)="remove(i)">
-            <mat-icon>clear</mat-icon>
-        </button>
-        <mat-form-field floatLabel="never">
-            <input type="text" matInput formControlName="label" placeholder="Tag">
-            <mat-error *ngIf="tags[i].get('label')?.hasError('required')">
-                Tag is required
-            </mat-error>
-        </mat-form-field>
-    </div>
-</div>
+<p *ngIf="!tags?.length" class="mat-small text-center">No defined Tags</p>
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="tags"
+    (cdkDropListDropped)="drop($event)">
+    <mat-expansion-panel *ngFor="let tag of tags; index as i" cdkDrag>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+                {{ tag.value.label || 'NewTag' }}
+                <mat-icon *ngIf="tag.invalid" color="warn">error</mat-icon>
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <ng-container [formGroup]="tag">
+            <div class="row">
+                <p>
+                    <span class="mat-body">Label</span><br>
+                    <span class="mat-caption">Tag label displayed on the main screen and on the search panel.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <input type="text" matInput formControlName="label" placeholder="Label">
+                    <mat-error *ngIf="form?.get('label')?.hasError('required')">
+                        Label is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Audio alert</span><br>
+                    <span class="mat-caption">Prefixes an alert sound to all calls assigned to this tag. The alert
+                        assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <mat-select formControlName="alert" placeholder="Alert" (selectionChange)="playAlert($event)">
+                        <mat-option value="">No Alert</mat-option>
+                        <mat-option *ngFor="let alert of alerts" [value]="alert">
+                            {{ alert | titlecase }}
+                        </mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Led Color</span><br>
+                    <span class="mat-caption">The default LED color is green but it can be changed at several levels.
+                        The color assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <mat-select formControlName="led" placeholder="Color">
+                        <mat-option [value]="''">Default</mat-option>
+                        <mat-option *ngFor="let led of leds" [value]="led">
+                            {{ led | titlecase }}
+                        </mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="row bottom">
+                <button type="button" mat-button color="warn" (click)="remove(i)">
+                    Delete Tag
+                </button>
+            </div>
+        </ng-container>
+    </mat-expansion-panel>
+</mat-accordion>

@@ -10,8 +10,8 @@
   color: orange;
 }
 
-.mat-cell,
-.mat-header-cell {
+.mat-mdc-cell,
+.mat-mdc-header-cell {
   &:nth-child(1),
   &:nth-child(2),
   &:nth-child(3) {
@@ -25,13 +25,13 @@ form {
   flex-direction: row;
   flex-wrap: wrap;
 
-  .mat-form-field,
+  .mat-mdc-form-field,
   .reset {
     box-sizing: border-box;
     padding: 0 0.5rem 1rem 0.5rem;
   }
 
-  .mat-form-field {
+  .mat-mdc-form-field {
     min-width: 220px;
   }
 
@@ -44,13 +44,13 @@ form {
 }
 
 @media (max-width: 719px) {
-  form > .mat-form-field {
+  form > .mat-mdc-form-field {
     flex: 100%;
   }
 }
 
 @media (min-width: 720px) {
-  form > .mat-form-field {
+  form > .mat-mdc-form-field {
     flex: 33%;
   }
 }

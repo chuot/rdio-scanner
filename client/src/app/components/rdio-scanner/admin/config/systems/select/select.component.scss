@@ -35,18 +35,7 @@ rdio-scanner-admin-systems-selection {
     margin-bottom: 1rem;
   }
 
-  .mat-checkbox,
-  .mat-checkbox-layout {
-    max-width: 100%;
-  }
-
-  .mat-checkbox-label {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .mat-dialog-actions {
+  .mat-mdc-dialog-actions {
     justify-content: space-between;
   }
 

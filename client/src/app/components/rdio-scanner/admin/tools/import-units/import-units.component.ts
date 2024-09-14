@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
         this.baseConfig = await this.adminService.getConfig();
 
         if (Array.isArray(this.baseConfig.systems) && this.baseConfig.systems.length > 0) {
-            this.system = this.baseConfig.systems![0];
+            this.system = this.baseConfig.systems[0];
         }
     }
 
@@ -50,12 +50,12 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
         if (this.system === undefined) return;
 
         const units = this.csv.map((csv, idx) => ({
-            id: +csv[0],
+            unitRef: +csv[0],
             label: csv[1],
             order: idx + 1,
         }));
 
-        this.system!.units = this.system!.units!.concat(units);
+        this.system.units = this.system?.units?.concat(units);
 
         this.csv = [];
 

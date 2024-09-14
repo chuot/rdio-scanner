@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,11 +24,12 @@ import { RdioScannerAdminComponent } from './admin.component';
 import { RdioScannerAdminService } from './admin.service';
 import { RdioScannerAdminConfigComponent } from './config/config.component';
 import { RdioScannerAdminAccessComponent } from './config/access/access.component';
-import { RdioScannerAdminApiKeysComponent } from './config/api-keys/api-keys.component';
-import { RdioScannerAdminDirWatchComponent } from './config/dir-watch/dir-watch.component';
+import { RdioScannerAdminApikeysComponent } from './config/apikeys/apikeys.component';
+import { RdioScannerAdminDirwatchComponent } from './config/dirwatch/dirwatch.component';
 import { RdioScannerAdminDownstreamsComponent } from './config/downstreams/downstreams.component';
 import { RdioScannerAdminGroupsComponent } from './config/groups/groups.component';
 import { RdioScannerAdminOptionsComponent } from './config/options/options.component';
+import { RdioScannerAdminSiteComponent } from './config/systems/site/site.component';
 import { RdioScannerAdminSystemsSelectComponent } from './config/systems/select/select.component';
 import { RdioScannerAdminSystemComponent } from './config/systems/system/system.component';
 import { RdioScannerAdminSystemsComponent } from './config/systems/systems.component';
@@ -49,8 +50,8 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminComponent,
         RdioScannerAdminConfigComponent,
         RdioScannerAdminAccessComponent,
-        RdioScannerAdminApiKeysComponent,
-        RdioScannerAdminDirWatchComponent,
+        RdioScannerAdminApikeysComponent,
+        RdioScannerAdminDirwatchComponent,
         RdioScannerAdminDownstreamsComponent,
         RdioScannerAdminGroupsComponent,
         RdioScannerAdminImportExportConfigComponent,
@@ -60,6 +61,7 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminLogsComponent,
         RdioScannerAdminOptionsComponent,
         RdioScannerAdminPasswordComponent,
+        RdioScannerAdminSiteComponent,
         RdioScannerAdminSystemComponent,
         RdioScannerAdminSystemsComponent,
         RdioScannerAdminSystemsSelectComponent,

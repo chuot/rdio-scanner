@@ -1,5 +1,30 @@
 # Change log
 
+## Version 7.0
+
+**Make sure to backup your config and your database before updating to Version 7.0.**
+
+- New database schema now compatible with SQLite, MariaDB, MySQL and PostgreSQL.
+- New Delayed feature which allows to delay ingested audio broadcasting for a specified amount of minutes.
+- New alert sounds that can be assigned to groups, tags, systems and talkgroups.
+- New system and talkgroup types to help identify the radio system.
+- Talkgroups can now be assigned to more than one group.
+- LED colors can now be assigned to groups, tags, systems and talkgroups.
+- Better call duplicates detection, thanks to the new database schema.
+- Tags toggle removed in favor of multi groups assignment for talkgroups.
+- AFS systems option remove and replace by system/talkgroup type provoice.
+- Newer API while retaining backward compatility.
+- Integrated web app migrated to Angular 15.
+- Simplified talkgroup importation to a specific system.
+- New /reset url path that allow reseting the user access code and talkgroups selection.
+- New #UNITLBL metatag for dirwatch.
+
+- TODO: Hold TG SYS persistent in local storage
+- TODO: Ingest Site ID and API Site ID
+- TODO: Ingest call DBFS and API call DBFS
+- TODO: search by uid
+- TODO: Display site # or label on main screen
+
 ## Version 6.6
 
 - From now on precompiled versions of macOS will be named as such instead of darwin.

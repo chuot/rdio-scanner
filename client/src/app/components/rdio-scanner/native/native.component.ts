@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,12 +27,12 @@ import { timer } from 'rxjs';
     templateUrl: './native.component.html',
 })
 export class RdioScannerNativeComponent implements OnInit {
-    countdown: number = 10;
+    countdown = 10;
 
-    deviceType: string = 'mobile';
+    deviceType = 'mobile';
 
-    isAndroid: boolean = false;
-    isApple: boolean = false;
+    isAndroid = false;
+    isApple = false;
 
     constructor(@Optional() private matSnackBarRef: MatSnackBarRef<RdioScannerNativeComponent>) { }
 

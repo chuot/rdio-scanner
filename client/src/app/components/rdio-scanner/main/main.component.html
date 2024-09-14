@@ -3,15 +3,13 @@
     <div class="led" [ngClass]="ledStyle"></div>
 </div>
 <div class="rdio-display" [ngClass]="{ idle: !dimmer }" (dblclick)="toggleFullscreen.emit()">
-    <div class="row">
+    <div class="row three">
         <div>
             <span>{{ clock | date:timeFormat }}</span>
         </div>
-        <div *ngIf="!linked">
-            <span>NO LINK</span>
-        </div>
-        <div *ngIf="linked && showListenersCount">
-            <span>L: {{ listeners }}</span>
+        <div>
+            <span *ngIf="!linked">NO LINK</span>
+            <span *ngIf="linked && showListenersCount">L: {{ listeners }}</span>
         </div>
         <div>
             <span>Q: {{ callQueue }}</span>
@@ -23,6 +21,9 @@
             <span>{{ callSystem }}</span>
         </div>
         <div>
+            <span>{{ type | uppercase }}</span>
+        </div>
+        <div>
             <span>{{ callTag }}</span>
         </div>
     </div>
@@ -30,39 +31,49 @@
         <div>
             <span>{{ callTalkgroup }}</span>
         </div>
+        <div></div>
         <div>
             <span>{{ callDate | date:'MM/dd' }} </span>
             <span>{{ callProgress | date:timeFormat }}</span>
         </div>
     </div>
-    <div class="row big">
+    <div class="row big full">
         <span>{{ callTalkgroupName }}</span>
     </div>
     <div class="row">
         <div>
             <span>F: {{ callFrequency || 0 }}</span>
         </div>
+        <div></div>
         <div>
             <span>TGID: {{ callTalkgroupId || 0 }}</span>
         </div>
     </div>
     <div class="row">
         <div>
-            <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }}</span>
+            <span>E: {{ callError || 0 }} S: {{ callSpike || 0 }} </span>
         </div>
+        <div></div>
         <div>
             <span *ngIf="callUnit">UID: {{ callUnit }}</span>
         </div>
     </div>
     <div class="row right small">
-        <div *ngIf="tempAvoid">
-            <span class="flag" [ngClass]="{ flaged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
-        </div>
+        <div></div>
+        <div></div>
         <div>
-            <span class="flag" [ngClass]="{ flaged: avoided }">AVOID</span>
-        </div>
-        <div>
-            <span class="flag" [ngClass]="{ flaged: patched }">PATCH</span>
+            <div *ngIf="tempAvoid">
+                <span class="flag" [ngClass]="{ flaged: avoided || patched }">&#x23f2;&#xFE0E; {{ tempAvoid }}M</span>
+            </div>
+            <div>
+                <span class="flag" [ngClass]="{ flaged: avoided }">AVOID</span>
+            </div>
+            <div>
+                <span class="flag" [ngClass]="{ flaged: patched }">PATCH</span>
+            </div>
+            <div>
+                <span class="flag" [ngClass]="{ flaged: delayed }">DELAYED</span>
+            </div>
         </div>
     </div>
     <div class="wrapper">

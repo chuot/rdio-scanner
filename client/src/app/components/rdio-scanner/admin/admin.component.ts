@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,19 +27,21 @@ import { AdminEvent, RdioScannerAdminService, Group, Tag } from './admin.service
     templateUrl: './admin.component.html',
 })
 export class RdioScannerAdminComponent implements OnDestroy {
-    authenticated = this.adminService.authenticated;
+    authenticated = true;
 
     groups: Group[] = [];
 
     tags: Tag[] = [];
 
-    private eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
-        if ('authenticated' in event) {
-            this.authenticated = event.authenticated || false;
-        }
-    });
+    private eventSubscription;
 
-    constructor(private adminService: RdioScannerAdminService) { }
+    constructor(private adminService: RdioScannerAdminService) {
+        this.eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
+            if ('authenticated' in event) {
+                this.authenticated = event.authenticated || false;
+            }
+        });
+    }
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();

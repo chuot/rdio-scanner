@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  */
 
 import { Component, ViewChild } from '@angular/core';
-import { FormBuilder } from '@angular/forms';
+import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
 import { Log, LogsQuery, LogsQueryOptions, RdioScannerAdminService } from '../admin.service';
@@ -29,11 +29,7 @@ import { Log, LogsQuery, LogsQueryOptions, RdioScannerAdminService } from '../ad
     templateUrl: './logs.component.html',
 })
 export class RdioScannerAdminLogsComponent {
-    form = this.ngFormBuilder.group({
-        date: [null],
-        level: [null],
-        sort: [-1],
-    });
+    form: FormGroup;
 
     logs = new BehaviorSubject(new Array<Log | null>(10));
 
@@ -47,7 +43,13 @@ export class RdioScannerAdminLogsComponent {
 
     @ViewChild(MatPaginator) private paginator: MatPaginator | undefined;
 
-    constructor(private adminService: RdioScannerAdminService, private ngFormBuilder: FormBuilder) { }
+    constructor(private adminService: RdioScannerAdminService, private ngFormBuilder: FormBuilder) {
+        this.form = this.ngFormBuilder.group({
+            date: [null],
+            level: [null],
+            sort: [-1],
+        });
+    }
 
     formHandler(): void {
         this.paginator?.firstPage();
@@ -98,11 +100,11 @@ export class RdioScannerAdminLogsComponent {
         const options: LogsQueryOptions = {
             limit: this.limit,
             offset: this.offset,
-            sort: this.form.value.sort,
+            sort: this.form.get('sort')?.value ?? -1,
         };
 
-        if (typeof this.form.value.level === 'string') {
-            options.level = this.form.value.level;
+        if (typeof this.form.get('level')?.value === 'string') {
+            options.level = this.form.get('level')?.value ?? undefined;
         }
 
         if (typeof this.form.value.date === 'string') {

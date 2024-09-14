@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,71 +17,72 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, Output } from '@angular/core';
-import { Config, RdioScannerAdminService } from '../../admin.service';
+import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Config, RdioScannerAdminService, System } from '../../admin.service';
 
 @Component({
     selector: 'rdio-scanner-admin-import-talkgroups',
     styleUrls: ['./import-talkgroups.component.scss'],
     templateUrl: './import-talkgroups.component.html',
 })
-export class RdioScannerAdminImportTalkgroupsComponent {
+export class RdioScannerAdminImportTalkgroupsComponent implements OnInit {
     @Output() config = new EventEmitter<Config>();
+
+    baseConfig: Config = {};
 
     csv: string[][] = [];
 
-    fields = [
-        // [id, label, description, tag, group]
-        [0, 3, 4, 5, 6], // trunk-recorder
-        [0, 2, 4, 5, 6], // radioreference.com
-    ];
-
-    mode = 0;
+    system: System | undefined;
 
     tableColumns = ['id', 'label', 'description', 'tag', 'group', 'action'];
 
     constructor(private adminService: RdioScannerAdminService) { }
 
+    async ngOnInit(): Promise<void> {
+        this.baseConfig = await this.adminService.getConfig();
+
+        if (Array.isArray(this.baseConfig.systems) && this.baseConfig.systems.length > 0) {
+            this.system = this.baseConfig.systems[0];
+        }
+    }
+
     async import(): Promise<void> {
-        const config = await this.adminService.getConfig();
+        if (this.system === undefined) return;
 
-        this.csv.forEach((tg) => {
-            const group = tg[this.fields[this.mode][4]];
+        this.csv.forEach((csv) => {
+            const group = csv[6];
 
-            if (!config.groups?.find((g) => g.label === group)) {
-                const id = config.groups?.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 1);
+            if (!this.baseConfig.groups?.find((g) => g.label === group)) {
+                const id = this.baseConfig.groups?.reduce((pv, cv) => typeof cv.id === 'number' && cv.id >= pv ? cv.id + 1 : pv, 1);
 
-                config.groups?.push({ _id: id, label: group });
+                this.baseConfig.groups?.push({ id: id, label: group });
             }
 
-            const tag = tg[this.fields[this.mode][3]];
+            const tag = csv[5];
 
-            if (!config.tags?.find((t) => t.label === tag)) {
-                const id = config.tags?.reduce((pv, cv) => typeof cv._id === 'number' && cv._id >= pv ? cv._id + 1 : pv, 1);
+            if (!this.baseConfig.tags?.find((t) => t.label === tag)) {
+                const id = this.baseConfig.tags?.reduce((pv, cv) => typeof cv.id === 'number' && cv.id >= pv ? cv.id + 1 : pv, 1);
 
-                config.tags?.push({ _id: id, label: tag });
+                this.baseConfig.tags?.push({ id: id, label: tag });
             }
         });
 
-        const talkgroups = this.csv.map((csv, idx) => {
-            const groupId = config.groups?.find((g) => g.label === csv[this.fields[this.mode][4]])?._id;
-            const tagId = config.tags?.find((t) => t.label === csv[this.fields[this.mode][3]])?._id;
+        this.csv.forEach((csv) => {
+            const groupId = this.baseConfig.groups?.find((g) => g.label === csv[6])?.id;
+            const tagId = this.baseConfig.tags?.find((t) => t.label === csv[5])?.id;
 
-            return {
-                id: +csv[this.fields[this.mode][0]],
-                label: csv[this.fields[this.mode][1]],
-                name: csv[this.fields[this.mode][2]],
-                order: idx + 1,
+            this.system?.talkgroups?.unshift({
+                talkgroupRef: +csv[0],
+                label: csv[2],
+                name: csv[4],
+                groupIds: groupId ? [groupId] : [],
                 tagId,
-                groupId,
-            };
+            });
         });
-
-        config.systems?.unshift({ talkgroups });
 
         this.csv = [];
 
-        this.config.emit(config);
+        this.config.emit(this.baseConfig);
     }
 
     async read(event: Event): Promise<void> {

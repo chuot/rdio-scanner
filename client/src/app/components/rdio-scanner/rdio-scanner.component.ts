@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ import { RdioScannerNativeComponent } from './native/native.component';
     templateUrl: './rdio-scanner.component.html',
 })
 export class RdioScannerComponent implements OnDestroy, OnInit {
-    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription;
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
 
@@ -43,7 +43,9 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
         private matSnackBar: MatSnackBar,
         private ngElementRef: ElementRef,
         private rdioScannerService: RdioScannerService,
-    ) { }
+    ) {
+        this.eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    }
 
     @HostListener('window:beforeunload', ['$event'])
     exitNotification(event: BeforeUnloadEvent): void {
@@ -66,14 +68,14 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
          * the open source project and its author.  Rdio Scanner represents a lot of
          * investment in time, support, testing and hardware.
          * 
-         * Be respectful, sponsor the project if you can, use native apps when possible.
+         * Be respectful, sponsor the project, use native apps when possible.
          * 
          */
         timer(10000).subscribe(() => {
             const ua: string = navigator.userAgent;
 
             if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
-                this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });
+                this.matSnackBar.openFromComponent(RdioScannerNativeComponent);
             }
         });
         /**

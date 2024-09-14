@@ -10,25 +10,25 @@
             </mat-expansion-panel-header>
             <rdio-scanner-admin-access #accessComponent [form]="access"></rdio-scanner-admin-access>
         </mat-expansion-panel>
-        <mat-expansion-panel (afterCollapse)="apiKeyComponent.closeAll()">
+        <mat-expansion-panel (afterCollapse)="apikeyComponent.closeAll()">
             <mat-expansion-panel-header>
                 <mat-panel-title>
                     <mat-icon>vpn_key</mat-icon>
                     ApiKey
-                    <mat-icon *ngIf="form?.get('apiKey')?.invalid" color="warn">error</mat-icon>
+                    <mat-icon *ngIf="form?.get('apikey')?.invalid" color="warn">error</mat-icon>
                 </mat-panel-title>
             </mat-expansion-panel-header>
-            <rdio-scanner-admin-api-keys #apiKeyComponent [form]="apiKeys"></rdio-scanner-admin-api-keys>
+            <rdio-scanner-admin-apikeys #apikeyComponent [form]="apikeys"></rdio-scanner-admin-apikeys>
         </mat-expansion-panel>
-        <mat-expansion-panel *ngIf="!docker" (afterCollapse)="dirWatchComponent.closeAll()">
+        <mat-expansion-panel *ngIf="!docker" (afterCollapse)="dirwatchComponent.closeAll()">
             <mat-expansion-panel-header>
                 <mat-panel-title>
                     <mat-icon>folder</mat-icon>
                     Dirwatch
-                    <mat-icon *ngIf="form?.get('dirWatch')?.invalid" color="warn">error</mat-icon>
+                    <mat-icon *ngIf="form?.get('dirwatch')?.invalid" color="warn">error</mat-icon>
                 </mat-panel-title>
             </mat-expansion-panel-header>
-            <rdio-scanner-admin-dir-watch #dirWatchComponent [form]="dirWatch"></rdio-scanner-admin-dir-watch>
+            <rdio-scanner-admin-dirwatch #dirwatchComponent [form]="dirwatch"></rdio-scanner-admin-dirwatch>
         </mat-expansion-panel>
         <mat-expansion-panel (afterCollapse)="downstreamsComponent.closeAll()">
             <mat-expansion-panel-header>

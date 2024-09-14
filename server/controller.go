@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -27,13 +27,15 @@ import (
 )
 
 type Controller struct {
+	Accesses    *Accesses
 	Admin       *Admin
 	Api         *Api
+	Apikeys     *Apikeys
 	Calls       *Calls
+	Clients     *Clients
 	Config      *Config
 	Database    *Database
-	Accesses    *Accesses
-	Apikeys     *Apikeys
+	Delayer     *Delayer
 	Dirwatches  *Dirwatches
 	Downstreams *Downstreams
 	FFMpeg      *FFMpeg
@@ -43,7 +45,6 @@ type Controller struct {
 	Scheduler   *Scheduler
 	Systems     *Systems
 	Tags        *Tags
-	Clients     *Clients
 	Register    chan *Client
 	Unregister  chan *Client
 	Ingest      chan *Call
@@ -52,27 +53,28 @@ type Controller struct {
 
 func NewController(config *Config) *Controller {
 	controller := &Controller{
-		Config:      config,
-		Accesses:    NewAccesses(),
-		Apikeys:     NewApikeys(),
-		Calls:       NewCalls(),
-		Dirwatches:  NewDirwatches(),
-		Downstreams: NewDownstreams(),
-		FFMpeg:      NewFFMpeg(),
-		Groups:      NewGroups(),
-		Logs:        NewLogs(),
-		Options:     NewOptions(),
-		Systems:     NewSystems(),
-		Tags:        NewTags(),
-		Clients:     NewClients(),
-		Register:    make(chan *Client, 8192),
-		Unregister:  make(chan *Client, 8192),
-		Ingest:      make(chan *Call, 8192),
+		Clients:    NewClients(),
+		Config:     config,
+		Accesses:   NewAccesses(),
+		Apikeys:    NewApikeys(),
+		Dirwatches: NewDirwatches(),
+		FFMpeg:     NewFFMpeg(),
+		Groups:     NewGroups(),
+		Logs:       NewLogs(),
+		Options:    NewOptions(),
+		Systems:    NewSystems(),
+		Tags:       NewTags(),
+		Register:   make(chan *Client, 8192),
+		Unregister: make(chan *Client, 8192),
+		Ingest:     make(chan *Call, 8192),
 	}
 
 	controller.Admin = NewAdmin(controller)
 	controller.Api = NewApi(controller)
+	controller.Calls = NewCalls(controller)
 	controller.Database = NewDatabase(config)
+	controller.Delayer = NewDelayer(controller)
+	controller.Downstreams = NewDownstreams(controller)
 	controller.Scheduler = NewScheduler(controller)
 
 	controller.Logs.setDaemon(config.daemon)
@@ -82,200 +84,245 @@ func NewController(config *Config) *Controller {
 }
 
 func (controller *Controller) EmitCall(call *Call) {
-	go controller.Downstreams.Send(controller, call)
-	go controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
+	if controller.Delayer.CanDelay(call) {
+		controller.Delayer.Delay(call)
+
+	} else {
+		go controller.Downstreams.Send(controller, call)
+		go controller.Clients.EmitCall(call, controller.Accesses.IsRestricted())
+	}
 }
 
 func (controller *Controller) EmitConfig() {
-	go controller.Clients.EmitConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags, controller.Accesses.IsRestricted())
+	go controller.Clients.EmitConfig(controller)
 	go controller.Admin.BroadcastConfig()
 }
 
 func (controller *Controller) IngestCall(call *Call) {
-	var (
-		err        error
-		group      *Group
-		groupId    uint
-		groupLabel string
-		id         uint
-		ok         bool
-		populated  bool
-		system     *System
-		tag        *Tag
-		tagId      uint
-		tagLabel   string
-		talkgroup  *Talkgroup
-	)
+	var populated bool
 
 	logCall := func(call *Call, level string, message string) {
-		controller.Logs.LogEvent(level, fmt.Sprintf("newcall: system=%v talkgroup=%v file=%v %v", call.System, call.Talkgroup, call.AudioName, message))
+		controller.Logs.LogEvent(level, fmt.Sprintf("newcall: system=%v talkgroup=%v file=%v %v", call.System.SystemRef, call.Talkgroup.TalkgroupRef, call.AudioFilename, message))
 	}
 
 	logError := func(err error) {
 		controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("controller.ingestcall: %v", err.Error()))
 	}
 
-	if system, ok = controller.Systems.GetSystem(call.System); ok {
-		if system.Blacklists.IsBlacklisted(call.Talkgroup) {
+	if call.System == nil {
+		if call.Meta.SystemId > 0 {
+			if system, ok := controller.Systems.GetSystemById(call.Meta.SystemId); ok {
+				call.System = system
+			}
+
+		} else if call.Meta.SystemRef > 0 {
+			if system, ok := controller.Systems.GetSystemByRef(call.Meta.SystemRef); ok {
+				call.System = system
+			}
+
+		} else if len(call.Meta.SystemLabel) > 0 {
+			if system, ok := controller.Systems.GetSystemByLabel(call.Meta.SystemLabel); ok {
+				call.System = system
+			}
+		}
+	}
+
+	if call.Talkgroup == nil && call.System != nil {
+		if call.Meta.TalkgroupId > 0 {
+			if talkgroup, ok := call.System.Talkgroups.GetTalkgroupById(call.Meta.TalkgroupId); ok {
+				call.Talkgroup = talkgroup
+			}
+
+		} else if call.Meta.TalkgroupRef > 0 {
+			if talkgroup, ok := call.System.Talkgroups.GetTalkgroupByRef(call.Meta.TalkgroupRef); ok {
+				call.Talkgroup = talkgroup
+			}
+
+		} else if len(call.Meta.TalkgroupLabel) > 0 {
+			if talkgroup, ok := call.System.Talkgroups.GetTalkgroupByLabel(call.Meta.TalkgroupLabel); ok {
+				call.Talkgroup = talkgroup
+			}
+		}
+	}
+
+	if len(call.Units) == 0 && call.Meta.UnitRefs != nil {
+		for _, unitRef := range call.Meta.UnitRefs {
+			if unitRef > 0 {
+				call.Units = append(call.Units, CallUnit{
+					UnitRef: unitRef,
+					Offset:  0,
+				})
+			}
+		}
+	}
+
+	if call.System != nil && call.Talkgroup != nil {
+		if call.System.Blacklists.IsBlacklisted(call.Talkgroup.TalkgroupRef) {
 			logCall(call, LogLevelInfo, "blacklisted")
 			return
 		}
-		talkgroup, _ = system.Talkgroups.GetTalkgroup(call.Talkgroup)
 	}
 
-	if controller.Options.AutoPopulate && system == nil {
+	if controller.Options.AutoPopulate && call.System == nil {
 		populated = true
 
-		system = NewSystem()
-		system.Id = call.System
+		call.System = NewSystem()
 
-		switch v := call.systemLabel.(type) {
-		case string:
-			system.Label = v
-		default:
-			system.Label = fmt.Sprintf("System %v", call.System)
+		if call.Meta.SystemRef > 0 {
+			call.System.SystemRef = call.Meta.SystemRef
+		} else {
+			call.System.SystemRef = controller.Systems.GetNewSystemRef()
 		}
 
-		controller.Systems.List = append(controller.Systems.List, system)
+		if len(call.Meta.SystemLabel) > 0 {
+			call.System.Label = call.Meta.SystemLabel
+		} else {
+			call.System.Label = fmt.Sprintf("System %v", call.System.SystemRef)
+		}
+
+		controller.Systems.List = append(controller.Systems.List, call.System)
 	}
 
-	if controller.Options.AutoPopulate || (system != nil && system.AutoPopulate) {
-		if system != nil && talkgroup == nil {
+	if controller.Options.AutoPopulate || (call.System != nil && call.System.AutoPopulate) {
+		if call.System != nil && call.Talkgroup == nil && call.Meta.TalkgroupRef > 0 {
+			var (
+				groupLabels    []string
+				tagId          uint64
+				tagLabel       string
+				talkgroupLabel string
+				talkgroupName  string
+			)
+
 			populated = true
 
-			switch v := call.talkgroupGroup.(type) {
-			case string:
-				groupLabel = v
-			default:
-				groupLabel = "Unknown"
+			if len(call.Meta.TalkgroupGroups) > 0 {
+				groupLabels = call.Meta.TalkgroupGroups
+			} else {
+				groupLabels = []string{"Unknown"}
 			}
 
-			switch v := call.talkgroupTag.(type) {
-			case string:
-				tagLabel = v
-			default:
+			for _, groupLabel := range groupLabels {
+				if _, ok := controller.Groups.GetGroupByLabel(groupLabel); !ok {
+					controller.Groups.List = append(controller.Groups.List, &Group{Label: groupLabel})
+
+					if err := controller.Groups.Write(controller.Database); err != nil {
+						logError(err)
+						return
+					}
+
+					if err := controller.Groups.Read(controller.Database); err != nil {
+						logError(err)
+						return
+					}
+				}
+			}
+
+			if len(call.Meta.TalkgroupTag) > 0 {
+				tagLabel = call.Meta.TalkgroupTag
+			} else {
 				tagLabel = "Untagged"
 			}
 
-			if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
-				group = &Group{Label: groupLabel}
+			if _, ok := controller.Tags.GetTagByLabel(tagLabel); !ok {
+				controller.Tags.List = append(controller.Tags.List, &Tag{Label: tagLabel})
 
-				controller.Groups.List = append(controller.Groups.List, group)
-
-				if err = controller.Groups.Write(controller.Database); err != nil {
+				if err := controller.Tags.Write(controller.Database); err != nil {
 					logError(err)
 					return
 				}
 
-				if err = controller.Groups.Read(controller.Database); err != nil {
+				if err := controller.Tags.Read(controller.Database); err != nil {
 					logError(err)
 					return
 				}
-
-				if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
-					logError(fmt.Errorf("unable to get group %s", groupLabel))
-					return
-				}
 			}
 
-			switch v := group.Id.(type) {
-			case uint:
-				groupId = v
-			default:
-				logError(fmt.Errorf("unable to get group id for group %s", groupLabel))
-				return
+			if len(call.Meta.TalkgroupLabel) > 0 {
+				talkgroupLabel = call.Meta.TalkgroupLabel
+			} else {
+				talkgroupLabel = fmt.Sprintf("%d", call.Meta.TalkgroupRef)
 			}
 
-			if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
-				tag = &Tag{Label: tagLabel}
-
-				controller.Tags.List = append(controller.Tags.List, tag)
-
-				if err = controller.Tags.Write(controller.Database); err != nil {
-					logError(err)
-					return
-				}
-
-				if err = controller.Tags.Read(controller.Database); err != nil {
-					logError(err)
-					return
-				}
-
-				if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
-					logError(fmt.Errorf("unable to get tag %s", tagLabel))
-					return
-				}
+			if len(call.Meta.TalkgroupName) > 0 {
+				talkgroupName = call.Meta.TalkgroupName
+			} else {
+				talkgroupName = fmt.Sprintf("Talkgroup %d", call.Meta.TalkgroupRef)
 			}
 
-			switch v := tag.Id.(type) {
-			case uint:
-				tagId = v
-			default:
-				logError(fmt.Errorf("unable to get tag id for tag %s", tagLabel))
-				return
+			if tag, ok := controller.Tags.GetTagByLabel(tagLabel); ok {
+				tagId = tag.Id
 			}
 
-			talkgroup = &Talkgroup{
-				GroupId: groupId,
-				Id:      call.Talkgroup,
-				Label:   fmt.Sprintf("%d", call.Talkgroup),
-				TagId:   tagId,
+			call.Talkgroup = &Talkgroup{
+				GroupIds:     controller.Groups.GetGroupIds(groupLabels),
+				Label:        talkgroupLabel,
+				Name:         talkgroupName,
+				TalkgroupRef: call.Meta.TalkgroupRef,
+				TagId:        tagId,
 			}
 
-			system.Talkgroups.List = append(system.Talkgroups.List, talkgroup)
+			call.System.Talkgroups.List = append(call.System.Talkgroups.List, call.Talkgroup)
 		}
 
-		switch v := call.talkgroupLabel.(type) {
-		case string:
-			if talkgroup.Label != v {
-				populated = true
-				talkgroup.Label = v
+		units := NewUnits()
+
+		if len(call.Meta.UnitRefs) > 0 {
+			for i, unitRef := range call.Meta.UnitRefs {
+				if len(call.Meta.UnitLabels)-1 > i {
+					if len(call.Meta.UnitLabels[i]) > 0 {
+						units.Add(unitRef, call.Meta.UnitLabels[i])
+					}
+				}
 			}
 		}
 
-		switch v := call.talkgroupName.(type) {
-		case string:
-			if talkgroup.Name != v {
-				populated = true
-				talkgroup.Name = v
-			}
-		default:
-			if len(talkgroup.Name) == 0 {
-				populated = true
-				talkgroup.Name = talkgroup.Label
-			}
-		}
-
-		switch v := call.units.(type) {
-		case *Units:
-			if v != nil {
-				populated = system.Units.Merge(v)
-			}
+		if ok := call.System.Units.Merge(units); ok {
+			populated = true
 		}
 	}
 
 	if populated {
-		if err = controller.Systems.Write(controller.Database); err != nil {
+		if err := controller.Systems.Write(controller.Database); err != nil {
 			logError(err)
 			return
 		}
 
-		if err = controller.Systems.Read(controller.Database); err != nil {
+		if err := controller.Systems.Read(controller.Database); err != nil {
 			logError(err)
 			return
+		}
+
+		if system, ok := controller.Systems.GetSystemByRef(call.System.SystemRef); ok {
+			call.System = system
+		}
+
+		if call.System == nil {
+			return
+
+		} else {
+			call.Talkgroup, _ = call.System.Talkgroups.GetTalkgroupByRef(call.Talkgroup.TalkgroupRef)
+
+			if call.Talkgroup == nil {
+				return
+			}
 		}
 
 		controller.EmitConfig()
 	}
 
-	if system == nil || talkgroup == nil {
+	if call.System == nil || call.Talkgroup == nil {
 		logCall(call, LogLevelWarn, "no matching system/talkgroup")
 		return
 	}
 
 	if !controller.Options.DisableDuplicateDetection {
-		if controller.Calls.CheckDuplicate(call, controller.Options.DuplicateDetectionTimeFrame, controller.Database) {
-			logCall(call, LogLevelWarn, "duplicate call rejected")
+		if dup, err := controller.Calls.CheckDuplicate(call, controller.Options.DuplicateDetectionTimeFrame, controller.Database); err == nil {
+			if dup {
+				logCall(call, LogLevelWarn, "duplicate call rejected")
+				return
+			}
+		} else {
+			logError(err)
 			return
 		}
 	}
@@ -284,23 +331,8 @@ func (controller *Controller) IngestCall(call *Call) {
 		controller.Logs.LogEvent(LogLevelWarn, err.Error())
 	}
 
-	if id, err = controller.Calls.WriteCall(call, controller.Database); err == nil {
+	if id, err := controller.Calls.WriteCall(call, controller.Database); err == nil {
 		call.Id = id
-		call.systemLabel = system.Label
-		call.talkgroupLabel = talkgroup.Label
-		call.talkgroupName = talkgroup.Name
-
-		if group == nil {
-			if group, ok = controller.Groups.GetGroup(talkgroup.GroupId); ok {
-				call.talkgroupGroup = group.Label
-			}
-		}
-
-		if tag == nil {
-			if tag, ok = controller.Tags.GetTag(talkgroup.TagId); ok {
-				call.talkgroupTag = tag.Label
-			}
-		}
 
 		logCall(call, LogLevelInfo, "success")
 
@@ -349,24 +381,24 @@ func (controller *Controller) ProcessMessage(client *Client, message *Message) e
 
 func (controller *Controller) ProcessMessageCommandCall(client *Client, message *Message) error {
 	var (
-		call *Call
-		err  error
-		i    int
-		id   uint
+		call   *Call
+		callId uint64
+		err    error
+		i      int
 	)
 
 	switch v := message.Payload.(type) {
 	case float64:
-		id = uint(v)
+		callId = uint64(v)
 	case string:
 		if i, err = strconv.Atoi(v); err == nil {
-			id = uint(i)
+			callId = uint64(i)
 		} else {
 			return err
 		}
 	}
 
-	if call, err = controller.Calls.GetCall(id, controller.Database); err != nil {
+	if call, err = controller.Calls.GetCall(callId); err != nil {
 		return err
 	}
 
@@ -380,9 +412,8 @@ func (controller *Controller) ProcessMessageCommandCall(client *Client, message 
 func (controller *Controller) ProcessMessageCommandListCall(client *Client, message *Message) error {
 	switch v := message.Payload.(type) {
 	case map[string]any:
-		searchOptions := CallsSearchOptions{searchPatchedTalkgroups: controller.Options.SearchPatchedTalkgroups}
-		searchOptions.fromMap(v)
-		if searchResults, err := controller.Calls.Search(&searchOptions, client); err == nil {
+		searchOptions := NewCallSearchOptions().fromMap(v)
+		if searchResults, err := controller.Calls.Search(searchOptions, client); err == nil {
 			client.Send <- &Message{Command: MessageCommandListCall, Payload: searchResults}
 		} else {
 			return fmt.Errorf("controller.processmessage.commandlistcall: %v", err)
@@ -416,6 +447,7 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			code := string(b)
 			if access, ok := controller.Accesses.GetAccess(code); ok {
 				client.Access = access
+
 			} else {
 				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid access code %s for ip %s", code, client.GetRemoteAddr()))
 				client.Send <- &Message{Command: MessageCommandPin}
@@ -434,14 +466,16 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 				return nil
 			}
 
-			switch v := client.Access.Limit.(type) {
-			case uint:
-				if controller.Clients.AccessCount(client) > int(v) {
+			if client.Access.Limit > 0 {
+				if controller.Clients.AccessCount(client) > client.Access.Limit {
 					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many concurrent connections for ident %s, limit is %d", client.Access.Ident, client.Access.Limit))
 					client.Send <- &Message{Command: MessageCommandMax}
 					return nil
 				}
 			}
+
+		} else {
+			client.Access = NewAccess()
 		}
 
 		client.AuthCount = 0
@@ -509,6 +543,9 @@ func (controller *Controller) Start() error {
 	if err = controller.Admin.Start(); err != nil {
 		return err
 	}
+	if err := controller.Delayer.Start(); err != nil {
+		return err
+	}
 	if err = controller.Scheduler.Start(); err != nil {
 		return err
 	}
@@ -528,47 +565,31 @@ func (controller *Controller) Start() error {
 	}()
 
 	go func() {
-		const (
-			minTimeout = 3
-			maxTimeout = 15
-		)
+		var timer *time.Timer
 
-		var (
-			timeout time.Duration = minTimeout
-			timer   *time.Timer
-		)
+		emitClientsCount := func() {
+			if timer == nil {
+				timer = time.AfterFunc(time.Duration(5)*time.Second, func() {
+					controller.LogClientsCount()
 
-		doClientsCount := func() {
-			if timer != nil {
-				timer.Stop()
+					if controller.Options.ShowListenersCount {
+						controller.Clients.EmitListenersCount()
+					}
 
-				timeout++
-				if timeout > maxTimeout {
-					timeout = maxTimeout
-				}
+					timer = nil
+				})
 			}
-
-			timer = time.AfterFunc(timeout*time.Second, func() {
-				timer = nil
-				timeout = minTimeout
-
-				controller.LogClientsCount()
-
-				if controller.Options.ShowListenersCount {
-					controller.Clients.EmitListenersCount()
-				}
-			})
 		}
 
 		for {
 			select {
 			case client := <-controller.Register:
 				controller.Clients.Add(client)
-				doClientsCount()
+				emitClientsCount()
 
 			case client := <-controller.Unregister:
 				controller.Clients.Remove(client)
-				doClientsCount()
+				emitClientsCount()
 			}
 		}
 	}()

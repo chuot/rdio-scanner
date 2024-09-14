@@ -103,7 +103,20 @@
     display: flex;
     flex-direction: row;
     height: 20px;
-    justify-content: space-between;
+
+    &:not(.full) > * {
+      display: flex;
+      flex: 33%;
+      flex-direction: row;
+
+      &:nth-child(2) {
+        justify-content: center;
+      }
+
+      &:nth-child(3) {
+        justify-content: flex-end;
+      }
+    }
 
     &.big {
       font-size: 24px;

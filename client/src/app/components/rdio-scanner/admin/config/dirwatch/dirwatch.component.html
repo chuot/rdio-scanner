@@ -1,0 +1,240 @@
+<div class="row top">
+    <p class="mat-body">Define a dirwatch to monitor new audio files from any directory.</p>
+    <button type="button" mat-button color="accent" (click)="add()">New dir watch</button>
+</div>
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="dirwatches"
+    (cdkDropListDropped)="drop($event)">
+    <mat-expansion-panel *ngFor="let dirwatch of dirwatches; index as i" cdkDrag>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+                {{ dirwatch.value.directory || 'NewDirwatch' }}
+                <mat-icon *ngIf="dirwatch.invalid" color="warn">error</mat-icon>
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <ng-container [formGroup]="dirwatch">
+            <div class="row">
+                <p>
+                    <span class="mat-body">Disabled</span><br>
+                    <span class="mat-caption">Disable the dirwatch.</span>
+                </p>
+                <div>
+                    <mat-slide-toggle color="primary" formControlName="disabled"></mat-slide-toggle>
+                </div>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Delete After</span><br>
+                    <span class="mat-caption">Delete the audio file after being ingested. If activated, all pre-existing
+                        audio files will be ingested and deleted as soon as the server starts. If not activated,
+                        pre-existing audio files are neither ingested nor deleted.</span>
+                </p>
+                <div>
+                    <mat-slide-toggle color="primary" formControlName="deleteAfter"></mat-slide-toggle>
+                </div>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Type</span><br>
+                    <span class="mat-caption">
+                        Dirwatch type defines how the metadata are obtained.
+                        <ul>
+                            <li><b>Default</b> - Extract the metadata from a custom mask.</li>
+                            <li><b>DSDPlus Fast Lane</b> - Extract the metadata from the file path.</li>
+                            <li><b>SDR Trunk</b> - Extract the metadata from the MP3 tags defined on the SDR Trunk's
+                                aliases tab.</li>
+                            <li><b>Trunk Recorder</b> - Extract the metadata from the json file.</li>
+                        </ul>
+                    </span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <mat-select formControlName="type" placeholder="Type">
+                        <mat-option value="default">Default</mat-option>
+                        <mat-option value="dsdplus">DSDPlus Fast Lane</mat-option>
+                        <mat-option value="sdr-trunk">SDR Trunk</mat-option>
+                        <mat-option value="trunk-recorder">Trunk Recorder</mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Directory</span><br>
+                    <span class="mat-caption">
+                        Path of the
+                        <ng-container [ngSwitch]="dirwatch.get('type')?.value">
+                            <ng-container *ngSwitchCase="'dsdplus'">
+                                <b>Record</b>, <b>1R-Record</b> or <b>VC-Record</b>
+                            </ng-container>
+                            <ng-container *ngSwitchCase="'sdr-trunk'">
+                                <b>Recordings</b>
+                            </ng-container>
+                            <ng-container *ngSwitchCase="'trunk-recorder'">
+                                <b>captureDir</b>
+                            </ng-container>
+                            <ng-container *ngSwitchDefault>
+                                local
+                            </ng-container>
+                        </ng-container>
+                        directory to monitor for file ingestion. Note that dirwatch is not compatible with networked
+                        disk.
+                    </span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <input type="text" matInput formControlName="directory" placeholder="Directory">
+                    <mat-error *ngIf="dirwatch.get('directory')?.hasError('required')">
+                        Directory is required
+                    </mat-error>
+                    <mat-error *ngIf="dirwatch.get('directory')?.hasError('duplicate')">
+                        Directory is already defined
+                    </mat-error>
+                    <mat-error *ngIf="dirwatch.get('directory')?.hasError('network')">
+                        Incompatible network folder
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default','dsdplus','trunk-recorder'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">Extension</span><br>
+                    <span class="mat-caption">The audio call extension to monitor without the period. Ex.: "mp3",
+                        "wav".</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <input type="text" matInput formControlName="extension" placeholder="Extension">
+                    <mat-error *ngIf="dirwatch.get('extension')?.hasError('invalid')">
+                        Invalid extension
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default','dsdplus'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">System</span><br>
+                    <span class="mat-caption">System to where the audio files should go.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <mat-select #sysId formControlName="systemId" placeholder="System">
+                        <mat-option [value]="null"></mat-option>
+                        <ng-container *ngFor="let system of systems">
+                            <mat-option *ngIf="system.value.id > 0" [value]="system.value.id">
+                                {{ system.value.label }}
+                            </mat-option>
+                        </ng-container>
+                    </mat-select>
+                    <mat-error *ngIf="dirwatch.get('systemId')?.hasError('required')">
+                        System is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default','dsdplus'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">Site</span><br>
+                    <span class="mat-caption">Site to where the audio files should go.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <mat-select formControlName="siteId" placeholder="Site">
+                        <mat-option [value]="null"></mat-option>
+                        <ng-container *ngFor="let site of sites[dirwatch.value.systemId] || []">
+                            <mat-option *ngIf="site.value.id > 0" [value]="site.value.id">
+                                {{ site.value.label }}
+                            </mat-option>
+                        </ng-container>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default','dsdplus'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">Talkgroup</span><br>
+                    <span class="mat-caption">Talkgroup to where the audio files should go.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <mat-select formControlName="talkgroupId" placeholder="Talkgroup">
+                        <mat-option [value]="null"></mat-option>
+                        <ng-container *ngFor="let talkgroup of talkgroups[dirwatch.value.systemId] || []">
+                            <mat-option *ngIf="talkgroup.value.id > 0" [value]="talkgroup.value.id">
+                                {{ talkgroup.value.label }}
+                            </mat-option>
+                        </ng-container>
+                    </mat-select>
+                    <mat-error *ngIf="dirwatch.get('talkgroupId')?.hasError('required')">
+                        Talkgroup is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">Mask</span><br>
+                    <span class="mat-caption">Some metadata can be extracted from the file name of the audio file using
+                        specific META tags. Possible META tags:
+                        <ul>
+                            <li><b>#DATE</b> - extract the date like 20201231&nbsp;(YYYYMMMDD),
+                                2020-12-31&nbsp;(YYYY-MM-DD) or 2020_12_31&nbsp;(YYYY_MM_DD).
+                            </li>
+                            <li><b>#GROUP</b> - extract the group label.</li>
+                            <li><b>#HZ</b> - extract the frequency in hertz like 119100000.</li>
+                            <li><b>#KHZ</b> - extract the frequency in kilohertz like 119100.</li>
+                            <li><b>#MHZ</b> - extract the frequency in megahertz like 119.100.</li>
+                            <li><b>#SITE</b> - extract the site id like 1.</li>
+                            <li><b>#SITELBL</b> - extract the site label.</li>
+                            <li><b>#SYS</b> - extract the system id like 11.</li>
+                            <li><b>#SYSLBL</b> - extract the system label.</li>
+                            <li><b>#TAG</b> - extract the tag label.</li>
+                            <li><b>#TG</b> - extract the talkgroup id like 1457 in decimal format.</li>
+                            <li><b>#TGAFS</b> - extract the talkgroup id like 11-061 in AFS (agency-fleet-subfleet)
+                                format.</li>
+                            <li><b>#TGHZ</b> - extract the frequency in hertz like 119100000 and set the talkgroup id to
+                                119100.</li>
+                            <li><b>#TGKHZ</b> - extract the frequency in kilohertz like 119100.000 or 119100 and set the
+                                talkgroup id to 119100.</li>
+                            <li><b>#TGLBL</b> - extract the talkgroup label.</li>
+                            <li><b>#TGMHZ</b> - extract the frequency in megahertz like 119.100000 or 119 and set the
+                                talkgroup id to 119100.</li>
+                            <li><b>#TIME</b> - extract the local time like 0853439&nbsp;(HHMMSS),
+                                08-34-39&nbsp;(HH-MM-SS) or 08:34:39&nbsp;(HH:MM:SS).</li>
+                            <li><b>#UNIT</b> - extract the unit id like 4424001.</li>
+                            <li><b>#UNITLBL</b> - extract the unit label. Also requires #UNIT.</li>
+                            <li><b>#ZTIME</b> - extract the zulu time like 0453439&nbsp;(HHMMSS),
+                                08-34-39&nbsp;(HH-MM-SS) or 04:34:39&nbsp;(HH:MM:SS).</li>
+                        </ul>
+                        Example: cymx_#TG_#DATE_#TIME_#HZ
+                    </span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <input type="text" matInput formControlName="mask" placeholder="Mask">
+                    <mat-error *ngIf="dirwatch.get('mask')?.hasError('invalid')">
+                        Invalid mask
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">Frequency</span><br>
+                    <span class="mat-caption">Fake frequency in hertz displayed on the main screen.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <input type="number" matInput formControlName="frequency" placeholder="Frequency">
+                    <mat-error *ngIf="dirwatch.get('frequency')?.errors">
+                        Invalid frequency
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row" *ngIf="['default'].includes(dirwatch.get('type')?.value)">
+                <p>
+                    <span class="mat-body">Delay</span><br>
+                    <span class="mat-caption">Depending on the recorder, audio files can be ingested too soon after the
+                        recorder has created the file. You can set a delay value in milliseconds for the audio file to
+                        settle before ingesting it.</span>
+                </p>
+                <mat-form-field floatLabel="auto">
+                    <input type="number" matInput formControlName="delay" min="2000" placeholder="Delay">
+                    <mat-error *ngIf="dirwatch.get('delay')?.hasError('min')">
+                        Delay value cannot be less than 2000 milliseconds.
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row bottom">
+                <button type="button" mat-button color="warn" (click)="remove(i)">
+                    Delete dirwatch
+                </button>
+            </div>
+        </ng-container>
+    </mat-expansion-panel>
+</mat-accordion>

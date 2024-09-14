@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -26,33 +26,38 @@ import (
 )
 
 type System struct {
-	Id           uint        `json:"id"`
-	AutoPopulate bool        `json:"autoPopulate"`
-	Blacklists   Blacklists  `json:"blacklists"`
-	Label        string      `json:"label"`
-	Led          any         `json:"led"`
-	Order        uint        `json:"order"`
-	RowId        any         `json:"_id"`
-	Talkgroups   *Talkgroups `json:"talkgroups"`
-	Units        *Units      `json:"units"`
+	Id           uint64
+	Alert        string
+	AutoPopulate bool
+	Blacklists   Blacklists
+	Delay        uint
+	Kind         string
+	Label        string
+	Led          string
+	Order        uint
+	Sites        *Sites
+	SystemRef    uint
+	Talkgroups   *Talkgroups
+	Units        *Units
 }
 
 func NewSystem() *System {
 	return &System{
+		Sites:      NewSites(),
 		Talkgroups: NewTalkgroups(),
 		Units:      NewUnits(),
 	}
 }
 
 func (system *System) FromMap(m map[string]any) *System {
-	switch v := m["_id"].(type) {
-	case float64:
-		system.RowId = uint(v)
-	}
-
 	switch v := m["id"].(type) {
 	case float64:
-		system.Id = uint(v)
+		system.Id = uint64(v)
+	}
+
+	switch v := m["alert"].(type) {
+	case string:
+		system.Alert = v
 	}
 
 	switch v := m["autoPopulate"].(type) {
@@ -65,6 +70,16 @@ func (system *System) FromMap(m map[string]any) *System {
 		system.Blacklists = Blacklists(v)
 	}
 
+	switch v := m["delay"].(type) {
+	case float64:
+		system.Delay = uint(v)
+	}
+
+	switch v := m["type"].(type) {
+	case string:
+		system.Kind = v
+	}
+
 	switch v := m["label"].(type) {
 	case string:
 		system.Label = v
@@ -72,12 +87,24 @@ func (system *System) FromMap(m map[string]any) *System {
 
 	switch v := m["led"].(type) {
 	case string:
-		system.Led = v
+		if len(v) > 0 {
+			system.Led = v
+		}
 	}
 
 	switch v := m["order"].(type) {
 	case float64:
 		system.Order = uint(v)
+	}
+
+	switch v := m["sites"].(type) {
+	case []any:
+		system.Sites.FromMap(v)
+	}
+
+	switch v := m["systemRef"].(type) {
+	case float64:
+		system.SystemRef = uint(v)
 	}
 
 	switch v := m["talkgroups"].(type) {
@@ -91,6 +118,44 @@ func (system *System) FromMap(m map[string]any) *System {
 	}
 
 	return system
+}
+
+func (system *System) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":           system.Id,
+		"autoPopulate": system.AutoPopulate,
+		"label":        system.Label,
+		"sites":        system.Sites.List,
+		"systemRef":    system.SystemRef,
+		"talkgroups":   system.Talkgroups.List,
+		"units":        system.Units.List,
+	}
+
+	if len(system.Alert) > 0 {
+		m["alert"] = system.Alert
+	}
+
+	if len(system.Blacklists) > 0 {
+		m["blacklists"] = system.Blacklists
+	}
+
+	if system.Delay > 0 {
+		m["delay"] = system.Delay
+	}
+
+	if len(system.Kind) > 0 {
+		m["type"] = system.Kind
+	}
+
+	if len(system.Led) > 0 {
+		m["led"] = system.Led
+	}
+
+	if system.Order > 0 {
+		m["order"] = system.Order
+	}
+
+	return json.Marshal(m)
 }
 
 type SystemMap map[string]any
@@ -125,15 +190,15 @@ func (systems *Systems) FromMap(f []any) *Systems {
 	return systems
 }
 
-func (systems *Systems) GetNewSystemId() uint {
+func (systems *Systems) GetNewSystemRef() uint {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
-NextId:
-	for i := uint(1); i < 65535; i++ {
+NextRef:
+	for i := uint(1); i < 2e16; i++ {
 		for _, s := range systems.List {
-			if s.Id == i {
-				continue NextId
+			if s.SystemRef == i {
+				continue NextRef
 			}
 		}
 		return i
@@ -141,24 +206,42 @@ NextId:
 	return 0
 }
 
-func (systems *Systems) GetSystem(f any) (system *System, ok bool) {
+func (systems *Systems) GetSystemById(id uint64) (system *System, ok bool) {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
-	switch v := f.(type) {
-	case uint:
-		for _, system := range systems.List {
-			if system.Id == v {
-				return system, true
-			}
-		}
-	case string:
-		for _, system := range systems.List {
-			if system.Label == v {
-				return system, true
-			}
+	for _, system := range systems.List {
+		if system.Id == id {
+			return system, true
 		}
 	}
+
+	return nil, false
+}
+
+func (systems *Systems) GetSystemByLabel(label string) (system *System, ok bool) {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	for _, system := range systems.List {
+		if system.Label == label {
+			return system, true
+		}
+	}
+
+	return nil, false
+}
+
+func (systems *Systems) GetSystemByRef(ref uint) (system *System, ok bool) {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	for _, system := range systems.List {
+		if system.SystemRef == ref {
+			return system, true
+		}
+	}
+
 	return nil, false
 }
 
@@ -204,7 +287,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 						continue
 					}
 
-					system, ok := systems.GetSystem(systemId)
+					system, ok := systems.GetSystemByRef(systemId)
 					if !ok {
 						continue
 					}
@@ -222,8 +305,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 						for _, fTalkgroupId := range v {
 							switch v := fTalkgroupId.(type) {
 							case float64:
-								talkgroupId := uint(v)
-								rawTalkgroup, ok := system.Talkgroups.GetTalkgroup(talkgroupId)
+								rawTalkgroup, ok := system.Talkgroups.GetTalkgroupByRef(uint(v))
 								if !ok {
 									continue
 								}
@@ -239,7 +321,7 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 		}
 	}
 
-	for i, rawSystem := range rawSystems {
+	for _, rawSystem := range rawSystems {
 		talkgroupsMap := TalkgroupsMap{}
 
 		if sortTalkgroups {
@@ -251,34 +333,39 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 			}
 		}
 
-		for j, rawTalkgroup := range rawSystem.Talkgroups.List {
-			group, ok := groups.GetGroup(rawTalkgroup.GroupId)
-			if !ok {
-				continue
-			}
-			rawSystems[i].Talkgroups.List[j].group = group.Label
+		for _, rawTalkgroup := range rawSystem.Talkgroups.List {
+			var (
+				groupLabel  string
+				groupLabels = []string{}
+			)
 
-			tag, ok := tags.GetTag(rawTalkgroup.TagId)
+			for _, id := range rawTalkgroup.GroupIds {
+				if group, ok := groups.GetGroupById(id); ok {
+					groupLabels = append(groupLabels, group.Label)
+				}
+			}
+
+			if len(groupLabels) > 0 {
+				groupLabel = groupLabels[0]
+			}
+
+			tag, ok := tags.GetTagById(rawTalkgroup.TagId)
 			if !ok {
 				continue
 			}
-			rawSystems[i].Talkgroups.List[j].tag = tag.Label
 
 			talkgroupMap := TalkgroupMap{
-				"id":    rawTalkgroup.Id,
-				"group": group.Label,
-				"label": rawTalkgroup.Label,
-				"name":  rawTalkgroup.Name,
-				"order": rawTalkgroup.Order,
-				"tag":   tag.Label,
-			}
-
-			if rawTalkgroup.Frequency != nil {
-				talkgroupMap["frequency"] = rawTalkgroup.Frequency
-			}
-
-			if rawTalkgroup.Led != nil {
-				talkgroupMap["led"] = rawTalkgroup.Led
+				"id":        rawTalkgroup.TalkgroupRef,
+				"alert":     rawTalkgroup.Alert,
+				"frequency": rawTalkgroup.Frequency,
+				"group":     groupLabel,
+				"groups":    groupLabels,
+				"label":     rawTalkgroup.Label,
+				"led":       rawTalkgroup.Led,
+				"name":      rawTalkgroup.Name,
+				"order":     rawTalkgroup.Order,
+				"tag":       tag.Label,
+				"type":      rawTalkgroup.Kind,
 			}
 
 			talkgroupsMap = append(talkgroupsMap, talkgroupMap)
@@ -294,15 +381,14 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 		})
 
 		systemMap := SystemMap{
-			"id":         rawSystem.Id,
+			"id":         rawSystem.SystemRef,
+			"alert":      rawSystem.Alert,
 			"label":      rawSystem.Label,
+			"led":        rawSystem.Led,
 			"order":      rawSystem.Order,
 			"talkgroups": talkgroupsMap,
 			"units":      rawSystem.Units.List,
-		}
-
-		if rawSystem.Led != nil {
-			systemMap["led"] = rawSystem.Led
+			"type":       rawSystem.Kind,
 		}
 
 		systemsMap = append(systemsMap, systemMap)
@@ -322,12 +408,10 @@ func (systems *Systems) GetScopedSystems(client *Client, groups *Groups, tags *T
 
 func (systems *Systems) Read(db *Database) error {
 	var (
-		blacklists sql.NullString
-		err        error
-		led        sql.NullString
-		order      sql.NullFloat64
-		rowId      sql.NullFloat64
-		rows       *sql.Rows
+		err   error
+		query string
+		rows  *sql.Rows
+		tx    *sql.Tx
 	)
 
 	systems.mutex.Lock()
@@ -335,48 +419,23 @@ func (systems *Systems) Read(db *Database) error {
 
 	systems.List = []*System{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("systems.read: %v", err)
+	formatError := errorFormatter("systems", "read")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order` from `rdioScannerSystems`"); err != nil {
-		return formatError(err)
+	query = `SELECT "systemId", "alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type" FROM "systems"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		system := &System{
-			Talkgroups: NewTalkgroups(),
-			Units:      NewUnits(),
-		}
+		system := NewSystem()
 
-		if err = rows.Scan(&rowId, &system.AutoPopulate, &blacklists, &system.Id, &system.Label, &led, &order); err != nil {
+		if err = rows.Scan(&system.Id, &system.Alert, &system.AutoPopulate, &system.Blacklists, &system.Delay, &system.Label, &system.Led, &system.Order, &system.SystemRef, &system.Kind); err != nil {
 			break
-		}
-
-		if rowId.Valid && rowId.Float64 > 0 {
-			system.RowId = uint(rowId.Float64)
-		}
-
-		if blacklists.Valid && len(blacklists.String) > 0 {
-			blacklists.String = strings.ReplaceAll(blacklists.String, "[", "")
-			blacklists.String = strings.ReplaceAll(blacklists.String, "]", "")
-			system.Blacklists = Blacklists(blacklists.String)
-		}
-
-		if led.Valid && len(led.String) > 0 {
-			system.Led = led.String
-		}
-
-		if order.Valid && order.Float64 > 0 {
-			system.Order = uint(order.Float64)
-		}
-
-		if err = system.Talkgroups.Read(db, system.Id); err != nil {
-			return err
-		}
-
-		if err = system.Units.Read(db, system.Id); err != nil {
-			return err
 		}
 
 		systems.List = append(systems.List, system)
@@ -385,7 +444,32 @@ func (systems *Systems) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
+	}
+
+	for _, system := range systems.List {
+		if err = system.Sites.ReadTx(tx, system.Id); err != nil {
+			break
+		}
+
+		if err = system.Talkgroups.ReadTx(tx, system.Id, db.Config.DbType); err != nil {
+			break
+		}
+
+		if err = system.Units.ReadTx(tx, system.Id); err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		tx.Rollback()
+		return formatError(err, "")
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	sort.Slice(systems.List, func(i int, j int) bool {
@@ -397,40 +481,42 @@ func (systems *Systems) Read(db *Database) error {
 
 func (systems *Systems) Write(db *Database) error {
 	var (
-		blacklists string
-		count      uint
-		err        error
-		rows       *sql.Rows
-		rowIds     = []uint{}
-		systemIds  = []uint{}
+		err       error
+		query     string
+		res       sql.Result
+		rows      *sql.Rows
+		systemIds = []uint64{}
+		tx        *sql.Tx
 	)
 
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("systems.write: %v", err)
+	formatError := errorFormatter("systems", "write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id`, `id` from `rdioScannerSystems`"); err != nil {
-		return formatError(err)
+	query = `SELECT "systemId" FROM "systems"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var rowId uint
-		var systemId uint
-		if err = rows.Scan(&rowId, &systemId); err != nil {
+		var systemId uint64
+		if err = rows.Scan(&systemId); err != nil {
 			break
 		}
 		remove := true
 		for _, system := range systems.List {
-			if system.RowId == nil || (system.RowId == rowId && system.Id == systemId) {
+			if system.Id == 0 || system.Id == systemId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, rowId)
 			systemIds = append(systemIds, systemId)
 		}
 	}
@@ -438,68 +524,102 @@ func (systems *Systems) Write(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
-	}
-
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerSystems` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
-			}
-		}
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	if len(systemIds) > 0 {
 		if b, err := json.Marshal(systemIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerTalkgroups` where `systemId` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+
+			query = fmt.Sprintf(`DELETE FROM "systems" WHERE "systemId" IN %s`, in)
+			if res, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
-			q = fmt.Sprintf("delete from `rdioScannerUnits` where `systemId` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+
+			if count, err := res.RowsAffected(); err == nil && count > 0 {
+				query = fmt.Sprintf(`DELETE FROM "sites" WHERE "systemId" IN %s`, in)
+				if _, err = tx.Exec(query); err != nil {
+					tx.Rollback()
+					return formatError(err, query)
+				}
+
+				query = fmt.Sprintf(`DELETE FROM "talkgroups" WHERE "systemId" IN %s`, in)
+				if _, err = tx.Exec(query); err != nil {
+					tx.Rollback()
+					return formatError(err, query)
+				}
+
+				query = fmt.Sprintf(`DELETE FROM "units" WHERE "systemId" IN %s`, in)
+				if _, err = tx.Exec(query); err != nil {
+					tx.Rollback()
+					return formatError(err, query)
+				}
 			}
 		}
 	}
 
 	for _, system := range systems.List {
-		if len(system.Blacklists) > 0 {
-			blacklists = strings.Join([]string{"[", system.Blacklists.String(), "]"}, "")
-		} else {
-			blacklists = "[]"
-		}
+		var count uint
 
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerSystems` where `_id` = ?", system.RowId).Scan(&count); err != nil {
-			break
+		if system.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "systems" WHERE "systemId" = %d`, system.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerSystems` (`_id`, `autoPopulate`, `blacklists`, `id`, `label`, `led`, `order`) values (?, ?, ?, ?, ?, ?, ?)", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order); err != nil {
-				break
+			query = fmt.Sprintf(`INSERT INTO "systems" ("alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES ('%s', %t, '%s', %d, '%s', '%s', %d, %d, '%s')`, system.Alert, system.AutoPopulate, system.Blacklists, system.Delay, escapeQuotes(system.Label), system.Led, system.Order, system.SystemRef, system.Kind)
+
+			if db.Config.DbType == DbTypePostgresql {
+				query = query + ` RETURNING "systemId"`
+
+				if err = tx.QueryRow(query).Scan(&system.Id); err != nil {
+					break
+				}
+
+			} else {
+				if res, err = tx.Exec(query); err == nil {
+					if id, err := res.LastInsertId(); err == nil {
+						system.Id = uint64(id)
+					}
+				} else {
+					break
+				}
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerSystems` set `_id` = ?, `autoPopulate` = ?, `blacklists` = ?, `id` = ?, `label` = ?, `led` = ?, `order` = ? where `_id` = ?", system.RowId, system.AutoPopulate, blacklists, system.Id, system.Label, system.Led, system.Order, system.RowId); err != nil {
+		} else {
+			query = fmt.Sprintf(`UPDATE "systems" SET "alert" = '%s', "autoPopulate" = %t, "blacklists" = '%s', "delay" = %d, "label" = '%s', "led" = '%s', "order" = %d, "systemRef" = %d, "type" = '%s' WHERE "systemId" = %d`, system.Alert, system.AutoPopulate, system.Blacklists, system.Delay, escapeQuotes(system.Label), system.Led, system.Order, system.SystemRef, system.Kind, system.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
+		}
+
+		query = ""
+
+		if err = system.Sites.WriteTx(tx, system.Id); err != nil {
 			break
 		}
 
-		if err = system.Talkgroups.Write(db, system.Id); err != nil {
-			return err
+		if err = system.Talkgroups.WriteTx(tx, system.Id, db.Config.DbType); err != nil {
+			break
 		}
 
-		if err = system.Units.Write(db, system.Id); err != nil {
-			return err
+		if err = system.Units.WriteTx(tx, system.Id); err != nil {
+			break
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	return nil

@@ -112,5 +112,7 @@
       }
     }
   },
-  "defaultProject": "rdio-scanner"
+  "cli": {
+    "analytics": false
+  }
 }

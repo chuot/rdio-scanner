@@ -4,6 +4,12 @@
         <ng-container *ngIf="csv.length === 0">
             <button mat-raised-button (click)="input.click()">Read the CSV file</button>
             <input #input type="file" accept=".csv" style="display: none" (change)="read($event)">
+            <br>
+            <p class="mat-body-1">
+                <span>Column format is: </span>
+                <span>Id</span>,
+                <span>Label</span>,
+            </p>
         </ng-container>
         <ng-container *ngIf="csv.length !== 0">
             <button mat-raised-button (click)="csv=[]">Reset</button>
@@ -14,7 +20,7 @@
 <section>
     <p class="mat-body">step 2: select system</p>
     <p class="text-center">
-        <mat-form-field floatLabel="never">
+        <mat-form-field floatLabel="auto">
             <mat-select [(ngModel)]="system">
                 <mat-option *ngFor="let system of baseConfig.systems" [value]="system">
                     {{ system.label}}

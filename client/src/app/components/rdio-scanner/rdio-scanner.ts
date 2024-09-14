@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ * Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,11 +28,8 @@ export interface RdioScannerAvoidOptions {
     talkgroup?: RdioScannerTalkgroup;
 }
 
-export interface RdioScannerBeep {
-    begin: number;
-    end: number;
-    frequency: number;
-    type: OscillatorType;
+export interface RdioScannerAlerts {
+    [key: string]: RdioScannerOscillatorData[];
 }
 
 export enum RdioScannerBeepStyle {
@@ -49,19 +46,23 @@ export interface RdioScannerCall {
     audioName?: string;
     audioType?: string;
     dateTime: Date;
+    delayed: boolean;
     frequencies?: RdioScannerCallFrequency[];
     frequency?: number;
+    groupsData?: RdioScannerGroupData[];
     id: number;
     patches: number[];
     source?: number;
     sources?: RdioScannerCallSource[];
     system: number;
+    tagData?: RdioScannerTagData;
     talkgroup: number;
     talkgroupData?: RdioScannerTalkgroup;
     systemData?: RdioScannerSystem;
 }
 
 export interface RdioScannerCallFrequency {
+    dbm?: number;
     errorCount?: number;
     freq?: number;
     len?: number;
@@ -92,17 +93,18 @@ export enum RdioScannerCategoryType {
 }
 
 export interface RdioScannerConfig {
-    afs?: string;
+    alerts?: RdioScannerAlerts;
     branding?: string;
     dimmerDelay: number | false;
     email?: string;
     groups: { [key: string]: { [key: number]: number[] } };
-    keypadBeeps: RdioScannerKeypadBeeps | false;
+    groupsData: RdioScannerGroupData[];
+    keypadBeeps: RdioScannerKeypadBeeps | undefined;
     playbackGoesLive: boolean;
     showListenersCount: boolean;
     systems: RdioScannerSystem[];
     tags: { [key: string]: { [key: number]: number[] } };
-    tagsToggle: boolean;
+    tagsData: RdioScannerTagData[];
     time12hFormat: boolean;
 }
 
@@ -126,10 +128,17 @@ export interface RdioScannerEvent {
     tooMany?: boolean;
 }
 
+export interface RdioScannerGroupData {
+    id: number;
+    alert?: string;
+    label?: string;
+    led?: string;
+}
+
 export interface RdioScannerKeypadBeeps {
-    [RdioScannerBeepStyle.Activate]: RdioScannerBeep[];
-    [RdioScannerBeepStyle.Deactivate]: RdioScannerBeep[];
-    [RdioScannerBeepStyle.Denied]: RdioScannerBeep[];
+    [RdioScannerBeepStyle.Activate]: RdioScannerOscillatorData[];
+    [RdioScannerBeepStyle.Deactivate]: RdioScannerOscillatorData[];
+    [RdioScannerBeepStyle.Denied]: RdioScannerOscillatorData[];
 }
 
 export interface RdioScannerLivefeed {
@@ -150,6 +159,13 @@ export enum RdioScannerLivefeedMode {
     Playback = 'playback',
 }
 
+export interface RdioScannerOscillatorData {
+    begin: number;
+    end: number;
+    frequency: number;
+    type: OscillatorType;
+}
+
 export interface RdioScannerPlaybackList {
     count: number;
     dateStart: Date;
@@ -167,28 +183,43 @@ export interface RdioScannerSearchOptions {
     system?: number;
     tag?: string;
     talkgroup?: number;
+    unit?: number;
 }
 
 export interface RdioScannerSystem {
     id: number;
+    alert?: string;
     label: string;
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'orange' | 'red' | 'white' | 'yellow';
     order?: number;
     talkgroups: RdioScannerTalkgroup[];
+    type?: string;
     units: RdioScannerUnit[];
 }
 
+export interface RdioScannerTagData {
+    id: number;
+    alert?: string;
+    label?: string;
+    led?: string;
+}
+
 export interface RdioScannerTalkgroup {
+    alert?: string;
     frequency?: number;
-    group: string;
+    groups: string[];
     id: number;
     label: string;
     led?: 'blue' | 'cyan' | 'green' | 'magenta' | 'orange' | 'red' | 'white' | 'yellow';
     name: string;
     tag: string;
+    type?: string;
 }
 
 export interface RdioScannerUnit {
     id: number;
     label: string;
+    unitRef: number;
+    unitFrom: number;
+    unitTo: number;
 }

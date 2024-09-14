@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Chrystian Huot <chrystian.huot@saubeo.solutions>
+// Copyright (C) 2019-2024 Chrystian Huot <chrystian@huot.qc.ca>
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,29 +19,30 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
 type Access struct {
-	Id         any    `json:"_id"`
-	Code       string `json:"code"`
-	Expiration any    `json:"expiration"`
-	Ident      string `json:"ident"`
-	Limit      any    `json:"limit"`
-	Order      any    `json:"order"`
-	Systems    any    `json:"systems"`
+	Id         uint64
+	Code       string
+	Expiration uint64
+	Ident      string
+	Limit      uint
+	Order      uint
+	Systems    any
 }
 
 func NewAccess() *Access {
-	return &Access{Systems: "*"}
+	return &Access{}
 }
 
 func (access *Access) FromMap(m map[string]any) *Access {
-	switch v := m["_id"].(type) {
+	switch v := m["id"].(type) {
 	case float64:
-		access.Id = uint(v)
+		access.Id = uint64(v)
 	}
 
 	switch v := m["code"].(type) {
@@ -52,7 +53,7 @@ func (access *Access) FromMap(m map[string]any) *Access {
 	switch v := m["expiration"].(type) {
 	case string:
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			access.Expiration = t.UTC()
+			access.Expiration = uint64(t.Unix())
 		}
 	}
 
@@ -71,40 +72,31 @@ func (access *Access) FromMap(m map[string]any) *Access {
 		access.Order = uint(v)
 	}
 
-	switch v := m["systems"].(type) {
-	case []any:
-		if b, err := json.Marshal(v); err == nil {
-			access.Systems = string(b)
-		}
-	case string:
-		access.Systems = v
-	}
+	access.Systems = m["systems"]
 
 	return access
 }
 
 func (access *Access) HasAccess(call *Call) bool {
-	if access.Systems != nil {
-		switch v := access.Systems.(type) {
-		case []any:
-			for _, f := range v {
-				switch v := f.(type) {
-				case map[string]any:
-					switch id := v["id"].(type) {
-					case float64:
-						if id == float64(call.System) {
-							switch tg := v["talkgroups"].(type) {
-							case string:
-								if tg == "*" {
-									return true
-								}
-							case []any:
-								for _, f := range tg {
-									switch tg := f.(type) {
-									case float64:
-										if tg == float64(call.Talkgroup) {
-											return true
-										}
+	switch v := access.Systems.(type) {
+	case []any:
+		for _, f := range v {
+			switch v := f.(type) {
+			case map[string]any:
+				switch id := v["id"].(type) {
+				case float64:
+					if id == float64(call.System.SystemRef) {
+						switch tg := v["talkgroups"].(type) {
+						case string:
+							if tg == "*" {
+								return true
+							}
+						case []any:
+							for _, f := range tg {
+								switch tg := f.(type) {
+								case float64:
+									if tg == float64(call.Talkgroup.TalkgroupRef) {
+										return true
 									}
 								}
 							}
@@ -112,11 +104,11 @@ func (access *Access) HasAccess(call *Call) bool {
 					}
 				}
 			}
+		}
 
-		case string:
-			if v == "*" {
-				return true
-			}
+	case string:
+		if v == "*" {
+			return true
 		}
 	}
 
@@ -124,11 +116,33 @@ func (access *Access) HasAccess(call *Call) bool {
 }
 
 func (access *Access) HasExpired() bool {
-	switch v := access.Expiration.(type) {
-	case time.Time:
-		return v.Before(time.Now())
+	if access.Expiration > 0 {
+		return time.Unix(int64(access.Expiration), 0).Before(time.Now())
 	}
 	return false
+}
+
+func (access *Access) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"id":      access.Id,
+		"code":    access.Code,
+		"ident":   access.Ident,
+		"systems": access.Systems,
+	}
+
+	if access.Expiration > 0 {
+		m["expiration"] = time.Unix(int64(access.Expiration), 0)
+	}
+
+	if access.Limit > 0 {
+		m["limit"] = access.Limit
+	}
+
+	if access.Order > 0 {
+		m["order"] = access.Order
+	}
+
+	return json.Marshal(m)
 }
 
 type Accesses struct {
@@ -175,8 +189,7 @@ func (accesses *Accesses) FromMap(f []any) *Accesses {
 	for _, r := range f {
 		switch m := r.(type) {
 		case map[string]any:
-			access := &Access{}
-			access.FromMap(m)
+			access := NewAccess().FromMap(m)
 			accesses.List = append(accesses.List, access)
 		}
 	}
@@ -206,14 +219,9 @@ func (accesses *Accesses) IsRestricted() bool {
 
 func (accesses *Accesses) Read(db *Database) error {
 	var (
-		err        error
-		expiration any
-		id         sql.NullFloat64
-		limit      sql.NullFloat64
-		order      sql.NullFloat64
-		rows       *sql.Rows
-		systems    string
-		t          time.Time
+		err   error
+		query string
+		rows  *sql.Rows
 	)
 
 	accesses.mutex.Lock()
@@ -221,47 +229,25 @@ func (accesses *Accesses) Read(db *Database) error {
 
 	accesses.List = []*Access{}
 
-	formatError := func(err error) error {
-		return fmt.Errorf("accesses.read: %v", err)
-	}
+	formatError := errorFormatter("accesses", "read")
 
-	if rows, err = db.Sql.Query("select `_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems` from `rdioScannerAccesses`"); err != nil {
-		return formatError(err)
+	query = `SELECT "accessId", "code", "expiration", "ident", "limit", "order", "systems" FROM "accesses"`
+	if rows, err = db.Sql.Query(query); err != nil {
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		access := &Access{}
+		var (
+			access  = NewAccess()
+			systems string
+		)
 
-		if err = rows.Scan(&id, &access.Code, &expiration, &access.Ident, &limit, &order, &systems); err != nil {
+		if err = rows.Scan(&access.Id, &access.Code, &access.Expiration, &access.Ident, &access.Limit, &access.Order, &systems); err != nil {
 			break
 		}
 
-		if id.Valid && id.Float64 > 0 {
-			access.Id = uint(id.Float64)
-		}
-
-		if len(access.Code) == 0 {
-			continue
-		}
-
-		if t, err = db.ParseDateTime(expiration); err == nil {
-			access.Expiration = t
-		}
-
-		if len(access.Ident) == 0 {
-			access.Ident = defaults.access.ident
-		}
-
-		if limit.Valid && limit.Float64 > 0 {
-			access.Limit = uint(limit.Float64)
-		}
-
-		if order.Valid && order.Float64 > 0 {
-			access.Order = uint(order.Float64)
-		}
-
-		if err = json.Unmarshal([]byte(systems), &access.Systems); err != nil {
-			access.Systems = []any{}
+		if len(systems) > 0 {
+			json.Unmarshal([]byte(systems), &access.Systems)
 		}
 
 		accesses.List = append(accesses.List, access)
@@ -270,8 +256,12 @@ func (accesses *Accesses) Read(db *Database) error {
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		return formatError(err, "")
 	}
+
+	sort.Slice(accesses.List, func(i int, j int) bool {
+		return accesses.List[i].Order < accesses.List[j].Order
+	})
 
 	return nil
 }
@@ -294,83 +284,102 @@ func (accesses *Accesses) Remove(access *Access) (*Accesses, bool) {
 
 func (accesses *Accesses) Write(db *Database) error {
 	var (
-		count   uint
-		err     error
-		rows    *sql.Rows
-		rowIds  = []uint{}
-		systems any
+		accessIds = []uint64{}
+		err       error
+		query     string
+		rows      *sql.Rows
+		tx        *sql.Tx
 	)
 
 	accesses.mutex.Lock()
 	defer accesses.mutex.Unlock()
 
-	formatError := func(err error) error {
-		return fmt.Errorf("accesses.write: %v", err)
+	formatError := errorFormatter("accesses", "write")
+
+	if tx, err = db.Sql.Begin(); err != nil {
+		return formatError(err, "")
 	}
 
-	if rows, err = db.Sql.Query("select `_id` from `rdioScannerAccesses`"); err != nil {
-		return formatError(err)
+	query = `SELECT "accessId" FROM "accesses"`
+	if rows, err = tx.Query(query); err != nil {
+		tx.Rollback()
+		return formatError(err, query)
 	}
 
 	for rows.Next() {
-		var id uint
-		if err = rows.Scan(&id); err != nil {
+		var accessId uint64
+		if err = rows.Scan(&accessId); err != nil {
 			break
 		}
 		remove := true
 		for _, access := range accesses.List {
-			if access.Id == nil || access.Id == id {
+			if access.Id == 0 || access.Id == accessId {
 				remove = false
 				break
 			}
 		}
 		if remove {
-			rowIds = append(rowIds, id)
+			accessIds = append(accessIds, accessId)
 		}
 	}
 
 	rows.Close()
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
-	if len(rowIds) > 0 {
-		if b, err := json.Marshal(rowIds); err == nil {
-			s := string(b)
-			s = strings.ReplaceAll(s, "[", "(")
-			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerAccesses` where `_id` in %v", s)
-			if _, err = db.Sql.Exec(q); err != nil {
-				return formatError(err)
+	if len(accessIds) > 0 {
+		if b, err := json.Marshal(accessIds); err == nil {
+			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+			query = fmt.Sprintf(`DELETE FROM "accesses" WHERE "accessId" IN %s`, in)
+			if _, err = tx.Exec(query); err != nil {
+				tx.Rollback()
+				return formatError(err, query)
 			}
 		}
 	}
 
 	for _, access := range accesses.List {
-		switch access.Systems {
-		case "*":
-			systems = `"*"`
-		default:
-			systems = access.Systems
+		var (
+			count   uint
+			systems string
+		)
+
+		if b, err := json.Marshal(access.Systems); err == nil {
+			systems = string(b)
 		}
 
-		if err = db.Sql.QueryRow("select count(*) from `rdioScannerAccesses` where `_id` = ?", access.Id).Scan(&count); err != nil {
-			break
+		if access.Id > 0 {
+			query = fmt.Sprintf(`SELECT COUNT(*) FROM "accesses" WHERE "accessId" = %d`, access.Id)
+			if err = tx.QueryRow(query).Scan(&count); err != nil {
+				break
+			}
 		}
 
 		if count == 0 {
-			if _, err = db.Sql.Exec("insert into `rdioScannerAccesses` (`_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems`) values (?, ?, ?, ?, ?, ?, ?)", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems); err != nil {
+			query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ('%s', %d, '%s', %d, %d, '%s')`, escapeQuotes(access.Code), access.Expiration, escapeQuotes(access.Ident), access.Limit, access.Order, systems)
+			if _, err = tx.Exec(query); err != nil {
 				break
 			}
 
-		} else if _, err = db.Sql.Exec("update `rdioScannerAccesses` set `_id` = ?, `code` = ?, `expiration` = ?, `ident` = ?, `limit` = ?, `order` = ?, `systems` = ? where `_id` = ?", access.Id, access.Code, access.Expiration, access.Ident, access.Limit, access.Order, systems, access.Id); err != nil {
-			break
+		} else {
+			query = fmt.Sprintf(`UPDATE "accesses" SET "code" = '%s', "expiration" = %d, "ident" = '%s', "limit" = %d, "order" = %d, "systems" = '%s' WHERE "accessId" = %d`, escapeQuotes(access.Code), access.Expiration, escapeQuotes(access.Ident), access.Limit, access.Order, systems, access.Id)
+			if _, err = tx.Exec(query); err != nil {
+				break
+			}
 		}
 	}
 
 	if err != nil {
-		return formatError(err)
+		tx.Rollback()
+		return formatError(err, query)
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return formatError(err, "")
 	}
 
 	return nil
