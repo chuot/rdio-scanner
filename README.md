@@ -70,5 +70,11 @@ You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the 
 # Commercial support
 
 Commercial support is available at **[https://saubeo.solutions/](https://saubeo.solutions)**.
+# Discord Community
+
+Join our Discord community for Rdio Scanner! Connect with other users, share tips, and get quick help in a friendly, collaborative environment. Although this server is currently unofficial, it’s a great place to discuss features, report issues, or just chat about your scanning experiences.
+
+You can join our Discord community here:  
+[Join Rdio Scanner Discord](https://discord.com/channels/928800455444791306/928812053936881725/1340887203936735255)
 
 **Happy Rdio scanning !**
