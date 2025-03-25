@@ -131,7 +131,7 @@ export interface LogsQueryOptions {
 export interface Options {
     afsSystems?: string;
     audioConversion?: 0 | 1 | 2 | 3;
-    audioCompression?: 0 | 1 | 2 | 3 | 4 | 5;
+    audioCompression?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
     autoPopulate?: boolean;
     branding?: string;
     dimmerDelay?: number;
