@@ -61,7 +61,7 @@ func NewFFMpeg() *FFMpeg {
 	return ffmpeg
 }
 
-func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uint) error {
+func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uint, compression uint) error {
 	var (
 		args = []string{"-i", "-"}
 		err  error
@@ -102,7 +102,21 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		}
 	}
 
-	args = append(args, "-ar", "16000", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "8k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
+	if compression == AUDIO_COMPRESSION_LOW {
+		args = append(args, "-ar", "32k", "-c:a", "libfdk_aac", "-b:a", "32k")
+	} else if compression == AUDIO_COMPRESSION_MEDIUM {
+		args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-b:a", "24k")
+	} else if compression == AUDIO_COMPRESSION_HIGH {
+		args = append(args, "-ar", "16k", "-c:a", "libfdk_aac", "-b:a", "16k")
+	} else if compression == AUDIO_COMPRESSION_ULTRA {
+		args = append(args, "-ar", "32k", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "12k")
+	} else if compression == AUDIO_COMPRESSION_EXTREME {
+		args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "8k")
+	} else {
+		args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-b:a", "24k")
+	}
+
+	args = append(args, "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
 
 	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stdin = bytes.NewReader(call.Audio)
