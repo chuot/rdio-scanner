@@ -37,6 +37,22 @@
     </div>
     <div class="row">
         <p>
+            <span class="mat-body">Audio Compression</span><br>
+            <span class="mat-caption">Controls the amount of audio compression</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <mat-select formControlName="audioCompression" placeholder="Audio Compression">
+                <mat-option [value]="0">Default compression</mat-option>
+                <mat-option [value]="1">Low compression</mat-option>
+                <mat-option [value]="2">Medium compression</mat-option>
+                <mat-option [value]="3">High compression</mat-option>
+                <mat-option [value]="4">Ultra compression</mat-option>
+                <mat-option [value]="5">Extreme compression</mat-option>
+            </mat-select>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Auto Populate</span><br>
             <span class="mat-caption">Globaly allows the automatic creation of unconfigured systems and
                 talkgroups.</span>
