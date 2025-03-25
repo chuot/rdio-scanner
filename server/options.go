@@ -211,6 +211,7 @@ func (options *Options) Read(db *Database) error {
 	options.adminPassword = string(defaultPassword)
 	options.adminPasswordNeedChange = defaults.adminPasswordNeedChange
 	options.AudioConversion = defaults.options.audioConversion
+	options.AudioCompression = defaults.options.audioCompression
 	options.AutoPopulate = defaults.options.autoPopulate
 	options.DimmerDelay = defaults.options.dimmerDelay
 	options.DisableDuplicateDetection = defaults.options.disableDuplicateDetection
@@ -383,6 +384,7 @@ func (options *Options) Write(db *Database) error {
 	if b, err = json.Marshal(map[string]any{
 		"afsSystems":                  options.AfsSystems,
 		"audioConversion":             options.AudioConversion,
+		"audioCompression":            options.AudioCompression,
 		"autoPopulate":                options.AutoPopulate,
 		"branding":                    options.Branding,
 		"dimmerDelay":                 options.DimmerDelay,
