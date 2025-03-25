@@ -63,6 +63,8 @@ const (
 	AUDIO_COMPRESSION_HIGH             = 3
 	AUDIO_COMPRESSION_ULTRA            = 4
 	AUDIO_COMPRESSION_EXTREME          = 5
+	AUDIO_COMPRESSION_BETA_1           = 6
+	AUDIO_COMPRESSION_BETA_2           = 7
 )
 
 func NewOptions() *Options {

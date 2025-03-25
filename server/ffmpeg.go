@@ -102,18 +102,23 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		}
 	}
 
-	if compression == AUDIO_COMPRESSION_LOW {
-		args = append(args, "-ar", "32k", "-c:a", "libfdk_aac", "-b:a", "32k")
-	} else if compression == AUDIO_COMPRESSION_MEDIUM {
-		args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-b:a", "24k")
-	} else if compression == AUDIO_COMPRESSION_HIGH {
-		args = append(args, "-ar", "16k", "-c:a", "libfdk_aac", "-b:a", "16k")
-	} else if compression == AUDIO_COMPRESSION_ULTRA {
-		args = append(args, "-ar", "32k", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "12k")
-	} else if compression == AUDIO_COMPRESSION_EXTREME {
-		args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "8k")
-	} else {
-		args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-b:a", "24k")
+	switch compression {
+		case AUDIO_COMPRESSION_LOW:
+			args = append(args, "-ar", "32k", "-c:a", "libfdk_aac", "-b:a", "32k")
+		case AUDIO_COMPRESSION_MEDIUM:
+			args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-b:a", "24k")
+		case AUDIO_COMPRESSION_HIGH:
+			args = append(args, "-ar", "16k", "-c:a", "libfdk_aac", "-b:a", "16k")
+		case AUDIO_COMPRESSION_ULTRA:
+			args = append(args, "-ar", "32k", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "12k")
+		case AUDIO_COMPRESSION_EXTREME:
+			args = append(args, "-ar", "24k", "-c:a", "libfdk_aac", "-profile:a", "aac_he", "-b:a", "8k")
+		case AUDIO_COMPRESSION_BETA_1:
+			args = append(args, "-ar", "32k", "-ac", "2", "-c:a", "libfdk_aac", "-profile:a", "aac_he_v2", "-b:a", "12k")
+		case AUDIO_COMPRESSION_BETA_2:
+			args = append(args, "-ar", "24k", "-ac", "2", "-c:a", "libfdk_aac", "-profile:a", "aac_he_v2", "-b:a", "8k")
+		default:
+			args = append(args, "-c:a", "24k", "-c:a", "libfdk_aac", "-b:a", "24k")
 	}
 
 	args = append(args, "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")

@@ -97,7 +97,7 @@ var defaults Defaults = Defaults{
 	keypadBeeps: "uniden",
 	options: DefaultOptions{
 		audioConversion:             AUDIO_CONVERSION_ENABLED,
-		audioCompression:            AUDIO_COMPRESSION_DEFAULT,
+		audioCompression:            AUDIO_COMPRESSION_MEDIUM,
 		autoPopulate:                true,
 		dimmerDelay:                 5000,
 		disableDuplicateDetection:   false,
