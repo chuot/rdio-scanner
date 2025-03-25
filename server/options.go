@@ -27,6 +27,7 @@ import (
 type Options struct {
 	AfsSystems                  string `json:"afsSystems"`
 	AudioConversion             uint   `json:"audioConversion"`
+	AudioCompression            uint   `json:"audioCompression"`
 	AutoPopulate                bool   `json:"autoPopulate"`
 	Branding                    string `json:"branding"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
