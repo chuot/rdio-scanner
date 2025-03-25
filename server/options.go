@@ -78,6 +78,13 @@ func (options *Options) FromMap(m map[string]any) *Options {
 		options.MaxClients = defaults.options.audioConversion
 	}
 
+	switch v := m["audioCompression"].(type) {
+	case float64:
+		options.AudioCompression = uint(v)
+	default:
+		options.AudioCompression = defaults.options.audioCompression
+	}
+
 	switch v := m["autoPopulate"].(type) {
 	case bool:
 		options.AutoPopulate = v
