@@ -56,6 +56,15 @@ const (
 	AUDIO_CONVERSION_ENABLED_LOUD_NORM = 3
 )
 
+const (
+	AUDIO_COMPRESSION_DEFAULT          = 0
+	AUDIO_COMPRESSION_LOW              = 1
+	AUDIO_COMPRESSION_MEDIUM           = 2
+	AUDIO_COMPRESSION_HIGH             = 3
+	AUDIO_COMPRESSION_ULTRA            = 4
+	AUDIO_COMPRESSION_EXTREME          = 5
+)
+
 func NewOptions() *Options {
 	return &Options{
 		mutex: sync.Mutex{},
