@@ -16,7 +16,7 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | -------------------------------------------------------------- | --- | -------- |
 | [Trunk Recorder](https://github.com/robotastic/trunk-recorder) | X   | X        |
 | [RTLSDR-Airband](https://github.com/szpajder/RTLSDR-Airband)   |     | X        |
-| [SDRTrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
+| [SDRTrunk](https://github.com/DSheirer/sdrtrunk)               | X   | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
 | [ProScan](https://www.proscan.org/)                            |     | X        |
 | [DSDPlus Fast Lane](https://https://www.dsdplus.com/)          |     | X        |
