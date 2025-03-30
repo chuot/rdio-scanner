@@ -50,7 +50,7 @@ As a courtesy to Docker users, [Rdio Scanner](https://github.com/chuot/rdio-scan
 
 # Need help ?
 
-You can ask your questions or post your comments on the [Rdio Scanner Discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
+You can ask your questions or post your comments on the [Rdio Scanner GitHub discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
 
 # Show your appreciation, support the author
 
