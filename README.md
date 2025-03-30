@@ -58,8 +58,6 @@ If you like [Rdio Scanner](https://github.com/chuot/rdio-scanner), **[consider s
 
 If you use [Rdio Scanner](https://github.com/chuot/rdio-scanner) for commercial purposes or derive income from it, **[sponsor the project](https://github.com/sponsors/chuot)** to help support continued development.
 
-[![Follow us on Twitter](./docs/images/twitter-badge.png?raw=true)](https://twitter.com/RdioScanner)
-
 # Improve your experience on the go
 
 You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the go on your mobile device with the native app.
