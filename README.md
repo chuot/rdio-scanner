@@ -75,8 +75,4 @@ You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the 
 [![Available on the App Store](./docs/images/app-store-badge.png?raw=true)](https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone)
 [![Get it on Google Play](./docs/images/google-play-badge.png?raw=true)](https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner)
 
-# Commercial support
-
-Commercial support is available at **[https://saubeo.solutions/](https://saubeo.solutions)**.
-
 **Happy Rdio scanning !**
