@@ -50,8 +50,17 @@ As a courtesy to Docker users, [Rdio Scanner](https://github.com/chuot/rdio-scan
 
 # Need help ?
 
-- Your question might already be addressed on the [Rdio Scanner GitHub Wiki](https://github.com/chuot/rdio-scanner/wiki), be sure to check it out at **[https://github.com/chuot/rdio-scanner/wiki](https://github.com/chuot/rdio-scanner/wiki)**.
-- You can ask your questions or post your comments on the [Rdio Scanner GitHub discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
+## GitHub Discussions 💭
+
+Your question might already be addressed on the [Rdio Scanner GitHub Wiki](https://github.com/chuot/rdio-scanner/wiki), be sure to check it out at **[https://github.com/chuot/rdio-scanner/wiki](https://github.com/chuot/rdio-scanner/wiki)**.
+
+## GitHub WIKI 📖
+
+Feel free to ask your questions or share your comments on the [Rdio Scanner GitHub discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
+
+## Discord Server 💬
+
+Connect with others interested in [Rdio Scanner](https://github.com/chuot/rdio-scanner) on this community [Discord server](https://discord.com/invite/pebyc3Sj2x).
 
 # Show your appreciation, support the author
 
