@@ -37,6 +37,24 @@
     </div>
     <div class="row">
         <p>
+            <span class="mat-body">Audio Compression</span><br>
+            <span class="mat-caption">Controls the amount of audio compression for audio files.</span>
+        </p>
+        <mat-form-field floatLabel="never">
+            <mat-select formControlName="audioCompression" placeholder="Audio Compression">
+                <mat-option [value]="0">Automatic compression (Default)</mat-option>
+                <mat-option [value]="1">Low compression, stable, 32 KB/s (AAC-LC)</mat-option>
+                <mat-option [value]="2">Medium compression, stable, 24 KB/s (AAC-LC)</mat-option>
+                <mat-option [value]="3">High compression, stable, 16 KB/s (AAC-LC)</mat-option>
+                <mat-option [value]="4">Ultra compression, unstable, 12 KB/s (AAC-HE)</mat-option>
+                <mat-option [value]="5">Extreme compression, unstable, 8 KB/s (AAC-HE)</mat-option>
+                <mat-option [value]="6">Experimental compression, HAZARDOUS, 12 KB/s (AAC-HE-v2)</mat-option>
+                <mat-option [value]="7">Experimental compression, HAZARDOUS, 8 KB/s (AAC-HE-v2)</mat-option>
+            </mat-select>
+        </mat-form-field>
+    </div>
+    <div class="row">
+        <p>
             <span class="mat-body">Auto Populate</span><br>
             <span class="mat-caption">Globaly allows the automatic creation of unconfigured systems and
                 talkgroups.</span>

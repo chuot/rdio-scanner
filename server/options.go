@@ -27,6 +27,7 @@ import (
 type Options struct {
 	AfsSystems                  string `json:"afsSystems"`
 	AudioConversion             uint   `json:"audioConversion"`
+	AudioCompression            uint   `json:"audioCompression"`
 	AutoPopulate                bool   `json:"autoPopulate"`
 	Branding                    string `json:"branding"`
 	DimmerDelay                 uint   `json:"dimmerDelay"`
@@ -55,6 +56,17 @@ const (
 	AUDIO_CONVERSION_ENABLED_LOUD_NORM = 3
 )
 
+const (
+	AUDIO_COMPRESSION_DEFAULT          = 0
+	AUDIO_COMPRESSION_LOW              = 1
+	AUDIO_COMPRESSION_MEDIUM           = 2
+	AUDIO_COMPRESSION_HIGH             = 3
+	AUDIO_COMPRESSION_ULTRA            = 4
+	AUDIO_COMPRESSION_EXTREME          = 5
+	AUDIO_COMPRESSION_BETA_1           = 6
+	AUDIO_COMPRESSION_BETA_2           = 7
+)
+
 func NewOptions() *Options {
 	return &Options{
 		mutex: sync.Mutex{},
@@ -75,6 +87,13 @@ func (options *Options) FromMap(m map[string]any) *Options {
 		options.AudioConversion = uint(v)
 	default:
 		options.MaxClients = defaults.options.audioConversion
+	}
+
+	switch v := m["audioCompression"].(type) {
+	case float64:
+		options.AudioCompression = uint(v)
+	default:
+		options.AudioCompression = defaults.options.audioCompression
 	}
 
 	switch v := m["autoPopulate"].(type) {
@@ -203,6 +222,7 @@ func (options *Options) Read(db *Database) error {
 	options.adminPassword = string(defaultPassword)
 	options.adminPasswordNeedChange = defaults.adminPasswordNeedChange
 	options.AudioConversion = defaults.options.audioConversion
+	options.AudioCompression = defaults.options.audioCompression
 	options.AutoPopulate = defaults.options.autoPopulate
 	options.DimmerDelay = defaults.options.dimmerDelay
 	options.DisableDuplicateDetection = defaults.options.disableDuplicateDetection
@@ -375,6 +395,7 @@ func (options *Options) Write(db *Database) error {
 	if b, err = json.Marshal(map[string]any{
 		"afsSystems":                  options.AfsSystems,
 		"audioConversion":             options.AudioConversion,
+		"audioCompression":            options.AudioCompression,
 		"autoPopulate":                options.AutoPopulate,
 		"branding":                    options.Branding,
 		"dimmerDelay":                 options.DimmerDelay,
