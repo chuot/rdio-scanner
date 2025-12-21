@@ -17,15 +17,36 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormGroup } from '@angular/forms';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { FormGroup, AbstractControl } from '@angular/forms';
 
 @Component({
     selector: 'rdio-scanner-admin-site',
     templateUrl: './site.component.html',
+    standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class RdioScannerAdminSiteComponent {
-    @Input() form: FormGroup | undefined;
+    private _form: FormGroup | undefined;
+
+    @Input()
+    set form(f: FormGroup | undefined) {
+        this._form = f;
+        this.cd.markForCheck();
+    }
+    get form(): FormGroup | undefined {
+        return this._form;
+    }
+
+    get siteRef(): AbstractControl | null | undefined {
+        return this._form?.get('siteRef');
+    }
+
+    get labelControl(): AbstractControl | null | undefined {
+        return this._form?.get('label');
+    }
 
     @Output() remove = new EventEmitter<void>();
+
+    constructor(private readonly cd: ChangeDetectorRef) {}
 }

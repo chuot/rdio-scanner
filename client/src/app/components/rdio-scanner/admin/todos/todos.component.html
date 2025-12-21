@@ -1,12 +1,14 @@
-<mat-card appearance="outlined" *ngIf="todos.length">
+<ng-container *ngIf="todos.length">
+  <mat-card appearance="outlined">
     <mat-card-title>Todos</mat-card-title>
     <mat-list>
-        <mat-list-item *ngFor="let todo of todos">
-            <mat-icon *ngIf="todo.level === 'info'" class="info" matListItemIcon>notifications</mat-icon>
-            <mat-icon *ngIf="todo.level === 'warn'" class="warn" matListItemIcon>warning</mat-icon>
-            <div mat-line>
-                <span class="todo">{{ todo.message }}</span>
-            </div>
-        </mat-list-item>
+      <mat-list-item *ngFor="let todo of todos">
+        <mat-icon *ngIf="todo.level === 'info'" class="info" matListItemIcon>notifications</mat-icon>
+        <mat-icon *ngIf="todo.level === 'warn'" class="warn" matListItemIcon>warning</mat-icon>
+        <div mat-line>
+          <span class="todo">{{ todo.message }}</span>
+        </div>
+      </mat-list-item>
     </mat-list>
-</mat-card>
+  </mat-card>
+</ng-container>

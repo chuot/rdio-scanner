@@ -29,6 +29,7 @@ interface Todo {
     selector: 'rdio-scanner-admin-todos',
     styleUrls: ['./todos.component.scss'],
     templateUrl: './todos.component.html',
+    standalone: false
 })
 export class RdioScannerAdminTodosComponent implements OnDestroy, OnInit {
     todos: Todo[] = [];

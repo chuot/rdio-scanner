@@ -33,10 +33,10 @@
                     <button type="button" mat-icon-button matSuffix (click)="copy(key)">
                         <mat-icon>content_copy</mat-icon>
                     </button>
-                    <mat-error *ngIf="apiKey.get('key')?.hasError('duplicate')">
+                    <mat-error *ngIf="apiKey.get('key').hasError('duplicate')">
                         Key is already defined
                     </mat-error>
-                    <mat-error *ngIf="apiKey.get('key')?.hasError('required')">
+                    <mat-error *ngIf="apiKey.get('key').hasError('required')">
                         Key is required
                     </mat-error>
                 </mat-form-field>
@@ -49,7 +49,7 @@
                 </p>
                 <mat-form-field floatLabel="never">
                     <input type="text" matInput formControlName="ident" placeholder="Ident">
-                    <mat-error *ngIf="apiKey.get('ident')?.hasError('required')">
+                    <mat-error *ngIf="apiKey.get('ident').hasError('required')">
                         Ident is required
                     </mat-error>
                 </mat-form-field>

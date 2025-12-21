@@ -1,68 +1,52 @@
-<ng-container *ngIf="form" [formGroup]="form">
+<ng-container *ngIf="form as f">
+  <ng-container [formGroup]="f">
     <div class="row">
-        <p>
-            <span class="mat-body">Id</span><br>
-            <span class="mat-caption">Unit identifier in decimal format. You can define a unique unit identifier here,
-                but you can also use a range of identifiers using the fields below.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="1" step="1" matInput formControlName="unitRef" placeholder="Id">
-            <mat-error *ngIf="form?.get('unitRef')?.hasError('duplicate')">
-                Id value is already defined
-            </mat-error>
-            <mat-error *ngIf="form?.get('unitRef')?.hasError('min')">
-                Id value is invalid
-            </mat-error>
-            <mat-error *ngIf="form?.get('unitRef')?.hasError('required')">
-                Id value is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Id</span><br>
+        <span class="mat-caption">Unit identifier in decimal format. You can define a unique unit identifier here,
+        but you can also use a range of identifiers using the fields below.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="number" min="1" step="1" matInput formControlName="unitRef" placeholder="Id">
+        <mat-error *ngIf="f.get('unitRef')!.hasError('duplicate')">Id value is already defined</mat-error>
+        <mat-error *ngIf="f.get('unitRef')!.hasError('min')">Id value is invalid</mat-error>
+        <mat-error *ngIf="f.get('unitRef')!.hasError('required')">Id value is required</mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Range from</span><br>
-            <span class="mat-caption">Unit identifier range from.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="1" step="1" matInput formControlName="unitFrom" placeholder="From">
-            <mat-error *ngIf="form?.get('unitFrom')?.hasError('range')">
-                From value should be lower than To value
-            </mat-error>
-            <mat-error *ngIf="form?.get('unitFrom')?.hasError('min')">
-                From value To is invalid
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Range from</span><br>
+        <span class="mat-caption">Unit identifier range from.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="number" min="1" step="1" matInput formControlName="unitFrom" placeholder="From">
+        <mat-error *ngIf="f.get('unitFrom')!.hasError('range')">From value should be lower than To value</mat-error>
+        <mat-error *ngIf="f.get('unitFrom')!.hasError('min')">From value is invalid</mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Range to</span><br>
-            <span class="mat-caption">Unit identifier range to.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="1" step="1" matInput formControlName="unitTo" placeholder="To">
-            <mat-error *ngIf="form?.get('unitTo')?.hasError('range')">
-                To value should be higher than From value
-            </mat-error>
-            <mat-error *ngIf="form?.get('unitTo')?.hasError('min')">
-                To value is invalid
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Range to</span><br>
+        <span class="mat-caption">Unit identifier range to.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="number" min="1" step="1" matInput formControlName="unitTo" placeholder="To">
+        <mat-error *ngIf="f.get('unitTo')!.hasError('range')">To value should be higher than From value</mat-error>
+        <mat-error *ngIf="f.get('unitTo')!.hasError('min')">To value is invalid</mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Label</span><br>
-            <span class="mat-caption">Unit label.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="text" matInput formControlName="label" placeholder="Label">
-            <mat-error *ngIf="form?.get('label')?.hasError('required')">
-                Label is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Label</span><br>
+        <span class="mat-caption">Unit label.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="text" matInput formControlName="label" placeholder="Label">
+        <mat-error *ngIf="f.get('label')!.hasError('required')">Label is required</mat-error>
+      </mat-form-field>
     </div>
     <div class="row bottom">
-        <button type="button" mat-button color="warn" (click)="remove.emit()">
-            Delete unit
-        </button>
+      <button type="button" mat-button color="warn" (click)="remove.emit()">Delete unit</button>
     </div>
+  </ng-container>
 </ng-container>

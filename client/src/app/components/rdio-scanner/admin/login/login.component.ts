@@ -25,6 +25,7 @@ import { RdioScannerAdminService } from '../admin.service';
     selector: 'rdio-scanner-admin-login',
     styleUrls: ['./login.component.scss'],
     templateUrl: './login.component.html',
+    standalone: false
 })
 export class RdioScannerAdminLoginComponent {
     @Output() loggedIn = new EventEmitter<void>();

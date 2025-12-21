@@ -22,5 +22,6 @@ import { Component } from '@angular/core';
 @Component({
     selector: 'google-play-badge',
     templateUrl: './google-play-badge.component.svg',
+    standalone: false
 })
 export class GooglePlayBadgeComponent {}

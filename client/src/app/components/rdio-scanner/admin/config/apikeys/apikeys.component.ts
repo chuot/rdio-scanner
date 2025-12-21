@@ -28,6 +28,7 @@ import { RdioScannerAdminSystemsSelectComponent } from '../systems/select/select
 @Component({
     selector: 'rdio-scanner-admin-apikeys',
     templateUrl: './apikeys.component.html',
+    standalone: false
 })
 export class RdioScannerAdminApikeysComponent {
     @Input() form: FormArray | undefined;

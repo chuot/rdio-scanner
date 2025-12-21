@@ -18,35 +18,60 @@
  */
 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Component, Input, QueryList, ViewChildren } from '@angular/core';
+import { Component, Input, QueryList, ViewChildren, OnDestroy } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { FormArray, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { MatSelectChange } from '@angular/material/select';
 import { RdioScannerAdminService } from '../../admin.service';
+import { Subscription } from 'rxjs';
 
 @Component({
     selector: 'rdio-scanner-admin-groups',
     templateUrl: './groups.component.html',
+    standalone: false
 })
-export class RdioScannerAdminGroupsComponent {
-    @Input() form: FormArray | undefined;
+export class RdioScannerAdminGroupsComponent implements OnDestroy {
+    private _form: FormArray | undefined;
+    private formSub: Subscription | undefined;
+    private cachedGroups: FormGroup[] | undefined;
+    private cacheValid = false;
+    readonly leds: string[] = [];
+    readonly alertsArray: string[] = [];
 
-    leds: string[];
+    @Input()
+    set form(value: FormArray | undefined) {
+        this._form = value;
+        this.cacheValid = false;
+        this.cachedGroups = undefined;
+        this.formSub?.unsubscribe();
+        if (this._form) {
+            this.formSub = this._form.valueChanges.subscribe(() => {
+                this.cacheValid = false;
+            });
+        }
+    }
+    get form(): FormArray | undefined {
+        return this._form;
+    }
 
     get alerts(): string[] {
-        return Object.keys(this.adminService.Alerts || {});
-    }   
+        return this.alertsArray;
+    }
 
     get groups(): FormGroup[] {
-        return this.form?.controls
-            .sort((a, b) => a.value.order - b.value.order) as FormGroup[];
+        if (this.cacheValid && this.cachedGroups) return this.cachedGroups;
+        const controls = (this._form?.controls?.slice() || []) as FormGroup[];
+        this.cachedGroups = controls.sort((a, b) => (a.value.order || 0) - (b.value.order || 0));
+        this.cacheValid = true;
+        return this.cachedGroups;
     }
 
     @ViewChildren(MatExpansionPanel) private panels: QueryList<MatExpansionPanel> | undefined;
 
     constructor(private adminService: RdioScannerAdminService, private matDialog: MatDialog) {
         this.leds = this.adminService.getLeds();
+        this.alertsArray = Object.keys(this.adminService.Alerts || {});
     }
 
     add(): void {
@@ -57,6 +82,7 @@ export class RdioScannerAdminGroupsComponent {
         this.form?.insert(0, group);
 
         this.form?.markAsDirty();
+        this.cacheValid = false;
     }
 
     closeAll(): void {
@@ -70,6 +96,7 @@ export class RdioScannerAdminGroupsComponent {
             event.container.data.forEach((dat, idx) => dat.get('order')?.setValue(idx + 1, { emitEvent: false }));
 
             this.form?.markAsDirty();
+            this.cacheValid = false;
         }
     }
 
@@ -81,5 +108,10 @@ export class RdioScannerAdminGroupsComponent {
         this.form?.removeAt(index);
 
         this.form?.markAsDirty();
+        this.cacheValid = false;
+    }
+
+    ngOnDestroy(): void {
+        this.formSub?.unsubscribe();
     }
 }

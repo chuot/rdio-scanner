@@ -27,6 +27,7 @@ import { Log, LogsQuery, LogsQueryOptions, RdioScannerAdminService } from '../ad
     selector: 'rdio-scanner-admin-logs',
     styleUrls: ['./logs.component.scss'],
     templateUrl: './logs.component.html',
+    standalone: false
 })
 export class RdioScannerAdminLogsComponent {
     form: FormGroup;

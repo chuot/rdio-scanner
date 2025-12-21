@@ -36,6 +36,7 @@ import { RdioScannerService } from '../rdio-scanner.service';
         './select.component.scss',
     ],
     templateUrl: './select.component.html',
+    standalone: false
 })
 export class RdioScannerSelectComponent implements OnDestroy {
     categories: RdioScannerCategory[] | undefined;

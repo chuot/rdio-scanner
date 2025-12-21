@@ -1,20 +1,20 @@
 <div class="row top">
-    <p class="mat-body">This is where you define all your systems and talkgroups are defined. Audio files to unknown
-        systems/talkgroups won't be ingested unless the auto populate option is activated. You can also drag and drop
-        systems to rearrange their order.</p>
-    <button type="button" mat-button color="accent" (click)="add()">New system</button>
+  <p class="mat-body">This is where you define all your systems and talkgroups are defined. Audio files to unknown
+    systems/talkgroups won't be ingested unless the auto populate option is activated. You can also drag and drop
+  systems to rearrange their order.</p>
+  <button type="button" mat-button color="accent" (click)="add()">New system</button>
 </div>
-<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="systems" (cdkDropListDropped)="drop($event)">
-    <mat-expansion-panel *ngFor="let system of systems; index as i" [formGroup]="system"
-        (afterCollapse)="systemComponent.closeAll()" cdkDrag>
-        <mat-expansion-panel-header>
-            <mat-panel-title>
-                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
-                {{ system.value.label?.trim() || 'NewSystem' }}
-                <mat-icon *ngIf="system.invalid" color="warn">error</mat-icon>
-            </mat-panel-title>
-        </mat-expansion-panel-header>
-        <rdio-scanner-admin-system #systemComponent [form]="system" (add)="add()" (remove)="remove(i)">
-        </rdio-scanner-admin-system>
-    </mat-expansion-panel>
+<mat-accordion *ngIf="systems" displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]="64" [cdkDropListData]="systems" (cdkDropListDropped)="drop($event)">
+  <mat-expansion-panel *ngFor="let system of systems; let i = index" [formGroup]="system"
+    (afterCollapse)="systemComponent.closeAll()" cdkDrag>
+    <mat-expansion-panel-header>
+      <mat-panel-title>
+        <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+        {{ system.value.label?.trim() || 'NewSystem' }}
+        <mat-icon *ngIf="system.invalid" color="warn">error</mat-icon>
+      </mat-panel-title>
+    </mat-expansion-panel-header>
+    <rdio-scanner-admin-system #systemComponent [form]="system" (add)="add()" (remove)="remove(i)">
+    </rdio-scanner-admin-system>
+  </mat-expansion-panel>
 </mat-accordion>

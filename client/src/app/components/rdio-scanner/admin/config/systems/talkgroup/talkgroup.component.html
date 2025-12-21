@@ -1,168 +1,170 @@
-<ng-container *ngIf="form" [formGroup]="form">
+<ng-container *ngIf="form">
+  <ng-container [formGroup]="form">
     <div class="row">
-        <p>
-            <span class="mat-body">Id</span><br>
-            <span class="mat-caption">Talkgroup identifier in decimal format.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="1" step="1" matInput formControlName="talkgroupRef" placeholder="Id">
-            <mat-error *ngIf="form?.get('talkgroupRef')?.hasError('duplicate')">
-                Id is already defined
-            </mat-error>
-            <mat-error *ngIf="form?.get('talkgroupRef')?.hasError('min')">
-                Id is invalid
-            </mat-error>
-            <mat-error *ngIf="form?.get('talkgroupRef')?.hasError('required')">
-                Id is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Id</span><br>
+        <span class="mat-caption">Talkgroup identifier in decimal format.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="number" min="1" step="1" matInput formControlName="talkgroupRef" placeholder="Id">
+        <mat-error *ngIf="form.get('talkgroupRef')!.hasError('duplicate')">
+          Id is already defined
+        </mat-error>
+        <mat-error *ngIf="form.get('talkgroupRef')!.hasError('min')">
+          Id is invalid
+        </mat-error>
+        <mat-error *ngIf="form.get('talkgroupRef')!.hasError('required')">
+          Id is required
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Label</span><br>
-            <span class="mat-caption">Talkgroup label displayed on the main screen and on buttons.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="text" matInput formControlName="label" placeholder="Label">
-            <mat-error *ngIf="form?.get('label')?.hasError('required')">
-                Label is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Label</span><br>
+        <span class="mat-caption">Talkgroup label displayed on the main screen and on buttons.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="text" matInput formControlName="label" placeholder="Label">
+        <mat-error *ngIf="form.get('label')!.hasError('required')">
+          Label is required
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Name</span><br>
-            <span class="mat-caption">Talkgroup name displayed on the main screen.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="text" matInput formControlName="name" placeholder="Name">
-            <mat-error *ngIf="form?.get('name')?.hasError('required')">
-                Name is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Name</span><br>
+        <span class="mat-caption">Talkgroup name displayed on the main screen.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="text" matInput formControlName="name" placeholder="Name">
+        <mat-error *ngIf="form.get('name')!.hasError('required')">
+          Name is required
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Groups</span><br>
-            <span class="mat-caption">Groups to which this talkgoups belongs.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="groupIds" placeholder="Groups" [multiple]="true">
-                <mat-option *ngFor="let group of groups" [value]="group.id">
-                    {{ group.label }}
-                </mat-option>
-            </mat-select>
-            <mat-error *ngIf="form?.get('groupId')?.hasError('required')">
-                Group is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Groups</span><br>
+        <span class="mat-caption">Groups to which this talkgroups belongs.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="groupIds" placeholder="Groups" [multiple]="true">
+          <mat-option *ngFor="let group of groups" [value]="group.id">
+            {{ group.label }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="form.get('groupIds')?.hasError('required')">
+          Group is required
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Tag</span><br>
-            <span class="mat-caption">Tag to which this talkgoups belongs.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="tagId" placeholder="Tag">
-                <mat-option *ngFor="let tag of tags" [value]="tag.id">
-                    {{ tag.label }}
-                </mat-option>
-            </mat-select>
-            <mat-error *ngIf="form?.get('tagId')?.hasError('required')">
-                Tag is required
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Tag</span><br>
+        <span class="mat-caption">Tag to which this talkgroups belongs.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="tagId" placeholder="Tag">
+          <mat-option *ngFor="let tag of tags" [value]="tag.id">
+            {{ tag.label }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="form.get('tagId')!.hasError('required')">
+          Tag is required
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Audio alert</span><br>
-            <span class="mat-caption">Prefixes an alert sound to all calls assigned from this talkgroup. The alert
-                assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="alert" placeholder="Alert" (selectionChange)="playAlert($event)">
-                <mat-option value="">No Alert</mat-option>
-                <mat-option *ngFor="let alert of alerts" [value]="alert">
-                    {{ alert | titlecase }}
-                </mat-option>
-            </mat-select>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Audio alert</span><br>
+        <span class="mat-caption">Prefixes an alert sound to all calls assigned from this talkgroup. The alert
+        assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="alert" placeholder="Alert" (selectionChange)="playAlert($event.value)">
+          <mat-option value="">No Alert</mat-option>
+          <mat-option *ngFor="let alert of alerts" [value]="alert">
+            {{ alert | titlecase }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Delay</span><br>
-            <span class="mat-caption">Delay in minutes before propagating calls to clients.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="0" step="1" matInput formControlName="delay" placeholder="Minutes">
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Delay</span><br>
+        <span class="mat-caption">Delay in minutes before propagating calls to clients.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="number" min="0" step="1" matInput formControlName="delay" placeholder="Minutes">
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Frequency</span><br>
-            <span class="mat-caption">Fake frequency in hertz displayed on the main screen.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="0" matInput formControlName="frequency" placeholder="Frequency">
-            <mat-error *ngIf="form?.get('frequency')?.errors">
-                Invalid frequency
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Frequency</span><br>
+        <span class="mat-caption">Fake frequency in hertz displayed on the main screen.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="number" min="0" matInput formControlName="frequency" placeholder="Frequency">
+        <mat-error *ngIf="form.get('frequency')?.errors">
+          Invalid frequency
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Led Color</span><br>
-            <span class="mat-caption">The default LED color is green but it can be changed at several levels.
-                The color assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="led" placeholder="Color">
-                <mat-option [value]="''">Default</mat-option>
-                <mat-option *ngFor="let led of leds" [value]="led">
-                    {{ led | titlecase }}
-                </mat-option>
-            </mat-select>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Led Color</span><br>
+        <span class="mat-caption">The default LED color is green but it can be changed at several levels.
+        The color assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="led" placeholder="Color">
+          <mat-option value="">Default</mat-option>
+          <mat-option *ngFor="let led of leds" [value]="led">
+            {{ led | titlecase }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Type</span><br>
-            <span class="mat-caption">
-                Type of radio system that will override the type defined at the system level, if any.
-                <ul>
-                    <li><b>AM</b> - Amplitude modulation.</li>
-                    <li><b>DMR</b> - Digital mobile radio system.</li>
-                    <li><b>FM</b> - Frequency modulation.</li>
-                    <li><b>NFM</b> - Narrow frequency modulation.</li>
-                    <li><b>NXDN</b> - Next Generation Digital Narrowband radio system.</li>
-                    <li><b>P25</b> - APCO-25 radio system.</li>
-                    <li><b>Provoice</b> - EDACS Provoice radio system.</li>
-                    <li><b>SmartNet</b> - Motorola SmartNet radio system.</li>
-                    <li><b>Tetra</b> - Trans european trunked radio system.</li>
-                </ul>
-            </span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="type" placeholder="Type">
-                <mat-option value="">No Type</mat-option>
-                <mat-option value="am">AM</mat-option>
-                <mat-option value="dmr">DMR</mat-option>
-                <mat-option value="fm">FM</mat-option>
-                <mat-option value="nfm">NFM</mat-option>
-                <mat-option value="nxdn">NXDN</mat-option>
-                <mat-option value="p25">P25</mat-option>
-                <mat-option value="provoice">Provoice</mat-option>
-                <mat-option value="smartnet">SmartNet</mat-option>
-                <mat-option value="tetra">Tetra</mat-option>
-            </mat-select>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Type</span><br>
+        <span class="mat-caption">
+          Type of radio system that will override the type defined at the system level, if any.
+          <ul>
+            <li><b>AM</b> - Amplitude modulation.</li>
+            <li><b>DMR</b> - Digital mobile radio system.</li>
+            <li><b>FM</b> - Frequency modulation.</li>
+            <li><b>NFM</b> - Narrow frequency modulation.</li>
+            <li><b>NXDN</b> - Next Generation Digital Narrowband radio system.</li>
+            <li><b>P25</b> - APCO-25 radio system.</li>
+            <li><b>Provoice</b> - EDACS Provoice radio system.</li>
+            <li><b>SmartNet</b> - Motorola SmartNet radio system.</li>
+            <li><b>Tetra</b> - Trans european trunked radio system.</li>
+          </ul>
+        </span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="type" placeholder="Type">
+          <mat-option value="">No Type</mat-option>
+          <mat-option value="am">AM</mat-option>
+          <mat-option value="dmr">DMR</mat-option>
+          <mat-option value="fm">FM</mat-option>
+          <mat-option value="nfm">NFM</mat-option>
+          <mat-option value="nxdn">NXDN</mat-option>
+          <mat-option value="p25">P25</mat-option>
+          <mat-option value="provoice">Provoice</mat-option>
+          <mat-option value="smartnet">SmartNet</mat-option>
+          <mat-option value="tetra">Tetra</mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
     <div class="row bottom">
-        <button *ngIf="form.get('id')?.value" type="button" mat-button (click)="blacklist.emit()">
-            Blacklist talkgroup
-        </button>
-        <button type="button" mat-button color="warn" (click)="remove.emit()">
-            Delete talkgroup
-        </button>
+      <button *ngIf="form.get('id')?.value" type="button" mat-button (click)="blacklist.emit()">
+        Blacklist talkgroup
+      </button>
+      <button type="button" mat-button color="warn" (click)="remove.emit()">
+        Delete talkgroup
+      </button>
     </div>
+  </ng-container>
 </ng-container>

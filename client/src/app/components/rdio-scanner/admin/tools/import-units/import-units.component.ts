@@ -24,6 +24,7 @@ import { Config, RdioScannerAdminService, System } from '../../admin.service';
     selector: 'rdio-scanner-admin-import-units',
     styleUrls: ['./import-units.component.scss'],
     templateUrl: './import-units.component.html',
+    standalone: false
 })
 export class RdioScannerAdminImportUnitsComponent implements OnInit{
     @Output() config = new EventEmitter<Config>();

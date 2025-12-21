@@ -42,6 +42,7 @@ import { RdioScannerSupportComponent } from './support/support.component';
         './main.component.scss',
     ],
     templateUrl: './main.component.html',
+    standalone: false
 })
 export class RdioScannerMainComponent implements OnDestroy, OnInit {
     auth = false;
@@ -530,7 +531,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     }
 
     private isAfsSystem(call: RdioScannerCall): boolean {
-        return (call.systemData?.type == 'provoice' ?? false) || (call.talkgroupData?.type === 'provoice' ?? false);
+        return (call.systemData?.type === 'provoice') || (call.talkgroupData?.type === 'provoice');
     }
 
     private syncClock(): void {

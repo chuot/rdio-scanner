@@ -2,8 +2,17 @@
     <p class="mat-body-2">Please enter the admin password to gain access to the administrative dashboard</p>
     <mat-form-field hideRequiredMarker>
         <mat-label>Password</mat-label>
-        <input matInput formControlName="password" type="password" required>
-        <mat-error>{{ message }}</mat-error>
+        <input
+            matInput
+            formControlName="password"
+            type="password"
+            autocomplete="current-password"
+            [attr.aria-invalid]="form.get('password')?.invalid"
+            required
+        >
+        <mat-error *ngIf="(form.get('password')?.invalid && form.get('password')?.touched) || message">
+            {{ message || 'Password is required' }}
+        </mat-error>
     </mat-form-field>
-    <button mat-raised-button color="primary" type="submit" [disabled]="form.disabled || form.invalid">Login</button>
+    <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || form.disabled">Login</button>
 </form>

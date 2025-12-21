@@ -19,12 +19,12 @@
 
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormGroup } from '@angular/forms';
-import { MatSelectChange } from '@angular/material/select';
 import { RdioScannerAdminService, Group, Tag } from '../../../admin.service';
 
 @Component({
     selector: 'rdio-scanner-admin-talkgroup',
     templateUrl: './talkgroup.component.html',
+    standalone: false
 })
 export class RdioScannerAdminTalkgroupComponent {
     @Input() form: FormGroup | undefined;
@@ -33,25 +33,25 @@ export class RdioScannerAdminTalkgroupComponent {
 
     @Output() remove = new EventEmitter<void>();
 
-    leds: string[];
+    leds: string[] = [];
 
     get alerts(): string[] {
         return Object.keys(this.adminService.Alerts || {});
     }
 
     get groups(): Group[] {
-        return this.form?.root.get('groups')?.value as Group[];
+        return (this.form?.root.get('groups')?.value as Group[]) || [];
     }
 
     get tags(): Tag[] {
-        return this.form?.root.get('tags')?.value as Tag[];
+        return (this.form?.root.get('tags')?.value as Tag[]) || [];
     }
 
     constructor(private adminService: RdioScannerAdminService) {
-        this.leds = this.adminService.getLeds();
+        this.leds = this.adminService.getLeds() || [];
     }
 
-    async playAlert(event: MatSelectChange): Promise<void> {
-        if (event.value) await this.adminService.playAlert(event.value);
+    async playAlert(value: string | null): Promise<void> {
+        if (value) await this.adminService.playAlert(value);
     }
 }

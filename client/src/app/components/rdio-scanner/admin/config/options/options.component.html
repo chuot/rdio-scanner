@@ -1,166 +1,168 @@
-<ng-container *ngIf="form" [formGroup]="form">
+<ng-container *ngIf="form">
+  <ng-container [formGroup]="form">
     <div class="row">
-        <p>
-            <span class="mat-body">12-Hour Time Format</span><br>
-            <span class="mat-caption">Display time stamp in 12-hour format.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="time12hFormat"></mat-slide-toggle>
-        </div>
+      <p>
+        <span class="mat-body">12-Hour Time Format</span><br>
+        <span class="mat-caption">Display time stamp in 12-hour format.</span>
+      </p>
+      <div>
+        <mat-slide-toggle color="primary" formControlName="time12hFormat"></mat-slide-toggle>
+      </div>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Audio Conversion</span><br>
-            <span class="mat-caption">Convert incoming audio files to H.264 m4a with ffmpeg.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="audioConversion" placeholder="Audio Conversion">
-                <mat-option [value]="0">Disabled</mat-option>
-                <mat-option [value]="1">Enabled without normalization</mat-option>
-                <mat-option [value]="2">Enabled with normalization</mat-option>
-                <mat-option [value]="3">Enabled with loud normalization</mat-option>
-            </mat-select>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Audio Conversion</span><br>
+        <span class="mat-caption">Convert incoming audio files to H.264 m4a with ffmpeg.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="audioConversion" placeholder="Audio Conversion">
+          <mat-option [value]="0">Disabled</mat-option>
+          <mat-option [value]="1">Enabled without normalization</mat-option>
+          <mat-option [value]="2">Enabled with normalization</mat-option>
+          <mat-option [value]="3">Enabled with loud normalization</mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Auto Populate</span><br>
-            <span class="mat-caption">Globaly allows the automatic creation of unconfigured systems and
-                talkgroups.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="autoPopulate"></mat-slide-toggle>
-        </div>
+      <p>
+        <span class="mat-body">Auto Populate</span><br>
+        <span class="mat-caption">Globally allows the automatic creation of unconfigured systems and
+        talkgroups.</span>
+      </p>
+      <div>
+        <mat-slide-toggle color="primary" formControlName="autoPopulate"></mat-slide-toggle>
+      </div>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Branding Label</span><br>
-            <span class="mat-caption">A simple line of text displayed above the main screen to help identify the Rdio
-                Scanner instance.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="text" matInput formControlName="branding" placeholder="Branding">
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Branding Label</span><br>
+        <span class="mat-caption">A simple line of text displayed above the main screen to help identify the Rdio
+        Scanner instance.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="text" matInput formControlName="branding" placeholder="Branding">
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Dimmer Delay</span><br>
-            <span class="mat-caption">Delay in milliseconds before turning off the screen backlight when
-                inactive.</span>
-        </p>
-        <mat-form-field>
-            <input type="number" min="0" step="1" matInput formControlName="dimmerDelay">
-            <mat-error *ngIf="form?.get('dimmerDelay')?.hasError('required')">
-                Dimmer delay is required
-            </mat-error>
-            <mat-error *ngIf="form?.get('dimmerDelay')?.hasError('min')">
-                Dimmer delay is invalid
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Dimmer Delay</span><br>
+        <span class="mat-caption">Delay in milliseconds before turning off the screen backlight when
+        inactive.</span>
+      </p>
+      <mat-form-field>
+        <input type="number" min="0" step="1" matInput formControlName="dimmerDelay">
+        <mat-error *ngIf="form.get('dimmerDelay')?.hasError('required')">
+          Dimmer delay is required
+        </mat-error>
+        <mat-error *ngIf="form.get('dimmerDelay')?.hasError('min')">
+          Dimmer delay is invalid
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Disable Duplicate Call Detection</span><br>
-            <span class="mat-caption">Disable duplicate audio file detection.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="disableDuplicateDetection"></mat-slide-toggle>
-        </div>
+      <p>
+        <span class="mat-body">Disable Duplicate Call Detection</span><br>
+        <span class="mat-caption">Disable duplicate audio file detection.</span>
+      </p>
+      <div>
+        <mat-slide-toggle color="primary" formControlName="disableDuplicateDetection"></mat-slide-toggle>
+      </div>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Duplicate Call Detection Time Frame</span><br>
-            <span class="mat-caption">New incoming calls will be rejected if a call already exists in the database with
-                a start time of +/- this delay in milliseconds.</span>
-        </p>
-        <mat-form-field>
-            <input type="number" min="0" step="1" matInput formControlName="duplicateDetectionTimeFrame">
-            <mat-error *ngIf="form?.get('duplicateDetectionTimeFrame')?.hasError('required')">
-                Duplicate call time frame is required
-            </mat-error>
-            <mat-error *ngIf="form?.get('duplicateDetectionTimeFrame')?.hasError('min')">
-                Duplicate call time frame is invalid
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Duplicate Call Detection Time Frame</span><br>
+        <span class="mat-caption">New incoming calls will be rejected if a call already exists in the database with
+        a start time of +/- this delay in milliseconds.</span>
+      </p>
+      <mat-form-field>
+        <input type="number" min="0" step="1" matInput formControlName="duplicateDetectionTimeFrame">
+        <mat-error *ngIf="form.get('duplicateDetectionTimeFrame')?.hasError('required')">
+          Duplicate call time frame is required
+        </mat-error>
+        <mat-error *ngIf="form.get('duplicateDetectionTimeFrame')?.hasError('min')">
+          Duplicate call time frame is invalid
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Email Support</span><br>
-            <span class="mat-caption">Email address where users can write to to get support.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="text" matInput formControlName="email" placeholder="Email">
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Email Support</span><br>
+        <span class="mat-caption">Email address where users can write to to get support.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <input type="text" matInput formControlName="email" placeholder="Email">
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Keypad Beep Style</span><br>
-            <span class="mat-caption">Provide audio feedback when pressing buttons.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <mat-select formControlName="keypadBeeps" placeholder="Style">
-                <mat-option value="uniden">Uniden</mat-option>
-                <mat-option value="whistler">Whistler</mat-option>
-            </mat-select>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Keypad Beep Style</span><br>
+        <span class="mat-caption">Provide audio feedback when pressing buttons.</span>
+      </p>
+      <mat-form-field floatLabel="auto">
+        <mat-select formControlName="keypadBeeps" placeholder="Style">
+          <mat-option value="uniden">Uniden</mat-option>
+          <mat-option value="whistler">Whistler</mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Max Clients</span><br>
-            <span class="mat-caption">Max number of simultaneous clients.</span>
-        </p>
-        <mat-form-field>
-            <input type="number" min="0" step="1" matInput formControlName="maxClients">
-            <mat-error *ngIf="form?.get('maxClients')?.hasError('required')">
-                Max clients is required
-            </mat-error>
-            <mat-error *ngIf="form?.get('maxClients')?.hasError('min')">
-                Max clients is invalid
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Max Clients</span><br>
+        <span class="mat-caption">Max number of simultaneous clients.</span>
+      </p>
+      <mat-form-field>
+        <input type="number" min="0" step="1" matInput formControlName="maxClients">
+        <mat-error *ngIf="form.get('maxClients')?.hasError('required')">
+          Max clients is required
+        </mat-error>
+        <mat-error *ngIf="form.get('maxClients')?.hasError('min')">
+          Max clients is invalid
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Playback Mode Goes Live</span><br>
-            <span class="mat-caption">Playback mode changes to live stream mode when the search list is
-                exhausted.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="playbackGoesLive"></mat-slide-toggle>
-        </div>
+      <p>
+        <span class="mat-body">Playback Mode Goes Live</span><br>
+        <span class="mat-caption">Playback mode changes to live stream mode when the search list is
+        exhausted.</span>
+      </p>
+      <div>
+        <mat-slide-toggle color="primary" formControlName="playbackGoesLive"></mat-slide-toggle>
+      </div>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Prune Days</span><br>
-            <span class="mat-caption">Prune the database for data older than the specified number of days. Set to 0 to
-                disable.</span>
-        </p>
-        <mat-form-field>
-            <input type="number" min="0" step="1" matInput formControlName="pruneDays">
-            <mat-error *ngIf="form?.get('pruneDays')?.hasError('required')">
-                Prune days is required
-            </mat-error>
-            <mat-error *ngIf="form?.get('pruneDays')?.hasError('min')">
-                Prune days is invalid
-            </mat-error>
-        </mat-form-field>
+      <p>
+        <span class="mat-body">Prune Days</span><br>
+        <span class="mat-caption">Prune the database for data older than the specified number of days. Set to 0 to
+        disable.</span>
+      </p>
+      <mat-form-field>
+        <input type="number" min="0" step="1" matInput formControlName="pruneDays">
+        <mat-error *ngIf="form.get('pruneDays')?.hasError('required')">
+          Prune days is required
+        </mat-error>
+        <mat-error *ngIf="form.get('pruneDays')?.hasError('min')">
+          Prune days is invalid
+        </mat-error>
+      </mat-form-field>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Show Listeners Count</span><br>
-            <span class="mat-caption">Show listeners count on main screen.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="showListenersCount"></mat-slide-toggle>
-        </div>
+      <p>
+        <span class="mat-body">Show Listeners Count</span><br>
+        <span class="mat-caption">Show listeners count on main screen.</span>
+      </p>
+      <div>
+        <mat-slide-toggle color="primary" formControlName="showListenersCount"></mat-slide-toggle>
+      </div>
     </div>
     <div class="row">
-        <p>
-            <span class="mat-body">Sort Talkgroups</span><br>
-            <span class="mat-caption">Automatically sort talkgroups by their id.</span>
-        </p>
-        <div>
-            <mat-slide-toggle color="primary" formControlName="sortTalkgroups"></mat-slide-toggle>
-        </div>
+      <p>
+        <span class="mat-body">Sort Talkgroups</span><br>
+        <span class="mat-caption">Automatically sort talkgroups by their id.</span>
+      </p>
+      <div>
+        <mat-slide-toggle color="primary" formControlName="sortTalkgroups"></mat-slide-toggle>
+      </div>
     </div>
+  </ng-container>
 </ng-container>

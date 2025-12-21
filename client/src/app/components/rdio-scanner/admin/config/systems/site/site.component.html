@@ -1,37 +1,43 @@
-<ng-container *ngIf="form" [formGroup]="form">
-    <div class="row">
-        <p>
-            <span class="mat-body">Id</span><br>
-            <span class="mat-caption">Site identifier in decimal format.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="number" min="1" step="1" matInput formControlName="siteRef" placeholder="Id">
-            <mat-error *ngIf="form?.get('siteRef')?.hasError('duplicate')">
-                Id is already defined
-            </mat-error>
-            <mat-error *ngIf="form?.get('siteRef')?.hasError('min')">
-                Id is invalid
-            </mat-error>
-            <mat-error *ngIf="form?.get('siteRef')?.hasError('required')">
-                Id is required
-            </mat-error>
-        </mat-form-field>
-    </div>
-    <div class="row">
-        <p>
-            <span class="mat-body">Label</span><br>
-            <span class="mat-caption">Site label.</span>
-        </p>
-        <mat-form-field floatLabel="auto">
-            <input type="text" matInput formControlName="label" placeholder="Label">
-            <mat-error *ngIf="form?.get('label')?.hasError('required')">
-                Label is required
-            </mat-error>
-        </mat-form-field>
-    </div>
-    <div class="row bottom">
-        <button type="button" mat-button color="warn" (click)="remove.emit()">
-            Delete site
-        </button>
-    </div>
+<ng-container *ngIf="form as f" [formGroup]="f">
+  <div class="row">
+    <p>
+      <span class="mat-body">Id</span><br>
+      <span class="mat-caption">Site identifier in decimal format.</span>
+    </p>
+    <mat-form-field floatLabel="auto">
+      <ng-container *ngIf="f.get('siteRef') as siteRef">
+        <input type="number" min="1" step="1" matInput formControlName="siteRef" placeholder="Id" />
+        <mat-error *ngIf="siteRef.hasError('duplicate')">
+          Id is already defined
+        </mat-error>
+        <mat-error *ngIf="siteRef.hasError('min')">
+          Id is invalid
+        </mat-error>
+        <mat-error *ngIf="siteRef.hasError('required')">
+          Id is required
+        </mat-error>
+      </ng-container>
+    </mat-form-field>
+  </div>
+
+  <div class="row">
+    <p>
+      <span class="mat-body">Label</span><br>
+      <span class="mat-caption">Site label.</span>
+    </p>
+    <mat-form-field floatLabel="auto">
+      <ng-container *ngIf="f.get('label') as labelCtrl">
+        <input type="text" matInput formControlName="label" placeholder="Label" />
+        <mat-error *ngIf="labelCtrl.hasError('required')">
+          Label is required
+        </mat-error>
+      </ng-container>
+    </mat-form-field>
+  </div>
+
+  <div class="row bottom">
+    <button type="button" mat-button color="warn" (click)="remove.emit()">
+      Delete site
+    </button>
+  </div>
 </ng-container>

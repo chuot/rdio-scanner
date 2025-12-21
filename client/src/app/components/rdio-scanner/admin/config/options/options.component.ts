@@ -17,13 +17,19 @@
  * ****************************************************************************
  */
 
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 
 @Component({
     selector: 'rdio-scanner-admin-options',
     templateUrl: './options.component.html',
+    standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class RdioScannerAdminOptionsComponent {
-    @Input() form: FormGroup | undefined;
+    @Input() form: FormGroup | null = null;
+
+    get controls() {
+        return this.form ? this.form.controls : {};
+    }
 }

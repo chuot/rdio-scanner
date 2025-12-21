@@ -37,6 +37,7 @@ import { RdioScannerService } from '../rdio-scanner.service';
     selector: 'rdio-scanner-search',
     styleUrls: ['./search.component.scss'],
     templateUrl: './search.component.html',
+    standalone: false
 })
 export class RdioScannerSearchComponent implements OnDestroy {
     call: RdioScannerCall | undefined;

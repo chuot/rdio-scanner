@@ -27,6 +27,7 @@ import { RdioScannerAdminService, Group, Tag } from '../../../admin.service';
 @Component({
     selector: 'rdio-scanner-admin-system',
     templateUrl: './system.component.html',
+    standalone: false
 })
 export class RdioScannerAdminSystemComponent {
     @Input() form = new FormGroup({});
@@ -47,23 +48,22 @@ export class RdioScannerAdminSystemComponent {
 
     get sites(): FormGroup[] {
         const sites = this.form.get('sites') as FormArray | null;
-
-        return sites?.controls
-            .sort((a, b) => (a.value.order || 0) - (b.value.order || 0)) as FormGroup[];
+        return (sites?.controls as FormGroup[]) || [];
     }
 
     get talkgroups(): FormGroup[] {
         const talkgroups = this.form.get('talkgroups') as FormArray | null;
-
-        return talkgroups?.controls
-            .sort((a, b) => (a.value.order || 0) - (b.value.order || 0)) as FormGroup[];
+        return (talkgroups?.controls as FormGroup[]) || [];
     }
 
     get units(): FormGroup[] {
         const units = this.form.get('units') as FormArray | null;
+        return (units?.controls as FormGroup[]) || [];
+    }
 
-        return units?.controls
-            .sort((a, b) => (a.value.order || 0) - (b.value.order || 0)) as FormGroup[];
+    // trackBy to preserve identity in ngFor lists
+    trackById(_index: number, group: FormGroup): any {
+        return group.get('id')?.value ?? _index;
     }
 
     @ViewChildren(MatExpansionPanel) private panels: QueryList<MatExpansionPanel> | undefined;

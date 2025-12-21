@@ -28,6 +28,7 @@ import { RdioScannerAdminSystemsSelectComponent } from '../systems/select/select
 @Component({
     selector: 'rdio-scanner-admin-downstreams',
     templateUrl: './downstreams.component.html',
+    standalone: false
 })
 export class RdioScannerAdminDownstreamsComponent {
     @Input() form: FormArray | undefined;

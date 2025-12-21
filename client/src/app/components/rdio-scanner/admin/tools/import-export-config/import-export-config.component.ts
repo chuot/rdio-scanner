@@ -17,8 +17,8 @@
  * ****************************************************************************
  */
 
-import { DOCUMENT } from '@angular/common';
-import { Component, EventEmitter, Inject, Output } from '@angular/core';
+
+import { Component, EventEmitter, Inject, Output, DOCUMENT } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Config, RdioScannerAdminService } from '../../admin.service';
 import packageInfo from '../../../../../../../package.json';
@@ -27,6 +27,7 @@ import packageInfo from '../../../../../../../package.json';
     selector: 'rdio-scanner-admin-import-export-config',
     styleUrls: ['./import-export-config.component.scss'],
     templateUrl: './import-export-config.component.html',
+    standalone: false
 })
 export class RdioScannerAdminImportExportConfigComponent {
     @Output() config = new EventEmitter<Config>();

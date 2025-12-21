@@ -18,61 +18,68 @@
  */
 
 import { Component } from '@angular/core';
-import { AbstractControl, FormBuilder, FormGroup, ValidatorFn, ValidationErrors, Validators } from '@angular/forms';
-import { MatSnackBar, MatSnackBarConfig } from '@angular/material/snack-bar';
+import { AbstractControl, FormBuilder, FormGroup, ValidationErrors, Validators } from '@angular/forms';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { RdioScannerAdminService } from '../../admin.service';
 
 @Component({
     selector: 'rdio-scanner-admin-password',
     styleUrls: ['./password.component.scss'],
     templateUrl: './password.component.html',
+    standalone: false
 })
 export class RdioScannerAdminPasswordComponent {
     form: FormGroup;
 
     constructor(
-        private adminService: RdioScannerAdminService,
-        private matSnackBar: MatSnackBar,
-        private ngFormBuilder: FormBuilder,
+        private readonly adminService: RdioScannerAdminService,
+        private readonly matSnackBar: MatSnackBar,
+        private readonly ngFormBuilder: FormBuilder,
     ) {
         this.form = this.ngFormBuilder.group({
             currentPassword: [null, Validators.required],
             newPassword: [null, [Validators.required, Validators.minLength(8)]],
-            verifyNewPassword: [null, [Validators.required, this.validatePassword()]],
-        });
+            verifyNewPassword: [null, Validators.required],
+        }, { validators: this.passwordsMatchValidator });
+
+        this.form.get('newPassword')?.valueChanges.subscribe(() =>
+            this.form.get('verifyNewPassword')?.updateValueAndValidity({ onlySelf: true })
+        );
     }
 
-    private validatePassword(): ValidatorFn {
-        return (control: AbstractControl): ValidationErrors | null => {
-            return typeof control.value === 'string' && control.value.length
-                ? control.value === control.parent?.value.newPassword
-                    ? null : { invalid: true } : null;
-        }
+    private passwordsMatchValidator(group: AbstractControl): ValidationErrors | null {
+        const newPwd = group.get('newPassword')?.value;
+        const verify = group.get('verifyNewPassword')?.value;
+        return newPwd && verify && newPwd !== verify ? { passwordMismatch: true } : null;
     }
+
+    get currentPassword() { return this.form.get('currentPassword'); }
+    get newPassword() { return this.form.get('newPassword'); }
+    get verifyNewPassword() { return this.form.get('verifyNewPassword'); }
 
     reset(): void {
         this.form.reset();
     }
 
     async save(): Promise<void> {
-        const config: MatSnackBarConfig = { duration: 5000 };
-        const currentPassword = this.form.get('currentPassword')?.value;
-        const newPassword = this.form.get('newPassword')?.value;
-
-        this.form.disable();
-
-        try {
-            if (currentPassword && newPassword) {
-                await this.adminService.changePassword(currentPassword, newPassword);
-            }
-
-            this.matSnackBar.open('Password changed successfully', '', config);
-
-            this.form.reset();
-        } catch (_) {
-            this.matSnackBar.open('Unable to change password', '', config);
+        if (this.form.invalid) {
+            this.form.markAllAsTouched();
+            return;
         }
 
-        this.form.enable();
+        const config = { duration: 5000 };
+        const currentPassword = this.currentPassword?.value;
+        const newPassword = this.newPassword?.value;
+
+        this.form.disable();
+        try {
+            await this.adminService.changePassword(currentPassword, newPassword);
+            this.matSnackBar.open('Password changed successfully', '', config);
+            this.form.reset();
+        } catch {
+            this.matSnackBar.open('Unable to change password', '', config);
+        } finally {
+            this.form.enable();
+        }
     }
 }

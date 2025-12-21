@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { HttpClientModule } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { NgModule } from '@angular/core';
 import { AppSharedModule } from '../../../shared/shared.module';
 import { RdioScannerAdminComponent } from './admin.component';
@@ -45,8 +45,7 @@ import { RdioScannerAdminImportTalkgroupsComponent } from './tools/import-talkgr
 import { RdioScannerAdminImportUnitsComponent } from './tools/import-units/import-units.component';
 import { RdioScannerAdminPasswordComponent } from './tools/password/password.component';
 
-@NgModule({
-    declarations: [
+@NgModule({ declarations: [
         RdioScannerAdminComponent,
         RdioScannerAdminConfigComponent,
         RdioScannerAdminAccessComponent,
@@ -71,9 +70,5 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminToolsComponent,
         RdioScannerAdminUnitComponent,
     ],
-    entryComponents: [RdioScannerAdminSystemsSelectComponent],
-    exports: [RdioScannerAdminComponent],
-    imports: [AppSharedModule, HttpClientModule],
-    providers: [RdioScannerAdminService],
-})
+    exports: [RdioScannerAdminComponent], imports: [AppSharedModule], providers: [RdioScannerAdminService, provideHttpClient(withInterceptorsFromDi())] })
 export class RdioScannerAdminModule { }

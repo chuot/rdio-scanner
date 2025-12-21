@@ -1,80 +1,86 @@
 <section>
-    <p class="mat-body">step 1: read the CSV file</p>
-    <p class="text-center">
-        <ng-container *ngIf="csv.length === 0">
-            <button mat-raised-button (click)="input.click()">Read the CSV file</button>
-            <input #input type="file" accept=".csv" style="display: none" (change)="read($event)">
-            <br>
-            <p class="mat-body-1">
-                <span>Column format is: </span>
-                <span>Id</span>,
-                <span>Label</span>,
-            </p>
-        </ng-container>
-        <ng-container *ngIf="csv.length !== 0">
-            <button mat-raised-button (click)="csv=[]">Reset</button>
-        </ng-container>
+  <p class="mat-body">step 1: read the CSV file</p>
+  <p class="text-center">
+    @if (csv.length === 0) {
+      <button mat-raised-button (click)="input.click()">Read the CSV file</button>
+      <input #input type="file" accept=".csv" style="display: none" (change)="read($event)">
+      <br>
+        <p class="mat-body-1">
+          <span>Column format is: </span>
+          <span>Id</span>,
+          <span>Label</span>,
+        </p>
+      }
+      @if (csv.length !== 0) {
+        <button mat-raised-button (click)="csv=[]">Reset</button>
+      }
     </p>
-</section>
+  </section>
 
-<section>
+  <section>
     <p class="mat-body">step 2: select system</p>
     <p class="text-center">
-        <mat-form-field floatLabel="auto">
-            <mat-select [(ngModel)]="system">
-                <mat-option *ngFor="let system of baseConfig.systems" [value]="system">
-                    {{ system.label}}
-                </mat-option>
-            </mat-select>
-        </mat-form-field>
+      <mat-form-field floatLabel="auto">
+        <mat-select [(ngModel)]="system">
+          @for (system of baseConfig.systems; track system) {
+            <mat-option [value]="system">
+              {{ system.label}}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
     </p>
-</section>
+  </section>
 
-<section>
+  <section>
     <p class="mat-body">step 3: review talkgroups to import</p>
     <div class="scroll">
-        <mat-table #table [dataSource]="csv">
-            <ng-container matColumnDef="id">
-                <mat-header-cell *matHeaderCellDef>
-                    <span>Id</span>
-                </mat-header-cell>
-                <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[0] }}</span>
-                </mat-cell>
-            </ng-container>
-            <ng-container matColumnDef="label">
-                <mat-header-cell *matHeaderCellDef>
-                    <span>Label</span>
-                </mat-header-cell>
-                <mat-cell *matCellDef="let tg">
-                    <span>{{ tg[1] }}</span>
-                </mat-cell>
-            </ng-container>
-            <ng-container matColumnDef="action">
-                <mat-header-cell *matHeaderCellDef></mat-header-cell>
-                <mat-cell *matCellDef="let tg; index as i">
-                    <button mat-icon-button (click)="csv.splice(i, 1); table.renderRows()">
-                        <mat-icon>clear</mat-icon>
-                    </button>
-                </mat-cell>
-            </ng-container>
-            <mat-header-row *matHeaderRowDef="tableColumns"></mat-header-row>
-            <mat-row *matRowDef="let row; columns: tableColumns"></mat-row>
-        </mat-table>
+      <mat-table #table [dataSource]="csv">
+        <ng-container matColumnDef="id">
+          <mat-header-cell *matHeaderCellDef>
+            <span>Id</span>
+          </mat-header-cell>
+          <mat-cell *matCellDef="let tg">
+            <span>{{ tg[0] }}</span>
+          </mat-cell>
+        </ng-container>
+        <ng-container matColumnDef="label">
+          <mat-header-cell *matHeaderCellDef>
+            <span>Label</span>
+          </mat-header-cell>
+          <mat-cell *matCellDef="let tg">
+            <span>{{ tg[1] }}</span>
+          </mat-cell>
+        </ng-container>
+        <ng-container matColumnDef="action">
+          <mat-header-cell *matHeaderCellDef></mat-header-cell>
+          <mat-cell *matCellDef="let tg; index as i">
+            <button mat-icon-button (click)="csv.splice(i, 1); table.renderRows()">
+              <mat-icon>clear</mat-icon>
+            </button>
+          </mat-cell>
+        </ng-container>
+        <mat-header-row *matHeaderRowDef="tableColumns"></mat-header-row>
+        <mat-row *matRowDef="let row; columns: tableColumns"></mat-row>
+      </mat-table>
     </div>
-    <p *ngIf="!csv.length" class="mat-body text-center">No CSV data yet</p>
-</section>
+    @if (!csv.length) {
+      <p class="mat-body text-center">No CSV data yet</p>
+    }
+  </section>
 
-<section>
+  <section>
     <p class="mat-body">step 4: import to configuration</p>
     <p class="text-center">
-        <button mat-raised-button [disabled]="!csv.length || system === undefined" (click)="import()">
-            Import to configuration
-        </button>
+      <button mat-raised-button [disabled]="!csv.length || system === undefined" (click)="import()">
+        Import to configuration
+      </button>
     </p>
-    <p *ngIf="csv.length > 1000" class="mat-caption mat-error text-center text-uppercase">
+    @if (csv.length > 1000) {
+      <p class="mat-caption mat-error text-center text-uppercase">
         Warning, you are trying to import more than 1000 units, {{csv.length}} in this case. The graphic interface has
         not designed for this number of units. You can continue, but expect Rdio Scanner to be quite slow, if not
         unusable.
-    </p>
-</section>
+      </p>
+    }
+  </section>

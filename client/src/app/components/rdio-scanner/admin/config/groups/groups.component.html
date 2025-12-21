@@ -1,68 +1,68 @@
 <div class="row top">
-    <p class="mat-body">All system talkgroups must be associated with a group, which is then used to toggle between
-        active talkgroups.</p>
-    <button type="button" mat-button color="accent" (click)="add()">New Group</button>
+  <p class="mat-body">All system talkgroups must be associated with a group, which is then used to toggle between
+  active talkgroups.</p>
+  <button type="button" mat-button color="accent" (click)="add()">New Group</button>
 </div>
-<p *ngIf="!groups?.length" class="mat-small text-center">No defined Groups</p>
+<p *ngIf="!groups.length" class="mat-small text-center">No defined Groups</p>
 <mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="groups"
-    (cdkDropListDropped)="drop($event)">
-    <mat-expansion-panel *ngFor="let group of groups; index as i" cdkDrag>
-        <mat-expansion-panel-header>
-            <mat-panel-title>
-                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
-                {{ group.value.label || 'NewGroup' }}
-                <mat-icon *ngIf="group.invalid" color="warn">error</mat-icon>
-            </mat-panel-title>
-        </mat-expansion-panel-header>
-        <ng-container [formGroup]="group">
-            <div class="row">
-                <p>
-                    <span class="mat-body">Label</span><br>
-                    <span class="mat-caption">Group label displayed on the main screen, on the search panel and on the
-                        select panel.</span>
-                </p>
-                <mat-form-field floatLabel="auto">
-                    <input type="text" matInput formControlName="label" placeholder="Label">
-                    <mat-error *ngIf="form?.get('label')?.hasError('required')">
-                        Label is required
-                    </mat-error>
-                </mat-form-field>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">Audio alert</span><br>
-                    <span class="mat-caption">Prefixes an alert sound to all calls assigned to this group. The alert
-                        assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
-                </p>
-                <mat-form-field floatLabel="auto">
-                    <mat-select formControlName="alert" placeholder="Alert" (selectionChange)="playAlert($event)">
-                        <mat-option value="">No Alert</mat-option>
-                        <mat-option *ngFor="let alert of alerts" [value]="alert">
-                            {{ alert | titlecase }}
-                        </mat-option>
-                    </mat-select>
-                </mat-form-field>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">Led Color</span><br>
-                    <span class="mat-caption">The default LED color is green but it can be changed at several levels.
-                        The color assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
-                </p>
-                <mat-form-field floatLabel="auto">
-                    <mat-select formControlName="led" placeholder="Color">
-                        <mat-option value="">Default</mat-option>
-                        <mat-option *ngFor="let led of leds" [value]="led">
-                            {{ led | titlecase }}
-                        </mat-option>
-                    </mat-select>
-                </mat-form-field>
-            </div>
-            <div class="row bottom">
-                <button type="button" mat-button color="warn" (click)="remove(i)">
-                    Delete Group
-                </button>
-            </div>
-        </ng-container>
-    </mat-expansion-panel>
+  (cdkDropListDropped)="drop($event)">
+  <mat-expansion-panel *ngFor="let group of groups; let i = index" cdkDrag>
+    <mat-expansion-panel-header>
+      <mat-panel-title>
+        <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+        {{ group.value.label || 'NewGroup' }}
+        <mat-icon *ngIf="group.invalid" color="warn">error</mat-icon>
+      </mat-panel-title>
+    </mat-expansion-panel-header>
+    <ng-container [formGroup]="group">
+      <div class="row">
+        <p>
+          <span class="mat-body">Label</span><br>
+          <span class="mat-caption">Group label displayed on the main screen, on the search panel and on the
+          select panel.</span>
+        </p>
+        <mat-form-field floatLabel="auto">
+          <input type="text" matInput formControlName="label" placeholder="Label">
+          <mat-error *ngIf="group.get('label')!.hasError('required')">
+            Label is required
+          </mat-error>
+        </mat-form-field>
+      </div>
+      <div class="row">
+        <p>
+          <span class="mat-body">Audio alert</span><br>
+          <span class="mat-caption">Prefixes an alert sound to all calls assigned to this group. The alert
+          assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
+        </p>
+        <mat-form-field floatLabel="auto">
+          <mat-select formControlName="alert" placeholder="Alert" (selectionChange)="playAlert($event)">
+            <mat-option value="">No Alert</mat-option>
+            <mat-option *ngFor="let alert of alerts" [value]="alert">
+              {{ alert | titlecase }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <div class="row">
+        <p>
+          <span class="mat-body">Led Color</span><br>
+          <span class="mat-caption">The default LED color is green but it can be changed at several levels.
+          The color assignment order is as follows: Group -> Tag -> System -> Talkgroup.</span>
+        </p>
+        <mat-form-field floatLabel="auto">
+          <mat-select formControlName="led" placeholder="Color">
+            <mat-option value="">Default</mat-option>
+            <mat-option *ngFor="let led of leds" [value]="led">
+              {{ led | titlecase }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <div class="row bottom">
+        <button type="button" mat-button color="warn" (click)="remove(i)">
+          Delete Group
+        </button>
+      </div>
+    </ng-container>
+  </mat-expansion-panel>
 </mat-accordion>

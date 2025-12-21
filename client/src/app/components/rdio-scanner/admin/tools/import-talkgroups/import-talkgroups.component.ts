@@ -24,6 +24,7 @@ import { Config, RdioScannerAdminService, System } from '../../admin.service';
     selector: 'rdio-scanner-admin-import-talkgroups',
     styleUrls: ['./import-talkgroups.component.scss'],
     templateUrl: './import-talkgroups.component.html',
+    standalone: false
 })
 export class RdioScannerAdminImportTalkgroupsComponent implements OnInit {
     @Output() config = new EventEmitter<Config>();

@@ -25,6 +25,7 @@ import { timer } from 'rxjs';
     selector: 'RdioScannerNative',
     styleUrls: ['./native.component.scss'],
     templateUrl: './native.component.html',
+    standalone: false
 })
 export class RdioScannerNativeComponent implements OnInit {
     countdown = 10;

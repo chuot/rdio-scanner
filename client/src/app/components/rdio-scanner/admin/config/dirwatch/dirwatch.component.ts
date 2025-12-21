@@ -26,6 +26,7 @@ import { RdioScannerAdminService } from '../../admin.service';
 @Component({
     selector: 'rdio-scanner-admin-dirwatch',
     templateUrl: './dirwatch.component.html',
+    standalone: false
 })
 export class RdioScannerAdminDirwatchComponent implements OnChanges {
     @Input() form: FormArray | undefined;

@@ -17,15 +17,17 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, ChangeDetectionStrategy, EventEmitter, Input, Output } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 
 @Component({
     selector: 'rdio-scanner-admin-unit',
     templateUrl: './unit.component.html',
+    standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class RdioScannerAdminUnitComponent {
-    @Input() form: FormGroup | undefined;
+    @Input() form: FormGroup | null = null;
 
-    @Output() remove = new EventEmitter<void>();
+    @Output() readonly remove = new EventEmitter<void>();
 }

@@ -1,81 +1,101 @@
 <div class="row top">
-    <p class="mat-body">Ingested audio calls can be sent downstream to other instances.</p>
-    <button type="button" mat-button color="accent" (click)="add()">New downstream</button>
+  <p class="mat-body">Ingested audio calls can be sent downstream to other instances.</p>
+  <button type="button" mat-button color="accent" (click)="add()">New downstream</button>
 </div>
-<p *ngIf="!downstreams.length" class="mat-small text-center">No defined downstreams</p>
+@if (!downstreams.length) {
+  <p class="mat-small text-center">No defined downstreams</p>
+}
 <mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="downstreams" (cdkDropListDropped)="drop($event)">
-    <mat-expansion-panel *ngFor="let downstream of downstreams; index as i" cdkDrag>
-        <mat-expansion-panel-header>
-            <mat-panel-title>
-                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
-                {{ downstream.value.url || 'NewDownstream' }}
-                <mat-icon *ngIf="downstream.invalid" color="warn">error</mat-icon>
-            </mat-panel-title>
-        </mat-expansion-panel-header>
-        <ng-container [formGroup]="downstream">
-            <div class="row">
-                <p>
-                    <span class="mat-body">Disabled</span><br>
-                    <span class="mat-caption">Disable the downstream.</span>
-                </p>
-                <div>
-                    <mat-slide-toggle color="primary" formControlName="disabled"></mat-slide-toggle>
-                </div>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">API Key</span><br>
-                    <span class="mat-caption">Api key of the remote instance.</span>
-                </p>
-                <mat-form-field floatLabel="auto">
-                    <input #key type="text" matInput formControlName="apikey" placeholder="API key">
-                    <mat-error *ngIf="downstream.get('apikey')?.hasError('duplicate')">
-                        API key is already defined
-                    </mat-error>
-                    <mat-error *ngIf="downstream.get('apikey')?.hasError('required')">
-                        API key is required
-                    </mat-error>
-                </mat-form-field>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">URL</span><br>
-                    <span class="mat-caption">URL of the remote instance.</span>
-                </p>
-                <mat-form-field floatLabel="auto">
-                    <input type="text" matInput formControlName="url" placeholder="URL">
-                    <mat-error *ngIf="downstream.get('url')?.hasError('required')">
-                        URL is required
-                    </mat-error>
-                    <mat-error *ngIf="downstream.get('url')?.hasError('invalid')">
-                        URL is invalid
-                    </mat-error>
-                    <mat-error *ngIf="downstream.get('url')?.hasError('duplicate')">
-                        URL is already defined
-                    </mat-error>
-                </mat-form-field>
-            </div>
-            <div class="row">
-                <p>
-                    <span class="mat-body">Access</span><br>
-                    <span class="mat-caption">
-                        This downstream allows access to <u>
-                            <ng-container *ngIf="downstream.value.systems === '*'">all</ng-container>
-                            <ng-container *ngIf="downstream.value.systems !== '*'">some</ng-container>
-                        </u> systems and talkgroups.
-                    </span>
-                </p>
-                <div>
-                    <button type="button" mat-button [disabled]="downstream.disabled" (click)="select(downstream)">
-                        Choose systems
-                    </button>
-                </div>
-            </div>
-            <div class="row bottom">
-                <button type="button" mat-button color="warn" (click)="remove(i)">
-                    Delete downstream
-                </button>
-            </div>
-        </ng-container>
-    </mat-expansion-panel>
+  @for (downstream of downstreams; track downstream; let i = $index) {
+    <mat-expansion-panel cdkDrag>
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+          {{ downstream.value.url || 'NewDownstream' }}
+          @if (downstream.invalid) {
+            <mat-icon color="warn">error</mat-icon>
+          }
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+      <ng-container [formGroup]="downstream">
+        <div class="row">
+          <p>
+            <span class="mat-body">Disabled</span><br>
+            <span class="mat-caption">Disable the downstream.</span>
+          </p>
+          <div>
+            <mat-slide-toggle color="primary" formControlName="disabled"></mat-slide-toggle>
+          </div>
+        </div>
+        <div class="row">
+          <p>
+            <span class="mat-body">API Key</span><br>
+            <span class="mat-caption">Api key of the remote instance.</span>
+          </p>
+          <mat-form-field floatLabel="auto">
+            <input #key type="text" matInput formControlName="apikey" placeholder="API key">
+            @if (downstream.get('apikey')?.hasError('duplicate')) {
+              <mat-error>
+                API key is already defined
+              </mat-error>
+            }
+            @if (downstream.get('apikey')?.hasError('required')) {
+              <mat-error>
+                API key is required
+              </mat-error>
+            }
+          </mat-form-field>
+        </div>
+        <div class="row">
+          <p>
+            <span class="mat-body">URL</span><br>
+            <span class="mat-caption">URL of the remote instance.</span>
+          </p>
+          <mat-form-field floatLabel="auto">
+            <input type="text" matInput formControlName="url" placeholder="URL">
+            @if (downstream.get('url')?.hasError('required')) {
+              <mat-error>
+                URL is required
+              </mat-error>
+            }
+            @if (downstream.get('url')?.hasError('invalid')) {
+              <mat-error>
+                URL is invalid
+              </mat-error>
+            }
+            @if (downstream.get('url')?.hasError('duplicate')) {
+              <mat-error>
+                URL is already defined
+              </mat-error>
+            }
+          </mat-form-field>
+        </div>
+        <div class="row">
+          <p>
+            <span class="mat-body">Access</span><br>
+            <span class="mat-caption">
+              This downstream allows access to <u>
+              @if (downstream.value.systems === '*') {
+                all
+              }
+              @if (downstream.value.systems !== '*') {
+                some
+              }
+            </u> systems and talkgroups.
+          </span>
+        </p>
+        <div>
+          <button type="button" mat-button [disabled]="downstream.disabled" (click)="select(downstream)">
+            Choose systems
+          </button>
+        </div>
+      </div>
+      <div class="row bottom">
+        <button type="button" mat-button color="warn" (click)="remove(i)">
+          Delete downstream
+        </button>
+      </div>
+    </ng-container>
+  </mat-expansion-panel>
+}
 </mat-accordion>

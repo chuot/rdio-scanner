@@ -29,6 +29,7 @@ import { RdioScannerNativeComponent } from './native/native.component';
     selector: 'rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
+    standalone: false
 })
 export class RdioScannerComponent implements OnDestroy, OnInit {
     private eventSubscription;

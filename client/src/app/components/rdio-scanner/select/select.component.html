@@ -1,39 +1,47 @@
-<fieldset *ngIf="categories?.length && (categories?.length || 0) >= 2" class="fieldset">
+@if (categories?.length && (categories?.length || 0) >= 2) {
+  <fieldset class="fieldset">
     <div>
-        <button *ngFor="let category of categories" class="rdio-button" [ngClass]="category.status"
-            (click)="toggle(category)">
-            {{ category.label }}
+      @for (category of categories; track category) {
+        <button class="rdio-button" [ngClass]="category.status"
+          (click)="toggle(category)">
+          {{ category.label }}
         </button>
-        <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
-            OFF
-        </button>
-        <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
-            ON
-        </button>
+      }
+      <button class="rdio-button-mini all-off" (click)="avoid({ all: false })">
+        OFF
+      </button>
+      <button class="rdio-button-mini all-on" (click)="avoid({ all: true })">
+        ON
+      </button>
     </div>
-</fieldset>
-<ng-container *ngFor="let system of systems">
-    <fieldset *ngIf="system.talkgroups.length" class="fieldset">
-        <legend>
-            {{ system.label }}
-        </legend>
-        <div>
-            <button *ngFor="let talkgroup of system.talkgroups" class="rdio-button"
-                [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]).active, on: map[system.id] && map[system.id][talkgroup.id].active, blink: map[system.id][talkgroup.id].minutes }"
-                (click)="avoid({ system: system, talkgroup: talkgroup })">
-                {{ talkgroup.label }}
-            </button>
-            <ng-container *ngIf="system.talkgroups.length > 1">
-                <button class="rdio-button-mini all-off" (click)="avoid({ system: system, status: false })">
-                    OFF
-                </button>
-                <button class="rdio-button-mini all-on" (click)="avoid({ system: system, status: true })">
-                    ON
-                </button>
-            </ng-container>
-        </div>
+  </fieldset>
+}
+@for (system of systems; track system) {
+  @if (system.talkgroups.length) {
+    <fieldset class="fieldset">
+      <legend>
+        {{ system.label }}
+      </legend>
+      <div>
+        @for (talkgroup of system.talkgroups; track talkgroup) {
+          <button class="rdio-button"
+            [ngClass]="{ off: !(map[system.id] && map[system.id][talkgroup.id]).active, on: map[system.id] && map[system.id][talkgroup.id].active, blink: map[system.id][talkgroup.id].minutes }"
+            (click)="avoid({ system: system, talkgroup: talkgroup })">
+            {{ talkgroup.label }}
+          </button>
+        }
+        @if (system.talkgroups.length > 1) {
+          <button class="rdio-button-mini all-off" (click)="avoid({ system: system, status: false })">
+            OFF
+          </button>
+          <button class="rdio-button-mini all-on" (click)="avoid({ system: system, status: true })">
+            ON
+          </button>
+        }
+      </div>
     </fieldset>
-</ng-container>
-<ng-container *ngIf="systems?.length === 0">
-    No talkgroup configured!
-</ng-container>
+  }
+}
+@if (systems?.length === 0) {
+  No talkgroup configured!
+}
