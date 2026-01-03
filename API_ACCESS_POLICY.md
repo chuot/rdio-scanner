@@ -49,4 +49,4 @@ Violation of these terms may result in:
 
 ### 7. Contact
 For authorization requests or questions, contact:  
-<rdio-scanner@saubeo.solutions>[mailto:rdio-scanner@saubeo.solutions]
+[rdio-scanner@saubeo.solutions](mailto:rdio-scanner@saubeo.solutions)
