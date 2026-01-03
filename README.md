@@ -67,4 +67,10 @@ You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the 
 [![Available on the App Store](./docs/images/app-store-badge.png?raw=true)](https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone)
 [![Get it on Google Play](./docs/images/google-play-badge.png?raw=true)](https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner)
 
+**Important Notice:**  
+
+> This project is licensed under the GNU GPL. However, the **WebSocket API** provided by this software is **restricted** and reserved exclusively for **Saubeo Solutions and its native applications**.  
+> Unauthorized use of the WebSocket API is strictly prohibited.  
+> For details, see [API_ACCESS_POLICY.md](API_ACCESS_POLICY.md).
+
 **Happy Rdio scanning !**
