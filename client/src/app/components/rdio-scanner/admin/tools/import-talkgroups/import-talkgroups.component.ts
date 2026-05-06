@@ -167,9 +167,23 @@ export class RdioScannerAdminImportTalkgroupsComponent {
                 return;
             }
 
-            this.csv = parseCsv(reader.result)
-                .filter((row) => row.length > 0 && /^[0-9]+$/.test(row[0]))
+            const rows = parseCsv(reader.result);
+            const accepted = rows
+                .map((row) => row.map((cell) => (typeof cell === 'string' ? cell.trim() : cell)))
+                .filter((row) => row.length > 0 && /^\d+$/.test(row[0]))
                 .filter((row, idx, arr) => arr.findIndex((other) => other[0] === row[0]) === idx);
+
+            this.csv = accepted;
+
+            if (accepted.length === 0) {
+                this.matSnackBar.open(
+                    `No talkgroup rows recognized in that CSV. ${rows.length} non-empty lines parsed; row 0 must start with a numeric talkgroup id.`,
+                    '',
+                    { duration: 7000 },
+                );
+            } else {
+                this.matSnackBar.open(`Loaded ${accepted.length} talkgroup row(s) from CSV.`, '', { duration: 4000 });
+            }
         };
 
         reader.readAsText(file);

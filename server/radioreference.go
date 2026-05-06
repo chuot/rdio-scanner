@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	radioReferenceEndpoint = "https://api.radioreference.com/soap2/"
-	radioReferenceVersion  = "15"
+	radioReferenceEndpoint = "https://api.radioreference.com/soap2/index.php"
+	radioReferenceVersion  = "latest"
 	radioReferenceMaxBody  = 25 * 1024 * 1024
 	radioReferenceTimeout  = 60 * time.Second
 )
@@ -54,6 +54,7 @@ type RadioReferenceTalkgroup struct {
 	Descr    string
 	Tag      string
 	Category string
+	Enc      bool
 }
 
 type rrEnvelope struct {
@@ -62,10 +63,9 @@ type rrEnvelope struct {
 }
 
 type rrBody struct {
-	Fault                  *rrFault                  `xml:"Fault"`
-	GetTalkgroupsResp      *rrGetTalkgroupsResp      `xml:"getTalkgroupsResponse"`
-	GetTalkgroupCatsResp   *rrGetTalkgroupCatsResp   `xml:"getTalkgroupCatsResponse"`
-	GetTalkgroupTagsResp   *rrGetTalkgroupTagsResp   `xml:"getTalkgroupTagsResponse"`
+	Fault                   *rrFault                   `xml:"Fault"`
+	GetTrsTalkgroupsResp    *rrGetTrsTalkgroupsResp    `xml:"getTrsTalkgroupsResponse"`
+	GetTrsTalkgroupCatsResp *rrGetTrsTalkgroupCatsResp `xml:"getTrsTalkgroupCatsResponse"`
 }
 
 type rrFault struct {
@@ -73,7 +73,7 @@ type rrFault struct {
 	String string `xml:"faultstring"`
 }
 
-type rrGetTalkgroupsResp struct {
+type rrGetTrsTalkgroupsResp struct {
 	Return rrTalkgroupsReturn `xml:"return"`
 }
 
@@ -81,17 +81,29 @@ type rrTalkgroupsReturn struct {
 	Items []rrTalkgroupData `xml:"item"`
 }
 
+// rrTalkgroupData mirrors the Talkgroup type defined in the RR WSDL. Tags are
+// embedded inline (no separate getTalkgroupTags call exists or is needed).
 type rrTalkgroupData struct {
-	TgDec   uint   `xml:"tgDec"`
-	TgHex   string `xml:"tgHex"`
-	TgAlpha string `xml:"tgAlpha"`
-	TgMode  string `xml:"tgMode"`
-	TgDescr string `xml:"tgDescr"`
-	TgTag   uint   `xml:"tgTag"`
-	TgCat   uint   `xml:"tgCat"`
+	TgId    uint    `xml:"tgId"`
+	TgDec   uint    `xml:"tgDec"`
+	TgAlpha string  `xml:"tgAlpha"`
+	TgMode  string  `xml:"tgMode"`
+	TgDescr string  `xml:"tgDescr"`
+	Enc     uint    `xml:"enc"`
+	TgCid   uint    `xml:"tgCid"`
+	Tags    rrTags  `xml:"tags"`
 }
 
-type rrGetTalkgroupCatsResp struct {
+type rrTags struct {
+	Items []rrTag `xml:"item"`
+}
+
+type rrTag struct {
+	TagId    uint   `xml:"tagId"`
+	TagDescr string `xml:"tagDescr"`
+}
+
+type rrGetTrsTalkgroupCatsResp struct {
 	Return rrCatsReturn `xml:"return"`
 }
 
@@ -104,26 +116,13 @@ type rrCatData struct {
 	TgCname string `xml:"tgCname"`
 }
 
-type rrGetTalkgroupTagsResp struct {
-	Return rrTagsReturn `xml:"return"`
-}
-
-type rrTagsReturn struct {
-	Items []rrTagData `xml:"item"`
-}
-
-type rrTagData struct {
-	TgTid    uint   `xml:"tgTid"`
-	TgTdescr string `xml:"tgTdescr"`
-}
-
 func radioReferenceSoapEnvelope(method string, params string) string {
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
 		`<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"`+
 		` xmlns:xsd="http://www.w3.org/2001/XMLSchema"`+
 		` xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"`+
 		` xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/"`+
-		` xmlns:tns="http://api.radioreference.com/soap2/"`+
+		` xmlns:tns="http://api.radioreference.com/soap2"`+
 		` SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">`+
 		`<SOAP-ENV:Body>`+
 		`<tns:%s>%s</tns:%s>`+
@@ -203,13 +202,13 @@ func radioReferenceFetchTalkgroups(ctx context.Context, creds *RadioReferenceCre
 	body := fmt.Sprintf(`%s<sid xsi:type="xsd:int">%d</sid>`, auth, sid)
 
 	var env rrEnvelope
-	if err := radioReferenceCall(ctx, "getTalkgroups", body, &env); err != nil {
+	if err := radioReferenceCall(ctx, "getTrsTalkgroups", body, &env); err != nil {
 		return nil, err
 	}
-	if env.Body.GetTalkgroupsResp == nil {
-		return nil, errors.New("radioreference: empty getTalkgroups response")
+	if env.Body.GetTrsTalkgroupsResp == nil {
+		return nil, errors.New("radioreference: empty getTrsTalkgroups response")
 	}
-	return env.Body.GetTalkgroupsResp.Return.Items, nil
+	return env.Body.GetTrsTalkgroupsResp.Return.Items, nil
 }
 
 func radioReferenceFetchCats(ctx context.Context, creds *RadioReferenceCredentials, sid uint) (map[uint]string, error) {
@@ -217,39 +216,36 @@ func radioReferenceFetchCats(ctx context.Context, creds *RadioReferenceCredentia
 	body := fmt.Sprintf(`%s<sid xsi:type="xsd:int">%d</sid>`, auth, sid)
 
 	var env rrEnvelope
-	if err := radioReferenceCall(ctx, "getTalkgroupCats", body, &env); err != nil {
+	if err := radioReferenceCall(ctx, "getTrsTalkgroupCats", body, &env); err != nil {
 		return nil, err
 	}
 
 	out := map[uint]string{}
-	if env.Body.GetTalkgroupCatsResp != nil {
-		for _, item := range env.Body.GetTalkgroupCatsResp.Return.Items {
+	if env.Body.GetTrsTalkgroupCatsResp != nil {
+		for _, item := range env.Body.GetTrsTalkgroupCatsResp.Return.Items {
 			out[item.TgCid] = item.TgCname
 		}
 	}
 	return out, nil
 }
 
-func radioReferenceFetchTags(ctx context.Context, creds *RadioReferenceCredentials, sid uint) (map[uint]string, error) {
-	auth := radioReferenceAuthBlock(creds)
-	body := fmt.Sprintf(`%s<sid xsi:type="xsd:int">%d</sid>`, auth, sid)
-
-	var env rrEnvelope
-	if err := radioReferenceCall(ctx, "getTalkgroupTags", body, &env); err != nil {
-		return nil, err
-	}
-
-	out := map[uint]string{}
-	if env.Body.GetTalkgroupTagsResp != nil {
-		for _, item := range env.Body.GetTalkgroupTagsResp.Return.Items {
-			out[item.TgTid] = item.TgTdescr
+// joinTags joins all inline tag descriptions for a talkgroup. RR allows a
+// talkgroup to carry multiple tags; we surface the first one as the primary
+// "Tag" label (so the existing CSV import flow has a single value to use)
+// and the description-style "Untagged" fallback when the talkgroup has none.
+func joinTags(tags []rrTag) string {
+	for _, t := range tags {
+		if d := strings.TrimSpace(t.TagDescr); d != "" {
+			return d
 		}
 	}
-	return out, nil
+	return "Untagged"
 }
 
 // RadioReferenceImportTalkgroups fetches all talkgroups for a Radio Reference
-// system id and resolves the numeric tag/category ids to label strings.
+// trunked-system id (sid). Tag descriptions are taken from the inline `tags`
+// list on each Talkgroup record; category names come from the separate
+// getTrsTalkgroupCats call.
 func RadioReferenceImportTalkgroups(creds *RadioReferenceCredentials, sid uint) ([]RadioReferenceTalkgroup, error) {
 	if creds == nil || strings.TrimSpace(creds.Username) == "" || creds.Password == "" || strings.TrimSpace(creds.AppKey) == "" {
 		return nil, errors.New("radioreference: credentials are required")
@@ -268,42 +264,31 @@ func RadioReferenceImportTalkgroups(creds *RadioReferenceCredentials, sid uint) 
 
 	cats, err := radioReferenceFetchCats(ctx, creds, sid)
 	if err != nil {
-		// non-fatal: keep numeric ids if we can't resolve names
+		// Non-fatal: degrade to "Category N" labels rather than failing the
+		// whole import if only the category lookup is the part that fails.
 		cats = map[uint]string{}
-	}
-
-	tags, err := radioReferenceFetchTags(ctx, creds, sid)
-	if err != nil {
-		tags = map[uint]string{}
 	}
 
 	out := make([]RadioReferenceTalkgroup, 0, len(talkgroups))
 	for _, t := range talkgroups {
-		tagLabel, ok := tags[t.TgTag]
-		if !ok || tagLabel == "" {
-			if t.TgTag == 0 {
-				tagLabel = "Untagged"
-			} else {
-				tagLabel = fmt.Sprintf("Tag %d", t.TgTag)
-			}
-		}
-		catLabel, ok := cats[t.TgCat]
-		if !ok || catLabel == "" {
-			if t.TgCat == 0 {
+		catLabel, ok := cats[t.TgCid]
+		if !ok || strings.TrimSpace(catLabel) == "" {
+			if t.TgCid == 0 {
 				catLabel = "Unknown"
 			} else {
-				catLabel = fmt.Sprintf("Category %d", t.TgCat)
+				catLabel = fmt.Sprintf("Category %d", t.TgCid)
 			}
 		}
 
 		out = append(out, RadioReferenceTalkgroup{
 			Dec:      t.TgDec,
-			Hex:      t.TgHex,
+			Hex:      fmt.Sprintf("%X", t.TgDec),
 			Alpha:    t.TgAlpha,
 			Mode:     t.TgMode,
 			Descr:    t.TgDescr,
-			Tag:      tagLabel,
+			Tag:      joinTags(t.Tags.Items),
 			Category: catLabel,
+			Enc:      t.Enc != 0,
 		})
 	}
 

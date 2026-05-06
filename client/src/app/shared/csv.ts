@@ -24,6 +24,14 @@
 // Empty lines are dropped. The previous regex-based splitter would corrupt
 // any field that contained a comma even when properly quoted.
 export function parseCsv(input: string): string[][] {
+    // Strip UTF-8 BOM. Spreadsheets (Excel, Numbers, Notepad on Windows) write
+    // CSVs that start with U+FEFF, which would otherwise end up as the first
+    // character of column 0 and quietly break any "starts with a digit"
+    // validation downstream.
+    if (input.charCodeAt(0) === 0xFEFF) {
+        input = input.slice(1);
+    }
+
     const rows: string[][] = [];
     let row: string[] = [];
     let field = '';

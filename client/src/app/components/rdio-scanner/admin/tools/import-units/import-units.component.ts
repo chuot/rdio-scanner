@@ -18,6 +18,7 @@
  */
 
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { parseCsv } from '../../../../../shared/csv';
 import { Config, RdioScannerAdminService, System } from '../../admin.service';
 
@@ -37,7 +38,10 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
 
     tableColumns = ['id', 'label', 'action'];
 
-    constructor(private adminService: RdioScannerAdminService) { }
+    constructor(
+        private adminService: RdioScannerAdminService,
+        private matSnackBar: MatSnackBar,
+    ) { }
 
     async ngOnInit(): Promise<void> {
         this.baseConfig = await this.adminService.getConfig();
@@ -79,9 +83,23 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
                 return;
             }
 
-            this.csv = parseCsv(reader.result)
-                .filter((row) => row.length > 0 && /^[0-9]+$/.test(row[0]))
+            const rows = parseCsv(reader.result);
+            const accepted = rows
+                .map((row) => row.map((cell) => (typeof cell === 'string' ? cell.trim() : cell)))
+                .filter((row) => row.length > 0 && /^\d+$/.test(row[0]))
                 .filter((row, idx, arr) => arr.findIndex((other) => other[0] === row[0]) === idx);
+
+            this.csv = accepted;
+
+            if (accepted.length === 0) {
+                this.matSnackBar.open(
+                    `No unit rows recognized in that CSV. ${rows.length} non-empty lines parsed; column 0 must be a numeric unit id.`,
+                    '',
+                    { duration: 7000 },
+                );
+            } else {
+                this.matSnackBar.open(`Loaded ${accepted.length} unit row(s) from CSV.`, '', { duration: 4000 });
+            }
         };
 
         reader.readAsText(file);
