@@ -18,7 +18,13 @@
  */
 
 import { Component, EventEmitter, Output } from '@angular/core';
-import { Config, RdioScannerAdminService } from '../../admin.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import {
+    Config,
+    RadioReferenceImportRequest,
+    RadioReferenceTalkgroup,
+    RdioScannerAdminService,
+} from '../../admin.service';
 
 @Component({
     selector: 'rdio-scanner-admin-import-talkgroups',
@@ -40,7 +46,67 @@ export class RdioScannerAdminImportTalkgroupsComponent {
 
     tableColumns = ['id', 'label', 'description', 'tag', 'group', 'action'];
 
-    constructor(private adminService: RdioScannerAdminService) { }
+    rrForm: RadioReferenceImportRequest = {
+        username: '',
+        password: '',
+        appKey: '',
+        sid: 0,
+    };
+
+    rrFetching = false;
+
+    constructor(
+        private adminService: RdioScannerAdminService,
+        private matSnackBar: MatSnackBar,
+    ) { }
+
+    async fetchFromRadioReference(): Promise<void> {
+        const username = (this.rrForm.username || '').trim();
+        const password = this.rrForm.password || '';
+        const appKey = (this.rrForm.appKey || '').trim();
+        const sid = Number(this.rrForm.sid);
+
+        if (!username || !password || !appKey || !Number.isFinite(sid) || sid <= 0) {
+            this.matSnackBar.open('Username, password, app key and a numeric system id are required.', '', { duration: 5000 });
+            return;
+        }
+
+        this.rrFetching = true;
+
+        try {
+            const talkgroups = await this.adminService.importRadioReferenceTalkgroups({
+                username, password, appKey, sid,
+            });
+
+            if (!talkgroups.length) {
+                this.matSnackBar.open('No talkgroups returned for that system.', '', { duration: 5000 });
+                return;
+            }
+
+            // Map RR records into the radioreference.com CSV column layout
+            // expected by mode=1: [DEC, HEX, AlphaTag, Mode, Description, Tag, Category]
+            this.csv = talkgroups.map((tg: RadioReferenceTalkgroup) => [
+                String(tg.id ?? ''),
+                tg.hex || '',
+                tg.alphaTag || '',
+                tg.mode || '',
+                tg.description || '',
+                tg.tag || '',
+                tg.group || '',
+            ]).filter((row) => /^[0-9]+$/.test(row[0]));
+
+            this.mode = 1;
+
+            this.matSnackBar.open(`Loaded ${this.csv.length} talkgroups from Radio Reference.`, '', { duration: 4000 });
+
+        } catch (err: unknown) {
+            const message = this.extractError(err);
+            this.matSnackBar.open(`Radio Reference import failed: ${message}`, '', { duration: 7000 });
+
+        } finally {
+            this.rrFetching = false;
+        }
+    }
 
     async import(): Promise<void> {
         const config = await this.adminService.getConfig();
@@ -107,6 +173,16 @@ export class RdioScannerAdminImportTalkgroupsComponent {
                 .filter((tg, idx, arr) => arr.findIndex((a) => a[0] === tg[0]) === idx);
         };
 
-        reader.readAsBinaryString(file);
+        reader.readAsText(file);
+    }
+
+    private extractError(err: unknown): string {
+        if (err && typeof err === 'object') {
+            const e = err as { error?: { error?: string }; message?: string; statusText?: string };
+            if (e.error?.error) return e.error.error;
+            if (e.message) return e.message;
+            if (e.statusText) return e.statusText;
+        }
+        return 'unknown error';
     }
 }

@@ -1,5 +1,5 @@
 <section>
-    <p class="mat-body">step 1: read the CSV file</p>
+    <p class="mat-body">step 1: read the CSV file or fetch from Radio Reference</p>
     <p class="text-center">
         <ng-container *ngIf="csv.length === 0">
             <button mat-raised-button (click)="input.click()">Read the CSV file</button>
@@ -9,6 +9,39 @@
             <button mat-raised-button (click)="csv=[]">Reset</button>
         </ng-container>
     </p>
+    <fieldset class="rr-fieldset" [disabled]="csv.length !== 0 || rrFetching">
+        <legend class="mat-caption">Radio Reference import</legend>
+        <p class="mat-caption">
+            Pull talkgroups directly from radioreference.com using your Radio Reference account
+            and registered application key. Credentials are sent only to your server and are not stored.
+        </p>
+        <div class="rr-grid">
+            <mat-form-field appearance="fill">
+                <mat-label>RR Username</mat-label>
+                <input matInput type="text" autocomplete="username" [(ngModel)]="rrForm.username" name="rrUsername">
+            </mat-form-field>
+            <mat-form-field appearance="fill">
+                <mat-label>RR Password</mat-label>
+                <input matInput type="password" autocomplete="current-password" [(ngModel)]="rrForm.password" name="rrPassword">
+            </mat-form-field>
+            <mat-form-field appearance="fill">
+                <mat-label>App Key</mat-label>
+                <input matInput type="text" autocomplete="off" [(ngModel)]="rrForm.appKey" name="rrAppKey">
+            </mat-form-field>
+            <mat-form-field appearance="fill">
+                <mat-label>System ID (sid)</mat-label>
+                <input matInput type="number" min="1" [(ngModel)]="rrForm.sid" name="rrSid">
+            </mat-form-field>
+        </div>
+        <p class="text-center">
+            <button mat-raised-button color="primary"
+                [disabled]="rrFetching || csv.length !== 0"
+                (click)="fetchFromRadioReference()">
+                <ng-container *ngIf="!rrFetching">Fetch from Radio Reference</ng-container>
+                <ng-container *ngIf="rrFetching">Fetching...</ng-container>
+            </button>
+        </p>
+    </fieldset>
 </section>
 
 <section>

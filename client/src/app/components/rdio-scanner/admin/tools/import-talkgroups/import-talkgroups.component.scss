@@ -33,3 +33,25 @@
 .text-uppercase {
   text-transform: uppercase;
 }
+
+.rr-fieldset {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 4px;
+  margin-top: 1rem;
+  padding: 0.5rem 1rem 1rem;
+
+  legend {
+    padding: 0 0.5rem;
+  }
+}
+
+.rr-grid {
+  display: grid;
+  gap: 0.5rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 0.5rem;
+
+  mat-form-field {
+    width: 100%;
+  }
+}

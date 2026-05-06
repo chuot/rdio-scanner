@@ -120,6 +120,8 @@ func main() {
 
 	http.HandleFunc("/api/admin/password", controller.Admin.PasswordHandler)
 
+	http.HandleFunc("/api/admin/radio-reference/talkgroups", controller.Admin.RadioReferenceTalkgroupsHandler)
+
 	http.HandleFunc("/api/admin/user-add", controller.Admin.UserAddHandler)
 
 	http.HandleFunc("/api/admin/user-remove", controller.Admin.UserRemoveHandler)

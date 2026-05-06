@@ -118,7 +118,7 @@ var defaults Defaults = Defaults{
 	systems: []System{},
 	tags: []string{
 		"Air Traffic Control",
-		"Emergency ",
+		"Emergency",
 		"Fire Dispatch",
 		"Fire Tac",
 		"Fire Talk",

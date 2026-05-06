@@ -24,8 +24,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +37,14 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func strconvAtoiUint(s string) (uint, error) {
+	n, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint(n), nil
+}
 
 type Admin struct {
 	Attempts         AdminLoginAttempts
@@ -61,7 +71,7 @@ func NewAdmin(controller *Controller) *Admin {
 	return &Admin{
 		Attempts:         AdminLoginAttempts{},
 		AttemptsMax:      uint(3),
-		AttemptsMaxDelay: time.Duration(time.Duration.Minutes(10)),
+		AttemptsMaxDelay: 10 * time.Minute,
 		Broadcast:        make(chan *[]byte),
 		Conns:            make(map[*websocket.Conn]bool),
 		Controller:       controller,
@@ -384,7 +394,17 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		attempt := admin.Attempts[remoteAddr]
 
-		if attempt == nil {
+		if attempt != nil && attempt.Count >= admin.AttemptsMax && time.Since(attempt.Date) < admin.AttemptsMaxDelay {
+			if attempt.Count == admin.AttemptsMax {
+				attempt.Count++
+				admin.Controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many login attempts for ip=\"%v\"", remoteAddr))
+			}
+
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if attempt == nil || time.Since(attempt.Date) >= admin.AttemptsMaxDelay {
 			admin.Attempts[remoteAddr] = &AdminLoginAttempt{
 				Count: 1,
 				Date:  time.Now(),
@@ -393,15 +413,6 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			attempt.Count++
 			attempt.Date = time.Now()
-		}
-
-		if attempt.Count > admin.AttemptsMax || time.Since(attempt.Date) < admin.AttemptsMaxDelay {
-			if attempt.Count == admin.AttemptsMax+1 {
-				admin.Controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many login attempts for ip=\"%v\"", remoteAddr))
-			}
-
-			w.WriteHeader(http.StatusUnauthorized)
-			return
 		}
 
 		ok := false
@@ -420,6 +431,8 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+
+		delete(admin.Attempts, remoteAddr)
 
 		id, err := uuid.NewRandom()
 
@@ -443,7 +456,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		b, err := json.Marshal(map[string]any{
-			"passwordNeedChange": true,
+			"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
 			"token":              sToken,
 		})
 		if err != nil {
@@ -597,6 +610,89 @@ func (admin *Admin) Start() error {
 	}()
 
 	return nil
+}
+
+func (admin *Admin) RadioReferenceTalkgroupsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		t := admin.GetAuthorization(r)
+		if !admin.ValidateToken(t) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		m := map[string]any{}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&m); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		creds := &RadioReferenceCredentials{}
+		if v, ok := m["username"].(string); ok {
+			creds.Username = strings.TrimSpace(v)
+		}
+		if v, ok := m["password"].(string); ok {
+			creds.Password = v
+		}
+		if v, ok := m["appKey"].(string); ok {
+			creds.AppKey = strings.TrimSpace(v)
+		}
+
+		var sid uint
+		switch v := m["sid"].(type) {
+		case float64:
+			if v > 0 {
+				sid = uint(v)
+			}
+		case string:
+			s := strings.TrimSpace(v)
+			if s != "" {
+				if n, err := strconvAtoiUint(s); err == nil {
+					sid = n
+				}
+			}
+		}
+
+		if creds.Username == "" || creds.Password == "" || creds.AppKey == "" || sid == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			b, _ := json.Marshal(map[string]any{"error": "username, password, appKey and sid are required"})
+			w.Write(b)
+			return
+		}
+
+		talkgroups, err := RadioReferenceImportTalkgroups(creds, sid)
+		if err != nil {
+			admin.Controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("admin.radioreference.import: %s", err.Error()))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			b, _ := json.Marshal(map[string]any{"error": err.Error()})
+			w.Write(b)
+			return
+		}
+
+		out := make([]map[string]any, 0, len(talkgroups))
+		for _, tg := range talkgroups {
+			out = append(out, map[string]any{
+				"id":          tg.Dec,
+				"hex":         tg.Hex,
+				"alphaTag":    tg.Alpha,
+				"mode":        tg.Mode,
+				"description": tg.Descr,
+				"tag":         tg.Tag,
+				"group":       tg.Category,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		b, _ := json.Marshal(map[string]any{"talkgroups": out})
+		w.Write(b)
+
+		admin.Controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("imported %d talkgroups from Radio Reference sid=%d", len(out), sid))
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 func (admin *Admin) UserAddHandler(w http.ResponseWriter, r *http.Request) {

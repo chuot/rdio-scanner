@@ -188,6 +188,24 @@ enum url {
     logout = 'logout',
     logs = 'logs',
     password = 'password',
+    radioReferenceTalkgroups = 'radio-reference/talkgroups',
+}
+
+export interface RadioReferenceTalkgroup {
+    id: number;
+    hex?: string;
+    alphaTag?: string;
+    mode?: string;
+    description?: string;
+    tag?: string;
+    group?: string;
+}
+
+export interface RadioReferenceImportRequest {
+    username: string;
+    password: string;
+    appKey: string;
+    sid: number;
 }
 
 const SESSION_STORAGE_KEY = 'rdio-scanner-admin-token';
@@ -339,6 +357,16 @@ export class RdioScannerAdminService implements OnDestroy {
 
             return false;
         }
+    }
+
+    async importRadioReferenceTalkgroups(request: RadioReferenceImportRequest): Promise<RadioReferenceTalkgroup[]> {
+        const res = await firstValueFrom(this.ngHttpClient.post<{ talkgroups: RadioReferenceTalkgroup[] }>(
+            this.getUrl(url.radioReferenceTalkgroups),
+            request,
+            { headers: this.getHeaders(), responseType: 'json' },
+        ));
+
+        return res?.talkgroups || [];
     }
 
     async logout(): Promise<boolean> {
