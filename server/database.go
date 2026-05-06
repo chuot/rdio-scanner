@@ -47,7 +47,15 @@ func NewDatabase(config *Config) *Database {
 	case DbTypeSqlite:
 		database.DateTimeFormat = "2006-01-02 15:04:05.000 -07:00"
 
-		dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout%%3d10000", config.GetDbFilePath())
+		// WAL mode lets searches run concurrently with the call-ingest writer
+		// (multiple readers + one writer instead of single-threaded). The
+		// busy timeout is needed because multiple ingest workers may try to
+		// write at once and SQLite serializes writers; without it they'd
+		// fail immediately with SQLITE_BUSY.
+		dsn := fmt.Sprintf(
+			"file:%s?_pragma=busy_timeout%%3d10000&_pragma=journal_mode%%3dwal&_pragma=synchronous%%3dnormal&_pragma=foreign_keys%%3don",
+			config.GetDbFilePath(),
+		)
 
 		if database.Sql, err = sql.Open("sqlite", dsn); err != nil {
 			log.Fatal(err)

@@ -12,6 +12,27 @@ are unchanged, and no new mandatory configuration is required.
 
 ## What's new in this fork
 
+### Performance
+- **Parallel call ingestion.** Upstream feeds the entire ingest channel
+  through a single goroutine, so FFmpeg conversion and the call DB write
+  for one upload block every other recorder behind it. The fork splits
+  ingestion into a serial *prepare* stage (auto-populate, dup check —
+  protects shared state) and a parallel *finalize* stage (FFmpeg + per-row
+  insert + broadcast) running across `min(NumCPU, 16)` workers. Tune with
+  the `ingest_workers` flag / ini key (0 = auto). The chosen worker count
+  and `GOMAXPROCS` are logged at startup and in the admin Logs panel.
+- **SQLite WAL mode + per-call DB concurrency.** SQLite is now opened with
+  `journal_mode=WAL` and `synchronous=NORMAL`, and the global `Calls`
+  mutex around `WriteCall` / `Search` / `CheckDuplicate` / `Prune` is gone.
+  Searches no longer block ingestion and vice versa, and multiple ingest
+  workers can write concurrently. Existing databases auto-migrate to WAL
+  on first start; you'll see `rdio-scanner.db-wal` and `.db-shm` files
+  appear next to the main DB — that is normal.
+- **Hot SQL paths now use parameterized queries.** `CheckDuplicate` and
+  `GetCall` previously interpolated values via `fmt.Sprintf` (defensible
+  but slower because the driver has to re-prepare each time and harder
+  for static analysis). They now use `?` placeholders.
+
 ### Features
 - **Radio Reference talkgroup import** — Admin → Tools → *Import Talkgroups*
   now has a "Radio Reference" panel where you enter your RR username, password,
@@ -33,6 +54,9 @@ are unchanged, and no new mandatory configuration is required.
   is ignored, so a direct client cannot spoof the header to dodge the per-IP
   admin login lockout. Turn it on only when rdio-scanner sits behind a
   trusted reverse proxy.
+- **`ingest_workers` knob** — CLI: `-ingest_workers=N`, ini:
+  `ingest_workers = N`. Sets the parallel-finalize worker count for call
+  ingestion. `0` (default) picks `min(NumCPU, 16)`.
 
 ### Bug fixes
 - **Admin login lockout actually works.** Upstream defined the lockout

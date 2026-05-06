@@ -57,6 +57,7 @@ type Config struct {
 	SslKeyFile       string
 	SslListen        string
 	TrustProxy       bool
+	IngestWorkers    uint
 	daemon           *Daemon
 	newAdminPassword string
 }
@@ -110,6 +111,7 @@ func NewConfig() *Config {
 	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
 	flag.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
 	flag.BoolVar(&config.TrustProxy, "trust_proxy", false, "trust X-Forwarded-For header (only enable if you run rdio-scanner behind a trusted reverse proxy)")
+	flag.UintVar(&config.IngestWorkers, "ingest_workers", 0, "number of parallel call-ingest workers; 0 picks min(NumCPU,16)")
 	flag.Parse()
 
 	if !config.isBaseDirWritable() {
@@ -182,6 +184,10 @@ func NewConfig() *Config {
 
 			if v, e := cfg.Section("").Key("trust_proxy").Bool(); e == nil {
 				config.TrustProxy = v
+			}
+
+			if v, e := cfg.Section("").Key("ingest_workers").Uint(); e == nil {
+				config.IngestWorkers = v
 			}
 		}
 

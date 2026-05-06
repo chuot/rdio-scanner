@@ -27,9 +27,32 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"time"
 )
+
+const ingestWorkerCap = 16
+
+// resolveIngestWorkers picks the parallel-ingest worker count, clamped so a
+// stray config value cannot DoS the box.
+func resolveIngestWorkers(configured uint) int {
+	if configured > 0 {
+		n := int(configured)
+		if n > ingestWorkerCap*4 {
+			n = ingestWorkerCap * 4
+		}
+		return n
+	}
+	n := runtime.NumCPU()
+	if n < 2 {
+		n = 2
+	}
+	if n > ingestWorkerCap {
+		n = ingestWorkerCap
+	}
+	return n
+}
 
 type Controller struct {
 	Admin       *Admin
@@ -96,13 +119,37 @@ func (controller *Controller) EmitConfig() {
 	go controller.Admin.BroadcastConfig()
 }
 
+// ingestPrepared carries the resolved system/talkgroup/group/tag pointers for
+// the parallel finalize stage so it doesn't have to look them up again.
+type ingestPrepared struct {
+	call      *Call
+	system    *System
+	talkgroup *Talkgroup
+	group     *Group
+	tag       *Tag
+}
+
+// IngestCall keeps the original public signature so existing call sites
+// (no parallelism) still work; it just runs prepare + finalize back to back.
+// The Start() loop uses prepareIngest + finalizeIngest separately so the
+// CPU-heavy finalize step (FFmpeg + DB write) can run in parallel across
+// many goroutines while the shared-state mutations stay serial.
 func (controller *Controller) IngestCall(call *Call) {
+	if prepared, ok := controller.prepareIngest(call); ok {
+		controller.finalizeIngest(prepared)
+	}
+}
+
+// prepareIngest runs the parts of ingestion that mutate shared state
+// (Systems / Groups / Tags / Talkgroups / Units autopopulate and config
+// rewrite). It must run on a single goroutine. Returns ok=false if the
+// call should be dropped (blacklisted, no matching talkgroup, or error).
+func (controller *Controller) prepareIngest(call *Call) (*ingestPrepared, bool) {
 	var (
 		err        error
 		group      *Group
 		groupId    uint
 		groupLabel string
-		id         uint
 		ok         bool
 		populated  bool
 		system     *System
@@ -123,7 +170,7 @@ func (controller *Controller) IngestCall(call *Call) {
 	if system, ok = controller.Systems.GetSystem(call.System); ok {
 		if system.Blacklists.IsBlacklisted(call.Talkgroup) {
 			logCall(call, LogLevelInfo, "blacklisted")
-			return
+			return nil, false
 		}
 		talkgroup, _ = system.Talkgroups.GetTalkgroup(call.Talkgroup)
 	}
@@ -169,17 +216,17 @@ func (controller *Controller) IngestCall(call *Call) {
 
 				if err = controller.Groups.Write(controller.Database); err != nil {
 					logError(err)
-					return
+					return nil, false
 				}
 
 				if err = controller.Groups.Read(controller.Database); err != nil {
 					logError(err)
-					return
+					return nil, false
 				}
 
 				if group, ok = controller.Groups.GetGroup(groupLabel); !ok {
 					logError(fmt.Errorf("unable to get group %s", groupLabel))
-					return
+					return nil, false
 				}
 			}
 
@@ -188,7 +235,7 @@ func (controller *Controller) IngestCall(call *Call) {
 				groupId = v
 			default:
 				logError(fmt.Errorf("unable to get group id for group %s", groupLabel))
-				return
+				return nil, false
 			}
 
 			if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
@@ -198,17 +245,17 @@ func (controller *Controller) IngestCall(call *Call) {
 
 				if err = controller.Tags.Write(controller.Database); err != nil {
 					logError(err)
-					return
+					return nil, false
 				}
 
 				if err = controller.Tags.Read(controller.Database); err != nil {
 					logError(err)
-					return
+					return nil, false
 				}
 
 				if tag, ok = controller.Tags.GetTag(tagLabel); !ok {
 					logError(fmt.Errorf("unable to get tag %s", tagLabel))
-					return
+					return nil, false
 				}
 			}
 
@@ -217,7 +264,7 @@ func (controller *Controller) IngestCall(call *Call) {
 				tagId = v
 			default:
 				logError(fmt.Errorf("unable to get tag id for tag %s", tagLabel))
-				return
+				return nil, false
 			}
 
 			talkgroup = &Talkgroup{
@@ -262,12 +309,12 @@ func (controller *Controller) IngestCall(call *Call) {
 	if populated {
 		if err = controller.Systems.Write(controller.Database); err != nil {
 			logError(err)
-			return
+			return nil, false
 		}
 
 		if err = controller.Systems.Read(controller.Database); err != nil {
 			logError(err)
-			return
+			return nil, false
 		}
 
 		controller.EmitConfig()
@@ -275,45 +322,72 @@ func (controller *Controller) IngestCall(call *Call) {
 
 	if system == nil || talkgroup == nil {
 		logCall(call, LogLevelWarn, "no matching system/talkgroup")
-		return
+		return nil, false
 	}
 
+	// Duplicate detection sees the database in its current state. A duplicate
+	// is rejected here so we don't waste an FFmpeg conversion on it.
 	if !controller.Options.DisableDuplicateDetection {
 		if controller.Calls.CheckDuplicate(call, controller.Options.DuplicateDetectionTimeFrame, controller.Database) {
 			logCall(call, LogLevelWarn, "duplicate call rejected")
-			return
+			return nil, false
 		}
+	}
+
+	return &ingestPrepared{
+		call:      call,
+		system:    system,
+		talkgroup: talkgroup,
+		group:     group,
+		tag:       tag,
+	}, true
+}
+
+// finalizeIngest runs the CPU/IO-heavy parts: FFmpeg conversion, DB write of
+// the call row, and broadcast to listeners. It only reads shared state
+// through methods that already lock internally, so it is safe to run from
+// many goroutines in parallel.
+func (controller *Controller) finalizeIngest(p *ingestPrepared) {
+	call := p.call
+	system := p.system
+	talkgroup := p.talkgroup
+	group := p.group
+	tag := p.tag
+
+	logCall := func(level, message string) {
+		controller.Logs.LogEvent(level, fmt.Sprintf("newcall: system=%v talkgroup=%v file=%v %v", call.System, call.Talkgroup, call.AudioName, message))
 	}
 
 	if err := controller.FFMpeg.Convert(call, controller.Systems, controller.Tags, controller.Options.AudioConversion); err != nil {
 		controller.Logs.LogEvent(LogLevelWarn, err.Error())
 	}
 
-	if id, err = controller.Calls.WriteCall(call, controller.Database); err == nil {
-		call.Id = id
-		call.systemLabel = system.Label
-		call.talkgroupLabel = talkgroup.Label
-		call.talkgroupName = talkgroup.Name
-
-		if group == nil {
-			if group, ok = controller.Groups.GetGroup(talkgroup.GroupId); ok {
-				call.talkgroupGroup = group.Label
-			}
-		}
-
-		if tag == nil {
-			if tag, ok = controller.Tags.GetTag(talkgroup.TagId); ok {
-				call.talkgroupTag = tag.Label
-			}
-		}
-
-		logCall(call, LogLevelInfo, "success")
-
-		controller.EmitCall(call)
-
-	} else {
-		logError(err)
+	id, err := controller.Calls.WriteCall(call, controller.Database)
+	if err != nil {
+		controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("controller.ingestcall: %v", err.Error()))
+		return
 	}
+
+	call.Id = id
+	call.systemLabel = system.Label
+	call.talkgroupLabel = talkgroup.Label
+	call.talkgroupName = talkgroup.Name
+
+	if group == nil {
+		if g, ok := controller.Groups.GetGroup(talkgroup.GroupId); ok {
+			call.talkgroupGroup = g.Label
+		}
+	}
+
+	if tag == nil {
+		if t, ok := controller.Tags.GetTag(talkgroup.TagId); ok {
+			call.talkgroupTag = t.Label
+		}
+	}
+
+	logCall(LogLevelInfo, "success")
+
+	controller.EmitCall(call)
 }
 
 func (controller *Controller) LogClientsCount() {
@@ -525,12 +599,35 @@ func (controller *Controller) Start() error {
 		controller.Terminate()
 	}()
 
+	// Ingest pipeline:
+	//   Ingest channel -> 1 prepare goroutine (autopopulate, dup check, all
+	//   shared-state writes) -> N finalize workers (FFmpeg + per-call DB
+	//   insert + broadcast). The prepare stage is serial because the
+	//   shared state mutations are not fully lock-protected. The finalize
+	//   stage only reads through locked accessors, so it runs in parallel
+	//   across CPU cores.
+	workers := resolveIngestWorkers(controller.Config.IngestWorkers)
+	finalizeQueue := make(chan *ingestPrepared, 8192)
+
+	controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("call ingest: %d worker(s), GOMAXPROCS=%d, NumCPU=%d", workers, runtime.GOMAXPROCS(0), runtime.NumCPU()))
+	log.Printf("call ingest: %d worker(s), GOMAXPROCS=%d, NumCPU=%d\n", workers, runtime.GOMAXPROCS(0), runtime.NumCPU())
+
 	go func() {
-		for {
-			call := <-controller.Ingest
-			controller.IngestCall(call)
+		for call := range controller.Ingest {
+			if prepared, ok := controller.prepareIngest(call); ok {
+				finalizeQueue <- prepared
+			}
 		}
+		close(finalizeQueue)
 	}()
+
+	for i := 0; i < workers; i++ {
+		go func() {
+			for prepared := range finalizeQueue {
+				controller.finalizeIngest(prepared)
+			}
+		}()
+	}
 
 	go func() {
 		const (

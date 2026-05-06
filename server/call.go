@@ -130,15 +130,14 @@ func NewCalls() *Calls {
 func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) bool {
 	var count uint
 
-	calls.mutex.Lock()
-	defer calls.mutex.Unlock()
-
 	d := time.Duration(msTimeFrame) * time.Millisecond
-	from := call.DateTime.Add(-d)
-	to := call.DateTime.Add(d)
+	from := call.DateTime.Add(-d).Format(db.DateTimeFormat)
+	to := call.DateTime.Add(d).Format(db.DateTimeFormat)
 
-	query := fmt.Sprintf("select count(*) from `rdioScannerCalls` where (`dateTime` between '%v' and '%v') and `system` = %v and `talkgroup` = %v", from, to, call.System, call.Talkgroup)
-	if err := db.Sql.QueryRow(query).Scan(&count); err != nil {
+	if err := db.Sql.QueryRow(
+		"select count(*) from `rdioScannerCalls` where `dateTime` between ? and ? and `system` = ? and `talkgroup` = ?",
+		from, to, call.System, call.Talkgroup,
+	).Scan(&count); err != nil {
 		return false
 	}
 
@@ -158,13 +157,10 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 		t           time.Time
 	)
 
-	calls.mutex.Lock()
-	defer calls.mutex.Unlock()
-
 	call := Call{Id: id}
 
-	query := fmt.Sprintf("select `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = %v", id)
-	err := db.Sql.QueryRow(query).Scan(&call.Audio, &audioName, &audioType, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &call.System, &call.Talkgroup)
+	query := "select `audio`, `audioName`, `audioType`, `DateTime`, `frequencies`, `frequency`, `patches`, `source`, `sources`, `system`, `talkgroup` from `rdioScannerCalls` where `id` = ?"
+	err := db.Sql.QueryRow(query, id).Scan(&call.Audio, &audioName, &audioType, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &call.System, &call.Talkgroup)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("getcall: %v, %v", err, query)
 	}
@@ -213,9 +209,6 @@ func (calls *Calls) GetCall(id uint, db *Database) (*Call, error) {
 }
 
 func (calls *Calls) Prune(db *Database, pruneDays uint) error {
-	calls.mutex.Lock()
-	defer calls.mutex.Unlock()
-
 	date := time.Now().Add(-24 * time.Hour * time.Duration(pruneDays)).Format(db.DateTimeFormat)
 	_, err := db.Sql.Exec("delete from `rdioScannerCalls` where `dateTime` < ?", date)
 
@@ -240,9 +233,6 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		t        time.Time
 		where    string = "true"
 	)
-
-	calls.mutex.Lock()
-	defer calls.mutex.Unlock()
 
 	db := client.Controller.Database
 
@@ -439,9 +429,6 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint, error) {
 		res         sql.Result
 		sources     string
 	)
-
-	calls.mutex.Lock()
-	defer calls.mutex.Unlock()
 
 	formatError := func(err error) error {
 		return fmt.Errorf("call.write: %s", err.Error())
