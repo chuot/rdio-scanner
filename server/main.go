@@ -26,10 +26,10 @@ import (
 	"io"
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -119,6 +119,10 @@ func main() {
 	http.HandleFunc("/api/admin/logs", controller.Admin.LogsHandler)
 
 	http.HandleFunc("/api/admin/password", controller.Admin.PasswordHandler)
+
+	http.HandleFunc("/api/admin/database/compact", controller.Admin.DatabaseCompactHandler)
+
+	http.HandleFunc("/api/admin/database/prune", controller.Admin.DatabasePruneHandler)
 
 	http.HandleFunc("/api/admin/radio-reference/talkgroups", controller.Admin.RadioReferenceTalkgroupsHandler)
 
@@ -258,16 +262,36 @@ func main() {
 	}
 }
 
-func GetRemoteAddr(r *http.Request) string {
-	re := regexp.MustCompile(`(.+):.*$`)
+// stripPort removes the trailing ":port" from a host string and trims
+// surrounding whitespace, returning the bare IP/hostname. It treats both
+// IPv4 ("1.2.3.4:5") and bracketed IPv6 ("[::1]:5") forms; bare addresses
+// without a port are returned untouched.
+func stripPort(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return addr
+	}
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
+}
 
-	for _, addr := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-		if ip := re.ReplaceAllString(addr, "$1"); len(ip) > 0 {
-			return ip
+// GetRemoteAddr returns the best-effort source address for a request.
+// X-Forwarded-For is only honored when trustProxy is true, otherwise the
+// header can be spoofed by any client and used to bypass per-IP limits
+// like the admin login lockout.
+func GetRemoteAddr(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if ip := stripPort(parts[0]); ip != "" {
+				return ip
+			}
 		}
 	}
 
-	if ip := re.ReplaceAllString(r.RemoteAddr, "$1"); len(ip) > 0 {
+	if ip := stripPort(r.RemoteAddr); ip != "" {
 		return ip
 	}
 

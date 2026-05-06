@@ -1,8 +1,90 @@
 ![Rdio Scanner](./docs/images/rdio-scanner.png?raw=true)
 
-# What is it ? 
-this fork is just me using claude ai to fix issues
-and add features. USE AT YOUR OWN RISK
+# This fork (evilgenius79/rdio-scanner)
+
+> This fork is just me using Claude AI to fix issues and add features.
+> **USE AT YOUR OWN RISK.**
+
+This is a community fork that adds quality-of-life features and fixes a number of
+issues found in the upstream codebase. Everything here is upstream-compatible —
+existing rdio-scanner.db files keep working, all original recorder integrations
+are unchanged, and no new mandatory configuration is required.
+
+## What's new in this fork
+
+### Features
+- **Radio Reference talkgroup import** — Admin → Tools → *Import Talkgroups*
+  now has a "Radio Reference" panel where you enter your RR username, password,
+  registered app key and a system id, and the server pulls talkgroups,
+  categories and tags directly from radioreference.com via SOAP. Categories and
+  tags are resolved to label strings before they are dropped into the existing
+  review-and-import flow. Credentials are sent only to your own server and are
+  never stored on disk.
+- **Database maintenance panel** — Admin → Tools → *Database maintenance* gives
+  you two new actions:
+  - **Compact database** — runs `VACUUM` on SQLite or `OPTIMIZE TABLE` on
+    MySQL/MariaDB so disk space is actually returned to the OS after pruning
+    or removing systems (addresses upstream issue #513).
+  - **Prune old calls** — manually deletes calls older than the configured
+    retention window, or a number of days you specify, without waiting for
+    the scheduled prune.
+- **Trusted proxy mode** — new `trust_proxy` flag (CLI: `-trust_proxy=true`,
+  ini: `trust_proxy = true`). When **off** (the default), `X-Forwarded-For`
+  is ignored, so a direct client cannot spoof the header to dodge the per-IP
+  admin login lockout. Turn it on only when rdio-scanner sits behind a
+  trusted reverse proxy.
+
+### Bug fixes
+- **Admin login lockout actually works.** Upstream defined the lockout
+  delay as `time.Duration(time.Duration.Minutes(10))`, which is roughly **16
+  nanoseconds**, and gated the lockout with `||` so it triggered on every
+  request. The fork applies a real 10-minute window, locks after the
+  configured number of failures, logs the threshold once and clears the
+  counter on a successful login.
+- **`passwordNeedChange` is honest.** Upstream hardcoded
+  `passwordNeedChange: true` in the login response. The fork returns the real
+  server state.
+- **Audio conversion default no longer overwrites `MaxClients`.** A
+  copy-paste typo in `options.go` was assigning the audio-conversion default
+  to `MaxClients`. Fixed.
+- **Default `Emergency` tag** no longer has a trailing space.
+- **JWT admin tokens have an `exp` claim** (24 h). Expired tokens fail
+  validation automatically.
+- **DirWatch `#UNIT` mask placeholder is finally derived correctly**
+  (addresses upstream issue #532). Upstream's `parseMask` only appended to
+  `call.Sources` and skipped the case where it was the zero value, so the
+  unit was silently dropped. The fork sets the call's primary source,
+  appends to the sources list and registers the unit on the system's Units
+  list via the autopopulate path so it shows up in the UI and downstream.
+- **Multipart `source`/`sources` ingestion** — `call.Source` was being
+  written as `int` (so the `case uint:` consumer in the downstream forwarder
+  silently dropped it) and the `sources` handler had a shadowed `units`
+  variable that meant tagged units were never actually added. Fixed.
+- **CSV importer no longer corrupts quoted commas.** Upstream's CSV parser
+  was a regex that split on `,` blindly and stripped only the outermost
+  `"` characters, so any field containing a `,` inside quotes was destroyed.
+  Replaced with an RFC 4180-ish parser that handles quoted fields,
+  embedded commas, newlines and `""` escapes. Used by both the talkgroup
+  and unit importers.
+- **CSV reading uses `readAsText`** instead of the deprecated
+  `readAsBinaryString`, so non-ASCII tag and group names round-trip.
+
+## New API endpoints (admin, JWT-protected)
+
+| Method | Path                                       | Purpose                                        |
+| ------ | ------------------------------------------ | ---------------------------------------------- |
+| POST   | `/api/admin/database/compact`              | Vacuum SQLite or OPTIMIZE all MySQL/MariaDB tables |
+| POST   | `/api/admin/database/prune`                | Delete calls older than `{ "days": N }` (or the configured retention window if omitted) |
+| POST   | `/api/admin/radio-reference/talkgroups`    | Body `{ username, password, appKey, sid }` → returns `{ talkgroups: [...] }` for review-import |
+
+## Branch
+
+Active development happens on `claude/code-review-api-integration-46d8E` in this
+fork. Pull requests welcome.
+
+---
+
+# What is it ?
 
 [Rdio Scanner](https://github.com/chuot/rdio-scanner) is an open source software that ingest and distribute audio files generated by various software-defined radio recorders. Its interface tries to reproduce the user experience of a real police scanner, while adding its own touch.
 

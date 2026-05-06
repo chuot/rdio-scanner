@@ -18,6 +18,7 @@
  */
 
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { parseCsv } from '../../../../../shared/csv';
 import { Config, RdioScannerAdminService, System } from '../../admin.service';
 
 @Component({
@@ -78,13 +79,11 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
                 return;
             }
 
-            this.csv = reader.result
-                .split(/\n|\r\n/)
-                .map((tg) => tg.replace(/^"|"$/g, '').split(/"*,"*/))
-                .filter((tg) => tg && /^[0-9]+$/.test(tg[0]))
-                .filter((tg, idx, arr) => arr.findIndex((a) => a[0] === tg[0]) === idx);
+            this.csv = parseCsv(reader.result)
+                .filter((row) => row.length > 0 && /^[0-9]+$/.test(row[0]))
+                .filter((row, idx, arr) => arr.findIndex((other) => other[0] === row[0]) === idx);
         };
 
-        reader.readAsBinaryString(file);
+        reader.readAsText(file);
     }
 }

@@ -332,8 +332,8 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 		}
 
 	case "source":
-		if i, err := strconv.Atoi(string(b)); err == nil {
-			call.Source = int(i)
+		if i, err := strconv.Atoi(string(b)); err == nil && i > 0 {
+			call.Source = uint(i)
 		}
 
 	case "sources":
@@ -361,11 +361,10 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 								src["src"] = uint(s)
 								switch t := v["tag"].(type) {
 								case string:
-									if units == nil {
-										units = NewUnits()
-									}
-									switch units := call.units.(type) {
-									case *Units:
+									if len(t) > 0 {
+										if units == nil {
+											units = NewUnits()
+										}
 										units.Add(uint(s), t)
 									}
 								}
@@ -375,7 +374,9 @@ func ParseMultipartContent(call *Call, p *multipart.Part, b []byte) {
 					sources = append(sources, src)
 				}
 				call.Sources = sources
-				call.units = units
+				if units != nil {
+					call.units = units
+				}
 			}
 		}
 

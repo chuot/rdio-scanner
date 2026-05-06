@@ -67,6 +67,8 @@ type AdminLoginAttempt struct {
 
 type AdminLoginAttempts map[string]*AdminLoginAttempt
 
+const adminTokenLifetime = 24 * time.Hour
+
 func NewAdmin(controller *Controller) *Admin {
 	return &Admin{
 		Attempts:         AdminLoginAttempts{},
@@ -390,7 +392,7 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		remoteAddr := GetRemoteAddr(r)
+		remoteAddr := GetRemoteAddr(r, admin.Controller.Config.TrustProxy)
 
 		attempt := admin.Attempts[remoteAddr]
 
@@ -441,7 +443,11 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{ID: id.String()})
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+			ID:        id.String(),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(adminTokenLifetime)),
+		})
 		sToken, err := token.SignedString([]byte(admin.Controller.Options.secret))
 
 		if err != nil {
@@ -610,6 +616,123 @@ func (admin *Admin) Start() error {
 	}()
 
 	return nil
+}
+
+func (admin *Admin) DatabaseCompactHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		t := admin.GetAuthorization(r)
+		if !admin.ValidateToken(t) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		writeError := func(status int, msg string) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			b, _ := json.Marshal(map[string]any{"error": msg})
+			w.Write(b)
+		}
+
+		db := admin.Controller.Database
+		if db == nil || db.Sql == nil {
+			writeError(http.StatusServiceUnavailable, "database not initialized")
+			return
+		}
+
+		// Vacuuming a busy SQLite database can fail with "database is locked".
+		// Serialize against everything else by holding the admin mutex.
+		admin.mutex.Lock()
+		defer admin.mutex.Unlock()
+
+		started := time.Now()
+
+		switch db.Config.DbType {
+		case DbTypeSqlite:
+			if _, err := db.Sql.Exec("VACUUM"); err != nil {
+				admin.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("admin.database.compact: %s", err.Error()))
+				writeError(http.StatusInternalServerError, err.Error())
+				return
+			}
+
+		case DbTypeMariadb, DbTypeMysql:
+			tables := []string{
+				"rdioScannerAccesses", "rdioScannerApiKeys", "rdioScannerCalls",
+				"rdioScannerConfigs", "rdioScannerDirWatches", "rdioScannerDownstreams",
+				"rdioScannerGroups", "rdioScannerLogs", "rdioScannerMeta",
+				"rdioScannerSystems", "rdioScannerTags", "rdioScannerTalkgroups",
+				"rdioScannerUnits",
+			}
+			for _, tbl := range tables {
+				if _, err := db.Sql.Exec(fmt.Sprintf("OPTIMIZE TABLE `%s`", tbl)); err != nil {
+					admin.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("admin.database.compact %s: %s", tbl, err.Error()))
+					writeError(http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+
+		default:
+			writeError(http.StatusNotImplemented, fmt.Sprintf("compact not supported for db type %q", db.Config.DbType))
+			return
+		}
+
+		elapsed := time.Since(started).Round(time.Millisecond)
+		admin.Controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("admin.database.compact: completed in %s", elapsed))
+
+		w.Header().Set("Content-Type", "application/json")
+		b, _ := json.Marshal(map[string]any{
+			"ok":         true,
+			"durationMs": elapsed.Milliseconds(),
+			"engine":     db.Config.DbType,
+		})
+		w.Write(b)
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (admin *Admin) DatabasePruneHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		t := admin.GetAuthorization(r)
+		if !admin.ValidateToken(t) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		writeError := func(status int, msg string) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			b, _ := json.Marshal(map[string]any{"error": msg})
+			w.Write(b)
+		}
+
+		body := map[string]any{}
+		if r.Body != nil {
+			_ = json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&body)
+		}
+
+		days := admin.Controller.Options.PruneDays
+		if v, ok := body["days"].(float64); ok && v >= 0 {
+			days = uint(v)
+		}
+
+		if err := admin.Controller.Calls.Prune(admin.Controller.Database, days); err != nil {
+			admin.Controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("admin.database.prune: %s", err.Error()))
+			writeError(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		admin.Controller.Logs.LogEvent(LogLevelInfo, fmt.Sprintf("admin.database.prune: removed calls older than %d day(s)", days))
+
+		w.Header().Set("Content-Type", "application/json")
+		b, _ := json.Marshal(map[string]any{"ok": true, "days": days})
+		w.Write(b)
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
 }
 
 func (admin *Admin) RadioReferenceTalkgroupsHandler(w http.ResponseWriter, r *http.Request) {

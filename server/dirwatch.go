@@ -580,11 +580,30 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 
 	switch v := metaval["unit"].(type) {
 	case string:
-		if i, err := strconv.Atoi(v); err == nil {
+		if i, err := strconv.Atoi(v); err == nil && i > 0 {
+			id := uint(i)
+
+			// Primary source for the call
+			call.Source = id
+
+			// Sources list (sent downstream)
 			switch sources := call.Sources.(type) {
 			case []map[string]any:
-				call.Sources = append(sources, map[string]any{"pos": 0, "src": uint(i)})
+				call.Sources = append(sources, map[string]any{"pos": 0, "src": id})
+			default:
+				call.Sources = []map[string]any{{"pos": 0, "src": id}}
 			}
+
+			// Register on the system Units list via the autopopulate path.
+			// We use the numeric id as the label when no #TGLBL-style label
+			// is associated with the unit; the admin UI can rename later.
+			label := fmt.Sprintf("%d", id)
+			units, ok := call.units.(*Units)
+			if !ok || units == nil {
+				units = NewUnits()
+			}
+			units.Add(id, label)
+			call.units = units
 		}
 	}
 }

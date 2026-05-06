@@ -1,0 +1,33 @@
+<section>
+    <p class="mat-body">
+        Reclaim disk space and reorganize the database. Useful after deleting old systems
+        or shrinking the retention window — SQLite does not return space to the operating
+        system until the database is vacuumed.
+    </p>
+    <p class="text-center">
+        <button mat-raised-button color="primary" [disabled]="busy" (click)="compact()">
+            <ng-container *ngIf="!busy">Compact database now</ng-container>
+            <ng-container *ngIf="busy">Working...</ng-container>
+        </button>
+    </p>
+</section>
+
+<section>
+    <p class="mat-body">
+        Manually prune call records older than the given number of days. Leave the field
+        blank to use the configured retention window. Compact the database afterwards
+        to reclaim disk space.
+    </p>
+    <p class="text-center">
+        <mat-form-field appearance="fill" style="max-width: 220px">
+            <mat-label>Days to keep</mat-label>
+            <input matInput type="number" min="0" [(ngModel)]="pruneDays">
+        </mat-form-field>
+    </p>
+    <p class="text-center">
+        <button mat-raised-button color="warn" [disabled]="busy" (click)="prune()">
+            <ng-container *ngIf="!busy">Prune old calls</ng-container>
+            <ng-container *ngIf="busy">Working...</ng-container>
+        </button>
+    </p>
+</section>

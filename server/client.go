@@ -174,7 +174,11 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 }
 
 func (client *Client) GetRemoteAddr() string {
-	return GetRemoteAddr(client.request)
+	trust := false
+	if client.Controller != nil && client.Controller.Config != nil {
+		trust = client.Controller.Config.TrustProxy
+	}
+	return GetRemoteAddr(client.request, trust)
 }
 
 func (client *Client) SendConfig(groups *Groups, options *Options, systems *Systems, tags *Tags) {

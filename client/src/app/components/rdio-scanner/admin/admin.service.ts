@@ -184,11 +184,24 @@ export interface Unit {
 
 enum url {
     config = 'config',
+    databaseCompact = 'database/compact',
+    databasePrune = 'database/prune',
     login = 'login',
     logout = 'logout',
     logs = 'logs',
     password = 'password',
     radioReferenceTalkgroups = 'radio-reference/talkgroups',
+}
+
+export interface DatabaseCompactResult {
+    ok: boolean;
+    engine: string;
+    durationMs: number;
+}
+
+export interface DatabasePruneResult {
+    ok: boolean;
+    days: number;
 }
 
 export interface RadioReferenceTalkgroup {
@@ -357,6 +370,26 @@ export class RdioScannerAdminService implements OnDestroy {
 
             return false;
         }
+    }
+
+    async compactDatabase(): Promise<DatabaseCompactResult> {
+        return await firstValueFrom(this.ngHttpClient.post<DatabaseCompactResult>(
+            this.getUrl(url.databaseCompact),
+            {},
+            { headers: this.getHeaders(), responseType: 'json' },
+        ));
+    }
+
+    async pruneDatabase(days?: number): Promise<DatabasePruneResult> {
+        const body: { days?: number } = {};
+        if (typeof days === 'number' && Number.isFinite(days) && days >= 0) {
+            body.days = Math.floor(days);
+        }
+        return await firstValueFrom(this.ngHttpClient.post<DatabasePruneResult>(
+            this.getUrl(url.databasePrune),
+            body,
+            { headers: this.getHeaders(), responseType: 'json' },
+        ));
     }
 
     async importRadioReferenceTalkgroups(request: RadioReferenceImportRequest): Promise<RadioReferenceTalkgroup[]> {
