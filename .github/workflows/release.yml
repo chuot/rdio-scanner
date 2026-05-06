@@ -1,0 +1,104 @@
+name: release
+
+# Triggered when a `vX.Y.Z*` tag is pushed. Cross-compiles binaries for every
+# supported platform, zips each one with the project docs, and publishes them
+# as a GitHub Release.
+#
+# This workflow needs the GITHUB_TOKEN's default `contents: write` permission
+# to upload assets. modernc.org/sqlite is a pure-Go SQLite port, so the
+# binaries cross-compile without a CGo toolchain.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          ver="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: server/go.sum
+
+      - name: Build the web app
+        working-directory: client
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Cross-compile and zip binaries
+        run: |
+          set -euo pipefail
+          ver="${{ steps.ver.outputs.ver }}"
+          mkdir -p dist
+
+          build_one() {
+            local os="$1"      # GOOS
+            local label="$2"   # platform name in the zip filename
+            local arch="$3"    # GOARCH
+            local out="rdio-scanner"
+            if [ "$os" = "windows" ]; then out="rdio-scanner.exe"; fi
+
+            local stage="dist/${label}-${arch}"
+            mkdir -p "$stage"
+
+            ( cd server && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
+                go build -trimpath -ldflags='-s -w' \
+                -o "../${stage}/${out}" )
+
+            cp README.md CHANGELOG.md LICENSE COMPILING.md "$stage/"
+            case "$label" in
+              freebsd) cp docs/platforms/freebsd.md "$stage/INSTALL.md" ;;
+              linux)   cp docs/platforms/linux.md   "$stage/INSTALL.md" ;;
+              macos)   cp docs/platforms/macos.md   "$stage/INSTALL.md" ;;
+              windows) cp docs/platforms/windows.md "$stage/INSTALL.md" ;;
+            esac
+
+            ( cd "$stage" && zip -q "../rdio-scanner-${label}-${arch}-v${ver}.zip" * )
+          }
+
+          build_one freebsd freebsd amd64
+          build_one linux   linux   386
+          build_one linux   linux   amd64
+          build_one linux   linux   arm
+          build_one linux   linux   arm64
+          build_one darwin  macos   amd64
+          build_one darwin  macos   arm64
+          build_one windows windows amd64
+
+          ( cd dist && sha256sum *.zip > SHA256SUMS )
+          ls -la dist/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS
