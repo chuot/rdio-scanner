@@ -159,10 +159,12 @@ earlier rounds:
 | POST   | `/api/admin/database/prune`                | Delete calls older than `{ "days": N }` (or the configured retention window if omitted) |
 | POST   | `/api/admin/radio-reference/talkgroups`    | Body `{ username, password, appKey, sid }` → returns `{ talkgroups: [...] }` for review-import |
 
-## Branch
+## Releases & contributing
 
-Active development happens on `claude/code-review-api-integration-46d8E` in this
-fork. Pull requests welcome.
+Active development happens on `master`. Tagged builds for FreeBSD, Linux
+(386/amd64/arm/arm64), macOS (amd64/arm64) and Windows (amd64) are
+published on the [fork releases page](https://github.com/evilgenius79/rdio-scanner/releases)
+via GitHub Actions on each `v*` tag. Pull requests welcome.
 
 ---
 
@@ -185,7 +187,7 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | [SDRTrunk](https://github.com/DSheirer/sdrtrunk)               |     | X        |
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
 | [ProScan](https://www.proscan.org/)                            |     | X        |
-| [DSDPlus Fast Lane](https://https://www.dsdplus.com/)          |     | X        |
+| [DSDPlus Fast Lane](https://www.dsdplus.com/)                  |     | X        |
 
 # Quick start
 
@@ -202,7 +204,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
    | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3.zip   |
    | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
    | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3.zip   |
-   | Windows          | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
+   | Windows          | amd64        | rdio-scanner-windows-amd64-v6.6.3.zip |
 
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
@@ -216,11 +218,11 @@ As a courtesy to Docker users, [Rdio Scanner](https://github.com/chuot/rdio-scan
 
 # Need help ?
 
-## GitHub Discussions 💭
+## GitHub WIKI 📖
 
 Your question might already be addressed on the [Rdio Scanner GitHub Wiki](https://github.com/chuot/rdio-scanner/wiki), be sure to check it out at **[https://github.com/chuot/rdio-scanner/wiki](https://github.com/chuot/rdio-scanner/wiki)**.
 
-## GitHub WIKI 📖
+## GitHub Discussions 💭
 
 Feel free to ask your questions or share your comments on the [Rdio Scanner GitHub discussions](https://github.com/chuot/rdio-scanner/discussions) at **[https://github.com/chuot/rdio-scanner/discussions](https://github.com/chuot/rdio-scanner/discussions)**.
 
