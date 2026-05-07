@@ -27,7 +27,8 @@ are unchanged, and no new mandatory configuration is required.
   Searches no longer block ingestion and vice versa, and multiple ingest
   workers can write concurrently. Existing databases auto-migrate to WAL
   on first start; you'll see `rdio-scanner.db-wal` and `.db-shm` files
-  appear next to the main DB — that is normal.
+  appear next to the main DB — that is normal. (Helps with the symptoms
+  in upstream issue [#469](https://github.com/chuot/rdio-scanner/issues/469).)
 - **Hot SQL paths now use parameterized queries.** `CheckDuplicate` and
   `GetCall` previously interpolated values via `fmt.Sprintf` (defensible
   but slower because the driver has to re-prepare each time and harder
@@ -45,7 +46,7 @@ are unchanged, and no new mandatory configuration is required.
   you two new actions:
   - **Compact database** — runs `VACUUM` on SQLite or `OPTIMIZE TABLE` on
     MySQL/MariaDB so disk space is actually returned to the OS after pruning
-    or removing systems (addresses upstream issue #513).
+    or removing systems (addresses upstream issue [#513](https://github.com/chuot/rdio-scanner/issues/513)).
   - **Prune old calls** — manually deletes calls older than the configured
     retention window, or a number of days you specify, without waiting for
     the scheduled prune.
@@ -132,7 +133,7 @@ earlier rounds:
 - **JWT admin tokens have an `exp` claim** (24 h). Expired tokens fail
   validation automatically.
 - **DirWatch `#UNIT` mask placeholder is finally derived correctly**
-  (addresses upstream issue #532). Upstream's `parseMask` only appended to
+  (addresses upstream issue [#532](https://github.com/chuot/rdio-scanner/issues/532)). Upstream's `parseMask` only appended to
   `call.Sources` and skipped the case where it was the zero value, so the
   unit was silently dropped. The fork sets the call's primary source,
   appends to the sources list and registers the unit on the system's Units
