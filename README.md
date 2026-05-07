@@ -58,6 +58,63 @@ are unchanged, and no new mandatory configuration is required.
   `ingest_workers = N`. Sets the parallel-finalize worker count for call
   ingestion. `0` (default) picks `min(NumCPU, 16)`.
 
+### Security & stability hardening
+
+A separate three-pillar audit pass (server security, server concurrency,
+Angular client) found and fixed a number of issues that survived the
+earlier rounds:
+
+- **Admin event-stream WebSocket no longer leaks config pre-auth.** The
+  `/api/admin/config` upgrade path used to register the connection on the
+  broadcast channel *before* reading the bearer token, then disabled the
+  read deadline. Any client that completed the WebSocket handshake
+  received the next admin config push (API keys, dirwatch paths, etc.)
+  before being torn down. It now requires a valid token on the first
+  frame within 10 seconds, enforces same-origin via an explicit
+  `CheckOrigin`, and bounds idle reads to 5 minutes.
+- **Concurrent-map panics under load.** With parallel ingest workers,
+  the `Clients` map was iterated unlocked in `EmitCall`/`EmitConfig`/
+  `EmitListenersCount` while `Add`/`Remove` mutated it. `Downstreams.Send`
+  walked its list without holding the mutex. `Units.Add` had no locking
+  at all. All three are now snapshot-under-lock + iterate-outside-lock.
+  Per-listener sends are now non-blocking so one stalled client can't
+  back-pressure ingest.
+- **Constant-time token / API-key comparisons.** Both `admin.ValidateToken`
+  and `Apikeys.GetApikey` did `==` compares in a linear scan, leaking
+  per-byte timing across all candidates. Both now use
+  `crypto/subtle.ConstantTimeCompare` with no early break.
+- **Admin `Tokens` slice race fixed.** `LoginHandler`/`LogoutHandler`/
+  `ValidateToken` mutated and read `admin.Tokens` from many goroutines
+  with no lock. All access now holds `admin.mutex`.
+- **Unauthenticated upload DoS closed.** `/api/call-upload` and
+  `/api/trunk-recorder-call-upload` read each multipart part with
+  `io.ReadAll` *before* checking the API key and had no body-size cap.
+  Both endpoints now wrap `r.Body` in `http.MaxBytesReader` (256 MiB).
+- **API-key delete table-name typo fixed.** The bulk-delete path
+  referenced `rdioScannerApikeys` while every other query uses
+  `rdioScannerApiKeys`. SQLite's case-insensitive identifier matching
+  hid the bug; case-sensitive backends would 500.
+- **DirWatch crash loop on bad mask fixed.** A malformed filename mask
+  panicked the watcher goroutine via `regexp.MustCompile`; the deferred
+  recover restarted the watcher, which immediately panicked again on
+  the next event. Now uses `Compile`, logs the error, and exits cleanly.
+- **WebSocket reconnect storm fixed.** Both the listener WebSocket and
+  the admin config WebSocket retried on a fixed 2-second timer with no
+  cap. Hundreds of mobile listeners stuck in this loop while the
+  backend was offline meant a thundering herd the moment it came back.
+  Both clients now use exponential backoff with jitter, capped at 60 s,
+  and reset on each successful open.
+- **Audio download no longer breaks past ~30 s of audio.** The "save
+  call" button built a base64 `data:` URL via
+  `String.fromCharCode` + `btoa`, which silently failed for recordings
+  larger than the browser's ~2 MiB data-URL cap. Replaced with
+  `Blob` + `URL.createObjectURL`.
+- **Admin config form subscription leak fixed.** Each config push from
+  the server triggered `reset()`, which subscribed to three form
+  observables without disposing the previous batch. After hours of
+  admin panel use this leaked dozens of subscriptions all firing on
+  every form edit.
+
 ### Bug fixes
 - **Admin login lockout actually works.** Upstream defined the lockout
   delay as `time.Duration(time.Duration.Minutes(10))`, which is roughly **16
