@@ -448,7 +448,15 @@ func (downstreams *Downstreams) Read(db *Database) error {
 }
 
 func (downstreams *Downstreams) Send(controller *Controller, call *Call) {
-	for _, downstream := range downstreams.List {
+	// Snapshot under the mutex so a concurrent FromMap/Read (admin
+	// config save) can't replace List mid-iteration. We hold the lock
+	// only for the copy, not for the long HTTP POSTs below.
+	downstreams.mutex.Lock()
+	list := make([]*Downstream, len(downstreams.List))
+	copy(list, downstreams.List)
+	downstreams.mutex.Unlock()
+
+	for _, downstream := range list {
 		logEvent := func(logLevel string, message string) {
 			controller.Logs.LogEvent(logLevel, fmt.Sprintf("downstream: system=%v talkgroup=%v file=%v to %v %v", call.System, call.Talkgroup, call.AudioName, downstream.Url, message))
 		}

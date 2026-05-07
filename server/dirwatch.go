@@ -442,9 +442,20 @@ func (dirwatch *Dirwatch) parseMask(call *Call) {
 		return metapos[i][1].(int) < metapos[j][1].(int)
 	})
 
+	// User-supplied mask. The previous code called MustCompile and
+	// would panic the watcher goroutine on any unbalanced bracket or
+	// other regex syntax error -- e.g. a literal `(` or `[` in the
+	// admin's filename pattern -- crashing every dirwatch handler.
+	// The deferred recover would then re-Start, immediately panicking
+	// again on the next event. Use Compile and bail on bad masks.
 	base := strings.TrimSuffix(filename, path.Ext(filename))
-	for i, s := range regexp.MustCompile(mask).FindStringSubmatch(base) {
-		if i > 0 {
+	re, err := regexp.Compile(mask)
+	if err != nil {
+		dirwatch.controller.Logs.LogEvent(LogLevelError, fmt.Sprintf("dirwatch.parsemask: invalid mask %q: %v", mask, err))
+		return
+	}
+	for i, s := range re.FindStringSubmatch(base) {
+		if i > 0 && i-1 < len(metapos) {
 			v := fmt.Sprintf("%v", metapos[i-1][0])
 			metaval[v] = s
 		}

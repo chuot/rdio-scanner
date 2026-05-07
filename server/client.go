@@ -204,13 +204,19 @@ func (client *Client) SendConfig(groups *Groups, options *Options, systems *Syst
 		payload["afs"] = options.AfsSystems
 	}
 
-	client.Send <- &Message{Command: MessageCommandConfig, Payload: payload}
+	select {
+	case client.Send <- &Message{Command: MessageCommandConfig, Payload: payload}:
+	default:
+	}
 }
 
 func (client *Client) SendListenersCount(count int) {
-	client.Send <- &Message{
+	select {
+	case client.Send <- &Message{
 		Command: MessagecommandListenersCount,
 		Payload: count,
+	}:
+	default:
 	}
 }
 
@@ -226,10 +232,27 @@ func NewClients() *Clients {
 	}
 }
 
+// snapshot returns the current set of clients under the mutex so the
+// caller can iterate without holding the lock (which would deadlock if a
+// downstream Send blocks long enough for Add/Remove to fire). Without this
+// the Map was iterated unlocked while Add/Remove mutated it under the
+// lock, and once parallel finalize workers started calling EmitCall
+// concurrently this would panic with "concurrent map read and map write".
+func (clients *Clients) snapshot() []*Client {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	out := make([]*Client, 0, len(clients.Map))
+	for c := range clients.Map {
+		out = append(out, c)
+	}
+	return out
+}
+
 func (clients *Clients) AccessCount(client *Client) int {
 	count := 0
 
-	for c := range clients.Map {
+	for _, c := range clients.snapshot() {
 		if c.Access == client.Access {
 			count++
 		}
@@ -246,23 +269,37 @@ func (clients *Clients) Add(client *Client) {
 }
 
 func (clients *Clients) Count() int {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
 	return len(clients.Map)
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
-	for c := range clients.Map {
+	for _, c := range clients.snapshot() {
 		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
-			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
+			// Non-blocking send so a stalled client can't back-pressure
+			// the entire ingest pipeline. The Send channel is buffered
+			// (8192) at construction; if it is full the listener is too
+			// far behind to keep up and we drop this frame for them.
+			select {
+			case c.Send <- &Message{Command: MessageCommandCall, Payload: call}:
+			default:
+			}
 		}
 	}
 }
 
 func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
-	count := len(clients.Map)
+	snap := clients.snapshot()
+	count := len(snap)
 
-	for c := range clients.Map {
+	for _, c := range snap {
 		if restricted {
-			c.Send <- &Message{Command: MessageCommandPin}
+			select {
+			case c.Send <- &Message{Command: MessageCommandPin}:
+			default:
+			}
 		} else {
 			c.SendConfig(groups, options, systems, tags)
 		}
@@ -274,9 +311,10 @@ func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Sy
 }
 
 func (clients *Clients) EmitListenersCount() {
-	count := len(clients.Map)
+	snap := clients.snapshot()
+	count := len(snap)
 
-	for c := range clients.Map {
+	for _, c := range snap {
 		c.SendListenersCount(count)
 	}
 }

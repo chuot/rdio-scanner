@@ -21,6 +21,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -149,10 +150,21 @@ func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
+	// Constant-time match across all enabled keys. The previous == compare
+	// leaked per-byte timing on each candidate, which combined with the
+	// linear scan let an attacker recover keys character-by-character.
+	keyBytes := []byte(key)
+	var match *Apikey
 	for _, apikey := range apikeys.List {
-		if apikey.Key == key && !apikey.Disabled {
-			return apikey, true
+		if apikey.Disabled {
+			continue
 		}
+		if subtle.ConstantTimeCompare(keyBytes, []byte(apikey.Key)) == 1 {
+			match = apikey
+		}
+	}
+	if match != nil {
+		return match, true
 	}
 	return nil, false
 }
@@ -266,7 +278,11 @@ func (apikeys *Apikeys) Write(db *Database) error {
 			s := string(b)
 			s = strings.ReplaceAll(s, "[", "(")
 			s = strings.ReplaceAll(s, "]", ")")
-			q := fmt.Sprintf("delete from `rdioScannerApikeys` where `_id` in %v", s)
+			// Table name is `rdioScannerApiKeys` everywhere else; the
+			// lowercase `Apikeys` here was a typo. SQLite happens to
+			// be case-insensitive about identifiers so it silently
+			// worked, but any case-sensitive backend would 500.
+			q := fmt.Sprintf("delete from `rdioScannerApiKeys` where `_id` in %v", s)
 			if _, err = db.Sql.Exec(q); err != nil {
 				return formatError(err)
 			}

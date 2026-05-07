@@ -589,6 +589,8 @@ export class RdioScannerAdminService implements OnDestroy {
         }
     }
 
+    private configWebSocketBackoff = 0;
+
     private configWebSocketReconnect(): void {
         this.configWebSocketClose();
 
@@ -607,14 +609,22 @@ export class RdioScannerAdminService implements OnDestroy {
         this.configWebSocket.onclose = (ev: CloseEvent) => {
             if (ev.code === 1000) {
                 this.token = '';
+                this.configWebSocketBackoff = 0;
 
                 this.event.emit({ authenticated: this.authenticated });
             } else {
-                timer(2000).subscribe(() => this.configWebSocketReconnect());
+                // Exponential backoff with jitter, capped at 60s. The
+                // previous fixed 2s retry would hammer the server (and
+                // light up phone radios for connected mobiles) every two
+                // seconds when the backend was offline.
+                this.configWebSocketBackoff = Math.min(this.configWebSocketBackoff + 1, 8);
+                const delayMs = Math.min(1000 * Math.pow(2, this.configWebSocketBackoff - 1), 60_000) + Math.floor(Math.random() * 1000);
+                timer(delayMs).subscribe(() => this.configWebSocketReconnect());
             }
         };
 
         this.configWebSocket.onopen = () => {
+            this.configWebSocketBackoff = 0;
             this.configWebSocket?.send(this.token);
 
             if (this.configWebSocket instanceof WebSocket) {

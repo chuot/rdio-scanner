@@ -67,20 +67,23 @@ func NewUnits() *Units {
 }
 
 func (units *Units) Add(id uint, label string) (*Units, bool) {
-	added := true
+	units.mutex.Lock()
+	defer units.mutex.Unlock()
+	return units.addLocked(id, label)
+}
 
+// addLocked is the lock-free body of Add. Callers that already hold
+// units.mutex (e.g. Merge) must use this instead to avoid re-entering
+// the same non-recursive mutex.
+func (units *Units) addLocked(id uint, label string) (*Units, bool) {
 	for _, u := range units.List {
 		if u.Id == id {
-			added = false
-			break
+			return units, false
 		}
 	}
 
-	if added {
-		units.List = append(units.List, &Unit{Id: id, Label: label})
-	}
-
-	return units, added
+	units.List = append(units.List, &Unit{Id: id, Label: label})
+	return units, true
 }
 
 func (units *Units) FromMap(f []any) *Units {
@@ -109,7 +112,7 @@ func (u *Units) Merge(units *Units) bool {
 		defer u.mutex.Unlock()
 
 		for _, v := range units.List {
-			if _, added := u.Add(v.Id, v.Label); added {
+			if _, added := u.addLocked(v.Id, v.Label); added {
 				merged = added
 			}
 		}

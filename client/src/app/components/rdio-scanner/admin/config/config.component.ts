@@ -20,6 +20,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, QueryList, ViewChildren, ViewEncapsulation } from '@angular/core';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
+import { Subscription } from 'rxjs';
 import { AdminEvent, RdioScannerAdminService, Config } from '../admin.service';
 
 @Component({
@@ -68,6 +69,15 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
 
     private config: Config | undefined;
 
+    // Subscriptions established during reset(). reset() runs every time
+    // the server pushes a fresh config; without disposing the previous
+    // batch each push leaked three subscriptions that kept firing
+    // markForCheck() and updateValueAndValidity() forever, eventually
+    // pinning a CPU core in long-running admin tabs.
+    private formStatusSub?: Subscription;
+    private groupsSub?: Subscription;
+    private tagsSub?: Subscription;
+
     private eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
         if ('authenticated' in event && event.authenticated === true) {
             this.config = await this.adminService.getConfig();
@@ -97,6 +107,9 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();
+        this.formStatusSub?.unsubscribe();
+        this.groupsSub?.unsubscribe();
+        this.tagsSub?.unsubscribe();
     }
 
     async ngOnInit(): Promise<void> {
@@ -110,13 +123,17 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
     }
 
     reset(config = this.config, options?: { dirty?: boolean }): void {
+        this.formStatusSub?.unsubscribe();
+        this.groupsSub?.unsubscribe();
+        this.tagsSub?.unsubscribe();
+
         this.form = this.adminService.newConfigForm(config);
 
-        this.form.statusChanges.subscribe(() => {
+        this.formStatusSub = this.form.statusChanges.subscribe(() => {
             this.ngChangeDetectorRef.markForCheck();
         });
 
-        this.groups.valueChanges.subscribe(() => {
+        this.groupsSub = this.groups.valueChanges.subscribe(() => {
             this.systems.controls.forEach((system) => {
                 const talkgroups = system.get('talkgroups') as FormArray;
 
@@ -132,7 +149,7 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
             });
         });
 
-        this.tags.valueChanges.subscribe(() => {
+        this.tagsSub = this.tags.valueChanges.subscribe(() => {
             this.systems.controls.forEach((system) => {
                 const talkgroups = system.get('talkgroups') as FormArray;
 

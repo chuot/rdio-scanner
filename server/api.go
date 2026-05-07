@@ -29,6 +29,11 @@ import (
 	"strings"
 )
 
+// maxCallUploadBytes caps the unauthenticated multipart body so a hostile
+// client can't exhaust memory before the API key check (which only runs
+// after the body has been fully read into memory).
+const maxCallUploadBytes = 256 << 20 // 256 MiB
+
 type Api struct {
 	Controller *Controller
 }
@@ -44,6 +49,12 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			call = NewCall()
 			key  string
 		)
+
+		// Cap the entire request body so an unauthenticated client (the
+		// API key check happens AFTER we've read the multipart body)
+		// can't exhaust memory by streaming a huge upload. 256 MiB is
+		// well above any plausible call recording.
+		r.Body = http.MaxBytesReader(w, r.Body, maxCallUploadBytes)
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
@@ -122,6 +133,8 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 			call = NewCall()
 			key  string
 		)
+
+		r.Body = http.MaxBytesReader(w, r.Body, maxCallUploadBytes)
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {

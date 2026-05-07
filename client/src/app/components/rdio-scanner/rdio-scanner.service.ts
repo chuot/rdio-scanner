@@ -797,25 +797,32 @@ export class RdioScannerService implements OnDestroy {
     }
 
     private download(call: RdioScannerCall): void {
-        if (call.audio) {
-            const file = call.audio.data.reduce((str, val) => str += String.fromCharCode(val), '');
-            const fileName = call.audioName || 'unknown.dat';
-            const fileType = call.audioType || 'audio/*';
-            const fileUri = `data:${fileType};base64,${window.btoa(file)}`;
-
-            const el = this.document.createElement('a');
-
-            el.style.display = 'none';
-
-            el.setAttribute('href', fileUri);
-            el.setAttribute('download', fileName);
-
-            this.document.body.appendChild(el);
-
-            el.click();
-
-            this.document.body.removeChild(el);
+        if (!call.audio) {
+            return;
         }
+
+        // The previous implementation built a base64 data: URL through a
+        // String.fromCharCode reduce + btoa(). Aside from being O(N) for
+        // both string concat and base64 conversion, browsers cap data:
+        // URLs around 2 MiB so anything longer than ~30 seconds of audio
+        // silently failed to download. A Blob URL has no such limit and
+        // skips the round-trip through Latin-1 strings.
+        const fileName = call.audioName || 'unknown.dat';
+        const fileType = call.audioType || 'audio/*';
+        const blob = new Blob([new Uint8Array(call.audio.data)], { type: fileType });
+        const url = URL.createObjectURL(blob);
+
+        const el = this.document.createElement('a');
+        el.style.display = 'none';
+        el.href = url;
+        el.download = fileName;
+
+        this.document.body.appendChild(el);
+        el.click();
+        this.document.body.removeChild(el);
+
+        // Defer revoke so the click() has time to start the download.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
     private getCall(id: number, flags?: WebsocketCallFlag): void {
@@ -845,6 +852,8 @@ export class RdioScannerService implements OnDestroy {
         this.instanceId = this.router.parseUrl(this.router.url).queryParams['id'] || this.instanceId;
     }
 
+    private websocketBackoff = 0;
+
     private openWebsocket(): void {
         const websocketUrl = window.location.href.replace(/^http/, 'ws');
 
@@ -854,11 +863,20 @@ export class RdioScannerService implements OnDestroy {
             this.event.emit({ linked: false });
 
             if (ev.code !== 1000) {
-                timer(2000).subscribe(() => this.reconnectWebsocket());
+                // Exponential backoff with jitter, capped at 60s. The
+                // previous fixed 2s retry would hammer the server every
+                // two seconds when the backend was offline -- bad for
+                // mobile clients (radio + battery) and for the server
+                // itself once even a few hundred listeners are stuck in
+                // the same loop.
+                this.websocketBackoff = Math.min(this.websocketBackoff + 1, 8);
+                const delayMs = Math.min(1000 * Math.pow(2, this.websocketBackoff - 1), 60_000) + Math.floor(Math.random() * 1000);
+                timer(delayMs).subscribe(() => this.reconnectWebsocket());
             }
         };
 
         this.websocket.onopen = () => {
+            this.websocketBackoff = 0;
             this.event.emit({ linked: true });
 
             if (this.websocket instanceof WebSocket) {

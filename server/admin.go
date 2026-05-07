@@ -21,11 +21,13 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -84,11 +86,14 @@ func NewAdmin(controller *Controller) *Admin {
 	}
 }
 
+// BroadcastConfig hands the serialized config off to the Start() loop
+// which is the only goroutine that reads/writes admin.Conns. Iterating
+// admin.Conns directly here used to race with Register/Unregister.
+// Callers already wrap this in a goroutine (controller.EmitConfig), so
+// blocking on the unbuffered channel is fine.
 func (admin *Admin) BroadcastConfig() {
 	if b, err := json.Marshal(admin.GetConfig()); err == nil {
-		for conn := range admin.Conns {
-			conn.WriteMessage(websocket.TextMessage, b)
-		}
+		admin.Broadcast <- &b
 	}
 }
 
@@ -131,32 +136,71 @@ func (admin *Admin) ChangePassword(currentPassword any, newPassword string) erro
 
 func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.EqualFold(r.Header.Get("upgrade"), "websocket") {
-		upgrader := websocket.Upgrader{}
+		// Same-origin enforcement on the admin event stream. The default
+		// gorilla CheckOrigin only blocks cross-origin if Origin differs
+		// from Host, but only when set explicitly. Make it explicit so a
+		// future gorilla default change can't silently open this up.
+		upgrader := websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true // non-browser client (e.g. curl)
+				}
+				u, err := url.Parse(origin)
+				if err != nil {
+					return false
+				}
+				return strings.EqualFold(stripPort(r.Host), u.Hostname())
+			},
+		}
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
 		}
 
-		admin.Register <- conn
-
 		go func() {
-			conn.SetReadDeadline(time.Time{})
+			const (
+				authWait    = 10 * time.Second
+				idleTimeout = 5 * time.Minute
+			)
+
+			// Authenticate first. The previous flow registered the
+			// connection on admin.Register before reading the token, so
+			// any anonymous client that completed the WebSocket
+			// handshake would receive the next BroadcastConfig (which
+			// includes API keys, dirwatch paths, etc.) before being
+			// disconnected. Now: read the token under a short deadline,
+			// validate, and only then enroll in the broadcast set.
+			conn.SetReadDeadline(time.Now().Add(authWait))
+			_, first, err := conn.ReadMessage()
+			if err != nil || !admin.ValidateToken(string(first)) {
+				conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "auth"))
+				conn.Close()
+				return
+			}
+
+			admin.Register <- conn
+
+			defer func() {
+				admin.Unregister <- conn
+				conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1000, ""))
+			}()
 
 			for {
+				// Bound how long a stale client can hold a slot. A
+				// disconnected admin used to leak the conn forever.
+				conn.SetReadDeadline(time.Now().Add(idleTimeout))
+
 				_, b, err := conn.ReadMessage()
 				if err != nil {
-					break
+					return
 				}
 
 				if !admin.ValidateToken(string(b)) {
-					break
+					return
 				}
 			}
-
-			admin.Unregister <- conn
-
-			conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1000, ""))
 		}()
 
 	} else {
@@ -455,11 +499,13 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		admin.mutex.Lock()
 		if len(admin.Tokens) < 5 {
 			admin.Tokens = append(admin.Tokens, sToken)
 		} else {
 			admin.Tokens = append(admin.Tokens[1:], sToken)
 		}
+		admin.mutex.Unlock()
 
 		b, err := json.Marshal(map[string]any{
 			"passwordNeedChange": admin.Controller.Options.adminPasswordNeedChange,
@@ -491,11 +537,14 @@ func (admin *Admin) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		admin.mutex.Lock()
 		for k, v := range admin.Tokens {
 			if v == t {
 				admin.Tokens = append(admin.Tokens[:k], admin.Tokens[k+1:]...)
+				break
 			}
 		}
+		admin.mutex.Unlock()
 		w.WriteHeader(http.StatusOK)
 
 	default:
@@ -899,14 +948,29 @@ func (admin *Admin) UserRemoveHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (admin *Admin) ValidateToken(sToken string) bool {
-	found := false
-	for _, t := range admin.Tokens {
-		if t == sToken {
-			found = true
-			break
-		}
+	if sToken == "" {
+		return false
 	}
-	if !found {
+
+	// Constant-time match across the issued-tokens slice. The previous ==
+	// compare leaked which prefix matched on each attempt, letting an
+	// attacker recover an active token byte-by-byte against the linear
+	// scan. We OR the bit results so the loop runtime depends only on
+	// len(Tokens), not on which one matched.
+	candidate := []byte(sToken)
+	var match int
+	admin.mutex.Lock()
+	for _, t := range admin.Tokens {
+		if len(t) != len(sToken) {
+			// ConstantTimeCompare returns 0 on length mismatch but
+			// also takes a length-dependent path; skipping is fine
+			// because length-mismatched tokens cannot match.
+			continue
+		}
+		match |= subtle.ConstantTimeCompare(candidate, []byte(t))
+	}
+	admin.mutex.Unlock()
+	if match != 1 {
 		return false
 	}
 
