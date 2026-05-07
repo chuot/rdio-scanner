@@ -159,12 +159,12 @@ earlier rounds:
 | POST   | `/api/admin/database/prune`                | Delete calls older than `{ "days": N }` (or the configured retention window if omitted) |
 | POST   | `/api/admin/radio-reference/talkgroups`    | Body `{ username, password, appKey, sid }` → returns `{ talkgroups: [...] }` for review-import |
 
-## Releases & contributing
+## Contributing
 
-Active development happens on `master`. Tagged builds for FreeBSD, Linux
-(386/amd64/arm/arm64), macOS (amd64/arm64) and Windows (amd64) are
-published on the [fork releases page](https://github.com/evilgenius79/rdio-scanner/releases)
-via GitHub Actions on each `v*` tag. Pull requests welcome.
+Active development happens on `master`. Pushing a `v*` tag triggers
+GitHub Actions to cross-compile every supported platform and publish a
+new entry on the [fork releases page](https://github.com/evilgenius79/rdio-scanner/releases).
+Pull requests welcome.
 
 ---
 
@@ -191,30 +191,47 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 
 # Quick start
 
-ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rdio-scanner) FROM ITS OFFICIAL REPOSITORY AT **[HTTPS://GITHUB.COM/CHUOT/RDIO-SCANNER](https://github.com/chuot/rdio-scanner)**.
+This fork publishes its own precompiled builds. The original upstream
+project is at **[https://github.com/chuot/rdio-scanner](https://github.com/chuot/rdio-scanner)** if you'd
+rather run the unmodified release.
 
-1. Download the latest precompiled version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) from the [releases tab](https://github.com/chuot/rdio-scanner/releases).
+1. Download the latest precompiled version of this fork from the [releases page](https://github.com/evilgenius79/rdio-scanner/releases).
 
-   | Operating system | Architecture | Use package                           |
-   | -----------------| ------------ | ------------------------------------- |
-   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3.zip |
-   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3.zip     |
-   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3.zip   |
-   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3.zip     |
-   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3.zip   |
-   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3.zip   |
-   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3.zip   |
-   | Windows          | amd64        | rdio-scanner-windows-amd64-v6.6.3.zip |
+   | Operating system | Architecture | Use package                                     |
+   | -----------------| ------------ | ----------------------------------------------- |
+   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3-fork.2.zip    |
+   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3-fork.2.zip        |
+   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3-fork.2.zip      |
+   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3-fork.2.zip        |
+   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3-fork.2.zip      |
+   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3-fork.2.zip      |
+   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3-fork.2.zip      |
+   | Windows          | amd64        | rdio-scanner-windows-amd64-v6.6.3-fork.2.zip    |
+
+   Each release also ships a `SHA256SUMS` file you can use to verify the
+   archive after download.
 
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 4. Access the administrative dashboard to finalize the configuration.
 
-More detailed instructions are available in the `rdio-scanner.pdf` file provided in the precompiled archives.
+More detailed instructions are available in the `INSTALL.md` file
+provided in each precompiled archive.
 
 # Docker
 
-As a courtesy to Docker users, [Rdio Scanner](https://github.com/chuot/rdio-scanner) is also distributed as a Docker image where a new version is generated with each new release. More information available at **[https://hub.docker.com/repository/docker/chuot/rdio-scanner](https://hub.docker.com/repository/docker/chuot/rdio-scanner)**.
+This fork does not publish a Docker image. The repo includes a
+`Containerfile` you can build yourself, e.g.:
+
+```sh
+podman build -t rdio-scanner -f Containerfile .
+# or: docker build -t rdio-scanner -f Containerfile .
+```
+
+The upstream Docker Hub image at
+**[chuot/rdio-scanner](https://hub.docker.com/repository/docker/chuot/rdio-scanner)**
+tracks the unmodified upstream project and does **not** include any
+of this fork's fixes.
 
 # Need help ?
 
