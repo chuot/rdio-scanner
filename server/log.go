@@ -113,6 +113,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		query    string
 		rows     *sql.Rows
 		where    string = "true"
+		args     []any
 	)
 
 	logs.mutex.Lock()
@@ -129,7 +130,10 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 
 	switch v := searchOptions.Level.(type) {
 	case string:
-		where += fmt.Sprintf(" and `level` = '%v'", v)
+		// Use a placeholder so an admin who types special characters
+		// into the Level filter cannot inject SQL fragments.
+		where += " and `level` = ?"
+		args = append(args, v)
 	}
 
 	switch v := searchOptions.Sort.(type) {
@@ -176,7 +180,7 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	}
 
 	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
-	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
+	if err = db.Sql.QueryRow(query, args...).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
@@ -184,8 +188,11 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		logResults.DateStart = t
 	}
 
-	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` asc", where)
-	if err = db.Sql.QueryRow(query).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
+	// DateStop is the most recent matching row. The original code copy-pasted
+	// the DateStart query verbatim (asc), so the date-range header in the
+	// admin Logs panel always showed DateStart == DateStop.
+	query = fmt.Sprintf("select `dateTime` from `rdioScannerLogs` where %v order by `dateTime` desc", where)
+	if err = db.Sql.QueryRow(query, args...).Scan(&dateTime); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
@@ -194,12 +201,12 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 	}
 
 	query = fmt.Sprintf("select count(*) from `rdioScannerLogs` where %v", where)
-	if err = db.Sql.QueryRow(query).Scan(&logResults.Count); err != nil && err != sql.ErrNoRows {
+	if err = db.Sql.QueryRow(query, args...).Scan(&logResults.Count); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 
 	query = fmt.Sprintf("select `_id`, `DateTime`, `level`, `message` from `rdioScannerLogs` where %v order by `dateTime` %v limit %v offset %v", where, order, limit, offset)
-	if rows, err = db.Sql.Query(query); err != nil && err != sql.ErrNoRows {
+	if rows, err = db.Sql.Query(query, args...); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(fmt.Errorf("%v, %v", err, query))
 	}
 

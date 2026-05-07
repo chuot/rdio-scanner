@@ -208,7 +208,11 @@ func ParseSdrTrunkMeta(call *Call, controller *Controller) error {
 		}
 	}
 
-	s = regexp.MustCompile(`(\[.+\])`).FindStringSubmatch(m.Title())
+	// Match exactly one bracketed segment (e.g. "[1234,5678]"). The original
+	// pattern was greedy, so a title like "[1234] foo [bar]" matched the
+	// entire run from the first `[` to the last `]`, JSON parsing failed,
+	// and patches were silently dropped.
+	s = regexp.MustCompile(`(\[[^\]]*\])`).FindStringSubmatch(m.Title())
 	if len(s) > 1 && len(s[1]) > 0 {
 		var f any
 		if err = json.Unmarshal([]byte(s[1]), &f); err == nil {

@@ -103,10 +103,16 @@ func (options *Options) FromMap(m map[string]any) *Options {
 
 	switch v := m["disableAudioConversion"].(type) {
 	case bool:
+		// Legacy boolean from pre-6.x configs. The original mapping had
+		// these two branches reversed: `true` (audio conversion DISABLED)
+		// was producing AUDIO_CONVERSION_ENABLED_NORM (=2) and `false`
+		// (conversion enabled) was producing AUDIO_CONVERSION_DISABLED
+		// (=0). Anyone migrating from an old DB silently got the
+		// opposite of what they had configured. Now correct.
 		if v {
-			options.AudioConversion = 2
+			options.AudioConversion = AUDIO_CONVERSION_DISABLED
 		} else {
-			options.AudioConversion = 0
+			options.AudioConversion = AUDIO_CONVERSION_ENABLED
 		}
 	}
 

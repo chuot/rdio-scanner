@@ -39,25 +39,26 @@ export class RdioScannerAdminImportExportConfigComponent {
     async export(): Promise<void> {
         const config = await this.adminService.getConfig();
 
-        const file = encodeURIComponent(JSON.stringify(config)).replace(/%([0-9A-F]{2})/g, (_, c) => {
-            return String.fromCharCode(parseInt(c, 16));
-        });
-        const fileName = 'rdio-scanner.json';
-        const fileType = 'application/json';
-        const fileUri = `data:${fileType};base64,${window.btoa(file)}`;
+        // Use a Blob URL so non-ASCII fields (branding text, talkgroup
+        // names with accents, etc.) survive the round-trip. The previous
+        // implementation percent-encoded JSON, mapped each %XX to a
+        // Latin-1 char, then btoa()'d the result -- a workaround for
+        // btoa()'s Latin-1-only restriction that was easy to break.
+        const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
 
         const el = this.document.createElement('a');
-
         el.style.display = 'none';
-
-        el.setAttribute('href', fileUri);
-        el.setAttribute('download', fileName);
+        el.href = url;
+        el.download = 'rdio-scanner.json';
 
         this.document.body.appendChild(el);
-
         el.click();
-
         this.document.body.removeChild(el);
+
+        // Free the blob URL on the next tick so the click() has had a
+        // chance to register.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
     async import(event: Event): Promise<void> {
@@ -72,18 +73,23 @@ export class RdioScannerAdminImportExportConfigComponent {
         reader.onloadend = () => {
             target.value = '';
 
+            if (typeof reader.result !== 'string') {
+                this.matSnackBar.open('Could not read the file.', '', { duration: 5000 });
+                return;
+            }
+
+            // readAsBinaryString is deprecated and the previous decode
+            // path mangled UTF-8. readAsText decodes UTF-8 cleanly so
+            // JSON.parse just works on the result.
             try {
-                const res = decodeURIComponent(Array.prototype.map.call(reader.result, (c) => {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-                }).join(''));
-
-                this.config.emit(JSON.parse(res));
-
+                const cfg = JSON.parse(reader.result) as Config;
+                this.config.emit(cfg);
+                this.matSnackBar.open('Configuration loaded. Save to apply.', '', { duration: 4000 });
             } catch (error) {
-                this.matSnackBar.open(error as string, '', { duration: 5000 });
+                this.matSnackBar.open(`Invalid config JSON: ${error instanceof Error ? error.message : String(error)}`, '', { duration: 6000 });
             }
         };
 
-        reader.readAsBinaryString(file);
+        reader.readAsText(file);
     }
 }
