@@ -19,6 +19,7 @@
 import argparse
 import collections
 import configparser
+import json
 import logging
 import os
 import queue
@@ -27,6 +28,9 @@ import signal
 import sys
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -248,6 +252,16 @@ class Recorder:
         self.poll_hz = cfg.getfloat("poll_hz", 5.0)
         self.output_dir = Path(cfg.get("output_dir", "/home/pi/scanner-calls")).expanduser()
 
+        # Optional admin-managed config fetched from rdio-scanner. If
+        # server_url and api_key are both set, a background thread refreshes
+        # the "soft" subset of settings every refresh_seconds. Hardware
+        # settings stay strictly local.
+        self.server_url = cfg.get("server_url", "").strip() or None
+        self.api_key = cfg.get("api_key", "").strip() or None
+        self.refresh_seconds = cfg.getint("refresh_seconds", 30)
+
+        self.enabled = True
+
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self._ring = AudioRing(self.samplerate, self.channels, self.pre_roll_ms)
@@ -268,6 +282,10 @@ class Recorder:
             threading.Thread(target=self._audio_consumer, name="audio-consumer", daemon=True),
             threading.Thread(target=self._serial_loop, name="serial-glg", daemon=True),
         ]
+        if self.server_url and self.api_key:
+            threads.append(
+                threading.Thread(target=self._config_refresh_loop, name="config-refresh", daemon=True)
+            )
         for t in threads:
             t.start()
 
@@ -383,7 +401,7 @@ class Recorder:
 
     def _handle_glg(self, glg: GlgState) -> None:
         with self._writer_lock:
-            if glg.squelch_open:
+            if glg.squelch_open and self.enabled:
                 if self._writer is None:
                     self._open_writer(glg)
                 elif self._writer.glg.call_key() != glg.call_key():
@@ -392,6 +410,9 @@ class Recorder:
                     self._open_writer(glg)
                 else:
                     self._writer.last_audio_at = time.time()
+            elif not self.enabled and self._writer is not None:
+                # Admin flipped us off mid-call; finalise gracefully.
+                self._close_writer_locked()
             # squelch closed: don't tear down immediately; idle check handles it.
 
     def _maybe_finalise_idle(self) -> None:
@@ -436,6 +457,78 @@ class Recorder:
             LOG.info("call close: %s (%d frames)", path.name, writer.frames_written)
         elif force:
             LOG.info("call discarded (too short)")
+
+    # ---- admin-managed config refresh -----------------------------------
+
+    def _config_refresh_loop(self) -> None:
+        period = max(self.refresh_seconds, 5)
+        url = f"{self.server_url.rstrip('/')}/api/recorder-config"
+        while not self._stop.is_set():
+            try:
+                self._fetch_remote_config(url)
+            except Exception as exc:
+                LOG.warning("config refresh failed: %s", exc)
+            self._sleep_interruptible(period)
+
+    def _fetch_remote_config(self, url: str) -> None:
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status != 200:
+                    LOG.warning("config refresh HTTP %s", resp.status)
+                    return
+                body = resp.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401:
+                LOG.error("config refresh: 401 unauthorised - check api_key")
+            else:
+                LOG.warning("config refresh HTTP %s", exc.code)
+            return
+
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            LOG.warning("config refresh: bad JSON: %s", exc)
+            return
+
+        self._apply_remote_config(payload)
+
+    def _apply_remote_config(self, payload: dict) -> None:
+        # Only apply fields that are safe to flip at runtime. Hardware
+        # settings (serial port, audio device, samplerate, channels) are
+        # never touched - they were locked in at startup.
+        if "disabled" in payload:
+            new_enabled = not bool(payload["disabled"])
+            if new_enabled != self.enabled:
+                LOG.info("remote config: enabled = %s", new_enabled)
+            self.enabled = new_enabled
+
+        if payload.get("minSilenceMs"):
+            try:
+                self.min_silence_ms = max(0, int(payload["minSilenceMs"]))
+            except (TypeError, ValueError):
+                pass
+
+        if payload.get("preRollMs"):
+            try:
+                self.pre_roll_ms = max(0, int(payload["preRollMs"]))
+            except (TypeError, ValueError):
+                pass
+
+        out = payload.get("outputDir")
+        if isinstance(out, str) and out.strip():
+            new_dir = Path(out.strip()).expanduser()
+            if new_dir != self.output_dir:
+                try:
+                    new_dir.mkdir(parents=True, exist_ok=True)
+                except OSError as exc:
+                    LOG.warning("remote config: cannot use output_dir %s: %s", new_dir, exc)
+                    return
+                LOG.info("remote config: output_dir -> %s", new_dir)
+                self.output_dir = new_dir
 
     # ---- signals --------------------------------------------------------
 

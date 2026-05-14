@@ -65,6 +65,7 @@ export interface Config {
     downstreams?: Downstream[];
     groups?: Group[];
     options?: Options;
+    recorders?: Recorder[];
     systems?: System[];
     tags?: Tag[];
 }
@@ -146,6 +147,18 @@ export interface Options {
     sortTalkgroups?: boolean;
     tagsToggle?: boolean;
     time12hFormat?: boolean;
+}
+
+export interface Recorder {
+    _id?: number;
+    apiKey?: string;
+    disabled?: boolean;
+    label?: string;
+    order?: number;
+    systemId?: number | null;
+    outputDir?: string;
+    minSilenceMs?: number;
+    preRollMs?: number;
 }
 
 export interface System {
@@ -473,6 +486,7 @@ export class RdioScannerAdminService implements OnDestroy {
             downstreams: this.ngFormBuilder.array(config?.downstreams?.map((downstream) => this.newDownstreamForm(downstream)) || []),
             groups: this.ngFormBuilder.array(config?.groups?.map((group) => this.newGroupForm(group)) || []),
             options: this.newOptionsForm(config?.options),
+            recorders: this.ngFormBuilder.array(config?.recorders?.map((recorder) => this.newRecorderForm(recorder)) || []),
             systems: this.ngFormBuilder.array(config?.systems?.map((system) => this.newSystemForm(system)) || []),
             tags: this.ngFormBuilder.array(config?.tags?.map((tag) => this.newTagForm(tag)) || []),
         });
@@ -492,6 +506,20 @@ export class RdioScannerAdminService implements OnDestroy {
             systemId: [dirWatch?.systemId, this.validateDirwatchSystemId()],
             talkgroupId: [dirWatch?.talkgroupId, this.validateDirwatchTalkgroupId()],
             type: [dirWatch?.type],
+        });
+    }
+
+    newRecorderForm(recorder?: Recorder): FormGroup {
+        return this.ngFormBuilder.group({
+            _id: [recorder?._id],
+            apiKey: [recorder?.apiKey, [Validators.required, this.validateRecorderApiKey()]],
+            disabled: [recorder?.disabled],
+            label: [recorder?.label, Validators.required],
+            order: [recorder?.order],
+            systemId: [recorder?.systemId],
+            outputDir: [recorder?.outputDir],
+            minSilenceMs: [recorder?.minSilenceMs, Validators.min(0)],
+            preRollMs: [recorder?.preRollMs, Validators.min(0)],
         });
     }
 
@@ -691,6 +719,20 @@ export class RdioScannerAdminService implements OnDestroy {
             const apiKeys: ApiKey[] = control.parent?.parent?.getRawValue() || [];
 
             const count = apiKeys.reduce((c, a) => c += a.key === control.value ? 1 : 0, 0);
+
+            return count > 1 ? { duplicate: true } : null;
+        };
+    }
+
+    private validateRecorderApiKey(): ValidatorFn {
+        return (control: AbstractControl): ValidationErrors | null => {
+            if (typeof control.value !== 'string' || !control.value.length) {
+                return null;
+            }
+
+            const recorders: Recorder[] = control.parent?.parent?.getRawValue() || [];
+
+            const count = recorders.reduce((c, r) => c += r.apiKey === control.value ? 1 : 0, 0);
 
             return count > 1 ? { duplicate: true } : null;
         };

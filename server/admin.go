@@ -310,6 +310,20 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			switch v := m["recorders"].(type) {
+			case []any:
+				admin.Controller.Recorders.FromMap(v)
+				err = admin.Controller.Recorders.Write(admin.Controller.Database)
+				if err != nil {
+					logError(err)
+				} else {
+					err = admin.Controller.Recorders.Read(admin.Controller.Database)
+					if err != nil {
+						logError(err)
+					}
+				}
+			}
+
 			switch v := m["systems"].(type) {
 			case []any:
 				admin.Controller.Systems.FromMap(v)
@@ -378,6 +392,7 @@ func (admin *Admin) GetConfig() map[string]any {
 		"downstreams": admin.Controller.Downstreams.List,
 		"groups":      admin.Controller.Groups.List,
 		"options":     admin.Controller.Options,
+		"recorders":   admin.Controller.Recorders.List,
 		"systems":     systems,
 		"tags":        admin.Controller.Tags.List,
 	}

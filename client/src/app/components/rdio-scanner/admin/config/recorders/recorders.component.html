@@ -1,0 +1,121 @@
+<div class="row top">
+    <p class="mat-body">Scanner Recorders are companion daemons (like
+        <code>tools/uniden-recorder</code>) that feed audio from a physical scanner
+        into rdio-scanner. Each recorder authenticates with its API key and pulls
+        its runtime settings from this list. Hardware-local settings (serial port,
+        audio device) live in the daemon's local <code>.ini</code>.</p>
+    <button type="button" mat-button color="accent" (click)="add()">New recorder</button>
+</div>
+<p *ngIf="!recorders.length" class="mat-small text-center">No defined recorders</p>
+<mat-accordion displayMode="flat" cdkDropList [cdkDropListAutoScrollStep]=64 [cdkDropListData]="recorders"
+    (cdkDropListDropped)="drop($event)">
+    <mat-expansion-panel *ngFor="let recorder of recorders; index as i" cdkDrag>
+        <mat-expansion-panel-header>
+            <mat-panel-title>
+                <mat-icon cdkDragHandle>drag_indicator</mat-icon>
+                {{ recorder.value.label || 'NewRecorder' }}
+                <mat-icon *ngIf="recorder.invalid" color="warn">error</mat-icon>
+            </mat-panel-title>
+        </mat-expansion-panel-header>
+        <ng-container [formGroup]="recorder">
+            <div class="row">
+                <p>
+                    <span class="mat-body">Disabled</span><br>
+                    <span class="mat-caption">When disabled, the daemon will still authenticate but the server's
+                        <code>disabled</code> flag tells it not to write call files.</span>
+                </p>
+                <div>
+                    <mat-slide-toggle color="primary" formControlName="disabled"></mat-slide-toggle>
+                </div>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Label</span><br>
+                    <span class="mat-caption">Friendly name shown in the admin UI. Pick something that identifies the
+                        physical scanner, e.g. "BCD996XT in basement".</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="text" matInput formControlName="label" placeholder="Label">
+                    <mat-error *ngIf="recorder.get('label')?.hasError('required')">
+                        Label is required
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">API key</span><br>
+                    <span class="mat-caption">Put this value in the recorder's <code>uniden-recorder.ini</code> as
+                        <code>api_key</code> so it can fetch its config from this server.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input #key type="text" matInput formControlName="apiKey" placeholder="API key">
+                    <button type="button" mat-icon-button matSuffix (click)="copy(key)">
+                        <mat-icon>content_copy</mat-icon>
+                    </button>
+                    <mat-error *ngIf="recorder.get('apiKey')?.hasError('required')">
+                        API key is required
+                    </mat-error>
+                    <mat-error *ngIf="recorder.get('apiKey')?.hasError('duplicate')">
+                        API key already in use
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">System</span><br>
+                    <span class="mat-caption">Optional. If set, the daemon advertises this system to Auto-populate
+                        instead of relying on the WAV filename's <code>#SYSLBL</code>.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <mat-select formControlName="systemId" placeholder="System">
+                        <mat-option [value]="null"></mat-option>
+                        <mat-option *ngFor="let system of systems" [value]="system.value.id">
+                            {{ system.value.label }}
+                        </mat-option>
+                    </mat-select>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Output directory</span><br>
+                    <span class="mat-caption">Where the daemon writes WAVs. Must be readable by the DirWatch entry on
+                        this server (typically the same path). Leave blank to keep the daemon's local default.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="text" matInput formControlName="outputDir" placeholder="Output directory">
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Min silence (ms)</span><br>
+                    <span class="mat-caption">How long a carrier drop must last before the daemon closes the current
+                        call file. Increase if transmissions get split; decrease if back-to-back calls get glued.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="number" matInput formControlName="minSilenceMs" min="0" placeholder="ms">
+                    <mat-error *ngIf="recorder.get('minSilenceMs')?.hasError('min')">
+                        Must be ≥ 0
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row">
+                <p>
+                    <span class="mat-body">Pre-roll (ms)</span><br>
+                    <span class="mat-caption">How much audio captured before squelch-open is prepended to each call so
+                        the first syllable isn't clipped.</span>
+                </p>
+                <mat-form-field floatLabel="never">
+                    <input type="number" matInput formControlName="preRollMs" min="0" placeholder="ms">
+                    <mat-error *ngIf="recorder.get('preRollMs')?.hasError('min')">
+                        Must be ≥ 0
+                    </mat-error>
+                </mat-form-field>
+            </div>
+            <div class="row bottom">
+                <button type="button" mat-button color="warn" (click)="remove(i)">
+                    Delete recorder
+                </button>
+            </div>
+        </ng-container>
+    </mat-expansion-panel>
+</mat-accordion>

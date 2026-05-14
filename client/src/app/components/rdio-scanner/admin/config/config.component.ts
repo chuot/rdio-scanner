@@ -59,6 +59,10 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
         return this.form?.get('options') as FormGroup;
     }
 
+    get recorders(): FormArray {
+        return this.form?.get('recorders') as FormArray;
+    }
+
     get systems(): FormArray {
         return this.form?.get('systems') as FormArray;
     }

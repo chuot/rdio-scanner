@@ -137,6 +137,29 @@ short and not contain characters that confuse the mask parser. The script
 strips anything outside `[A-Za-z0-9._-]` to underscores before naming
 files, but very long labels are truncated to 48 chars.
 
+## Admin-managed config (optional)
+
+If you'd rather not SSH into the Pi to tweak silence thresholds, register
+the recorder in the rdio-scanner admin UI:
+
+1. **Admin → Recorders → New recorder.** Give it a label, copy the
+   generated **API key**, set System / Output directory / Min silence /
+   Pre-roll, save.
+2. On the Pi, add three lines to `uniden-recorder.ini`:
+
+   ```ini
+   server_url = http://your-rdio-scanner-host:3000
+   api_key    = <paste the key from the admin UI>
+   refresh_seconds = 30
+   ```
+3. Restart the service. The daemon will now pull soft settings (enabled
+   flag, output dir, silence, pre-roll) from the server every 30 s.
+
+Hardware-local settings (`serial_port`, `audio_device`, `samplerate`,
+`channels`) **are not** remotely tunable — only the recorder's local
+operator knows what's plugged in where, so changing those over the wire
+would just be a footgun.
+
 ## Limitations
 
 - GLG field positions are best-effort and BCD996XT-tuned. Adjacent models

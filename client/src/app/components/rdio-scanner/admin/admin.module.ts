@@ -29,6 +29,7 @@ import { RdioScannerAdminDirWatchComponent } from './config/dir-watch/dir-watch.
 import { RdioScannerAdminDownstreamsComponent } from './config/downstreams/downstreams.component';
 import { RdioScannerAdminGroupsComponent } from './config/groups/groups.component';
 import { RdioScannerAdminOptionsComponent } from './config/options/options.component';
+import { RdioScannerAdminRecordersComponent } from './config/recorders/recorders.component';
 import { RdioScannerAdminSystemsSelectComponent } from './config/systems/select/select.component';
 import { RdioScannerAdminSystemComponent } from './config/systems/system/system.component';
 import { RdioScannerAdminSystemsComponent } from './config/systems/systems.component';
@@ -62,6 +63,7 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminLogsComponent,
         RdioScannerAdminOptionsComponent,
         RdioScannerAdminPasswordComponent,
+        RdioScannerAdminRecordersComponent,
         RdioScannerAdminSystemComponent,
         RdioScannerAdminSystemsComponent,
         RdioScannerAdminSystemsSelectComponent,
