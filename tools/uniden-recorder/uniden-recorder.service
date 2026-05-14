@@ -1,0 +1,30 @@
+[Unit]
+Description=Uniden BCD996XT companion recorder for rdio-scanner
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+# Adjust the path if you installed the recorder somewhere other than the
+# user's home. The .ini path falls back to /etc/uniden-recorder.ini if you
+# move config there.
+ExecStart=/usr/bin/python3 /home/pi/rdio-scanner/tools/uniden-recorder/uniden_recorder.py -c /home/pi/rdio-scanner/tools/uniden-recorder/uniden-recorder.ini
+Restart=on-failure
+RestartSec=5
+# Give the scanner a moment to re-enumerate after a USB hotplug.
+StartLimitBurst=10
+StartLimitIntervalSec=120
+
+# Soft sandboxing. The recorder only needs to read /dev/ttyUSB*, access the
+# audio device, and write into output_dir; everything else can be locked
+# down. If you have to widen these, do it here, not in code.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/pi/scanner-calls
+
+[Install]
+WantedBy=multi-user.target

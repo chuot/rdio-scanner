@@ -78,7 +78,11 @@ jobs:
               windows) cp docs/platforms/windows.md "$stage/INSTALL.md" ;;
             esac
 
-            ( cd "$stage" && zip -q "../rdio-scanner-${label}-${arch}-v${ver}.zip" * )
+            # Ship the companion tools dir (Python recorder etc.) so the
+            # release zip is self-contained. -r so subdirs come along.
+            cp -r tools "$stage/tools"
+
+            ( cd "$stage" && zip -qr "../rdio-scanner-${label}-${arch}-v${ver}.zip" * )
           }
 
           build_one freebsd freebsd amd64

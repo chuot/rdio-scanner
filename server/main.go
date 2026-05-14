@@ -130,6 +130,8 @@ func main() {
 
 	http.HandleFunc("/api/admin/user-remove", controller.Admin.UserRemoveHandler)
 
+	http.HandleFunc("/api/recorder-config", controller.Admin.RecorderConfigHandler)
+
 	http.HandleFunc("/api/call-upload", controller.Api.CallUploadHandler)
 
 	http.HandleFunc("/api/trunk-recorder-call-upload", controller.Api.TrunkRecorderCallUploadHandler)

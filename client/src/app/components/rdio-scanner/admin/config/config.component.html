@@ -60,6 +60,16 @@
             </mat-expansion-panel-header>
             <rdio-scanner-admin-options [form]="options"></rdio-scanner-admin-options>
         </mat-expansion-panel>
+        <mat-expansion-panel (afterCollapse)="recordersComponent.closeAll()">
+            <mat-expansion-panel-header>
+                <mat-panel-title>
+                    <mat-icon>radio</mat-icon>
+                    Recorders
+                    <mat-icon *ngIf="form?.get('recorders')?.invalid" color="warn">error</mat-icon>
+                </mat-panel-title>
+            </mat-expansion-panel-header>
+            <rdio-scanner-admin-recorders #recordersComponent [form]="recorders"></rdio-scanner-admin-recorders>
+        </mat-expansion-panel>
         <mat-expansion-panel (afterCollapse)="systemsComponent.closeAll()">
             <mat-expansion-panel-header>
                 <mat-panel-title>

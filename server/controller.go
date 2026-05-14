@@ -68,6 +68,7 @@ type Controller struct {
 	Groups      *Groups
 	Logs        *Logs
 	Options     *Options
+	Recorders   *Recorders
 	Scheduler   *Scheduler
 	Systems     *Systems
 	Tags        *Tags
@@ -90,6 +91,7 @@ func NewController(config *Config) *Controller {
 		Groups:      NewGroups(),
 		Logs:        NewLogs(),
 		Options:     NewOptions(),
+		Recorders:   NewRecorders(),
 		Systems:     NewSystems(),
 		Tags:        NewTags(),
 		Clients:     NewClients(),
@@ -576,6 +578,9 @@ func (controller *Controller) Start() error {
 		return err
 	}
 	if err = controller.Options.Read(controller.Database); err != nil {
+		return err
+	}
+	if err = controller.Recorders.Read(controller.Database); err != nil {
 		return err
 	}
 	if err = controller.Systems.Read(controller.Database); err != nil {

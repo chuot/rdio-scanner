@@ -3,3 +3,8 @@
 *.token
 /build
 /dist
+
+# uniden-recorder companion daemon
+__pycache__/
+*.pyc
+tools/uniden-recorder/uniden-recorder.ini

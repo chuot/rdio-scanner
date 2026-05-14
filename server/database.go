@@ -140,6 +140,9 @@ func (db *Database) migrate() error {
 	if err == nil {
 		err = db.migration20220101070000(verbose)
 	}
+	if err == nil {
+		err = db.migration20260514000000(verbose)
+	}
 
 	return err
 }
@@ -470,6 +473,20 @@ func (db *Database) migration20220101070000(verbose bool) error {
 		}
 	}
 	return db.migrateWithSchema("20220101070000-v6.1.0", queries, verbose)
+}
+
+func (db *Database) migration20260514000000(verbose bool) error {
+	var queries []string
+	if db.Config.DbType == DbTypeSqlite {
+		queries = []string{
+			"create table `rdioScannerRecorders` (`_id` integer primary key autoincrement, `apiKey` varchar(255) not null unique, `disabled` tinyint(1) default 0, `label` varchar(255) not null default '', `order` integer, `systemId` integer, `outputDir` varchar(255), `minSilenceMs` integer, `preRollMs` integer)",
+		}
+	} else {
+		queries = []string{
+			"create table `rdioScannerRecorders` (`_id` integer primary key auto_increment, `apiKey` varchar(255) not null unique, `disabled` tinyint(1) default 0, `label` varchar(255) not null default '', `order` integer, `systemId` integer, `outputDir` varchar(255), `minSilenceMs` integer, `preRollMs` integer)",
+		}
+	}
+	return db.migrateWithSchema("20260514000000-recorders-table", queries, verbose)
 }
 
 func (db *Database) prepareMigration() (bool, error) {
