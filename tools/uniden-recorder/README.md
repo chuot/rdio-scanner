@@ -160,6 +160,12 @@ Hardware-local settings (`serial_port`, `audio_device`, `samplerate`,
 operator knows what's plugged in where, so changing those over the wire
 would just be a footgun.
 
+**Security note.** The `api_key` rides in plain `Authorization: Bearer`
+headers. Over `http://` anyone on the same network can sniff it and
+impersonate the recorder. Use `https://` (the rdio-scanner server supports
+SSL certs and ACME via the `ssl_*` options) unless the recorder and the
+server are on the same trusted LAN.
+
 ## Limitations
 
 - GLG field positions are best-effort and BCD996XT-tuned. Adjacent models

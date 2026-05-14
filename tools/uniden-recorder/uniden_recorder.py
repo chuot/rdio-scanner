@@ -186,9 +186,22 @@ class CallWriter:
         hz = glg.frequency_hz if glg.frequency_hz is not None else 0
         # Mask compatible with rdio-scanner DirWatch:
         #   #DATE_#TIME_#SYSLBL_#TGLBL_#HZ.wav
-        self.final_name = f"{date}_{clock}_{syslbl}_{tglbl}_{hz}.wav"
+        base = f"{date}_{clock}_{syslbl}_{tglbl}_{hz}"
+        self.final_name = f"{base}.wav"
         self.part_path = output_dir / (self.final_name + ".part")
         self.final_path = output_dir / self.final_name
+        # Two calls starting in the same second on the same TG would
+        # collide. os.replace overwrites silently, so we'd lose the first.
+        # Bump with -N if the target (or its .part) already exists.
+        suffix = 1
+        while self.final_path.exists() or self.part_path.exists():
+            self.final_name = f"{base}-{suffix}.wav"
+            self.part_path = output_dir / (self.final_name + ".part")
+            self.final_path = output_dir / self.final_name
+            suffix += 1
+            if suffix > 99:
+                # Pathological case; bail rather than spin forever.
+                raise RuntimeError(f"too many filename collisions on {base}")
 
         self._wave = wave.open(str(self.part_path), "wb")
         self._wave.setnchannels(channels)
@@ -470,6 +483,10 @@ class Recorder:
                 LOG.warning("config refresh failed: %s", exc)
             self._sleep_interruptible(period)
 
+    # Hard cap on the config response body. A misconfigured or hostile
+    # server could otherwise stream gigabytes and OOM the recorder.
+    _MAX_CONFIG_BYTES = 64 * 1024
+
     def _fetch_remote_config(self, url: str) -> None:
         req = urllib.request.Request(
             url,
@@ -480,7 +497,14 @@ class Recorder:
                 if resp.status != 200:
                     LOG.warning("config refresh HTTP %s", resp.status)
                     return
-                body = resp.read()
+                # +1 so an exactly-at-limit response trips the guard.
+                body = resp.read(self._MAX_CONFIG_BYTES + 1)
+                if len(body) > self._MAX_CONFIG_BYTES:
+                    LOG.warning(
+                        "config refresh: response exceeds %d bytes, ignoring",
+                        self._MAX_CONFIG_BYTES,
+                    )
+                    return
         except urllib.error.HTTPError as exc:
             if exc.code == 401:
                 LOG.error("config refresh: 401 unauthorised - check api_key")

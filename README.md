@@ -50,6 +50,23 @@ are unchanged, and no new mandatory configuration is required.
   - **Prune old calls** — manually deletes calls older than the configured
     retention window, or a number of days you specify, without waiting for
     the scheduled prune.
+- **Uniden BCD996XT companion recorder** — `tools/uniden-recorder/` ships
+  a small Python daemon that turns a USB-connected Uniden BCD996XT (and
+  close relatives like the BCD436HP / BCD536HP) into a live feed for
+  rdio-scanner. It polls the scanner over USB serial for current
+  frequency / system / talkgroup, captures audio from a USB sound card
+  line-in, and drops finished calls into a directory that the existing
+  DirWatch ingests automatically. The release zip now bundles `tools/`
+  on every platform; full install instructions are in
+  [`tools/uniden-recorder/README.md`](tools/uniden-recorder/README.md).
+- **Admin → Recorders** — new admin section for managing companion
+  recorders. Each recorder gets an API key it presents to
+  `GET /api/recorder-config` (`Authorization: Bearer <key>`); the server
+  hands back the "soft" runtime settings (enabled flag, target system,
+  output dir, min silence, pre-roll) while hardware-local settings
+  (serial port, audio device, samplerate) stay in the daemon's local
+  `.ini`. Useful for tweaking call-splitting thresholds from the admin
+  UI without SSH-ing into the Pi.
 - **Trusted proxy mode** — new `trust_proxy` flag (CLI: `-trust_proxy=true`,
   ini: `trust_proxy = true`). When **off** (the default), `X-Forwarded-For`
   is ignored, so a direct client cannot spoof the header to dodge the per-IP
@@ -159,6 +176,12 @@ earlier rounds:
 | POST   | `/api/admin/database/prune`                | Delete calls older than `{ "days": N }` (or the configured retention window if omitted) |
 | POST   | `/api/admin/radio-reference/talkgroups`    | Body `{ username, password, appKey, sid }` → returns `{ talkgroups: [...] }` for review-import |
 
+## New API endpoints (recorder-key authenticated)
+
+| Method | Path                       | Purpose                                                                |
+| ------ | -------------------------- | ---------------------------------------------------------------------- |
+| GET    | `/api/recorder-config`     | Companion recorder polls this with `Authorization: Bearer <apiKey>`; returns runtime settings (enabled, output dir, min silence, pre-roll, target system). Keys are managed under Admin → Recorders. |
+
 ## Contributing
 
 Active development happens on `master`. Pushing a `v*` tag triggers
@@ -188,6 +211,7 @@ Here is a list of recorders known to work with [Rdio Scanner](https://github.com
 | [voxcall](https://github.com/aaknitt/voxcall)                  | X   |          |
 | [ProScan](https://www.proscan.org/)                            |     | X        |
 | [DSDPlus Fast Lane](https://www.dsdplus.com/)                  |     | X        |
+| [uniden-recorder](./tools/uniden-recorder/) (this fork, BCD996XT family) |     | X        |
 
 # Quick start
 
@@ -199,14 +223,14 @@ rather run the unmodified release.
 
    | Operating system | Architecture | Use package                                     |
    | -----------------| ------------ | ----------------------------------------------- |
-   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3-fork.2.zip    |
-   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3-fork.2.zip        |
-   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3-fork.2.zip      |
-   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3-fork.2.zip        |
-   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3-fork.2.zip      |
-   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3-fork.2.zip      |
-   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3-fork.2.zip      |
-   | Windows          | amd64        | rdio-scanner-windows-amd64-v6.6.3-fork.2.zip    |
+   | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v6.6.3-fork.3.zip    |
+   | Linux            | 386          | rdio-scanner-linux-386-v6.6.3-fork.3.zip        |
+   | Linux            | amd64        | rdio-scanner-linux-amd64-v6.6.3-fork.3.zip      |
+   | Linux            | arm          | rdio-scanner-linux-arm-v6.6.3-fork.3.zip        |
+   | Linux            | arm64        | rdio-scanner-linux-arm64-v6.6.3-fork.3.zip      |
+   | macOS            | amd64        | rdio-scanner-macos-amd64-v6.6.3-fork.3.zip      |
+   | macOS            | arm64        | rdio-scanner-macos-arm64-v6.6.3-fork.3.zip      |
+   | Windows          | amd64        | rdio-scanner-windows-amd64-v6.6.3-fork.3.zip    |
 
    Each release also ships a `SHA256SUMS` file you can use to verify the
    archive after download.
