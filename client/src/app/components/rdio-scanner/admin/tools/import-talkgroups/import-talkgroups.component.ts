@@ -37,10 +37,21 @@ export class RdioScannerAdminImportTalkgroupsComponent {
 
     csv: string[][] = [];
 
+    // Index of the synthetic "kHz from frequency" cell appended to each row
+    // when the upload looks like a RadioReference frequency export. Kept
+    // out of the way of anything a real CSV would put there.
+    private static readonly SYNTH_FREQ_KHZ_COL = 32;
+
     fields = [
         // [id, label, description, tag, group]
-        [0, 3, 4, 5, 6], // trunk-recorder
-        [0, 2, 4, 5, 6], // radioreference.com
+        [0, 3, 4, 5, 6], // 0: trunk-recorder
+        [0, 2, 4, 5, 6], // 1: radioreference.com talkgroup CSV
+        // 2: radioreference.com "Frequencies" CSV. id is synthesized from
+        // the decimal-MHz "Frequency Output" column (kHz, integer). Other
+        // columns: 0:Freq Out, 1:Freq In, 2:Callsign, 3:Agency/Category,
+        // 4:Description, 5:Alpha Tag, 6:PL Out, 7:PL In, 8:Mode,
+        // 9:Class Station Code, 10:Tag.
+        [RdioScannerAdminImportTalkgroupsComponent.SYNTH_FREQ_KHZ_COL, 5, 4, 10, 3],
     ];
 
     mode = 0;
@@ -167,22 +178,69 @@ export class RdioScannerAdminImportTalkgroupsComponent {
                 return;
             }
 
-            const rows = parseCsv(reader.result);
-            const accepted = rows
-                .map((row) => row.map((cell) => (typeof cell === 'string' ? cell.trim() : cell)))
-                .filter((row) => row.length > 0 && /^\d+$/.test(row[0]))
-                .filter((row, idx, arr) => arr.findIndex((other) => other[0] === row[0]) === idx);
+            const synthCol = RdioScannerAdminImportTalkgroupsComponent.SYNTH_FREQ_KHZ_COL;
+
+            const rows = parseCsv(reader.result)
+                .map((row) => row.map((cell) => (typeof cell === 'string' ? cell.trim() : cell)));
+
+            // Two accepted shapes:
+            //   1. Talkgroup CSV (trunk-recorder / RR talkgroups): col 0 is a
+            //      pure integer talkgroup id.
+            //   2. RR Frequencies CSV: col 0 is a decimal MHz value; we
+            //      synthesize an integer kHz id and stash it in synthCol so
+            //      modes 0/1 still read row[0] and mode 2 reads row[synthCol].
+            // A row that doesn't fit either shape is dropped.
+            let freqRowCount = 0;
+            let talkgroupRowCount = 0;
+
+            const enriched = rows.map((row) => {
+                const out = row.slice();
+                const first = out[0] ?? '';
+
+                if (/^\d+$/.test(first)) {
+                    talkgroupRowCount++;
+                } else if (/^\d+(\.\d+)?$/.test(first) && parseFloat(first) > 0) {
+                    // Round to nearest kHz, away from 0; covers both
+                    // 147.000000 (MHz) and 462.5500 cleanly without
+                    // precision drift.
+                    out[synthCol] = String(Math.round(parseFloat(first) * 1000));
+                    freqRowCount++;
+                }
+
+                return out;
+            });
+
+            const accepted = enriched
+                .filter((row) => /^\d+$/.test(row[0] ?? '') || /^\d+$/.test(row[synthCol] ?? ''))
+                .filter((row, idx, arr) => {
+                    const idOf = (r: string[]): string => (/^\d+$/.test(r[0] ?? '') ? r[0] : r[synthCol]) || '';
+                    const myId = idOf(row);
+                    return arr.findIndex((other) => idOf(other) === myId) === idx;
+                });
+
+            // Auto-pick mode 2 if the CSV is clearly a frequency export.
+            // Don't override an existing selection if both shapes are mixed.
+            if (freqRowCount > talkgroupRowCount && freqRowCount > 0) {
+                this.mode = 2;
+            } else if (this.mode === 2 && talkgroupRowCount > freqRowCount) {
+                this.mode = 0;
+            }
 
             this.csv = accepted;
 
             if (accepted.length === 0) {
                 this.matSnackBar.open(
-                    `No talkgroup rows recognized in that CSV. ${rows.length} non-empty lines parsed; row 0 must start with a numeric talkgroup id.`,
+                    `No usable rows in that CSV. ${rows.length} non-empty lines parsed; expected either a numeric talkgroup id or a decimal-MHz frequency in column 1.`,
                     '',
                     { duration: 7000 },
                 );
             } else {
-                this.matSnackBar.open(`Loaded ${accepted.length} talkgroup row(s) from CSV.`, '', { duration: 4000 });
+                const shape = this.mode === 2 ? 'frequency' : 'talkgroup';
+                this.matSnackBar.open(
+                    `Loaded ${accepted.length} ${shape} row(s) from CSV.`,
+                    '',
+                    { duration: 4000 },
+                );
             }
         };
 
