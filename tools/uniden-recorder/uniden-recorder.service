@@ -2,20 +2,25 @@
 Description=Uniden BCD996XT companion recorder for rdio-scanner
 After=network-online.target sound.target
 Wants=network-online.target
+# Bound restart attempts in case the USB device is missing or the .ini is
+# broken — without these two systemd would loop forever. These keys MUST
+# live in [Unit], not [Service]; older docs put them in [Service] and
+# modern systemd ignores them with a warning.
+StartLimitBurst=10
+StartLimitIntervalSec=120
 
 [Service]
 Type=simple
+# === EDIT THESE FOR YOUR INSTALL ===
+# Older Pi OS images used the `pi` account. Modern ones (Bookworm / latest
+# imager flow) typically have whatever username you picked at first boot.
+# Change User= / Group= and the two /home/<user>/ paths below to match.
 User=pi
 Group=pi
-# Adjust the path if you installed the recorder somewhere other than the
-# user's home. The .ini path falls back to /etc/uniden-recorder.ini if you
-# move config there.
 ExecStart=/usr/bin/python3 /home/pi/rdio-scanner/tools/uniden-recorder/uniden_recorder.py -c /home/pi/rdio-scanner/tools/uniden-recorder/uniden-recorder.ini
+# ===================================
 Restart=on-failure
 RestartSec=5
-# Give the scanner a moment to re-enumerate after a USB hotplug.
-StartLimitBurst=10
-StartLimitIntervalSec=120
 
 # Soft sandboxing. The recorder only needs to read /dev/ttyUSB*, access the
 # audio device, and write into output_dir; everything else can be locked
@@ -24,6 +29,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
+# Set this to the same value as `output_dir` in the .ini. Must also be
+# changed when User= changes.
 ReadWritePaths=/home/pi/scanner-calls
 
 [Install]

@@ -132,10 +132,15 @@ sudo usermod -aG dialout pi
 **Wave files are huge.** Drop `samplerate` to 16000 or 11025; FM voice
 fits in either fine, and DirWatch will transcode anyway.
 
-**Auto-populate isn't creating talkgroups.** The talkgroup label must be
+**Auto-populate isn't creating talkgroups.** First, confirm Auto-populate
+is ON for the system the DirWatch is pointing at (Admin → Systems → that
+system → Auto-populate slider). Without it, rdio-scanner refuses to create
+talkgroups it hasn't seen before. Second, the talkgroup label must be
 short and not contain characters that confuse the mask parser. The script
-strips anything outside `[A-Za-z0-9._-]` to underscores before naming
-files, but very long labels are truncated to 48 chars.
+strips anything outside `[A-Za-z0-9.-]` to **dashes** (not underscores —
+`_` is reserved as the mask field separator), and labels are truncated to
+48 chars. So `"Decatur County Fire EMS"` becomes `Decatur-County-Fire-EMS`
+in the filename, which the mask parses unambiguously.
 
 ## Admin-managed config (optional)
 

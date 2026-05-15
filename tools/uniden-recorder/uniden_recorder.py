@@ -56,8 +56,11 @@ DEFAULT_CONFIG_PATHS = (
 )
 
 # Regex that strips characters that would be a pain in a filename. We keep
-# alphanumerics, dash, underscore; everything else becomes underscore.
-_FNAME_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+# alphanumerics, dot, dash. Spaces and other punctuation become a dash —
+# NOT an underscore, because `_` is the field separator on the rdio-scanner
+# DirWatch mask. If a system or talkgroup label contained underscores the
+# mask parser couldn't tell where SYSLBL ends and TGLBL starts.
+_FNAME_SAFE = re.compile(r"[^A-Za-z0-9.-]+")
 
 # How long after squelch-close we wait before finalising the call, so a brief
 # carrier drop in the middle of a transmission doesn't split it into two
@@ -241,7 +244,7 @@ class CallWriter:
 
 def _safe_label(s: str) -> str:
     s = s.strip() or "unknown"
-    s = _FNAME_SAFE.sub("_", s)
+    s = _FNAME_SAFE.sub("-", s)
     return s[:48] or "unknown"
 
 
