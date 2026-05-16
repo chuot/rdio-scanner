@@ -10,43 +10,56 @@
 ### 1. License
 This software is distributed under the GNU General Public License (GPL). You are free to use, modify, and distribute the source code under the terms of the GPL.
 
+**Exception:** The WebSocket API implementation is proprietary and subject to the terms outlined in this document.
+
 ---
 
 ### 2. Scope of Restriction
-The restriction described below applies **only** to the **WebSocket API** implemented by this project.  
-It does **not** apply to any standard HTTP API endpoints or other interfaces provided by the software.  
-The WebSocket API is a real-time communication channel intended for authorized clients only.
+The HTTP REST API and all other features are fully available under GPL terms.
+
+The **WebSocket API** is a proprietary real-time communication channel provided exclusively by Saubeo Solutions. This distinction supports the commercial model that funds ongoing project development.
 
 ---
 
 ### 3. Authorized Access
-- Access to the **WebSocket API** is **exclusively reserved** for the official sponsor of this project, **Saubeo Solutions**, **and its native applications**.
-- No other entity or individual is permitted to use the WebSocket API without prior written consent from the maintainers.
+
+**Official Saubeo Solutions Service:**
+- The WebSocket API is exclusively available through Saubeo Solutions' hosted service for its native applications and the integrated web application.
+
+**Self-Hosted Deployments:**
+- Self-hosted instances can use the HTTP REST API without restriction.
+- Access to the WebSocket API in self-hosted instances requires a prior written license agreement with Saubeo Solutions.
+- Contact [rdio-scanner@saubeo.solutions](mailto:rdio-scanner@saubeo.solutions) to inquire about licensing.
 
 ---
 
 ### 4. Authentication
-Authorized clients must:
-- Use valid authentication credentials provided by the maintainers.
+Authorized clients (including self-hosted licensees) must:
+- Use valid authentication credentials provided by Saubeo Solutions.
 - Ensure secure handling of credentials. Sharing credentials with unauthorized parties is strictly prohibited.
 
 ---
 
 ### 5. Prohibited Use
 You may not:
-- Attempt to connect to the WebSocket API without explicit authorization.
-- Use the WebSocket API for any purpose outside the scope of Saubeo Solutions’ sponsorship and its native apps.
-- Reverse-engineer, replicate, or redistribute the hosted WebSocket API service.
+- Attempt to use the WebSocket API without explicit authorization (either through the official hosted service or a valid license agreement).
+- Use the WebSocket API in commercial applications or services without a license agreement.
+- Reverse-engineer, replicate, or redistribute the WebSocket API service.
+- Bypass or disable WebSocket API restrictions through code modification.
+
+### 6. HTTP REST API
+The HTTP REST API provided by Rdio Scanner is **not restricted** and fully available under GPL terms for all uses, including self-hosted deployments and third-party applications.
 
 ---
 
-### 6. Enforcement
+### 7. Enforcement
 Violation of these terms may result in:
 - Immediate revocation of WebSocket API access.
+- Termination of any license agreement.
 - Legal action for unauthorized use.
 
 ---
 
-### 7. Contact
-For authorization requests or questions, contact:  
+### 8. Commercial Licensing
+For WebSocket API access in self-hosted or commercial deployments, contact:  
 [rdio-scanner@saubeo.solutions](mailto:rdio-scanner@saubeo.solutions)

@@ -18,6 +18,10 @@ For **feature requests**, describe the reason and use case.
 
 Most of the time, the issue will be assigned to the [owner and project manager](https://github.com/chuot) and then resolved in a timely manner. In some cases, the issue will be identified as _help needed_ and then assigned to a volonteer contributor. Again, pull requests will be rejected if they are not related to a previously opened and assigned issue.
 
+## Contributor Agreement
+
+By submitting a contribution to this repository, you agree to the terms of the [Individual Contributor Assignment Agreement](./ICAA.md).
+
 ## Random Pull Requests
 
 To keep the project stable and well organized, random pull requests will be rejected if no issue have been previously opened and assigned first by the [owner and project manager](https://github.com/chuot).
