@@ -18,7 +18,7 @@
  */
 
 import { Component, ViewChild } from '@angular/core';
-import { FormBuilder } from '@angular/forms';
+import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatPaginator } from '@angular/material/paginator';
 import { BehaviorSubject } from 'rxjs';
 import { Log, LogsQuery, LogsQueryOptions, RdioScannerAdminService } from '../admin.service';
@@ -27,13 +27,10 @@ import { Log, LogsQuery, LogsQueryOptions, RdioScannerAdminService } from '../ad
     selector: 'rdio-scanner-admin-logs',
     styleUrls: ['./logs.component.scss'],
     templateUrl: './logs.component.html',
+    standalone: false
 })
 export class RdioScannerAdminLogsComponent {
-    form = this.ngFormBuilder.group({
-        date: [null],
-        level: [null],
-        sort: [-1],
-    });
+    form: FormGroup;
 
     logs = new BehaviorSubject(new Array<Log | null>(10));
 
@@ -47,7 +44,13 @@ export class RdioScannerAdminLogsComponent {
 
     @ViewChild(MatPaginator) private paginator: MatPaginator | undefined;
 
-    constructor(private adminService: RdioScannerAdminService, private ngFormBuilder: FormBuilder) { }
+    constructor(private adminService: RdioScannerAdminService, private ngFormBuilder: FormBuilder) {
+        this.form = this.ngFormBuilder.group({
+            date: [null],
+            level: [null],
+            sort: [-1],
+        });
+    }
 
     formHandler(): void {
         this.paginator?.firstPage();
@@ -98,11 +101,11 @@ export class RdioScannerAdminLogsComponent {
         const options: LogsQueryOptions = {
             limit: this.limit,
             offset: this.offset,
-            sort: this.form.value.sort,
+            sort: this.form.get('sort')?.value ?? -1,
         };
 
-        if (typeof this.form.value.level === 'string') {
-            options.level = this.form.value.level;
+        if (typeof this.form.get('level')?.value === 'string') {
+            options.level = this.form.get('level')?.value ?? undefined;
         }
 
         if (typeof this.form.value.date === 'string') {

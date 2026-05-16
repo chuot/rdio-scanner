@@ -24,6 +24,7 @@ import { Config, RdioScannerAdminService, System } from '../../admin.service';
     selector: 'rdio-scanner-admin-import-units',
     styleUrls: ['./import-units.component.scss'],
     templateUrl: './import-units.component.html',
+    standalone: false
 })
 export class RdioScannerAdminImportUnitsComponent implements OnInit{
     @Output() config = new EventEmitter<Config>();
@@ -42,7 +43,7 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
         this.baseConfig = await this.adminService.getConfig();
 
         if (Array.isArray(this.baseConfig.systems) && this.baseConfig.systems.length > 0) {
-            this.system = this.baseConfig.systems![0];
+            this.system = this.baseConfig.systems[0];
         }
     }
 
@@ -50,12 +51,12 @@ export class RdioScannerAdminImportUnitsComponent implements OnInit{
         if (this.system === undefined) return;
 
         const units = this.csv.map((csv, idx) => ({
-            id: +csv[0],
+            unitRef: +csv[0],
             label: csv[1],
             order: idx + 1,
         }));
 
-        this.system!.units = this.system!.units!.concat(units);
+        this.system.units = this.system?.units?.concat(units);
 
         this.csv = [];
 

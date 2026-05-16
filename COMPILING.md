@@ -1,6 +1,6 @@
 # How to compile
 
-> RDIO SCANNER REPRESENTS A LOT OF INVESTMENT IN TIME, SUPPORT, TESTS AND MATERIALS. BY INTENTIONALLY MODIFYING ITS CODE TO REMOVE ITS IDENTITY, YOU HARM THE OPEN SOURCE PROJECT AND ITS AUTHOR. PLEASE BE RESPECTFUL, SPONSOR THIS PROJECT IF YOU CAN, USE NATIVE APPS IF POSSIBLE.
+> RDIO SCANNER REPRESENTS A LOT OF INVESTMENT IN TIME, SUPPORT, TESTS AND MATERIALS. BY INTENTIONALLY MODIFYING ITS CODE TO REMOVE ITS IDENTITY, YOU HARM THE OPEN SOURCE PROJECT AND ITS AUTHOR. PLEASE BE RESPECTFUL, SPONSOR THIS PROJECT, USE NATIVE APPS IF POSSIBLE.
 
 The official version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is compiled on a PC using the current version of Fedora Workstation. You should have no problem building on another platform as long as the prerequisites are available and installed.
 
@@ -27,13 +27,13 @@ Clone the official repository on your computer and start the build process.
 
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 
-        rdio-scanner-darwin-amd64-v6.6.3.zip
-        rdio-scanner-darwin-arm64-v6.6.3.zip
-        rdio-scanner-freebsd-amd64-v6.6.3.zip
-        rdio-scanner-linux-386-v6.6.3.zip
-        rdio-scanner-linux-amd64-v6.6.3.zip
-        rdio-scanner-linux-arm64-v6.6.3.zip
-        rdio-scanner-linux-arm-v6.6.3.zip
-        rdio-scanner-windows-amd64-v6.6.3.zip
+        rdio-scanner-darwin-amd64-v7.0.0.zip
+        rdio-scanner-darwin-arm64-v7.0.0.zip
+        rdio-scanner-freebsd-amd64-v7.0.0.zip
+        rdio-scanner-linux-386-v7.0.0.zip
+        rdio-scanner-linux-amd64-v7.0.0.zip
+        rdio-scanner-linux-arm64-v7.0.0.zip
+        rdio-scanner-linux-arm-v7.0.0.zip
+        rdio-scanner-windows-amd64-v7.0.0.zip
 
 **Happy Rdio scanning !**

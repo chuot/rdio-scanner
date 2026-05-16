@@ -25,9 +25,10 @@ import { timer } from 'rxjs';
     selector: 'RdioScannerSupport',
     styleUrls: ['./support.component.scss'],
     templateUrl: './support.component.html',
+    standalone: false
 })
 export class RdioScannerSupportComponent {
-    countdown: number = 10;
+    countdown = 10;
 
     email: string | undefined;
 

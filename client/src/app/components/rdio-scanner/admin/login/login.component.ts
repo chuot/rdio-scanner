@@ -18,27 +18,30 @@
  */
 
 import { Component, EventEmitter, Output } from '@angular/core';
-import { FormBuilder, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RdioScannerAdminService } from '../admin.service';
 
 @Component({
     selector: 'rdio-scanner-admin-login',
     styleUrls: ['./login.component.scss'],
     templateUrl: './login.component.html',
+    standalone: false
 })
 export class RdioScannerAdminLoginComponent {
     @Output() loggedIn = new EventEmitter<void>();
 
-    form = this.formBuilder.group({
-        password: [null, Validators.required],
-    });
+    form: FormGroup;
 
     message = '';
 
     constructor(
         private adminService: RdioScannerAdminService,
-        private formBuilder: FormBuilder,
-    ) { }
+        private ngFormBuilder: FormBuilder,
+    ) {
+        this.form = this.ngFormBuilder.group({
+            password: this.ngFormBuilder.control(null, Validators.required),
+        });
+    }
 
     async login(password = this.form.get('password')?.value): Promise<void> {
         if (!password) {

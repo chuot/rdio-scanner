@@ -18,26 +18,44 @@
  */
 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Component, Input, QueryList, ViewChildren } from '@angular/core';
+import { Component, Input, QueryList, ViewChildren, ChangeDetectionStrategy, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { FormArray, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { RdioScannerAdminService } from '../../admin.service';
+import { Subscription } from 'rxjs';
 
 @Component({
     selector: 'rdio-scanner-admin-systems',
     templateUrl: './systems.component.html',
+    standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class RdioScannerAdminSystemsComponent {
-    @Input() form: FormArray | undefined;
+export class RdioScannerAdminSystemsComponent implements OnDestroy {
+    private _form: FormArray | undefined;
+    private subs = new Subscription();
+    private _systemsCache: FormGroup[] = [];
+
+    @Input()
+    set form(f: FormArray | undefined) {
+        if (this._form === f) { return; }
+        this.subs.unsubscribe();
+        this.subs = new Subscription();
+        this._form = f;
+        this.updateCache();
+        if (this._form) {
+            const s = this._form.valueChanges.subscribe(() => this.updateCache());
+            this.subs.add(s);
+        }
+    }
+    get form(): FormArray | undefined { return this._form; }
 
     get systems(): FormGroup[] {
-        return this.form?.controls
-            .sort((a, b) => (a.value.order || 0) - (b.value.order || 0)) as FormGroup[];
+        return this._systemsCache;
     }
 
     @ViewChildren(MatExpansionPanel) private panels: QueryList<MatExpansionPanel> | undefined;
 
-    constructor(private adminService: RdioScannerAdminService) { }
+    constructor(private adminService: RdioScannerAdminService, private cd: ChangeDetectorRef) { }
 
     add(): void {
         const system = this.adminService.newSystemForm();
@@ -47,6 +65,8 @@ export class RdioScannerAdminSystemsComponent {
         this.form?.insert(0, system);
 
         this.form?.markAsDirty();
+
+        this.updateCache();
     }
 
     closeAll(): void {
@@ -60,6 +80,8 @@ export class RdioScannerAdminSystemsComponent {
             event.container.data.forEach((dat, idx) => dat.get('order')?.setValue(idx + 1, { emitEvent: false }));
 
             this.form?.markAsDirty();
+
+            this.updateCache();
         }
     }
 
@@ -67,5 +89,23 @@ export class RdioScannerAdminSystemsComponent {
         this.form?.removeAt(index);
 
         this.form?.markAsDirty();
+
+        this.updateCache();
+    }
+
+    private updateCache(): void {
+        if (!this._form) {
+            this._systemsCache = [];
+            this.cd.markForCheck();
+            return;
+        }
+        const arr = [...this._form.controls] as FormGroup[];
+        arr.sort((a, b) => (a.value.order || 0) - (b.value.order || 0));
+        this._systemsCache = arr;
+        this.cd.markForCheck();
+    }
+
+    ngOnDestroy(): void {
+        this.subs.unsubscribe();
     }
 }

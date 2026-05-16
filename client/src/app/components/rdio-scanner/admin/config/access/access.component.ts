@@ -28,6 +28,7 @@ import { RdioScannerAdminSystemsSelectComponent } from '../systems/select/select
 @Component({
     selector: 'rdio-scanner-admin-access',
     templateUrl: './access.component.html',
+    standalone: false
 })
 export class RdioScannerAdminAccessComponent {
     @Input() form: FormArray | undefined;

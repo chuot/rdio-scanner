@@ -1,4 +1,4 @@
-.mat-radio-group {
+.mat-mdc-radio-group {
   display: flex;
   flex-direction: row;
   justify-content: center;
@@ -8,18 +8,25 @@
   }
 }
 
-.mat-table {
+.mat-mdc-table {
   min-width: 720px;
 }
 
-.mat-cell >  span {
+.mat-mdc-cell >  span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .mat-column-action {
-  max-width: 40px;
+  max-width: 48px;
+}
+
+.note {
+  border: 2px solid darkred;
+  color: darkred;
+  margin: 0 4rem;
+  padding: 2px;
 }
 
 .scroll {

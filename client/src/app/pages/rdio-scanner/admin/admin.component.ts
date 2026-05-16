@@ -24,6 +24,7 @@ import packageInfo from '../../../../../package.json';
     selector: 'rdio-scanner-admin-page',
     styleUrls: ['./admin.component.scss'],
     templateUrl: './admin.component.html',
+    standalone: false
 })
 export class RdioScannerAdminPageComponent {
     version = packageInfo.version;

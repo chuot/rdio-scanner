@@ -25,14 +25,15 @@ import { timer } from 'rxjs';
     selector: 'RdioScannerNative',
     styleUrls: ['./native.component.scss'],
     templateUrl: './native.component.html',
+    standalone: false
 })
 export class RdioScannerNativeComponent implements OnInit {
-    countdown: number = 10;
+    countdown = 10;
 
-    deviceType: string = 'mobile';
+    deviceType = 'mobile';
 
-    isAndroid: boolean = false;
-    isApple: boolean = false;
+    isAndroid = false;
+    isApple = false;
 
     constructor(@Optional() private matSnackBarRef: MatSnackBarRef<RdioScannerNativeComponent>) { }
 

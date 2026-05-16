@@ -1,43 +1,43 @@
-<ng-container *ngIf="!authenticated">
-    <rdio-scanner-admin-login></rdio-scanner-admin-login>
-</ng-container>
-<ng-container *ngIf="authenticated">
-    <rdio-scanner-admin-todos></rdio-scanner-admin-todos>
-    <mat-accordion displayMode="flat">
-        <mat-expansion-panel #configPanel (afterCollapse)="configComponent?.closeAll()">
-            <mat-expansion-panel-header>
-                <mat-panel-title>
-                    <mat-icon>settings</mat-icon>
-                    Config
-                </mat-panel-title>
-            </mat-expansion-panel-header>
-            <rdio-scanner-admin-config #configComponent></rdio-scanner-admin-config>
-        </mat-expansion-panel>
-        <mat-expansion-panel (afterExpand)="logsComponent.reload()">
-            <mat-expansion-panel-header>
-                <mat-panel-title>
-                    <mat-icon>article</mat-icon>
-                    Logs
-                </mat-panel-title>
-            </mat-expansion-panel-header>
-            <rdio-scanner-admin-logs #logsComponent></rdio-scanner-admin-logs>
-        </mat-expansion-panel>
-        <mat-expansion-panel (afterCollapse)="toolsComponent?.closeAll()">
-            <mat-expansion-panel-header>
-                <mat-panel-title>
-                    <mat-icon>build</mat-icon>
-                    Tools
-                </mat-panel-title>
-            </mat-expansion-panel-header>
-            <rdio-scanner-admin-tools #toolsComponent (config)="configComponent.reset($event, { dirty: true }); configPanel.open()"></rdio-scanner-admin-tools>
-        </mat-expansion-panel>
-        <mat-expansion-panel hideToggle (click)="logout()">
-            <mat-expansion-panel-header>
-                <mat-panel-title>
-                    <mat-icon>logout</mat-icon>
-                    Logout
-                </mat-panel-title>
-            </mat-expansion-panel-header>
-        </mat-expansion-panel>
-    </mat-accordion>
-</ng-container>
+@if (!authenticated) {
+  <rdio-scanner-admin-login></rdio-scanner-admin-login>
+}
+@if (authenticated) {
+  <rdio-scanner-admin-todos></rdio-scanner-admin-todos>
+  <mat-accordion displayMode="flat">
+    <mat-expansion-panel #configPanel (afterCollapse)="configComponent.closeAll()">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>settings</mat-icon>
+          Config
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+      <rdio-scanner-admin-config #configComponent></rdio-scanner-admin-config>
+    </mat-expansion-panel>
+    <mat-expansion-panel (afterExpand)="logsComponent.reload()">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>article</mat-icon>
+          Logs
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+      <rdio-scanner-admin-logs #logsComponent></rdio-scanner-admin-logs>
+    </mat-expansion-panel>
+    <mat-expansion-panel (afterCollapse)="toolsComponent.closeAll()">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>build</mat-icon>
+          Tools
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+      <rdio-scanner-admin-tools #toolsComponent (config)="configComponent.reset($event, { dirty: true }); configPanel.open()"></rdio-scanner-admin-tools>
+    </mat-expansion-panel>
+    <mat-expansion-panel hideToggle (click)="logout()">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>logout</mat-icon>
+          Logout
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+    </mat-expansion-panel>
+  </mat-accordion>
+}

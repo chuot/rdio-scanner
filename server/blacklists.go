@@ -27,9 +27,9 @@ import (
 
 type Blacklists string
 
-func (blacklists *Blacklists) IsBlacklisted(id uint) bool {
+func (blacklists *Blacklists) IsBlacklisted(ref uint) bool {
 	for _, i := range strings.Split(blacklists.String(), ",") {
-		if fmt.Sprintf("%v", i) == fmt.Sprintf("%v", id) {
+		if fmt.Sprintf("%v", i) == fmt.Sprintf("%v", ref) {
 			return true
 		}
 	}

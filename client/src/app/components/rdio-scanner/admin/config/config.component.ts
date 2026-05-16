@@ -21,6 +21,8 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { AdminEvent, RdioScannerAdminService, Config } from '../admin.service';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,6 +30,7 @@ import { AdminEvent, RdioScannerAdminService, Config } from '../admin.service';
     selector: 'rdio-scanner-admin-config',
     styleUrls: ['./config.component.scss'],
     templateUrl: './config.component.html',
+    standalone: false
 })
 export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
     docker = false;
@@ -38,12 +41,12 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
         return this.form?.get('access') as FormArray;
     }
 
-    get apiKeys(): FormArray {
-        return this.form?.get('apiKeys') as FormArray;
+    get apikeys(): FormArray {
+        return this.form?.get('apikeys') as FormArray;
     }
 
-    get dirWatch(): FormArray {
-        return this.form?.get('dirWatch') as FormArray;
+    get dirwatch(): FormArray {
+        return this.form?.get('dirwatch') as FormArray;
     }
 
     get downstreams(): FormArray {
@@ -68,38 +71,42 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
 
     private config: Config | undefined;
 
-    private eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
-        if ('authenticated' in event && event.authenticated === true) {
-            this.config = await this.adminService.getConfig();
-
-            this.reset();
-        }
-
-        if ('config' in event) {
-            this.config = event.config;
-
-            if (this.form?.pristine) {
-                this.reset();
-            }
-        }
-
-        if ('docker' in event) {
-            this.docker = event.docker ?? false;
-        }
-    });
+    private readonly destroy$ = new Subject<void>();
 
     @ViewChildren(MatExpansionPanel) private panels: QueryList<MatExpansionPanel> | undefined;
 
     constructor(
         private adminService: RdioScannerAdminService,
         private ngChangeDetectorRef: ChangeDetectorRef,
-    ) { }
+    ) {
+        this.adminService.event.pipe(takeUntil(this.destroy$)).subscribe(async (event: AdminEvent) => {
+            if ('authenticated' in event && event.authenticated === true) {
+                this.config = await this.adminService.getConfig();
+                this.reset();
+            }
+
+            if ('config' in event) {
+                this.config = event.config;
+
+                if (this.form?.pristine) {
+                    this.reset();
+                }
+            }
+
+            if ('docker' in event) {
+                this.docker = event.docker ?? false;
+            }
+        });
+    }
 
     ngOnDestroy(): void {
-        this.eventSubscription.unsubscribe();
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     async ngOnInit(): Promise<void> {
+        await this.adminService.loadAlerts();
+
         this.config = await this.adminService.getConfig();
 
         this.reset();
@@ -112,28 +119,34 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
     reset(config = this.config, options?: { dirty?: boolean }): void {
         this.form = this.adminService.newConfigForm(config);
 
-        this.form.statusChanges.subscribe(() => {
+        this.form.statusChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
             this.ngChangeDetectorRef.markForCheck();
         });
 
-        this.groups.valueChanges.subscribe(() => {
-            this.systems.controls.forEach((system) => {
+        const systemsArray = this.systems;
+        const groupsArray = this.groups;
+        const tagsArray = this.tags;
+
+        groupsArray?.valueChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
+            if (!systemsArray) { return; }
+            systemsArray.controls.forEach((system) => {
                 const talkgroups = system.get('talkgroups') as FormArray;
 
                 talkgroups.controls.forEach((talkgroup) => {
-                    const groupId = talkgroup.get('groupId') as FormControl;
+                    const groupIds = talkgroup.get('groupIds') as FormArray;
 
-                    groupId.updateValueAndValidity({ onlySelf: true });
+                    groupIds.updateValueAndValidity({ onlySelf: true });
 
-                    if (groupId.errors) {
-                        groupId.markAsTouched({ onlySelf: true });
+                    if (groupIds.errors) {
+                        groupIds.markAsTouched({ onlySelf: true });
                     }
                 });
             });
         });
 
-        this.tags.valueChanges.subscribe(() => {
-            this.systems.controls.forEach((system) => {
+        tagsArray?.valueChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
+            if (!systemsArray) { return; }
+            systemsArray.controls.forEach((system) => {
                 const talkgroups = system.get('talkgroups') as FormArray;
 
                 talkgroups.controls.forEach((talkgroup) => {
@@ -156,8 +169,10 @@ export class RdioScannerAdminConfigComponent implements OnDestroy, OnInit {
     }
 
     async save(): Promise<void> {
-        this.form?.markAsPristine();
+        if (!this.form) { return; }
 
-        await this.adminService.saveConfig(this.form?.getRawValue());
+        this.form.markAsPristine();
+
+        await this.adminService.saveConfig(this.form.getRawValue());
     }
 }

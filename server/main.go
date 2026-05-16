@@ -51,6 +51,11 @@ func main() {
 
 	config := NewConfig()
 
+	if config.newAdminPassword == "" {
+		fmt.Printf("\nRdio Scanner v%s\n", Version)
+		fmt.Printf("----------------------------------\n")
+	}
+
 	controller := NewController(config)
 
 	if config.newAdminPassword != "" {
@@ -74,9 +79,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-
-	fmt.Printf("\nRdio Scanner v%s\n", Version)
-	fmt.Printf("----------------------------------\n")
 
 	if err := controller.Start(); err != nil {
 		log.Fatal(err)
@@ -109,6 +111,8 @@ func main() {
 	if len(sslAddr) == 0 {
 		sslAddr = defaultAddr
 	}
+
+	http.HandleFunc("/api/admin/alerts", controller.Admin.AlertsHandler)
 
 	http.HandleFunc("/api/admin/config", controller.Admin.ConfigHandler)
 
@@ -248,6 +252,8 @@ func main() {
 	} else {
 		log.Printf("admin interface at http://%s:%s/admin", hostname, port)
 	}
+
+	log.Println("please consider sponsoring the project at https://github.com/sponsors/chuot")
 
 	server := newServer(fmt.Sprintf("%s:%s", addr, port), nil)
 

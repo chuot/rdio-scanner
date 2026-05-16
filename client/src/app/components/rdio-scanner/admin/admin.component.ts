@@ -25,21 +25,24 @@ import { AdminEvent, RdioScannerAdminService, Group, Tag } from './admin.service
     selector: 'rdio-scanner-admin',
     styleUrls: ['./admin.component.scss'],
     templateUrl: './admin.component.html',
+    standalone: false
 })
 export class RdioScannerAdminComponent implements OnDestroy {
-    authenticated = this.adminService.authenticated;
+    authenticated = true;
 
     groups: Group[] = [];
 
     tags: Tag[] = [];
 
-    private eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
-        if ('authenticated' in event) {
-            this.authenticated = event.authenticated || false;
-        }
-    });
+    private eventSubscription;
 
-    constructor(private adminService: RdioScannerAdminService) { }
+    constructor(private adminService: RdioScannerAdminService) {
+        this.eventSubscription = this.adminService.event.subscribe(async (event: AdminEvent) => {
+            if ('authenticated' in event) {
+                this.authenticated = event.authenticated || false;
+            }
+        });
+    }
 
     ngOnDestroy(): void {
         this.eventSubscription.unsubscribe();

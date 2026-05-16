@@ -20,7 +20,8 @@
 import { Component } from '@angular/core';
 
 @Component({
-  templateUrl: './update.component.html',
-  styleUrls: ['./update.component.scss'],
+    templateUrl: './update.component.html',
+    styleUrls: ['./update.component.scss'],
+    standalone: false
 })
 export class AppUpdateComponent { }

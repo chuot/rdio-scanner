@@ -27,12 +27,16 @@ export const routes: Routes = [
         component: RdioScannerPageComponent,
         children: [
             {
-                component: RdioScannerMainPageComponent,
                 path: '',
+                component: RdioScannerMainPageComponent,
             },
             {
-                loadChildren: () => import('./admin/admin.module').then((module) => module.RdioScannerAdminPageModule),
+                path: 'reset',
+                component: RdioScannerMainPageComponent,
+            },
+            {
                 path: 'admin',
+                loadChildren: () => import('./admin/admin.module').then((module) => module.RdioScannerAdminPageModule),
             },
         ],
     },

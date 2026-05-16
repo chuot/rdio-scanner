@@ -22,5 +22,6 @@ import { Component } from '@angular/core';
 @Component({
     selector: 'rdio-scanner-page',
     template: '<router-outlet></router-outlet>',
+    standalone: false
 })
 export class RdioScannerPageComponent { }

@@ -38,7 +38,9 @@ type Client struct {
 	Conn       *websocket.Conn
 	Send       chan *Message
 	Systems    []System
+	GroupsData []Group
 	GroupsMap  GroupsMap
+	TagsData   []Tag
 	TagsMap    TagsMap
 	Livefeed   *Livefeed
 	SystemsMap SystemsMap
@@ -61,7 +63,7 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		return nil
 	}
 
-	client.Access = &Access{}
+	client.Access = NewAccess()
 	client.Controller = controller
 	client.Conn = conn
 	client.Livefeed = NewLivefeed()
@@ -82,10 +84,15 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 			client.Conn.Close()
 		}()
 
-		client.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err := client.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			return
+		}
 
 		client.Conn.SetPongHandler(func(string) error {
-			client.Conn.SetReadDeadline(time.Now().Add(pongWait))
+			if err := client.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+				return err
+			}
+
 			return nil
 		})
 
@@ -116,6 +123,8 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		})
 
 		defer func() {
+			client.Send = nil
+
 			ticker.Stop()
 
 			if timer != nil {
@@ -148,12 +157,13 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 					}
 				}
 
-				b, err := message.ToJson()
-				if err != nil {
+				if b, err := message.ToJson(); err != nil {
 					log.Println(fmt.Errorf("client.message.tojson: %v", err))
 
 				} else {
-					client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+					if err = client.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+						return
+					}
 
 					if err = client.Conn.WriteMessage(websocket.TextMessage, b); err != nil {
 						return
@@ -161,7 +171,9 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 				}
 
 			case <-ticker.C:
-				client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := client.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+					return
+				}
 
 				if err := client.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
@@ -179,25 +191,25 @@ func (client *Client) GetRemoteAddr() string {
 
 func (client *Client) SendConfig(groups *Groups, options *Options, systems *Systems, tags *Tags) {
 	client.SystemsMap = systems.GetScopedSystems(client, groups, tags, options.SortTalkgroups)
+	client.GroupsData = groups.GetGroupsData(&client.SystemsMap)
 	client.GroupsMap = groups.GetGroupsMap(&client.SystemsMap)
+	client.TagsData = tags.GetTagsData(&client.SystemsMap)
 	client.TagsMap = tags.GetTagsMap(&client.SystemsMap)
 
 	var payload = map[string]any{
+		"alerts":             Alerts,
 		"branding":           options.Branding,
 		"dimmerDelay":        options.DimmerDelay,
 		"email":              options.Email,
 		"groups":             client.GroupsMap,
+		"groupsData":         client.GroupsData,
 		"keypadBeeps":        GetKeypadBeeps(options),
 		"playbackGoesLive":   options.PlaybackGoesLive,
 		"showListenersCount": options.ShowListenersCount,
 		"systems":            client.SystemsMap,
 		"tags":               client.TagsMap,
-		"tagsToggle":         options.TagsToggle,
+		"tagsData":           client.TagsData,
 		"time12hFormat":      options.Time12hFormat,
-	}
-
-	if len(options.AfsSystems) > 0 {
-		payload["afs"] = options.AfsSystems
 	}
 
 	client.Send <- &Message{Command: MessageCommandConfig, Payload: payload}
@@ -222,8 +234,11 @@ func NewClients() *Clients {
 	}
 }
 
-func (clients *Clients) AccessCount(client *Client) int {
-	count := 0
+func (clients *Clients) AccessCount(client *Client) uint {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	count := uint(0)
 
 	for c := range clients.Map {
 		if c.Access == client.Access {
@@ -246,6 +261,9 @@ func (clients *Clients) Count() int {
 }
 
 func (clients *Clients) EmitCall(call *Call, restricted bool) {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
 	for c := range clients.Map {
 		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
 			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
@@ -253,23 +271,32 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 	}
 }
 
-func (clients *Clients) EmitConfig(groups *Groups, options *Options, systems *Systems, tags *Tags, restricted bool) {
+func (clients *Clients) EmitConfig(controller *Controller) {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
 	count := len(clients.Map)
+	restricted := controller.Accesses.IsRestricted()
+	showListenersCount := controller.Options.ShowListenersCount
 
 	for c := range clients.Map {
 		if restricted {
 			c.Send <- &Message{Command: MessageCommandPin}
+
 		} else {
-			c.SendConfig(groups, options, systems, tags)
+			c.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
 		}
 
-		if options.ShowListenersCount {
+		if showListenersCount {
 			c.SendListenersCount(count)
 		}
 	}
 }
 
 func (clients *Clients) EmitListenersCount() {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
 	count := len(clients.Map)
 
 	for c := range clients.Map {

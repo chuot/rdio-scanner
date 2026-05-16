@@ -24,6 +24,7 @@ import { Config } from '../admin.service';
 @Component({
     selector: 'rdio-scanner-admin-tools',
     templateUrl: './tools.component.html',
+    standalone: false
 })
 export class RdioScannerAdminToolsComponent {
     @Output() config = new EventEmitter<Config>();

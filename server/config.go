@@ -34,9 +34,10 @@ import (
 )
 
 const (
-	DbTypeMariadb string = "mariadb"
-	DbTypeMysql   string = "mysql"
-	DbTypeSqlite  string = "sqlite"
+	DbTypeMariadb    string = "mariadb"
+	DbTypeMysql      string = "mysql"
+	DbTypePostgresql string = "postgresql"
+	DbTypeSqlite     string = "sqlite"
 )
 
 type Config struct {
@@ -62,13 +63,14 @@ type Config struct {
 
 func NewConfig() *Config {
 	const (
-		defaultAdminUrl   = "/admin"
-		defaultConfigFile = "rdio-scanner.ini"
-		defaultDbType     = DbTypeSqlite
-		defaultDbFile     = "rdio-scanner.db"
-		defaultDbHost     = "localhost"
-		defaultDbPort     = uint(3306)
-		defaultListen     = ":3000"
+		defaultAdminUrl         = "/admin"
+		defaultConfigFile       = "rdio-scanner.ini"
+		defaultDbType           = DbTypeSqlite
+		defaultDbFile           = "rdio-scanner.db"
+		defaultDbHost           = "localhost"
+		defaultDbPortMariaDb    = uint(3306)
+		defaultDbPortPostgreSql = uint(5432)
+		defaultListen           = ":3000"
 	)
 
 	var (
@@ -98,8 +100,8 @@ func NewConfig() *Config {
 	flag.StringVar(&config.DbHost, "db_host", defaultDbHost, "database host ip or hostname")
 	flag.StringVar(&config.DbName, "db_name", "", "database name")
 	flag.StringVar(&config.DbPassword, "db_pass", "", "database password")
-	flag.UintVar(&config.DbPort, "db_port", defaultDbPort, "database host port")
-	flag.StringVar(&config.DbType, "db_type", defaultDbType, fmt.Sprintf("database type, one of %s, %s, %s", DbTypeSqlite, DbTypeMariadb, DbTypeMysql))
+	flag.UintVar(&config.DbPort, "db_port", defaultDbPortMariaDb, "database host port")
+	flag.StringVar(&config.DbType, "db_type", defaultDbType, fmt.Sprintf("database type, one of %s, %s, %s, %s", DbTypeSqlite, DbTypeMariadb, DbTypeMysql, DbTypePostgresql))
 	flag.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
 	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
@@ -146,12 +148,17 @@ func NewConfig() *Config {
 				config.DbPassword = v
 			}
 
-			if config.DbPort, err = cfg.Section("").Key("db_port").Uint(); err != nil {
-				config.DbPort = defaultDbPort
-			}
-
 			if v := cfg.Section("").Key("db_type").String(); len(v) > 0 {
 				config.DbType = v
+			}
+
+			if config.DbPort, err = cfg.Section("").Key("db_port").Uint(); err != nil {
+				switch config.DbType {
+				case DbTypePostgresql:
+					config.DbPort = defaultDbPortPostgreSql
+				default:
+					config.DbPort = defaultDbPortMariaDb
+				}
 			}
 
 			if v := cfg.Section("").Key("db_user").String(); len(v) > 0 {
@@ -179,7 +186,7 @@ func NewConfig() *Config {
 			}
 		}
 
-		if !(config.DbType == DbTypeMariadb || config.DbType == DbTypeMysql || config.DbType == DbTypeSqlite) {
+		if !(config.DbType == DbTypeMariadb || config.DbType == DbTypeMysql || config.DbType == DbTypePostgresql || config.DbType == DbTypeSqlite) {
 			fmt.Printf("unknown database type %s\n", config.DbType)
 			return nil
 		}

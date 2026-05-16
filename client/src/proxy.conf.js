@@ -23,7 +23,7 @@ const server = 'http://localhost:3000';
 
 module.exports = [
     {
-        context: ['/**', '!/admin**', '!/ws**'],
+        context: ['/**', '!/admin**', '!/ng-cli-ws**', '!/reset**'],
         secure: false,
         target: server,
         ws: true

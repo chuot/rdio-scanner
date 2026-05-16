@@ -85,18 +85,14 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		return nil
 	}
 
-	if system, ok := systems.GetSystem(call.System); ok {
-		if talkgroup, ok := system.Talkgroups.GetTalkgroup(call.Talkgroup); ok {
-			if tag, ok := tags.GetTag(talkgroup.TagId); ok {
-				args = append(args,
-					"-metadata", fmt.Sprintf("album=%v", talkgroup.Label),
-					"-metadata", fmt.Sprintf("artist=%v", system.Label),
-					"-metadata", fmt.Sprintf("date=%v", call.DateTime),
-					"-metadata", fmt.Sprintf("genre=%v", tag),
-					"-metadata", fmt.Sprintf("title=%v", talkgroup.Name),
-				)
-			}
-		}
+	if tag, ok := tags.GetTagById(call.Talkgroup.TagId); ok {
+		args = append(args,
+			"-metadata", fmt.Sprintf("album=%v", call.Talkgroup.Label),
+			"-metadata", fmt.Sprintf("artist=%v", call.System.Label),
+			"-metadata", fmt.Sprintf("date=%v", call.Timestamp),
+			"-metadata", fmt.Sprintf("genre=%v", tag),
+			"-metadata", fmt.Sprintf("title=%v", call.Talkgroup.Name),
+		)
 	}
 
 	if ffmpeg.version43 {
@@ -120,12 +116,8 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 
 	if err = cmd.Run(); err == nil {
 		call.Audio = stdout.Bytes()
-		call.AudioType = "audio/mp4"
-
-		switch v := call.AudioName.(type) {
-		case string:
-			call.AudioName = fmt.Sprintf("%v.m4a", strings.TrimSuffix(v, path.Ext((v))))
-		}
+		call.AudioFilename = fmt.Sprintf("%v.m4a", strings.TrimSuffix(call.AudioFilename, path.Ext((call.AudioFilename))))
+		call.AudioMime = "audio/mp4"
 
 	} else {
 		fmt.Println(stderr.String())

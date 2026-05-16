@@ -45,9 +45,10 @@ type DefaultApikey struct {
 }
 
 type DefaultDirwatch struct {
+	delay       uint
 	deleteAfter bool
 	disabled    bool
-	usePolling  bool
+	kind        string
 }
 
 type DefaultDownstream struct {
@@ -64,10 +65,8 @@ type DefaultOptions struct {
 	maxClients                  uint
 	playbackGoesLive            bool
 	pruneDays                   uint
-	searchPatchedTalkgroups     bool
 	showListenersCount          bool
 	sortTalkgroups              bool
-	tagsToggle                  bool
 	time12hFormat               bool
 }
 
@@ -83,9 +82,10 @@ var defaults Defaults = Defaults{
 		systems: "*",
 	},
 	dirwatch: DefaultDirwatch{
+		delay:       2000,
 		deleteAfter: true,
 		disabled:    false,
-		usePolling:  false,
+		kind:        "default",
 	},
 	downstream: DefaultDownstream{
 		systems: "*",
@@ -109,10 +109,8 @@ var defaults Defaults = Defaults{
 		maxClients:                  200,
 		playbackGoesLive:            false,
 		pruneDays:                   7,
-		searchPatchedTalkgroups:     false,
 		showListenersCount:          false,
 		sortTalkgroups:              false,
-		tagsToggle:                  false,
 		time12hFormat:               false,
 	},
 	systems: []System{},

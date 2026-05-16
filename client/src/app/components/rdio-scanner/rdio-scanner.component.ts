@@ -29,9 +29,10 @@ import { RdioScannerNativeComponent } from './native/native.component';
     selector: 'rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
+    standalone: false
 })
 export class RdioScannerComponent implements OnDestroy, OnInit {
-    private eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    private eventSubscription;
 
     private livefeedMode: RdioScannerLivefeedMode = RdioScannerLivefeedMode.Offline;
 
@@ -43,7 +44,9 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
         private matSnackBar: MatSnackBar,
         private ngElementRef: ElementRef,
         private rdioScannerService: RdioScannerService,
-    ) { }
+    ) {
+        this.eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+    }
 
     @HostListener('window:beforeunload', ['$event'])
     exitNotification(event: BeforeUnloadEvent): void {
@@ -66,14 +69,14 @@ export class RdioScannerComponent implements OnDestroy, OnInit {
          * the open source project and its author.  Rdio Scanner represents a lot of
          * investment in time, support, testing and hardware.
          * 
-         * Be respectful, sponsor the project if you can, use native apps when possible.
+         * Be respectful, sponsor the project, use native apps when possible.
          * 
          */
         timer(10000).subscribe(() => {
             const ua: string = navigator.userAgent;
 
             if (ua.includes('Android') || ua.includes('iPad') || ua.includes('iPhone')) {
-                this.matSnackBar.openFromComponent(RdioScannerNativeComponent, { panelClass: 'snackbar-white' });
+                this.matSnackBar.openFromComponent(RdioScannerNativeComponent);
             }
         });
         /**
