@@ -28,7 +28,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 1. Download the latest precompiled version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) from the [releases tab](https://github.com/chuot/rdio-scanner/releases).
 
    | Operating system | Architecture | Use package                           |
-   | -----------------| ------------ | ------------------------------------- |
+   | ---------------- | ------------ | ------------------------------------- |
    | FreeBSD          | amd64        | rdio-scanner-freebsd-amd64-v7.0.0.zip |
    | Linux            | 386          | rdio-scanner-linux-386-v7.0.0.zip     |
    | Linux            | amd64        | rdio-scanner-linux-amd64-v7.0.0.zip   |
