@@ -95,8 +95,6 @@ func NewCommand(baseDir string) *Command {
 }
 
 func (command *Command) Do(action string) {
-	var err error
-
 	i := 1
 
 	readVal := func() string {
@@ -142,7 +140,7 @@ func (command *Command) Do(action string) {
 		case COMMAND_ARG_URL:
 			command.url = readVal()
 
-			if err != nil || !regexp.MustCompile(`^https?://`).Match([]byte(command.url)) {
+			if !regexp.MustCompile(`^https?://`).Match([]byte(command.url)) {
 				command.exitWithError(errors.New("invalid URL"))
 			}
 		}
