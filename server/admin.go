@@ -350,10 +350,6 @@ func (admin *Admin) LogsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logOptions := NewLogSearchOptions().FromMap(m)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
 
 		r, err := admin.Controller.Logs.Search(logOptions, admin.Controller.Database)
 		if err != nil {
