@@ -44,9 +44,10 @@ func ParseDSDPlusMeta(call *Call, fp string) error {
 	lbl := false
 	ptr := 0
 	for i := 0; i < len(base); i++ {
-		if base[i] == '[' {
+		switch base[i] {
+		case '[':
 			lbl = true
-		} else if base[i] == ']' {
+		case ']':
 			lbl = false
 		}
 		if !lbl && base[i] == '_' {
