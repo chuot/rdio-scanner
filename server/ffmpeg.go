@@ -96,9 +96,10 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 	}
 
 	if ffmpeg.version43 {
-		if mode == AUDIO_CONVERSION_ENABLED_NORM {
+		switch mode {
+		case AUDIO_CONVERSION_ENABLED_NORM:
 			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
-		} else if mode == AUDIO_CONVERSION_ENABLED_LOUD_NORM {
+		case AUDIO_CONVERSION_ENABLED_LOUD_NORM:
 			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
 		}
 	}
