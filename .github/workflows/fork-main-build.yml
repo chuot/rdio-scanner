@@ -1,0 +1,159 @@
+name: Build fork-main
+
+on:
+  push:
+    branches: [fork-main]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-main-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  webapp:
+    name: Build webapp
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Compute version
+        id: version
+        run: |
+          base=$(grep -m1 -oP '^ver\s*:=\s*\K\S+' Makefile)
+          short=$(git rev-parse --short=7 HEAD)
+          version="${base}+${GITHUB_RUN_NUMBER}.${short}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Build version: ${version}"
+
+      - name: Build Angular webapp
+        working-directory: client
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webapp
+          path: server/webapp/
+          retention-days: 7
+          if-no-files-found: error
+
+  binaries:
+    name: Build ${{ matrix.target }}
+    needs: webapp
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            goos: linux
+            goarch: amd64
+            binname: rdio-scanner
+          - target: linux-arm64
+            goos: linux
+            goarch: arm64
+            binname: rdio-scanner
+          - target: macos-amd64
+            goos: darwin
+            goarch: amd64
+            binname: rdio-scanner
+          - target: macos-arm64
+            goos: darwin
+            goarch: arm64
+            binname: rdio-scanner
+          - target: windows-amd64
+            goos: windows
+            goarch: amd64
+            binname: rdio-scanner.exe
+    env:
+      VERSION: ${{ needs.webapp.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: webapp
+          path: server/webapp/
+
+      - name: Inject version into server/version.go
+        run: |
+          sed -i -re 's|^(const[[:space:]]+Version[[:space:]]*=).*$|\1 "'"$VERSION"'"|' server/version.go
+          grep '^const Version' server/version.go
+
+      - name: Build ${{ matrix.target }} binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        working-directory: server
+        run: |
+          mkdir -p "../dist/${{ matrix.target }}"
+          go build -trimpath -ldflags="-s -w" -o "../dist/${{ matrix.target }}/${{ matrix.binname }}" .
+
+      - name: Package zip
+        run: |
+          cd "dist/${{ matrix.target }}"
+          zip -q "../rdio-scanner-${{ matrix.target }}-v${VERSION}.zip" *
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rdio-scanner-${{ matrix.target }}-v${{ env.VERSION }}
+          path: dist/rdio-scanner-${{ matrix.target }}-v${{ env.VERSION }}.zip
+          retention-days: 14
+          if-no-files-found: error
+
+  nightly-release:
+    name: Publish rolling nightly pre-release
+    needs: [webapp, binaries]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.webapp.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: rdio-scanner-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Publish/update nightly pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Rolling nightly build of \`fork-main\`."
+            echo ""
+            echo "**Build:** \`${VERSION}\`"
+            echo "**Commit:** [\`${GITHUB_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})"
+            echo "**Workflow run:** [#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+            echo ""
+            echo "> :warning: Automated pre-release built on every push to \`fork-main\`. The tag and assets are replaced on each build. Not for production use."
+          } > notes.md
+          gh release delete nightly --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          gh release create nightly dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Nightly v${VERSION}" \
+            --notes-file notes.md
