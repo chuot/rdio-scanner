@@ -168,7 +168,10 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *Api) HandleCall(key string, call *Call, w http.ResponseWriter) {
-	msg := []byte(fmt.Sprintf("Invalid API key for system %v talkgroup %v.\n", call.System, call.Talkgroup))
+	// Don't echo the resolved system/talkgroup back to an unauthenticated
+	// caller — that lets an attacker enumerate which (system, talkgroup)
+	// pairs exist by submitting empty bodies with various headers.
+	msg := []byte("Unauthorized.\n")
 
 	if apikey, ok := api.Controller.Apikeys.GetApikey(api.Controller.Options.secret, key); ok {
 		if apikey.HasAccess(call) {

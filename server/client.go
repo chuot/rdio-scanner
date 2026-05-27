@@ -290,6 +290,14 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 	defer clients.mutex.Unlock()
 
 	for c := range clients.Map {
+		// Re-check expiration on every emit. The PIN handler only
+		// validates expiry at auth time; without this check a listener
+		// who connected one second before their access expired would
+		// keep receiving audio indefinitely.
+		if restricted && c.Access != nil && c.Access.HasExpired() {
+			c.Send <- &Message{Command: MessageCommandExpired}
+			continue
+		}
 		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
 			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
 		}

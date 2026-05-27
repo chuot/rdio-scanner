@@ -115,11 +115,17 @@ func (admin *Admin) ChangePassword(currentPassword any, newPassword string) erro
 		return errors.New("newPassword is empty")
 	}
 
-	switch v := currentPassword.(type) {
-	case string:
-		if err = bcrypt.CompareHashAndPassword([]byte(admin.Controller.Options.adminPassword), []byte(v)); err != nil {
-			return err
-		}
+	// Require the current password unconditionally. The prior `switch`
+	// only verified when currentPassword was a string; omitting it from
+	// the JSON body (or sending null) silently skipped the check, so a
+	// stolen JWT could rotate the password without ever proving knowledge
+	// of the old one.
+	currentStr, ok := currentPassword.(string)
+	if !ok || currentStr == "" {
+		return errors.New("currentPassword is required")
+	}
+	if err = bcrypt.CompareHashAndPassword([]byte(admin.Controller.Options.adminPassword), []byte(currentStr)); err != nil {
+		return err
 	}
 
 	if hash, err = bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost); err != nil {

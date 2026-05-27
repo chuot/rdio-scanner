@@ -23,16 +23,23 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
 )
 
+// errorFormatter returns errors that are safe to surface in the admin
+// Logs view. The full SQL `query` string passed by callers is written
+// only to the process's stderr at startup-debug level (env RDIO_DEBUG_SQL=1)
+// — it must never end up in the logs table, because failing INSERTs/UPDATEs
+// frequently embed parameter values that include bcrypt hashes, API keys,
+// or access codes.
 func errorFormatter(section string, label string) func(err error, query string) error {
+	debugSQL := os.Getenv("RDIO_DEBUG_SQL") == "1"
 	return func(err error, query string) error {
-		s := fmt.Sprintf("%s.%s: %s", section, label, err.Error())
-
-		if len(query) > 0 {
-			s = fmt.Sprintf("%s in %s", s, query)
+		safe := fmt.Sprintf("%s.%s: %s", section, label, err.Error())
+		if debugSQL && len(query) > 0 {
+			log.Printf("[sql] %s :: %s", safe, query)
 		}
-
-		return errors.New(s)
+		return errors.New(safe)
 	}
 }
