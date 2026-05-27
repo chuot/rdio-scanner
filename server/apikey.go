@@ -157,16 +157,23 @@ func (apikeys *Apikeys) FromMap(f []any) *Apikeys {
 	return apikeys
 }
 
-func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
+// GetApikey looks up an apikey whose key matches the submitted plaintext.
+// VerifyCredential runs in constant time, and the loop deliberately does not
+// early-exit so total work is independent of which entry matches.
+func (apikeys *Apikeys) GetApikey(secret, key string) (apikey *Apikey, ok bool) {
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
-	for _, apikey := range apikeys.List {
-		if apikey.Key == key && !apikey.Disabled {
-			return apikey, true
+	var matched *Apikey
+	for _, a := range apikeys.List {
+		if !a.Disabled && VerifyCredential(secret, a.Key, key) {
+			matched = a
 		}
 	}
-	return nil, false
+	if matched == nil {
+		return nil, false
+	}
+	return matched, true
 }
 
 func (apikeys *Apikeys) Read(db *Database) error {
@@ -218,7 +225,7 @@ func (apikeys *Apikeys) Read(db *Database) error {
 	return nil
 }
 
-func (apikeys *Apikeys) Write(db *Database) error {
+func (apikeys *Apikeys) Write(db *Database, secret string) error {
 	var (
 		apikeyIds = []uint64{}
 		err       error
@@ -288,6 +295,10 @@ func (apikeys *Apikeys) Write(db *Database) error {
 				systems = string(b)
 			}
 		}
+
+		// Hash the API key at rest. No-op if already hashed (admin UI
+		// echoed back what it received).
+		apikey.Key = EnsureHashed(secret, apikey.Key)
 
 		if apikey.Id > 0 {
 			query = fmt.Sprintf(`SELECT COUNT(*) FROM "apikeys" WHERE "apikeyId" = %d`, apikey.Id)

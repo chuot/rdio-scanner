@@ -203,7 +203,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			switch v := m["access"].(type) {
 			case []any:
 				admin.Controller.Accesses.FromMap(v)
-				err := admin.Controller.Accesses.Write(admin.Controller.Database)
+				err := admin.Controller.Accesses.Write(admin.Controller.Database, admin.Controller.Options.secret)
 				if err != nil {
 					logError(err)
 				} else {
@@ -217,7 +217,7 @@ func (admin *Admin) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 			switch v := m["apikeys"].(type) {
 			case []any:
 				admin.Controller.Apikeys.FromMap(v)
-				err = admin.Controller.Apikeys.Write(admin.Controller.Database)
+				err = admin.Controller.Apikeys.Write(admin.Controller.Database, admin.Controller.Options.secret)
 				if err != nil {
 					logError(err)
 				} else {
@@ -658,7 +658,7 @@ func (admin *Admin) UserAddHandler(w http.ResponseWriter, r *http.Request) {
 
 		admin.Controller.Accesses.Add(NewAccess().FromMap(m))
 
-		if err := admin.Controller.Accesses.Write(admin.Controller.Database); err == nil {
+		if err := admin.Controller.Accesses.Write(admin.Controller.Database, admin.Controller.Options.secret); err == nil {
 			if err := admin.Controller.Accesses.Read(admin.Controller.Database); err == nil {
 				admin.BroadcastConfig()
 				w.WriteHeader(http.StatusOK)
@@ -697,7 +697,7 @@ func (admin *Admin) UserRemoveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, ok := admin.Controller.Accesses.Remove(NewAccess().FromMap(m)); ok {
-			if err := admin.Controller.Accesses.Write(admin.Controller.Database); err == nil {
+			if err := admin.Controller.Accesses.Write(admin.Controller.Database, admin.Controller.Options.secret); err == nil {
 				if err := admin.Controller.Accesses.Read(admin.Controller.Database); err == nil {
 					admin.BroadcastConfig()
 					w.WriteHeader(http.StatusOK)
