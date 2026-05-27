@@ -389,20 +389,23 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		remoteAddr := GetRemoteAddr(r)
 
+		admin.mutex.Lock()
 		attempt := admin.Attempts[remoteAddr]
-
-		if attempt == nil {
-			admin.Attempts[remoteAddr] = &AdminLoginAttempt{
-				Count: 1,
-				Date:  time.Now(),
-			}
-			attempt = admin.Attempts[remoteAddr]
-		} else {
-			attempt.Count++
-			attempt.Date = time.Now()
+		if attempt == nil || time.Since(attempt.Date) > admin.AttemptsMaxDelay {
+			// First failure in this window — start a fresh counter.
+			attempt = &AdminLoginAttempt{Count: 0, Date: time.Now()}
+			admin.Attempts[remoteAddr] = attempt
 		}
+		attempt.Count++
+		// Deliberately do NOT update attempt.Date on subsequent guesses.
+		// The lockout window runs from the FIRST failure; otherwise a
+		// steady stream of attempts perpetually extends the lockout but
+		// never trips the "elapsed > delay" reset, so the counter grows
+		// unbounded without ever clearing.
+		locked := attempt.Count > admin.AttemptsMax
+		admin.mutex.Unlock()
 
-		if attempt.Count > admin.AttemptsMax || time.Since(attempt.Date) < admin.AttemptsMaxDelay {
+		if locked {
 			if attempt.Count == admin.AttemptsMax+1 {
 				admin.Controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many login attempts for ip=\"%v\"", remoteAddr))
 			}
@@ -469,11 +472,18 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		admin.mutex.Lock()
+		// On successful login, drop the caller's failure record entirely
+		// so an earlier mistype doesn't carry into the next session, and
+		// opportunistically prune stale entries from other addresses.
+		delete(admin.Attempts, remoteAddr)
+		nowCleanup := time.Now()
 		for k, v := range admin.Attempts {
-			if time.Since(v.Date) > admin.AttemptsMaxDelay {
+			if nowCleanup.Sub(v.Date) > admin.AttemptsMaxDelay {
 				delete(admin.Attempts, k)
 			}
 		}
+		admin.mutex.Unlock()
 
 		w.Write(b)
 

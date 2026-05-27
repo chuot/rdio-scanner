@@ -26,11 +26,11 @@ import (
 	"io"
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -58,6 +58,22 @@ func main() {
 	}
 
 	controller := NewController(config)
+
+	// Resolve -admin_password_file before -admin_password so that a
+	// file-supplied secret wins. The file path keeps the password off
+	// the process command line (-admin_password is visible in ps).
+	if config.newAdminPasswordFile != "" {
+		b, err := os.ReadFile(config.newAdminPasswordFile)
+		if err != nil {
+			log.Fatalf("failed to read admin password file: %v", err)
+		}
+		config.newAdminPassword = strings.TrimSpace(string(b))
+		if config.newAdminPassword == "" {
+			log.Fatal("admin password file is empty")
+		}
+	} else if config.newAdminPassword != "" {
+		log.Println("warning: -admin_password is visible in the process list; prefer -admin_password_file")
+	}
 
 	if config.newAdminPassword != "" {
 		if hash, err := bcrypt.GenerateFromPassword([]byte(config.newAdminPassword), bcrypt.DefaultCost); err == nil {
@@ -200,9 +216,24 @@ func main() {
 		}
 	}
 
-	newServer := func(addr string, tlsConfig *tls.Config) *http.Server {
+	// hardenedTLSConfig sets a minimum of TLS 1.2 and lets Go's defaults
+	// pick the cipher suites (which exclude anything weak as of recent
+	// releases). If a caller passed a base config (e.g. autocert), we
+	// merge on top of it.
+	hardenedTLSConfig := func(base *tls.Config) *tls.Config {
+		if base == nil {
+			base = &tls.Config{}
+		}
+		if base.MinVersion == 0 {
+			base.MinVersion = tls.VersionTLS12
+		}
+		return base
+	}
+
+	newServer := func(addr string, tlsConfig *tls.Config, handler http.Handler) *http.Server {
 		s := &http.Server{
 			Addr:         addr,
+			Handler:      handler,
 			TLSConfig:    tlsConfig,
 			ReadTimeout:  30 * time.Second,
 			WriteTimeout: 30 * time.Second,
@@ -214,6 +245,36 @@ func main() {
 		return s
 	}
 
+	// hstsWrapper wraps a handler to add Strict-Transport-Security on every
+	// response served over TLS. Only attached to the HTTPS listener.
+	hstsWrapper := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			h.ServeHTTP(w, r)
+		})
+	}
+
+	// httpsRedirectHandler unconditionally redirects the request to the
+	// configured TLS listener, preserving path and query. Used as the
+	// HTTP handler when TLS is enabled so /api/admin/login can't be
+	// answered cleartext alongside the encrypted route.
+	httpsRedirectHandler := func() http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			host := r.Host
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+			target := "https://" + host
+			if sslPort != "443" {
+				target += ":" + sslPort
+			}
+			target += r.URL.RequestURI()
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+		})
+	}
+
+	tlsEnabled := (len(config.SslCertFile) > 0 && len(config.SslKeyFile) > 0) || config.SslAutoCert != ""
+
 	if len(config.SslCertFile) > 0 && len(config.SslKeyFile) > 0 {
 		go func() {
 			sslPrintInfo()
@@ -221,7 +282,7 @@ func main() {
 			sslCert := config.GetSslCertFilePath()
 			sslKey := config.GetSslKeyFilePath()
 
-			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), nil)
+			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), hardenedTLSConfig(nil), hstsWrapper(http.DefaultServeMux))
 
 			if err := server.ListenAndServeTLS(sslCert, sslKey); err != nil {
 				log.Fatal(err)
@@ -238,7 +299,7 @@ func main() {
 				HostPolicy: autocert.HostWhitelist(config.SslAutoCert),
 			}
 
-			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), manager.TLSConfig())
+			server := newServer(fmt.Sprintf("%s:%s", sslAddr, sslPort), hardenedTLSConfig(manager.TLSConfig()), hstsWrapper(http.DefaultServeMux))
 
 			if err := server.ListenAndServeTLS("", ""); err != nil {
 				log.Fatal(err)
@@ -254,7 +315,15 @@ func main() {
 
 	log.Println("please consider sponsoring the project at https://github.com/sponsors/chuot")
 
-	server := newServer(fmt.Sprintf("%s:%s", addr, port), nil)
+	// When TLS is enabled, the plaintext listener becomes a redirect-only
+	// endpoint so /api/admin/login (and listener PIN entry) cannot be
+	// answered over cleartext alongside the encrypted route.
+	var httpHandler http.Handler = http.DefaultServeMux
+	if tlsEnabled {
+		log.Printf("plaintext listener will 301-redirect to https://%s:%s", hostname, sslPort)
+		httpHandler = httpsRedirectHandler()
+	}
+	server := newServer(fmt.Sprintf("%s:%s", addr, port), nil, httpHandler)
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
@@ -278,18 +347,44 @@ func sameOriginCheck(r *http.Request) bool {
 	return strings.EqualFold(u.Host, r.Host)
 }
 
+// GetRemoteAddr returns the caller's IP address. X-Forwarded-For is only
+// honored when the direct TCP peer is on a loopback or RFC1918 network —
+// i.e. when the server is plausibly behind a reverse proxy. Public-internet
+// peers asserting X-Forwarded-For are ignored, because the prior unconditional
+// trust let attackers spoof their IP to evade rate limiters.
 func GetRemoteAddr(r *http.Request) string {
-	re := regexp.MustCompile(`(.+):.*$`)
+	directHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		directHost = r.RemoteAddr
+	}
 
-	for _, addr := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-		if ip := re.ReplaceAllString(addr, "$1"); len(ip) > 0 {
-			return ip
+	if isTrustedProxyHost(directHost) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// The leftmost entry is the original client. Trim ports and whitespace.
+			first := strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+			if host, _, splitErr := net.SplitHostPort(first); splitErr == nil {
+				first = host
+			}
+			if first != "" {
+				return first
+			}
 		}
 	}
 
-	if ip := re.ReplaceAllString(r.RemoteAddr, "$1"); len(ip) > 0 {
-		return ip
-	}
+	return directHost
+}
 
-	return r.RemoteAddr
+// isTrustedProxyHost reports whether a TCP peer address can be trusted to
+// have set X-Forwarded-For honestly. Conservative default: loopback +
+// RFC1918 + IPv6 ULA. Operators with proxies outside these ranges should
+// terminate TLS at the proxy and let it rewrite RemoteAddr.
+func isTrustedProxyHost(host string) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+		return true
+	}
+	return false
 }
