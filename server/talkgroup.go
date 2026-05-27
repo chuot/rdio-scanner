@@ -371,17 +371,14 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "talkgroups" ("alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES ('%s', %d, %d, '%s', '%s', '%s', %d, %d, %d, %d, '%s')`, talkgroup.Alert, talkgroup.Delay, talkgroup.Frequency, escapeQuotes(talkgroup.Label), talkgroup.Led, escapeQuotes(talkgroup.Name), talkgroup.Order, systemId, talkgroup.TagId, talkgroup.TalkgroupRef, talkgroup.Kind)
-
 			if dbType == DbTypePostgresql {
-				query = query + ` RETURNING "talkgroupId"`
-
-				if err = tx.QueryRow(query).Scan(&talkgroup.Id); err != nil {
+				query = fmt.Sprintf(`INSERT INTO "talkgroups" ("alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES ($1, %d, %d, $2, $3, $4, %d, %d, %d, %d, $5) RETURNING "talkgroupId"`, talkgroup.Delay, talkgroup.Frequency, talkgroup.Order, systemId, talkgroup.TagId, talkgroup.TalkgroupRef)
+				if err = tx.QueryRow(query, talkgroup.Alert, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Kind).Scan(&talkgroup.Id); err != nil {
 					break
 				}
-
 			} else {
-				if res, err = tx.Exec(query); err == nil {
+				query = fmt.Sprintf(`INSERT INTO "talkgroups" ("alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (?, %d, %d, ?, ?, ?, %d, %d, %d, %d, ?)`, talkgroup.Delay, talkgroup.Frequency, talkgroup.Order, systemId, talkgroup.TagId, talkgroup.TalkgroupRef)
+				if res, err = tx.Exec(query, talkgroup.Alert, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Kind); err == nil {
 					if id, err := res.LastInsertId(); err == nil {
 						talkgroup.Id = uint64(id)
 					}
@@ -391,8 +388,12 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "talkgroups" SET "alert" = '%s', "delay" = %d, "frequency" = %d, "label" = '%s', "led" = '%s', "name" = '%s', "order" = %d, "tagId" = %d, "talkgroupRef" = %d, "type" = '%s' WHERE "talkgroupId" = %d`, talkgroup.Alert, talkgroup.Delay, talkgroup.Frequency, escapeQuotes(talkgroup.Label), talkgroup.Led, escapeQuotes(talkgroup.Name), talkgroup.Order, talkgroup.TagId, talkgroup.TalkgroupRef, talkgroup.Kind, talkgroup.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if dbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "talkgroups" SET "alert" = $1, "delay" = %d, "frequency" = %d, "label" = $2, "led" = $3, "name" = $4, "order" = %d, "tagId" = %d, "talkgroupRef" = %d, "type" = $5 WHERE "talkgroupId" = %d`, talkgroup.Delay, talkgroup.Frequency, talkgroup.Order, talkgroup.TagId, talkgroup.TalkgroupRef, talkgroup.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "talkgroups" SET "alert" = ?, "delay" = %d, "frequency" = %d, "label" = ?, "led" = ?, "name" = ?, "order" = %d, "tagId" = %d, "talkgroupRef" = %d, "type" = ? WHERE "talkgroupId" = %d`, talkgroup.Delay, talkgroup.Frequency, talkgroup.Order, talkgroup.TagId, talkgroup.TalkgroupRef, talkgroup.Id)
+			}
+			if _, err = tx.Exec(query, talkgroup.Alert, talkgroup.Label, talkgroup.Led, talkgroup.Name, talkgroup.Kind); err != nil {
 				break
 			}
 		}

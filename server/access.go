@@ -364,14 +364,22 @@ func (accesses *Accesses) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ('%s', %d, '%s', %d, %d, '%s')`, escapeQuotes(access.Code), access.Expiration, escapeQuotes(access.Ident), access.Limit, access.Order, systems)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ($1, %d, $2, %d, %d, $3)`, access.Expiration, access.Limit, access.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES (?, %d, ?, %d, %d, ?)`, access.Expiration, access.Limit, access.Order)
+			}
+			if _, err = tx.Exec(query, access.Code, access.Ident, systems); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "accesses" SET "code" = '%s', "expiration" = %d, "ident" = '%s', "limit" = %d, "order" = %d, "systems" = '%s' WHERE "accessId" = %d`, escapeQuotes(access.Code), access.Expiration, escapeQuotes(access.Ident), access.Limit, access.Order, systems, access.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "accesses" SET "code" = $1, "expiration" = %d, "ident" = $2, "limit" = %d, "order" = %d, "systems" = $3 WHERE "accessId" = %d`, access.Expiration, access.Limit, access.Order, access.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "accesses" SET "code" = ?, "expiration" = %d, "ident" = ?, "limit" = %d, "order" = %d, "systems" = ? WHERE "accessId" = %d`, access.Expiration, access.Limit, access.Order, access.Id)
+			}
+			if _, err = tx.Exec(query, access.Code, access.Ident, systems); err != nil {
 				break
 			}
 		}

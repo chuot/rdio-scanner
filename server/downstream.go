@@ -508,14 +508,22 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ('%s', %t, %d, '%s', '%s')`, escapeQuotes(downstream.Apikey), downstream.Disabled, downstream.Order, systems, escapeQuotes(downstream.Url))
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ($1, %t, %d, $2, $3)`, downstream.Disabled, downstream.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES (?, %t, %d, ?, ?)`, downstream.Disabled, downstream.Order)
+			}
+			if _, err = tx.Exec(query, downstream.Apikey, systems, downstream.Url); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = '%s', "disabled" = %t, "order" = %d, "systems" = '%s', "url" = '%s' WHERE "downstreamId" = %d`, escapeQuotes(downstream.Apikey), downstream.Disabled, downstream.Order, systems, escapeQuotes(downstream.Url), downstream.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = $1, "disabled" = %t, "order" = %d, "systems" = $2, "url" = $3 WHERE "downstreamId" = %d`, downstream.Disabled, downstream.Order, downstream.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = ?, "disabled" = %t, "order" = %d, "systems" = ?, "url" = ? WHERE "downstreamId" = %d`, downstream.Disabled, downstream.Order, downstream.Id)
+			}
+			if _, err = tx.Exec(query, downstream.Apikey, systems, downstream.Url); err != nil {
 				break
 			}
 		}

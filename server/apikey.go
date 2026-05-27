@@ -297,14 +297,22 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, '%s', '%s', %d, '%s')`, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, $1, $2, %d, $3)`, apikey.Disabled, apikey.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, ?, ?, %d, ?)`, apikey.Disabled, apikey.Order)
+			}
+			if _, err = tx.Exec(query, apikey.Ident, apikey.Key, systems); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = '%s', "key" = '%s', "order" = %d, "systems" = '%s' WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = $1, "key" = $2, "order" = %d, "systems" = $3 WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Order, apikey.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = ?, "key" = ?, "order" = %d, "systems" = ? WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Order, apikey.Id)
+			}
+			if _, err = tx.Exec(query, apikey.Ident, apikey.Key, systems); err != nil {
 				break
 			}
 		}

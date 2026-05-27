@@ -25,7 +25,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"sync"
 
@@ -383,20 +382,31 @@ func (options *Options) Write(db *Database) error {
 
 	formatError := errorFormatter("options", "write")
 
+	// Note: the prior implementation tried `switch v := val.(type) { case string }`
+	// after json.Marshal — but json.Marshal returns []byte, so the case never
+	// fired, leaving JSON values with embedded single quotes unescaped.
+	// Parameterizing the writes removes the issue entirely.
 	set := func(key string, val any) {
-		if val, err = json.Marshal(val); err == nil {
-			switch v := val.(type) {
-			case string:
-				val = escapeQuotes(v)
-			}
+		marshaled, mErr := json.Marshal(val)
+		if mErr != nil {
+			err = mErr
+			return
+		}
+		jsonStr := string(marshaled)
 
-			query := fmt.Sprintf(`UPDATE "options" SET "value" = '%s' WHERE "key" = '%s'`, val, key)
-			if res, err = tx.Exec(query); err == nil {
-				if i, err := res.RowsAffected(); err == nil && i == 0 {
-					query = fmt.Sprintf(`INSERT INTO "options" ("key", "value") VALUES ('%s', '%s')`, key, val)
-					if _, err = tx.Exec(query); err != nil {
-						log.Println(formatError(err, query))
-					}
+		var updateQ, insertQ string
+		if db.Config.DbType == DbTypePostgresql {
+			updateQ = `UPDATE "options" SET "value" = $1 WHERE "key" = $2`
+			insertQ = `INSERT INTO "options" ("key", "value") VALUES ($1, $2)`
+		} else {
+			updateQ = `UPDATE "options" SET "value" = ? WHERE "key" = ?`
+			insertQ = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
+		}
+
+		if res, err = tx.Exec(updateQ, jsonStr, key); err == nil {
+			if i, err := res.RowsAffected(); err == nil && i == 0 {
+				if _, err = tx.Exec(insertQ, key, jsonStr); err != nil {
+					log.Println(formatError(err, insertQ))
 				}
 			}
 		}

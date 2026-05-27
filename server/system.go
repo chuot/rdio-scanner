@@ -589,18 +589,16 @@ func (systems *Systems) Write(db *Database) error {
 			}
 		}
 
+		blacklists := string(system.Blacklists)
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "systems" ("alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES ('%s', %t, '%s', %d, '%s', '%s', %d, %d, '%s')`, system.Alert, system.AutoPopulate, system.Blacklists, system.Delay, escapeQuotes(system.Label), system.Led, system.Order, system.SystemRef, system.Kind)
-
 			if db.Config.DbType == DbTypePostgresql {
-				query = query + ` RETURNING "systemId"`
-
-				if err = tx.QueryRow(query).Scan(&system.Id); err != nil {
+				query = fmt.Sprintf(`INSERT INTO "systems" ("alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES ($1, %t, $2, %d, $3, $4, %d, %d, $5) RETURNING "systemId"`, system.AutoPopulate, system.Delay, system.Order, system.SystemRef)
+				if err = tx.QueryRow(query, system.Alert, blacklists, system.Label, system.Led, system.Kind).Scan(&system.Id); err != nil {
 					break
 				}
-
 			} else {
-				if res, err = tx.Exec(query); err == nil {
+				query = fmt.Sprintf(`INSERT INTO "systems" ("alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (?, %t, ?, %d, ?, ?, %d, %d, ?)`, system.AutoPopulate, system.Delay, system.Order, system.SystemRef)
+				if res, err = tx.Exec(query, system.Alert, blacklists, system.Label, system.Led, system.Kind); err == nil {
 					if id, err := res.LastInsertId(); err == nil {
 						system.Id = uint64(id)
 					}
@@ -610,8 +608,12 @@ func (systems *Systems) Write(db *Database) error {
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "systems" SET "alert" = '%s', "autoPopulate" = %t, "blacklists" = '%s', "delay" = %d, "label" = '%s', "led" = '%s', "order" = %d, "systemRef" = %d, "type" = '%s' WHERE "systemId" = %d`, system.Alert, system.AutoPopulate, system.Blacklists, system.Delay, escapeQuotes(system.Label), system.Led, system.Order, system.SystemRef, system.Kind, system.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "systems" SET "alert" = $1, "autoPopulate" = %t, "blacklists" = $2, "delay" = %d, "label" = $3, "led" = $4, "order" = %d, "systemRef" = %d, "type" = $5 WHERE "systemId" = %d`, system.AutoPopulate, system.Delay, system.Order, system.SystemRef, system.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "systems" SET "alert" = ?, "autoPopulate" = %t, "blacklists" = ?, "delay" = %d, "label" = ?, "led" = ?, "order" = %d, "systemRef" = %d, "type" = ? WHERE "systemId" = %d`, system.AutoPopulate, system.Delay, system.Order, system.SystemRef, system.Id)
+			}
+			if _, err = tx.Exec(query, system.Alert, blacklists, system.Label, system.Led, system.Kind); err != nil {
 				break
 			}
 		}

@@ -1016,14 +1016,22 @@ func (dirwatches *Dirwatches) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (%d, %t, '%s', %t, '%s', %d, '%s', %d, %d, %d, %d, '%s')`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (%d, %t, $1, %t, $2, %d, $3, %d, %d, %d, %d, $4)`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Disabled, dirwatch.Frequency, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (%d, %t, ?, %t, ?, %d, ?, %d, %d, %d, %d, ?)`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Disabled, dirwatch.Frequency, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId)
+			}
+			if _, err = tx.Exec(query, dirwatch.Directory, dirwatch.Extension, dirwatch.Mask, dirwatch.Kind); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "dirwatches" SET "delay" = %d, "deleteAfter" = %t, "directory" = '%s', "disabled" = %t, "extension" = '%s', "frequency" = %d, "mask" = '%s', "order" = %d, "siteId" = %d, "systemId" = %d, "talkgroupId" = %d, "type" = '%s' WHERE "dirwatchId" = %d`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Directory, dirwatch.Disabled, dirwatch.Extension, dirwatch.Frequency, dirwatch.Mask, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Kind, dirwatch.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "dirwatches" SET "delay" = %d, "deleteAfter" = %t, "directory" = $1, "disabled" = %t, "extension" = $2, "frequency" = %d, "mask" = $3, "order" = %d, "siteId" = %d, "systemId" = %d, "talkgroupId" = %d, "type" = $4 WHERE "dirwatchId" = %d`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Disabled, dirwatch.Frequency, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "dirwatches" SET "delay" = %d, "deleteAfter" = %t, "directory" = ?, "disabled" = %t, "extension" = ?, "frequency" = %d, "mask" = ?, "order" = %d, "siteId" = %d, "systemId" = %d, "talkgroupId" = %d, "type" = ? WHERE "dirwatchId" = %d`, dirwatch.Delay, dirwatch.DeleteAfter, dirwatch.Disabled, dirwatch.Frequency, dirwatch.Order, dirwatch.SiteId, dirwatch.SystemId, dirwatch.TalkgroupId, dirwatch.Id)
+			}
+			if _, err = tx.Exec(query, dirwatch.Directory, dirwatch.Extension, dirwatch.Mask, dirwatch.Kind); err != nil {
 				break
 			}
 		}
