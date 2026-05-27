@@ -27,6 +27,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -137,9 +138,7 @@ func main() {
 
 		if strings.EqualFold(r.Header.Get("upgrade"), "websocket") {
 			upgrader := websocket.Upgrader{
-				CheckOrigin: func(r *http.Request) bool {
-					return true
-				},
+				CheckOrigin:     sameOriginCheck,
 				ReadBufferSize:  1024,
 				WriteBufferSize: 1024,
 			}
@@ -260,6 +259,23 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// sameOriginCheck blocks cross-origin WebSocket upgrades. The Gorilla
+// upgrader's default is to reject when Origin != Host; this restores that
+// behavior (the previous implementation unconditionally returned true,
+// allowing cross-site WebSocket hijacking against authenticated users).
+// Requests without an Origin header (curl, server-to-server) are allowed.
+func sameOriginCheck(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
 }
 
 func GetRemoteAddr(r *http.Request) string {
