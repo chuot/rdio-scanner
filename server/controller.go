@@ -601,6 +601,8 @@ func (controller *Controller) Start() error {
 
 	controller.Dirwatches.Start(controller)
 
+	go controller.Calls.BackfillBlobs()
+
 	return nil
 }
 

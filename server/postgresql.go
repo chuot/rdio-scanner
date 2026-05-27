@@ -117,6 +117,7 @@ var PostgresqlSchema = []string{
     "audio" bytea NOT NULL,
     "audioFilename" text NOT NULL,
     "audioMime" text NOT NULL,
+    "audioPath" text NOT NULL DEFAULT '',
     "siteRef" integer NOT NULL DEFAULT 0,
     "systemId" bigint NOT NULL,
     "talkgroupId" bigint NOT NULL,
@@ -126,6 +127,10 @@ var PostgresqlSchema = []string{
   );`,
 
 	`CREATE INDEX IF NOT EXISTS "calls_idx" ON "calls" ("systemId","talkgroupId","siteRef","timestamp");`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_calls_timestamp" ON "calls" ("timestamp");`,
+	`CREATE INDEX IF NOT EXISTS "idx_calls_talkgroupId" ON "calls" ("talkgroupId");`,
+	`CREATE INDEX IF NOT EXISTS "idx_calls_audioPath" ON "calls" ("audioPath");`,
 
 	`CREATE TABLE IF NOT EXISTS "callFrequencies" (
     "callFrequencyId" bigserial NOT NULL PRIMARY KEY,
@@ -138,6 +143,8 @@ var PostgresqlSchema = []string{
     CONSTRAINT "callFrequencies_callId" FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
 
+	`CREATE INDEX IF NOT EXISTS "idx_callFrequencies_callId" ON "callFrequencies" ("callId");`,
+
 	`CREATE TABLE IF NOT EXISTS "callPatches" (
     "callPatchId" bigserial NOT NULL PRIMARY KEY,
     "callId" bigint NOT NULL,
@@ -145,6 +152,9 @@ var PostgresqlSchema = []string{
     CONSTRAINT "callPatches_callId" FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "callPatches_talkgroupId" FOREIGN KEY ("talkgroupId") REFERENCES "talkgroups" ("talkgroupId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_callPatches_callId" ON "callPatches" ("callId");`,
+	`CREATE INDEX IF NOT EXISTS "idx_callPatches_talkgroupId" ON "callPatches" ("talkgroupId");`,
 
 	`CREATE TABLE IF NOT EXISTS "callUnits" (
     "callUnitId" bigserial NOT NULL PRIMARY KEY,
@@ -154,12 +164,16 @@ var PostgresqlSchema = []string{
     CONSTRAINT "callUnits_callId" FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
 
+	`CREATE INDEX IF NOT EXISTS "idx_callUnits_callId" ON "callUnits" ("callId");`,
+
 	`CREATE TABLE IF NOT EXISTS "delayed" (
     "delayedId" bigserial NOT NULL PRIMARY KEY,
     "callId" bigint NOT NULL,
     "timestamp" bigint NOT NULL,
     CONSTRAINT "delayed_callId" FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_delayed_callId" ON "delayed" ("callId");`,
 
 	`CREATE TABLE IF NOT EXISTS "dirwatches" (
     "dirwatchId" bigserial NOT NULL PRIMARY KEY,
@@ -183,6 +197,8 @@ var PostgresqlSchema = []string{
     "message" text NOT NULL,
     "timestamp" bigint NOT NULL
   );`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_logs_timestamp" ON "logs" ("timestamp");`,
 
 	`CREATE TABLE IF NOT EXISTS "options" (
     "optionId" bigserial NOT NULL PRIMARY KEY,

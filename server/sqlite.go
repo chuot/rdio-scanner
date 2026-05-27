@@ -117,6 +117,7 @@ var SqliteSchema = []string{
     "audio" blob NOT NULL,
     "audioFilename" text NOT NULL,
     "audioMime" text NOT NULL,
+    "audioPath" text NOT NULL DEFAULT '',
     "siteRef" integer NOT NULL DEFAULT 0,
     "systemId" integer NOT NULL,
     "talkgroupId" integer NOT NULL,
@@ -126,6 +127,10 @@ var SqliteSchema = []string{
   );`,
 
 	`CREATE INDEX IF NOT EXISTS "calls_idx" ON "calls" ("systemId","siteRef","talkgroupId","timestamp");`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_calls_timestamp" ON "calls" ("timestamp");`,
+	`CREATE INDEX IF NOT EXISTS "idx_calls_talkgroupId" ON "calls" ("talkgroupId");`,
+	`CREATE INDEX IF NOT EXISTS "idx_calls_audioPath" ON "calls" ("audioPath");`,
 
 	`CREATE TABLE IF NOT EXISTS "callFrequencies" (
     "callFrequencyId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -138,6 +143,8 @@ var SqliteSchema = []string{
     FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
 
+	`CREATE INDEX IF NOT EXISTS "idx_callFrequencies_callId" ON "callFrequencies" ("callId");`,
+
 	`CREATE TABLE IF NOT EXISTS "callPatches" (
     "callPatchId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
     "callId" integer NOT NULL,
@@ -145,6 +152,9 @@ var SqliteSchema = []string{
     FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY ("talkgroupId") REFERENCES "talkgroups" ("talkgroupId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_callPatches_callId" ON "callPatches" ("callId");`,
+	`CREATE INDEX IF NOT EXISTS "idx_callPatches_talkgroupId" ON "callPatches" ("talkgroupId");`,
 
 	`CREATE TABLE IF NOT EXISTS "callUnits" (
     "callUnitId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -154,12 +164,16 @@ var SqliteSchema = []string{
     FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
 
+	`CREATE INDEX IF NOT EXISTS "idx_callUnits_callId" ON "callUnits" ("callId");`,
+
 	`CREATE TABLE IF NOT EXISTS "delayed" (
     "delayedId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
     "callId" integer NOT NULL,
     "timestamp" integer NOT NULL,
     FOREIGN KEY ("callId") REFERENCES "calls" ("callId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_delayed_callId" ON "delayed" ("callId");`,
 
 	`CREATE TABLE IF NOT EXISTS "dirwatches" (
     "dirwatchId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -183,6 +197,8 @@ var SqliteSchema = []string{
     "message" text not null,
     "timestamp" integer not null
   );`,
+
+	`CREATE INDEX IF NOT EXISTS "idx_logs_timestamp" ON "logs" ("timestamp");`,
 
 	`CREATE TABLE IF NOT EXISTS "options" (
     "optionId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,

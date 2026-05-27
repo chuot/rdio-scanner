@@ -29,6 +29,28 @@ import (
 	"strings"
 )
 
+// migrateCallsAudioPath adds the "audioPath" column to existing "calls"
+// tables. Fresh installs already get the column via the schema seed; this
+// function is for upgrading databases that were created before file-backed
+// audio storage existed.
+func migrateCallsAudioPath(db *Database) error {
+	formatError := errorFormatter("migration", "migrateCallsAudioPath")
+
+	// Probe for the column. If the SELECT succeeds, migration is done.
+	if _, err := db.Sql.Exec(`SELECT "audioPath" FROM "calls" LIMIT 1`); err == nil {
+		return nil
+	}
+
+	log.Println("adding calls.audioPath column...")
+
+	query := `ALTER TABLE "calls" ADD COLUMN "audioPath" text NOT NULL DEFAULT ''`
+	if _, err := db.Sql.Exec(query); err != nil {
+		return formatError(err, query)
+	}
+
+	return nil
+}
+
 func migrateAccesses(db *Database) error {
 	var (
 		err   error
