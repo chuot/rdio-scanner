@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, HostListener, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -40,6 +40,7 @@ import { RdioScannerSupportComponent } from './support/support.component';
     styleUrls: [
         '../common.scss',
         './main.component.scss',
+        './main-sliders.scss',
     ],
     templateUrl: './main.component.html',
     standalone: false
@@ -80,6 +81,7 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     // END OF RED TAPE.
     //
 
+    callDuration = 0;
     callTime = 0;
     callUnit = '0';
 
@@ -119,6 +121,11 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
     type = '';
 
+    // Mirrored from RdioScannerService.getVolume() so the slider's [value]
+    // binding stays reactive when the service emits a volume event (for
+    // instance after the initial load from localStorage).
+    volume = 1;
+
     get showListenersCount(): boolean {
         return this.config?.showListenersCount || false;
     }
@@ -152,6 +159,87 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         });
 
         this.eventSubscription = this.rdioScannerService.event.subscribe((event: RdioScannerEvent) => this.eventHandler(event));
+
+        // Pull the persisted volume (localStorage) so the slider thumb is
+        // positioned correctly on first paint.
+        this.volume = this.rdioScannerService.getVolume();
+    }
+
+    onScrub(ev: Event): void {
+        const v = parseFloat((ev.target as HTMLInputElement).value);
+        if (!isNaN(v)) {
+            this.rdioScannerService.seek(v);
+        }
+    }
+
+    onVolumeChange(ev: Event): void {
+        const v = parseFloat((ev.target as HTMLInputElement).value);
+        if (!isNaN(v)) {
+            this.volume = v;
+            this.rdioScannerService.setVolume(v);
+        }
+    }
+
+    // mutedAt holds the pre-mute volume so M can toggle back. 0 means
+    // either "we just unmuted from M" or "volume was always zero" — in
+    // both cases the next M press restores to a sensible 0.5.
+    private mutedAt = 0;
+
+    @HostListener('document:keydown', ['$event'])
+    onGlobalKey(ev: KeyboardEvent): void {
+        // Don't hijack keys while the user is typing into an input,
+        // textarea, or contenteditable element. Notable side-effect:
+        // when the scrub or volume slider has focus, the browser's
+        // native range-input ←/→ stepping still works (with the input's
+        // own `step`), which is what we want.
+        const t = ev.target as HTMLElement | null;
+        if (t) {
+            const tag = t.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) {
+                return;
+            }
+        }
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) {
+            return;
+        }
+
+        switch (ev.key) {
+            case ' ':
+            case 'Spacebar':
+                this.pause();
+                ev.preventDefault();
+                break;
+            case 'ArrowLeft':
+                if (this.call && this.callDuration > 0) {
+                    this.rdioScannerService.seek(Math.max(0, this.callTime - 5));
+                    ev.preventDefault();
+                }
+                break;
+            case 'ArrowRight':
+                if (this.call && this.callDuration > 0) {
+                    this.rdioScannerService.seek(Math.min(this.callDuration, this.callTime + 5));
+                    ev.preventDefault();
+                }
+                break;
+            case 'ArrowUp':
+                this.rdioScannerService.setVolume(Math.min(1, this.volume + 0.05));
+                ev.preventDefault();
+                break;
+            case 'ArrowDown':
+                this.rdioScannerService.setVolume(Math.max(0, this.volume - 0.05));
+                ev.preventDefault();
+                break;
+            case 'm':
+            case 'M':
+                if (this.volume > 0) {
+                    this.mutedAt = this.volume;
+                    this.rdioScannerService.setVolume(0);
+                } else {
+                    this.rdioScannerService.setVolume(this.mutedAt > 0 ? this.mutedAt : 0.5);
+                }
+                ev.preventDefault();
+                break;
+        }
     }
 
     authenticate(password = this.authForm.get('password')?.value): void {
@@ -411,7 +499,20 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                 this.call = event.call;
 
                 this.updateDimmer();
+            } else {
+                // No call is playing — reset scrub bar so the thumb
+                // doesn't show a stale position from the previous clip.
+                this.callDuration = 0;
+                this.callTime = 0;
             }
+        }
+
+        if ('duration' in event && typeof event.duration === 'number') {
+            this.callDuration = event.duration;
+        }
+
+        if ('volume' in event && typeof event.volume === 'number') {
+            this.volume = event.volume;
         }
 
         if ('config' in event) {

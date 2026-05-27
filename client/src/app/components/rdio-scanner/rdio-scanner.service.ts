@@ -68,13 +68,28 @@ export class RdioScannerService implements OnDestroy {
     static LOCAL_STORAGE_KEY_LEGACY = 'rdio-scanner';
     static LOCAL_STORAGE_KEY_LFM = 'rdio-scanner-lfm';
     static LOCAL_STORAGE_KEY_PIN = 'rdio-scanner-pin';
+    static LOCAL_STORAGE_KEY_VOLUME = 'rdio-scanner-volume';
 
     event = new EventEmitter<RdioScannerEvent>();
 
     private audioContext: AudioContext | undefined;
 
+    // audioGain sits between every source and destination so volume can be
+    // adjusted live. It's created lazily during bootstrapAudio() once the
+    // AudioContext is available.
+    private audioGain: GainNode | undefined;
+
     private audioSource: AudioBufferSourceNode | undefined;
     private audioSourceStartTime = NaN;
+
+    // audioBuffer holds the decoded buffer for the currently-playing call,
+    // kept so seek() can construct a fresh BufferSourceNode at an arbitrary
+    // offset without re-decoding the audio bytes.
+    private audioBuffer: AudioBuffer | undefined;
+
+    // currentVolume is the linear gain (0..1) applied to audioGain. Updated
+    // by setVolume() and persisted to localStorage.
+    private currentVolume = 1.0;
 
     private call: RdioScannerCall | undefined;
     private callPrevious: RdioScannerCall | undefined;
@@ -128,6 +143,8 @@ export class RdioScannerService implements OnDestroy {
             return;
         }
 
+        this.readStoredVolume();
+
         this.bootstrapAudio();
 
         this.initializeInstanceId();
@@ -135,6 +152,21 @@ export class RdioScannerService implements OnDestroy {
         this.readLivefeedMap();
 
         this.openWebsocket();
+    }
+
+    private readStoredVolume(): void {
+        try {
+            const raw = window?.localStorage?.getItem(RdioScannerService.LOCAL_STORAGE_KEY_VOLUME);
+            if (raw === null || raw === undefined) {
+                return;
+            }
+            const v = parseFloat(raw);
+            if (!isNaN(v)) {
+                this.currentVolume = Math.min(1, Math.max(0, v));
+            }
+        } catch {
+            // localStorage may be unavailable (private browsing, etc.); fall back to default.
+        }
     }
 
     authenticate(password: string): void {
@@ -440,6 +472,68 @@ export class RdioScannerService implements OnDestroy {
         this.event.emit({ pause: this.livefeedPaused });
     }
 
+    // setVolume clamps to [0, 1] and ramps the gain node a few ms to avoid
+    // audible clicks (a direct value assignment on AudioParam produces a
+    // step change that can pop on transient-rich content). The new value is
+    // persisted to localStorage so it survives reloads.
+    setVolume(v: number): void {
+        v = Math.min(1, Math.max(0, v));
+        this.currentVolume = v;
+        if (this.audioGain && this.audioContext) {
+            this.audioGain.gain.setTargetAtTime(v, this.audioContext.currentTime, 0.01);
+        }
+        try {
+            window?.localStorage?.setItem(RdioScannerService.LOCAL_STORAGE_KEY_VOLUME, String(v));
+        } catch {
+            // localStorage may be unavailable in private browsing; non-fatal.
+        }
+        this.event.emit({ volume: v });
+    }
+
+    getVolume(): number {
+        return this.currentVolume;
+    }
+
+    getCurrentCallDuration(): number {
+        return this.audioBuffer?.duration ?? 0;
+    }
+
+    // seek jumps playback to offsetSeconds within the current call. The
+    // AudioBufferSourceNode API is one-shot: to seek we have to tear down
+    // the current source and start a fresh one with the desired offset.
+    // The decoded buffer is reused so this happens in sub-ms with no
+    // network or decode cost.
+    seek(offsetSeconds: number): void {
+        if (!this.audioContext || !this.audioBuffer || !this.audioGain || !this.call) {
+            return;
+        }
+
+        const duration = this.audioBuffer.duration;
+        const target = Math.min(duration, Math.max(0, offsetSeconds));
+
+        if (this.audioSource) {
+            this.audioSource.onended = null;
+            try {
+                this.audioSource.stop();
+            } catch {
+                // Source may already have ended; safe to ignore.
+            }
+            this.audioSource.disconnect();
+            this.audioSource = undefined;
+        }
+
+        this.audioSource = this.audioContext.createBufferSource();
+        this.audioSource.buffer = this.audioBuffer;
+        this.audioSource.connect(this.audioGain);
+        this.audioSource.onended = () => this.skip({ delay: true });
+        this.audioSource.start(0, target);
+
+        // Shift the perceived start time so the `time` event-emitter
+        // (currentTime - startTime) keeps producing the right offset.
+        this.audioSourceStartTime = this.audioContext.currentTime - target;
+        this.event.emit({ time: target });
+    }
+
     play(call?: RdioScannerCall | undefined): void {
         if (this.livefeedPaused || this.skipDelay) {
             return;
@@ -474,19 +568,22 @@ export class RdioScannerService implements OnDestroy {
         }
 
         this.audioContext?.decodeAudioData(arrayBuffer, async (buffer) => {
-            if (!this.audioContext || this.audioSource || !this.call) {
+            if (!this.audioContext || !this.audioGain || this.audioSource || !this.call) {
                 return;
             }
 
             await this.playAlert(this.call);
 
+            this.audioBuffer = buffer;
             this.audioSource = this.audioContext.createBufferSource();
             this.audioSource.buffer = buffer;
-            this.audioSource.connect(this.audioContext.destination);
+            this.audioSource.connect(this.audioGain);
             this.audioSource.onended = () => this.skip({ delay: true });
             this.audioSource.start();
 
-            this.event.emit({ call: this.call, queue });
+            // Emit duration so the UI can size its scrub bar before the first
+            // time-tick fires.
+            this.event.emit({ call: this.call, duration: buffer.duration, queue });
 
             interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {
@@ -601,6 +698,8 @@ export class RdioScannerService implements OnDestroy {
             this.audioSourceStartTime = NaN;
         }
 
+        this.audioBuffer = undefined;
+
         if (this.call) {
             this.callPrevious = this.call;
 
@@ -700,6 +799,15 @@ export class RdioScannerService implements OnDestroy {
         const bootstrap = async () => {
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+            }
+
+            // The gain node lives for the lifetime of the AudioContext.
+            // Every play() / seek() connects its source through this node so
+            // setVolume() takes effect without rebuilding the graph.
+            if (!this.audioGain && this.audioContext) {
+                this.audioGain = this.audioContext.createGain();
+                this.audioGain.gain.value = this.currentVolume;
+                this.audioGain.connect(this.audioContext.destination);
             }
 
             if (!this.oscillatorContext) {

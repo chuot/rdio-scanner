@@ -113,6 +113,7 @@ export interface RdioScannerEvent {
     categories?: RdioScannerCategory[];
     call?: RdioScannerCall;
     config?: RdioScannerConfig;
+    duration?: number;
     expired?: boolean;
     holdSys?: boolean;
     holdTg?: boolean;
@@ -126,6 +127,7 @@ export interface RdioScannerEvent {
     queue?: number;
     time?: number;
     tooMany?: boolean;
+    volume?: number;
 }
 
 export interface RdioScannerGroupData {
