@@ -44,11 +44,16 @@ type Admin struct {
 	Conns            map[*websocket.Conn]bool
 	Controller       *Controller
 	Register         chan *websocket.Conn
-	Tokens           []string
-	Unregister       chan *websocket.Conn
-	mutex            sync.Mutex
-	running          bool
+	// Tokens maps a JWT's jti (UUID string) to its absolute expiry.
+	// Entries are added on login and removed on logout or when the entry
+	// is found expired during validation. Access is mutex-guarded.
+	Tokens     map[string]time.Time
+	Unregister chan *websocket.Conn
+	mutex      sync.Mutex
+	running    bool
 }
+
+const adminTokenTTL = 24 * time.Hour
 
 type AdminLoginAttempt struct {
 	Count uint
@@ -66,7 +71,7 @@ func NewAdmin(controller *Controller) *Admin {
 		Conns:            make(map[*websocket.Conn]bool),
 		Controller:       controller,
 		Register:         make(chan *websocket.Conn),
-		Tokens:           []string{},
+		Tokens:           map[string]time.Time{},
 		Unregister:       make(chan *websocket.Conn),
 		mutex:            sync.Mutex{},
 	}
@@ -430,7 +435,12 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{ID: id.String()})
+		expiry := time.Now().Add(adminTokenTTL)
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+			ID:        id.String(),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(expiry),
+		})
 		sToken, err := token.SignedString([]byte(admin.Controller.Options.secret))
 
 		if err != nil {
@@ -438,11 +448,17 @@ func (admin *Admin) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if len(admin.Tokens) < 5 {
-			admin.Tokens = append(admin.Tokens, sToken)
-		} else {
-			admin.Tokens = append(admin.Tokens[1:], sToken)
+		admin.mutex.Lock()
+		// Opportunistic prune of expired entries so the map can't grow
+		// unboundedly from login spam.
+		now := time.Now()
+		for jti, exp := range admin.Tokens {
+			if !exp.After(now) {
+				delete(admin.Tokens, jti)
+			}
 		}
+		admin.Tokens[id.String()] = expiry
+		admin.mutex.Unlock()
 
 		b, err := json.Marshal(map[string]any{
 			"passwordNeedChange": true,
@@ -474,16 +490,35 @@ func (admin *Admin) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		for k, v := range admin.Tokens {
-			if v == t {
-				admin.Tokens = append(admin.Tokens[:k], admin.Tokens[k+1:]...)
-			}
+
+		// Parse the JWT again here just to recover its jti for deletion.
+		// ValidateToken already verified the signature and expiry; the
+		// claims read here cannot be forged at this point.
+		if jti, ok := admin.tokenJTI(t); ok {
+			admin.mutex.Lock()
+			delete(admin.Tokens, jti)
+			admin.mutex.Unlock()
 		}
 		w.WriteHeader(http.StatusOK)
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// tokenJTI extracts the jti claim from a JWT without re-validating it.
+// Callers must verify the token via ValidateToken first; otherwise the
+// returned jti is attacker-controlled.
+func (admin *Admin) tokenJTI(sToken string) (string, bool) {
+	parser := jwt.NewParser()
+	claims := &jwt.RegisteredClaims{}
+	if _, _, err := parser.ParseUnverified(sToken, claims); err != nil {
+		return "", false
+	}
+	if claims.ID == "" {
+		return "", false
+	}
+	return claims.ID, true
 }
 
 func (admin *Admin) PasswordHandler(w http.ResponseWriter, r *http.Request) {
@@ -682,27 +717,35 @@ func (admin *Admin) UserRemoveHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (admin *Admin) ValidateToken(sToken string) bool {
-	found := false
-	for _, t := range admin.Tokens {
-		if t == sToken {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if sToken == "" {
 		return false
 	}
 
-	token, err := jwt.Parse(sToken, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-
+	// Parse and verify signature + expiry. ExpiresAt is auto-checked by
+	// the jwt library when present; the WithValidMethods option restricts
+	// the accepted signing algorithm so the "alg:none" attack class is closed.
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(sToken, claims, func(token *jwt.Token) (any, error) {
 		return []byte(admin.Controller.Options.secret), nil
-	})
-	if err != nil {
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
+	if err != nil || !token.Valid {
+		return false
+	}
+	if claims.ID == "" {
 		return false
 	}
 
-	return token.Valid
+	// Check that the token is in the active set. Map lookup is O(1) and
+	// (unlike the prior linear == on every token string) doesn't leak
+	// timing information about other active tokens.
+	admin.mutex.Lock()
+	expiry, ok := admin.Tokens[claims.ID]
+	admin.mutex.Unlock()
+	if !ok {
+		return false
+	}
+
+	// Defense-in-depth: even if the JWT's exp says one thing, the
+	// server-side expiry is authoritative.
+	return time.Now().Before(expiry)
 }

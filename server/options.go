@@ -21,11 +21,12 @@
 package main
 
 import (
+	crand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"sync"
 
 	"golang.org/x/crypto/bcrypt"
@@ -206,14 +207,16 @@ func (options *Options) Read(db *Database) error {
 
 	formatError := errorFormatter("options", "read")
 
-	newSecret := func(n uint) string {
-		var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&")
-
-		s := make([]rune, n)
-		for i := range s {
-			s[i] = letters[rand.Intn(len(letters))]
+	// Generate a cryptographically random JWT signing secret.
+	// Returns a hex-encoded string of length 2*nBytes.
+	newSecret := func(nBytes uint) string {
+		b := make([]byte, nBytes)
+		if _, err := crand.Read(b); err != nil {
+			// crypto/rand failure is fatal: without a strong secret,
+			// JWT auth is forgeable. Better to refuse to boot.
+			log.Fatalf("options: crypto/rand read failed: %v", err)
 		}
-		return string(s)
+		return hex.EncodeToString(b)
 	}
 
 	query = `SELECT "key", "value" FROM "options"`
@@ -324,16 +327,22 @@ func (options *Options) Read(db *Database) error {
 			}
 		case "secret":
 			if err = json.Unmarshal([]byte(value.String), &f); err == nil {
-				const n = 256
+				// 64 random bytes hex-encoded = 128 chars. Different length
+				// from the legacy math/rand secret (256 chars), so any old
+				// secret fails the check below and is rotated automatically.
+				// Rotation invalidates all existing admin sessions, which is
+				// the correct behavior here — the old secret was forgeable.
+				const n = 128
 				switch v := f.(type) {
 				case string:
 					if len(v) == n {
 						options.secret = v
 					} else {
-						options.secret = newSecret(n)
+						log.Println("options: rotating JWT signing secret to use crypto/rand; existing admin sessions invalidated")
+						options.secret = newSecret(n / 2)
 					}
 				default:
-					options.secret = newSecret(n)
+					options.secret = newSecret(n / 2)
 				}
 			}
 		case "showListenersCount":
