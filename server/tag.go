@@ -355,13 +355,21 @@ func (tags *Tags) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "tags" ("alert", "label", "led", "order") VALUES ('%s', '%s', '%s', %d)`, tag.Alert, escapeQuotes(tag.Label), tag.Led, tag.Order)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "tags" ("alert", "label", "led", "order") VALUES ($1, $2, $3, %d)`, tag.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "tags" ("alert", "label", "led", "order") VALUES (?, ?, ?, %d)`, tag.Order)
+			}
+			if _, err = tx.Exec(query, tag.Alert, tag.Label, tag.Led); err != nil {
 				break
 			}
 		} else {
-			query = fmt.Sprintf(`UPDATE "tags" SET "alert" = '%s', "label" = '%s', "led" = '%s', "order" = %d WHERE "tagId" = %d`, tag.Alert, escapeQuotes(tag.Label), tag.Led, tag.Order, tag.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "tags" SET "alert" = $1, "label" = $2, "led" = $3, "order" = %d WHERE "tagId" = %d`, tag.Order, tag.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "tags" SET "alert" = ?, "label" = ?, "led" = ?, "order" = %d WHERE "tagId" = %d`, tag.Order, tag.Id)
+			}
+			if _, err = tx.Exec(query, tag.Alert, tag.Label, tag.Led); err != nil {
 				break
 			}
 		}

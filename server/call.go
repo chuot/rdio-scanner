@@ -458,8 +458,13 @@ func (calls *Calls) BackfillBlobs() {
 			// Clear the BLOB and store the path. If the UPDATE fails we
 			// leave the file on disk to be picked up on the next attempt
 			// (the SELECT will return the row again).
-			update := fmt.Sprintf(`UPDATE "calls" SET "audioPath" = '%s', "audio" = ? WHERE "callId" = %d`, escapeQuotes(path), r.id)
-			if _, err := db.Sql.Exec(update, []byte{}); err != nil {
+			var update string
+			if db.Config.DbType == DbTypePostgresql {
+				update = fmt.Sprintf(`UPDATE "calls" SET "audioPath" = $1, "audio" = $2 WHERE "callId" = %d`, r.id)
+			} else {
+				update = fmt.Sprintf(`UPDATE "calls" SET "audioPath" = ?, "audio" = ? WHERE "callId" = %d`, r.id)
+			}
+			if _, err := db.Sql.Exec(update, path, []byte{}); err != nil {
 				log.Println(formatError(err, update))
 				if rmErr := deleteAudioFile(path); rmErr != nil {
 					log.Println(formatError(rmErr, "cleanup"))
@@ -738,15 +743,19 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint64, error) {
 
 	emptyAudio := []byte{}
 
+	// Parameterize all string fields, including the pre-existing audio blob.
+	// AudioFilename/AudioMime arrive from untrusted multipart uploads
+	// (parsers.go), and previously landed in the query via '%s' with no
+	// escaping at all — a pre-auth SQLi vector.
 	if db.Config.DbType == DbTypePostgresql {
-		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "audioPath", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES ($1, '%s', '%s', '%s', %d, %d, %d, %d) RETURNING "callId"`, call.AudioFilename, call.AudioMime, escapeQuotes(call.AudioPath), call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
+		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "audioPath", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES ($1, $2, $3, $4, %d, %d, %d, %d) RETURNING "callId"`, call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
 
-		err = tx.QueryRow(query, emptyAudio).Scan(&call.Id)
+		err = tx.QueryRow(query, emptyAudio, call.AudioFilename, call.AudioMime, call.AudioPath).Scan(&call.Id)
 
 	} else {
-		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "audioPath", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, '%s', '%s', '%s', %d, %d, %d, %d)`, call.AudioFilename, call.AudioMime, escapeQuotes(call.AudioPath), call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
+		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "audioPath", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, ?, ?, ?, %d, %d, %d, %d)`, call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
 
-		if res, err = tx.Exec(query, emptyAudio); err == nil {
+		if res, err = tx.Exec(query, emptyAudio, call.AudioFilename, call.AudioMime, call.AudioPath); err == nil {
 			if id, err := res.LastInsertId(); err == nil {
 				call.Id = uint64(id)
 			}

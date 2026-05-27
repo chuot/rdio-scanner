@@ -157,16 +157,23 @@ func (apikeys *Apikeys) FromMap(f []any) *Apikeys {
 	return apikeys
 }
 
-func (apikeys *Apikeys) GetApikey(key string) (apikey *Apikey, ok bool) {
+// GetApikey looks up an apikey whose key matches the submitted plaintext.
+// VerifyCredential runs in constant time, and the loop deliberately does not
+// early-exit so total work is independent of which entry matches.
+func (apikeys *Apikeys) GetApikey(secret, key string) (apikey *Apikey, ok bool) {
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
-	for _, apikey := range apikeys.List {
-		if apikey.Key == key && !apikey.Disabled {
-			return apikey, true
+	var matched *Apikey
+	for _, a := range apikeys.List {
+		if !a.Disabled && VerifyCredential(secret, a.Key, key) {
+			matched = a
 		}
 	}
-	return nil, false
+	if matched == nil {
+		return nil, false
+	}
+	return matched, true
 }
 
 func (apikeys *Apikeys) Read(db *Database) error {
@@ -218,7 +225,7 @@ func (apikeys *Apikeys) Read(db *Database) error {
 	return nil
 }
 
-func (apikeys *Apikeys) Write(db *Database) error {
+func (apikeys *Apikeys) Write(db *Database, secret string) error {
 	var (
 		apikeyIds = []uint64{}
 		err       error
@@ -289,6 +296,10 @@ func (apikeys *Apikeys) Write(db *Database) error {
 			}
 		}
 
+		// Hash the API key at rest. No-op if already hashed (admin UI
+		// echoed back what it received).
+		apikey.Key = EnsureHashed(secret, apikey.Key)
+
 		if apikey.Id > 0 {
 			query = fmt.Sprintf(`SELECT COUNT(*) FROM "apikeys" WHERE "apikeyId" = %d`, apikey.Id)
 			if err = tx.QueryRow(query).Scan(&count); err != nil {
@@ -297,14 +308,22 @@ func (apikeys *Apikeys) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, '%s', '%s', %d, '%s')`, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, $1, $2, %d, $3)`, apikey.Disabled, apikey.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (%t, ?, ?, %d, ?)`, apikey.Disabled, apikey.Order)
+			}
+			if _, err = tx.Exec(query, apikey.Ident, apikey.Key, systems); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = '%s', "key" = '%s', "order" = %d, "systems" = '%s' WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Ident, apikey.Key, apikey.Order, systems, apikey.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = $1, "key" = $2, "order" = %d, "systems" = $3 WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Order, apikey.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "apikeys" SET "disabled" = %t, "ident" = ?, "key" = ?, "order" = %d, "systems" = ? WHERE "apikeyId" = %d`, apikey.Disabled, apikey.Order, apikey.Id)
+			}
+			if _, err = tx.Exec(query, apikey.Ident, apikey.Key, systems); err != nil {
 				break
 			}
 		}

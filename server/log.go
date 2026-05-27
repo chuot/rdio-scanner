@@ -83,9 +83,16 @@ func (logs *Logs) LogEvent(level string, message string) error {
 			Message:  message,
 		}
 
-		query := fmt.Sprintf(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES ('%s', '%s', %d)`, l.Level, l.Message, l.DateTime.UnixMilli())
-		if _, err := logs.database.Sql.Exec(query); err != nil {
-			return fmt.Errorf("logs.logevent: %s in %s", err, query)
+		// Parameterize level/message — message frequently embeds
+		// attacker-influenced strings (filenames, idents, IPs).
+		var query string
+		if logs.database.Config.DbType == DbTypePostgresql {
+			query = fmt.Sprintf(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES ($1, $2, %d)`, l.DateTime.UnixMilli())
+		} else {
+			query = fmt.Sprintf(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, %d)`, l.DateTime.UnixMilli())
+		}
+		if _, err := logs.database.Sql.Exec(query, l.Level, l.Message); err != nil {
+			return fmt.Errorf("logs.logevent: %s", err)
 		}
 	}
 

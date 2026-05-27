@@ -63,6 +63,15 @@ func (client *Client) Init(controller *Controller, request *http.Request, conn *
 		return nil
 	}
 
+	// Per-IP cap so one host can't burn through the global MaxClients
+	// budget. The threshold is intentionally lenient (20 connections per
+	// IP) to accommodate office NAT, shared kiosks, etc.
+	const maxClientsPerIP = 20
+	if controller.Clients.CountByIP(GetRemoteAddr(request)) >= maxClientsPerIP {
+		conn.Close()
+		return nil
+	}
+
 	client.Access = NewAccess()
 	client.Controller = controller
 	client.Conn = conn
@@ -249,6 +258,22 @@ func (clients *Clients) AccessCount(client *Client) uint {
 	return count
 }
 
+// CountByIP returns how many existing clients share the given remote
+// address. Used to cap per-IP WebSocket connections so a single attacker
+// can't exhaust MaxClients alone.
+func (clients *Clients) CountByIP(remoteAddr string) uint {
+	clients.mutex.Lock()
+	defer clients.mutex.Unlock()
+
+	count := uint(0)
+	for c := range clients.Map {
+		if c.GetRemoteAddr() == remoteAddr {
+			count++
+		}
+	}
+	return count
+}
+
 func (clients *Clients) Add(client *Client) {
 	clients.mutex.Lock()
 	defer clients.mutex.Unlock()
@@ -265,6 +290,14 @@ func (clients *Clients) EmitCall(call *Call, restricted bool) {
 	defer clients.mutex.Unlock()
 
 	for c := range clients.Map {
+		// Re-check expiration on every emit. The PIN handler only
+		// validates expiry at auth time; without this check a listener
+		// who connected one second before their access expired would
+		// keep receiving audio indefinitely.
+		if restricted && c.Access != nil && c.Access.HasExpired() {
+			c.Send <- &Message{Command: MessageCommandExpired}
+			continue
+		}
 		if (!restricted || c.Access.HasAccess(call)) && c.Livefeed.IsEnabled(call) {
 			c.Send <- &Message{Command: MessageCommandCall, Payload: call}
 		}

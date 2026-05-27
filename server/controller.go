@@ -433,8 +433,6 @@ func (controller *Controller) ProcessMessageCommandLivefeedMap(client *Client, m
 }
 
 func (controller *Controller) ProcessMessageCommandPin(client *Client, message *Message) error {
-	const maxAuthCount = 5
-
 	switch v := message.Payload.(type) {
 	case string:
 		b, err := base64.StdEncoding.DecodeString(v)
@@ -442,38 +440,43 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			return fmt.Errorf("controller.processmessage.commandpin: %v", err)
 		}
 
-		client.AuthCount++
-		if client.AuthCount > maxAuthCount {
+		remoteAddr := client.GetRemoteAddr()
+
+		// Per-IP lockout survives WebSocket reconnects. The prior
+		// per-connection counter was trivially bypassed by closing and
+		// reopening the socket.
+		if controller.Accesses.IsPinLockedOut(remoteAddr) {
 			client.Send <- &Message{Command: MessageCommandPin}
 			return nil
 		}
 
 		if controller.Accesses.IsRestricted() {
 			code := string(b)
-			if access, ok := controller.Accesses.GetAccess(code); ok {
-				client.Access = access
-
-			} else {
-				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid access code %s for ip %s", code, client.GetRemoteAddr()))
+			access, ok := controller.Accesses.GetAccess(controller.Options.secret, code)
+			if !ok {
+				lockedOut := controller.Accesses.RecordPinFailure(remoteAddr)
+				// Do not log the submitted code: mistyped codes would
+				// otherwise accumulate valid PINs in the admin-visible
+				// log table.
+				if lockedOut {
+					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("pin lockout for ip %s after repeated failures", remoteAddr))
+				} else {
+					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("invalid access code from ip %s", remoteAddr))
+				}
 				client.Send <- &Message{Command: MessageCommandPin}
 				return nil
 			}
+			client.Access = access
 
-			if client.AuthCount == maxAuthCount {
-				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("locked access for ident %s locked", client.Access.Ident))
-				client.Send <- &Message{Command: MessageCommandPin}
-				return nil
-			}
-
-			if client.Access.HasExpired() {
-				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("expired access for ident %s", client.Access.Ident))
+			if access.HasExpired() {
+				controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("expired access for ident %s", access.Ident))
 				client.Send <- &Message{Command: MessageCommandExpired}
 				return nil
 			}
 
-			if client.Access.Limit > 0 {
-				if controller.Clients.AccessCount(client) > client.Access.Limit {
-					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many concurrent connections for ident %s, limit is %d", client.Access.Ident, client.Access.Limit))
+			if access.Limit > 0 {
+				if controller.Clients.AccessCount(client) > access.Limit {
+					controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("too many concurrent connections for ident %s, limit is %d", access.Ident, access.Limit))
 					client.Send <- &Message{Command: MessageCommandMax}
 					return nil
 				}
@@ -483,7 +486,9 @@ func (controller *Controller) ProcessMessageCommandPin(client *Client, message *
 			client.Access = NewAccess()
 		}
 
-		client.AuthCount = 0
+		// Success — clear the per-IP failure counter so legitimate
+		// users aren't punished for an earlier mistyped code.
+		controller.Accesses.ResetPinAttempts(remoteAddr)
 
 		client.SendConfig(controller.Groups, controller.Options, controller.Systems, controller.Tags)
 	}

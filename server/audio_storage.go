@@ -107,10 +107,21 @@ func deleteAudioFile(path string) error {
 }
 
 // audioExtension returns a sensible file extension (including leading dot)
-// for the given filename or mime type. Falls back to ".bin" if neither helps.
+// for the given filename or mime type. The extension is whitelisted: an
+// attacker-controlled AudioFilename of ".php", "..", or other oddities
+// cannot produce a matching extension on disk — we fall back to ".bin"
+// for anything unrecognized.
 func audioExtension(filename, mime string) string {
-	if ext := filepath.Ext(filename); ext != "" {
-		return strings.ToLower(ext)
+	allowed := map[string]bool{
+		".m4a":  true,
+		".mp3":  true,
+		".wav":  true,
+		".ogg":  true,
+		".flac": true,
+		".aac":  true,
+	}
+	if ext := strings.ToLower(filepath.Ext(filename)); ext != "" && allowed[ext] {
+		return ext
 	}
 	switch strings.ToLower(mime) {
 	case "audio/aac", "audio/mp4", "audio/m4a", "audio/x-m4a":

@@ -151,15 +151,80 @@ func (access *Access) MarshalJSON() ([]byte, error) {
 }
 
 type Accesses struct {
-	List  []*Access
-	mutex sync.Mutex
+	// Attempts tracks PIN guesses per remote address so that closing and
+	// reopening the WebSocket cannot reset the lockout (the prior
+	// client.AuthCount counter lived on the connection itself, which was
+	// trivially bypassable).
+	Attempts         map[string]*AccessAttempt
+	AttemptsMax      uint
+	AttemptsMaxDelay time.Duration
+	List             []*Access
+	mutex            sync.Mutex
+}
+
+type AccessAttempt struct {
+	Count uint
+	Date  time.Time
 }
 
 func NewAccesses() *Accesses {
 	return &Accesses{
-		List:  []*Access{},
-		mutex: sync.Mutex{},
+		Attempts:         map[string]*AccessAttempt{},
+		AttemptsMax:      uint(5),
+		AttemptsMaxDelay: 10 * time.Minute,
+		List:             []*Access{},
+		mutex:            sync.Mutex{},
 	}
+}
+
+// RecordPinFailure increments the attempt counter for the given remote
+// address and returns true if the address is now locked out.
+func (accesses *Accesses) RecordPinFailure(remoteAddr string) bool {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	now := time.Now()
+	attempt := accesses.Attempts[remoteAddr]
+	if attempt == nil || now.Sub(attempt.Date) > accesses.AttemptsMaxDelay {
+		attempt = &AccessAttempt{Count: 0, Date: now}
+		accesses.Attempts[remoteAddr] = attempt
+	}
+	attempt.Count++
+	// Don't update Date on subsequent attempts — let the lockout window
+	// expire from the first failure, not be perpetually extended.
+
+	// Opportunistic prune of stale entries.
+	for ip, a := range accesses.Attempts {
+		if now.Sub(a.Date) > accesses.AttemptsMaxDelay {
+			delete(accesses.Attempts, ip)
+		}
+	}
+
+	return attempt.Count > accesses.AttemptsMax
+}
+
+// IsPinLockedOut reports whether the remote address is currently rate-limited.
+func (accesses *Accesses) IsPinLockedOut(remoteAddr string) bool {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+
+	attempt := accesses.Attempts[remoteAddr]
+	if attempt == nil {
+		return false
+	}
+	if time.Since(attempt.Date) > accesses.AttemptsMaxDelay {
+		delete(accesses.Attempts, remoteAddr)
+		return false
+	}
+	return attempt.Count > accesses.AttemptsMax
+}
+
+// ResetPinAttempts clears the failure counter for an address on
+// successful authentication.
+func (accesses *Accesses) ResetPinAttempts(remoteAddr string) {
+	accesses.mutex.Lock()
+	defer accesses.mutex.Unlock()
+	delete(accesses.Attempts, remoteAddr)
 }
 
 func (accesses *Accesses) Add(access *Access) (*Accesses, bool) {
@@ -202,17 +267,24 @@ func (accesses *Accesses) FromMap(f []any) *Accesses {
 	return accesses
 }
 
-func (accesses *Accesses) GetAccess(code string) (access *Access, ok bool) {
+// GetAccess looks up an access entry whose code matches the submitted
+// plaintext. The compare is constant-time (VerifyCredential), and the loop
+// intentionally does NOT early-exit so the total work is independent of
+// which entry (or no entry) matches.
+func (accesses *Accesses) GetAccess(secret, code string) (access *Access, ok bool) {
 	accesses.mutex.Lock()
 	defer accesses.mutex.Unlock()
 
-	for _, access := range accesses.List {
-		if access.Code == code {
-			return access, true
+	var matched *Access
+	for _, a := range accesses.List {
+		if VerifyCredential(secret, a.Code, code) {
+			matched = a
 		}
 	}
-
-	return nil, false
+	if matched == nil {
+		return nil, false
+	}
+	return matched, true
 }
 
 func (accesses *Accesses) IsRestricted() bool {
@@ -287,7 +359,7 @@ func (accesses *Accesses) Remove(access *Access) (*Accesses, bool) {
 	return accesses, removed
 }
 
-func (accesses *Accesses) Write(db *Database) error {
+func (accesses *Accesses) Write(db *Database, secret string) error {
 	var (
 		accessIds = []uint64{}
 		err       error
@@ -356,6 +428,11 @@ func (accesses *Accesses) Write(db *Database) error {
 			systems = string(b)
 		}
 
+		// Hash the access code at rest. EnsureHashed is a no-op if the
+		// in-memory value is already in hash format (e.g., the admin UI
+		// re-sent what it last received).
+		access.Code = EnsureHashed(secret, access.Code)
+
 		if access.Id > 0 {
 			query = fmt.Sprintf(`SELECT COUNT(*) FROM "accesses" WHERE "accessId" = %d`, access.Id)
 			if err = tx.QueryRow(query).Scan(&count); err != nil {
@@ -364,14 +441,22 @@ func (accesses *Accesses) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ('%s', %d, '%s', %d, %d, '%s')`, escapeQuotes(access.Code), access.Expiration, escapeQuotes(access.Ident), access.Limit, access.Order, systems)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ($1, %d, $2, %d, %d, $3)`, access.Expiration, access.Limit, access.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES (?, %d, ?, %d, %d, ?)`, access.Expiration, access.Limit, access.Order)
+			}
+			if _, err = tx.Exec(query, access.Code, access.Ident, systems); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "accesses" SET "code" = '%s', "expiration" = %d, "ident" = '%s', "limit" = %d, "order" = %d, "systems" = '%s' WHERE "accessId" = %d`, escapeQuotes(access.Code), access.Expiration, escapeQuotes(access.Ident), access.Limit, access.Order, systems, access.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "accesses" SET "code" = $1, "expiration" = %d, "ident" = $2, "limit" = %d, "order" = %d, "systems" = $3 WHERE "accessId" = %d`, access.Expiration, access.Limit, access.Order, access.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "accesses" SET "code" = ?, "expiration" = %d, "ident" = ?, "limit" = %d, "order" = %d, "systems" = ? WHERE "accessId" = %d`, access.Expiration, access.Limit, access.Order, access.Id)
+			}
+			if _, err = tx.Exec(query, access.Code, access.Ident, systems); err != nil {
 				break
 			}
 		}

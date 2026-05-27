@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -312,24 +313,64 @@ func (downstream *Downstream) Send(call *Call) error {
 		return formatError(err)
 	}
 
-	if u, err := url.Parse(downstream.Url); err == nil {
-		u.Path = path.Join(u.Path, "/api/call-upload")
+	u, err := url.Parse(downstream.Url)
+	if err != nil {
+		return formatError(err)
+	}
 
-		c := http.Client{Timeout: 30 * time.Second}
+	// Refuse to relay to local/private destinations. An admin (or an
+	// attacker who reached admin) could otherwise turn this server into
+	// an SSRF probe against internal services (AWS metadata, RFC1918
+	// hosts, loopback admin panels, etc.).
+	if err := validateDownstreamURL(u); err != nil {
+		return formatError(err)
+	}
 
-		if res, err := c.Post(u.String(), mw.FormDataContentType(), &buf); err == nil {
-			if res.StatusCode != http.StatusOK {
-				return formatError(fmt.Errorf("bad status: %s", res.Status))
-			}
+	u.Path = path.Join(u.Path, "/api/call-upload")
 
-		} else {
-			return formatError(err)
+	c := http.Client{
+		Timeout: 30 * time.Second,
+		// Don't follow redirects — a server could 302 us to an internal
+		// target after the initial host check.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if res, err := c.Post(u.String(), mw.FormDataContentType(), &buf); err == nil {
+		if res.StatusCode != http.StatusOK {
+			return formatError(fmt.Errorf("bad status: %s", res.Status))
 		}
 
 	} else {
 		return formatError(err)
 	}
 
+	return nil
+}
+
+// validateDownstreamURL rejects destinations that aren't safe to relay
+// to: non-http(s) schemes, missing hosts, and any address that resolves
+// to loopback / RFC1918 / link-local. Resolution happens once here; the
+// redirect-disabled client above blocks bait-and-switch.
+func validateDownstreamURL(u *url.URL) error {
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("downstream url: scheme %q not allowed", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("downstream url: missing host")
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("downstream url: dns lookup failed for %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("downstream url: host %q resolves to a private/loopback address (%s)", host, ip)
+		}
+	}
 	return nil
 }
 
@@ -508,14 +549,22 @@ func (downstreams *Downstreams) Write(db *Database) error {
 		}
 
 		if count == 0 {
-			query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ('%s', %t, %d, '%s', '%s')`, escapeQuotes(downstream.Apikey), downstream.Disabled, downstream.Order, systems, escapeQuotes(downstream.Url))
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ($1, %t, %d, $2, $3)`, downstream.Disabled, downstream.Order)
+			} else {
+				query = fmt.Sprintf(`INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES (?, %t, %d, ?, ?)`, downstream.Disabled, downstream.Order)
+			}
+			if _, err = tx.Exec(query, downstream.Apikey, systems, downstream.Url); err != nil {
 				break
 			}
 
 		} else {
-			query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = '%s', "disabled" = %t, "order" = %d, "systems" = '%s', "url" = '%s' WHERE "downstreamId" = %d`, escapeQuotes(downstream.Apikey), downstream.Disabled, downstream.Order, systems, escapeQuotes(downstream.Url), downstream.Id)
-			if _, err = tx.Exec(query); err != nil {
+			if db.Config.DbType == DbTypePostgresql {
+				query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = $1, "disabled" = %t, "order" = %d, "systems" = $2, "url" = $3 WHERE "downstreamId" = %d`, downstream.Disabled, downstream.Order, downstream.Id)
+			} else {
+				query = fmt.Sprintf(`UPDATE "downstreams" SET "apikey" = ?, "disabled" = %t, "order" = %d, "systems" = ?, "url" = ? WHERE "downstreamId" = %d`, downstream.Disabled, downstream.Order, downstream.Id)
+			}
+			if _, err = tx.Exec(query, downstream.Apikey, systems, downstream.Url); err != nil {
 				break
 			}
 		}

@@ -56,9 +56,10 @@ type Config struct {
 	SslCaKeyFile     string
 	SslCertFile      string
 	SslKeyFile       string
-	SslListen        string
-	daemon           *Daemon
-	newAdminPassword string
+	SslListen            string
+	daemon               *Daemon
+	newAdminPassword     string
+	newAdminPasswordFile string
 }
 
 func NewConfig() *Config {
@@ -105,7 +106,8 @@ func NewConfig() *Config {
 	flag.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	flag.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
 	flag.StringVar(&config.Listen, "listen", defaultListen, "listening address")
-	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password")
+	flag.StringVar(&config.newAdminPassword, "admin_password", "", "change admin password (DEPRECATED: visible in process list; prefer -admin_password_file)")
+	flag.StringVar(&config.newAdminPasswordFile, "admin_password_file", "", "change admin password by reading it from this file (recommended over -admin_password)")
 	flag.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
 	flag.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	flag.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")

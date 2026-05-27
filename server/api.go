@@ -27,22 +27,96 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
+
+// maxUploadSize caps each /api/call-upload (and TR variant) request body.
+// A 30-second AAC clip is ~120 KB; even raw WAV is well under 32 MB. The
+// limit exists to prevent pre-auth memory exhaustion via an unbounded
+// multipart body — previously the server happily io.ReadAll'd whatever
+// the client sent before the API key was checked.
+const maxUploadSize = 32 << 20 // 32 MiB
+
+// maxUploadsPerMinute throttles uploads per remote address. A legitimate
+// recorder feeding one talkgroup at full duty cycle generates ~2 calls/sec
+// (= 120/min). The threshold leaves headroom for bursts while bounding
+// per-IP cost.
+const maxUploadsPerMinute = 600
 
 type Api struct {
 	Controller *Controller
+
+	uploadMu       sync.Mutex
+	uploadAttempts map[string]*uploadAttempt
+}
+
+type uploadAttempt struct {
+	count       uint
+	windowStart time.Time
 }
 
 func NewApi(controller *Controller) *Api {
-	return &Api{Controller: controller}
+	return &Api{
+		Controller:     controller,
+		uploadAttempts: map[string]*uploadAttempt{},
+	}
+}
+
+// allowUpload enforces a sliding 60-second per-IP upload counter and
+// returns false if the request should be rejected.
+func (api *Api) allowUpload(remoteAddr string) bool {
+	const window = time.Minute
+
+	api.uploadMu.Lock()
+	defer api.uploadMu.Unlock()
+
+	now := time.Now()
+	a := api.uploadAttempts[remoteAddr]
+	if a == nil || now.Sub(a.windowStart) > window {
+		a = &uploadAttempt{count: 0, windowStart: now}
+		api.uploadAttempts[remoteAddr] = a
+	}
+	a.count++
+
+	// Opportunistic prune of stale entries to bound map size under churn.
+	for ip, v := range api.uploadAttempts {
+		if now.Sub(v.windowStart) > window {
+			delete(api.uploadAttempts, ip)
+		}
+	}
+
+	return a.count <= maxUploadsPerMinute
+}
+
+// extractApikey returns the upload key from the Authorization: Bearer
+// header if present, otherwise empty. Multipart form-field fallback is
+// still honored by the per-handler parsing loops below.
+func extractBearerKey(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	const prefix = "Bearer "
+	if len(auth) > len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
+		return strings.TrimSpace(auth[len(prefix):])
+	}
+	return ""
 }
 
 func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
+		remoteAddr := GetRemoteAddr(r)
+		if !api.allowUpload(remoteAddr) {
+			api.exitWithError(w, http.StatusTooManyRequests, "Upload rate limit exceeded")
+			return
+		}
+
+		// Cap the request body before any read happens, so an unbounded
+		// multipart cannot OOM the server pre-auth.
+		r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
 		var (
 			call = NewCall()
-			key  string
+			key  = extractBearerKey(r)
 		)
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -94,9 +168,12 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *Api) HandleCall(key string, call *Call, w http.ResponseWriter) {
-	msg := []byte(fmt.Sprintf("Invalid API key for system %v talkgroup %v.\n", call.System, call.Talkgroup))
+	// Don't echo the resolved system/talkgroup back to an unauthenticated
+	// caller — that lets an attacker enumerate which (system, talkgroup)
+	// pairs exist by submitting empty bodies with various headers.
+	msg := []byte("Unauthorized.\n")
 
-	if apikey, ok := api.Controller.Apikeys.GetApikey(key); ok {
+	if apikey, ok := api.Controller.Apikeys.GetApikey(api.Controller.Options.secret, key); ok {
 		if apikey.HasAccess(call) {
 			api.Controller.Ingest <- call
 
@@ -118,9 +195,18 @@ func (api *Api) HandleCall(key string, call *Call, w http.ResponseWriter) {
 func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
+		remoteAddr := GetRemoteAddr(r)
+		if !api.allowUpload(remoteAddr) {
+			api.exitWithError(w, http.StatusTooManyRequests, "Upload rate limit exceeded")
+			return
+		}
+
+		// Cap the request body before any read happens.
+		r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
 		var (
 			call = NewCall()
-			key  string
+			key  = extractBearerKey(r)
 		)
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

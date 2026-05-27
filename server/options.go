@@ -21,11 +21,11 @@
 package main
 
 import (
+	crand "crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
-	"math/rand"
 	"sync"
 
 	"golang.org/x/crypto/bcrypt"
@@ -206,14 +206,16 @@ func (options *Options) Read(db *Database) error {
 
 	formatError := errorFormatter("options", "read")
 
-	newSecret := func(n uint) string {
-		var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&")
-
-		s := make([]rune, n)
-		for i := range s {
-			s[i] = letters[rand.Intn(len(letters))]
+	// Generate a cryptographically random JWT signing secret.
+	// Returns a hex-encoded string of length 2*nBytes.
+	newSecret := func(nBytes uint) string {
+		b := make([]byte, nBytes)
+		if _, err := crand.Read(b); err != nil {
+			// crypto/rand failure is fatal: without a strong secret,
+			// JWT auth is forgeable. Better to refuse to boot.
+			log.Fatalf("options: crypto/rand read failed: %v", err)
 		}
-		return string(s)
+		return hex.EncodeToString(b)
 	}
 
 	query = `SELECT "key", "value" FROM "options"`
@@ -324,16 +326,22 @@ func (options *Options) Read(db *Database) error {
 			}
 		case "secret":
 			if err = json.Unmarshal([]byte(value.String), &f); err == nil {
-				const n = 256
+				// 64 random bytes hex-encoded = 128 chars. Different length
+				// from the legacy math/rand secret (256 chars), so any old
+				// secret fails the check below and is rotated automatically.
+				// Rotation invalidates all existing admin sessions, which is
+				// the correct behavior here — the old secret was forgeable.
+				const n = 128
 				switch v := f.(type) {
 				case string:
 					if len(v) == n {
 						options.secret = v
 					} else {
-						options.secret = newSecret(n)
+						log.Println("options: rotating JWT signing secret to use crypto/rand; existing admin sessions invalidated")
+						options.secret = newSecret(n / 2)
 					}
 				default:
-					options.secret = newSecret(n)
+					options.secret = newSecret(n / 2)
 				}
 			}
 		case "showListenersCount":
@@ -374,20 +382,31 @@ func (options *Options) Write(db *Database) error {
 
 	formatError := errorFormatter("options", "write")
 
+	// Note: the prior implementation tried `switch v := val.(type) { case string }`
+	// after json.Marshal — but json.Marshal returns []byte, so the case never
+	// fired, leaving JSON values with embedded single quotes unescaped.
+	// Parameterizing the writes removes the issue entirely.
 	set := func(key string, val any) {
-		if val, err = json.Marshal(val); err == nil {
-			switch v := val.(type) {
-			case string:
-				val = escapeQuotes(v)
-			}
+		marshaled, mErr := json.Marshal(val)
+		if mErr != nil {
+			err = mErr
+			return
+		}
+		jsonStr := string(marshaled)
 
-			query := fmt.Sprintf(`UPDATE "options" SET "value" = '%s' WHERE "key" = '%s'`, val, key)
-			if res, err = tx.Exec(query); err == nil {
-				if i, err := res.RowsAffected(); err == nil && i == 0 {
-					query = fmt.Sprintf(`INSERT INTO "options" ("key", "value") VALUES ('%s', '%s')`, key, val)
-					if _, err = tx.Exec(query); err != nil {
-						log.Println(formatError(err, query))
-					}
+		var updateQ, insertQ string
+		if db.Config.DbType == DbTypePostgresql {
+			updateQ = `UPDATE "options" SET "value" = $1 WHERE "key" = $2`
+			insertQ = `INSERT INTO "options" ("key", "value") VALUES ($1, $2)`
+		} else {
+			updateQ = `UPDATE "options" SET "value" = ? WHERE "key" = ?`
+			insertQ = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
+		}
+
+		if res, err = tx.Exec(updateQ, jsonStr, key); err == nil {
+			if i, err := res.RowsAffected(); err == nil && i == 0 {
+				if _, err = tx.Exec(insertQ, key, jsonStr); err != nil {
+					log.Println(formatError(err, insertQ))
 				}
 			}
 		}
