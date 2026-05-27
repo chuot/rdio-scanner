@@ -287,7 +287,7 @@ func (talkgroups *Talkgroups) ReadTx(tx *sql.Tx, systemId uint64, dbType string)
 	return nil
 }
 
-func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string) error {
+func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string) ([]string, error) {
 	var (
 		err   error
 		query string
@@ -296,6 +296,7 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 
 		talkgroupGroupIds = []uint64{}
 		talkgroupIds      = []uint64{}
+		cascadeAudioPaths []string
 	)
 
 	talkgroups.mutex.Lock()
@@ -305,7 +306,7 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 
 	query = fmt.Sprintf(`SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = %d`, systemId)
 	if rows, err = tx.Query(query); err != nil {
-		return formatError(err, query)
+		return nil, formatError(err, query)
 	}
 
 	for rows.Next() {
@@ -328,21 +329,33 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 	rows.Close()
 
 	if err != nil {
-		return formatError(err, "")
+		return nil, formatError(err, "")
 	}
 
 	if len(talkgroupIds) > 0 {
 		if b, err := json.Marshal(talkgroupIds); err == nil {
 			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
 
+			// Capture audio file paths for cascading call rows before the DELETE.
+			selectQuery := fmt.Sprintf(`SELECT "audioPath" FROM "calls" WHERE "talkgroupId" IN %s AND "audioPath" <> ''`, in)
+			if pathRows, err := tx.Query(selectQuery); err == nil {
+				for pathRows.Next() {
+					var p sql.NullString
+					if err := pathRows.Scan(&p); err == nil && p.Valid && p.String != "" {
+						cascadeAudioPaths = append(cascadeAudioPaths, p.String)
+					}
+				}
+				pathRows.Close()
+			}
+
 			query = fmt.Sprintf(`DELETE FROM "talkgroups" WHERE "talkgroupId" IN %s`, in)
 			if _, err = tx.Exec(query); err != nil {
-				return formatError(err, query)
+				return nil, formatError(err, query)
 			}
 
 			query = fmt.Sprintf(`DELETE FROM "talkgroupGroups" WHERE "talkgroupId" IN %s`, in)
 			if _, err = tx.Exec(query); err != nil {
-				return formatError(err, query)
+				return cascadeAudioPaths, formatError(err, query)
 			}
 		}
 	}
@@ -412,7 +425,7 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 		rows.Close()
 
 		if err != nil {
-			return formatError(err, "")
+			return cascadeAudioPaths, formatError(err, "")
 		}
 
 		if len(talkgroupGroupIds) > 0 {
@@ -420,7 +433,7 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 				in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
 				query = fmt.Sprintf(`DELETE FROM "talkgroupGroups" WHERE "talkgroupGroupId" IN %s`, in)
 				if _, err = tx.Exec(query); err != nil {
-					return formatError(err, query)
+					return cascadeAudioPaths, formatError(err, query)
 				}
 			}
 		}
@@ -441,10 +454,10 @@ func (talkgroups *Talkgroups) WriteTx(tx *sql.Tx, systemId uint64, dbType string
 	}
 
 	if err != nil {
-		return formatError(err, query)
+		return cascadeAudioPaths, formatError(err, query)
 	}
 
-	return nil
+	return cascadeAudioPaths, nil
 }
 
 type TalkgroupsMap []TalkgroupMap

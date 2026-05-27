@@ -24,6 +24,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -486,12 +487,13 @@ func (systems *Systems) Read(db *Database) error {
 
 func (systems *Systems) Write(db *Database) error {
 	var (
-		err       error
-		query     string
-		res       sql.Result
-		rows      *sql.Rows
-		systemIds = []uint64{}
-		tx        *sql.Tx
+		err               error
+		query             string
+		res               sql.Result
+		rows              *sql.Rows
+		systemIds         = []uint64{}
+		tx                *sql.Tx
+		cascadeAudioPaths []string
 	)
 
 	systems.mutex.Lock()
@@ -536,6 +538,18 @@ func (systems *Systems) Write(db *Database) error {
 	if len(systemIds) > 0 {
 		if b, err := json.Marshal(systemIds); err == nil {
 			in := strings.ReplaceAll(strings.ReplaceAll(string(b), "[", "("), "]", ")")
+
+			// Capture audio file paths for call rows that will cascade-delete.
+			selectQuery := fmt.Sprintf(`SELECT "audioPath" FROM "calls" WHERE "systemId" IN %s AND "audioPath" <> ''`, in)
+			if pathRows, err := tx.Query(selectQuery); err == nil {
+				for pathRows.Next() {
+					var p sql.NullString
+					if err := pathRows.Scan(&p); err == nil && p.Valid && p.String != "" {
+						cascadeAudioPaths = append(cascadeAudioPaths, p.String)
+					}
+				}
+				pathRows.Close()
+			}
 
 			query = fmt.Sprintf(`DELETE FROM "systems" WHERE "systemId" IN %s`, in)
 			if res, err = tx.Exec(query); err != nil {
@@ -608,7 +622,10 @@ func (systems *Systems) Write(db *Database) error {
 			break
 		}
 
-		if err = system.Talkgroups.WriteTx(tx, system.Id, db.Config.DbType); err != nil {
+		tgPaths, tgErr := system.Talkgroups.WriteTx(tx, system.Id, db.Config.DbType)
+		cascadeAudioPaths = append(cascadeAudioPaths, tgPaths...)
+		if tgErr != nil {
+			err = tgErr
 			break
 		}
 
@@ -625,6 +642,12 @@ func (systems *Systems) Write(db *Database) error {
 	if err = tx.Commit(); err != nil {
 		tx.Rollback()
 		return formatError(err, "")
+	}
+
+	for _, p := range cascadeAudioPaths {
+		if rmErr := deleteAudioFile(p); rmErr != nil {
+			log.Println(formatError(rmErr, "cleanup"))
+		}
 	}
 
 	return nil

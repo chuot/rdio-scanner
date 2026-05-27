@@ -185,27 +185,19 @@ func (logs *Logs) Search(searchOptions *LogsSearchOptions, db *Database) (*LogsS
 		offset = v
 	}
 
-	query = fmt.Sprintf(`SELECT "timestamp" FROM "logs" WHERE %s ORDER BY "timestamp" ASC`, where)
-	if err = db.Sql.QueryRow(query).Scan(&timestamp); err != nil && err != sql.ErrNoRows {
+	// MIN/MAX/COUNT share the same WHERE here, so fold into one query —
+	// saves two round-trips and two index scans per log search.
+	var minTs, maxTs sql.NullInt64
+	query = fmt.Sprintf(`SELECT MIN("timestamp"), MAX("timestamp"), COUNT(*) FROM "logs" WHERE %s`, where)
+	if err = db.Sql.QueryRow(query).Scan(&minTs, &maxTs, &logResults.Count); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(err, query)
 	}
 
-	if timestamp.Valid {
-		logResults.DateStart = time.UnixMilli(timestamp.Int64)
+	if minTs.Valid {
+		logResults.DateStart = time.UnixMilli(minTs.Int64)
 	}
-
-	query = fmt.Sprintf(`SELECT "timestamp" FROM "logs" WHERE %s ORDER BY "timestamp" DESC`, where)
-	if err = db.Sql.QueryRow(query).Scan(&timestamp); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(err, query)
-	}
-
-	if timestamp.Valid {
-		logResults.DateStop = time.UnixMilli(timestamp.Int64)
-	}
-
-	query = fmt.Sprintf(`SELECT COUNT(*) FROM "logs" WHERE %s`, where)
-	if err = db.Sql.QueryRow(query).Scan(&logResults.Count); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(err, query)
+	if maxTs.Valid {
+		logResults.DateStop = time.UnixMilli(maxTs.Int64)
 	}
 
 	query = fmt.Sprintf(`SELECT "logId", "level", "message", "timestamp" FROM "logs" WHERE %s ORDER BY "timestamp" %s limit %d offset %d`, where, order, limit, offset)

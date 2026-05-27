@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -71,6 +72,7 @@ type Call struct {
 	Audio         []byte
 	AudioFilename string
 	AudioMime     string
+	AudioPath     string
 	Delayed       bool
 	Frequencies   []CallFrequency
 	Meta          CallMeta
@@ -201,8 +203,6 @@ func NewCalls(controller *Controller) *Calls {
 }
 
 func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) (bool, error) {
-	var count uint64
-
 	calls.mutex.Lock()
 	defer calls.mutex.Unlock()
 
@@ -212,12 +212,18 @@ func (calls *Calls) CheckDuplicate(call *Call, msTimeFrame uint, db *Database) (
 	from := call.Timestamp.Add(-d)
 	to := call.Timestamp.Add(d)
 
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM "calls" WHERE ("timestamp" BETWEEN %d and %d) AND "systemId" = %d AND "talkgroupId" = %d`, from.UnixMilli(), to.UnixMilli(), call.System.Id, call.Talkgroup.Id)
-	if err := db.Sql.QueryRow(query).Scan(&count); err != nil {
+	// SELECT 1 ... LIMIT 1 short-circuits at the first matching row,
+	// rather than counting every match across the whole window.
+	query := fmt.Sprintf(`SELECT 1 FROM "calls" WHERE ("timestamp" BETWEEN %d and %d) AND "systemId" = %d AND "talkgroupId" = %d LIMIT 1`, from.UnixMilli(), to.UnixMilli(), call.System.Id, call.Talkgroup.Id)
+	var found int
+	switch err := db.Sql.QueryRow(query).Scan(&found); err {
+	case nil:
+		return true, nil
+	case sql.ErrNoRows:
+		return false, nil
+	default:
 		return false, formatError(err, query)
 	}
-
-	return count > 0, nil
 }
 
 func (calls *Calls) GetCall(id uint64) (*Call, error) {
@@ -244,16 +250,31 @@ func (calls *Calls) GetCall(id uint64) (*Call, error) {
 
 	call := Call{Id: id}
 
+	// c.systemId and c.talkgroupId are taken directly from the calls row;
+	// the prior LEFT JOINs to systems/talkgroups existed only to re-select
+	// those columns and are pure overhead (FK constraints guarantee the
+	// references resolve, and Go re-looks up against in-memory caches anyway).
 	if calls.controller.Database.Config.DbType == DbTypePostgresql {
-		query = fmt.Sprintf(`SELECT c."audio", c."audioFilename", c."audioMime", c."siteRef", c."timestamp", STRING_AGG(CAST(COALESCE(cpt."talkgroupRef", 0) AS text), ','), c."siteRef", sy."systemId", t."talkgroupId" FROM "calls" AS c LEFT JOIN "callPatches" AS cp on cp."callId" = c."callId" LEFT JOIN "talkgroups" AS cpt ON cpt."talkgroupId" = cp."talkgroupId" LEFT JOIN "systems" AS sy ON sy."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = %d GROUP BY c."callId"`, id)
+		query = fmt.Sprintf(`SELECT c."audio", c."audioFilename", c."audioMime", c."audioPath", c."siteRef", c."timestamp", STRING_AGG(CAST(COALESCE(cpt."talkgroupRef", 0) AS text), ','), c."systemId", c."talkgroupId" FROM "calls" AS c LEFT JOIN "callPatches" AS cp on cp."callId" = c."callId" LEFT JOIN "talkgroups" AS cpt ON cpt."talkgroupId" = cp."talkgroupId" WHERE c."callId" = %d GROUP BY c."callId"`, id)
 
 	} else {
-		query = fmt.Sprintf(`SELECT c."audio", c."audioFilename", c."audioMime", c."siteRef", c."timestamp", GROUP_CONCAT(COALESCE(cpt."talkgroupRef", 0)), c."siteRef", sy."systemId", t."talkgroupId" FROM "calls" AS c LEFT JOIN "callPatches" AS cp on cp."callId" = c."callId" LEFT JOIN "talkgroups" AS cpt ON cpt."talkgroupId" = cp."talkgroupId" LEFT JOIN "systems" AS sy ON sy."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = %d GROUP BY c."callId"`, id)
+		query = fmt.Sprintf(`SELECT c."audio", c."audioFilename", c."audioMime", c."audioPath", c."siteRef", c."timestamp", GROUP_CONCAT(COALESCE(cpt."talkgroupRef", 0)), c."systemId", c."talkgroupId" FROM "calls" AS c LEFT JOIN "callPatches" AS cp on cp."callId" = c."callId" LEFT JOIN "talkgroups" AS cpt ON cpt."talkgroupId" = cp."talkgroupId" WHERE c."callId" = %d GROUP BY c."callId"`, id)
 	}
 
-	if err = tx.QueryRow(query).Scan(&call.Audio, &call.AudioFilename, &call.AudioMime, &patch, &timestamp, &patch, &call.SiteRef, &systemId, &talkgroupId); err != nil && err != sql.ErrNoRows {
+	if err = tx.QueryRow(query).Scan(&call.Audio, &call.AudioFilename, &call.AudioMime, &call.AudioPath, &call.SiteRef, &timestamp, &patch, &systemId, &talkgroupId); err != nil && err != sql.ErrNoRows {
 		tx.Rollback()
 		return nil, formatError(err, query)
+	}
+
+	// File-backed rows have audio on disk; legacy rows still have it in
+	// the BLOB column. Load from disk when we have a path.
+	if call.AudioPath != "" {
+		if b, readErr := readAudioFile(call.AudioPath); readErr == nil {
+			call.Audio = b
+		} else {
+			tx.Rollback()
+			return nil, formatError(readErr, call.AudioPath)
+		}
 	}
 
 	call.Timestamp = time.UnixMilli(timestamp)
@@ -329,15 +350,167 @@ func (calls *Calls) GetCall(id uint64) (*Call, error) {
 	return &call, nil
 }
 
+// BackfillBlobs migrates legacy rows (audio bytes in the DB blob, no audioPath)
+// to file-backed storage. Safe to run alongside ingestion: legacy rows are
+// effectively immutable except for Prune, which races harmlessly with the
+// per-row UPDATE here (an UPDATE that affects 0 rows is a no-op). Resumable
+// on restart because the SELECT keeps finding un-migrated rows.
+func (calls *Calls) BackfillBlobs() {
+	const (
+		batchSize     = 100
+		batchInterval = 50 * time.Millisecond
+	)
+
+	formatError := errorFormatter("calls", "backfillblobs")
+
+	db := calls.controller.Database
+	config := calls.controller.Config
+
+	type legacyRow struct {
+		id            uint64
+		audio         []byte
+		audioFilename string
+		audioMime     string
+		systemId      uint64
+		talkgroupId   uint64
+		timestamp     int64
+	}
+
+	migrated := uint64(0)
+	failed := uint64(0)
+	scanned := false
+
+	for {
+		batch := []legacyRow{}
+
+		query := fmt.Sprintf(`SELECT "callId", "audio", "audioFilename", "audioMime", "systemId", "talkgroupId", "timestamp" FROM "calls" WHERE "audioPath" = '' LIMIT %d`, batchSize)
+		rows, err := db.Sql.Query(query)
+		if err != nil {
+			log.Println(formatError(err, query))
+			return
+		}
+		for rows.Next() {
+			var r legacyRow
+			if err := rows.Scan(&r.id, &r.audio, &r.audioFilename, &r.audioMime, &r.systemId, &r.talkgroupId, &r.timestamp); err == nil {
+				batch = append(batch, r)
+			}
+		}
+		rows.Close()
+
+		if len(batch) == 0 {
+			if scanned {
+				log.Printf("audio backfill: complete (%d migrated, %d skipped)", migrated, failed)
+			}
+			return
+		}
+		if !scanned {
+			log.Println("audio backfill: starting")
+			scanned = true
+		}
+
+		for _, r := range batch {
+			// Empty BLOB = legacy row with no audio at all; mark it as
+			// migrated by setting audioPath to a sentinel that won't match
+			// real files, so the SELECT stops finding it.
+			if len(r.audio) == 0 {
+				update := fmt.Sprintf(`UPDATE "calls" SET "audioPath" = '-' WHERE "callId" = %d`, r.id)
+				if _, err := db.Sql.Exec(update); err != nil {
+					log.Println(formatError(err, update))
+					failed++
+				}
+				continue
+			}
+
+			sys, ok := calls.controller.Systems.GetSystemById(r.systemId)
+			if !ok {
+				log.Println(formatError(fmt.Errorf("system %d not found for call %d", r.systemId, r.id), ""))
+				failed++
+				continue
+			}
+			tg, ok := sys.Talkgroups.GetTalkgroupById(r.talkgroupId)
+			if !ok {
+				log.Println(formatError(fmt.Errorf("talkgroup %d not found for call %d", r.talkgroupId, r.id), ""))
+				failed++
+				continue
+			}
+
+			stub := &Call{
+				Id:            r.id,
+				AudioFilename: r.audioFilename,
+				AudioMime:     r.audioMime,
+				System:        sys,
+				Talkgroup:     tg,
+				Timestamp:     time.UnixMilli(r.timestamp),
+			}
+
+			path, err := buildAudioFilePath(config, stub)
+			if err != nil {
+				log.Println(formatError(err, ""))
+				failed++
+				continue
+			}
+			if err := writeAudioFile(path, r.audio); err != nil {
+				log.Println(formatError(err, ""))
+				failed++
+				continue
+			}
+
+			// Clear the BLOB and store the path. If the UPDATE fails we
+			// leave the file on disk to be picked up on the next attempt
+			// (the SELECT will return the row again).
+			update := fmt.Sprintf(`UPDATE "calls" SET "audioPath" = '%s', "audio" = ? WHERE "callId" = %d`, escapeQuotes(path), r.id)
+			if _, err := db.Sql.Exec(update, []byte{}); err != nil {
+				log.Println(formatError(err, update))
+				if rmErr := deleteAudioFile(path); rmErr != nil {
+					log.Println(formatError(rmErr, "cleanup"))
+				}
+				failed++
+				continue
+			}
+
+			migrated++
+		}
+
+		if migrated > 0 && migrated%1000 < uint64(batchSize) {
+			log.Printf("audio backfill: %d rows migrated so far", migrated)
+		}
+
+		time.Sleep(batchInterval)
+	}
+}
+
 func (calls *Calls) Prune(db *Database, pruneDays uint) error {
 	calls.mutex.Lock()
 	defer calls.mutex.Unlock()
 
 	timestamp := time.Now().Add(-24 * time.Hour * time.Duration(pruneDays)).UnixMilli()
-	query := fmt.Sprintf(`DELETE FROM "calls" WHERE "timestamp" < %d`, timestamp)
 
-	if _, err := db.Sql.Exec(query); err != nil {
-		return fmt.Errorf("%s in %s", err, query)
+	// Collect the audio file paths for soon-to-be-deleted rows so we can
+	// remove them from disk after the DB delete succeeds. Best-effort:
+	// an orphan file is preferable to a row pointing at a missing file.
+	var audioPaths []string
+	selectQuery := fmt.Sprintf(`SELECT "audioPath" FROM "calls" WHERE "timestamp" < %d AND "audioPath" <> ''`, timestamp)
+	if rows, err := db.Sql.Query(selectQuery); err == nil {
+		for rows.Next() {
+			var p sql.NullString
+			if err := rows.Scan(&p); err == nil && p.Valid && p.String != "" {
+				audioPaths = append(audioPaths, p.String)
+			}
+		}
+		rows.Close()
+	} else {
+		log.Println(fmt.Errorf("calls.prune: %s in %s", err, selectQuery))
+	}
+
+	deleteQuery := fmt.Sprintf(`DELETE FROM "calls" WHERE "timestamp" < %d`, timestamp)
+	if _, err := db.Sql.Exec(deleteQuery); err != nil {
+		return fmt.Errorf("%s in %s", err, deleteQuery)
+	}
+
+	for _, p := range audioPaths {
+		if err := deleteAudioFile(p); err != nil {
+			log.Println(fmt.Errorf("calls.prune: %s", err))
+		}
 	}
 
 	return nil
@@ -438,19 +611,20 @@ func (calls *Calls) Search(searchOptions *CallsSearchOptions, client *Client) (*
 		}
 	}
 
-	query = fmt.Sprintf(`SELECT c."timestamp" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" WHERE %s ORDER BY c."timestamp" ASC`, where)
-	if err = db.Sql.QueryRow(query).Scan(&timestamp); err != nil && err != sql.ErrNoRows {
+	// Aggregate MIN/MAX in one round-trip; with idx_calls_timestamp these
+	// resolve as index lookups rather than full sorts of the filtered set.
+	var minTs, maxTs sql.NullInt64
+	query = fmt.Sprintf(`SELECT MIN(c."timestamp"), MAX(c."timestamp") FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" WHERE %s`, where)
+	if err = db.Sql.QueryRow(query).Scan(&minTs, &maxTs); err != nil && err != sql.ErrNoRows {
 		return nil, formatError(err, query)
 	}
 
-	searchResults.DateStart = time.UnixMilli(timestamp)
-
-	query = fmt.Sprintf(`SELECT c."timestamp" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" WHERE %s ORDER BY c."timestamp" DESC`, where)
-	if err = db.Sql.QueryRow(query).Scan(&timestamp); err != nil && err != sql.ErrNoRows {
-		return nil, formatError(err, query)
+	if minTs.Valid {
+		searchResults.DateStart = time.UnixMilli(minTs.Int64)
 	}
-
-	searchResults.DateStop = time.UnixMilli(timestamp)
+	if maxTs.Valid {
+		searchResults.DateStop = time.UnixMilli(maxTs.Int64)
+	}
 
 	switch v := searchOptions.Sort.(type) {
 	case int:
@@ -537,19 +711,42 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint64, error) {
 
 	formatError := errorFormatter("calls", "writecall")
 
+	// Write audio to disk before opening the transaction. The DB only
+	// stores the path; the BLOB column gets an empty value for new rows.
+	audioPath, err := buildAudioFilePath(calls.controller.Config, call)
+	if err != nil {
+		return 0, formatError(err, "")
+	}
+	if err = writeAudioFile(audioPath, call.Audio); err != nil {
+		return 0, formatError(err, "")
+	}
+	call.AudioPath = audioPath
+
+	// If we don't reach a successful commit, remove the orphan file.
+	committed := false
+	defer func() {
+		if !committed {
+			if rmErr := deleteAudioFile(audioPath); rmErr != nil {
+				log.Println(formatError(rmErr, "cleanup"))
+			}
+		}
+	}()
+
 	if tx, err = db.Sql.Begin(); err != nil {
 		return 0, formatError(err, "")
 	}
 
-	if db.Config.DbType == DbTypePostgresql {
-		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES ($1, '%s', '%s', %d, %d, %d, %d) RETURNING "callId"`, call.AudioFilename, call.AudioMime, call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
+	emptyAudio := []byte{}
 
-		err = tx.QueryRow(query, call.Audio).Scan(&call.Id)
+	if db.Config.DbType == DbTypePostgresql {
+		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "audioPath", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES ($1, '%s', '%s', '%s', %d, %d, %d, %d) RETURNING "callId"`, call.AudioFilename, call.AudioMime, escapeQuotes(call.AudioPath), call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
+
+		err = tx.QueryRow(query, emptyAudio).Scan(&call.Id)
 
 	} else {
-		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, '%s', '%s', %d, %d, %d, %d)`, call.AudioFilename, call.AudioMime, call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
+		query = fmt.Sprintf(`INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "audioPath", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, '%s', '%s', '%s', %d, %d, %d, %d)`, call.AudioFilename, call.AudioMime, escapeQuotes(call.AudioPath), call.SiteRef, call.System.Id, call.Talkgroup.Id, call.Timestamp.UnixMilli())
 
-		if res, err = tx.Exec(query, call.Audio); err == nil {
+		if res, err = tx.Exec(query, emptyAudio); err == nil {
 			if id, err := res.LastInsertId(); err == nil {
 				call.Id = uint64(id)
 			}
@@ -598,6 +795,8 @@ func (calls *Calls) WriteCall(call *Call, db *Database) (uint64, error) {
 		tx.Rollback()
 		return 0, formatError(err, "")
 	}
+
+	committed = true
 
 	return uint64(call.Id), nil
 }
