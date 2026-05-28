@@ -11,15 +11,15 @@
     </div>
     <div class="row">
       <p>
-        <span class="mat-body">Audio Conversion</span><br>
-        <span class="mat-caption">Convert incoming audio files to H.264 m4a with ffmpeg.</span>
+        <span class="mat-body">Audio Normalization</span><br>
+        <span class="mat-caption">All incoming audio is transcoded to M4A (AAC) via ffmpeg. Choose how
+        loudness is normalized: Norm uses EBU&nbsp;R128 defaults (quieter, more headroom); Loudnorm
+        targets broadcast-loud (I=-16&nbsp;LUFS, TP=-1.5, LRA=11).</span>
       </p>
       <mat-form-field floatLabel="auto">
-        <mat-select formControlName="audioConversion" placeholder="Audio Conversion">
-          <mat-option [value]="0">Disabled</mat-option>
-          <mat-option [value]="1">Enabled without normalization</mat-option>
-          <mat-option [value]="2">Enabled with normalization</mat-option>
-          <mat-option [value]="3">Enabled with loud normalization</mat-option>
+        <mat-select formControlName="audioConversion" placeholder="Audio Normalization">
+          <mat-option [value]="2">Norm</mat-option>
+          <mat-option [value]="3">Loudnorm</mat-option>
         </mat-select>
       </mat-form-field>
     </div>

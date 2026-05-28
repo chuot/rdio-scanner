@@ -145,7 +145,7 @@ export interface LogsQueryOptions {
 }
 
 export interface Options {
-    audioConversion?: 0 | 1 | 2 | 3;
+    audioConversion?: 2 | 3;
     autoPopulate?: boolean;
     branding?: string;
     dimmerDelay?: number;

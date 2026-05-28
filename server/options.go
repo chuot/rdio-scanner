@@ -75,6 +75,12 @@ func (options *Options) FromMap(m map[string]any) *Options {
 	default:
 		options.MaxClients = defaults.options.audioConversion
 	}
+	// Legacy values (0=disabled, 1=enabled-no-normalization) collapse to
+	// the new default ("norm"). The admin UI now exposes only Norm and
+	// Loudnorm, and conversion to M4A is unconditional in ffmpeg.go.
+	if options.AudioConversion < AUDIO_CONVERSION_ENABLED_NORM {
+		options.AudioConversion = AUDIO_CONVERSION_ENABLED_NORM
+	}
 
 	switch v := m["autoPopulate"].(type) {
 	case bool:
@@ -253,6 +259,12 @@ func (options *Options) Read(db *Database) error {
 				case float64:
 					options.AudioConversion = uint(v)
 				}
+			}
+			// Migrate legacy DB rows (0=disabled, 1=enabled-no-norm) to
+			// the new default ("norm"). Conversion is now unconditional;
+			// the value only selects the loudness filter.
+			if options.AudioConversion < AUDIO_CONVERSION_ENABLED_NORM {
+				options.AudioConversion = AUDIO_CONVERSION_ENABLED_NORM
 			}
 		case "autoPopulate":
 			if err = json.Unmarshal([]byte(value.String), &f); err == nil {

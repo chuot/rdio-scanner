@@ -34,7 +34,6 @@ import (
 type FFMpeg struct {
 	available bool
 	version43 bool
-	warned    bool
 }
 
 func NewFFMpeg() *FFMpeg {
@@ -66,24 +65,29 @@ func NewFFMpeg() *FFMpeg {
 	return ffmpeg
 }
 
+// Convert transcodes the incoming audio to M4A (AAC) so every stored call
+// has the same container/codec — the rest of the stack (frontend decoder,
+// scrub bar, downstream consumers) only has to handle one format. The
+// `mode` argument selects the loudness-normalization filter, not whether
+// to convert: conversion is unconditional now.
+//
+// Modes:
+//   AUDIO_CONVERSION_ENABLED_NORM      — EBU R128 loudnorm with defaults
+//   AUDIO_CONVERSION_ENABLED_LOUD_NORM — broadcast-loud loudnorm
+//                                         (I=-16 LUFS, TP=-1.5, LRA=11)
+//   anything else                      — transcode only, no normalization
+//                                         (legacy values 0/1, normalized
+//                                         away at the options layer)
+//
+// If ffmpeg is unavailable or the run fails, we return an error so the
+// controller logs it. The caller currently still stores the call with the
+// original audio; install ffmpeg to restore the "always M4A" guarantee.
 func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uint) error {
-	var (
-		args = []string{"-i", "-"}
-		err  error
-	)
-
-	if mode == AUDIO_CONVERSION_DISABLED {
-		return nil
-	}
-
 	if !ffmpeg.available {
-		if !ffmpeg.warned {
-			ffmpeg.warned = true
-
-			return errors.New("ffmpeg is not available, no audio conversion will be performed")
-		}
-		return nil
+		return errors.New("ffmpeg is not available, audio cannot be transcoded to M4A")
 	}
+
+	args := []string{"-i", "-"}
 
 	if tag, ok := tags.GetTagById(call.Talkgroup.TagId); ok {
 		args = append(args,
@@ -98,6 +102,9 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 	if ffmpeg.version43 {
 		switch mode {
 		case AUDIO_CONVERSION_ENABLED_NORM:
+			// apad pads to 3s so loudnorm has enough samples to analyze
+			// in single-pass mode. The client-side trimSilenceEnd removes
+			// the added tail at decode time so it doesn't affect UX.
 			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
 		case AUDIO_CONVERSION_ENABLED_LOUD_NORM:
 			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
@@ -115,14 +122,13 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 	stderr := bytes.NewBuffer([]byte(nil))
 	cmd.Stderr = stderr
 
-	if err = cmd.Run(); err == nil {
-		call.Audio = stdout.Bytes()
-		call.AudioFilename = fmt.Sprintf("%v.m4a", strings.TrimSuffix(call.AudioFilename, path.Ext((call.AudioFilename))))
-		call.AudioMime = "audio/mp4"
-
-	} else {
-		fmt.Println(stderr.String())
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg conversion failed: %s: %s", err.Error(), strings.TrimSpace(stderr.String()))
 	}
+
+	call.Audio = stdout.Bytes()
+	call.AudioFilename = fmt.Sprintf("%v.m4a", strings.TrimSuffix(call.AudioFilename, path.Ext(call.AudioFilename)))
+	call.AudioMime = "audio/mp4"
 
 	return nil
 }

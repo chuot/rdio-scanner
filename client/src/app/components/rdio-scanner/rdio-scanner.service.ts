@@ -87,11 +87,20 @@ export class RdioScannerService implements OnDestroy {
     // offset without re-decoding the audio bytes.
     private audioBuffer: AudioBuffer | undefined;
 
-    // lastPlayedBuffer / lastPlayedPeaks / lastPlayedCall survive stop()
-    // so the user can scrub back into the most recently played clip even
-    // after it has finished (and the auto-advance has cleared the active
-    // playback state). They're overwritten when a new call decodes.
+    // audioBufferDuration is the *effective* duration of audioBuffer with
+    // codec-padding silence trimmed off (see trimSilenceEnd). AAC/M4A and
+    // MP3 buffers come out of decodeAudioData with up to ~50ms of silent
+    // tail; without trimming, the scrub bar would run past where the
+    // audible content ends.
+    private audioBufferDuration: number | undefined;
+
+    // lastPlayedBuffer / lastPlayedPeaks / lastPlayedCall / lastPlayedDuration
+    // survive stop() so the user can scrub back into the most recently
+    // played clip even after it has finished (and the auto-advance has
+    // cleared the active playback state). They're overwritten when a new
+    // call decodes.
     private lastPlayedBuffer: AudioBuffer | undefined;
+    private lastPlayedDuration: number | undefined;
     private lastPlayedPeaks: number[] | undefined;
     private lastPlayedCall: RdioScannerCall | undefined;
 
@@ -503,7 +512,7 @@ export class RdioScannerService implements OnDestroy {
     }
 
     getCurrentCallDuration(): number {
-        return this.audioBuffer?.duration ?? this.lastPlayedBuffer?.duration ?? 0;
+        return this.audioBufferDuration ?? this.lastPlayedDuration ?? 0;
     }
 
     // seek jumps playback to offsetSeconds within the current OR most
@@ -531,7 +540,10 @@ export class RdioScannerService implements OnDestroy {
             return;
         }
 
-        const duration = activeBuffer.duration;
+        // Use the codec-padding-trimmed duration when we have it, so seek
+        // clamps to audible content and the third arg to start() stops
+        // playback at the real end (no silent tail after the audio fades).
+        const duration = this.audioBufferDuration ?? this.lastPlayedDuration ?? activeBuffer.duration;
         const target = Math.min(duration, Math.max(0, offsetSeconds));
 
         // Resurrection path: the clip ended (and possibly auto-skip
@@ -543,6 +555,7 @@ export class RdioScannerService implements OnDestroy {
                 this.skipDelay = undefined;
             }
             this.audioBuffer = this.lastPlayedBuffer;
+            this.audioBufferDuration = this.lastPlayedDuration;
             this.call = this.lastPlayedCall ?? this.callPrevious;
             if (!this.call || !this.audioBuffer) {
                 return;
@@ -551,7 +564,7 @@ export class RdioScannerService implements OnDestroy {
             // scrub bar and display re-bind to this clip.
             this.event.emit({
                 call: this.call,
-                duration: this.audioBuffer.duration,
+                duration,
                 peaks: this.lastPlayedPeaks,
             });
         }
@@ -570,8 +583,10 @@ export class RdioScannerService implements OnDestroy {
         this.audioSource = this.audioContext.createBufferSource();
         this.audioSource.buffer = activeBuffer;
         this.audioSource.connect(this.audioGain);
-        this.audioSource.onended = () => this.skip({ delay: true });
-        this.audioSource.start(0, target);
+        this.audioSource.onended = () => this.onSourceEnded();
+        // start(when, offset, duration) — third arg stops playback at the
+        // trimmed end so onended fires when audible content stops.
+        this.audioSource.start(0, target, Math.max(0, duration - target));
 
         // Shift the perceived start time so the `time` event-emitter
         // (currentTime - startTime) keeps producing the right offset.
@@ -618,6 +633,44 @@ export class RdioScannerService implements OnDestroy {
         return out;
     }
 
+    // onSourceEnded is the natural-end callback for the playing source.
+    // It first pushes a final time = duration event so the scrub bar lands
+    // exactly at the end (the 500ms time-tick interval otherwise leaves
+    // the visual up to half a second short of the actual stop), then hands
+    // off to the standard skip-with-delay flow for queue advancement.
+    private onSourceEnded(): void {
+        const finalDuration = this.audioBufferDuration ?? this.audioBuffer?.duration;
+        if (typeof finalDuration === 'number') {
+            this.event.emit({ time: finalDuration });
+        }
+        this.skip({ delay: true });
+    }
+
+    // trimSilenceEnd returns the buffer time where the audible content
+    // ends. AAC/M4A and MP3 encoders pad the last frame with silent
+    // samples (typically 1024–2112 samples); decodeAudioData doesn't strip
+    // them, so buffer.duration is slightly longer than the actual content.
+    // Without trimming, audio stops before the scrub bar reaches the end.
+    //
+    // We walk channel 0 from the end backwards looking for the last sample
+    // above a low threshold, then add a 30ms safety margin so we don't
+    // hard-cut content with a quiet decay. If the buffer looks all-silent
+    // (unlikely but defensive) we fall back to the untrimmed duration.
+    private trimSilenceEnd(buffer: AudioBuffer): number {
+        const data = buffer.getChannelData(0);
+        const threshold = 0.003; // well below voice (~0.05), above DC noise
+        let last = data.length - 1;
+        while (last > 0 && Math.abs(data[last]) < threshold) {
+            last--;
+        }
+        if (last <= 0) {
+            return buffer.duration;
+        }
+        const padding = Math.floor(buffer.sampleRate * 0.03);
+        last = Math.min(data.length - 1, last + padding);
+        return (last + 1) / buffer.sampleRate;
+    }
+
     play(call?: RdioScannerCall | undefined): void {
         if (this.livefeedPaused || this.skipDelay) {
             return;
@@ -658,22 +711,29 @@ export class RdioScannerService implements OnDestroy {
 
             await this.playAlert(this.call);
 
+            const trimmedDuration = this.trimSilenceEnd(buffer);
+
             this.audioBuffer = buffer;
+            this.audioBufferDuration = trimmedDuration;
             this.lastPlayedBuffer = buffer;
+            this.lastPlayedDuration = trimmedDuration;
             this.lastPlayedCall = this.call;
             this.lastPlayedPeaks = this.computePeaks(buffer);
 
             this.audioSource = this.audioContext.createBufferSource();
             this.audioSource.buffer = buffer;
             this.audioSource.connect(this.audioGain);
-            this.audioSource.onended = () => this.skip({ delay: true });
-            this.audioSource.start();
+            this.audioSource.onended = () => this.onSourceEnded();
+            // start(when, offset, duration) — third arg stops playback at
+            // the trimmed end, so onended fires exactly when the audible
+            // content stops (instead of after AAC/MP3 silent padding).
+            this.audioSource.start(0, 0, trimmedDuration);
 
             // Emit duration and peaks so the UI can size its scrub bar and
             // draw the waveform before the first time-tick fires.
             this.event.emit({
                 call: this.call,
-                duration: buffer.duration,
+                duration: trimmedDuration,
                 peaks: this.lastPlayedPeaks,
                 queue,
             });
@@ -792,6 +852,7 @@ export class RdioScannerService implements OnDestroy {
         }
 
         this.audioBuffer = undefined;
+        this.audioBufferDuration = undefined;
 
         if (this.call) {
             this.callPrevious = this.call;
