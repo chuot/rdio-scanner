@@ -44,37 +44,6 @@
   <div class="row big full">
     <span>{{ callTalkgroupName }}</span>
   </div>
-  <div class="rdio-scrub">
-    @if (peaks.length) {
-      <svg class="rdio-waveform" viewBox="0 0 64 30" preserveAspectRatio="none" aria-hidden="true">
-        <g class="rdio-waveform-bg">
-          @for (p of peaks; track $index; let i = $index) {
-            <rect [attr.x]="i + 0.2" [attr.y]="15 - p * 13" width="0.6" [attr.height]="(p * 26) || 0.6" rx="0.3" ry="0.3"></rect>
-          }
-        </g>
-        <g class="rdio-waveform-fg" [style.clip-path]="'inset(0 ' + (100 - playedFraction * 100) + '% 0 0)'">
-          @for (p of peaks; track $index; let i = $index) {
-            <rect [attr.x]="i + 0.2" [attr.y]="15 - p * 13" width="0.6" [attr.height]="(p * 26) || 0.6" rx="0.3" ry="0.3"></rect>
-          }
-        </g>
-        @if (call?.sources && callDuration > 0) {
-          <g class="rdio-waveform-marks">
-            @for (s of call?.sources; track $index) {
-              @if (s.pos !== undefined && s.pos > 0 && s.pos < callDuration) {
-                <rect [attr.x]="(s.pos / callDuration) * 64 - 0.075" y="3" width="0.15" height="24"></rect>
-              }
-            }
-          </g>
-        }
-      </svg>
-    }
-    <input type="range" class="rdio-scrub-input"
-      min="0" [max]="callDuration || 1" step="0.1"
-      [disabled]="!callDuration"
-      [value]="callTime"
-      (input)="onScrub($event)"
-      aria-label="Playback position">
-  </div>
   <div class="row">
     <div>
       <span>F: {{ callFrequency || 0 }}</span>
@@ -173,14 +142,62 @@
     </table>
   </div>
 </div>
-<div class="rdio-volume">
-  <mat-icon class="rdio-volume-icon" aria-hidden="true">volume_down</mat-icon>
-  <input type="range" class="rdio-volume-input"
-    min="0" max="1" step="0.01"
-    [value]="volume"
-    (input)="onVolumeChange($event)"
-    aria-label="Volume">
-  <mat-icon class="rdio-volume-icon" aria-hidden="true">volume_up</mat-icon>
+<div class="rdio-drawer" [ngClass]="{ open: drawerOpen }">
+  <button class="rdio-drawer-handle" type="button" (click)="toggleDrawer()"
+    [attr.aria-expanded]="drawerOpen" aria-label="Toggle playback drawer">
+    <mat-icon>{{ drawerOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+  </button>
+  <div class="rdio-drawer-content">
+    <div class="rdio-drawer-row">
+      <button class="rdio-drawer-iconbtn" type="button" (click)="pause()"
+        [attr.aria-label]="livefeedPaused ? 'Play' : 'Pause'">
+        <mat-icon>{{ livefeedPaused ? 'play_arrow' : 'pause' }}</mat-icon>
+      </button>
+      <div class="rdio-scrub">
+        @if (peaks.length) {
+          <svg class="rdio-waveform" viewBox="0 0 64 30" preserveAspectRatio="none" aria-hidden="true">
+            <g class="rdio-waveform-bg">
+              @for (p of peaks; track $index; let i = $index) {
+                <rect [attr.x]="i + 0.2" [attr.y]="15 - p * 13" width="0.6" [attr.height]="(p * 26) || 0.6" rx="0.3" ry="0.3"></rect>
+              }
+            </g>
+            <g class="rdio-waveform-fg" [style.clip-path]="'inset(0 ' + (100 - playedFraction * 100) + '% 0 0)'">
+              @for (p of peaks; track $index; let i = $index) {
+                <rect [attr.x]="i + 0.2" [attr.y]="15 - p * 13" width="0.6" [attr.height]="(p * 26) || 0.6" rx="0.3" ry="0.3"></rect>
+              }
+            </g>
+            @if (call?.sources && callDuration > 0) {
+              <g class="rdio-waveform-marks">
+                @for (s of call?.sources; track $index) {
+                  @if (s.pos !== undefined && s.pos > 0 && s.pos < callDuration) {
+                    <rect [attr.x]="(s.pos / callDuration) * 64 - 0.075" y="3" width="0.15" height="24"></rect>
+                  }
+                }
+              </g>
+            }
+          </svg>
+        }
+        <input type="range" class="rdio-scrub-input"
+          min="0" [max]="callDuration || 1" step="0.1"
+          [disabled]="!callDuration"
+          [value]="callTime"
+          (input)="onScrub($event)"
+          aria-label="Playback position">
+      </div>
+      <span class="rdio-drawer-time" aria-label="Playback time">
+        {{ formatTime(callTime) }} / {{ formatTime(callDuration) }}
+      </span>
+    </div>
+    <div class="rdio-volume">
+      <mat-icon class="rdio-volume-icon" aria-hidden="true">volume_down</mat-icon>
+      <input type="range" class="rdio-volume-input"
+        min="0" max="1" step="0.01"
+        [value]="volume"
+        (input)="onVolumeChange($event)"
+        aria-label="Volume">
+      <mat-icon class="rdio-volume-icon" aria-hidden="true">volume_up</mat-icon>
+    </div>
+  </div>
 </div>
 <div class="rdio-control">
   <div class="row">

@@ -41,6 +41,7 @@ import { RdioScannerSupportComponent } from './support/support.component';
         '../common.scss',
         './main.component.scss',
         './main-sliders.scss',
+        './main-drawer.scss',
     ],
     templateUrl: './main.component.html',
     standalone: false
@@ -137,6 +138,13 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     // instance after the initial load from localStorage).
     volume = 1;
 
+    // drawerOpen controls the collapsible chassis drawer that holds the
+    // volume slider. Persisted in localStorage so the user's last choice
+    // sticks across reloads; defaults to open so first-run users still
+    // see volume without having to discover the toggle.
+    drawerOpen = true;
+    private static readonly LOCAL_STORAGE_KEY_DRAWER = 'rdio-scanner-drawer';
+
     get showListenersCount(): boolean {
         return this.config?.showListenersCount || false;
     }
@@ -174,6 +182,37 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
         // Pull the persisted volume (localStorage) so the slider thumb is
         // positioned correctly on first paint.
         this.volume = this.rdioScannerService.getVolume();
+
+        try {
+            const stored = window?.localStorage?.getItem(RdioScannerMainComponent.LOCAL_STORAGE_KEY_DRAWER);
+            if (stored !== null && stored !== undefined) {
+                this.drawerOpen = stored === '1';
+            }
+        } catch {
+            // localStorage may be unavailable (private browsing, etc.); keep default.
+        }
+    }
+
+    toggleDrawer(): void {
+        this.drawerOpen = !this.drawerOpen;
+        try {
+            window?.localStorage?.setItem(
+                RdioScannerMainComponent.LOCAL_STORAGE_KEY_DRAWER,
+                this.drawerOpen ? '1' : '0',
+            );
+        } catch {
+            // non-fatal in private browsing
+        }
+    }
+
+    // formatTime renders seconds as m:ss for the drawer's time label.
+    // Defensive against NaN / negative inputs that could appear briefly
+    // during state transitions.
+    formatTime(seconds: number | undefined): string {
+        if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
     }
 
     onScrub(ev: Event): void {
