@@ -128,9 +128,17 @@ func (access *Access) HasExpired() bool {
 }
 
 func (access *Access) MarshalJSON() ([]byte, error) {
+	// Defensive: any path that JSON-marshals an access without going
+	// through ToAdminMap (which decrypts $e1$) gets blank for stored
+	// hash/cipher values rather than leaking the at-rest form.
+	code := access.Code
+	if LooksLikeCredentialHash(code) || LooksLikeCredentialCiphertext(code) {
+		code = ""
+	}
+
 	m := map[string]any{
 		"id":      access.Id,
-		"code":    access.Code,
+		"code":    code,
 		"ident":   access.Ident,
 		"systems": access.Systems,
 	}
@@ -148,6 +156,34 @@ func (access *Access) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(m)
+}
+
+// ToAdminMap renders the access entry for the admin UI with the plaintext
+// code decrypted, so the admin can see and distribute it. Legacy $h1$
+// rows (whose plaintext is unrecoverable) and $e1$ rows that fail to
+// decrypt render the code as "" — the UI shows a blank field, and saving
+// without re-entry preserves the existing DB row.
+func (access *Access) ToAdminMap(secret string) map[string]any {
+	m := map[string]any{
+		"id":      access.Id,
+		"code":    CredentialForDisplay(secret, access.Code),
+		"ident":   access.Ident,
+		"systems": access.Systems,
+	}
+
+	if access.Expiration > 0 {
+		m["expiration"] = time.Unix(int64(access.Expiration), 0)
+	}
+
+	if access.Limit > 0 {
+		m["limit"] = access.Limit
+	}
+
+	if access.Order > 0 {
+		m["order"] = access.Order
+	}
+
+	return m
 }
 
 type Accesses struct {
@@ -420,24 +456,41 @@ func (accesses *Accesses) Write(db *Database, secret string) error {
 
 	for _, access := range accesses.List {
 		var (
-			count   uint
-			systems string
+			count        uint
+			existingCode string
+			systems      string
 		)
 
 		if b, err := json.Marshal(access.Systems); err == nil {
 			systems = string(b)
 		}
 
-		// Hash the access code at rest. EnsureHashed is a no-op if the
-		// in-memory value is already in hash format (e.g., the admin UI
-		// re-sent what it last received).
-		access.Code = EnsureHashed(secret, access.Code)
-
 		if access.Id > 0 {
-			query = fmt.Sprintf(`SELECT COUNT(*) FROM "accesses" WHERE "accessId" = %d`, access.Id)
-			if err = tx.QueryRow(query).Scan(&count); err != nil {
+			query = fmt.Sprintf(`SELECT "code" FROM "accesses" WHERE "accessId" = %d`, access.Id)
+			scanErr := tx.QueryRow(query).Scan(&existingCode)
+			switch scanErr {
+			case nil:
+				count = 1
+			case sql.ErrNoRows:
+				count = 0
+			default:
+				err = scanErr
+			}
+			if err != nil {
 				break
 			}
+		}
+
+		// Admin UI sends "" when the original code was unrecoverable
+		// (legacy $h1$ hash, or $e1$ that didn't decrypt) and the
+		// admin did not type a new value. Preserve the stored row in
+		// that case so legacy HMAC auth keeps working until the admin
+		// actually rotates it. Otherwise re-encrypt — idempotent for
+		// already-$e1$ values that round-tripped unchanged.
+		if access.Code == "" && count > 0 {
+			access.Code = existingCode
+		} else {
+			access.Code = EnsureEncrypted(secret, access.Code)
 		}
 
 		if count == 0 {

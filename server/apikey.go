@@ -113,11 +113,19 @@ func (apikey *Apikey) HasAccess(call *Call) bool {
 }
 
 func (apikey *Apikey) MarshalJSON() ([]byte, error) {
+	// Defensive: any path that JSON-marshals an apikey without going
+	// through ToAdminMap (which decrypts $e1$) gets blank for stored
+	// hash/cipher values rather than leaking the at-rest form.
+	key := apikey.Key
+	if LooksLikeCredentialHash(key) || LooksLikeCredentialCiphertext(key) {
+		key = ""
+	}
+
 	m := map[string]any{
 		"id":       apikey.Id,
 		"disabled": apikey.Disabled,
 		"ident":    apikey.Ident,
-		"key":      apikey.Key,
+		"key":      key,
 		"systems":  apikey.Systems,
 	}
 
@@ -126,6 +134,27 @@ func (apikey *Apikey) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(m)
+}
+
+// ToAdminMap renders the apikey for the admin UI with the plaintext key
+// decrypted, so the admin can see and copy it. Legacy $h1$ rows (whose
+// plaintext is unrecoverable) and $e1$ rows that fail to decrypt (e.g.,
+// secret rotated) render the key as "" — the UI shows a blank field, and
+// saving without re-entry preserves the existing DB row.
+func (apikey *Apikey) ToAdminMap(secret string) map[string]any {
+	m := map[string]any{
+		"id":       apikey.Id,
+		"disabled": apikey.Disabled,
+		"ident":    apikey.Ident,
+		"key":      CredentialForDisplay(secret, apikey.Key),
+		"systems":  apikey.Systems,
+	}
+
+	if apikey.Order > 0 {
+		m["order"] = apikey.Order
+	}
+
+	return m
 }
 
 type Apikeys struct {
@@ -286,8 +315,9 @@ func (apikeys *Apikeys) Write(db *Database, secret string) error {
 
 	for _, apikey := range apikeys.List {
 		var (
-			count   uint
-			systems string
+			count       uint
+			existingKey string
+			systems     string
 		)
 
 		if apikey.Systems != nil {
@@ -296,15 +326,32 @@ func (apikeys *Apikeys) Write(db *Database, secret string) error {
 			}
 		}
 
-		// Hash the API key at rest. No-op if already hashed (admin UI
-		// echoed back what it received).
-		apikey.Key = EnsureHashed(secret, apikey.Key)
-
 		if apikey.Id > 0 {
-			query = fmt.Sprintf(`SELECT COUNT(*) FROM "apikeys" WHERE "apikeyId" = %d`, apikey.Id)
-			if err = tx.QueryRow(query).Scan(&count); err != nil {
+			query = fmt.Sprintf(`SELECT "key" FROM "apikeys" WHERE "apikeyId" = %d`, apikey.Id)
+			scanErr := tx.QueryRow(query).Scan(&existingKey)
+			switch scanErr {
+			case nil:
+				count = 1
+			case sql.ErrNoRows:
+				count = 0
+			default:
+				err = scanErr
+			}
+			if err != nil {
 				break
 			}
+		}
+
+		// Admin UI sends "" when the original key was unrecoverable
+		// (legacy $h1$ hash, or $e1$ that didn't decrypt) and the
+		// admin did not type a new value. Preserve the stored row in
+		// that case so legacy HMAC auth keeps working until the
+		// admin actually rotates it. Otherwise re-encrypt — idempotent
+		// for already-$e1$ values that round-tripped unchanged.
+		if apikey.Key == "" && count > 0 {
+			apikey.Key = existingKey
+		} else {
+			apikey.Key = EnsureEncrypted(secret, apikey.Key)
 		}
 
 		if count == 0 {

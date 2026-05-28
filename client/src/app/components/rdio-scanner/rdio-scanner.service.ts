@@ -87,6 +87,14 @@ export class RdioScannerService implements OnDestroy {
     // offset without re-decoding the audio bytes.
     private audioBuffer: AudioBuffer | undefined;
 
+    // lastPlayedBuffer / lastPlayedPeaks / lastPlayedCall survive stop()
+    // so the user can scrub back into the most recently played clip even
+    // after it has finished (and the auto-advance has cleared the active
+    // playback state). They're overwritten when a new call decodes.
+    private lastPlayedBuffer: AudioBuffer | undefined;
+    private lastPlayedPeaks: number[] | undefined;
+    private lastPlayedCall: RdioScannerCall | undefined;
+
     // currentVolume is the linear gain (0..1) applied to audioGain. Updated
     // by setVolume() and persisted to localStorage.
     private currentVolume = 1.0;
@@ -495,21 +503,58 @@ export class RdioScannerService implements OnDestroy {
     }
 
     getCurrentCallDuration(): number {
-        return this.audioBuffer?.duration ?? 0;
+        return this.audioBuffer?.duration ?? this.lastPlayedBuffer?.duration ?? 0;
     }
 
-    // seek jumps playback to offsetSeconds within the current call. The
-    // AudioBufferSourceNode API is one-shot: to seek we have to tear down
-    // the current source and start a fresh one with the desired offset.
-    // The decoded buffer is reused so this happens in sub-ms with no
-    // network or decode cost.
+    // seek jumps playback to offsetSeconds within the current OR most
+    // recently played call. The AudioBufferSourceNode API is one-shot, so
+    // seeking means tear-down + new source with start(offset). Two paths:
+    //
+    //   1. Active source — standard seek within the playing clip.
+    //   2. No active source but lastPlayedBuffer exists — the clip ended
+    //      (or stop() was called) but the decoded buffer is still around.
+    //      Resurrect playback: cancel any pending skip-delay, restore the
+    //      call state, and start a fresh source at the requested offset.
+    //      When that resurrected playback ends, the normal onended ->
+    //      skip({delay:true}) flow advances to the next queued call as
+    //      usual, so the queue is not stalled.
+    //
+    // The decoded buffer is reused in both paths, so seek is sub-ms with
+    // no network or decode cost.
     seek(offsetSeconds: number): void {
-        if (!this.audioContext || !this.audioBuffer || !this.audioGain || !this.call) {
+        if (!this.audioContext || !this.audioGain) {
             return;
         }
 
-        const duration = this.audioBuffer.duration;
+        const activeBuffer = this.audioBuffer ?? this.lastPlayedBuffer;
+        if (!activeBuffer) {
+            return;
+        }
+
+        const duration = activeBuffer.duration;
         const target = Math.min(duration, Math.max(0, offsetSeconds));
+
+        // Resurrection path: the clip ended (and possibly auto-skip
+        // cleared call state) but we still have the buffer.
+        const resurrecting = !this.audioSource && !this.call;
+        if (resurrecting) {
+            if (this.skipDelay) {
+                this.skipDelay.unsubscribe();
+                this.skipDelay = undefined;
+            }
+            this.audioBuffer = this.lastPlayedBuffer;
+            this.call = this.lastPlayedCall ?? this.callPrevious;
+            if (!this.call || !this.audioBuffer) {
+                return;
+            }
+            // Tell the UI the call/duration/peaks are live again so the
+            // scrub bar and display re-bind to this clip.
+            this.event.emit({
+                call: this.call,
+                duration: this.audioBuffer.duration,
+                peaks: this.lastPlayedPeaks,
+            });
+        }
 
         if (this.audioSource) {
             this.audioSource.onended = null;
@@ -523,7 +568,7 @@ export class RdioScannerService implements OnDestroy {
         }
 
         this.audioSource = this.audioContext.createBufferSource();
-        this.audioSource.buffer = this.audioBuffer;
+        this.audioSource.buffer = activeBuffer;
         this.audioSource.connect(this.audioGain);
         this.audioSource.onended = () => this.skip({ delay: true });
         this.audioSource.start(0, target);
@@ -531,7 +576,46 @@ export class RdioScannerService implements OnDestroy {
         // Shift the perceived start time so the `time` event-emitter
         // (currentTime - startTime) keeps producing the right offset.
         this.audioSourceStartTime = this.audioContext.currentTime - target;
+
+        if (resurrecting) {
+            // Spin up a fresh time-tick poller now that we're playing
+            // again — the previous one self-terminated when this.call
+            // went undefined.
+            interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
+                if (this.audioContext && !isNaN(this.audioContext.currentTime) && !this.livefeedPaused) {
+                    this.event.emit({ time: this.audioContext.currentTime - this.audioSourceStartTime });
+                }
+            });
+        }
+
         this.event.emit({ time: target });
+    }
+
+    // computePeaks reduces a decoded AudioBuffer to a small array of peak
+    // amplitudes for the scrub-bar waveform. Channel 0 only (mono read of
+    // whatever the source provides), bucketed into ~buckets equal-width
+    // slices, each slice's max |sample| in [0, 1]. Returns a plain number[]
+    // so it survives JSON-ish event propagation and Angular change detection.
+    //
+    // Default bucket count chosen so bars render around a 60/40 fill ratio
+    // on typical scrub widths (~250–350 px), matching wavesurfer-style
+    // proportions without looking dense on mobile.
+    private computePeaks(buffer: AudioBuffer, buckets = 64): number[] {
+        const data = buffer.getChannelData(0);
+        const step = Math.max(1, Math.floor(data.length / buckets));
+        const out = new Array<number>(buckets);
+        for (let i = 0; i < buckets; i++) {
+            const start = i * step;
+            const end = i === buckets - 1 ? data.length : Math.min(data.length, start + step);
+            let peak = 0;
+            for (let j = start; j < end; j++) {
+                const v = data[j];
+                const a = v < 0 ? -v : v;
+                if (a > peak) peak = a;
+            }
+            out[i] = peak > 1 ? 1 : peak;
+        }
+        return out;
     }
 
     play(call?: RdioScannerCall | undefined): void {
@@ -575,15 +659,24 @@ export class RdioScannerService implements OnDestroy {
             await this.playAlert(this.call);
 
             this.audioBuffer = buffer;
+            this.lastPlayedBuffer = buffer;
+            this.lastPlayedCall = this.call;
+            this.lastPlayedPeaks = this.computePeaks(buffer);
+
             this.audioSource = this.audioContext.createBufferSource();
             this.audioSource.buffer = buffer;
             this.audioSource.connect(this.audioGain);
             this.audioSource.onended = () => this.skip({ delay: true });
             this.audioSource.start();
 
-            // Emit duration so the UI can size its scrub bar before the first
-            // time-tick fires.
-            this.event.emit({ call: this.call, duration: buffer.duration, queue });
+            // Emit duration and peaks so the UI can size its scrub bar and
+            // draw the waveform before the first time-tick fires.
+            this.event.emit({
+                call: this.call,
+                duration: buffer.duration,
+                peaks: this.lastPlayedPeaks,
+                queue,
+            });
 
             interval(500).pipe(takeWhile(() => !!this.call)).subscribe(() => {
                 if (this.audioContext && !isNaN(this.audioContext.currentTime)) {

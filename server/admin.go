@@ -331,9 +331,21 @@ func (admin *Admin) GetAuthorization(r *http.Request) string {
 }
 
 func (admin *Admin) GetConfig() map[string]any {
+	secret := admin.Controller.Options.secret
+
+	accessList := make([]map[string]any, 0, len(admin.Controller.Accesses.List))
+	for _, a := range admin.Controller.Accesses.List {
+		accessList = append(accessList, a.ToAdminMap(secret))
+	}
+
+	apikeyList := make([]map[string]any, 0, len(admin.Controller.Apikeys.List))
+	for _, k := range admin.Controller.Apikeys.List {
+		apikeyList = append(apikeyList, k.ToAdminMap(secret))
+	}
+
 	return map[string]any{
-		"access":      admin.Controller.Accesses.List,
-		"apikeys":     admin.Controller.Apikeys.List,
+		"access":      accessList,
+		"apikeys":     apikeyList,
 		"dirwatch":    admin.Controller.Dirwatches.List,
 		"downstreams": admin.Controller.Downstreams.List,
 		"groups":      admin.Controller.Groups.List,

@@ -1,11 +1,24 @@
-// Scrub bar — sits inside the LCD display, styled to read as part of
-// the same surface. Track is recessed against the LCD background, thumb
-// has the same bevel as the .rdio-button family in common.scss.
+// Scrub bar — SVG waveform behind a transparent-track range input.
+// The played/unplayed color boundary is the primary position cue; the
+// thumb is a slim needle that sits on top.
 .rdio-scrub {
   align-items: center;
   display: flex;
-  height: 18px;
+  height: 32px;
   margin: 2px 4px 4px;
+  position: relative;
+
+  .rdio-waveform {
+    height: 28px;
+    inset: 2px 0;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+
+    .rdio-waveform-bg rect { fill: rgba(0, 50, 25, 0.6); }
+    .rdio-waveform-fg rect { fill: rgb(0, 230, 118); }
+    .rdio-waveform-marks rect { fill: rgba(255, 255, 255, 0.18); }
+  }
 
   .rdio-scrub-input {
     -webkit-appearance: none;
@@ -13,68 +26,59 @@
     background: transparent;
     cursor: pointer;
     flex: 1;
-    height: 18px;
+    height: 32px;
     margin: 0;
     outline: none;
     padding: 0;
+    position: relative;
+    z-index: 1;
 
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.4;
-    }
+    &:disabled { cursor: not-allowed; opacity: 0.4; }
 
-    // Track — recessed inset on the LCD-green background.
+    // Transparent 28px-tall track so the entire waveform area is a
+    // tap target on touch. The inset hairline draws a 1px centerline
+    // as a fallback when peaks haven't loaded yet.
     &::-webkit-slider-runnable-track {
-      background: rgba(0, 0, 0, 0.25);
-      border-radius: 2px;
-      box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5),
-        inset -1px -1px 1px rgba(255, 255, 255, 0.2);
-      height: 4px;
+      background: transparent;
+      box-shadow: inset 0 14px 0 -13.5px rgba(0, 0, 0, 0.4);
+      height: 28px;
     }
     &::-moz-range-track {
-      background: rgba(0, 0, 0, 0.25);
-      border-radius: 2px;
-      box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5),
-        inset -1px -1px 1px rgba(255, 255, 255, 0.2);
-      height: 4px;
+      background: transparent;
+      box-shadow: inset 0 14px 0 -13.5px rgba(0, 0, 0, 0.4);
+      height: 28px;
     }
 
-    // Thumb — beveled dark cap matching .rdio-button.
+    // Slim accent-green needle — full track height, easy to spot,
+    // generous touch target without occluding the waveform.
     &::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      background: rgb(45, 45, 45);
+      background: rgb(220, 255, 235);
       border: none;
-      border-radius: 50%;
-      box-shadow: -1px -1px 1px rgba(0, 0, 0, 0.7) inset,
-        1px 1px 1px rgba(255, 255, 255, 0.3) inset,
-        0 0 2px rgba(0, 0, 0, 0.5);
+      border-radius: 1px;
+      box-shadow: 0 0 4px rgb(0, 230, 118),
+        0 0 1px rgba(0, 0, 0, 0.8);
       cursor: pointer;
-      height: 14px;
-      margin-top: -5px;
-      width: 14px;
+      height: 24px;
+      margin-top: 2px;
+      width: 3px;
     }
     &::-moz-range-thumb {
-      background: rgb(45, 45, 45);
+      background: rgb(220, 255, 235);
       border: none;
-      border-radius: 50%;
-      box-shadow: -1px -1px 1px rgba(0, 0, 0, 0.7) inset,
-        1px 1px 1px rgba(255, 255, 255, 0.3) inset,
-        0 0 2px rgba(0, 0, 0, 0.5);
+      border-radius: 1px;
+      box-shadow: 0 0 4px rgb(0, 230, 118),
+        0 0 1px rgba(0, 0, 0, 0.8);
       cursor: pointer;
-      height: 14px;
-      width: 14px;
+      height: 24px;
+      width: 3px;
     }
 
-    &:focus-visible::-webkit-slider-thumb {
-      box-shadow: -1px -1px 1px rgba(0, 0, 0, 0.7) inset,
-        1px 1px 1px rgba(255, 255, 255, 0.3) inset,
-        0 0 4px rgb(0, 230, 118);
-    }
+    &:focus-visible::-webkit-slider-thumb,
     &:focus-visible::-moz-range-thumb {
-      box-shadow: -1px -1px 1px rgba(0, 0, 0, 0.7) inset,
-        1px 1px 1px rgba(255, 255, 255, 0.3) inset,
-        0 0 4px rgb(0, 230, 118);
+      box-shadow: 0 0 6px rgb(0, 230, 118),
+        0 0 2px rgb(255, 255, 255);
     }
   }
 }

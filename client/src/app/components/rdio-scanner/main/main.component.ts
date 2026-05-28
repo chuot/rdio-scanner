@@ -85,6 +85,17 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     callTime = 0;
     callUnit = '0';
 
+    // peaks holds the precomputed amplitude buckets for the current (or
+    // most recently played) clip, used to draw the waveform behind the
+    // scrub bar. Persists across clip-end so the user can scrub a clip
+    // that has already finished.
+    peaks: number[] = [];
+
+    // playedFraction is the 0..1 progress of the scrub thumb along the
+    // waveform, kept as a separate field so the SVG clip-path can bind
+    // to a string without recomputing every change-detection cycle.
+    playedFraction = 0;
+
     clock = new Date();
 
     delayed = false;
@@ -168,6 +179,13 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
     onScrub(ev: Event): void {
         const v = parseFloat((ev.target as HTMLInputElement).value);
         if (!isNaN(v)) {
+            // Optimistic update: move the played/unplayed boundary now so
+            // the visual lands with the gesture instead of waiting for the
+            // service's 500ms time-emitter to echo back the new position.
+            this.callTime = v;
+            this.playedFraction = this.callDuration > 0
+                ? Math.min(1, Math.max(0, v / this.callDuration))
+                : 0;
             this.rdioScannerService.seek(v);
         }
     }
@@ -210,13 +228,13 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                 ev.preventDefault();
                 break;
             case 'ArrowLeft':
-                if (this.call && this.callDuration > 0) {
+                if (this.callDuration > 0) {
                     this.rdioScannerService.seek(Math.max(0, this.callTime - 5));
                     ev.preventDefault();
                 }
                 break;
             case 'ArrowRight':
-                if (this.call && this.callDuration > 0) {
+                if (this.callDuration > 0) {
                     this.rdioScannerService.seek(Math.min(this.callDuration, this.callTime + 5));
                     ev.preventDefault();
                 }
@@ -499,16 +517,22 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
                 this.call = event.call;
 
                 this.updateDimmer();
-            } else {
-                // No call is playing — reset scrub bar so the thumb
-                // doesn't show a stale position from the previous clip.
-                this.callDuration = 0;
-                this.callTime = 0;
             }
+            // When event.call is undefined (clip finished / auto-skip /
+            // explicit stop) we deliberately leave callDuration, callTime
+            // and peaks in place so the user can scrub back into the
+            // just-finished clip. They get overwritten when the next clip
+            // decodes.
         }
 
         if ('duration' in event && typeof event.duration === 'number') {
             this.callDuration = event.duration;
+            this.callTime = 0;
+            this.playedFraction = 0;
+        }
+
+        if ('peaks' in event && Array.isArray(event.peaks)) {
+            this.peaks = event.peaks;
         }
 
         if ('volume' in event && typeof event.volume === 'number') {
@@ -575,6 +599,9 @@ export class RdioScannerMainComponent implements OnDestroy, OnInit {
 
         if ('time' in event && typeof event.time === 'number') {
             this.callTime = event.time;
+            this.playedFraction = this.callDuration > 0
+                ? Math.min(1, Math.max(0, this.callTime / this.callDuration))
+                : 0;
 
             this.updateDimmer();
         }
