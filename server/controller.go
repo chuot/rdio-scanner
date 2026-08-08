@@ -333,7 +333,8 @@ func (controller *Controller) IngestCall(call *Call) {
 	}
 
 	if err := controller.FFMpeg.Convert(call, controller.Systems, controller.Tags, controller.Options.AudioConversion); err != nil {
-		controller.Logs.LogEvent(LogLevelWarn, err.Error())
+		controller.Logs.LogEvent(LogLevelWarn, fmt.Sprintf("audio conversion failed: %s %s", call.ingestDiagnostics(), err.Error()))
+		return
 	}
 
 	if id, err := controller.Calls.WriteCall(call, controller.Database); err == nil {

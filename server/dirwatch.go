@@ -182,6 +182,7 @@ func (dirwatch *Dirwatch) ingestDefault(p string) error {
 
 	if strings.EqualFold(path.Ext(p), ext) {
 		call := NewCall()
+		call.ingestRoute = "dirwatch/default"
 
 		call.AudioFilename = filepath.Base(p)
 		call.AudioMime = mime.TypeByExtension(path.Ext(p))
@@ -242,6 +243,7 @@ func (dirwatch *Dirwatch) ingestDSDPlus(p string) error {
 	}
 
 	call := NewCall()
+	call.ingestRoute = "dirwatch/dsdplus"
 
 	call.AudioFilename = filepath.Base(p)
 	call.AudioMime = mime.TypeByExtension(path.Ext(p))
@@ -297,6 +299,7 @@ func (dirwatch *Dirwatch) ingestSdrTrunk(p string) error {
 	}
 
 	call := NewCall()
+	call.ingestRoute = "dirwatch/sdr-trunk"
 
 	call.AudioFilename = filepath.Base(p)
 	call.AudioMime = mime.TypeByExtension(path.Ext(p))
@@ -354,6 +357,7 @@ func (dirwatch *Dirwatch) ingestTrunkRecorder(p string) error {
 	audioName := base + ext
 
 	call := NewCall()
+	call.ingestRoute = "dirwatch/trunk-recorder"
 
 	call.AudioFilename = filepath.Base(audioName)
 	call.AudioMime = mime.TypeByExtension(path.Ext(audioName))

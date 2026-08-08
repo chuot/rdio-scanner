@@ -31,6 +31,8 @@ import (
 	"strings"
 )
 
+var ffmpegCommand = exec.Command
+
 type FFMpeg struct {
 	available bool
 	version43 bool
@@ -68,7 +70,6 @@ func NewFFMpeg() *FFMpeg {
 
 func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uint) error {
 	var (
-		args = []string{"-i", "-"}
 		err  error
 	)
 
@@ -85,8 +86,9 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		return nil
 	}
 
+	metadata := []string{}
 	if tag, ok := tags.GetTagById(call.Talkgroup.TagId); ok {
-		args = append(args,
+		metadata = append(metadata,
 			"-metadata", fmt.Sprintf("album=%v", call.Talkgroup.Label),
 			"-metadata", fmt.Sprintf("artist=%v", call.System.Label),
 			"-metadata", fmt.Sprintf("date=%v", call.Timestamp),
@@ -95,18 +97,9 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		)
 	}
 
-	if ffmpeg.version43 {
-		switch mode {
-		case AUDIO_CONVERSION_ENABLED_NORM:
-			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
-		case AUDIO_CONVERSION_ENABLED_LOUD_NORM:
-			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
-		}
-	}
+	args := audioConversionArgs(ffmpeg.version43, mode, metadata)
 
-	args = append(args, "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
-
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := ffmpegCommand("ffmpeg", args...)
 	cmd.Stdin = bytes.NewReader(call.Audio)
 
 	stdout := bytes.NewBuffer([]byte(nil))
@@ -121,8 +114,46 @@ func (ffmpeg *FFMpeg) Convert(call *Call, systems *Systems, tags *Tags, mode uin
 		call.AudioMime = "audio/mp4"
 
 	} else {
-		fmt.Println(stderr.String())
+		status := -1
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			status = exitErr.ExitCode()
+		}
+
+		return fmt.Errorf("ffmpeg conversion failed: exit_status=%d input_bytes=%d class=%s", status, len(call.Audio), ffmpegErrorClass(stderr.String()))
 	}
 
 	return nil
+}
+
+func audioConversionArgs(version43 bool, mode uint, metadata []string) []string {
+	args := []string{"-i", "-"}
+	args = append(args, metadata...)
+
+	if version43 {
+		switch mode {
+		case AUDIO_CONVERSION_ENABLED_NORM:
+			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
+		case AUDIO_CONVERSION_ENABLED_LOUD_NORM:
+			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
+		}
+	}
+
+	return append(args, "-c:a", "aac", "-b:a", "64k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
+}
+
+func ffmpegErrorClass(stderr string) string {
+	s := strings.ToLower(stderr)
+
+	switch {
+	case strings.Contains(s, "does not contain any stream") || strings.Contains(s, "no streams"):
+		return "no_stream"
+	case strings.Contains(s, "invalid data found when processing input"):
+		return "invalid_input"
+	case strings.Contains(s, "error opening input"):
+		return "input_open"
+	case strings.Contains(s, "error opening output") || strings.Contains(s, "invalid argument"):
+		return "output_open"
+	default:
+		return "other"
+	}
 }
