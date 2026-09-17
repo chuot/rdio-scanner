@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"math"
 	"strconv"
 	"strings"
@@ -81,10 +82,13 @@ type Call struct {
 	Talkgroup     *Talkgroup
 	Timestamp     time.Time
 	Units         []CallUnit
+	ingestID      string
+	ingestRoute   string
 }
 
 func NewCall() *Call {
 	return &Call{
+		ingestID: uuid.New().String(),
 		Frequencies: []CallFrequency{},
 		Meta: CallMeta{
 			TalkgroupGroups: []string{},
@@ -94,6 +98,10 @@ func NewCall() *Call {
 		Patches: []uint{},
 		Units:   []CallUnit{},
 	}
+}
+
+func (call *Call) ingestDiagnostics() string {
+	return fmt.Sprintf("ingest_id=%s route=%s input_bytes=%d audio_type=%s", call.ingestID, call.ingestRoute, len(call.Audio), call.AudioMime)
 }
 
 func (call *Call) IsValid() (ok bool, err error) {

@@ -44,6 +44,7 @@ func (api *Api) CallUploadHandler(w http.ResponseWriter, r *http.Request) {
 			call = NewCall()
 			key  string
 		)
+		call.ingestRoute = "api/call-upload"
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
@@ -122,6 +123,7 @@ func (api *Api) TrunkRecorderCallUploadHandler(w http.ResponseWriter, r *http.Re
 			call = NewCall()
 			key  string
 		)
+		call.ingestRoute = "api/trunk-recorder-call-upload"
 
 		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		if err != nil {
