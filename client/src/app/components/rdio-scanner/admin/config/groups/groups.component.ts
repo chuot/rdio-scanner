@@ -18,7 +18,7 @@
  */
 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Component, Input, QueryList, ViewChildren, OnDestroy } from '@angular/core';
+import { Component, Input, QueryList, ViewChildren, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { FormArray, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
@@ -29,6 +29,7 @@ import { Subscription } from 'rxjs';
 @Component({
     selector: 'rdio-scanner-admin-groups',
     templateUrl: './groups.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminGroupsComponent implements OnDestroy {

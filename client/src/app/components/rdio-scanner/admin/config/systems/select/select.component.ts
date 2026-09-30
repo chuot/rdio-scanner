@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, Inject, ViewEncapsulation, OnDestroy } from '@angular/core';
+import { Component, Inject, ViewEncapsulation, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { FormArray, FormBuilder, FormControl, FormGroup } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Access } from '../../../admin.service';
@@ -39,6 +39,7 @@ interface Talkgroup {
     selector: 'rdio-scanner-admin-systems-selection',
     styleUrls: ['./select.component.scss'],
     templateUrl: './select.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminSystemsSelectComponent implements OnDestroy {

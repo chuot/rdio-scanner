@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 import { NgModule } from '@angular/core';
 import { AppSharedModule } from '../../../shared/shared.module';
 import { RdioScannerAdminComponent } from './admin.component';
@@ -70,5 +70,5 @@ import { RdioScannerAdminPasswordComponent } from './tools/password/password.com
         RdioScannerAdminToolsComponent,
         RdioScannerAdminUnitComponent,
     ],
-    exports: [RdioScannerAdminComponent], imports: [AppSharedModule], providers: [RdioScannerAdminService, provideHttpClient(withInterceptorsFromDi())] })
+    exports: [RdioScannerAdminComponent], imports: [AppSharedModule], providers: [RdioScannerAdminService, provideHttpClient(withXhr(), withInterceptorsFromDi())] })
 export class RdioScannerAdminModule { }

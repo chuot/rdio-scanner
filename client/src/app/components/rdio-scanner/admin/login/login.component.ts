@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RdioScannerAdminService } from '../admin.service';
 
@@ -25,6 +25,7 @@ import { RdioScannerAdminService } from '../admin.service';
     selector: 'rdio-scanner-admin-login',
     styleUrls: ['./login.component.scss'],
     templateUrl: './login.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminLoginComponent {

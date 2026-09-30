@@ -17,13 +17,14 @@
  * ****************************************************************************
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import packageInfo from '../../../../../package.json';
 
 @Component({
     selector: 'rdio-scanner-admin-page',
     styleUrls: ['./admin.component.scss'],
     templateUrl: './admin.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminPageComponent {

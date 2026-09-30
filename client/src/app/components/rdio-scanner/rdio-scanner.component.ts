@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { MatSidenav } from '@angular/material/sidenav';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { timer } from 'rxjs';
@@ -29,6 +29,7 @@ import { RdioScannerNativeComponent } from './native/native.component';
     selector: 'rdio-scanner',
     styleUrls: ['./rdio-scanner.component.scss'],
     templateUrl: './rdio-scanner.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerComponent implements OnDestroy, OnInit {

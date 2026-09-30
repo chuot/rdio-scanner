@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, Optional, OnInit } from '@angular/core';
+import { Component, Optional, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { MatSnackBarRef } from '@angular/material/snack-bar';
 import { timer } from 'rxjs';
 
@@ -25,6 +25,7 @@ import { timer } from 'rxjs';
     selector: 'RdioScannerNative',
     styleUrls: ['./native.component.scss'],
     templateUrl: './native.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerNativeComponent implements OnInit {

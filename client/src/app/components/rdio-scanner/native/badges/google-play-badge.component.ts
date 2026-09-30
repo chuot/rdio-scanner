@@ -17,11 +17,12 @@
  * ****************************************************************************
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
     selector: 'google-play-badge',
     templateUrl: './google-play-badge.component.svg',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class GooglePlayBadgeComponent {}

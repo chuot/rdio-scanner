@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, OnDestroy, ViewEncapsulation } from '@angular/core';
+import { Component, OnDestroy, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { AdminEvent, RdioScannerAdminService, Group, Tag } from './admin.service';
 
 @Component({
@@ -25,6 +25,7 @@ import { AdminEvent, RdioScannerAdminService, Group, Tag } from './admin.service
     selector: 'rdio-scanner-admin',
     styleUrls: ['./admin.component.scss'],
     templateUrl: './admin.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminComponent implements OnDestroy {

@@ -18,7 +18,7 @@
  */
 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Component, EventEmitter, Input, Output, QueryList, ViewChildren } from '@angular/core';
+import { Component, EventEmitter, Input, Output, QueryList, ViewChildren, ChangeDetectionStrategy } from '@angular/core';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { MatSelectChange } from '@angular/material/select';
@@ -27,6 +27,7 @@ import { RdioScannerAdminService, Group, Tag } from '../../../admin.service';
 @Component({
     selector: 'rdio-scanner-admin-system',
     templateUrl: './system.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminSystemComponent {

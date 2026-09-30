@@ -18,7 +18,7 @@
  */
 
 
-import { Component, EventEmitter, Inject, Output, DOCUMENT } from '@angular/core';
+import { Component, EventEmitter, Inject, Output, DOCUMENT, ChangeDetectionStrategy } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Config, RdioScannerAdminService } from '../../admin.service';
 import packageInfo from '../../../../../../../package.json';
@@ -27,6 +27,7 @@ import packageInfo from '../../../../../../../package.json';
     selector: 'rdio-scanner-admin-import-export-config',
     styleUrls: ['./import-export-config.component.scss'],
     templateUrl: './import-export-config.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminImportExportConfigComponent {

@@ -18,7 +18,7 @@
  */
 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { Component, Input, OnChanges, QueryList, ViewChildren } from '@angular/core';
+import { Component, Input, OnChanges, QueryList, ViewChildren, ChangeDetectionStrategy } from '@angular/core';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { RdioScannerAdminService } from '../../admin.service';
@@ -26,6 +26,7 @@ import { RdioScannerAdminService } from '../../admin.service';
 @Component({
     selector: 'rdio-scanner-admin-dirwatch',
     templateUrl: './dirwatch.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminDirwatchComponent implements OnChanges {

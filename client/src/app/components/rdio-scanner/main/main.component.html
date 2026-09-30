@@ -123,9 +123,9 @@
       <tbody>
         @for (previousCall of callHistory; track $index) {
           <tr
-            [ngClass]="{ 'replaying': previousCall?.id !== null && previousCall?.id === call?.id} ">
+            [ngClass]="{ 'replaying': $safeNavigationMigration(previousCall?.id) !== null && previousCall?.id === call?.id} ">
             <td>
-              <span>{{ previousCall?.dateTime | date:timeFormat }}</span>
+              <span>{{ $safeNavigationMigration(previousCall?.dateTime) | date:timeFormat }}</span>
             </td>
             <td>
               <span>{{ previousCall?.systemData?.label || previousCall?.system}}</span>

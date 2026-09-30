@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { AdminEvent, Config, RdioScannerAdminService } from '../admin.service';
 
 interface Todo {
@@ -29,6 +29,7 @@ interface Todo {
     selector: 'rdio-scanner-admin-todos',
     styleUrls: ['./todos.component.scss'],
     templateUrl: './todos.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminTodosComponent implements OnDestroy, OnInit {

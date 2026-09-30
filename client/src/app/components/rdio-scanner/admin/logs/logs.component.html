@@ -20,7 +20,7 @@
       <span>Date</span>
     </mat-header-cell>
     <mat-cell *matCellDef="let log">
-      <span>{{ log?.dateTime | date:'MM/dd' }}</span>
+      <span>{{ $safeNavigationMigration(log?.dateTime) | date:'MM/dd' }}</span>
     </mat-cell>
   </ng-container>
   <ng-container matColumnDef="time">
@@ -28,7 +28,7 @@
       <span>Time</span>
     </mat-header-cell>
     <mat-cell *matCellDef="let log">
-      <span>{{ log?.dateTime | date:'HH:mm' }}</span>
+      <span>{{ $safeNavigationMigration(log?.dateTime) | date:'HH:mm' }}</span>
     </mat-cell>
   </ng-container>
   <ng-container matColumnDef="message">
@@ -46,7 +46,7 @@
 </mat-table>
 <mat-progress-bar color="primary" [mode]="logsQueryPending ? 'query' : 'determinate'">
 </mat-progress-bar>
-<mat-paginator [disabled]="logsQueryPending" [length]="logsQuery?.count" [hidePageSize]="true"
+<mat-paginator [disabled]="logsQueryPending" [length]="$safeNavigationMigration(logsQuery?.count)" [hidePageSize]="true"
   [pageSize]="logs.value.length" [showFirstLastButtons]="true" (page)="refresh()">
 </mat-paginator>
 <form autocomplete="off" [formGroup]="form">
@@ -67,8 +67,8 @@
     <mat-label>
       Date
     </mat-label>
-    <input matInput type="datetime-local" formControlName="date" [max]="logsQuery?.dateStop"
-      [min]="logsQuery?.dateStart" placeholder="Choose a date" (change)="formHandler()">
+    <input matInput type="datetime-local" formControlName="date" [max]="$safeNavigationMigration(logsQuery?.dateStop)"
+      [min]="$safeNavigationMigration(logsQuery?.dateStart)" placeholder="Choose a date" (change)="formHandler()">
   </mat-form-field>
   <mat-form-field>
     <mat-label>

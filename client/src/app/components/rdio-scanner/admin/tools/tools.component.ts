@@ -17,13 +17,14 @@
  * ****************************************************************************
  */
 
-import { Component, EventEmitter, Output, QueryList, ViewChildren } from '@angular/core';
+import { Component, EventEmitter, Output, QueryList, ViewChildren, ChangeDetectionStrategy } from '@angular/core';
 import { MatExpansionPanel } from '@angular/material/expansion';
 import { Config } from '../admin.service';
 
 @Component({
     selector: 'rdio-scanner-admin-tools',
     templateUrl: './tools.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerAdminToolsComponent {

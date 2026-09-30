@@ -101,7 +101,7 @@
           }
         </mat-form-field>
       </div>
-      @if (['default','dsdplus','trunk-recorder'].includes(dirwatch.get('type')?.value)) {
+      @if (['default','dsdplus','trunk-recorder'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
         <div class="row">
           <p>
             <span class="mat-body">Extension</span><br>
@@ -118,7 +118,7 @@
           </mat-form-field>
         </div>
       }
-      @if (['default','dsdplus'].includes(dirwatch.get('type')?.value)) {
+      @if (['default','dsdplus'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
         <div class="row">
           <p>
             <span class="mat-body">System</span><br>
@@ -143,7 +143,7 @@
           </mat-form-field>
         </div>
       }
-      @if (['default','dsdplus'].includes(dirwatch.get('type')?.value)) {
+      @if (['default','dsdplus'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
         <div class="row">
           <p>
             <span class="mat-body">Site</span><br>
@@ -163,7 +163,7 @@
           </mat-form-field>
         </div>
       }
-      @if (['default','dsdplus'].includes(dirwatch.get('type')?.value)) {
+      @if (['default','dsdplus'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
         <div class="row">
           <p>
             <span class="mat-body">Talkgroup</span><br>
@@ -188,7 +188,7 @@
           </mat-form-field>
         </div>
       }
-      @if (['default'].includes(dirwatch.get('type')?.value)) {
+      @if (['default'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
         <div class="row">
           <p>
             <span class="mat-body">Mask</span><br>
@@ -237,7 +237,7 @@ Example: cymx_#TG_#DATE_#TIME_#HZ
 </mat-form-field>
 </div>
 }
-@if (['default'].includes(dirwatch.get('type')?.value)) {
+@if (['default'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
   <div class="row">
     <p>
       <span class="mat-body">Frequency</span><br>
@@ -253,7 +253,7 @@ Example: cymx_#TG_#DATE_#TIME_#HZ
     </mat-form-field>
   </div>
 }
-@if (['default'].includes(dirwatch.get('type')?.value)) {
+@if (['default'].includes($safeNavigationMigration(dirwatch.get('type')?.value))) {
   <div class="row">
     <p>
       <span class="mat-body">Delay</span><br>

@@ -17,11 +17,12 @@
  * ****************************************************************************
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
     selector: 'app-store-badge',
     templateUrl: './app-store-badge.component.svg',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AppStoreBadgeComponent {}

@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-import { Component, Inject, Optional } from '@angular/core';
+import { Component, Inject, Optional, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_SNACK_BAR_DATA, MatSnackBarRef } from '@angular/material/snack-bar';
 import { timer } from 'rxjs';
 
@@ -25,6 +25,7 @@ import { timer } from 'rxjs';
     selector: 'RdioScannerSupport',
     styleUrls: ['./support.component.scss'],
     templateUrl: './support.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerSupportComponent {

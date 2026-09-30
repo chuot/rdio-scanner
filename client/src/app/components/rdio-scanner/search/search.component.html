@@ -31,7 +31,7 @@
         <span>Date</span>
       </mat-header-cell>
       <mat-cell *matCellDef="let row">
-        <span>{{ row?.dateTime | date:'MM/dd' }}</span>
+        <span>{{ $safeNavigationMigration(row?.dateTime) | date:'MM/dd' }}</span>
       </mat-cell>
     </ng-container>
     <ng-container matColumnDef="time">
@@ -39,7 +39,7 @@
         <span>Time</span>
       </mat-header-cell>
       <mat-cell *matCellDef="let row" [ngClass]="{'time12h': time12h}">
-        <span>{{ row?.dateTime | date: time12h ? 'h:mm a' : 'HH:mm' }}</span>
+        <span>{{ $safeNavigationMigration(row?.dateTime) | date: time12h ? 'h:mm a' : 'HH:mm' }}</span>
       </mat-cell>
     </ng-container>
     <ng-container matColumnDef="system">
@@ -77,7 +77,7 @@
     <mat-slide-toggle #downloadMode color="primary" labelPosition="before">
       <mat-icon>save_alt</mat-icon>
     </mat-slide-toggle>
-    <mat-paginator [disabled]="livefeedPlayback || resultsPending" [length]="playbackList?.count"
+    <mat-paginator [disabled]="livefeedPlayback || resultsPending" [length]="$safeNavigationMigration(playbackList?.count)"
       [hidePageSize]="true" [pageSize]="results.value.length" [showFirstLastButtons]="true"
       (page)="refreshResults()">
     </mat-paginator>
@@ -102,8 +102,8 @@
       <mat-label>
         Date
       </mat-label>
-      <input matInput type="datetime-local" formControlName="date" [max]="playbackList?.dateStop"
-        [min]="playbackList?.dateStart" placeholder="Choose a date" (change)="formChangeHandler()">
+      <input matInput type="datetime-local" formControlName="date" [max]="$safeNavigationMigration(playbackList?.dateStop)"
+        [min]="$safeNavigationMigration(playbackList?.dateStart)" placeholder="Choose a date" (change)="formChangeHandler()">
     </mat-form-field>
     <mat-form-field>
       <mat-label>

@@ -17,11 +17,12 @@
  * ****************************************************************************
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
     selector: 'rdio-scanner-main-page',
     template: '<rdio-scanner></rdio-scanner>',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class RdioScannerMainPageComponent { }
