@@ -1,0 +1,625 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+// Package fakes holds in-memory implementations of every application port, used by the
+// use case tests. They are not mocks: they behave like the real adapters on the rules
+// that matter, so a use case tested against them is tested against the rules rather than
+// against a scripted answer.
+package fakes
+
+import (
+	"context"
+	"sort"
+	"time"
+
+	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/server-ng/internal/domain"
+)
+
+// Calls is an in-memory call repository.
+type Calls struct {
+	// Stored is the call history, keyed by call identifier. Tests may seed it directly.
+	Stored map[uint64]domain.Call
+
+	// NextID is the identifier the next stored call gets.
+	NextID uint64
+
+	// Saved records the calls that were written, in the order they were written.
+	Saved []domain.Call
+
+	// Err, when set, is returned by every method instead of the stored state.
+	Err error
+}
+
+var _ ports.CallRepository = (*Calls)(nil)
+
+// NewCalls returns an empty call history.
+func NewCalls() *Calls {
+	return &Calls{Stored: map[uint64]domain.Call{}, NextID: 1}
+}
+
+// GetCall returns a stored call or ports.ErrNotFound.
+func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error) {
+	if calls.Err != nil {
+		return domain.Call{}, calls.Err
+	}
+
+	call, ok := calls.Stored[id]
+	if !ok {
+		return domain.Call{}, ports.ErrNotFound
+	}
+
+	return call, nil
+}
+
+// SaveCall stores a call, assigning it an identifier when it has none.
+func (calls *Calls) SaveCall(ctx context.Context, call domain.Call) (domain.Call, error) {
+	if calls.Err != nil {
+		return domain.Call{}, calls.Err
+	}
+
+	if call.ID == 0 {
+		call.ID = calls.NextID
+		calls.NextID++
+	}
+
+	calls.Stored[call.ID] = call
+	calls.Saved = append(calls.Saved, call)
+
+	return call, nil
+}
+
+// FindDuplicateCandidates returns the stored calls on the same system and talkgroup
+// whose timestamps fall between from and to, inclusive.
+func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, from, to time.Time) ([]domain.Call, error) {
+	if calls.Err != nil {
+		return nil, calls.Err
+	}
+
+	out := []domain.Call{}
+
+	for _, call := range calls.Stored {
+		if call.System.ID != systemID || call.Talkgroup.ID != talkgroupID {
+			continue
+		}
+
+		if call.Timestamp.Before(from) || call.Timestamp.After(to) {
+			continue
+		}
+
+		out = append(out, call)
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].Timestamp.Before(out[j].Timestamp) })
+
+	return out, nil
+}
+
+// SearchCalls applies the resolved criteria to the stored history. Delayed calls are
+// left out, because a call that is waiting out a delay is not part of the history until
+// its delay has run.
+func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (ports.CallSearchPage, error) {
+	if calls.Err != nil {
+		return ports.CallSearchPage{}, calls.Err
+	}
+
+	matching := []domain.Call{}
+
+	for _, call := range calls.Stored {
+		if call.Delayed {
+			continue
+		}
+
+		if !searchMatches(call, search) {
+			continue
+		}
+
+		matching = append(matching, call)
+	}
+
+	sort.Slice(matching, func(i, j int) bool {
+		if search.Ascending {
+			return matching[i].Timestamp.Before(matching[j].Timestamp)
+		}
+
+		return matching[i].Timestamp.After(matching[j].Timestamp)
+	})
+
+	page := ports.CallSearchPage{Count: uint(len(matching))}
+
+	for _, call := range matching {
+		if page.DateStart.IsZero() || call.Timestamp.Before(page.DateStart) {
+			page.DateStart = call.Timestamp
+		}
+
+		if page.DateStop.IsZero() || call.Timestamp.After(page.DateStop) {
+			page.DateStop = call.Timestamp
+		}
+	}
+
+	for i, call := range matching {
+		if uint(i) < search.Offset {
+			continue
+		}
+
+		// A limit of zero asks for no rows at all, which is what the stored query does.
+		if uint(i)-search.Offset >= search.Limit {
+			break
+		}
+
+		page.Results = append(page.Results, ports.CallSummary{
+			ID:           call.ID,
+			SystemRef:    call.System.SystemRef,
+			TalkgroupRef: call.Talkgroup.TalkgroupRef,
+			Timestamp:    call.Timestamp,
+		})
+	}
+
+	return page, nil
+}
+
+// searchMatches applies one criterion at a time, in the same order the legacy server
+// builds its filter: the caller's scope, then the system and talkgroup, then the group
+// and tag labels.
+func searchMatches(call domain.Call, search ports.CallSearch) bool {
+	if search.Scope.Present && !search.Scope.Grants(call) {
+		return false
+	}
+
+	if !search.From.IsZero() && call.Timestamp.Before(search.From) {
+		return false
+	}
+
+	if !search.To.IsZero() && call.Timestamp.After(search.To) {
+		return false
+	}
+
+	if search.SystemRef != 0 {
+		if call.System.SystemRef != search.SystemRef {
+			return false
+		}
+
+		if search.TalkgroupRef != 0 && call.Talkgroup.TalkgroupRef != search.TalkgroupRef {
+			return false
+		}
+	}
+
+	if len(search.GroupTalkgroups) > 0 && !matchesAnyPair(call, search.GroupTalkgroups) {
+		return false
+	}
+
+	if len(search.TagTalkgroups) > 0 && !matchesAnyPair(call, search.TagTalkgroups) {
+		return false
+	}
+
+	return true
+}
+
+func matchesAnyPair(call domain.Call, pairs []ports.ScopedTalkgroups) bool {
+	for _, pair := range pairs {
+		if pair.SystemRef != call.System.SystemRef {
+			continue
+		}
+
+		for _, ref := range pair.TalkgroupRefs {
+			if ref == call.Talkgroup.TalkgroupRef {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// DeleteCallsBefore removes the calls older than the given instant.
+func (calls *Calls) DeleteCallsBefore(ctx context.Context, before time.Time) (int, error) {
+	if calls.Err != nil {
+		return 0, calls.Err
+	}
+
+	removed := 0
+
+	for id, call := range calls.Stored {
+		if call.Timestamp.Before(before) {
+			delete(calls.Stored, id)
+			removed++
+		}
+	}
+
+	return removed, nil
+}
+
+// Systems is an in-memory system repository.
+type Systems struct {
+	Stored domain.Systems
+	Err    error
+}
+
+var _ ports.SystemRepository = (*Systems)(nil)
+
+// AllSystems returns the stored systems.
+func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) {
+	if systems.Err != nil {
+		return nil, systems.Err
+	}
+
+	return systems.Stored, nil
+}
+
+// SaveSystems replaces the stored systems.
+func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {
+	if systems.Err != nil {
+		return systems.Err
+	}
+
+	systems.Stored = next
+
+	return nil
+}
+
+// Groups is an in-memory group repository.
+type Groups struct {
+	Stored domain.Groups
+	Err    error
+}
+
+var _ ports.GroupRepository = (*Groups)(nil)
+
+// AllGroups returns the stored groups.
+func (groups *Groups) AllGroups(ctx context.Context) (domain.Groups, error) {
+	if groups.Err != nil {
+		return nil, groups.Err
+	}
+
+	return groups.Stored, nil
+}
+
+// SaveGroups replaces the stored groups.
+func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error {
+	if groups.Err != nil {
+		return groups.Err
+	}
+
+	groups.Stored = next
+
+	return nil
+}
+
+// Tags is an in-memory tag repository.
+type Tags struct {
+	Stored domain.Tags
+	Err    error
+}
+
+var _ ports.TagRepository = (*Tags)(nil)
+
+// AllTags returns the stored tags.
+func (tags *Tags) AllTags(ctx context.Context) (domain.Tags, error) {
+	if tags.Err != nil {
+		return nil, tags.Err
+	}
+
+	return tags.Stored, nil
+}
+
+// SaveTags replaces the stored tags.
+func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
+	if tags.Err != nil {
+		return tags.Err
+	}
+
+	tags.Stored = next
+
+	return nil
+}
+
+// Accesses is an in-memory access repository.
+type Accesses struct {
+	Stored domain.Accesses
+	Err    error
+}
+
+var _ ports.AccessRepository = (*Accesses)(nil)
+
+// AllAccesses returns the stored accesses.
+func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, error) {
+	if accesses.Err != nil {
+		return nil, accesses.Err
+	}
+
+	return accesses.Stored, nil
+}
+
+// SaveAccesses replaces the stored accesses.
+func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses) error {
+	if accesses.Err != nil {
+		return accesses.Err
+	}
+
+	accesses.Stored = next
+
+	return nil
+}
+
+// Apikeys is an in-memory apikey repository.
+type Apikeys struct {
+	Stored domain.Apikeys
+	Err    error
+}
+
+var _ ports.ApikeyRepository = (*Apikeys)(nil)
+
+// AllApikeys returns the stored apikeys.
+func (apikeys *Apikeys) AllApikeys(ctx context.Context) (domain.Apikeys, error) {
+	if apikeys.Err != nil {
+		return nil, apikeys.Err
+	}
+
+	return apikeys.Stored, nil
+}
+
+// SaveApikeys replaces the stored apikeys.
+func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) error {
+	if apikeys.Err != nil {
+		return apikeys.Err
+	}
+
+	apikeys.Stored = next
+
+	return nil
+}
+
+// Options is an in-memory options repository.
+type Options struct {
+	Stored domain.Options
+	Err    error
+}
+
+var _ ports.OptionsRepository = (*Options)(nil)
+
+// ReadOptions returns the stored options.
+func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error) {
+	if options.Err != nil {
+		return domain.Options{}, options.Err
+	}
+
+	return options.Stored, nil
+}
+
+// WriteOptions replaces the stored options.
+func (options *Options) WriteOptions(ctx context.Context, next domain.Options) error {
+	if options.Err != nil {
+		return options.Err
+	}
+
+	options.Stored = next
+
+	return nil
+}
+
+// Logs is an in-memory log repository.
+type Logs struct {
+	Stored []domain.LogEntry
+	Err    error
+}
+
+var _ ports.LogRepository = (*Logs)(nil)
+
+// AppendLog records an entry.
+func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
+	if logs.Err != nil {
+		return logs.Err
+	}
+
+	if entry.ID == 0 {
+		entry.ID = uint64(len(logs.Stored) + 1)
+	}
+
+	logs.Stored = append(logs.Stored, entry)
+
+	return nil
+}
+
+// SearchLogs applies the criteria to the stored entries.
+func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (ports.LogSearchPage, error) {
+	if logs.Err != nil {
+		return ports.LogSearchPage{}, logs.Err
+	}
+
+	matching := []domain.LogEntry{}
+
+	for _, entry := range logs.Stored {
+		if search.HasLevel() && entry.Level != search.Level {
+			continue
+		}
+
+		if search.HasDate() {
+			from, to, _ := search.DateWindow()
+
+			if entry.DateTime.Before(from) || entry.DateTime.After(to) {
+				continue
+			}
+		}
+
+		matching = append(matching, entry)
+	}
+
+	sort.SliceStable(matching, func(i, j int) bool {
+		if search.Ascending {
+			return matching[i].DateTime.Before(matching[j].DateTime)
+		}
+
+		return matching[i].DateTime.After(matching[j].DateTime)
+	})
+
+	page := ports.LogSearchPage{Count: uint64(len(matching))}
+
+	for i, entry := range matching {
+		if uint(i) < search.Offset {
+			continue
+		}
+
+		// A limit of zero asks for no rows at all, which is what the stored query does.
+		if uint(i)-search.Offset >= search.Limit {
+			break
+		}
+
+		page.Results = append(page.Results, entry)
+	}
+
+	return page, nil
+}
+
+// DeleteLogsBefore removes the entries older than the given instant.
+func (logs *Logs) DeleteLogsBefore(ctx context.Context, before time.Time) (int, error) {
+	if logs.Err != nil {
+		return 0, logs.Err
+	}
+
+	kept := []domain.LogEntry{}
+	removed := 0
+
+	for _, entry := range logs.Stored {
+		if entry.DateTime.Before(before) {
+			removed++
+			continue
+		}
+
+		kept = append(kept, entry)
+	}
+
+	logs.Stored = kept
+
+	return removed, nil
+}
+
+// Dirwatches is an in-memory directory-watch repository.
+type Dirwatches struct {
+	Stored domain.Dirwatches
+	Err    error
+}
+
+var _ ports.DirwatchRepository = (*Dirwatches)(nil)
+
+// AllDirwatches returns the stored watches.
+func (dirwatches *Dirwatches) AllDirwatches(ctx context.Context) (domain.Dirwatches, error) {
+	if dirwatches.Err != nil {
+		return nil, dirwatches.Err
+	}
+
+	return dirwatches.Stored, nil
+}
+
+// SaveDirwatches replaces the stored watches.
+func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Dirwatches) error {
+	if dirwatches.Err != nil {
+		return dirwatches.Err
+	}
+
+	dirwatches.Stored = next
+
+	return nil
+}
+
+// Downstreams is an in-memory downstream repository.
+type Downstreams struct {
+	Stored domain.Downstreams
+	Err    error
+}
+
+var _ ports.DownstreamRepository = (*Downstreams)(nil)
+
+// AllDownstreams returns the stored downstreams.
+func (downstreams *Downstreams) AllDownstreams(ctx context.Context) (domain.Downstreams, error) {
+	if downstreams.Err != nil {
+		return nil, downstreams.Err
+	}
+
+	return downstreams.Stored, nil
+}
+
+// SaveDownstreams replaces the stored downstreams.
+func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain.Downstreams) error {
+	if downstreams.Err != nil {
+		return downstreams.Err
+	}
+
+	downstreams.Stored = next
+
+	return nil
+}
+
+// DelayedCalls is an in-memory delayed-call repository.
+type DelayedCalls struct {
+	Stored []ports.DelayedCall
+	Err    error
+}
+
+var _ ports.DelayedCallRepository = (*DelayedCalls)(nil)
+
+// AllDelayed returns the calls still waiting.
+func (delayed *DelayedCalls) AllDelayed(ctx context.Context) ([]ports.DelayedCall, error) {
+	if delayed.Err != nil {
+		return nil, delayed.Err
+	}
+
+	return delayed.Stored, nil
+}
+
+// ScheduleDelayed records that a call is waiting until the given instant.
+func (delayed *DelayedCalls) ScheduleDelayed(ctx context.Context, callID uint64, until time.Time) error {
+	if delayed.Err != nil {
+		return delayed.Err
+	}
+
+	delayed.Stored = append(delayed.Stored, ports.DelayedCall{CallID: callID, Timestamp: until})
+
+	return nil
+}
+
+// UnscheduleDelayed drops one waiting call.
+func (delayed *DelayedCalls) UnscheduleDelayed(ctx context.Context, callID uint64) error {
+	if delayed.Err != nil {
+		return delayed.Err
+	}
+
+	kept := []ports.DelayedCall{}
+
+	for _, entry := range delayed.Stored {
+		if entry.CallID != callID {
+			kept = append(kept, entry)
+		}
+	}
+
+	delayed.Stored = kept
+
+	return nil
+}
+
+// ClearDelayed drops every waiting call.
+func (delayed *DelayedCalls) ClearDelayed(ctx context.Context) error {
+	if delayed.Err != nil {
+		return delayed.Err
+	}
+
+	delayed.Stored = nil
+
+	return nil
+}
