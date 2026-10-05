@@ -21,7 +21,7 @@
 package main
 
 import (
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,24 +31,47 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout))
 }
 
-// run parses the command line and dispatches the special modes that exit without
-// starting the server. It returns the process exit code instead of calling
-// os.Exit directly, so the modes stay testable.
+// run dispatches the modes that finish without starting the server. It returns the
+// process exit code instead of calling os.Exit directly, so the modes stay testable.
 func run(args []string, stdout io.Writer) int {
-	fs := flag.NewFlagSet("rdio-scanner", flag.ContinueOnError)
-	fs.SetOutput(stdout)
-
-	showVersion := fs.Bool("version", false, "show application version")
-
-	if err := fs.Parse(args); err != nil {
-		return 2
+	exePath, err := os.Executable()
+	if err != nil {
+		exePath = ""
 	}
 
-	if *showVersion {
-		fmt.Fprintln(stdout, Version)
+	config, mode, err := newConfig(args, exePath, stdout)
+	if err != nil {
+		var usage usageError
+		if errors.As(err, &usage) {
+			return 2
+		}
+
+		fmt.Fprintf(stdout, "error: %v\n", err)
+		return 1
+	}
+
+	if mode == ModeExit {
 		return 0
 	}
 
-	// Configuration loading and server wiring arrive in the composition-root tasks.
+	// The -admin_password, -cmd and -service modes and the server startup itself
+	// are wired by the later composition-root tasks.
+	_ = config
+
 	return 0
 }
+
+// usageError marks a command-line parsing failure, which maps to exit code 2.
+type usageError struct {
+	err error
+}
+
+func (e usageError) Error() string {
+	return e.err.Error()
+}
+
+func (e usageError) Unwrap() error {
+	return e.err
+}
+
+var _ error = usageError{}
