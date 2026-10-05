@@ -1,0 +1,210 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package domain
+
+import (
+	"testing"
+	"time"
+)
+
+func TestDefaultOptionsMatchTheLegacyServer(t *testing.T) {
+	o := DefaultOptions()
+
+	checks := map[string]struct{ got, want any }{
+		"AudioConversion":             {o.AudioConversion, AudioConversionEnabled},
+		"AutoPopulate":                {o.AutoPopulate, true},
+		"DimmerDelay":                 {o.DimmerDelay, uint(5000)},
+		"DisableDuplicateDetection":   {o.DisableDuplicateDetection, false},
+		"DuplicateDetectionTimeFrame": {o.DuplicateDetectionTimeFrame, uint(500)},
+		"KeypadBeeps":                 {o.KeypadBeeps, "uniden"},
+		"MaxClients":                  {o.MaxClients, uint(200)},
+		"PlaybackGoesLive":            {o.PlaybackGoesLive, false},
+		"PruneDays":                   {o.PruneDays, uint(7)},
+		"ShowListenersCount":          {o.ShowListenersCount, false},
+		"SortTalkgroups":              {o.SortTalkgroups, false},
+		"Time12hFormat":               {o.Time12hFormat, false},
+		"AdminPasswordNeedChange":     {o.AdminPasswordNeedChange, true},
+	}
+
+	for name, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", name, c.got, c.want)
+		}
+	}
+}
+
+func TestApplyMapReadsEveryEditableOption(t *testing.T) {
+	o := DefaultOptions().ApplyMap(map[string]any{
+		"audioConversion":             float64(3),
+		"autoPopulate":                false,
+		"branding":                    "City of Test",
+		"dimmerDelay":                 float64(9000),
+		"disableDuplicateDetection":   true,
+		"duplicateDetectionTimeFrame": float64(1500),
+		"email":                       "ops@example.com",
+		"keypadBeeps":                 "whistler",
+		"maxClients":                  float64(25),
+		"playbackGoesLive":            true,
+		"pruneDays":                   float64(30),
+		"showListenersCount":          true,
+		"sortTalkgroups":              true,
+		"time12hFormat":               true,
+	})
+
+	checks := map[string]struct{ got, want any }{
+		"AudioConversion":             {o.AudioConversion, uint(3)},
+		"AutoPopulate":                {o.AutoPopulate, false},
+		"Branding":                    {o.Branding, "City of Test"},
+		"DimmerDelay":                 {o.DimmerDelay, uint(9000)},
+		"DisableDuplicateDetection":   {o.DisableDuplicateDetection, true},
+		"DuplicateDetectionTimeFrame": {o.DuplicateDetectionTimeFrame, uint(1500)},
+		"Email":                       {o.Email, "ops@example.com"},
+		"KeypadBeeps":                 {o.KeypadBeeps, "whistler"},
+		"MaxClients":                  {o.MaxClients, uint(25)},
+		"PlaybackGoesLive":            {o.PlaybackGoesLive, true},
+		"PruneDays":                   {o.PruneDays, uint(30)},
+		"ShowListenersCount":          {o.ShowListenersCount, true},
+		"SortTalkgroups":              {o.SortTalkgroups, true},
+		"Time12hFormat":               {o.Time12hFormat, true},
+	}
+
+	for name, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", name, c.got, c.want)
+		}
+	}
+}
+
+func TestApplyMapKeepsCurrentValuesForAbsentStrings(t *testing.T) {
+	o := DefaultOptions()
+	o.Branding = "Keep me"
+	o.Email = "keep@example.com"
+
+	o = o.ApplyMap(map[string]any{"pruneDays": float64(3)})
+
+	if o.Branding != "Keep me" {
+		t.Errorf("Branding = %q, want the previous value preserved", o.Branding)
+	}
+
+	if o.Email != "keep@example.com" {
+		t.Errorf("Email = %q, want the previous value preserved", o.Email)
+	}
+}
+
+func TestApplyMapFallsBackToDefaultsForAbsentOrWronglyTypedValues(t *testing.T) {
+	o := DefaultOptions()
+	o.PruneDays = 99
+	o.AutoPopulate = false
+	o.KeypadBeeps = "whistler"
+
+	o = o.ApplyMap(map[string]any{
+		"pruneDays":    "not a number",
+		"autoPopulate": "not a bool",
+		"keypadBeeps":  float64(7),
+	})
+
+	if o.PruneDays != 7 {
+		t.Errorf("PruneDays = %d, want the default 7", o.PruneDays)
+	}
+
+	if !o.AutoPopulate {
+		t.Error("AutoPopulate = false, want the default true")
+	}
+
+	if o.KeypadBeeps != "uniden" {
+		t.Errorf("KeypadBeeps = %q, want the default uniden", o.KeypadBeeps)
+	}
+}
+
+// TestApplyMapLegacyAudioConversionDefaultQuirk pins a legacy defect and its masking:
+// when the submitted configuration has no audioConversion key, the legacy server
+// assigns the audio-conversion default to MaxClients — but its own later maxClients
+// branch then overwrites that with the maxClients default, so the defect is only
+// observable when a maxClients value is actually submitted.
+// See docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
+func TestApplyMapLegacyAudioConversionDefaultQuirk(t *testing.T) {
+	o := DefaultOptions().ApplyMap(map[string]any{"maxClients": float64(25)})
+
+	if o.MaxClients != 25 {
+		t.Errorf("MaxClients = %d, want the submitted 25 to survive the audioConversion default branch", o.MaxClients)
+	}
+
+	o = DefaultOptions().ApplyMap(map[string]any{})
+
+	if o.MaxClients != 200 {
+		t.Errorf("MaxClients = %d, want the maxClients default 200 to mask the audioConversion default branch", o.MaxClients)
+	}
+}
+
+// TestApplyMapLegacyDisableAudioConversion maps the retired boolean option onto the
+// audio-conversion modes exactly as the legacy server did.
+func TestApplyMapLegacyDisableAudioConversion(t *testing.T) {
+	if o := DefaultOptions().ApplyMap(map[string]any{"disableAudioConversion": true}); o.AudioConversion != AudioConversionEnabledNorm {
+		t.Errorf("AudioConversion = %d, want %d", o.AudioConversion, AudioConversionEnabledNorm)
+	}
+
+	if o := DefaultOptions().ApplyMap(map[string]any{"disableAudioConversion": false}); o.AudioConversion != AudioConversionDisabled {
+		t.Errorf("AudioConversion = %d, want %d", o.AudioConversion, AudioConversionDisabled)
+	}
+}
+
+func TestDuplicateDetectionWindow(t *testing.T) {
+	o := DefaultOptions()
+
+	if got, want := o.DuplicateDetectionWindow(), 500*time.Millisecond; got != want {
+		t.Errorf("DuplicateDetectionWindow = %v, want %v", got, want)
+	}
+
+	o.DisableDuplicateDetection = true
+	if got := o.DuplicateDetectionWindow(); got != 0 {
+		t.Errorf("DuplicateDetectionWindow = %v, want 0 when detection is disabled", got)
+	}
+}
+
+func TestSecretIsGeneratedOnceAndStaysStable(t *testing.T) {
+	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&"
+
+	secret := GenerateSecret(256)
+
+	if len([]rune(secret)) != 256 {
+		t.Fatalf("secret length = %d, want 256 runes", len([]rune(secret)))
+	}
+
+	for _, r := range secret {
+		if !containsRune(alphabet, r) {
+			t.Errorf("secret contains %q which is outside the allowed alphabet", r)
+		}
+	}
+
+	if GenerateSecret(256) == secret {
+		t.Error("two generated secrets are identical; the secret must be random")
+	}
+}
+
+func containsRune(s string, r rune) bool {
+	for _, c := range s {
+		if c == r {
+			return true
+		}
+	}
+
+	return false
+}
