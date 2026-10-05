@@ -31,6 +31,7 @@ zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 .PHONY: linux linux-386 linux-amd64 linux-arm linux-arm64
 .PHONY: macos macos-amd64 macos-arm64
 .PHONY: windows windows-amd64
+.PHONY: webapp-ng
 
 all: clean dist
 
@@ -56,6 +57,10 @@ webapp: server/webapp/index.html
 server/webapp/index.html: $(client)
 	@cd client && test -d node_modules || npm ci --loglevel=error --no-progress
 	@cd client && npm run build
+
+webapp-ng:
+	@cd client-ng && test -d node_modules || npm ci --loglevel=error --no-progress
+	@cd client-ng && npm run build
 
 freebsd: freebsd-amd64
 freebsd-amd64: webapp dist/$(app)-freebsd-amd64-v$(ver).zip

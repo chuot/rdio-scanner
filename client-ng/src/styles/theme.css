@@ -1,0 +1,333 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/*
+ * Global theme (T049, REQ-013): self-hosted fonts only — the @font-face
+ * sources mirror the legacy roboto-fonts.scss / material-icons.scss but
+ * point at the local assets/fonts/ copies. No third-party font requests.
+ */
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(/assets/fonts/roboto-latin-ext-w300.woff2) format("woff2");
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(/assets/fonts/roboto-latin-w300.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/roboto-latin-ext-w400.woff2) format("woff2");
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/roboto-latin-w400.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/roboto-latin-ext-w500.woff2) format("woff2");
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/roboto-latin-w500.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Material Icons";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(/assets/fonts/material-icons-v129.woff2) format("woff2");
+}
+
+.material-icons {
+  direction: ltr;
+  display: inline-block;
+  font-display: block;
+  font-family: "Material Icons";
+  font-size: 24px;
+  font-style: normal;
+  font-weight: normal;
+  letter-spacing: normal;
+  line-height: 1;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+}
+
+:root {
+  /* Legacy Angular palette: grey-800 primary, green accent, red warn. */
+  --rdio-background: rgb(30, 30, 30);
+  --rdio-foreground: rgb(255, 255, 255);
+  --rdio-primary: rgb(66, 66, 66);
+  --rdio-primary-light: rgb(97, 97, 97);
+  --rdio-primary-dark: rgb(33, 33, 33);
+  --rdio-accent: rgb(76, 175, 80);
+  --rdio-accent-dark: rgb(56, 142, 64);
+  --rdio-warn: rgb(244, 67, 54);
+  --rdio-font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--rdio-background);
+  color: var(--rdio-foreground);
+  font-family: var(--rdio-font-family);
+  margin: 0;
+}
+
+/* Stand-in for the Material elevation classes used by dialogs/cards. */
+.mat-elevation {
+  box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2), 0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
+}
+
+/*
+ * Shared UI primitives (T022 elements): snackbar, dialog, buttons, form
+ * fields, select, toggle, paginator. Page-specific looks (beveled listener
+ * buttons, admin cards) live in rdio.css / admin.css.
+ */
+
+rdio-snackbar {
+  background: rgb(48, 48, 48);
+  border-radius: 4px;
+  bottom: 16px;
+  box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.3);
+  color: var(--rdio-foreground);
+  left: 50%;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 20px;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+
+rdio-snackbar[hidden] {
+  display: none;
+}
+
+rdio-dialog {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 1100;
+}
+
+.rdio-dialog-box {
+  background: rgb(46, 46, 46);
+  border-radius: 4px;
+  max-width: 560px;
+  padding: 16px 20px;
+  width: 100%;
+}
+
+.rdio-dialog-box h2 {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+
+.rdio-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.rdio-button,
+.rdio-button-mini {
+  background: var(--rdio-primary);
+  border: none;
+  border-radius: 4px;
+  color: var(--rdio-foreground);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 16px;
+}
+
+.rdio-button-mini {
+  font-size: 13px;
+  padding: 5px 12px;
+}
+
+.rdio-button:hover:not(:disabled),
+.rdio-button-mini:hover:not(:disabled) {
+  background: var(--rdio-primary-light);
+}
+
+.rdio-button:disabled,
+.rdio-button-mini:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.rdio-button.warn,
+.rdio-button-mini.warn {
+  background: var(--rdio-warn);
+}
+
+.rdio-button.warn:hover:not(:disabled),
+.rdio-button-mini.warn:hover:not(:disabled) {
+  background: rgb(255, 82, 70);
+}
+
+.rdio-icon-button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+}
+
+rdio-form-field {
+  display: block;
+  margin: 4px 0;
+}
+
+rdio-form-field label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+  opacity: 0.85;
+}
+
+rdio-form-field input,
+rdio-form-field textarea {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgb(90, 90, 90);
+  border-radius: 4px;
+  color: var(--rdio-foreground);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+rdio-form-field input[aria-invalid],
+rdio-select select[aria-invalid] {
+  border-color: var(--rdio-warn);
+}
+
+.rdio-form-error {
+  color: var(--rdio-warn);
+  font-size: 12px;
+  min-height: 0;
+}
+
+.rdio-form-error:empty {
+  display: none;
+}
+
+rdio-select select {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgb(90, 90, 90);
+  border-radius: 4px;
+  color: var(--rdio-foreground);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+rdio-select select option {
+  background: rgb(46, 46, 46);
+  color: var(--rdio-foreground);
+}
+
+rdio-toggle .rdio-toggle {
+  background: rgb(90, 90, 90);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  height: 24px;
+  padding: 0;
+  position: relative;
+  transition: background 0.2s;
+  width: 44px;
+}
+
+rdio-toggle .rdio-toggle::after {
+  background: rgb(220, 220, 220);
+  border-radius: 50%;
+  content: "";
+  height: 18px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: left 0.2s;
+  width: 18px;
+}
+
+rdio-toggle .rdio-toggle.on {
+  background: var(--rdio-accent);
+}
+
+rdio-toggle .rdio-toggle.on::after {
+  left: 23px;
+}
+
+rdio-paginator {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 10px 0;
+}

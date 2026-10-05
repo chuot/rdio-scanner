@@ -3,3 +3,5 @@
 *.token
 /build
 /dist
+client-ng/node_modules
+data-dev/

@@ -1,0 +1,964 @@
+/*
+ * *****************************************************************************
+ * Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
+
+/*
+ * Listener page styles (T050, REQ-013/REQ-014): the legacy beveled rdio
+ * buttons with LED pseudo-elements and blink animations, the 8-color status
+ * LED, the LCD display with idle/dimmed state and history table, the
+ * select/search side panels, and the help/promo snackbar contents.
+ *
+ * Ported from the read-only legacy sources:
+ *   client/src/app/components/rdio-scanner/common.scss
+ *   client/src/app/components/rdio-scanner/rdio-scanner.component.scss
+ *   client/src/app/components/rdio-scanner/main/main.component.scss
+ *   client/src/app/components/rdio-scanner/main/support/support.component.scss
+ *   client/src/app/components/rdio-scanner/select/select.component.scss
+ *   client/src/app/components/rdio-scanner/search/search.component.scss
+ *   client/src/app/components/rdio-scanner/native/native.component.scss
+ *
+ * All rules are scoped to the listener custom elements (rdio-app,
+ * rdio-status, rdio-display, rdio-controls, rdio-select-panel,
+ * rdio-search-panel, and the snackbar content wrappers) so the shared
+ * theme.css primitives keep their look everywhere else (dialogs, admin).
+ */
+
+/* ---------------------------------------------------------------------------
+ * App shell (legacy rdio-scanner.component.scss :host + .panel)
+ * ------------------------------------------------------------------------ */
+
+rdio-app {
+  background-color: var(--rdio-background);
+  color: var(--rdio-foreground);
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  justify-content: center;
+  min-width: 320px;
+  position: relative;
+}
+
+/* Legacy mat-sidenav-content centering + rdio-scanner-main :host box. */
+rdio-app > section.content {
+  box-sizing: border-box;
+  max-height: 100%;
+  max-width: 640px;
+  min-width: 0;
+  padding: 24px;
+  user-select: none;
+}
+
+/* Legacy mat-sidenav panels (position start/end, width 100%): full-area
+ * overlays above the centered content. The hidden attribute is toggled by
+ * rdio-app.js, so re-assert display:none against the flex rule below. */
+rdio-app > .panel {
+  background-color: var(--rdio-background);
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 10;
+}
+
+rdio-app > .panel[hidden] {
+  display: none;
+}
+
+rdio-app .panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+rdio-app .panel > div {
+  flex: 1;
+  height: 100%;
+  overflow: auto;
+}
+
+rdio-app .panel .toolbar {
+  background-color: inherit;
+  box-shadow: 0 4px 8px rgba(30, 30, 30, 0.8);
+  color: currentColor;
+  display: flex;
+  flex-direction: row;
+  z-index: 2;
+}
+
+/* Legacy .panel.search .mat-toolbar > div { justify-content: flex-end }. */
+rdio-app .panel.search .toolbar {
+  justify-content: flex-end;
+}
+
+/* Legacy mat-icon-button in the panel toolbars. */
+rdio-app .panel .panel-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* Legacy "> div > div" inner column: the panel bodies stay centered at
+ * 1200px max. Our panels embed the panel elements directly. */
+rdio-app .panel > div > rdio-search-panel,
+rdio-app .panel > div > rdio-select-panel {
+  box-sizing: border-box;
+  margin: 0 auto;
+  max-width: 1200px;
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+ * Beveled listener buttons with status LEDs
+ * (legacy common.scss, scoped to the listener elements)
+ * ------------------------------------------------------------------------ */
+
+rdio-controls .rdio-button,
+rdio-select-panel .rdio-button,
+rdio-select-panel .rdio-button-mini {
+  --def: rgb(45, 45, 45);
+  --green: rgb(0, 230, 118);
+  --red: rgb(255, 23, 68);
+  --yellow: rgb(255, 234, 0);
+
+  background: var(--def);
+  border-style: solid;
+  border-width: 1px;
+  border-bottom-color: rgba(0, 0, 0, 0.87);
+  border-left-color: rgba(255, 255, 255, 0.7);
+  border-right-color: rgba(0, 0, 0, 0.87);
+  border-top-color: rgba(255, 255, 255, 0.7);
+  border-radius: 0;
+  color: rgb(255, 255, 255);
+  font-family: inherit;
+  font-weight: 500;
+  height: 40px;
+  line-height: 18px;
+  margin: 2px;
+  overflow: hidden;
+  padding: 2px 8px;
+  position: relative;
+  text-overflow: clip;
+  text-shadow: 0 0 4px rgb(0, 0, 0);
+  white-space: normal;
+}
+
+rdio-controls .rdio-button:active,
+rdio-select-panel .rdio-button:active,
+rdio-select-panel .rdio-button-mini:active {
+  outline: 0;
+  top: 2px;
+  transform: scale(0.98);
+  transform-origin: bottom center;
+}
+
+/* REQ-014: unlike the legacy client, keyboard focus stays visible. */
+rdio-controls .rdio-button:focus-visible,
+rdio-select-panel .rdio-button:focus-visible,
+rdio-select-panel .rdio-button-mini:focus-visible,
+rdio-app .panel .panel-close:focus-visible,
+rdio-app .rdio-help button:focus-visible,
+rdio-search-panel .row-action:focus-visible {
+  outline: 2px solid var(--rdio-accent);
+  outline-offset: 2px;
+}
+
+rdio-controls .rdio-button.off::after,
+rdio-controls .rdio-button.on::after,
+rdio-controls .rdio-button.partial::after,
+rdio-select-panel .rdio-button.off::after,
+rdio-select-panel .rdio-button.on::after,
+rdio-select-panel .rdio-button.partial::after,
+rdio-select-panel .rdio-button.blink::after {
+  animation: blink 1s linear infinite both;
+  content: "";
+  display: block;
+  height: 6px;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 6px;
+}
+
+rdio-controls .rdio-button.off::after,
+rdio-select-panel .rdio-button.off::after {
+  background: var(--red);
+  box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--red);
+}
+
+rdio-controls .rdio-button.off.blink::after,
+rdio-select-panel .rdio-button.off.blink::after {
+  animation: blink-off 500ms linear infinite;
+}
+
+/* rdio-select-panel marks timed-avoid talkgroups with a bare .blink class
+ * (no off/on state); the legacy equivalent was off + blink, so the timed
+ * LED blinks red. */
+rdio-select-panel .rdio-button.blink::after {
+  animation: blink-off 500ms linear infinite;
+  background: var(--red);
+  box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--red);
+}
+
+rdio-controls .rdio-button.on::after,
+rdio-select-panel .rdio-button.on::after {
+  background: var(--green);
+  box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--green);
+}
+
+rdio-controls .rdio-button.on.blink::after,
+rdio-select-panel .rdio-button.on.blink::after {
+  animation: blink-on 500ms linear infinite;
+}
+
+rdio-controls .rdio-button.partial::after,
+rdio-select-panel .rdio-button.partial::after {
+  background: var(--yellow);
+  box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px var(--yellow);
+}
+
+rdio-controls .rdio-button.partial.blink::after,
+rdio-select-panel .rdio-button.partial.blink::after {
+  animation: blink-partial 500ms linear infinite;
+}
+
+rdio-controls .rdio-button {
+  color: rgb(250, 250, 250);
+  font-size: 12px;
+  min-width: 80px;
+  text-transform: uppercase;
+}
+
+rdio-select-panel .rdio-button {
+  color: rgb(250, 250, 250);
+  font-size: 12px;
+  min-width: 80px;
+  text-transform: uppercase;
+}
+
+@keyframes blink-off {
+  0%, 50% {
+    background: rgb(45, 45, 45);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 0px 0px rgb(45, 45, 45);
+  }
+
+  50%, 100% {
+    background: rgb(255, 23, 68);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px rgb(255, 23, 68);
+  }
+}
+
+@keyframes blink-on {
+  0%, 50% {
+    background: rgb(45, 45, 45);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 0px 0px rgb(45, 45, 45);
+  }
+
+  50%, 100% {
+    background: rgb(45, 45, 45);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px rgb(0, 230, 118);
+  }
+}
+
+@keyframes blink-partial {
+  0%, 50% {
+    background: rgb(45, 45, 45);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 0px 0px rgb(45, 45, 45);
+  }
+
+  50%, 100% {
+    background: rgb(255, 234, 0);
+    box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.7) inset, 0 0 3px 1px rgb(255, 234, 0);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Status bar (legacy main.component.scss .rdio-status)
+ * ------------------------------------------------------------------------ */
+
+rdio-status {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 24px;
+  min-height: 1.5rem;
+}
+
+rdio-status .branding {
+  color: rgb(64, 64, 64);
+  flex: 1;
+  font-size: 16px;
+  font-weight: normal;
+  letter-spacing: 2px;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: -1px -1px 1px rgba(0, 0, 0, 0.7), 1px 1px 1px rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+rdio-status .led {
+  background: rgb(80, 80, 80);
+  display: block;
+  height: 12px;
+  margin-left: 24px;
+  width: 24px;
+}
+
+rdio-status .led.on {
+  background: rgb(0, 230, 118);
+  box-shadow: 0 0 6px 3px rgb(0, 230, 118);
+}
+
+rdio-status .led.on.blue {
+  background: rgb(41, 121, 255);
+  box-shadow: 0 0 6px 3px rgb(41, 121, 255);
+}
+
+rdio-status .led.on.cyan {
+  background: rgb(0, 229, 255);
+  box-shadow: 0 0 6px 3px rgb(0, 229, 255);
+}
+
+rdio-status .led.on.green {
+  background: rgb(0, 230, 118);
+  box-shadow: 0 0 6px 3px rgb(0, 230, 118);
+}
+
+rdio-status .led.on.magenta {
+  background: rgb(213, 0, 249);
+  box-shadow: 0 0 6px 3px rgb(213, 0, 249);
+}
+
+rdio-status .led.on.orange {
+  background: rgb(255, 145, 0);
+  box-shadow: 0 0 6px 3px rgb(255, 145, 0);
+}
+
+rdio-status .led.on.red {
+  background: rgb(255, 23, 68);
+  box-shadow: 0 0 6px 3px rgb(255, 23, 68);
+}
+
+rdio-status .led.on.white {
+  background: rgb(255, 255, 255);
+  box-shadow: 0 0 6px 3px rgb(255, 255, 255);
+}
+
+rdio-status .led.on.yellow {
+  background: rgb(255, 234, 0);
+  box-shadow: 0 0 6px 3px rgb(255, 234, 0);
+}
+
+rdio-status .led.paused {
+  animation: led-blink 2s step-end infinite;
+}
+
+@keyframes led-blink {
+  50% {
+    background: rgb(80, 80, 80);
+    box-shadow: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * LCD display (legacy main.component.scss .rdio-display)
+ * ------------------------------------------------------------------------ */
+
+rdio-display {
+  background: rgb(209, 238, 238);
+  box-shadow: 2px 2px 4px rgb(0, 0, 0) inset, 1px 1px 2px 1px rgb(255, 255, 255);
+  color: rgba(0, 0, 0, 0.8);
+  cursor: default;
+  display: block;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  margin-bottom: 24px;
+  padding: 8px;
+}
+
+rdio-display.idle {
+  background: rgb(190, 190, 174);
+}
+
+/* Legacy dimmed the AVOID/PATCH flags into the idle background. */
+rdio-display.idle .flag {
+  color: rgb(190, 190, 174);
+}
+
+rdio-display * {
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+rdio-display .flag {
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 3px;
+  color: rgb(209, 238, 238);
+  display: none;
+  margin-left: 4px;
+  opacity: 0.87;
+  padding: 0 3px;
+}
+
+rdio-display .flag.flaged {
+  display: block;
+}
+
+rdio-display .wrapper {
+  position: relative;
+}
+
+rdio-display .row {
+  display: flex;
+  flex-direction: row;
+  height: 20px;
+}
+
+rdio-display .row:not(.full) > * {
+  display: flex;
+  flex: 33%;
+  flex-direction: row;
+}
+
+rdio-display .row:not(.full) > *:nth-child(2) {
+  justify-content: center;
+}
+
+rdio-display .row:not(.full) > *:nth-child(3) {
+  justify-content: flex-end;
+}
+
+rdio-display .row.big {
+  font-size: 24px;
+  height: 32px;
+  line-height: 32px;
+}
+
+rdio-display .row.right {
+  justify-content: flex-end;
+}
+
+rdio-display .row.small {
+  font-size: 12px;
+  height: 14px;
+  line-height: 14px;
+}
+
+/* Unlock overlay (legacy .auth over the history area). */
+rdio-display .auth {
+  align-items: center;
+  display: none;
+  flex-direction: row;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+rdio-display .auth.visible {
+  display: flex;
+}
+
+rdio-display .auth[hidden] {
+  display: none;
+}
+
+/* Legacy form carried mat-elevation-z8. */
+rdio-display .auth form {
+  background: rgb(240, 240, 240);
+  border-radius: 8px;
+  box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2), 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12);
+  padding: 8px 32px;
+}
+
+/* The unlock field sits on the light LCD overlay, not on the dark theme. */
+rdio-display .auth rdio-form-field {
+  width: 220px;
+}
+
+rdio-display .auth rdio-form-field label {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+rdio-display .auth rdio-form-field input {
+  background: rgb(255, 255, 255);
+  border-color: rgb(150, 150, 150);
+  color: rgba(0, 0, 0, 0.8);
+  text-align: center;
+}
+
+/* History table. */
+rdio-display .history {
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+rdio-display .history td,
+rdio-display .history th {
+  padding: 0 6px;
+  text-align: start;
+}
+
+rdio-display .history td:nth-child(1),
+rdio-display .history th:nth-child(1) {
+  width: 10%;
+}
+
+rdio-display .history td:nth-child(2),
+rdio-display .history th:nth-child(2) {
+  width: 25%;
+}
+
+rdio-display .history td:nth-child(3),
+rdio-display .history th:nth-child(3) {
+  width: 25%;
+}
+
+rdio-display .history td:nth-child(4),
+rdio-display .history th:nth-child(4) {
+  width: 40%;
+}
+
+rdio-display .history th {
+  color: rgba(0, 0, 0, 0.4);
+  font-weight: 400;
+  text-transform: uppercase;
+}
+
+rdio-display .history tr {
+  height: 21px;
+}
+
+rdio-display .history tr.replaying {
+  font-weight: 700;
+}
+
+rdio-display .history tbody > tr {
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/* ---------------------------------------------------------------------------
+ * Control rows (legacy main.component.scss .rdio-control)
+ * ------------------------------------------------------------------------ */
+
+rdio-controls {
+  display: block;
+}
+
+rdio-controls .row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+rdio-controls .row .rdio-button {
+  box-sizing: content-box;
+  flex: 1;
+  line-height: normal;
+}
+
+rdio-controls .spacer {
+  display: block;
+  width: 24px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Help button (legacy main.component.scss .rdio-help)
+ * ------------------------------------------------------------------------ */
+
+rdio-app .rdio-help {
+  bottom: 24px;
+  opacity: 0.3;
+  position: absolute;
+  right: 24px;
+}
+
+rdio-app .rdio-help[hidden] {
+  display: none;
+}
+
+/* Legacy mat-icon-button. */
+rdio-app .rdio-help button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Talkgroup select panel (legacy select.component.scss)
+ * ------------------------------------------------------------------------ */
+
+rdio-select-panel {
+  box-sizing: border-box;
+  display: block;
+  padding: 8px;
+  user-select: none;
+}
+
+rdio-select-panel .fieldset {
+  border-color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  padding: 4px;
+}
+
+rdio-select-panel .fieldset:not(:last-child) {
+  margin-bottom: 12px;
+}
+
+rdio-select-panel .fieldset > div {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+}
+
+rdio-select-panel .rdio-button {
+  width: calc(25% - 4px);
+}
+
+rdio-select-panel .rdio-button-mini {
+  width: calc(12.5% - 4px);
+}
+
+rdio-select-panel .rdio-button-mini:nth-last-child(2) {
+  margin-left: auto;
+}
+
+rdio-select-panel .rdio-button-mini.all-off {
+  background: rgb(100, 50, 50);
+}
+
+rdio-select-panel .rdio-button-mini.all-on {
+  background: rgb(50, 100, 50);
+}
+
+rdio-select-panel .empty {
+  padding: 8px;
+}
+
+@media (min-width: 720px) {
+  rdio-select-panel .rdio-button {
+    width: calc(20% - 4px);
+  }
+
+  rdio-select-panel .rdio-button-mini {
+    width: calc(10% - 4px);
+  }
+}
+
+@media (min-width: 1200px) {
+  rdio-select-panel .rdio-button {
+    width: calc(10% - 4px);
+  }
+
+  rdio-select-panel .rdio-button-mini {
+    width: calc(5% - 4px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Search panel (legacy search.component.scss)
+ * ------------------------------------------------------------------------ */
+
+rdio-search-panel {
+  box-sizing: border-box;
+  display: block;
+  padding: 8px;
+  user-select: none;
+}
+
+/* Legacy mat-card appearance="outlined" surfaces. */
+rdio-search-panel .rdio-list,
+rdio-search-panel .rdio-filters {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+rdio-search-panel .rdio-filters {
+  padding: 1rem;
+}
+
+rdio-search-panel .rdio-list {
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+rdio-search-panel .rdio-list table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+
+rdio-search-panel .rdio-list th,
+rdio-search-panel .rdio-list td {
+  padding: 0 8px;
+  text-align: start;
+}
+
+rdio-search-panel .rdio-list th:first-child,
+rdio-search-panel .rdio-list td:first-child {
+  padding-left: 8px;
+}
+
+rdio-search-panel .rdio-list th:last-child,
+rdio-search-panel .rdio-list td:last-child {
+  padding-right: 8px;
+}
+
+/* Legacy mat-table column flexes: action 48px, date 55px, time 53px
+ * (78px in 12-hour format — kept fixed so both formats fit), system and
+ * talkgroup 20% each, name takes the rest. */
+rdio-search-panel .rdio-list th:nth-child(1),
+rdio-search-panel .rdio-list td:nth-child(1) {
+  width: 48px;
+}
+
+rdio-search-panel .rdio-list th:nth-child(2),
+rdio-search-panel .rdio-list td:nth-child(2) {
+  width: 55px;
+}
+
+rdio-search-panel .rdio-list th:nth-child(3),
+rdio-search-panel .rdio-list td:nth-child(3) {
+  width: 78px;
+}
+
+rdio-search-panel .rdio-list th:nth-child(4),
+rdio-search-panel .rdio-list td:nth-child(4),
+rdio-search-panel .rdio-list th:nth-child(5),
+rdio-search-panel .rdio-list td:nth-child(5) {
+  width: 20%;
+}
+
+rdio-search-panel .rdio-list th {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+rdio-search-panel .rdio-list td > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Legacy row control mat-icon-button (play/stop/download/cached). */
+rdio-search-panel .row-action {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+}
+
+rdio-search-panel .row-action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Legacy .spin mat-icon (cached) while results are pending. */
+rdio-search-panel .spin {
+  animation-duration: 1000ms;
+  animation-iteration-count: infinite;
+  animation-name: spin;
+  animation-timing-function: linear;
+}
+
+/* Indeterminate stand-in for the legacy spinner while a server page of
+ * results is being fetched. */
+rdio-search-panel .progress-bar {
+  display: none;
+  height: 4px;
+  overflow: hidden;
+}
+
+rdio-search-panel .progress-bar.pending {
+  display: block;
+}
+
+rdio-search-panel .progress-bar.pending::after {
+  animation: progress-slide 1s linear infinite;
+  background: linear-gradient(90deg, transparent 0%, var(--rdio-accent) 50%, transparent 100%);
+  content: "";
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+rdio-search-panel .paginator {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding-left: 8px;
+}
+
+rdio-search-panel .rdio-filters form {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(1) {
+  order: 1;
+}
+
+rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(2) {
+  order: 2;
+}
+
+rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(3) {
+  order: 3;
+}
+
+rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(4) {
+  order: 4;
+}
+
+rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(5) {
+  order: 5;
+}
+
+rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(6) {
+  order: 6;
+}
+
+rdio-search-panel .rdio-filters .reset {
+  display: flex;
+  flex: 100%;
+  flex-direction: row;
+  justify-content: flex-end;
+  order: 7;
+}
+
+@media (max-width: 459px) {
+  rdio-search-panel .rdio-filters form rdio-form-field {
+    flex: 100%;
+  }
+}
+
+@media (min-width: 460px) and (max-width: 979px) {
+  rdio-search-panel .rdio-filters form rdio-form-field {
+    flex: calc(50% - 1em);
+  }
+
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(2),
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(4),
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(6) {
+    margin-left: 1em;
+  }
+}
+
+@media (min-width: 980px) {
+  rdio-search-panel .rdio-filters form rdio-form-field {
+    flex: calc(100% / 3 - 2em);
+  }
+
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(2),
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(4),
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(5),
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(6) {
+    margin-left: 1em;
+  }
+
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(3) {
+    order: 4;
+  }
+
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(4) {
+    order: 5;
+  }
+
+  rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(5) {
+    order: 3;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Help / promo snackbar contents (legacy support.component.scss and
+ * native.component.scss; rdio-snackbar itself is styled by theme.css)
+ * ------------------------------------------------------------------------ */
+
+rdio-snackbar .rdio-support a {
+  color: currentColor;
+  text-decoration: none;
+}
+
+rdio-snackbar .rdio-support b {
+  font-weight: 500;
+}
+
+rdio-snackbar .rdio-native {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+}
+
+rdio-snackbar .rdio-native > div {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+}
+
+rdio-snackbar .rdio-native > div > *:first-child {
+  padding-right: 0.5em;
+}
+
+rdio-snackbar .countdown {
+  bottom: 4px;
+  font-size: 12px;
+  position: absolute;
+  right: 4px;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}

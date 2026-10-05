@@ -116,6 +116,8 @@ func main() {
 
 	http.HandleFunc("/api/admin/config", controller.Admin.ConfigHandler)
 
+	http.HandleFunc("/api/admin/config/", controller.Admin.SectionHandler)
+
 	http.HandleFunc("/api/admin/login", controller.Admin.LoginHandler)
 
 	http.HandleFunc("/api/admin/logout", controller.Admin.LogoutHandler)

@@ -1,0 +1,18 @@
+{
+  "name": "rdio-scanner-client-ng",
+  "version": "7.0.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "Rdio Scanner webapp - vanilla JavaScript web components rewrite",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs --production",
+    "watch": "node build.mjs --watch",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
