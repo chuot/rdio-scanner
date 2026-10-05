@@ -1,0 +1,200 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package persistence
+
+import (
+	"context"
+	"database/sql"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/go-sql-driver/mysql"
+)
+
+func TestOpenSqliteEnforcesForeignKeysAndWaitsForABusyDatabase(t *testing.T) {
+	db, err := Open(Settings{
+		Dialect:  DialectSqlite,
+		FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db"),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	defer db.Close()
+
+	var foreignKeys int
+	if err := db.QueryRow(`PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+		t.Fatalf("PRAGMA foreign_keys: %v", err)
+	}
+
+	if foreignKeys != 1 {
+		t.Errorf("foreign_keys = %d, want the legacy server's enforced foreign keys: deleting a system cascades to its talkgroups and calls", foreignKeys)
+	}
+
+	var busyTimeout int
+	if err := db.QueryRow(`PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatalf("PRAGMA busy_timeout: %v", err)
+	}
+
+	if busyTimeout != 10000 {
+		t.Errorf("busy_timeout = %d, want the legacy server's ten second wait for a busy database", busyTimeout)
+	}
+}
+
+// TestOpenSqliteUsesTheLegacyConnectionPool pins the pool the legacy server runs with: at most
+// 25 connections, and all of them kept for reuse.
+//
+// The idle half is worth pinning by behavior rather than by reading the setting back: a pool that
+// kept only the default two idle connections would close twenty-three of the twenty-five the
+// legacy server holds ready, and the way that shows up is connections being closed for being idle.
+func TestOpenSqliteUsesTheLegacyConnectionPool(t *testing.T) {
+	db, err := Open(Settings{
+		Dialect:  DialectSqlite,
+		FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db"),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	defer db.Close()
+
+	if stats := db.Stats(); stats.MaxOpenConnections != 25 {
+		t.Errorf("MaxOpenConnections = %d, want the legacy pool of 25", stats.MaxOpenConnections)
+	}
+
+	const held = 5
+
+	conns := make([]*sql.Conn, 0, held)
+
+	for range held {
+		conn, err := db.Conn(context.Background())
+		if err != nil {
+			t.Fatalf("Conn: %v", err)
+		}
+
+		conns = append(conns, conn)
+	}
+
+	if stats := db.Stats(); stats.InUse != held {
+		t.Fatalf("InUse = %d, want %d connections held out of a pool of 25", stats.InUse, held)
+	}
+
+	for _, conn := range conns {
+		conn.Close()
+	}
+
+	stats := db.Stats()
+
+	if stats.Idle != 5 {
+		t.Errorf("Idle = %d, want every connection kept ready for the next query", stats.Idle)
+	}
+
+	if stats.MaxIdleClosed != 0 {
+		t.Errorf("MaxIdleClosed = %d, want none: a pool smaller than the legacy 25 closes connections for being idle", stats.MaxIdleClosed)
+	}
+}
+
+func TestOpenRejectsAnUnknownDatabaseTypeWithoutOpeningAnything(t *testing.T) {
+	db, err := Open(Settings{Dialect: Dialect("oracle"), FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db")})
+
+	if err == nil {
+		t.Fatal("a database type the server does not know is a failure the caller is told about")
+	}
+
+	if db != nil {
+		t.Error("nothing was opened")
+	}
+
+	if !strings.Contains(err.Error(), "unknown database type oracle") {
+		t.Errorf("error = %v, want the legacy wording that names the type the deployment asked for", err)
+	}
+}
+
+func TestSqliteDataSourceIsTheLegacyOne(t *testing.T) {
+	_, dsn, err := dataSourceName(Settings{Dialect: DialectSqlite, FilePath: "/var/lib/rdio-scanner/rdio-scanner.db"})
+	if err != nil {
+		t.Fatalf("dataSourceName: %v", err)
+	}
+
+	const want = "file:/var/lib/rdio-scanner/rdio-scanner.db?_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000"
+
+	if dsn != want {
+		t.Errorf("dsn = %q, want %q", dsn, want)
+	}
+}
+
+func TestMysqlAndMariadbDataSourcesAreTheLegacyOne(t *testing.T) {
+	driver, dsn, err := dataSourceName(Settings{
+		Dialect:  DialectMariadb,
+		Host:     "db.internal",
+		Port:     3306,
+		Username: "rdio",
+		Password: "secret",
+		Name:     "rdio-scanner",
+	})
+	if err != nil {
+		t.Fatalf("dataSourceName: %v", err)
+	}
+
+	if driver != "mysql" {
+		t.Errorf("driver = %q, want MariaDB served by the mysql driver, as the legacy server does", driver)
+	}
+
+	const want = "rdio:secret@tcp(db.internal:3306)/rdio-scanner?sql_mode=ANSI_QUOTES"
+
+	if dsn != want {
+		t.Errorf("dsn = %q, want %q", dsn, want)
+	}
+
+	parsed, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		t.Fatalf("the data source is not one the mysql driver accepts: %v", err)
+	}
+
+	if parsed.Params["sql_mode"] != "ANSI_QUOTES" {
+		t.Errorf("sql_mode = %q, want ANSI_QUOTES: the schema quotes identifiers the way ANSI requires, and the three backends have to agree about that", parsed.Params["sql_mode"])
+	}
+}
+
+func TestPostgresqlDataSourceIsTheLegacyOne(t *testing.T) {
+	driver, dsn, err := dataSourceName(Settings{
+		Dialect:  DialectPostgresql,
+		Host:     "db.internal",
+		Port:     5432,
+		Username: "rdio",
+		Password: "secret",
+		Name:     "rdio-scanner",
+	})
+	if err != nil {
+		t.Fatalf("dataSourceName: %v", err)
+	}
+
+	if driver != "pgx" {
+		t.Errorf("driver = %q, want the pgx driver the legacy server registers", driver)
+	}
+
+	const want = "postgresql://rdio:secret@db.internal:5432/rdio-scanner"
+
+	if dsn != want {
+		t.Errorf("dsn = %q, want %q", dsn, want)
+	}
+}
