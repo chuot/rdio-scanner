@@ -82,6 +82,17 @@ func (units Units) ByID(id uint64) (Unit, bool) {
 	return Unit{}, false
 }
 
+// ByRef finds a unit by the reference clients identify it by.
+func (units Units) ByRef(ref uint) (Unit, bool) {
+	for _, unit := range units {
+		if unit.UnitRef == ref {
+			return unit, true
+		}
+	}
+
+	return Unit{}, false
+}
+
 // Ordered returns the units sorted by their display order.
 func (units Units) Ordered() Units {
 	out := append(Units{}, units...)
