@@ -174,9 +174,14 @@ func (hub *Hub) BroadcastListenersCount(count int) {
 	hub.ListenerCounts = append(hub.ListenerCounts, count)
 }
 
-// CloseClient records a session that was ended.
+// CloseClient records a session that was ended and drops its state, because a closed
+// session stops counting, stops holding an access, and stops watching.
 func (hub *Hub) CloseClient(clientID string, code int) {
 	hub.ClosedClients = append(hub.ClosedClients, ClosedClient{ClientID: clientID, Code: code})
+
+	delete(hub.remoteAddrs, clientID)
+	delete(hub.accesses, clientID)
+	delete(hub.Livefeeds, clientID)
 }
 
 // GrantAccess attaches an access to a session.
