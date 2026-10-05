@@ -212,7 +212,7 @@ func searchMatches(call domain.Call, search ports.CallSearch) bool {
 	return true
 }
 
-func matchesAnyPair(call domain.Call, pairs []ports.ScopedTalkgroups) bool {
+func matchesAnyPair(call domain.Call, pairs []domain.TalkgroupScope) bool {
 	for _, pair := range pairs {
 		if pair.SystemRef != call.System.SystemRef {
 			continue

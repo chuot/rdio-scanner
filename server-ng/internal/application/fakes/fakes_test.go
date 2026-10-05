@@ -199,7 +199,7 @@ func TestCallsSearchHonoursScopeSystemAndTalkgroup(t *testing.T) {
 		TalkgroupRef:    1514001,
 		Limit:           200,
 		Ascending:       true,
-		GroupTalkgroups: []ports.ScopedTalkgroups{{SystemRef: 5, TalkgroupRefs: []uint{1514000}}},
+		GroupTalkgroups: []domain.TalkgroupScope{{SystemRef: 5, TalkgroupRefs: []uint{1514000}}},
 	})
 	if err != nil {
 		t.Fatalf("SearchCalls: %v", err)

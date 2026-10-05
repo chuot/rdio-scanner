@@ -78,20 +78,14 @@ type CallSearch struct {
 	// GroupTalkgroups and TagTalkgroups are the talkgroups a group label or tag label
 	// stands for, expanded by the query handler into the pairs the history is filtered
 	// by.
-	GroupTalkgroups []ScopedTalkgroups
-	TagTalkgroups   []ScopedTalkgroups
+	GroupTalkgroups []domain.TalkgroupScope
+	TagTalkgroups   []domain.TalkgroupScope
 
 	// Limit is the resolved page size. It is never left unset by the query handler, and
 	// a zero Limit asks for no rows at all, which is what the stored query does with it.
 	Limit     uint
 	Offset    uint
 	Ascending bool
-}
-
-// ScopedTalkgroups is the set of talkgroups on one system a search criterion stands for.
-type ScopedTalkgroups struct {
-	SystemRef     uint
-	TalkgroupRefs []uint
 }
 
 // CallSummary is the read model the call history view needs: enough to list a call and
