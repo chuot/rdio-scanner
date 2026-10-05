@@ -91,22 +91,37 @@ func (call Call) IsValid() error {
 		return errors.New("no timestamp")
 	}
 
-	if !call.hasSystem() {
+	if !call.hasSystemClaim() {
 		return errors.New("no system")
 	}
 
-	if !call.hasTalkgroup() {
+	if !call.hasTalkgroupClaim() {
 		return errors.New("no talkgroup")
 	}
 
 	return nil
 }
 
-func (call Call) hasSystem() bool {
+// HasSystem reports whether a system is attached to the call: one the server already
+// stores, or one auto-populate has just created for it and has not stored yet.
+func (call Call) HasSystem() bool {
+	return call.System.ID > 0 || call.System.SystemRef > 0
+}
+
+// HasTalkgroup reports whether a talkgroup is attached to the call, in the same sense as
+// HasSystem.
+func (call Call) HasTalkgroup() bool {
+	return call.Talkgroup.ID > 0 || call.Talkgroup.TalkgroupRef > 0
+}
+
+// hasSystemClaim reports whether the ingest source named a system in any form, which is
+// not the same as the server having resolved one.
+func (call Call) hasSystemClaim() bool {
 	return call.System.ID > 0 || call.Meta.SystemID > 0 || call.Meta.SystemRef > 0 || call.Meta.SystemLabel != ""
 }
 
-func (call Call) hasTalkgroup() bool {
+// hasTalkgroupClaim reports whether the ingest source named a talkgroup in any form.
+func (call Call) hasTalkgroupClaim() bool {
 	return call.Talkgroup.ID > 0 || call.Meta.TalkgroupID > 0 || call.Meta.TalkgroupRef > 0 || call.Meta.TalkgroupLabel != ""
 }
 

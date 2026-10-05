@@ -125,6 +125,39 @@ func (system System) AddTalkgroup(talkgroup Talkgroup) (System, bool) {
 	return system, true
 }
 
+// WithTalkgroup returns the system with one of its talkgroups updated: the talkgroup
+// already under the same reference is replaced by the given copy, and a talkgroup the
+// system does not have is appended.
+func (system System) WithTalkgroup(talkgroup Talkgroup) System {
+	out := System{
+		ID:           system.ID,
+		Alert:        system.Alert,
+		AutoPopulate: system.AutoPopulate,
+		Blacklists:   system.Blacklists,
+		Delay:        system.Delay,
+		Kind:         system.Kind,
+		Label:        system.Label,
+		LED:          system.LED,
+		Order:        system.Order,
+		Sites:        system.Sites,
+		SystemRef:    system.SystemRef,
+		Talkgroups:   append(Talkgroups{}, system.Talkgroups...),
+		Units:        system.Units,
+	}
+
+	for i, existing := range out.Talkgroups {
+		if existing.TalkgroupRef == talkgroup.TalkgroupRef {
+			out.Talkgroups[i] = talkgroup
+
+			return out
+		}
+	}
+
+	out.Talkgroups = append(out.Talkgroups, talkgroup)
+
+	return out
+}
+
 // MergeUnits adds every unit of another collection that the system does not already
 // know, reporting whether anything was added.
 func (system System) MergeUnits(units Units) (System, bool) {
@@ -140,6 +173,27 @@ func (system System) MergeUnits(units Units) (System, bool) {
 	}
 
 	return system, merged
+}
+
+// Replace returns the catalog with one system updated: the system already stored under
+// the same reference is replaced by the given copy, and a system the catalog does not
+// have is appended. Auto-populate uses this to carry a system it has just created, or a
+// talkgroup or unit it has just added to a stored system, into the catalog that gets
+// saved.
+func (systems Systems) Replace(system System) Systems {
+	out := append(Systems{}, systems...)
+
+	for i, existing := range out {
+		if existing.SystemRef == system.SystemRef {
+			out[i] = system
+
+			return out
+		}
+	}
+
+	out = append(out, system)
+
+	return out
 }
 
 // Systems is the server's system catalog.

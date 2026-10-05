@@ -263,15 +263,91 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 	return systems.Stored, nil
 }
 
-// SaveSystems replaces the stored systems.
+// SaveSystems replaces the stored systems, assigning identifiers to a system and to the
+// talkgroups, sites, and units it carries, which is what the stored tables do to the
+// aggregates auto-populate has just created.
 func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {
 	if systems.Err != nil {
 		return systems.Err
 	}
 
-	systems.Stored = next
+	out := append(domain.Systems{}, next...)
+
+	systemID := uint64(0)
+
+	for _, system := range out {
+		if system.ID > systemID {
+			systemID = system.ID
+		}
+	}
+
+	for i := range out {
+		if out[i].ID == 0 {
+			systemID++
+			out[i].ID = systemID
+		}
+
+		out[i] = assignAggregateIDs(out[i])
+	}
+
+	systems.Stored = out
 
 	return nil
+}
+
+// assignAggregateIDs gives the talkgroups, sites, and units of one system the identifiers
+// their tables would give them, and records which system they belong to.
+func assignAggregateIDs(system domain.System) domain.System {
+	system.Talkgroups = append(domain.Talkgroups{}, system.Talkgroups...)
+	system.Sites = append(domain.Sites{}, system.Sites...)
+	system.Units = append(domain.Units{}, system.Units...)
+
+	talkgroupID := uint64(0)
+	siteID := uint64(0)
+	unitID := uint64(0)
+
+	for _, talkgroup := range system.Talkgroups {
+		if talkgroup.ID > talkgroupID {
+			talkgroupID = talkgroup.ID
+		}
+	}
+
+	for _, site := range system.Sites {
+		if site.ID > siteID {
+			siteID = site.ID
+		}
+	}
+
+	for _, unit := range system.Units {
+		if unit.ID > unitID {
+			unitID = unit.ID
+		}
+	}
+
+	for i := range system.Talkgroups {
+		if system.Talkgroups[i].ID == 0 {
+			talkgroupID++
+			system.Talkgroups[i].ID = talkgroupID
+		}
+	}
+
+	for i := range system.Sites {
+		if system.Sites[i].ID == 0 {
+			siteID++
+			system.Sites[i].ID = siteID
+			system.Sites[i].SystemID = system.ID
+		}
+	}
+
+	for i := range system.Units {
+		if system.Units[i].ID == 0 {
+			unitID++
+			system.Units[i].ID = unitID
+			system.Units[i].SystemID = system.ID
+		}
+	}
+
+	return system
 }
 
 // Groups is an in-memory group repository.
@@ -291,15 +367,39 @@ func (groups *Groups) AllGroups(ctx context.Context) (domain.Groups, error) {
 	return groups.Stored, nil
 }
 
-// SaveGroups replaces the stored groups.
+// SaveGroups replaces the stored groups, assigning identifiers to the ones that have
+// none, which is what the stored table does to a group auto-populate just created.
 func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error {
 	if groups.Err != nil {
 		return groups.Err
 	}
 
-	groups.Stored = next
+	out := append(domain.Groups{}, next...)
+
+	id := maxGroupID(out)
+
+	for i := range out {
+		if out[i].ID == 0 {
+			id++
+			out[i].ID = id
+		}
+	}
+
+	groups.Stored = out
 
 	return nil
+}
+
+func maxGroupID(groups domain.Groups) uint64 {
+	var top uint64
+
+	for _, group := range groups {
+		if group.ID > top {
+			top = group.ID
+		}
+	}
+
+	return top
 }
 
 // Tags is an in-memory tag repository.
@@ -319,13 +419,30 @@ func (tags *Tags) AllTags(ctx context.Context) (domain.Tags, error) {
 	return tags.Stored, nil
 }
 
-// SaveTags replaces the stored tags.
+// SaveTags replaces the stored tags, assigning identifiers to the ones that have none.
 func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 	if tags.Err != nil {
 		return tags.Err
 	}
 
-	tags.Stored = next
+	out := append(domain.Tags{}, next...)
+
+	id := uint64(0)
+
+	for _, tag := range out {
+		if tag.ID > id {
+			id = tag.ID
+		}
+	}
+
+	for i := range out {
+		if out[i].ID == 0 {
+			id++
+			out[i].ID = id
+		}
+	}
+
+	tags.Stored = out
 
 	return nil
 }

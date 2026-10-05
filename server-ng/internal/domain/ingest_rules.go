@@ -88,6 +88,13 @@ func ShouldCreateSystem(options Options, meta IngestMeta) bool {
 	return options.AutoPopulate
 }
 
+// AutoPopulates reports whether auto-populate applies to calls on this system at all:
+// either the server-wide option or the system's own flag. It is the condition the legacy
+// server tests before inventing a talkgroup *or* adding units to a system.
+func AutoPopulates(options Options, system System) bool {
+	return options.AutoPopulate || system.AutoPopulate
+}
+
 // ShouldCreateTalkgroup reports whether auto-populate should invent the talkgroup the
 // call claims. Either the server-wide option or the owning system's own flag enables
 // it, and a talkgroup reference is required.
@@ -96,7 +103,7 @@ func ShouldCreateTalkgroup(options Options, system System, meta IngestMeta) bool
 		return false
 	}
 
-	return options.AutoPopulate || system.AutoPopulate
+	return AutoPopulates(options, system)
 }
 
 // GroupLabels returns the group labels the call claims, or the default group when it
@@ -150,6 +157,13 @@ func (meta IngestMeta) NewTalkgroup(groupIDs []uint64, tagID uint64) Talkgroup {
 // upload repairs only that generated placeholder, never a configured label.
 func ShouldRepairTalkgroupLabels(options Options, system System, meta IngestMeta, talkgroup Talkgroup) bool {
 	if meta.TalkgroupLabel == "" {
+		return false
+	}
+
+	// There is nothing to repair on a talkgroup the server has not attached to the call.
+	// The legacy server guards this by testing its pointer for nil; with value semantics
+	// the equivalent guard is that the talkgroup is there at all.
+	if talkgroup.ID == 0 && talkgroup.TalkgroupRef == 0 {
 		return false
 	}
 
