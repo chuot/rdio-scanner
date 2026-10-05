@@ -154,10 +154,22 @@ type ApikeyRepository interface {
 	SaveApikeys(ctx context.Context, apikeys domain.Apikeys) error
 }
 
-// OptionsRepository stores the server options, including the signing secret.
+// OptionsRepository holds the server options, including the signing secret.
+//
+// It is the configuration in effect, not a database view: `ReadOptions` reports what the server
+// is currently running with, and `WriteOptions` replaces what it runs with and then persists it.
+// See [decision-internal-ports.md](../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
+// §9 for why the difference matters.
 type OptionsRepository interface {
 	ReadOptions(ctx context.Context) (domain.Options, error)
 	WriteOptions(ctx context.Context, options domain.Options) error
+
+	// ReloadOptions re-derives the options from what is stored and makes that what the server
+	// runs with. The legacy server does this in exactly one place — after changing the
+	// administrator password — and it is not a no-op: re-deriving resets every option to its
+	// default and then applies the stored rows, so an option stored under a name the reader does
+	// not look for (Q1) comes back as the default.
+	ReloadOptions(ctx context.Context) (domain.Options, error)
 }
 
 // LogSearchPage is the log view's envelope: the total number of entries the criteria

@@ -43,32 +43,12 @@ type GetConfigQuery struct{}
 // the four-section listener payload, the per-section payloads — belong to the DTO layer (T035),
 // which is where a shape can differ per consumer without the read having to know about it.
 type GetConfigHandler struct {
-	repos configurationRepositories
+	repos ConfigurationRepositories
 }
 
-// NewGetConfigHandler builds the handler from the repositories that own each section.
-func NewGetConfigHandler(
-	accesses ports.AccessRepository,
-	apikeys ports.ApikeyRepository,
-	dirwatches ports.DirwatchRepository,
-	downstreams ports.DownstreamRepository,
-	groups ports.GroupRepository,
-	options ports.OptionsRepository,
-	systems ports.SystemRepository,
-	tags ports.TagRepository,
-) *GetConfigHandler {
-	return &GetConfigHandler{
-		repos: configurationRepositories{
-			accesses:    accesses,
-			apikeys:     apikeys,
-			dirwatches:  dirwatches,
-			downstreams: downstreams,
-			groups:      groups,
-			options:     options,
-			systems:     systems,
-			tags:        tags,
-		},
-	}
+// NewGetConfigHandler builds the handler from the stores that own each section.
+func NewGetConfigHandler(repos ConfigurationRepositories) *GetConfigHandler {
+	return &GetConfigHandler{repos: repos}
 }
 
 // Handle gathers the configuration in effect.
@@ -76,63 +56,63 @@ func (handler *GetConfigHandler) Handle(ctx context.Context, query GetConfigQuer
 	return readConfiguration(ctx, handler.repos)
 }
 
-// configurationRepositories are the stores that own each section of the configuration. It is
-// gathered into one value because both reading the configuration and saving part of it need
-// all of them, and a handler that needs all eight should say so once.
-type configurationRepositories struct {
-	accesses    ports.AccessRepository
-	apikeys     ports.ApikeyRepository
-	dirwatches  ports.DirwatchRepository
-	downstreams ports.DownstreamRepository
-	groups      ports.GroupRepository
-	options     ports.OptionsRepository
-	systems     ports.SystemRepository
-	tags        ports.TagRepository
+// ConfigurationRepositories are the stores that own each section of the configuration. It is
+// exported because reading the configuration, saving part of it, and telling an administrator
+// about a change all need the same set, and the composition root (T042) builds it once.
+type ConfigurationRepositories struct {
+	Accesses    ports.AccessRepository
+	Apikeys     ports.ApikeyRepository
+	Dirwatches  ports.DirwatchRepository
+	Downstreams ports.DownstreamRepository
+	Groups      ports.GroupRepository
+	Options     ports.OptionsRepository
+	Systems     ports.SystemRepository
+	Tags        ports.TagRepository
 }
 
 // readConfiguration gathers the configuration in effect.
 //
 // The order the sections are read in is the order the legacy server reports them in, which is
 // the order the administrator's view has always shown them in.
-func readConfiguration(ctx context.Context, repos configurationRepositories) (domain.Configuration, error) {
+func readConfiguration(ctx context.Context, repos ConfigurationRepositories) (domain.Configuration, error) {
 	var configuration domain.Configuration
 
-	accesses, err := repos.accesses.AllAccesses(ctx)
+	accesses, err := repos.Accesses.AllAccesses(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	apikeys, err := repos.apikeys.AllApikeys(ctx)
+	apikeys, err := repos.Apikeys.AllApikeys(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	dirwatches, err := repos.dirwatches.AllDirwatches(ctx)
+	dirwatches, err := repos.Dirwatches.AllDirwatches(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	downstreams, err := repos.downstreams.AllDownstreams(ctx)
+	downstreams, err := repos.Downstreams.AllDownstreams(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	groups, err := repos.groups.AllGroups(ctx)
+	groups, err := repos.Groups.AllGroups(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	options, err := repos.options.ReadOptions(ctx)
+	options, err := repos.Options.ReadOptions(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	systems, err := repos.systems.AllSystems(ctx)
+	systems, err := repos.Systems.AllSystems(ctx)
 	if err != nil {
 		return configuration, err
 	}
 
-	tags, err := repos.tags.AllTags(ctx)
+	tags, err := repos.Tags.AllTags(ctx)
 	if err != nil {
 		return configuration, err
 	}

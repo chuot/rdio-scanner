@@ -59,7 +59,7 @@ func newConfigFixture() *configFixture {
 	fixture.groups.Stored = domain.Groups{{ID: 1, Label: "Fire"}}
 	fixture.tags.Stored = domain.Tags{{ID: 10, Label: "Dispatch"}}
 
-	ports := ConfigurationPorts{
+	repos := ConfigurationRepositories{
 		Accesses:    fixture.accesses,
 		Apikeys:     fixture.apikeys,
 		Dirwatches:  fixture.dirwatches,
@@ -68,17 +68,18 @@ func newConfigFixture() *configFixture {
 		Options:     fixture.options,
 		Systems:     fixture.systems,
 		Tags:        fixture.tags,
-		Logs:        fixture.logs,
-		Hub:         fixture.hub,
-		Admin:       fixture.admin,
-		Dirwatchers: fixture.watchers,
-		Clock:       fixture.clock,
 	}
 
-	fixture.get = NewGetConfigHandler(
-		fixture.accesses, fixture.apikeys, fixture.dirwatches, fixture.downstreams,
-		fixture.groups, fixture.options, fixture.systems, fixture.tags,
-	)
+	ports := ConfigurationPorts{
+		ConfigurationRepositories: repos,
+		Logs:                      fixture.logs,
+		Hub:                       fixture.hub,
+		Admin:                     fixture.admin,
+		Dirwatchers:               fixture.watchers,
+		Clock:                     fixture.clock,
+	}
+
+	fixture.get = NewGetConfigHandler(repos)
 	fixture.update = NewUpdateConfigurationHandler(ports)
 	fixture.updateSection = NewUpdateConfigurationSectionHandler(ports)
 

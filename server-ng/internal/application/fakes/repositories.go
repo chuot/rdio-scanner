@@ -553,6 +553,12 @@ type Options struct {
 	Stored  domain.Options
 	Err     error
 	SaveErr error
+
+	// Reloaded is what re-deriving the options from the store produces, when a test wants that
+	// to differ from what was last written. The legacy server's re-derivation resets every
+	// option to its default and then applies the stored rows, so an option it stores under one
+	// name and reads under another comes back as the default.
+	Reloaded *domain.Options
 }
 
 var _ ports.OptionsRepository = (*Options)(nil)
@@ -583,6 +589,20 @@ func (options *Options) WriteOptions(ctx context.Context, next domain.Options) e
 	options.Stored = next
 
 	return nil
+}
+
+// ReloadOptions re-derives the options from what the store holds. Without a Reloaded value it
+// reports what was last written, which is what a store that round-trips every key produces.
+func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, error) {
+	if options.Err != nil {
+		return domain.Options{}, options.Err
+	}
+
+	if options.Reloaded != nil {
+		options.Stored = *options.Reloaded
+	}
+
+	return options.Stored, nil
 }
 
 // Logs is an in-memory log repository.

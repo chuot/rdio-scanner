@@ -137,6 +137,61 @@ func (accesses Accesses) ByIdent(ident string) (Access, bool) {
 	return Access{}, false
 }
 
+// UpsertByCode adds an access, or updates the one already configured under the same code.
+//
+// The code is what identifies an access for this purpose, and an update replaces the
+// expiration, the identity, the connection limit, and the scope of every access sharing that
+// code — but not its display order, which the administrator's own ordering keeps. It reports
+// whether the access was new, which the legacy server ignores and the save does not depend on.
+func (accesses Accesses) UpsertByCode(access Access) (Accesses, bool) {
+	out := append(Accesses{}, accesses...)
+
+	added := true
+
+	for i, existing := range out {
+		if existing.Code != access.Code {
+			continue
+		}
+
+		out[i].Expiration = access.Expiration
+		out[i].Ident = access.Ident
+		out[i].Limit = access.Limit
+		out[i].Scope = access.Scope
+
+		added = false
+	}
+
+	if added {
+		out = append(out, access)
+	}
+
+	return out, added
+}
+
+// RemoveAllByIdent removes every access configured under an identity.
+//
+// More than one access may share an identity, and the legacy server removes all of them: an
+// administrator deleting a user deletes that user's accesses, not one row. It reports whether
+// anything went, which matters because a removal that matched nothing is answered as though it
+// worked.
+func (accesses Accesses) RemoveAllByIdent(ident string) (Accesses, bool) {
+	out := Accesses{}
+
+	removed := false
+
+	for _, access := range accesses {
+		if access.Ident == ident {
+			removed = true
+
+			continue
+		}
+
+		out = append(out, access)
+	}
+
+	return out, removed
+}
+
 // Ordered returns the accesses sorted by their display order.
 func (accesses Accesses) Ordered() Accesses {
 	out := append(Accesses{}, accesses...)

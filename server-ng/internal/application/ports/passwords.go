@@ -44,3 +44,13 @@ type PasswordVerifier interface {
 	// to know that the stored form is a hash.
 	Matches(ctx context.Context, storedCredential string, submittedCredential string) bool
 }
+
+// PasswordHasher turns a credential into the form the server keeps for it.
+//
+// It is a port for the same reason PasswordVerifier is: the form the legacy server keeps is a
+// bcrypt hash, and the application layer is not allowed to know that. The use case decides when
+// a credential is worth storing; the adapter decides what storing it looks like.
+type PasswordHasher interface {
+	// Hash returns the form of a credential the server can store and later compare against.
+	Hash(ctx context.Context, credential string) (string, error)
+}

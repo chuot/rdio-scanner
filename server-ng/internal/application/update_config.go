@@ -179,14 +179,7 @@ type UpdateConfigurationSectionCommand struct {
 // value because reading the configuration, saving part of it, and announcing the change all
 // need the same set, and the composition root (T042) builds it once.
 type ConfigurationPorts struct {
-	Accesses    ports.AccessRepository
-	Apikeys     ports.ApikeyRepository
-	Dirwatches  ports.DirwatchRepository
-	Downstreams ports.DownstreamRepository
-	Groups      ports.GroupRepository
-	Options     ports.OptionsRepository
-	Systems     ports.SystemRepository
-	Tags        ports.TagRepository
+	ConfigurationRepositories
 
 	Logs        ports.LogRepository
 	Hub         ports.Hub
@@ -199,7 +192,7 @@ type ConfigurationPorts struct {
 // section, the things that have to be told when a section changes, and the bracket the save
 // performs around the directory watchers.
 type configurationSaver struct {
-	repos       configurationRepositories
+	repos       ConfigurationRepositories
 	logs        ports.LogRepository
 	hub         ports.Hub
 	admin       ports.AdministratorSessions
@@ -209,16 +202,7 @@ type configurationSaver struct {
 
 func newConfigurationSaver(configuration ConfigurationPorts) configurationSaver {
 	return configurationSaver{
-		repos: configurationRepositories{
-			accesses:    configuration.Accesses,
-			apikeys:     configuration.Apikeys,
-			dirwatches:  configuration.Dirwatches,
-			downstreams: configuration.Downstreams,
-			groups:      configuration.Groups,
-			options:     configuration.Options,
-			systems:     configuration.Systems,
-			tags:        configuration.Tags,
-		},
+		repos:       configuration.ConfigurationRepositories,
 		logs:        configuration.Logs,
 		hub:         configuration.Hub,
 		admin:       configuration.Admin,
@@ -237,21 +221,21 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 
 	switch section {
 	case AccessSection:
-		return saver.repos.accesses.SaveAccesses(ctx, *changes.Access)
+		return saver.repos.Accesses.SaveAccesses(ctx, *changes.Access)
 	case ApikeysSection:
-		return saver.repos.apikeys.SaveApikeys(ctx, *changes.Apikeys)
+		return saver.repos.Apikeys.SaveApikeys(ctx, *changes.Apikeys)
 	case DirwatchSection:
-		return saver.repos.dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)
+		return saver.repos.Dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)
 	case DownstreamsSection:
-		return saver.repos.downstreams.SaveDownstreams(ctx, *changes.Downstreams)
+		return saver.repos.Downstreams.SaveDownstreams(ctx, *changes.Downstreams)
 	case GroupsSection:
-		return saver.repos.groups.SaveGroups(ctx, *changes.Groups)
+		return saver.repos.Groups.SaveGroups(ctx, *changes.Groups)
 	case OptionsSection:
-		return saver.repos.options.WriteOptions(ctx, *changes.Options)
+		return saver.repos.Options.WriteOptions(ctx, *changes.Options)
 	case SystemsSection:
-		return saver.repos.systems.SaveSystems(ctx, *changes.Systems)
+		return saver.repos.Systems.SaveSystems(ctx, *changes.Systems)
 	case TagsSection:
-		return saver.repos.tags.SaveTags(ctx, *changes.Tags)
+		return saver.repos.Tags.SaveTags(ctx, *changes.Tags)
 	}
 
 	return fmt.Errorf("unknown configuration section %s", section)
@@ -298,15 +282,7 @@ func (saver configurationSaver) reportFailure(ctx context.Context, where string,
 }
 
 func (saver configurationSaver) writeLog(ctx context.Context, level, message string) {
-	if err := saver.logs.AppendLog(ctx, domain.LogEntry{
-		DateTime: saver.clock.Now(),
-		Level:    level,
-		Message:  message,
-	}); err != nil {
-		// A log entry that cannot be written never changes a decision that has already been
-		// taken.
-		return
-	}
+	appendServerLog(ctx, saver.logs, saver.clock, level, message)
 }
 
 // UpdateConfigurationHandler saves the whole configuration.
@@ -383,7 +359,7 @@ func (handler *UpdateConfigurationHandler) watchesToStart(ctx context.Context, c
 		return submitted
 	}
 
-	watches, err := handler.saver.repos.dirwatches.AllDirwatches(ctx)
+	watches, err := handler.saver.repos.Dirwatches.AllDirwatches(ctx)
 	if err != nil {
 		handler.saver.reportFailure(ctx, "confighandler", err)
 
@@ -453,7 +429,7 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 // it did not, for the same reason a whole-configuration save does.
 func (handler *UpdateConfigurationSectionHandler) watchesToRestart(ctx context.Context, cmd UpdateConfigurationSectionCommand, saved bool) domain.Dirwatches {
 	if cmd.Section != DirwatchSection || saved {
-		watches, err := handler.saver.repos.dirwatches.AllDirwatches(ctx)
+		watches, err := handler.saver.repos.Dirwatches.AllDirwatches(ctx)
 		if err != nil {
 			handler.saver.reportFailure(ctx, "sectionhandler", err)
 

@@ -252,3 +252,92 @@ func TestMaxAccessAuthAttemptsIsTheLegacyLimit(t *testing.T) {
 		t.Errorf("MaxAccessAuthAttempts = %d, want the legacy limit of 5", MaxAccessAuthAttempts)
 	}
 }
+
+func TestAccessesUpsertByCodeAddsAnUnseenAccess(t *testing.T) {
+	accesses := Accesses{{ID: 1, Code: "dispatch-code", Ident: "dispatch"}}
+
+	next, added := accesses.UpsertByCode(Access{Code: "harbour-code", Ident: "harbour"})
+
+	if !added {
+		t.Error("an access under a code that is not on the list is a new access")
+	}
+
+	if len(next) != 2 {
+		t.Errorf("accesses = %v, want the new access appended", next)
+	}
+
+	if len(accesses) != 1 {
+		t.Errorf("original = %v, want the original list left alone", accesses)
+	}
+}
+
+func TestAccessesUpsertByCodeUpdatesEverythingButTheOrder(t *testing.T) {
+	accesses := Accesses{{ID: 1, Code: "dispatch-code", Ident: "dispatch", Limit: 1, Order: 5}}
+
+	next, added := accesses.UpsertByCode(Access{
+		Code:       "dispatch-code",
+		Ident:      "dispatch-renamed",
+		Expiration: 1_800_000_000,
+		Limit:      3,
+		Order:      9,
+		Scope:      AccessScope{Present: true, Wildcard: true},
+	})
+
+	if added {
+		t.Error("an access under a code already on the list is updated, not added")
+	}
+
+	if len(next) != 1 {
+		t.Fatalf("accesses = %v, want one access", next)
+	}
+
+	updated := next[0]
+
+	if updated.Ident != "dispatch-renamed" || updated.Limit != 3 || updated.Expiration != 1_800_000_000 {
+		t.Errorf("updated = %+v, want the identity, limit, and expiry replaced", updated)
+	}
+
+	if !updated.Scope.Present || !updated.Scope.Wildcard {
+		t.Errorf("updated scope = %+v, want the scope replaced", updated.Scope)
+	}
+
+	if updated.Order != 5 {
+		t.Errorf("order = %d, want the order the access already had kept: the legacy update does not touch it", updated.Order)
+	}
+
+	if updated.ID != 1 {
+		t.Errorf("id = %d, want the stored access keep its own identifier", updated.ID)
+	}
+}
+
+func TestAccessesRemoveAllByIdentRemovesEveryAccessUnderTheIdentity(t *testing.T) {
+	accesses := Accesses{
+		{ID: 1, Code: "a", Ident: "dispatch"},
+		{ID: 2, Code: "b", Ident: "dispatch"},
+		{ID: 3, Code: "c", Ident: "harbour"},
+	}
+
+	next, removed := accesses.RemoveAllByIdent("dispatch")
+
+	if !removed {
+		t.Error("an identity on the list is removed")
+	}
+
+	if len(next) != 1 || next[0].Ident != "harbour" {
+		t.Errorf("accesses = %v, want every access carrying the identity gone", next)
+	}
+}
+
+func TestAccessesRemoveAllByIdentReportsAnUnmatchedIdentity(t *testing.T) {
+	accesses := Accesses{{ID: 1, Code: "a", Ident: "dispatch"}}
+
+	next, removed := accesses.RemoveAllByIdent("nobody")
+
+	if removed {
+		t.Error("an identity that is not on the list removed nothing")
+	}
+
+	if len(next) != 1 {
+		t.Errorf("accesses = %v, want the list left as it was", next)
+	}
+}

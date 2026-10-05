@@ -64,3 +64,34 @@ func (verifier *PasswordVerifier) Matches(ctx context.Context, storedCredential 
 func (verifier *PasswordVerifier) AskedFor() int {
 	return len(verifier.Asked)
 }
+
+// PasswordHasher is the storing side of the credential check. It records each credential it was
+// asked to turn into a stored form and returns it unchanged, which is what lets the
+// PasswordVerifier fake above compare two credentials by equality: in this in-memory world the
+// stored form of a credential is the credential itself.
+type PasswordHasher struct {
+	// Hashed records each credential the handler asked to store, in order.
+	Hashed []string
+
+	// Err makes the storing itself fail, which is how a test exercises a password change the
+	// server could not complete.
+	Err error
+}
+
+var _ ports.PasswordHasher = (*PasswordHasher)(nil)
+
+// NewPasswordHasher returns a hasher that has been asked for nothing.
+func NewPasswordHasher() *PasswordHasher {
+	return &PasswordHasher{}
+}
+
+// Hash records the credential and returns it as its own stored form.
+func (hasher *PasswordHasher) Hash(ctx context.Context, credential string) (string, error) {
+	hasher.Hashed = append(hasher.Hashed, credential)
+
+	if hasher.Err != nil {
+		return "", hasher.Err
+	}
+
+	return credential, nil
+}
