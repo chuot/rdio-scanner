@@ -391,11 +391,11 @@ func TestHubDeliversOnlyToSessionsThatGrantedAndAskedForTheCall(t *testing.T) {
 	}
 }
 
-func TestHubCountsSessionsPerAccessIdent(t *testing.T) {
+func TestHubCountsSessionsPerAccess(t *testing.T) {
 	hub := NewHub()
 
-	shared := domain.Access{}.ApplyMap(map[string]any{"code": "a", "ident": "dispatch", "systems": "*"})
-	other := domain.Access{}.ApplyMap(map[string]any{"code": "b", "ident": "recorder", "systems": "*"})
+	shared := domain.Access{ID: 1, Code: "a", Ident: "dispatch", Scope: domain.AccessScope{Present: true, Wildcard: true}}
+	other := domain.Access{ID: 2, Code: "b", Ident: "dispatch", Scope: domain.AccessScope{Present: true, Wildcard: true}}
 
 	hub.Open("one", "10.0.0.1")
 	hub.Open("two", "10.0.0.2")
@@ -405,8 +405,12 @@ func TestHubCountsSessionsPerAccessIdent(t *testing.T) {
 	hub.GrantAccess("two", shared)
 	hub.GrantAccess("three", other)
 
-	if got := hub.AccessSessionCount("dispatch"); got != 2 {
-		t.Errorf("AccessSessionCount(dispatch) = %d, want the two sessions holding that identity", got)
+	if got := hub.AccessSessionCount(1); got != 2 {
+		t.Errorf("AccessSessionCount(1) = %d, want the two sessions holding that access", got)
+	}
+
+	if got := hub.AccessSessionCount(2); got != 1 {
+		t.Errorf("AccessSessionCount(2) = %d, want one session: two accesses sharing a label are not one access", got)
 	}
 
 	if got := hub.ListenerCount(); got != 3 {
@@ -415,6 +419,29 @@ func TestHubCountsSessionsPerAccessIdent(t *testing.T) {
 
 	if got := hub.RemoteAddrOf("two"); got != "10.0.0.2" {
 		t.Errorf("RemoteAddrOf = %q, want the address the session connected from", got)
+	}
+}
+
+func TestHubCountsAccessAttemptsPerSession(t *testing.T) {
+	hub := NewHub()
+
+	hub.Open("one", "10.0.0.1")
+	hub.Open("two", "10.0.0.2")
+
+	for want := uint(1); want <= 3; want++ {
+		if got := hub.RecordAccessAttempt("one"); got != want {
+			t.Errorf("RecordAccessAttempt = %d, want attempt %d", got, want)
+		}
+	}
+
+	if got := hub.RecordAccessAttempt("two"); got != 1 {
+		t.Errorf("RecordAccessAttempt for another session = %d, want 1: attempts are counted per session", got)
+	}
+
+	hub.CloseClient("one", 1000)
+
+	if got := hub.RecordAccessAttempt("one"); got != 1 {
+		t.Errorf("RecordAccessAttempt after the session closed = %d, want the count to start over for a new session", got)
 	}
 }
 

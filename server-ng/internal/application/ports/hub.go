@@ -85,8 +85,20 @@ type Hub interface {
 	// AccessOf returns the access a listener session holds, if it holds one.
 	AccessOf(clientID string) (domain.Access, bool)
 
-	// AccessSessionCount reports how many sessions are open under one access identity.
-	AccessSessionCount(ident string) int
+	// RecordAccessAttempt counts one access-code attempt for a listener session and
+	// reports which attempt number that was, which is how the server knows when a session
+	// has used up its tries.
+	RecordAccessAttempt(clientID string) uint
+
+	// ResetAccessAttempts clears a session's attempt counter, which happens only when an
+	// access code is accepted: a session that is refused for a bad code, for arriving too
+	// late, for an expired access, or for its connection limit keeps spending tries.
+	ResetAccessAttempts(clientID string)
+
+	// AccessSessionCount reports how many sessions are open under one access, counted by
+	// the access itself rather than by its label: the legacy server counts the sessions
+	// holding the same access, and two accesses may share a label.
+	AccessSessionCount(accessID uint64) uint
 
 	// ListenerCount reports how many listener sessions are open.
 	ListenerCount() int

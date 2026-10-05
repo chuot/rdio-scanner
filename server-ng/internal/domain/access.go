@@ -42,6 +42,13 @@ type Access struct {
 	Scope      AccessScope
 }
 
+// NewAccess returns the anonymous access a listener session holds before it has
+// authenticated: no code, no identity, and no scope named. It is what the legacy server
+// installs on every connection, and the server's PIN gate recognises a session by it.
+func NewAccess() Access {
+	return Access{}
+}
+
 // ApplyMap reads an access out of an administrator configuration payload. The scope is
 // assigned unconditionally: a payload that omits it clears the scope, which is what the
 // legacy server does.

@@ -70,6 +70,9 @@ type Hub struct {
 	// accesses records the access each session holds.
 	accesses map[string]domain.Access
 
+	// attempts records how many access-code attempts each session has made.
+	attempts map[string]uint
+
 	// remoteAddrs records where each session connected from.
 	remoteAddrs map[string]string
 }
@@ -91,6 +94,7 @@ func NewHub() *Hub {
 		LivefeedAcks:     map[string][]bool{},
 		Versions:         map[string][]string{},
 		accesses:         map[string]domain.Access{},
+		attempts:         map[string]uint{},
 		remoteAddrs:      map[string]string{},
 	}
 }
@@ -181,12 +185,31 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 
 	delete(hub.remoteAddrs, clientID)
 	delete(hub.accesses, clientID)
+	delete(hub.attempts, clientID)
 	delete(hub.Livefeeds, clientID)
 }
 
 // GrantAccess attaches an access to a session.
 func (hub *Hub) GrantAccess(clientID string, access domain.Access) {
 	hub.accesses[clientID] = access
+}
+
+// RecordAccessAttempt counts one access-code attempt for a session and reports which
+// attempt number that was.
+func (hub *Hub) RecordAccessAttempt(clientID string) uint {
+	hub.attempts[clientID]++
+
+	return hub.attempts[clientID]
+}
+
+// ResetAccessAttempts clears a session's attempt counter.
+func (hub *Hub) ResetAccessAttempts(clientID string) {
+	delete(hub.attempts, clientID)
+}
+
+// AttemptsOf reports how many attempts a session has made.
+func (hub *Hub) AttemptsOf(clientID string) uint {
+	return hub.attempts[clientID]
 }
 
 // AccessOf returns the access a session holds.
@@ -196,12 +219,12 @@ func (hub *Hub) AccessOf(clientID string) (domain.Access, bool) {
 	return access, ok
 }
 
-// AccessSessionCount counts the sessions holding an access of one identity.
-func (hub *Hub) AccessSessionCount(ident string) int {
-	count := 0
+// AccessSessionCount counts the sessions holding one access, counted by the access itself.
+func (hub *Hub) AccessSessionCount(accessID uint64) uint {
+	count := uint(0)
 
 	for _, access := range hub.accesses {
-		if access.Ident == ident {
+		if access.ID == accessID {
 			count++
 		}
 	}
