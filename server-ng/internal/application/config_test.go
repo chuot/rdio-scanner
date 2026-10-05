@@ -1,0 +1,640 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package application
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"rdio-scanner/server-ng/internal/application/fakes"
+	"rdio-scanner/server-ng/internal/domain"
+)
+
+var configTime = time.Date(2026, 5, 9, 11, 45, 0, 0, time.UTC)
+
+func newConfigFixture() *configFixture {
+	fixture := &configFixture{
+		accesses:    &fakes.Accesses{},
+		apikeys:     &fakes.Apikeys{},
+		dirwatches:  &fakes.Dirwatches{},
+		downstreams: &fakes.Downstreams{},
+		groups:      &fakes.Groups{},
+		options:     &fakes.Options{Stored: domain.DefaultOptions()},
+		systems:     &fakes.Systems{},
+		tags:        &fakes.Tags{},
+		logs:        &fakes.Logs{},
+		hub:         fakes.NewHub(),
+		admin:       fakes.NewAdministratorSessions(),
+		watchers:    fakes.NewDirwatchers(),
+		clock:       fakes.NewClock(configTime),
+	}
+
+	fixture.dirwatches.Stored = domain.Dirwatches{
+		domain.Dirwatch{ID: 1, Directory: "/spool/live"},
+		domain.Dirwatch{ID: 2, Directory: "/spool/finished"},
+	}
+
+	fixture.systems.Stored = domain.Systems{{ID: 1, SystemRef: 4, Label: "Grand Metro"}}
+	fixture.groups.Stored = domain.Groups{{ID: 1, Label: "Fire"}}
+	fixture.tags.Stored = domain.Tags{{ID: 10, Label: "Dispatch"}}
+
+	ports := ConfigurationPorts{
+		Accesses:    fixture.accesses,
+		Apikeys:     fixture.apikeys,
+		Dirwatches:  fixture.dirwatches,
+		Downstreams: fixture.downstreams,
+		Groups:      fixture.groups,
+		Options:     fixture.options,
+		Systems:     fixture.systems,
+		Tags:        fixture.tags,
+		Logs:        fixture.logs,
+		Hub:         fixture.hub,
+		Admin:       fixture.admin,
+		Dirwatchers: fixture.watchers,
+		Clock:       fixture.clock,
+	}
+
+	fixture.get = NewGetConfigHandler(
+		fixture.accesses, fixture.apikeys, fixture.dirwatches, fixture.downstreams,
+		fixture.groups, fixture.options, fixture.systems, fixture.tags,
+	)
+	fixture.update = NewUpdateConfigurationHandler(ports)
+	fixture.updateSection = NewUpdateConfigurationSectionHandler(ports)
+
+	return fixture
+}
+
+type configFixture struct {
+	accesses    *fakes.Accesses
+	apikeys     *fakes.Apikeys
+	dirwatches  *fakes.Dirwatches
+	downstreams *fakes.Downstreams
+	groups      *fakes.Groups
+	options     *fakes.Options
+	systems     *fakes.Systems
+	tags        *fakes.Tags
+	logs        *fakes.Logs
+	hub         *fakes.Hub
+	admin       *fakes.AdministratorSessions
+	watchers    *fakes.Dirwatchers
+	clock       *fakes.Clock
+
+	get           *GetConfigHandler
+	update        *UpdateConfigurationHandler
+	updateSection *UpdateConfigurationSectionHandler
+}
+
+func (fixture *configFixture) save(changes ConfigurationChanges) (UpdateConfigurationResult, error) {
+	return fixture.update.Handle(context.Background(), UpdateConfigurationCommand{Changes: changes})
+}
+
+func (fixture *configFixture) saveSection(section ConfigSection, changes ConfigurationChanges) (UpdateConfigurationResult, error) {
+	return fixture.updateSection.Handle(context.Background(), UpdateConfigurationSectionCommand{Section: section, Changes: changes})
+}
+
+func (fixture *configFixture) read() (domain.Configuration, error) {
+	return fixture.get.Handle(context.Background(), GetConfigQuery{})
+}
+
+// loggedContaining reports whether the server wrote a log line containing the fragment, which
+// is how these tests pin the legacy wording byte for byte.
+func (fixture *configFixture) loggedContaining(fragment string) bool {
+	for _, entry := range fixture.logs.Stored {
+		if strings.Contains(entry.Message, fragment) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func TestGetConfigQueryReturnsEverySection(t *testing.T) {
+	fixture := newConfigFixture()
+
+	configuration, err := fixture.read()
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(configuration.Systems) != 1 || configuration.Systems[0].SystemRef != 4 {
+		t.Errorf("systems = %v, want the stored systems", configuration.Systems)
+	}
+
+	if len(configuration.Groups) != 1 || configuration.Groups[0].Label != "Fire" {
+		t.Errorf("groups = %v, want the stored groups", configuration.Groups)
+	}
+
+	if len(configuration.Tags) != 1 || configuration.Tags[0].Label != "Dispatch" {
+		t.Errorf("tags = %v, want the stored tags", configuration.Tags)
+	}
+
+	if len(configuration.Dirwatches) != 2 {
+		t.Errorf("dirwatches = %v, want the two stored watched directories", configuration.Dirwatches)
+	}
+
+	if configuration.Options.DuplicateDetectionTimeFrame == 0 {
+		t.Errorf("options = %+v, want the stored options", configuration.Options)
+	}
+}
+
+func TestGetConfigQueryReportsAFailingStore(t *testing.T) {
+	fixture := newConfigFixture()
+	fixture.tags.Err = errors.New("no such table: tags")
+
+	_, err := fixture.read()
+
+	if err == nil {
+		t.Error("a store that cannot be read must reach the caller rather than report a partial configuration")
+	}
+}
+
+func TestIsConfigSectionKnowsTheEightSections(t *testing.T) {
+	for _, name := range []string{
+		"access", "apikeys", "dirwatch", "downstreams", "groups", "options", "systems", "tags",
+	} {
+		if !IsConfigSection(name) {
+			t.Errorf("IsConfigSection(%q) = false, want true", name)
+		}
+	}
+
+	// "dirwatch" is the section name; the plural is what the stored collection is called, and
+	// an administrator asking for "dirwatches" is asking for something the server has no such
+	// section for.
+	for _, name := range []string{"", "dirwatches", "delayed", "calls", "Access"} {
+		if IsConfigSection(name) {
+			t.Errorf("IsConfigSection(%q) = true, want false", name)
+		}
+	}
+}
+
+func TestUpdateConfigurationSavesEveryNamedSection(t *testing.T) {
+	fixture := newConfigFixture()
+
+	accesses := domain.Accesses{{ID: 1, Code: "dispatch-code", Ident: "dispatch"}}
+	apikeys := domain.Apikeys{{ID: 2, Key: "recorder-key"}}
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+	tags := domain.Tags{{ID: 11, Label: "Interop"}}
+	systems := domain.Systems{{ID: 4, SystemRef: 5, Label: "Harbour"}}
+	downstreams := domain.Downstreams{{ID: 5, URL: "https://other.example/api/call-upload"}}
+	dirwatches := domain.Dirwatches{{ID: 6, Directory: "/spool/other"}}
+	options := domain.DefaultOptions()
+	options.PruneDays = 14
+
+	result, err := fixture.save(ConfigurationChanges{
+		Access:      &accesses,
+		Apikeys:     &apikeys,
+		Dirwatches:  &dirwatches,
+		Downstreams: &downstreams,
+		Groups:      &groups,
+		Options:     &options,
+		Systems:     &systems,
+		Tags:        &tags,
+	})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != ConfigurationSaved {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, ConfigurationSaved)
+	}
+
+	want := []ConfigSection{
+		AccessSection, ApikeysSection, DirwatchSection, DownstreamsSection,
+		GroupsSection, OptionsSection, SystemsSection, TagsSection,
+	}
+
+	if len(result.Saved) != len(want) {
+		t.Fatalf("saved = %v, want all eight sections in save order", result.Saved)
+	}
+
+	for i, section := range want {
+		if result.Saved[i] != section {
+			t.Errorf("saved = %v, want the sections saved in the order %v", result.Saved, want)
+			break
+		}
+	}
+
+	if len(fixture.accesses.Stored) != 1 || len(fixture.apikeys.Stored) != 1 ||
+		len(fixture.groups.Stored) != 1 || len(fixture.tags.Stored) != 1 ||
+		len(fixture.systems.Stored) != 1 || len(fixture.downstreams.Stored) != 1 ||
+		len(fixture.dirwatches.Stored) != 1 || fixture.options.Stored.PruneDays != 14 {
+		t.Errorf("the stores were not all replaced: accesses=%v apikeys=%v groups=%v tags=%v systems=%v downstreams=%v dirwatches=%v pruneDays=%d",
+			fixture.accesses.Stored, fixture.apikeys.Stored, fixture.groups.Stored, fixture.tags.Stored,
+			fixture.systems.Stored, fixture.downstreams.Stored, fixture.dirwatches.Stored, fixture.options.Stored.PruneDays)
+	}
+}
+
+func TestUpdateConfigurationLeavesAnUnnamedSectionAlone(t *testing.T) {
+	fixture := newConfigFixture()
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	result, err := fixture.save(ConfigurationChanges{Groups: &groups})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != GroupsSection {
+		t.Fatalf("saved = %v, want only the groups section", result.Saved)
+	}
+
+	if len(fixture.systems.Stored) != 1 || fixture.systems.Stored[0].SystemRef != 4 {
+		t.Errorf("systems = %v, want the systems left exactly as they were", fixture.systems.Stored)
+	}
+
+	if len(fixture.tags.Stored) != 1 {
+		t.Errorf("tags = %v, want the tags left exactly as they were", fixture.tags.Stored)
+	}
+}
+
+// TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty pins the difference
+// between saying "no groups" and saying nothing about groups.
+func TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty(t *testing.T) {
+	fixture := newConfigFixture()
+
+	empty := domain.Groups{}
+
+	result, err := fixture.save(ConfigurationChanges{Groups: &empty})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(result.Saved) != 1 {
+		t.Fatalf("saved = %v, want the groups section reported as saved", result.Saved)
+	}
+
+	if len(fixture.groups.Stored) != 0 {
+		t.Errorf("groups = %v, want the section replaced with nothing", fixture.groups.Stored)
+	}
+
+	if len(fixture.tags.Stored) != 1 {
+		t.Errorf("tags = %v, want a section that was not named left alone", fixture.tags.Stored)
+	}
+}
+
+func TestUpdateConfigurationKeepsGoingWhenASectionCannotBeStored(t *testing.T) {
+	fixture := newConfigFixture()
+	fixture.apikeys.SaveErr = errors.New("constraint failed")
+
+	apikeys := domain.Apikeys{{ID: 2, Key: "recorder-key"}}
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	result, err := fixture.save(ConfigurationChanges{Apikeys: &apikeys, Groups: &groups})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != ConfigurationSaved {
+		t.Errorf("outcome = %q, want %q: a whole-configuration save is not one transaction", result.Outcome, ConfigurationSaved)
+	}
+
+	if len(result.Failed) != 1 || result.Failed[0] != ApikeysSection {
+		t.Errorf("failed = %v, want the apikeys section reported as not stored", result.Failed)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != GroupsSection {
+		t.Errorf("saved = %v, want the later section saved despite the earlier one failing", result.Saved)
+	}
+
+	if len(fixture.groups.Stored) != 1 || fixture.groups.Stored[0].Label != "EMS" {
+		t.Errorf("groups = %v, want the sections after a failure still saved", fixture.groups.Stored)
+	}
+
+	if !fixture.loggedContaining("admin.confighandler.put: constraint failed") {
+		t.Errorf("logs = %v, want the legacy failure wording naming the section that failed", fixture.logs.Stored)
+	}
+}
+
+func TestUpdateConfigurationAnnouncesTheNewConfigurationToListenersAndAdministrators(t *testing.T) {
+	fixture := newConfigFixture()
+
+	systems := domain.Systems{{ID: 4, SystemRef: 5, Label: "Harbour"}}
+
+	if _, err := fixture.save(ConfigurationChanges{Systems: &systems}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 1 {
+		t.Fatalf("listener broadcasts = %d, want the new configuration sent to the listeners once", len(fixture.hub.BroadcastConfigs))
+	}
+
+	if len(fixture.hub.BroadcastConfigs[0].Systems) != 1 || fixture.hub.BroadcastConfigs[0].Systems[0].SystemRef != 5 {
+		t.Error("the listeners must be broadcast the configuration that resulted from the save, not the one before it")
+	}
+
+	if fixture.admin.AnnouncedCount() != 1 {
+		t.Fatalf("administrator announcements = %d, want the open administrator connections told once", fixture.admin.AnnouncedCount())
+	}
+
+	announced := fixture.admin.Announced[0]
+
+	if len(announced.Dirwatches) != 2 || len(announced.Tags) != 1 {
+		t.Errorf("announced = %+v, want an administrator told the whole configuration, not the four sections a listener sees", announced)
+	}
+}
+
+func TestUpdateConfigurationRecordsThatTheConfigurationChanged(t *testing.T) {
+	fixture := newConfigFixture()
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	if _, err := fixture.save(ConfigurationChanges{Groups: &groups}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if !fixture.loggedContaining("configuration changed") {
+		t.Errorf("logs = %v, want the legacy notice that the configuration changed", fixture.logs.Stored)
+	}
+}
+
+func TestUpdateConfigurationStopsAndRestartsTheDirectoryWatchersAroundTheSave(t *testing.T) {
+	fixture := newConfigFixture()
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	if _, err := fixture.save(ConfigurationChanges{Groups: &groups}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if fixture.watchers.Stops != 1 {
+		t.Errorf("watchers stopped %d times, want the save to stop them once before it changes anything", fixture.watchers.Stops)
+	}
+
+	if len(fixture.watchers.Starts) != 1 {
+		t.Fatalf("watchers started %d times, want the save to start them once after it changes everything", len(fixture.watchers.Starts))
+	}
+}
+
+// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins preserved
+// quirk Q12: stopping the watchers empties what the server watches from, and only naming the
+// dirwatch section fills it again.
+func TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing(t *testing.T) {
+	fixture := newConfigFixture()
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	if _, err := fixture.save(ConfigurationChanges{Groups: &groups}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if !fixture.watchers.WatchingNothing() {
+		t.Errorf("watching = %v, want nothing: a whole-configuration save that says nothing about dirwatch leaves the server watching nothing until it restarts", fixture.watchers.Watching())
+	}
+
+	if len(fixture.dirwatches.Stored) != 2 {
+		t.Errorf("stored dirwatches = %v, want the stored watched directories left untouched", fixture.dirwatches.Stored)
+	}
+}
+
+func TestUpdateConfigurationWatchesTheStoredDirectoriesWhenItSavesTheDirwatchSection(t *testing.T) {
+	fixture := newConfigFixture()
+
+	submitted := domain.Dirwatches{{ID: 0, Directory: "/spool/new"}}
+
+	if _, err := fixture.save(ConfigurationChanges{Dirwatches: &submitted}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	watching := fixture.watchers.Watching()
+
+	if len(watching) != 1 || watching[0].Directory != "/spool/new" {
+		t.Errorf("watching = %v, want what the store has after the save, because the legacy server reads back what it saved", watching)
+	}
+}
+
+// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins preserved quirk
+// Q13: a dirwatch save that could not be persisted leaves the submitted directories being
+// watched, because the legacy server restarts its watchers from what it was given and only
+// reads the stored list back when the save succeeded.
+func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *testing.T) {
+	fixture := newConfigFixture()
+	fixture.dirwatches.SaveErr = errors.New("disk full")
+
+	submitted := domain.Dirwatches{{ID: 0, Directory: "/spool/submitted"}}
+
+	result, err := fixture.save(ConfigurationChanges{Dirwatches: &submitted})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(result.Failed) != 1 || result.Failed[0] != DirwatchSection {
+		t.Fatalf("failed = %v, want the dirwatch section reported as not stored", result.Failed)
+	}
+
+	watching := fixture.watchers.Watching()
+
+	if len(watching) != 1 || watching[0].Directory != "/spool/submitted" {
+		t.Errorf("watching = %v, want the submitted directories: the legacy server keeps watching what it was given when it could not store it", watching)
+	}
+}
+
+// TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching pins the legacy
+// behavior of a whole-configuration save that names nothing it recognises: the watchers are
+// stopped and nothing is restarted, the configuration is still announced, and the change is
+// still recorded.
+func TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching(t *testing.T) {
+	fixture := newConfigFixture()
+
+	result, err := fixture.save(ConfigurationChanges{})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if len(result.Saved) != 0 || len(result.Failed) != 0 {
+		t.Errorf("saved = %v failed = %v, want a save that names nothing to report nothing either way", result.Saved, result.Failed)
+	}
+
+	if fixture.watchers.Stops != 1 || len(fixture.watchers.Starts) != 1 {
+		t.Errorf("watchers stopped %d started %d, want the bracket performed anyway", fixture.watchers.Stops, len(fixture.watchers.Starts))
+	}
+
+	if !fixture.watchers.WatchingNothing() {
+		t.Error("the watchers must be left watching nothing, which is what the legacy server leaves them watching")
+	}
+
+	if fixture.admin.AnnouncedCount() != 1 {
+		t.Error("the configuration is still announced, as the legacy server announces it")
+	}
+
+	if !fixture.loggedContaining("configuration changed") {
+		t.Errorf("logs = %v, want the legacy notice written even though nothing changed", fixture.logs.Stored)
+	}
+}
+
+func TestUpdateConfigurationSectionSavesOnlyThatSection(t *testing.T) {
+	fixture := newConfigFixture()
+
+	systems := domain.Systems{{ID: 4, SystemRef: 5, Label: "Harbour"}}
+
+	result, err := fixture.saveSection(SystemsSection, ConfigurationChanges{Systems: &systems})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != ConfigurationSaved {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, ConfigurationSaved)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != SystemsSection {
+		t.Errorf("saved = %v, want only the systems section", result.Saved)
+	}
+
+	if len(fixture.systems.Stored) != 1 || fixture.systems.Stored[0].SystemRef != 5 {
+		t.Errorf("systems = %v, want the section replaced", fixture.systems.Stored)
+	}
+
+	if len(fixture.groups.Stored) != 1 || fixture.groups.Stored[0].Label != "Fire" {
+		t.Errorf("groups = %v, want every other section left alone", fixture.groups.Stored)
+	}
+
+	if !fixture.loggedContaining("configuration changed") {
+		t.Errorf("logs = %v, want the legacy notice that the configuration changed", fixture.logs.Stored)
+	}
+}
+
+func TestUpdateConfigurationSectionReportsAFailureAndChangesNothingElse(t *testing.T) {
+	fixture := newConfigFixture()
+	fixture.systems.Err = errors.New("constraint failed")
+
+	systems := domain.Systems{{ID: 4, SystemRef: 5, Label: "Harbour"}}
+
+	result, err := fixture.saveSection(SystemsSection, ConfigurationChanges{Systems: &systems})
+
+	if err == nil {
+		t.Error("the reason a per-section save failed must reach the caller, which logs it")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: a per-section save reports its failure", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Failed) != 1 || result.Failed[0] != SystemsSection {
+		t.Errorf("failed = %v, want the section reported as not stored", result.Failed)
+	}
+
+	if !fixture.loggedContaining("admin.sectionhandler.put: constraint failed") {
+		t.Errorf("logs = %v, want the per-section failure wording", fixture.logs.Stored)
+	}
+
+	if fixture.admin.AnnouncedCount() != 0 {
+		t.Error("a save that did not work must not announce a configuration change")
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 0 {
+		t.Error("a save that did not work must not re-send the configuration to the listeners")
+	}
+
+	if fixture.loggedContaining("configuration changed") {
+		t.Error("a save that did not work must not record that the configuration changed")
+	}
+
+	// The watchers are restarted whatever happens, which is what the legacy server does: a
+	// rejected save leaves the server watching rather than silently stopped.
+	if fixture.watchers.Stops != 1 || len(fixture.watchers.Starts) != 1 {
+		t.Errorf("watchers stopped %d started %d, want them restarted even though the save failed", fixture.watchers.Stops, len(fixture.watchers.Starts))
+	}
+}
+
+func TestUpdateConfigurationSectionRefusesAChangeThatDoesNotMatchTheSection(t *testing.T) {
+	fixture := newConfigFixture()
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	result, err := fixture.saveSection(SystemsSection, ConfigurationChanges{Groups: &groups})
+
+	if !errors.Is(err, ErrNoConfigurationChange) {
+		t.Errorf("error = %v, want %v: the caller and the server disagree about what was submitted", err, ErrNoConfigurationChange)
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(fixture.groups.Stored) != 1 || fixture.groups.Stored[0].Label != "Fire" {
+		t.Errorf("groups = %v, want nothing saved when the section and the change disagree", fixture.groups.Stored)
+	}
+}
+
+func TestUpdateConfigurationSectionOfAnotherSectionRestartsTheStoredDirwatchers(t *testing.T) {
+	fixture := newConfigFixture()
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	if _, err := fixture.saveSection(GroupsSection, ConfigurationChanges{Groups: &groups}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	watching := fixture.watchers.Watching()
+
+	if len(watching) != 2 {
+		t.Errorf("watching = %v, want the stored watched directories read back and watched again, which is what a per-section save does and a whole-configuration save does not", watching)
+	}
+}
+
+func TestUpdateConfigurationSectionOfDirwatchWatchesWhatWasSubmittedWhenTheSaveFails(t *testing.T) {
+	fixture := newConfigFixture()
+	fixture.dirwatches.SaveErr = errors.New("disk full")
+
+	submitted := domain.Dirwatches{{ID: 0, Directory: "/spool/submitted"}}
+
+	result, err := fixture.saveSection(DirwatchSection, ConfigurationChanges{Dirwatches: &submitted})
+
+	if err == nil {
+		t.Error("the reason the save failed must reach the caller")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	watching := fixture.watchers.Watching()
+
+	if len(watching) != 1 || watching[0].Directory != "/spool/submitted" {
+		t.Errorf("watching = %v, want the submitted directories, as a whole-configuration save also leaves them", watching)
+	}
+}
+
+func TestUpdateConfigurationSectionAnnouncesTheWholeConfigurationForOneSection(t *testing.T) {
+	fixture := newConfigFixture()
+
+	tags := domain.Tags{{ID: 11, Label: "Interop"}}
+
+	if _, err := fixture.saveSection(TagsSection, ConfigurationChanges{Tags: &tags}); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if fixture.admin.AnnouncedCount() != 1 {
+		t.Fatalf("administrator announcements = %d, want the open administrator connections told once", fixture.admin.AnnouncedCount())
+	}
+
+	announced := fixture.admin.Announced[0]
+
+	if len(announced.Systems) != 1 || len(announced.Dirwatches) != 2 {
+		t.Errorf("announced = %+v, want the whole configuration announced even though one section was saved", announced)
+	}
+
+	if len(announced.Tags) != 1 || announced.Tags[0].Label != "Interop" {
+		t.Errorf("announced tags = %v, want the announced configuration to be the one that resulted from the save", announced.Tags)
+	}
+}

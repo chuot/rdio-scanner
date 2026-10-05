@@ -248,8 +248,9 @@ func (calls *Calls) DeleteCallsBefore(ctx context.Context, before time.Time) (in
 
 // Systems is an in-memory system repository.
 type Systems struct {
-	Stored domain.Systems
-	Err    error
+	Stored  domain.Systems
+	Err     error
+	SaveErr error
 }
 
 var _ ports.SystemRepository = (*Systems)(nil)
@@ -269,6 +270,14 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {
 	if systems.Err != nil {
 		return systems.Err
+	}
+
+	if systems.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		systems.Stored = next
+
+		return systems.SaveErr
 	}
 
 	out := append(domain.Systems{}, next...)
@@ -352,8 +361,9 @@ func assignAggregateIDs(system domain.System) domain.System {
 
 // Groups is an in-memory group repository.
 type Groups struct {
-	Stored domain.Groups
-	Err    error
+	Stored  domain.Groups
+	Err     error
+	SaveErr error
 }
 
 var _ ports.GroupRepository = (*Groups)(nil)
@@ -372,6 +382,14 @@ func (groups *Groups) AllGroups(ctx context.Context) (domain.Groups, error) {
 func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error {
 	if groups.Err != nil {
 		return groups.Err
+	}
+
+	if groups.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		groups.Stored = next
+
+		return groups.SaveErr
 	}
 
 	out := append(domain.Groups{}, next...)
@@ -404,8 +422,9 @@ func maxGroupID(groups domain.Groups) uint64 {
 
 // Tags is an in-memory tag repository.
 type Tags struct {
-	Stored domain.Tags
-	Err    error
+	Stored  domain.Tags
+	Err     error
+	SaveErr error
 }
 
 var _ ports.TagRepository = (*Tags)(nil)
@@ -423,6 +442,14 @@ func (tags *Tags) AllTags(ctx context.Context) (domain.Tags, error) {
 func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 	if tags.Err != nil {
 		return tags.Err
+	}
+
+	if tags.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		tags.Stored = next
+
+		return tags.SaveErr
 	}
 
 	out := append(domain.Tags{}, next...)
@@ -449,8 +476,9 @@ func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 
 // Accesses is an in-memory access repository.
 type Accesses struct {
-	Stored domain.Accesses
-	Err    error
+	Stored  domain.Accesses
+	Err     error
+	SaveErr error
 }
 
 var _ ports.AccessRepository = (*Accesses)(nil)
@@ -470,6 +498,14 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 		return accesses.Err
 	}
 
+	if accesses.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		accesses.Stored = next
+
+		return accesses.SaveErr
+	}
+
 	accesses.Stored = next
 
 	return nil
@@ -477,8 +513,9 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 
 // Apikeys is an in-memory apikey repository.
 type Apikeys struct {
-	Stored domain.Apikeys
-	Err    error
+	Stored  domain.Apikeys
+	Err     error
+	SaveErr error
 }
 
 var _ ports.ApikeyRepository = (*Apikeys)(nil)
@@ -498,6 +535,14 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 		return apikeys.Err
 	}
 
+	if apikeys.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		apikeys.Stored = next
+
+		return apikeys.SaveErr
+	}
+
 	apikeys.Stored = next
 
 	return nil
@@ -505,8 +550,9 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 
 // Options is an in-memory options repository.
 type Options struct {
-	Stored domain.Options
-	Err    error
+	Stored  domain.Options
+	Err     error
+	SaveErr error
 }
 
 var _ ports.OptionsRepository = (*Options)(nil)
@@ -524,6 +570,14 @@ func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error)
 func (options *Options) WriteOptions(ctx context.Context, next domain.Options) error {
 	if options.Err != nil {
 		return options.Err
+	}
+
+	if options.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		options.Stored = next
+
+		return options.SaveErr
 	}
 
 	options.Stored = next
@@ -629,8 +683,9 @@ func (logs *Logs) DeleteLogsBefore(ctx context.Context, before time.Time) (int, 
 
 // Dirwatches is an in-memory directory-watch repository.
 type Dirwatches struct {
-	Stored domain.Dirwatches
-	Err    error
+	Stored  domain.Dirwatches
+	Err     error
+	SaveErr error
 }
 
 var _ ports.DirwatchRepository = (*Dirwatches)(nil)
@@ -650,6 +705,14 @@ func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Di
 		return dirwatches.Err
 	}
 
+	if dirwatches.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		dirwatches.Stored = next
+
+		return dirwatches.SaveErr
+	}
+
 	dirwatches.Stored = next
 
 	return nil
@@ -657,8 +720,9 @@ func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Di
 
 // Downstreams is an in-memory downstream repository.
 type Downstreams struct {
-	Stored domain.Downstreams
-	Err    error
+	Stored  domain.Downstreams
+	Err     error
+	SaveErr error
 }
 
 var _ ports.DownstreamRepository = (*Downstreams)(nil)
@@ -676,6 +740,14 @@ func (downstreams *Downstreams) AllDownstreams(ctx context.Context) (domain.Down
 func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain.Downstreams) error {
 	if downstreams.Err != nil {
 		return downstreams.Err
+	}
+
+	if downstreams.SaveErr != nil {
+		// A save that cannot be persisted still leaves the submitted value in effect,
+		// because the legacy server replaces what it is running with before it stores it.
+		downstreams.Stored = next
+
+		return downstreams.SaveErr
 	}
 
 	downstreams.Stored = next
