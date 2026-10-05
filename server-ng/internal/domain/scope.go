@@ -95,12 +95,27 @@ func ParseAccessScope(value any) (AccessScope, bool) {
 // Grants reports whether a call falls inside the scope. The comparison is made against
 // the client-facing references, exactly as the legacy server compares them.
 func (scope AccessScope) Grants(call Call) bool {
+	return scope.GrantsReferences(call.System.SystemRef, call.Talkgroup.TalkgroupRef)
+}
+
+// GrantsReferences reports whether one system reference and one talkgroup reference fall
+// inside the scope.
+//
+// It exists because the two things a scope is checked against are not always the same pair.
+// A live call is checked after its system and talkgroup have been resolved; an upload is
+// checked before that, when all the server has are the references the upload itself names.
+// The legacy server compares against the resolved pair in both places, and at the upload
+// boundary they are not resolved yet, which is what makes a scoped upload apikey dereference
+// a nil aggregate — Q20 in
+// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md. Checking the submitted
+// references is what that comparison was written to do.
+func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 	if scope.Wildcard {
 		return true
 	}
 
 	for _, system := range scope.Systems {
-		if system.SystemRef != call.System.SystemRef {
+		if system.SystemRef != systemRef {
 			continue
 		}
 
@@ -109,11 +124,51 @@ func (scope AccessScope) Grants(call Call) bool {
 		}
 
 		for _, ref := range system.TalkgroupRefs {
-			if ref == call.Talkgroup.TalkgroupRef {
+			if ref == talkgroupRef {
 				return true
 			}
 		}
 	}
 
 	return false
+}
+
+// Value is the scope as the server stores it and announces it: the wildcard is the string
+// "*", an explicit scope is a list of systems each naming its talkgroups, and a scope that
+// was never supplied is nothing at all.
+//
+// It is the mirror of ParseAccessScope, and both are needed because the same shape appears in
+// the stored row and on the wire. A scope that names no systems is an empty list rather than
+// nothing, because "an empty list was supplied" and "nothing was supplied" are the two states
+// Q9 turns on.
+func (scope AccessScope) Value() any {
+	if !scope.Present {
+		return nil
+	}
+
+	if scope.Wildcard {
+		return "*"
+	}
+
+	systems := []any{}
+
+	for _, system := range scope.Systems {
+		entry := map[string]any{"id": system.SystemRef}
+
+		if system.TalkgroupsWildcard {
+			entry["talkgroups"] = "*"
+		} else {
+			talkgroups := []any{}
+
+			for _, ref := range system.TalkgroupRefs {
+				talkgroups = append(talkgroups, ref)
+			}
+
+			entry["talkgroups"] = talkgroups
+		}
+
+		systems = append(systems, entry)
+	}
+
+	return systems
 }

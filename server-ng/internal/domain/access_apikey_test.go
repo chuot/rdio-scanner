@@ -21,6 +21,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -339,5 +340,130 @@ func TestAccessesRemoveAllByIdentReportsAnUnmatchedIdentity(t *testing.T) {
 
 	if len(next) != 1 {
 		t.Errorf("accesses = %v, want the list left as it was", next)
+	}
+}
+
+func TestWildcardScopeIsStoredAndAnnouncedAsTheStar(t *testing.T) {
+	scope, _ := ParseAccessScope("*")
+
+	if value := scope.Value(); value != "*" {
+		t.Errorf("value = %#v, want the string the stored column and the configuration payload carry", value)
+	}
+}
+
+func TestAbsentScopeIsStoredAndAnnouncedAsNothing(t *testing.T) {
+	scope, present := ParseAccessScope(nil)
+
+	if present {
+		t.Error("a scope that was not supplied is not present")
+	}
+
+	if value := scope.Value(); value != nil {
+		t.Errorf("value = %#v, want nothing: an access with no scope is stored as null and gated like an anonymous client", value)
+	}
+}
+
+func TestScopedSystemsAreStoredAndAnnouncedAsTheirOwnList(t *testing.T) {
+	scope, _ := ParseAccessScope([]any{
+		map[string]any{"id": float64(10001), "talkgroups": []any{float64(1514000), float64(1514001)}},
+		map[string]any{"id": float64(10002), "talkgroups": "*"},
+	})
+
+	b, err := json.Marshal(scope.Value())
+	if err != nil {
+		t.Fatalf("marshalling the scope: %v", err)
+	}
+
+	const want = `[{"id":10001,"talkgroups":[1514000,1514001]},{"id":10002,"talkgroups":"*"}]`
+
+	if string(b) != want {
+		t.Errorf("stored scope = %s, want %s", b, want)
+	}
+}
+
+// TestScopeOfNothingAndScopeOfNothingAtAllAreDifferent is the Q9 distinction carried all the way
+// into the stored value: a payload that supplies an empty list is stored as [], a payload that
+// supplies nothing is stored as null.
+func TestScopeOfNothingAndScopeOfNothingAtAllAreDifferent(t *testing.T) {
+	empty, present := ParseAccessScope([]any{})
+
+	if !present {
+		t.Fatal("a scope that names no systems was still supplied")
+	}
+
+	b, err := json.Marshal(empty.Value())
+	if err != nil {
+		t.Fatalf("marshalling the scope: %v", err)
+	}
+
+	if string(b) != "[]" {
+		t.Errorf("stored scope = %s, want []", b)
+	}
+
+	if empty.GrantsReferences(10001, 1514000) {
+		t.Error("a scope that names no systems grants nothing")
+	}
+}
+
+func TestScopeValueRoundTripsThroughTheStoredShape(t *testing.T) {
+	original, _ := ParseAccessScope([]any{
+		map[string]any{"id": float64(10001), "talkgroups": []any{float64(1514000)}},
+	})
+
+	b, err := json.Marshal(original.Value())
+	if err != nil {
+		t.Fatalf("marshalling the scope: %v", err)
+	}
+
+	var stored any
+
+	if err := json.Unmarshal(b, &stored); err != nil {
+		t.Fatalf("unmarshalling the stored scope: %v", err)
+	}
+
+	read, present := ParseAccessScope(stored)
+
+	if !present {
+		t.Fatal("the stored scope reads back as present")
+	}
+
+	if !read.GrantsReferences(10001, 1514000) {
+		t.Errorf("the stored scope %s reads back as %v", b, read)
+	}
+
+	if read.GrantsReferences(10001, 1514001) {
+		t.Error("the stored scope grants a talkgroup it does not name")
+	}
+}
+
+// TestScopeGrantsReferencesIsWhatAnUploadIsCheckedAgainst pins the Q20 repair: an upload is
+// scoped by the references the upload names, because its aggregates are not resolved yet.
+func TestScopeGrantsReferencesIsWhatAnUploadIsCheckedAgainst(t *testing.T) {
+	scope, _ := ParseAccessScope([]any{
+		map[string]any{"id": float64(10001), "talkgroups": []any{float64(1514000)}},
+	})
+
+	if !scope.GrantsReferences(10001, 1514000) {
+		t.Error("the scope grants the system and talkgroup it names")
+	}
+
+	if scope.GrantsReferences(10001, 1514001) {
+		t.Error("the scope grants a talkgroup it does not name")
+	}
+
+	if scope.GrantsReferences(10002, 1514000) {
+		t.Error("the scope grants a system it does not name")
+	}
+
+	wildcard, _ := ParseAccessScope("*")
+
+	if !wildcard.GrantsReferences(10002, 1520000) {
+		t.Error("the wildcard scope grants everything")
+	}
+
+	absent, _ := ParseAccessScope(nil)
+
+	if absent.GrantsReferences(10001, 1514000) {
+		t.Error("a scope that was never supplied grants nothing")
 	}
 }
