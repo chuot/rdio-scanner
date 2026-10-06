@@ -58,6 +58,13 @@ func run(args []string, stdout io.Writer) int {
 		return 0
 	}
 
+	// The -cmd mode drives a server that is already running and then stops. It outranks the administrator
+	// password mode because the legacy server reaches it first, and it needs neither this deployment's
+	// database nor its configuration — only the address of a server that is answering.
+	if mode == ModeCommand {
+		return runCommand(config, exePath, stdout)
+	}
+
 	// The administrator password mode is a one-shot that needs the database and nothing else: it is the
 	// way a deployment sets its credential from a script, or the way an operator recovers a server whose
 	// credential was lost.

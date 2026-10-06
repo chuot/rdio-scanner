@@ -61,6 +61,9 @@ const (
 
 	// ModeExit means a one-shot mode (-version, -config_save) already completed.
 	ModeExit
+
+	// ModeCommand means the -cmd mode was asked for: drive a server that is already running, and stop.
+	ModeCommand
 )
 
 // Config is the effective server configuration: command-line flags overlaid with
@@ -84,7 +87,13 @@ type Config struct {
 	SslListen   string
 
 	// Special-mode inputs, dispatched by the composition root.
-	Command          string
+	Command string
+
+	// CommandArgs are the tokens that came after the -cmd action. The flag parser stops at the first
+	// argument that is not a flag, and every option this mode takes (`+ident`, `+password`, …) is such an
+	// argument, so what the parser leaves over is exactly the options the mode was given.
+	CommandArgs []string
+
 	ServiceAction    string
 	NewAdminPassword string
 }
@@ -98,7 +107,7 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.SetOutput(stdout)
 
 	var (
-		command       = fs.String("cmd", "", "advanced administrative tasks (use -cmd help for usage)")
+		command       = fs.String("cmd", "", fmt.Sprintf("advanced administrative tasks (use -%s %s for usage)", commandArg, commandHelp))
 		configSave    = fs.Bool("config_save", false, fmt.Sprintf("save configuration to %s", defaultConfigFile))
 		serviceAction = fs.String("service", "", "service command, one of start, stop, restart, install, uninstall")
 		version       = fs.Bool("version", false, "show application version")
@@ -129,6 +138,7 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	}
 
 	config.Command = *command
+	config.CommandArgs = fs.Args()
 	config.ServiceAction = *serviceAction
 
 	if !config.isBaseDirWritable() {
@@ -155,6 +165,14 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 
 	if !isDbTypeSupported(config.DbType) {
 		return nil, ModeExit, fmt.Errorf("unknown database type %s", config.DbType)
+	}
+
+	// The -cmd mode is decided here rather than left for the composition root to notice, because this is
+	// where the legacy server decides it: after the configuration file has been read and the database type
+	// has been checked, and before the service mode or the server itself. It outranks -admin_password for
+	// the same reason — the legacy reaches it before main.go looks at the password.
+	if config.Command != "" {
+		return config, ModeCommand, nil
 	}
 
 	return config, ModeServe, nil
