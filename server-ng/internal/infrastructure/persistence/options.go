@@ -45,6 +45,11 @@ type Options struct {
 	mutex  sync.Mutex
 	loaded bool
 	live   domain.Options
+
+	// initialCredential is the credential the server accepts when the stored configuration has none,
+	// supplied by the composition root because making it is bcrypt's job and not this package's. See
+	// StoreInitialCredential.
+	initialCredential string
 }
 
 var _ ports.OptionsRepository = (*Options)(nil)
@@ -67,6 +72,26 @@ type optionRow struct {
 // NewOptions returns the options repository for one database.
 func NewOptions(db *sql.DB, dialect Dialect) *Options {
 	return &Options{store: newStore(db, dialect)}
+}
+
+// StoreInitialCredential records the credential the server accepts when its stored configuration has
+// none, and keeps it in memory only.
+//
+// The legacy server generates a fresh hash of the default administrator password at every startup and
+// puts it in place before the stored rows are applied. It never writes that hash: a deployment that has
+// not changed the password has no adminPassword row at all, and the signing secret it generates at the
+// same time is regenerated at the next startup as well, so a session started before a restart does not
+// survive it. Writing the initial credential to make this easier would write the secret with it, and the
+// server would start keeping sessions across restarts the legacy server does not keep.
+//
+// The credential is supplied rather than computed here because bcrypt belongs to the password adapter:
+// this package can decide when a server needs a credential and hold the one it is given, but it cannot
+// make one.
+func (options *Options) StoreInitialCredential(credential string) {
+	options.mutex.Lock()
+	defer options.mutex.Unlock()
+
+	options.initialCredential = credential
 }
 
 // ReadOptions returns the options the server is currently running with. The first call is the
@@ -137,6 +162,8 @@ func (options *Options) rederive(ctx context.Context, from domain.Options) (doma
 
 	next := resetOptions(from)
 
+	next.AdminPasswordHash = options.initialCredential
+
 	for _, row := range rows {
 		next = applyOptionRow(next, row)
 	}
@@ -191,11 +218,12 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 // then the legacy server keeps the value it was already running with, which is what this does
 // too.
 //
-// One value is deliberately not reproduced: the legacy reset puts a freshly generated bcrypt
+// One value is deliberately not produced here: the legacy reset puts a freshly generated bcrypt
 // hash of the default administrator password in place before the stored rows are applied, so a
-// server whose options table has no `adminPassword` row still accepts the default password.
-// bcrypt belongs to the password adapter (T060) and not to this package, so the credential
-// stays empty here and the composition root (T042) has to store the initial one.
+// server whose options table has no `adminPassword` row still accepts the default password. bcrypt
+// belongs to the password adapter (T060) and not to this package, so the reset leaves the
+// credential empty and the re-derivation puts in whatever the composition root supplied through
+// StoreInitialCredential.
 func resetOptions(live domain.Options) domain.Options {
 	next := domain.DefaultOptions()
 

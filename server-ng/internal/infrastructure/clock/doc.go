@@ -18,6 +18,6 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package clock provides the real-time Clock adapter used by the composition root;
-// use cases receive the port and are tested with a fixed clock.
+// Package clock provides the real-time Clock and Scheduler adapters used by the composition root;
+// use cases receive the ports and are tested with a fixed clock and a fake scheduler.
 package clock

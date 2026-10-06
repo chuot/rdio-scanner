@@ -621,3 +621,88 @@ func readOptionValue(t *testing.T, db *sql.DB, key string) string {
 
 	return value
 }
+
+// The legacy server puts a freshly generated hash of the default administrator password in place at
+// every startup, before it applies the stored rows, and writes nothing. A deployment that has never
+// changed the password has no adminPassword row at all, and its signing secret is regenerated at every
+// startup as well — which is why the initial credential has to stay out of the database.
+func TestStoreInitialCredentialIsWhatTheServerAcceptsUntilAStoredCredentialArrives(t *testing.T) {
+	db := openSchemaDatabase(t)
+	options := NewOptions(db, DialectSqlite)
+
+	options.StoreInitialCredential("$2a$10$theinitialcredential")
+
+	live, err := options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if live.AdminPasswordHash != "$2a$10$theinitialcredential" {
+		t.Errorf("AdminPasswordHash = %q, want the initial credential the composition root supplied", live.AdminPasswordHash)
+	}
+
+	if rows := countOptionRows(t, db); rows != 0 {
+		t.Errorf("the options table holds %d rows after an initial credential, want none: the legacy server "+
+			"keeps this credential in memory, and writing it would write the signing secret with it", rows)
+	}
+}
+
+// A stored credential is the configuration the administrator chose, and it wins.
+func TestStoreInitialCredentialYieldsToTheCredentialInTheStoredConfiguration(t *testing.T) {
+	db := openLegacyDatabase(t)
+	options := NewOptions(db, DialectSqlite)
+
+	stored, err := options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if stored.AdminPasswordHash == "" {
+		t.Fatalf("the fixture stores no administrator credential, want one to compare against")
+	}
+
+	options.StoreInitialCredential("$2a$10$theinitialcredential")
+
+	live, err := options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if live.AdminPasswordHash != stored.AdminPasswordHash {
+		t.Errorf("AdminPasswordHash = %q, want the stored credential, not the initial one", live.AdminPasswordHash)
+	}
+}
+
+// The password change re-derives the options from what is stored, and the initial credential is part
+// of that reset rather than a one-time patch: a server that has not chosen a credential still needs
+// one after the re-derivation.
+func TestStoreInitialCredentialSurvivesTheReDerivationAPasswordChangeRuns(t *testing.T) {
+	db := openSchemaDatabase(t)
+	options := NewOptions(db, DialectSqlite)
+
+	options.StoreInitialCredential("$2a$10$theinitialcredential")
+
+	reloaded, err := options.ReloadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReloadOptions: %v", err)
+	}
+
+	if reloaded.AdminPasswordHash != "$2a$10$theinitialcredential" {
+		t.Errorf("AdminPasswordHash after the re-derivation = %q, want the initial credential to be put back "+
+			"as the legacy server puts it back on every read", reloaded.AdminPasswordHash)
+	}
+}
+
+// countOptionRows is how many options the table holds.
+func countOptionRows(t *testing.T, db *sql.DB) int {
+	t.Helper()
+
+	const query = `SELECT COUNT(*) FROM "options"`
+
+	var rows int
+	if err := db.QueryRow(query).Scan(&rows); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	return rows
+}

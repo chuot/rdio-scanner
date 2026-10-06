@@ -21,18 +21,22 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
+
+	"rdio-scanner/server-ng/internal/domain"
 )
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout))
 }
 
-// run dispatches the modes that finish without starting the server. It returns the
-// process exit code instead of calling os.Exit directly, so the modes stay testable.
+// run dispatches the modes the command line asks for. It returns the process exit code instead of calling
+// os.Exit directly, so the modes stay testable.
 func run(args []string, stdout io.Writer) int {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -54,11 +58,105 @@ func run(args []string, stdout io.Writer) int {
 		return 0
 	}
 
-	// The -admin_password, -cmd and -service modes and the server startup itself
-	// are wired by the later composition-root tasks.
-	_ = config
+	// The administrator password mode is a one-shot that needs the database and nothing else: it is the
+	// way a deployment sets its credential from a script, or the way an operator recovers a server whose
+	// credential was lost.
+	if config.NewAdminPassword != "" {
+		return changeAdminPassword(config)
+	}
+
+	return serve(config, stdout)
+}
+
+// serve starts the server and answers with it until the operator stops it.
+func serve(config *Config, stdout io.Writer) int {
+	// The banner is said before the database is opened, which is the order the legacy server says it in:
+	// what the operator ran is visible before what went wrong.
+	fmt.Fprintf(stdout, "\nRdio Scanner v%s\n", Version)
+	fmt.Fprintf(stdout, "----------------------------------\n")
+
+	srv, err := newServer(config, os.Stderr)
+	if err != nil {
+		return exitWithError(err)
+	}
+
+	if err := srv.start(context.Background()); err != nil {
+		srv.stop(context.Background())
+
+		return exitWithError(err)
+	}
+
+	srv.waitForInterrupt()
+
+	err = srv.listen()
+
+	srv.stop(context.Background())
+
+	if err != nil {
+		return exitWithError(err)
+	}
 
 	return 0
+}
+
+// changeAdminPassword is the -admin_password mode: store the credential the administrator chose, say so in
+// the log view, and stop without starting a server.
+//
+// It is the legacy server's startup branch rather than a use case, because it is a way of running the
+// program and not a thing the server does while it is running. It writes the whole configuration, as the
+// legacy server does, which is also what stores the signing secret the options read generated — the one
+// thing this mode does that a startup does not.
+func changeAdminPassword(config *Config) int {
+	ctx := context.Background()
+
+	srv, err := newServer(config, os.Stderr)
+	if err != nil {
+		return exitWithError(err)
+	}
+
+	defer func() {
+		if err := srv.db.Close(); err != nil {
+			exitWithError(err)
+		}
+	}()
+
+	hash, err := srv.hashes.Hash(ctx, config.NewAdminPassword)
+	if err != nil {
+		return exitWithError(err)
+	}
+
+	options, err := srv.options.ReadOptions(ctx)
+	if err != nil {
+		return exitWithError(err)
+	}
+
+	options.AdminPasswordHash = hash
+
+	// A credential that is still the one the server ships with is one the administrator has to replace,
+	// which is what the web application insists on until they do.
+	options.AdminPasswordNeedChange = config.NewAdminPassword == domain.DefaultAdminPassword
+
+	if err := srv.options.WriteOptions(ctx, options); err != nil {
+		return exitWithError(err)
+	}
+
+	if err := srv.logs.AppendLog(ctx, domain.LogEntry{
+		DateTime: srv.clock.Now(),
+		Level:    domain.LogLevelInfo,
+		Message:  "admin password changed.",
+	}); err != nil {
+		return exitWithError(err)
+	}
+
+	return 0
+}
+
+// exitWithError reports a failure the way the legacy server reports one — the line, on the standard error,
+// with the moment it was said — and returns the exit code the process ends with.
+func exitWithError(err error) int {
+	log.Println(err)
+
+	return 1
 }
 
 // usageError marks a command-line parsing failure, which maps to exit code 2.
