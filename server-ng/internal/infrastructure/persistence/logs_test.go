@@ -1,0 +1,576 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package persistence
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"rdio-scanner/server-ng/internal/domain"
+)
+
+// TestAppendLogStoresAMessageContainingSingleQuotes is Q21, the one defect this task is allowed to
+// fix.
+//
+// server/log.go `LogEvent` interpolates the message into its `INSERT` with `fmt.Sprintf`, so a
+// message containing a single quote produces broken SQL. Every line that names a failed statement
+// contains the statement, and therefore contains quotes: the insert fails, `LogEvent` returns the
+// error, and every caller discards it — so the administrator's log view is missing exactly the
+// entries that explain a failed save. The parameterized insert stores them.
+func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	logs := NewLogs(db, DialectSqlite)
+
+	const message = `accesses.write: constraint failed: FOREIGN KEY constraint failed (787) in INSERT INTO "accesses" ("ident") VALUES ('O'Brien')`
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
+		Level:    domain.LogLevelError,
+		Message:  message,
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if len(page.Results) != 1 {
+		t.Fatalf("the log view has %d entries, want the one entry whose message is full of quotes", len(page.Results))
+	}
+
+	if page.Results[0].Message != message {
+		t.Errorf("the stored message is %q, want the submitted one unchanged", page.Results[0].Message)
+	}
+}
+
+// TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase runs the same fix over a
+// database the legacy server wrote, which is the case REQ-007 is about: the log view a deployment
+// already has, and the line that has never been able to appear in it.
+func TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase(t *testing.T) {
+	db := openLegacyDatabase(t)
+	logs := NewLogs(db, DialectSqlite)
+
+	before, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	const message = `systems.writetx: constraint failed: FOREIGN KEY constraint failed (787) in INSERT INTO "talkgroups" ("tagId") VALUES ('9')`
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
+		Level:    domain.LogLevelError,
+		Message:  message,
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	after, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if after.Count != before.Count+1 {
+		t.Fatalf("the log view went from %d entries to %d, want one more", before.Count, after.Count)
+	}
+
+	var found bool
+
+	for _, entry := range after.Results {
+		if entry.Message == message {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		t.Error("the entry with quotes in its message is not in the log view read from a legacy-written database")
+	}
+}
+
+func TestSearchLogsReturnsTheEntriesTheLegacyServerStored(t *testing.T) {
+	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 5 || len(page.Results) != 5 {
+		t.Fatalf("SearchLogs returned %d entries of %d, want the five the legacy server stored", len(page.Results), page.Count)
+	}
+
+	for i := 1; i < len(page.Results); i++ {
+		if page.Results[i].DateTime.Before(page.Results[i-1].DateTime) {
+			t.Errorf("entries %d and %d are out of order: %v then %v", i-1, i, page.Results[i-1].DateTime, page.Results[i].DateTime)
+		}
+	}
+
+	if first, last := page.Results[0], page.Results[len(page.Results)-1]; first.Message != "server started" || !strings.HasPrefix(last.Message, "newcall: system=10001 talkgroup=1514002") {
+		t.Errorf("the log view runs %q to %q, want the stored first and last entries", first.Message, last.Message)
+	}
+
+	warns, infos := 0, 0
+
+	for _, entry := range page.Results {
+		switch entry.Level {
+		case domain.LogLevelWarn:
+			warns++
+		case domain.LogLevelInfo:
+			infos++
+		}
+	}
+
+	if warns != 3 || infos != 2 {
+		t.Errorf("the stored entries carry %d warn and %d info levels, want 3 and 2", warns, infos)
+	}
+}
+
+// TestAppendLogReadsBackTheInstantItStored pins the millisecond rule: every timestamp in this
+// schema is Unix milliseconds, and an entry's own instant is what is stored.
+func TestAppendLogReadsBackTheInstantItStored(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	at := time.Date(2026, 3, 14, 9, 30, 15, 500_000_000, time.UTC)
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: at,
+		Level:    domain.LogLevelInfo,
+		Message:  "stored with its own instant",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if len(page.Results) != 1 {
+		t.Fatalf("the log view has %d entries, want 1", len(page.Results))
+	}
+
+	if !page.Results[0].DateTime.Equal(at) {
+		t.Errorf("the entry reads back at %v, want %v down to the millisecond", page.Results[0].DateTime, at)
+	}
+}
+
+func TestSearchLogsCountsEveryEntryTheCriteriaMatches(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
+
+	for i := range 5 {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: base.Add(time.Duration(i) * time.Minute),
+			Level:    domain.LogLevelInfo,
+			Message:  "entry",
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: 2, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 5 {
+		t.Errorf("Count = %d, want the 5 entries the criteria matches, not the page size", page.Count)
+	}
+
+	if len(page.Results) != 2 {
+		t.Errorf("the page has %d entries, want the requested 2", len(page.Results))
+	}
+}
+
+func TestSearchLogsOrdersByTheRequestedDirection(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
+
+	for _, entry := range []struct {
+		offset  time.Duration
+		message string
+	}{
+		{0 * time.Minute, "first"},
+		{1 * time.Minute, "second"},
+		{2 * time.Minute, "third"},
+	} {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: base.Add(entry.offset),
+			Level:    domain.LogLevelInfo,
+			Message:  entry.message,
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		ascending bool
+		want      []string
+	}{
+		{"ascending", true, []string{"first", "second", "third"}},
+		{"descending", false, []string{"third", "second", "first"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+				Limit:     domain.DefaultLogSearchLimit,
+				Ascending: tc.ascending,
+			})
+			if err != nil {
+				t.Fatalf("SearchLogs: %v", err)
+			}
+
+			if len(page.Results) != len(tc.want) {
+				t.Fatalf("the page has %d entries, want %d", len(page.Results), len(tc.want))
+			}
+
+			for i, message := range tc.want {
+				if page.Results[i].Message != message {
+					t.Errorf("entry %d is %q, want %q", i, page.Results[i].Message, message)
+				}
+			}
+		})
+	}
+}
+
+func TestSearchLogsStartsAtTheRequestedOffset(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
+
+	for i := range 4 {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: base.Add(time.Duration(i) * time.Minute),
+			Level:    domain.LogLevelInfo,
+			Message:  "entry",
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: 2, Offset: 2, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 4 {
+		t.Errorf("Count = %d, want the 4 entries the criteria matches", page.Count)
+	}
+
+	if len(page.Results) != 2 {
+		t.Fatalf("the page has %d entries, want 2", len(page.Results))
+	}
+
+	want := base.Add(2 * time.Minute)
+	if !page.Results[0].DateTime.Equal(want) {
+		t.Errorf("the page starts at %v, want the third entry at %v", page.Results[0].DateTime, want)
+	}
+}
+
+// TestSearchLogsReturnsNoRowsForAnExplicitZeroLimit pins the paging rule the fakes carry: a limit
+// of zero asks for no rows at all, which is what the stored query does with it, while the count is
+// still the whole match.
+func TestSearchLogsReturnsNoRowsForAnExplicitZeroLimit(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC),
+		Level:    domain.LogLevelInfo,
+		Message:  "entry",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: 0})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 1 {
+		t.Errorf("Count = %d, want 1", page.Count)
+	}
+
+	if len(page.Results) != 0 {
+		t.Errorf("the page has %d entries, want none", len(page.Results))
+	}
+}
+
+func TestSearchLogsKeepsOnlyTheRequestedLevel(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
+
+	for i, level := range []string{domain.LogLevelInfo, domain.LogLevelWarn, domain.LogLevelError, domain.LogLevelWarn} {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: base.Add(time.Duration(i) * time.Minute),
+			Level:    level,
+			Message:  level + " entry",
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Level: domain.LogLevelWarn,
+		Limit: domain.DefaultLogSearchLimit,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 || len(page.Results) != 2 {
+		t.Fatalf("the warn search matched %d of %d entries, want 2", len(page.Results), page.Count)
+	}
+
+	for _, entry := range page.Results {
+		if entry.Level != domain.LogLevelWarn {
+			t.Errorf("the level filter returned %+v, want only warn entries", entry)
+		}
+	}
+}
+
+// TestSearchLogsAppliesTheAscendingDateWindow pins the window `domain.LogSearch` models: the
+// submitted instant truncated to the minute, running forward a full day.
+func TestSearchLogsAppliesTheAscendingDateWindow(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	day := time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC)
+
+	for _, at := range []time.Time{
+		day.Add(-time.Millisecond),
+		day,
+		day.Add(24*time.Hour - time.Millisecond),
+		day.Add(24 * time.Hour),
+	} {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: at,
+			Level:    domain.LogLevelInfo,
+			Message:  at.Format(time.RFC3339Nano),
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Date:      time.Date(2026, 3, 14, 9, 30, 15, 500_000_000, time.UTC),
+		Limit:     domain.DefaultLogSearchLimit,
+		Ascending: true,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 || len(page.Results) != 2 {
+		t.Fatalf("the ascending window matched %d of %d entries, want the two inside [%v, %v]", len(page.Results), page.Count, day, day.Add(24*time.Hour-time.Millisecond))
+	}
+
+	if !page.Results[0].DateTime.Equal(day) {
+		t.Errorf("the window starts at %v, want the submitted instant truncated to the minute: %v", page.Results[0].DateTime, day)
+	}
+}
+
+// TestSearchLogsAppliesTheDescendingDateWindow pins the other half of the asymmetry: a day back,
+// and then back again by the submitted hour and minute.
+func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
+	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+
+	from := time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24*time.Hour - time.Millisecond - 9*time.Hour - 30*time.Minute)
+
+	for _, at := range []time.Time{
+		from.Add(-time.Millisecond),
+		from,
+		to,
+		to.Add(time.Millisecond),
+	} {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: at,
+			Level:    domain.LogLevelInfo,
+			Message:  at.Format(time.RFC3339Nano),
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Date:      time.Date(2026, 3, 14, 9, 30, 15, 500_000_000, time.UTC),
+		Limit:     domain.DefaultLogSearchLimit,
+		Ascending: false,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 || len(page.Results) != 2 {
+		t.Fatalf("the descending window matched %d of %d entries, want the two inside [%v, %v]", len(page.Results), page.Count, from, to)
+	}
+
+	if !page.Results[0].DateTime.Equal(to) {
+		t.Errorf("the descending page starts at %v, want the newest entry in the window: %v", page.Results[0].DateTime, to)
+	}
+}
+
+// TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults pins a legacy read rule rather than a
+// fix: server/log.go `Search` counts every row the criteria matches, and then drops from the
+// results any row that carries no identity, no level, no message, or a timestamp that is not a
+// real instant.
+func TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	logs := NewLogs(db, DialectSqlite)
+
+	const query = `INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`
+
+	if _, err := db.Exec(query, domain.LogLevelInfo, "", 1791217116088); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	if _, err := db.Exec(query, domain.LogLevelInfo, "no instant", 0); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC),
+		Level:    domain.LogLevelInfo,
+		Message:  "a real entry",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 3 {
+		t.Errorf("Count = %d, want the 3 rows the criteria matches, including the two the legacy server would not show", page.Count)
+	}
+
+	if len(page.Results) != 1 || page.Results[0].Message != "a real entry" {
+		t.Errorf("the log view has %+v, want only the entry that carries something to show", page.Results)
+	}
+}
+
+func TestDeleteLogsBeforeRemovesTheOlderEntriesAndReportsHowManyWent(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	logs := NewLogs(db, DialectSqlite)
+
+	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
+
+	for i := range 4 {
+		if err := logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: base.Add(time.Duration(i) * 24 * time.Hour),
+			Level:    domain.LogLevelInfo,
+			Message:  "entry",
+		}); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	removed, err := logs.DeleteLogsBefore(context.Background(), base.Add(48*time.Hour))
+	if err != nil {
+		t.Fatalf("DeleteLogsBefore: %v", err)
+	}
+
+	if removed != 2 {
+		t.Errorf("DeleteLogsBefore removed %d entries, want the 2 older than the given instant", removed)
+	}
+
+	if count := countRows(t, db, "logs"); count != 2 {
+		t.Errorf("the table has %d entries after the prune, want 2", count)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	for _, entry := range page.Results {
+		if entry.DateTime.Before(base.Add(48 * time.Hour)) {
+			t.Errorf("the prune left %v, which is older than the instant it was given", entry.DateTime)
+		}
+	}
+}
+
+func TestAppendLogReportsTheLegacyFailureShape(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+
+	if _, err := db.Exec(`DROP TABLE "logs"`); err != nil {
+		t.Fatalf("DROP TABLE: %v", err)
+	}
+
+	err := NewLogs(db, DialectSqlite).AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Now(),
+		Level:    domain.LogLevelInfo,
+		Message:  "nothing to store",
+	})
+
+	if err == nil {
+		t.Fatal("the failure is reported")
+	}
+
+	if !strings.HasPrefix(err.Error(), "logs.logevent: ") {
+		t.Errorf("error = %v, want the legacy logs.logevent shape", err)
+	}
+}
+
+func TestSearchLogsReportsTheLegacyFailureShape(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+
+	if _, err := db.Exec(`DROP TABLE "logs"`); err != nil {
+		t.Fatalf("DROP TABLE: %v", err)
+	}
+
+	_, err := NewLogs(db, DialectSqlite).SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+
+	if err == nil {
+		t.Fatal("the failure is reported")
+	}
+
+	if !strings.HasPrefix(err.Error(), "logs.search: ") {
+		t.Errorf("error = %v, want the legacy logs.search shape", err)
+	}
+}
+
+func TestDeleteLogsBeforeReportsTheLegacyFailureShape(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+
+	if _, err := db.Exec(`DROP TABLE "logs"`); err != nil {
+		t.Fatalf("DROP TABLE: %v", err)
+	}
+
+	_, err := NewLogs(db, DialectSqlite).DeleteLogsBefore(context.Background(), time.Now())
+
+	if err == nil {
+		t.Fatal("the failure is reported")
+	}
+
+	if !strings.HasPrefix(err.Error(), "logs.prune: ") {
+		t.Errorf("error = %v, want a failure the log line can attribute to the prune", err)
+	}
+}
