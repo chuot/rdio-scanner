@@ -74,6 +74,10 @@ type server struct {
 	config  *Config
 	console *consoleLog
 
+	// service is the service manager's arrangement this server is running under, or nil for a server an
+	// operator started in a terminal. It decides whose copy of the log entries the operator reads.
+	service *daemon
+
 	db      *sql.DB
 	dialect persistence.Dialect
 
@@ -126,10 +130,14 @@ type server struct {
 //
 // out is where the server writes the lines it says out loud. The legacy server's console is Go's log
 // package, which writes to the standard error, so that is what the composition root hands it.
-func newServer(config *Config, out io.Writer) (*server, error) {
+//
+// as is the service this server is running under, or nil for a server an operator started. It changes one
+// thing: whose copy of the server's log entries the operator reads. The legacy server keeps the same
+// distinction as a daemon field on its log, and asks the same question.
+func newServer(config *Config, out io.Writer, as *daemon) (*server, error) {
 	ctx := context.Background()
 
-	srv := &server{config: config, console: newConsoleLog(out)}
+	srv := &server{config: config, console: newConsoleLog(out), service: as}
 
 	dialect, err := dialectOf(config.DbType)
 	if err != nil {
@@ -214,8 +222,15 @@ func (s *server) wire() error {
 	s.hashes = credentials
 
 	// Every log entry the server writes is also said out loud, which is what the legacy server's
-	// LogEvent does and what an operator running the server in a terminal expects.
-	s.logs = &loggedEvents{logs: logs, console: s.console}
+	// LogEvent does and what an operator running the server in a terminal expects. A server running as a
+	// service says them to the manager instead, at the level each entry is filed under.
+	var echo logEcho = s.console
+
+	if s.service != nil {
+		echo = serviceLog{logger: s.service.logger}
+	}
+
+	s.logs = &loggedEvents{logs: logs, echo: echo}
 
 	converter := ffmpeg.New()
 	forwarder := downstream.NewForwarder(groups, tags)

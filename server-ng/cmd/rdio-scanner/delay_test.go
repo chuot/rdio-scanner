@@ -413,7 +413,7 @@ func testServerOnBase(t *testing.T, base string) *server {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":3000",
-	}, io.Discard)
+	}, io.Discard, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}

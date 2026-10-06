@@ -65,6 +65,15 @@ func run(args []string, stdout io.Writer) int {
 		return runCommand(config, exePath, stdout)
 	}
 
+	// The -service mode. An action the operator named is something the service manager does to the
+	// deployment's service, and this process is only the one that asked for it, so it ends when the manager
+	// has done it. The action the manager runs the service with is this process becoming the service, and the
+	// server starts underneath it. Both come before the administrator password mode, as they do in the legacy
+	// server, which reaches them while it is still reading the command line.
+	if asksTheServiceManager(config.ServiceAction) {
+		return controlService(config.ServiceAction)
+	}
+
 	// The administrator password mode is a one-shot that needs the database and nothing else: it is the
 	// way a deployment sets its credential from a script, or the way an operator recovers a server whose
 	// credential was lost.
@@ -82,7 +91,23 @@ func serve(config *Config, stdout io.Writer) int {
 	fmt.Fprintf(stdout, "\nRdio Scanner v%s\n", Version)
 	fmt.Fprintf(stdout, "----------------------------------\n")
 
-	srv, err := newServer(config, os.Stderr)
+	// A server the service manager started is the manager's service first and the server second, which is
+	// the order the legacy server has them in: the manager's own loop is handed a goroutine before the
+	// database is opened, so a server that cannot start is a service the manager can see failing.
+	var as *daemon
+
+	if config.ServiceAction == serviceActionRun {
+		d, err := newDaemon()
+		if err != nil {
+			return exitWithError(err)
+		}
+
+		d.run()
+
+		as = d
+	}
+
+	srv, err := newServer(config, os.Stderr, as)
 	if err != nil {
 		return exitWithError(err)
 	}
@@ -116,7 +141,7 @@ func serve(config *Config, stdout io.Writer) int {
 func changeAdminPassword(config *Config) int {
 	ctx := context.Background()
 
-	srv, err := newServer(config, os.Stderr)
+	srv, err := newServer(config, os.Stderr, nil)
 	if err != nil {
 		return exitWithError(err)
 	}

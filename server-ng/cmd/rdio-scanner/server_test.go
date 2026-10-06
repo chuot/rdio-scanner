@@ -308,7 +308,7 @@ func TestServerAnnouncesTheInterfacesItIsListeningOn(t *testing.T) {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":3000",
-	}, console)
+	}, console, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestServerAnnouncesAnAddressOnTheDefaultPortWithoutThePort(t *testing.T) {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":80",
-	}, console)
+	}, console, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestServerAnnouncesTheBaseFolderItWasGiven(t *testing.T) {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":3000",
-	}, console)
+	}, console, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestAdminPasswordModeIsTheCredentialTheServerAccepts(t *testing.T) {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":3000",
-	}, io.Discard)
+	}, io.Discard, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
@@ -569,7 +569,7 @@ func TestServerReportsWhatTheHttpLayerItselfReports(t *testing.T) {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":3000",
-	}, console)
+	}, console, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
@@ -659,7 +659,7 @@ func testServer(t *testing.T) *server {
 func testServerOn(t *testing.T, out io.Writer) *server {
 	t.Helper()
 
-	srv, err := newServer(testConfig(t), out)
+	srv, err := newServer(testConfig(t), out, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}
@@ -893,7 +893,7 @@ func loginAnswered(t *testing.T, base, credential string) int {
 		DbFile:  "rdio-scanner.db",
 		DbType:  DbTypeSqlite,
 		Listen:  ":3000",
-	}, io.Discard)
+	}, io.Discard, nil)
 	if err != nil {
 		t.Fatalf("newServer: %v", err)
 	}

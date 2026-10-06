@@ -75,7 +75,22 @@ func (console *consoleLog) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// loggedEvents is the server's log, and the terminal's copy of it.
+// logEcho is where a log entry is said out loud, as well as being written to the log view the administrator
+// reads. A server an operator is watching says them to the terminal; a server running as a service says them
+// to the service manager, which is what an operator of that deployment reads.
+type logEcho interface {
+	echo(level, message string)
+}
+
+// echo is the terminal's copy of a log entry. The level is not said: the legacy server's console copy is the
+// message on its own, with the moment in front of it, whatever level the entry is filed under.
+func (console *consoleLog) echo(level, message string) {
+	console.println(message)
+}
+
+var _ logEcho = (*consoleLog)(nil)
+
+// loggedEvents is the server's log, and the operator's copy of it.
 //
 // The legacy server's LogEvent writes every entry to the console as well as into the log view — unless the
 // server is running as a service, in which case the service's own logger takes the line instead. The log
@@ -85,14 +100,14 @@ func (console *consoleLog) Write(b []byte) (int, error) {
 // The line is said before the entry is stored, which is the order the legacy server says it in, and a
 // log that cannot be stored does not take the line back.
 type loggedEvents struct {
-	logs    ports.LogRepository
-	console *consoleLog
+	logs ports.LogRepository
+	echo logEcho
 }
 
 var _ ports.LogRepository = (*loggedEvents)(nil)
 
 func (events *loggedEvents) AppendLog(ctx context.Context, entry domain.LogEntry) error {
-	events.console.println(entry.Message)
+	events.echo.echo(entry.Level, entry.Message)
 
 	return events.logs.AppendLog(ctx, entry)
 }
