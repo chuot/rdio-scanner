@@ -21,6 +21,7 @@
 package persistence
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -83,4 +84,52 @@ func countRows(t *testing.T, db *sql.DB, table string) int {
 	}
 
 	return count
+}
+
+// openEmptyDatabase opens the file a server-ng deployment that has never run before gets: nothing
+// in it. Migrate is what puts the tables there, so a test of Migrate must not have applied them
+// first.
+func openEmptyDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db")})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	t.Cleanup(func() { db.Close() })
+
+	return db
+}
+
+// openSchemaDatabase opens a database that has the legacy tables and nothing in them, which is what
+// a repository test writes into.
+func openSchemaDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db := openEmptyDatabase(t)
+
+	if err := ApplySchema(context.Background(), db, DialectSqlite); err != nil {
+		t.Fatalf("ApplySchema: %v", err)
+	}
+
+	return db
+}
+
+// openLegacyDatabaseWithout opens the database the legacy server wrote with the named tables
+// emptied: the legacy schema, the legacy column types, and no rows to trip over.
+func openLegacyDatabaseWithout(t *testing.T, tables ...string) *sql.DB {
+	t.Helper()
+
+	db := openLegacyDatabase(t)
+
+	for _, table := range tables {
+		query := `DELETE FROM "` + table + `"`
+
+		if _, err := db.Exec(query); err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+	}
+
+	return db
 }
