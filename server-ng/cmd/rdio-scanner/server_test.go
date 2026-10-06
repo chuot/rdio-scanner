@@ -709,6 +709,19 @@ func (s *server) post(path, body string) *httptest.ResponseRecorder {
 	return rec
 }
 
+// put sends an authenticated request to an administrator endpoint, which is how these tests install a
+// configuration the way an administrator installs one.
+func (s *server) put(path, token, body string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(body))
+	req.Header.Set("Authorization", token)
+
+	s.routes.ServeHTTP(rec, req)
+
+	return rec
+}
+
 // dial opens a listener socket against the server's own routes, which is how these tests reach a path
 // that can be either an endpoint or a socket.
 func (s *server) dial(t *testing.T, path string) *websocket.Conn {
