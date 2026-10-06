@@ -66,7 +66,7 @@ func newAdminFixture() *adminFixture {
 	fixture.systems.Stored = domain.Systems{{ID: 1, SystemRef: 4, Label: "Grand Metro"}}
 	fixture.dirwatches.Stored = domain.Dirwatches{{ID: 1, Directory: "/spool/live"}}
 
-	fixture.searchLogs = NewSearchLogsHandler(fixture.logs)
+	fixture.searchLogs = NewSearchLogsHandler(fixture.logs, fixture.clock)
 
 	fixture.changePassword = NewChangeAdminPasswordHandler(
 		fixture.options, fixture.passwords, fixture.hashes, fixture.logs, fixture.clock,
@@ -154,6 +154,44 @@ func TestSearchLogsQueryReturnsTheMatchingEntriesAndTheTotal(t *testing.T) {
 
 	if page.Results[0].Message != "invalid access code nope for ip 203.0.113.7" {
 		t.Errorf("results = %v, want the oldest matching entry first for an ascending search", page.Results)
+	}
+
+	// The span belongs to everything the criteria match, and the page is one entry of it: the log view
+	// pages through the span, so its ends stay where they are while the page moves.
+	if !page.DateStart.Equal(adminTime.Add(-2*time.Hour)) || !page.DateStop.Equal(adminTime.Add(-1*time.Hour)) {
+		t.Errorf("the span of the two matching entries is %v to %v, want the ends of both and not of the one that was returned", page.DateStart, page.DateStop)
+	}
+}
+
+// The log view records its own failure, in the same view the search was asked for. An administrator who
+// is shown an empty log has to be able to tell an empty log apart from a log that cannot be read, and
+// the legacy server has always said which one in the log itself.
+func TestSearchLogsRecordsTheFailureItCouldNotAnswerWith(t *testing.T) {
+	fixture := newAdminFixture()
+
+	fixture.logs.SearchErr = errors.New("logs.search: no such table: logs in SELECT COUNT(*) FROM \"logs\" WHERE TRUE")
+
+	_, err := fixture.searchLogs.Handle(context.Background(), SearchLogsQuery{
+		Search: domain.ParseLogSearch(map[string]any{}),
+	})
+	if err == nil {
+		t.Fatal("a log store that cannot be read must reach the caller, which answers it as a failure")
+	}
+
+	var recorded bool
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Message == err.Error() {
+			recorded = true
+
+			if entry.Level != domain.LogLevelError {
+				t.Errorf("the failure is recorded at level %q, want an error", entry.Level)
+			}
+		}
+	}
+
+	if !recorded {
+		t.Errorf("the failure to read the log view is not in the log view: %v", fixture.logs.Stored)
 	}
 }
 

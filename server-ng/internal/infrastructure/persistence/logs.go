@@ -23,6 +23,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -101,6 +102,27 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		order = "DESC"
 	}
 
+	page := ports.LogSearchPage{}
+
+	// The span of everything the criteria match is read first, in the order the legacy server reads
+	// it: the matching timestamps ascending, then descending, then the count, then the page. The two
+	// ends belong to the whole match and not to the page, because the log view pages through them.
+	startQuery := `SELECT "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ASC`
+
+	if at, ok, err := logs.searchInstant(ctx, startQuery, args); err != nil {
+		return ports.LogSearchPage{}, statementError("logs", "search", err, startQuery)
+	} else if ok {
+		page.DateStart = at
+	}
+
+	stopQuery := `SELECT "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" DESC`
+
+	if at, ok, err := logs.searchInstant(ctx, stopQuery, args); err != nil {
+		return ports.LogSearchPage{}, statementError("logs", "search", err, stopQuery)
+	} else if ok {
+		page.DateStop = at
+	}
+
 	var count int64
 
 	countQuery := `SELECT COUNT(*) FROM "logs" WHERE ` + filter
@@ -108,7 +130,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		return ports.LogSearchPage{}, statementError("logs", "search", err, countQuery)
 	}
 
-	page := ports.LogSearchPage{Count: uint64(count)}
+	page.Count = uint64(count)
 
 	rowsQuery := `SELECT "logId", "level", "message", "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ` + order + ` LIMIT ? OFFSET ?`
 
@@ -160,6 +182,30 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	}
 
 	return page, nil
+}
+
+// searchInstant reads one instant out of the entries the criteria match, which is how the two ends of
+// the log view's span are found: the same filter, ordered from one end, and the first row is the end.
+//
+// A search that matches nothing is not a failure and is reported as one: the legacy server tolerates
+// the no-rows answer here and leaves that end of the span unset, so an empty log view is an empty log
+// view rather than an error the administrator is answered with a status code.
+func (logs *Logs) searchInstant(ctx context.Context, query string, args []any) (time.Time, bool, error) {
+	var timestamp sql.NullInt64
+
+	if err := logs.store.queryRow(ctx, query, args...).Scan(&timestamp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return time.Time{}, false, nil
+		}
+
+		return time.Time{}, false, err
+	}
+
+	if !timestamp.Valid {
+		return time.Time{}, false, nil
+	}
+
+	return instantOf(timestamp.Int64), true, nil
 }
 
 // DeleteLogsBefore is the prune: remove the entries older than the given instant and report how

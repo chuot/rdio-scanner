@@ -625,6 +625,10 @@ type Logs struct {
 	Stored []domain.LogEntry
 	Err    error
 
+	// SearchErr, when set, is returned by SearchLogs and by nothing else. The log view records the
+	// failures it cannot answer with, so a test needs the read to fail while the write still works.
+	SearchErr error
+
 	mutex sync.Mutex
 }
 
@@ -665,6 +669,10 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		return ports.LogSearchPage{}, logs.Err
 	}
 
+	if logs.SearchErr != nil {
+		return ports.LogSearchPage{}, logs.SearchErr
+	}
+
 	matching := []domain.LogEntry{}
 
 	for _, entry := range logs.Stored {
@@ -691,7 +699,24 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		return matching[i].DateTime.After(matching[j].DateTime)
 	})
 
+	// The span belongs to everything the criteria match, and not to the page that is returned: the
+	// log view pages through the span, and its ends stay where they are while the page moves. A
+	// search that matches nothing leaves both ends unset.
 	page := ports.LogSearchPage{Count: uint64(len(matching))}
+
+	if len(matching) > 0 {
+		page.DateStart, page.DateStop = matching[0].DateTime, matching[0].DateTime
+
+		for _, entry := range matching[1:] {
+			if entry.DateTime.Before(page.DateStart) {
+				page.DateStart = entry.DateTime
+			}
+
+			if entry.DateTime.After(page.DateStop) {
+				page.DateStop = entry.DateTime
+			}
+		}
+	}
 
 	for i, entry := range matching {
 		if uint(i) < search.Offset {

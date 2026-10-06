@@ -39,19 +39,33 @@ type SearchLogsQuery struct {
 
 // SearchLogsHandler reads the log view.
 //
-// It is a query and so it writes nothing. The legacy server's log endpoint does write — it
-// records its own failures — and that belongs to the REST layer (T041), which is where a failure
-// to answer becomes a server-log entry and a status code.
+// It is a query: it changes nothing about what the log holds. The one thing it does is record its own
+// failure, which is what the legacy server has always done with a log search it could not answer — the
+// notice goes into the very view the search was asked for. That is not the query mutating the log view's
+// contents; it is the server saying out loud that it could not answer, and an administrator shown an
+// empty log view has no other way to learn that the log view is broken.
 type SearchLogsHandler struct {
-	logs ports.LogRepository
+	logs  ports.LogRepository
+	clock ports.Clock
 }
 
-// NewSearchLogsHandler builds the handler from the log store.
-func NewSearchLogsHandler(logs ports.LogRepository) *SearchLogsHandler {
-	return &SearchLogsHandler{logs: logs}
+// NewSearchLogsHandler builds the handler from the log store and the clock the notice is stamped with.
+func NewSearchLogsHandler(logs ports.LogRepository, clock ports.Clock) *SearchLogsHandler {
+	return &SearchLogsHandler{logs: logs, clock: clock}
 }
 
 // Handle returns the matching entries and the total the criteria matches.
+//
+// A search the store cannot answer is recorded with the failure's own text and nothing added to it, which
+// is how the legacy server recorded it: the failure already names the statement that failed, and a prefix
+// would only make the two servers' log lines differ.
 func (handler *SearchLogsHandler) Handle(ctx context.Context, query SearchLogsQuery) (ports.LogSearchPage, error) {
-	return handler.logs.SearchLogs(ctx, query.Search)
+	page, err := handler.logs.SearchLogs(ctx, query.Search)
+	if err != nil {
+		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, err.Error())
+
+		return ports.LogSearchPage{}, err
+	}
+
+	return page, nil
 }

@@ -26,9 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/gorilla/websocket"
 
@@ -36,6 +34,7 @@ import (
 	"rdio-scanner/server-ng/internal/application/ports"
 	"rdio-scanner/server-ng/internal/domain"
 	"rdio-scanner/server-ng/internal/presentation/dto"
+	"rdio-scanner/server-ng/internal/presentation/httpaddr"
 )
 
 // Deps are the use cases the listener endpoint answers each command with, and the things it needs in
@@ -143,7 +142,7 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handler.hub.Attach(conn, remoteAddress(r), handler.dispatch)
+	handler.hub.Attach(conn, httpaddr.Address(r), handler.dispatch)
 }
 
 // dispatch decides which use case answers one frame, and reports a failure the hub writes to its console
@@ -323,26 +322,4 @@ func (handler *Handler) setLivefeed(ctx context.Context, clientID string, frame 
 	})
 
 	return err
-}
-
-// remoteAddress is the address the server names when it talks about a listener: the address in the
-// forwarding header when there is one, without its port, and the address of the connection when there is
-// not.
-//
-// It is the same address the server names in its warnings about guessed access codes, so that a line
-// about a guessed code and a line about a listener joining can be read as being about the same machine.
-func remoteAddress(r *http.Request) string {
-	withoutPort := regexp.MustCompile(`(.+):.*$`)
-
-	for _, address := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-		if host := withoutPort.ReplaceAllString(address, "$1"); len(host) > 0 {
-			return host
-		}
-	}
-
-	if host := withoutPort.ReplaceAllString(r.RemoteAddr, "$1"); len(host) > 0 {
-		return host
-	}
-
-	return r.RemoteAddr
 }

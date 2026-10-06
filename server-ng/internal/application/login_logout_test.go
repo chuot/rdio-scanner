@@ -47,6 +47,7 @@ type loginFixture struct {
 
 	login  *AdminLoginHandler
 	logout *AdminLogoutHandler
+	check  *CheckAdminSessionHandler
 }
 
 func newLoginFixture() *loginFixture {
@@ -64,8 +65,14 @@ func newLoginFixture() *loginFixture {
 
 	fixture.login = NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.passwords, fixture.clock)
 	fixture.logout = NewAdminLogoutHandler(fixture.tokens)
+	fixture.check = NewCheckAdminSessionHandler(fixture.tokens)
 
 	return fixture
+}
+
+// sessionIsOpen asks the question every administrator endpoint asks before it does anything else.
+func (fixture *loginFixture) sessionIsOpen(token string) bool {
+	return fixture.check.Handle(context.Background(), CheckAdminSessionQuery{Token: token})
 }
 
 // attempt logs in from the address the tests use by default.

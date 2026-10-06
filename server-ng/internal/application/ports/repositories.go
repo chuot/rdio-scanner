@@ -173,9 +173,21 @@ type OptionsRepository interface {
 }
 
 // LogSearchPage is the log view's envelope: the total number of entries the criteria
-// matches and the matching entries themselves.
+// matches, the span of time everything that matches covers, and the matching entries
+// themselves.
 type LogSearchPage struct {
-	Count   uint64
+	Count uint64
+
+	// DateStart and DateStop are the earliest and latest instants among everything the criteria
+	// match, and not among the entries this page carries. The log view pages through the span, so
+	// the span has to stay where it is while the page moves.
+	//
+	// A search that matches nothing leaves both ends unset, which is not the same as the Unix epoch:
+	// the log view shows the instant the page reports, and an empty log view has always shown the
+	// earliest instant a clock can name.
+	DateStart time.Time
+	DateStop  time.Time
+
 	Results []domain.LogEntry
 }
 

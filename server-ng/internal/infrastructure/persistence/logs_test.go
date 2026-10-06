@@ -574,3 +574,94 @@ func TestDeleteLogsBeforeReportsTheLegacyFailureShape(t *testing.T) {
 		t.Errorf("error = %v, want a failure the log line can attribute to the prune", err)
 	}
 }
+
+// TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch is what the administrator's log view asks
+// the server for: the earliest and latest instants among everything the criteria match, and not merely
+// the ends of the page that was shown. Paging is how an administrator moves through that span, so a
+// span taken from the page would move its ends every time the page changed.
+//
+// The legacy server reads the span with two queries of its own — the matching timestamps ascending and
+// descending — before it counts or pages anything, and server-ng asks the same three questions in the
+// same order.
+func TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch(t *testing.T) {
+	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+
+	whole, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if whole.Count != 5 {
+		t.Fatalf("the stored log holds %d entries, want the five the legacy server stored", whole.Count)
+	}
+
+	first, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: 1, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if first.Count != 5 || len(first.Results) != 1 {
+		t.Fatalf("the first page holds %d entries of %d, want one entry of five", len(first.Results), first.Count)
+	}
+
+	if !first.DateStart.Equal(whole.DateStart) {
+		t.Errorf("the span starts at %v, want %v: the earliest entry the criteria match, not the earliest entry on this page", first.DateStart, whole.DateStart)
+	}
+
+	if !first.DateStop.Equal(whole.DateStop) {
+		t.Errorf("the span stops at %v, want %v: the latest entry the criteria match, not the latest entry on this page", first.DateStop, whole.DateStop)
+	}
+
+	// The span is the whole match and not the page, so the ends of the span are not the ends of the
+	// entries that were returned.
+	if first.DateStart.Equal(first.DateStop) {
+		t.Errorf("the span of five entries is a single instant %v, want the ends of everything the criteria match", first.DateStart)
+	}
+}
+
+// TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter pins the span against the same
+// criteria the log view submits, because the span belongs to the filtered set: an administrator who
+// asks for warnings only is shown the span of the warnings, and paging moves through those.
+func TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter(t *testing.T) {
+	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+
+	warns, err := logs.SearchLogs(context.Background(), domain.LogSearch{Level: domain.LogLevelWarn, Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if warns.Count < 2 {
+		t.Fatalf("the stored log holds %d warnings, want at least two so that the span has two ends", warns.Count)
+	}
+
+	if warns.DateStart.After(warns.DateStop) {
+		t.Errorf("the warnings span runs %v to %v, want the earliest warning first", warns.DateStart, warns.DateStop)
+	}
+
+	for _, entry := range warns.Results {
+		if entry.DateTime.Before(warns.DateStart) || entry.DateTime.After(warns.DateStop) {
+			t.Errorf("the entry at %v is outside the span %v to %v the same search reports", entry.DateTime, warns.DateStart, warns.DateStop)
+		}
+	}
+}
+
+// TestSearchLogsWithNothingToReportLeavesTheSpanUnset pins the shape an empty log view is answered
+// with. The legacy server leaves both ends at the zero time when nothing matches — and not at the Unix
+// epoch, which is what its call search leaves behind — and the administrator's log view shows that
+// instant.
+func TestSearchLogsWithNothingToReportLeavesTheSpanUnset(t *testing.T) {
+	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Level: "not-a-level", Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 0 || len(page.Results) != 0 {
+		t.Fatalf("a search for a level the log does not hold reports %d entries of %d, want nothing", len(page.Results), page.Count)
+	}
+
+	if !page.DateStart.IsZero() || !page.DateStop.IsZero() {
+		t.Errorf("the span of nothing is %v to %v, want both ends unset", page.DateStart, page.DateStop)
+	}
+}
