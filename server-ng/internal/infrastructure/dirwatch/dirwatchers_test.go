@@ -330,9 +330,29 @@ func TestAWatchDeletesTheRecordingItIngested(t *testing.T) {
 
 	watched.calls.next(t, settleWait)
 
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("the recording the watch ingested is still there (%v), want it deleted", err)
+	wantGone(t, path)
+}
+
+// wantGone waits for a file the watch is supposed to delete, and says what it found when it is still
+// there. The watch hands the call over before it deletes the files it read from, which is the order the
+// legacy server has them in, so the moment a test can see the call is a moment the files may not be gone
+// yet.
+func wantGone(t *testing.T, path string) {
+	t.Helper()
+
+	deadline := time.Now().Add(settleWait)
+
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			return
+		}
+
+		time.Sleep(20 * time.Millisecond)
 	}
+
+	_, err := os.Stat(path)
+
+	t.Errorf("%s is still there (%v), want it deleted", filepath.Base(path), err)
 }
 
 // TestARecordingAlreadyInTheDirectoryIsIngestedOnlyByAWatchThatDeletesAfterIngesting is quirk
@@ -447,9 +467,7 @@ func TestATrunkRecorderPairIsIngestedAndBothFilesGo(t *testing.T) {
 	}
 
 	for _, path := range []string{sidecar, audio} {
-		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-			t.Errorf("%s is still there (%v), want both files the call was built from deleted", filepath.Base(path), err)
-		}
+		wantGone(t, path)
 	}
 }
 
