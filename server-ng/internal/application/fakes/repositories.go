@@ -143,15 +143,25 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 		return matching[i].Timestamp.After(matching[j].Timestamp)
 	})
 
-	page := ports.CallSearchPage{Count: uint(len(matching))}
+	// An empty page reports the Unix epoch at both ends, which is what the legacy server's
+	// `QueryRow` leaves behind when no call matches and what the captured empty `LCL` frame carries.
+	page := ports.CallSearchPage{
+		Count:     uint(len(matching)),
+		DateStart: time.UnixMilli(0),
+		DateStop:  time.UnixMilli(0),
+	}
 
-	for _, call := range matching {
-		if page.DateStart.IsZero() || call.Timestamp.Before(page.DateStart) {
-			page.DateStart = call.Timestamp
-		}
+	if len(matching) > 0 {
+		page.DateStart, page.DateStop = matching[0].Timestamp, matching[0].Timestamp
 
-		if page.DateStop.IsZero() || call.Timestamp.After(page.DateStop) {
-			page.DateStop = call.Timestamp
+		for _, call := range matching[1:] {
+			if call.Timestamp.Before(page.DateStart) {
+				page.DateStart = call.Timestamp
+			}
+
+			if call.Timestamp.After(page.DateStop) {
+				page.DateStop = call.Timestamp
+			}
 		}
 	}
 

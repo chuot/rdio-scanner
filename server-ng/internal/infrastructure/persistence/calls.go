@@ -479,6 +479,13 @@ func (calls *Calls) readSearchSpan(ctx context.Context, query string, args []any
 	err := calls.queryRow(ctx, query, args...).Scan(&timestamp)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		// A search that matches nothing reports the Unix epoch at both ends, not an absent span:
+		// the legacy server reads its timestamp variable with `QueryRow`, leaves it at zero when
+		// there is no row, and renders `time.UnixMilli(0)`. The captured empty `LCL` frame carries
+		// `"dateStart":"1970-01-01T00:00:00Z"`, and a client that has to answer with those bytes
+		// cannot be given year 1 instead.
+		*at = instantOf(0)
+
 		return nil
 	}
 

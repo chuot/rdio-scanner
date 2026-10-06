@@ -665,10 +665,12 @@ func TestSearchCallsReportsTheSpanOfTheBoundedMatch(t *testing.T) {
 	}
 }
 
-// TestSearchCallsWithNothingToReturnReportsNoSpan pins what an empty history page carries. The
-// legacy server leaves its timestamp variable at zero and reports the Unix epoch for both ends,
-// which the history view cannot tell apart from a call recorded on 1970-01-01.
-func TestSearchCallsWithNothingToReturnReportsNoSpan(t *testing.T) {
+// TestSearchCallsWithNothingToReturnReportsTheUnixEpoch pins what an empty history page carries. The
+// legacy server reads its span timestamps with `QueryRow`, leaves the variable at zero when there is no
+// row, and renders `time.UnixMilli(0)` — so an empty search answers `"dateStart":"1970-01-01T00:00:00Z"`
+// and the history view cannot tell that apart from a call recorded on 1 January 1970. It is preserved
+// because the captured empty `LCL` frame carries those bytes and a client reads them.
+func TestSearchCallsWithNothingToReturnReportsTheUnixEpoch(t *testing.T) {
 	fixture := newCallsFixture(t)
 
 	page := fixture.search(t, ports.CallSearch{Limit: 200, Ascending: true})
@@ -677,8 +679,10 @@ func TestSearchCallsWithNothingToReturnReportsNoSpan(t *testing.T) {
 		t.Fatalf("SearchCalls returned %v with count %d, want an empty page", page.Results, page.Count)
 	}
 
-	if !page.DateStart.IsZero() || !page.DateStop.IsZero() {
-		t.Errorf("DateStart/DateStop = %v / %v, want no span at all rather than the Unix epoch", page.DateStart, page.DateStop)
+	epoch := time.UnixMilli(0)
+
+	if !page.DateStart.Equal(epoch) || !page.DateStop.Equal(epoch) {
+		t.Errorf("DateStart/DateStop = %v / %v, want %v: the legacy reports the Unix epoch, not an absent span", page.DateStart, page.DateStop, epoch)
 	}
 }
 
