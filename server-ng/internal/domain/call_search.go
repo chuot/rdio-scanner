@@ -150,14 +150,22 @@ type TalkgroupScope struct {
 //
 // A talkgroup whose tag the server no longer knows is left out of the view entirely, as
 // the legacy server leaves it out of the configuration it sends.
+//
+// A system survives losing every talkgroup under it: it is still a system the listener sees, with
+// nothing under it. And a scope entry that names its talkgroups as a list — even an empty list —
+// says something different from one that names them some other way or not at all, which is the
+// difference between a system the listener sees empty and a system the listener never sees.
+//
+// The talkgroups under a scoped system come in the order the scope names them, and a system the
+// scope names twice is seen twice. Both are what the legacy server appends.
 func (systems Systems) Scoped(scope AccessScope, tags Tags) Systems {
 	out := Systems{}
 
 	if !scope.Present || scope.Wildcard {
 		for _, system := range systems {
-			if scoped, ok := withTaggedTalkgroups(system, tags); ok {
-				out = append(out, scoped)
-			}
+			system.Talkgroups = taggedTalkgroups(system, tags)
+
+			out = append(out, system)
 		}
 
 		return out
@@ -169,34 +177,41 @@ func (systems Systems) Scoped(scope AccessScope, tags Tags) Systems {
 			continue
 		}
 
-		if entry.TalkgroupsWildcard {
-			if scoped, ok := withTaggedTalkgroups(system, tags); ok {
-				out = append(out, scoped)
-			}
-
+		// A scope entry that named its talkgroups as neither the wildcard nor a list names a system
+		// this listener does not see.
+		if !entry.TalkgroupsGiven && !entry.TalkgroupsWildcard {
 			continue
 		}
 
 		named := Talkgroups{}
 
-		for _, talkgroup := range system.Talkgroups {
-			if _, ok := tags.ByID(talkgroup.TagID); !ok {
-				continue
-			}
-
-			for _, ref := range entry.TalkgroupRefs {
-				if ref == talkgroup.TalkgroupRef {
-					named = append(named, talkgroup)
-
-					break
+		if entry.TalkgroupsWildcard {
+			for _, talkgroup := range system.Talkgroups {
+				if _, ok := tags.ByID(talkgroup.TagID); !ok {
+					continue
 				}
+
+				named = append(named, talkgroup)
+			}
+		} else {
+			// In the order the scope names them, which is not the order the system keeps them in,
+			// and a reference that is not on this system is left out rather than looked for
+			// somewhere else.
+			for _, ref := range entry.TalkgroupRefs {
+				talkgroup, ok := system.Talkgroups.ByRef(ref)
+				if !ok {
+					continue
+				}
+
+				if _, ok := tags.ByID(talkgroup.TagID); !ok {
+					continue
+				}
+
+				named = append(named, talkgroup)
 			}
 		}
 
-		if len(named) == 0 {
-			continue
-		}
-
+		// A system with nothing left under it is still a system the listener sees.
 		system.Talkgroups = named
 
 		out = append(out, system)
@@ -205,9 +220,8 @@ func (systems Systems) Scoped(scope AccessScope, tags Tags) Systems {
 	return out
 }
 
-// withTaggedTalkgroups returns the system with only the talkgroups whose tag the server
-// knows. It reports false when nothing is left.
-func withTaggedTalkgroups(system System, tags Tags) (System, bool) {
+// taggedTalkgroups returns the talkgroups of a system whose tag the server still knows.
+func taggedTalkgroups(system System, tags Tags) Talkgroups {
 	kept := Talkgroups{}
 
 	for _, talkgroup := range system.Talkgroups {
@@ -218,13 +232,7 @@ func withTaggedTalkgroups(system System, tags Tags) (System, bool) {
 		kept = append(kept, talkgroup)
 	}
 
-	if len(kept) == 0 {
-		return System{}, false
-	}
-
-	system.Talkgroups = kept
-
-	return system, true
+	return kept
 }
 
 // ScopeForGroup returns where a group label applies in the given catalog: the systems

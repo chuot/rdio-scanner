@@ -35,10 +35,16 @@ type AccessScope struct {
 	Systems  []ScopedSystem
 }
 
-// ScopedSystem is one system an access or apikey may reach, named by the reference
-// clients use rather than by the database identifier.
+// ScopedSystem is one system an access or apikey may see, named by the reference clients use rather
+// than by the database identifier.
+//
+// TalkgroupsGiven is what separates two scope entries that otherwise look the same: one that named
+// its talkgroups as a list, even an empty one, and one that named them some other way or not at all.
+// The first sees that system with exactly those talkgroups under it, and the second does not see that
+// system at all.
 type ScopedSystem struct {
 	SystemRef          uint
+	TalkgroupsGiven    bool
 	TalkgroupsWildcard bool
 	TalkgroupRefs      []uint
 }
@@ -75,6 +81,10 @@ func ParseAccessScope(value any) (AccessScope, bool) {
 				system.TalkgroupsWildcard = talkgroups == "*"
 
 			case []any:
+				// Naming talkgroups as a list is what makes the system visible at all, even when
+				// the list is empty.
+				system.TalkgroupsGiven = true
+
 				for _, talkgroup := range talkgroups {
 					if ref, ok := talkgroup.(float64); ok {
 						system.TalkgroupRefs = append(system.TalkgroupRefs, uint(ref))
@@ -140,7 +150,8 @@ func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 // It is the mirror of ParseAccessScope, and both are needed because the same shape appears in
 // the stored row and on the wire. A scope that names no systems is an empty list rather than
 // nothing, because "an empty list was supplied" and "nothing was supplied" are the two states
-// Q9 turns on.
+// Q9 turns on. An entry that named no talkgroups gets no talkgroups key for the same reason:
+// inventing an empty list would turn a system the listener cannot see into one the listener can.
 func (scope AccessScope) Value() any {
 	if !scope.Present {
 		return nil
@@ -157,7 +168,7 @@ func (scope AccessScope) Value() any {
 
 		if system.TalkgroupsWildcard {
 			entry["talkgroups"] = "*"
-		} else {
+		} else if system.TalkgroupsGiven {
 			talkgroups := []any{}
 
 			for _, ref := range system.TalkgroupRefs {
