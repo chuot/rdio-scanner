@@ -162,6 +162,14 @@ func operationError(section, operation string, err error) error {
 	return fmt.Errorf("%s.%s: %s", section, operation, err)
 }
 
+// placeholders is the right number of `?` for a list of values. The legacy server built its
+// `IN (...)` lists by marshaling the identifiers into JSON and turning the brackets back into
+// parentheses, which put the values inside the statement; this is the same list with the values
+// kept outside it, bound as parameters.
+func placeholders(count int) string {
+	return strings.TrimSuffix(strings.Repeat("?, ", count), ", ")
+}
+
 // instantOf converts the integer a legacy table stores to the instant it means. Every timestamp in
 // this schema is milliseconds since the Unix epoch, in the server's local zone.
 func instantOf(millis int64) time.Time {
