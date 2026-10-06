@@ -23,6 +23,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"rdio-scanner/server-ng/internal/application/ports"
 	"rdio-scanner/server-ng/internal/domain"
@@ -87,6 +88,14 @@ type IngestCallHandler struct {
 	downstreams ports.DownstreamRepository
 	forwarder   ports.DownstreamForwarder
 	clock       ports.Clock
+
+	// writes holds one call being ingested at a time. The legacy server gets this for free: every call
+	// — from a watched directory, from an upload, from a downstream server — goes to one queue with one
+	// worker. That is what makes its duplicate detection mean anything, and what makes two calls naming a
+	// system the server does not know create that system once and not twice. Here the watchers run on
+	// their own goroutines and an upload is answered on the connection that posted it, so the rule has to
+	// be held on purpose.
+	writes sync.Mutex
 }
 
 // NewIngestCallHandler builds the handler from its ports.
@@ -129,6 +138,9 @@ func NewIngestCallHandler(
 
 // Handle resolves, filters, stores, and delivers one ingested call.
 func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallCommand) (IngestCallResult, error) {
+	handler.writes.Lock()
+	defer handler.writes.Unlock()
+
 	call := cmd.Call
 
 	if err := call.IsValid(); err != nil {

@@ -77,6 +77,24 @@ func (apikey Apikey) Accepts(call Call) bool {
 	return apikey.Scope.Grants(call)
 }
 
+// AcceptsUpload reports whether the credential an uploader presented covers the call it posted.
+//
+// It is the reference-boundary twin of Accepts, and the difference is the whole point of it. A call is
+// matched against a system and a talkgroup the server has resolved, and at the upload boundary nothing
+// about the call has been resolved yet — the server has only the references the upload itself names. The
+// legacy server compares the resolved pair here anyway, which means a credential scoped to particular
+// systems dereferences a system that does not exist yet and the connection ends with no reply at all
+// (Q51, and the fix the owner approved on Q20). Comparing the submitted references is what that
+// comparison was written to do.
+func (apikeys Apikeys) AcceptsUpload(key string, call Call) bool {
+	apikey, ok := apikeys.ByKey(key)
+	if !ok || apikey.Disabled {
+		return false
+	}
+
+	return apikey.Scope.GrantsReferences(call.Meta.SystemRef, call.Meta.TalkgroupRef)
+}
+
 // Apikeys is the server's upload credential list.
 type Apikeys []Apikey
 

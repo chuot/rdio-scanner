@@ -30,6 +30,15 @@ import (
 	"rdio-scanner/server-ng/internal/domain"
 )
 
+// The call-upload endpoints declare the reading they need themselves, because they may not import this
+// package (contract-server-ng.md §1) and the composition root is what wires it to them. The shape is
+// asserted here so that a change to this parser is caught by this suite rather than by a build of the
+// composition root.
+var _ interface {
+	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call
+	ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error
+} = (*Parsers)(nil)
+
 // uploadField builds one field of a call upload and hands back the part and its contents,
 // which is the pair the upload endpoint hands the parser for each field it reads.
 func uploadField(t *testing.T, name, value string) (*multipart.Part, []byte) {
@@ -471,5 +480,92 @@ func TestApplyMultipartUnknownFieldIsReadAsNothing(t *testing.T) {
 	if call.Meta.TalkgroupLabel != "Dispatch 1" || call.Meta.TalkgroupRef != 1514000 {
 		t.Errorf("the call names talkgroup %d %q, want the fields around the unknown one to land",
 			call.Meta.TalkgroupRef, call.Meta.TalkgroupLabel)
+	}
+}
+
+// The order the fields arrive in decides which of two fields naming the same thing wins, because each one
+// writes over what an earlier one wrote.
+//
+// This is the legacy server's own behaviour for its call-upload endpoint. Its trunk-recorder endpoint
+// collects the fields into a map and applies them in whatever order Go walks that map in, so the same upload
+// is read differently on different runs — quirk Q57, and not reproduced: both endpoints apply the fields as
+// they arrived.
+func TestApplyMultipartAppliesFieldsInTheOrderTheyArrived(t *testing.T) {
+	call := domain.NewCall()
+
+	part, data := uploadFileField(t, "audio", "first.wav", "a recording")
+	call = ApplyMultipart(part, data, call)
+
+	part, data = uploadField(t, "audioFilename", "second.wav")
+	call = ApplyMultipart(part, data, call)
+
+	if call.AudioFilename != "second.wav" {
+		t.Errorf("the recording is named %q, want the name that arrived last", call.AudioFilename)
+	}
+
+	reversed := domain.NewCall()
+
+	part, data = uploadField(t, "audioFilename", "second.wav")
+	reversed = ApplyMultipart(part, data, reversed)
+
+	part, data = uploadFileField(t, "audio", "first.wav", "a recording")
+	reversed = ApplyMultipart(part, data, reversed)
+
+	if reversed.AudioFilename != "first.wav" {
+		t.Errorf("the recording is named %q, want the name that arrived last", reversed.AudioFilename)
+	}
+}
+
+// The dash some recording tools write in place of a name is a value for a system and not for a talkgroup.
+// The asymmetry is the legacy server's own, and it decides whether a call naming "-" is matched to a system
+// by label: a system label of "-" is looked up as a system actually named "-", and a talkgroup label of "-"
+// is read as no label at all.
+func TestApplyMultipartSystemLabelTakesTheDashRecordingToolsWrite(t *testing.T) {
+	call := applyUploadFields(t, domain.NewCall(),
+		[2]string{"systemLabel", "-"},
+		[2]string{"talkgroupLabel", "-"},
+	)
+
+	if call.Meta.SystemLabel != "-" {
+		t.Errorf("the call names system label %q, want the dash the upload carried: the legacy server reads a "+
+			"system label with no guard on it at all", call.Meta.SystemLabel)
+	}
+
+	if len(call.Meta.TalkgroupLabel) != 0 {
+		t.Errorf("the call names talkgroup label %q, want nothing: the talkgroup fields ignore the dash",
+			call.Meta.TalkgroupLabel)
+	}
+}
+
+// A timestamp of zero is the one moment this guard refuses. A submission that names no moment at all is
+// accepted and recorded at the year 1, which is quirk Q42 and is preserved; an upload that explicitly says
+// the epoch is the case the guard was written for, and it does catch it.
+func TestApplyMultipartTimestampOfZeroIsTheMomentTheServerRefuses(t *testing.T) {
+	const recording = "a recording long enough to be a recording, and then some more of it"
+
+	stamped := applyUploadFields(t, domain.NewCall(),
+		[2]string{"audio", recording},
+		[2]string{"system", "10001"},
+		[2]string{"talkgroup", "1514000"},
+		[2]string{"timestamp", "0"},
+	)
+
+	if err := stamped.IsValid(); err == nil || err.Error() != "no timestamp" {
+		t.Errorf("a call stamped at the epoch reports %v, want the refusal the guard was written for", err)
+	}
+
+	unstamped := applyUploadFields(t, domain.NewCall(),
+		[2]string{"audio", recording},
+		[2]string{"system", "10001"},
+		[2]string{"talkgroup", "1514000"},
+	)
+
+	if err := unstamped.IsValid(); err != nil {
+		t.Errorf("a call naming no moment reports %v, want it accepted: quirk Q42 is preserved", err)
+	}
+
+	if unstamped.Timestamp.Year() != 1 {
+		t.Errorf("a call naming no moment is dated to the year %d, want the year 1 the guard was written to "+
+			"catch and does not", unstamped.Timestamp.Year())
 	}
 }

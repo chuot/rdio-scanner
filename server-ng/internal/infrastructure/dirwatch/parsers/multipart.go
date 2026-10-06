@@ -278,3 +278,14 @@ func decodeList(data []byte) []any {
 
 	return list
 }
+
+// ApplyMultipart reads one posted field of a call upload into the call, for the value the call-upload
+// endpoints are wired with.
+//
+// It is this package's ApplyMultipart reading and nothing new: the same knowledge is what the directory
+// watchers use for the files they read. The method exists because the endpoints are wired with a parser and
+// may not import this package directly (contract-server-ng.md §1), so the composition root hands them this
+// value and the endpoints reach the reading through the seam they declare themselves.
+func (parsers *Parsers) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call {
+	return ApplyMultipart(part, data, call)
+}

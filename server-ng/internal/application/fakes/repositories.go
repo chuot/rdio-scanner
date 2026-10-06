@@ -45,6 +45,14 @@ type Calls struct {
 	// Saved records the calls that were written, in the order they were written.
 	Saved []domain.Call
 
+	// Entered, when set, is signalled when a write begins. Tests use it to know that the server is
+	// inside a write rather than merely about to start one.
+	Entered chan struct{}
+
+	// Hold, when set, makes a write wait until it is closed. Tests use it to keep the server inside a
+	// write and see whether it starts another one.
+	Hold chan struct{}
+
 	// Err, when set, is returned by every method instead of the stored state.
 	Err error
 }
@@ -74,6 +82,18 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 func (calls *Calls) SaveCall(ctx context.Context, call domain.Call) (domain.Call, error) {
 	if calls.Err != nil {
 		return domain.Call{}, calls.Err
+	}
+
+	if calls.Entered != nil {
+		select {
+		case calls.Entered <- struct{}{}:
+
+		default:
+		}
+	}
+
+	if calls.Hold != nil {
+		<-calls.Hold
 	}
 
 	if call.ID == 0 {

@@ -632,6 +632,16 @@ func (parsers *Parsers) applyTrunkRecorder(call *domain.Call, sidecar []byte) er
 	return nil
 }
 
+// ApplyTrunkRecorderSidecar reads the JSON document trunk-recorder writes beside a recording, reached from
+// the call-upload endpoint instead of from a watched directory.
+//
+// It is the same reading, and it keeps the same quirk: a sidecar that names a start time and no timestamp is
+// recorded at the moment the server read it, which is quirk Q39 in
+// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
+func (parsers *Parsers) ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error {
+	return parsers.applyTrunkRecorder(call, sidecar)
+}
+
 // splitDSDPlusName splits a dsd+ recording name on the underscores that are not inside
 // square brackets.
 func splitDSDPlusName(base string) []string {

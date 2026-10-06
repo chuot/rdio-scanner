@@ -815,3 +815,102 @@ func TestIngestCallReportsFailureWhenARepositoryFails(t *testing.T) {
 		t.Error("a repository failure must reach the caller")
 	}
 }
+
+// The server stores one call at a time.
+//
+// The legacy server gets this for free: every call — from a watched directory, from an upload, from a
+// downstream server — goes to one queue with one worker, so a call is never compared against the history
+// before an earlier call has been written. That is what makes its duplicate detection mean anything, and
+// what makes two calls naming a system the server does not know create that system once and not twice.
+//
+// Here the watchers run on their own goroutines and an upload is answered on the connection that posted
+// it, so the rule has to be held on purpose.
+func TestIngestCallHandlerStoresOneCallAtATime(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.seedKnownSystem()
+
+	// The store signals every write it begins and holds the first one open, so that a second write
+	// starting while the first is still open is something the test can see rather than infer.
+	fixture.calls.Entered = make(chan struct{}, 8)
+	fixture.calls.Hold = make(chan struct{})
+
+	first := validIngestCall()
+	first.AudioFilename = "first.wav"
+	first.Meta.SystemRef = 1
+	first.Meta.TalkgroupRef = 123
+
+	second := validIngestCall()
+	second.AudioFilename = "second.wav"
+	second.Timestamp = ingestTime.Add(time.Second)
+	second.Meta.SystemRef = 1
+	second.Meta.TalkgroupRef = 123
+
+	firstDone := make(chan IngestCallResult, 1)
+
+	go func() {
+		result, _ := fixture.handler.Handle(context.Background(), IngestCallCommand{Call: first})
+
+		firstDone <- result
+	}()
+
+	select {
+	case <-fixture.calls.Entered:
+
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first call never reached the store")
+	}
+
+	secondDone := make(chan IngestCallResult, 1)
+
+	go func() {
+		result, _ := fixture.handler.Handle(context.Background(), IngestCallCommand{Call: second})
+
+		secondDone <- result
+	}()
+
+	// The second call is given a full second to reach the store, which is far more than the store itself
+	// takes. A server that does not serialize its ingests reaches it in microseconds.
+	started := 0
+
+observing:
+	for {
+		select {
+		case <-fixture.calls.Entered:
+			started++
+
+		case <-time.After(time.Second):
+			break observing
+		}
+	}
+
+	if started != 0 {
+		t.Fatalf("%d calls reached the store while the first was still being stored: a call is compared "+
+			"against the history the server has already written, and a call that has not been written yet is "+
+			"invisible to it", started)
+	}
+
+	close(fixture.calls.Hold)
+
+	for name, done := range map[string]<-chan IngestCallResult{"first": firstDone, "second": secondDone} {
+		select {
+		case result := <-done:
+			if result.Outcome != IngestCallAccepted {
+				t.Errorf("%s call outcome = %q, want accepted", name, result.Outcome)
+			}
+
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the %s call never finished", name)
+		}
+	}
+
+	if len(fixture.calls.Saved) != 2 {
+		t.Fatalf("the server stored %v, want both calls", fixture.calls.Saved)
+	}
+
+	firstStored, secondStored := fixture.calls.Saved[0].AudioFilename, fixture.calls.Saved[1].AudioFilename
+
+	if !strings.HasPrefix(firstStored, "first") || !strings.HasPrefix(secondStored, "second") {
+		t.Errorf("the calls were stored as %s then %s, want them stored one at a time in the order they arrived",
+			firstStored, secondStored)
+	}
+}
