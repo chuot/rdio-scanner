@@ -76,15 +76,17 @@ type IngestCallCommand struct {
 // auto-populates broadcasts the new configuration before it is stored, and a duplicate is
 // rejected before its audio is converted.
 type IngestCallHandler struct {
-	calls     ports.CallRepository
-	systems   ports.SystemRepository
-	groups    ports.GroupRepository
-	tags      ports.TagRepository
-	options   ports.OptionsRepository
-	logs      ports.LogRepository
-	converter ports.AudioConverter
-	hub       ports.Hub
-	clock     ports.Clock
+	calls       ports.CallRepository
+	systems     ports.SystemRepository
+	groups      ports.GroupRepository
+	tags        ports.TagRepository
+	options     ports.OptionsRepository
+	logs        ports.LogRepository
+	converter   ports.AudioConverter
+	hub         ports.Hub
+	downstreams ports.DownstreamRepository
+	forwarder   ports.DownstreamForwarder
+	clock       ports.Clock
 }
 
 // NewIngestCallHandler builds the handler from its ports.
@@ -92,6 +94,11 @@ type IngestCallHandler struct {
 // The options are read through the options port rather than held, so that the composition
 // root decides whether that read reaches the database or an in-memory copy refreshed when
 // the configuration changes.
+//
+// The downstream repository and the forwarder belong to the same step: the repository says
+// which other servers this one posts its calls to and for which systems, and the forwarder
+// does the posting. A deployment with no downstreams is a repository that returns nothing,
+// not a handler built without them.
 func NewIngestCallHandler(
 	calls ports.CallRepository,
 	systems ports.SystemRepository,
@@ -101,18 +108,22 @@ func NewIngestCallHandler(
 	logs ports.LogRepository,
 	converter ports.AudioConverter,
 	hub ports.Hub,
+	downstreams ports.DownstreamRepository,
+	forwarder ports.DownstreamForwarder,
 	clock ports.Clock,
 ) *IngestCallHandler {
 	return &IngestCallHandler{
-		calls:     calls,
-		systems:   systems,
-		groups:    groups,
-		tags:      tags,
-		options:   options,
-		logs:      logs,
-		converter: converter,
-		hub:       hub,
-		clock:     clock,
+		calls:       calls,
+		systems:     systems,
+		groups:      groups,
+		tags:        tags,
+		options:     options,
+		logs:        logs,
+		converter:   converter,
+		hub:         hub,
+		downstreams: downstreams,
+		forwarder:   forwarder,
+		clock:       clock,
 	}
 }
 
@@ -361,9 +372,69 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 	logCall(domain.LogLevelInfo, stored, "success")
 
-	handler.hub.BroadcastCall(stored)
+	handler.emitCall(ctx, stored)
 
 	return IngestCallResult{Outcome: IngestCallAccepted, CallID: stored.ID}, nil
+}
+
+// emitCall tells everyone about a call this server has just stored.
+//
+// This is the step the delay belongs in front of: a call recorded on a talkgroup or system
+// with a delay is not told to anybody when it is recorded but when its delay runs out, and
+// the delay re-uses this same step rather than carrying its own copy of the fan-out.
+func (handler *IngestCallHandler) emitCall(ctx context.Context, call domain.Call) {
+	// The order is the legacy order: the other servers are told first, the listeners second.
+	// Neither waits for the other, and neither waits for a downstream server to answer.
+	handler.forwardCall(ctx, call)
+
+	handler.hub.BroadcastCall(call)
+}
+
+// forwardCall re-posts a stored call to every downstream server whose scope covers it.
+//
+// It runs on its own goroutine, as the legacy server does, because a downstream server is
+// somebody else's server: one that is slow, or unreachable, holds its own re-post for the
+// full length of its timeout, and must not hold the calls that arrive after this one with
+// it. The consequence is that a forwarding failure is not this use case's failure — the call
+// was already stored and delivered here — so it is reported where the legacy reports it, in
+// the server log.
+//
+// The forwarding also outlives the request or the watch cycle that produced the call, which
+// is why its context is detached from that cycle's cancellation. What bounds it instead is
+// the forwarder's own timeout.
+func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
+	go func() {
+		ctx = context.WithoutCancel(ctx)
+
+		downstreams, err := handler.downstreams.AllDownstreams(ctx)
+		if err != nil {
+			handler.log(ctx, domain.LogLevelError, err.Error())
+
+			return
+		}
+
+		for _, downstream := range downstreams.Accepting(call) {
+			err := handler.forwarder.Forward(ctx, ports.DownstreamTarget{
+				URL:    downstream.URL,
+				Apikey: downstream.Apikey,
+			}, call)
+
+			if err != nil {
+				handler.log(ctx, domain.LogLevelError, downstreamLine(call, downstream.URL, err.Error()))
+
+				continue
+			}
+
+			handler.log(ctx, domain.LogLevelInfo, downstreamLine(call, downstream.URL, "success"))
+		}
+	}()
+}
+
+// downstreamLine is the log line the legacy server writes for every downstream it posts a
+// call to, whether that server took it or refused it.
+func downstreamLine(call domain.Call, url string, outcome string) string {
+	return fmt.Sprintf("downstream: system=%d talkgroup=%d file=%s to %s %s",
+		call.System.SystemRef, call.Talkgroup.TalkgroupRef, call.AudioFilename, url, outcome)
 }
 
 // convertAudio converts the call's audio and replaces it with the converted file. When

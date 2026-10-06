@@ -44,6 +44,9 @@ type ingestFixture struct {
 	hub       *fakes.Hub
 	clock     *fakes.Clock
 
+	downstreams *fakes.Downstreams
+	forwarder   *fakes.Forwarder
+
 	handler *IngestCallHandler
 }
 
@@ -58,11 +61,13 @@ func newIngestFixture() *ingestFixture {
 		tags: &fakes.Tags{Stored: domain.Tags{
 			{ID: 10, Label: "Untagged"},
 		}},
-		options:   &fakes.Options{Stored: domain.DefaultOptions()},
-		logs:      &fakes.Logs{},
-		converter: fakes.NewConverter(),
-		hub:       fakes.NewHub(),
-		clock:     fakes.NewClock(ingestTime),
+		options:     &fakes.Options{Stored: domain.DefaultOptions()},
+		logs:        &fakes.Logs{},
+		converter:   fakes.NewConverter(),
+		hub:         fakes.NewHub(),
+		clock:       fakes.NewClock(ingestTime),
+		downstreams: &fakes.Downstreams{},
+		forwarder:   &fakes.Forwarder{},
 	}
 
 	fixture.handler = NewIngestCallHandler(
@@ -74,6 +79,8 @@ func newIngestFixture() *ingestFixture {
 		fixture.logs,
 		fixture.converter,
 		fixture.hub,
+		fixture.downstreams,
+		fixture.forwarder,
 		fixture.clock,
 	)
 
@@ -120,11 +127,63 @@ func (fixture *ingestFixture) ingest(call domain.Call) (IngestCallResult, error)
 func (fixture *ingestFixture) logMessages() []string {
 	out := []string{}
 
-	for _, entry := range fixture.logs.Stored {
+	for _, entry := range fixture.logs.Recorded() {
 		out = append(out, entry.Message)
 	}
 
 	return out
+}
+
+// loggedEventually waits for a log line that the ingest wrote on another goroutine — the
+// downstream fan-out — and gives up after a moment that no local log write needs.
+func (fixture *ingestFixture) loggedEventually(want string) bool {
+	deadline := time.Now().Add(2 * time.Second)
+
+	for {
+		for _, message := range fixture.logMessages() {
+			if message == want {
+				return true
+			}
+		}
+
+		if time.Now().After(deadline) {
+			return false
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// reposted returns what the downstream fan-out re-posted.
+//
+// The fan-out runs on its own goroutine — that is what it is for — so the ingest returning
+// does not mean it has finished. It only touches memory in these tests, so it counts as
+// finished once its count has stopped growing.
+func (fixture *ingestFixture) reposted() []fakes.ForwardedCall {
+	deadline := time.Now().Add(2 * time.Second)
+
+	current := fixture.forwarder.Reposts()
+	stable := 0
+
+	for time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+
+		next := fixture.forwarder.Reposts()
+
+		if len(next) != len(current) {
+			current, stable = next, 0
+
+			continue
+		}
+
+		stable++
+
+		if stable >= 5 {
+			return next
+		}
+	}
+
+	return current
 }
 
 func (fixture *ingestFixture) loggedContaining(fragment string) bool {

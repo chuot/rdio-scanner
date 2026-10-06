@@ -25,6 +25,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"rdio-scanner/server-ng/internal/application/ports"
@@ -94,9 +95,32 @@ func extensionOf(name string) string {
 }
 
 // Forwarder is an in-memory downstream forwarder.
+//
+// It can be made to behave like a downstream server that refuses a call (Err) and like one
+// that takes its time (Started and Release): a test closes Release when it wants the re-post
+// to finish, so that how long the use case waits for it is something the test decides rather
+// than something it hopes about.
 type Forwarder struct {
 	// Forwarded records each re-post, with the target it went to.
 	Forwarded []ForwardedCall
+
+	// Err, when set, is what every re-post reports.
+	Err error
+
+	// Started, when set, is closed the first time a re-post is entered.
+	Started chan struct{}
+
+	// Finished, when set, is closed the first time a re-post returns.
+	Finished chan struct{}
+
+	// Release, when set, is waited for before a re-post finishes. Closing it lets every
+	// waiting re-post finish.
+	Release chan struct{}
+
+	entered  sync.Once
+	finished sync.Once
+
+	mutex sync.Mutex
 }
 
 // ForwardedCall is one recorded re-post.
@@ -109,9 +133,31 @@ var _ ports.DownstreamForwarder = (*Forwarder)(nil)
 
 // Forward records a re-post.
 func (forwarder *Forwarder) Forward(ctx context.Context, target ports.DownstreamTarget, call domain.Call) error {
+	forwarder.mutex.Lock()
 	forwarder.Forwarded = append(forwarder.Forwarded, ForwardedCall{Target: target, Call: call})
+	forwarder.mutex.Unlock()
 
-	return nil
+	if forwarder.Started != nil {
+		forwarder.entered.Do(func() { close(forwarder.Started) })
+	}
+
+	if forwarder.Release != nil {
+		<-forwarder.Release
+	}
+
+	if forwarder.Finished != nil {
+		forwarder.finished.Do(func() { close(forwarder.Finished) })
+	}
+
+	return forwarder.Err
+}
+
+// Reposts returns the re-posts recorded so far.
+func (forwarder *Forwarder) Reposts() []ForwardedCall {
+	forwarder.mutex.Lock()
+	defer forwarder.mutex.Unlock()
+
+	return append([]ForwardedCall{}, forwarder.Forwarded...)
 }
 
 // Tokens is an in-memory token issuer with the same rolling window the real one has:
