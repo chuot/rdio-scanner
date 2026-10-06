@@ -76,6 +76,13 @@ type adminFixture struct {
 	// configuration answer reports that is not configuration.
 	Docker bool
 
+	// configSocket is what the configuration path hands a request that asks to become a websocket
+	// connection to. Nothing in this suite is a socket, so it is left unset except by the tests that ask
+	// about the handover.
+	configSocket http.Handler
+
+	socketRequests []*http.Request
+
 	routes http.Handler
 }
 
@@ -124,6 +131,7 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		Configuration:        application.NewUpdateConfigurationHandler(fixture.configurationPorts()),
 		ConfigurationSection: application.NewUpdateConfigurationSectionHandler(fixture.configurationPorts()),
 		Config:               application.NewGetConfigHandler(fixture.repositories()),
+		ConfigSocket:         fixture.configSocket,
 		Docker:               fixture.Docker,
 		Logout:               application.NewAdminLogoutHandler(fixture.tokens),
 		Logs:                 application.NewSearchLogsHandler(fixture.logs, fixture.clock),
@@ -173,6 +181,9 @@ type adminRequest struct {
 	// Forwarded is the forwarding header, when the test is about which machine the server thinks a
 	// request came from.
 	Forwarded string
+
+	// Upgrade is whether the request asks to become a websocket connection.
+	Upgrade bool
 }
 
 func (fixture *adminFixture) serve(request adminRequest) *httptest.ResponseRecorder {
@@ -186,11 +197,30 @@ func (fixture *adminFixture) serve(request adminRequest) *httptest.ResponseRecor
 		req.Header.Set("X-Forwarded-For", request.Forwarded)
 	}
 
+	if request.Upgrade {
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", "websocket")
+	}
+
 	rec := httptest.NewRecorder()
 
 	fixture.routes.ServeHTTP(rec, req)
 
 	return rec
+}
+
+// socketHandoverMarker is what the stand-in socket answers with, so a test can tell a request the endpoint
+// answered from a request the socket was given.
+const socketHandoverMarker = "handed to the configuration socket"
+
+// recordingSocket is the configuration socket as these tests see it: it records what it was handed and
+// answers with a line the endpoint half would never write.
+func recordingSocket(fixture *adminFixture) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fixture.socketRequests = append(fixture.socketRequests, r)
+
+		w.Write([]byte(socketHandoverMarker))
+	})
 }
 
 // authorized is a request from the logged-in administrator at the address the capture used.
@@ -539,6 +569,66 @@ func TestConfigEndpointRefusesARequestWithoutACredentialWithTheCapturedStatus(t 
 
 	if rec.Body.Len() != 0 {
 		t.Errorf("an unauthorized configuration request answers %q, want nothing", rec.Body.String())
+	}
+}
+
+// The configuration path is both an endpoint and a socket, and the upgrade header is what decides which.
+//
+// The socket is handed the request before any credential is asked for, which is the legacy server's order:
+// its one handler looks at the upgrade header first, and only the endpoint half of it looks at a token. A
+// configuration socket authenticates by the frames it sends, and the credential a request could carry in a
+// header is not what the socket is checked against.
+func TestConfigEndpointHandsAnUpgradeRequestToTheSocketWithoutAskingForACredential(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	fixture.configSocket = recordingSocket(fixture)
+
+	fixture.routes = fixture.buildRoutes()
+
+	rec := fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/config", Upgrade: true})
+
+	if len(fixture.socketRequests) != 1 {
+		t.Fatalf("the configuration socket was handed %d requests, want the one that asked to become a socket",
+			len(fixture.socketRequests))
+	}
+
+	if got, want := rec.Body.String(), socketHandoverMarker; got != want {
+		t.Errorf("the configuration path answered %q, want what the socket answers: the endpoint half is not "+
+			"supposed to answer at all", got)
+	}
+
+	// The ordinary half of the same path is untouched. The same path without the upgrade header is answered
+	// as an endpoint, and the socket is not involved.
+	plain := fixture.authorized(http.MethodGet, "/api/admin/config", "")
+
+	if len(fixture.socketRequests) != 1 {
+		t.Errorf("an ordinary configuration request was handed to the socket as well")
+	}
+
+	if plain.Code != http.StatusOK {
+		t.Errorf("the ordinary configuration request was answered %d, want it answered as the endpoint it is",
+			plain.Code)
+	}
+}
+
+// An upgrade request that carries a credential is still a socket: the credential in a header is what the
+// endpoint half is checked against, and the socket is not the thing that reads it.
+func TestConfigEndpointHandsAnUpgradeRequestToTheSocketEvenWhenItCarriesACredential(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	fixture.configSocket = recordingSocket(fixture)
+
+	fixture.routes = fixture.buildRoutes()
+
+	fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/config", token: captureToken, Upgrade: true})
+
+	if len(fixture.socketRequests) != 1 {
+		t.Fatalf("the configuration socket was handed %d requests, want the one that asked to become a socket",
+			len(fixture.socketRequests))
 	}
 }
 

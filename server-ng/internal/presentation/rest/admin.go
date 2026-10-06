@@ -30,6 +30,7 @@ import (
 	"rdio-scanner/server-ng/internal/domain"
 	"rdio-scanner/server-ng/internal/presentation/dto"
 	"rdio-scanner/server-ng/internal/presentation/httpaddr"
+	"rdio-scanner/server-ng/internal/presentation/upgrade"
 )
 
 // Deps are the use cases the administrator endpoints answer with, and the two things these endpoints
@@ -49,6 +50,12 @@ type Deps struct {
 
 	// ConfigurationSection saves one section, which is what the administrator's page does.
 	ConfigurationSection *application.UpdateConfigurationSectionHandler
+
+	// ConfigSocket is the administrator's configuration socket: the thing the whole-configuration path hands
+	// a request that asks to become a websocket connection. It is an http.Handler rather than a socket type
+	// because this package has no business knowing what a socket is, and the composition root wires the real
+	// one. Left unset, the path answers only as an endpoint.
+	ConfigSocket http.Handler
 
 	RemoveUser *application.RemoveAccessUserHandler
 	Session    *application.CheckAdminSessionHandler
@@ -72,6 +79,7 @@ type Deps struct {
 type Admin struct {
 	addUser              *application.AddAccessUserHandler
 	config               *application.GetConfigHandler
+	configSocket         http.Handler
 	configuration        *application.UpdateConfigurationHandler
 	configurationSection *application.UpdateConfigurationSectionHandler
 	docker               bool
@@ -89,6 +97,7 @@ func NewAdmin(deps Deps) *Admin {
 	return &Admin{
 		addUser:              deps.AddUser,
 		config:               deps.Config,
+		configSocket:         deps.ConfigSocket,
 		configuration:        deps.Configuration,
 		configurationSection: deps.ConfigurationSection,
 		docker:               deps.Docker,
@@ -108,8 +117,9 @@ func NewAdmin(deps Deps) *Admin {
 // command-line tooling ask these paths directly, and the whole-configuration path and the section subtree
 // hanging off it are two different handlers, exactly as they are in the legacy server.
 //
-// The whole-configuration path is also where an administrator's configuration socket is opened. That
-// decision is made where the socket is wired, because this package has no socket to hand a request to.
+// The whole-configuration path is also where an administrator's configuration socket is opened: a request
+// that asks to become a websocket connection is handed to the socket the composition root wired, and it is
+// handed over before any credential is asked for, which is the order the legacy server's one handler uses.
 func (admin *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/alerts", admin.Alerts)
 	mux.HandleFunc("/api/admin/config", admin.Config)
@@ -201,12 +211,23 @@ func (admin *Admin) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Config reads or saves the whole configuration.
+// Config reads or saves the whole configuration, or hands the request to the configuration socket.
 //
-// The session is asked before the method: the legacy server checks the credential at the top of the
-// handler, so a request that asks something this endpoint does not answer is told the session is gone
-// rather than that the question is wrong.
+// The upgrade header is looked at first, and before anything is asked for. A request that asks to become a
+// websocket connection is given to the socket, which authenticates by the frames it sends and not by a
+// credential in a header; the legacy server's one handler does the same, and only its endpoint half looks at
+// a token.
+//
+// For an ordinary request, the session is asked before the method: the legacy server checks the credential
+// at the top of the handler, so a request that asks something this endpoint does not answer is told the
+// session is gone rather than that the question is wrong.
 func (admin *Admin) Config(w http.ResponseWriter, r *http.Request) {
+	if admin.configSocket != nil && upgrade.Wanted(r) {
+		admin.configSocket.ServeHTTP(w, r)
+
+		return
+	}
+
 	if !admin.sessionIsOpen(r) {
 		w.WriteHeader(http.StatusUnauthorized)
 
