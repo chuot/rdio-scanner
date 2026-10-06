@@ -214,6 +214,36 @@ func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
 	}
 }
 
+// TestGetCallLeavesTheDatabaseFreeForTheNextWrite pins the consequence the legacy leak had, which
+// is the only reason a fetch of a call that is not there is interesting at all.
+//
+// server/call.go `GetCall` returns without rolling back when the call it found names a system or a
+// talkgroup it cannot resolve — and a call id that does not exist falls through its own no-rows
+// result with the system id still zero, so that is the ordinary case. The transaction stays open
+// until the garbage collector collects it, and on a SQLite deployment it holds the read lock that
+// blocks writers, so the next log insert or configuration save waits out the ten-second
+// `busy_timeout` the connection string sets and then fails with `database is locked`. Observed
+// while capturing the wire protocol: a client asking for call id 999999 is answered with nothing,
+// and the listener-count broadcast that follows arrives ten seconds late. Recorded as Q56.
+func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	if _, err := NewCalls(db, DialectSqlite).GetCall(context.Background(), 999999); !errors.Is(err, ports.ErrNotFound) {
+		t.Fatalf("GetCall error = %v, want ports.ErrNotFound", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := NewLogs(db, DialectSqlite).AppendLog(ctx, domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
+		Level:    domain.LogLevelWarn,
+		Message:  "written immediately after a call fetch that found nothing",
+	}); err != nil {
+		t.Fatalf("AppendLog after a failed GetCall: %v", err)
+	}
+}
+
 // TestGetCallDoesNotReportAStoredCallAsWaitingOutADelay pins what the legacy read does: the
 // `delayed` table is the delayer's own state, and `Calls.GetCall` never consults it, so a call
 // fetched out of the history carries no delayed flag. The delayer sets it on the call it hands

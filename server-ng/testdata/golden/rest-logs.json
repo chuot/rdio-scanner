@@ -1,0 +1,1 @@
+{"count":3,"dateStart":"<datetime>","dateStop":"<datetime>","options":{"level":"warn","limit":200,"offset":0,"sort":0},"logs":[{"id":1,"dateTime":"<datetime>","level":"warn","message":"server started"},{"id":2,"dateTime":"<datetime>","level":"warn","message":"configuration changed"},{"id":3,"dateTime":"<datetime>","level":"warn","message":"configuration changed"}]}

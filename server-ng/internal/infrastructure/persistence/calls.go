@@ -66,7 +66,12 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 
 	call, err := readCall(ctx, tx, id)
 	if err != nil {
+		// The legacy server returns here without rolling back, which is quirk Q56: the open
+		// transaction holds the SQLite read lock that blocks writers until the garbage collector
+		// collects it. Pinned by `TestGetCallLeavesTheDatabaseFreeForTheNextWrite`, which fails in
+		// exactly ten seconds — the connection string's `busy_timeout` — if this line is removed.
 		tx.rollback()
+
 		return domain.Call{}, err
 	}
 
