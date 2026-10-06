@@ -21,6 +21,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -626,6 +627,10 @@ type fixture struct {
 	server   *httptest.Server
 	clients  map[string]*websocket.Conn
 
+	// endpoint replaces the hub-only endpoint with the one a test is exercising. It is set before the
+	// first connection dials.
+	endpoint func(http.ResponseWriter, *http.Request)
+
 	id     string
 	client *websocket.Conn
 }
@@ -669,6 +674,12 @@ func newBareFixture(t *testing.T, settings Settings) *fixture {
 	f.hub.pingPeriod = 100 * time.Millisecond
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if f.endpoint != nil {
+			f.endpoint(w, r)
+
+			return
+		}
+
 		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
 		if err != nil {
 			t.Errorf("upgrading: %v", err)
@@ -695,14 +706,22 @@ func newBareFixture(t *testing.T, settings Settings) *fixture {
 	return f
 }
 
-// dial opens another listener connection and waits for the server to take it over. The identifier is
-// empty when the server refused the connection.
-func (f *fixture) dial(t *testing.T) (string, *websocket.Conn) {
+// open connects to the fixture's endpoint and returns the connection, without waiting for the hub to
+// take it over.
+func (f *fixture) open(t *testing.T) *websocket.Conn {
+	t.Helper()
+
+	return f.openWith(t, nil)
+}
+
+// openWith connects to the fixture's endpoint with extra request headers, which is how a test hands the
+// server a forwarding header the way another proxy would.
+func (f *fixture) openWith(t *testing.T, header http.Header) *websocket.Conn {
 	t.Helper()
 
 	address := "ws://" + strings.TrimPrefix(f.server.URL, "http://")
 
-	conn, _, err := websocket.DefaultDialer.Dial(address, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(address, header)
 	if err != nil {
 		t.Fatalf("connecting: %v", err)
 	}
@@ -713,6 +732,30 @@ func (f *fixture) dial(t *testing.T) (string, *websocket.Conn) {
 
 	t.Cleanup(func() { conn.Close() })
 
+	return conn
+}
+
+// send writes one frame on a connection, the way a listener does.
+func (f *fixture) send(t *testing.T, conn *websocket.Conn, frame Message) {
+	t.Helper()
+
+	b, err := json.Marshal(frame)
+	if err != nil {
+		t.Fatalf("marshaling %v: %v", frame, err)
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+		t.Fatalf("writing %v: %v", frame, err)
+	}
+}
+
+// dial opens another listener connection and waits for the server to take it over. The identifier is
+// empty when the server refused the connection.
+func (f *fixture) dial(t *testing.T) (string, *websocket.Conn) {
+	t.Helper()
+
+	conn := f.open(t)
+
 	select {
 	case id := <-f.attached:
 		f.clients[id] = conn
@@ -722,6 +765,14 @@ func (f *fixture) dial(t *testing.T) (string, *websocket.Conn) {
 	case <-time.After(2 * time.Second):
 		return "", nil
 	}
+}
+
+// dialEndpoint opens a connection against the endpoint the fixture is exercising. It does not wait for
+// the hub to name the session, because an endpoint test talks to its connection and not to the hub.
+func (f *fixture) dialEndpoint(t *testing.T) *websocket.Conn {
+	t.Helper()
+
+	return f.open(t)
 }
 
 // register makes one dialed connection a listener: the server writes its configuration on it, and the
@@ -748,6 +799,13 @@ func (f *fixture) expectFrame(t *testing.T, id string) Message {
 	if !ok {
 		t.Fatalf("there is no listener connection %s", id)
 	}
+
+	return f.expectOn(t, conn)
+}
+
+// expectOn reads the next frame the server sent on one connection.
+func (f *fixture) expectOn(t *testing.T, conn *websocket.Conn) Message {
+	t.Helper()
 
 	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("setting a read deadline: %v", err)
@@ -776,6 +834,13 @@ func (f *fixture) quiet(t *testing.T, id string, window time.Duration) bool {
 		t.Fatalf("there is no listener connection %s", id)
 	}
 
+	return f.quietOn(t, conn, window)
+}
+
+// quietOn reports whether nothing arrived on one connection for a while.
+func (f *fixture) quietOn(t *testing.T, conn *websocket.Conn, window time.Duration) bool {
+	t.Helper()
+
 	if err := conn.SetReadDeadline(time.Now().Add(window)); err != nil {
 		t.Fatalf("setting a read deadline: %v", err)
 	}
@@ -798,6 +863,20 @@ func (f *fixture) expectClosed(t *testing.T) {
 	}
 
 	f.waitFor(t, func() bool { return f.hub.ListenerCount() == 0 }, "the session to be forgotten")
+}
+
+// logText is everything the hub has written to the server log, oldest first, which is how a test looks
+// for one notice without having to know how many other notices came first.
+func (f *fixture) logText() string {
+	recorded := f.logs.Recorded()
+
+	lines := make([]string, 0, len(recorded))
+
+	for _, entry := range recorded {
+		lines = append(lines, entry.Message)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // logAt reads one line the hub wrote to the server log, oldest first.
@@ -852,17 +931,27 @@ func (s *mutableSettings) set(settings Settings) {
 	s.settings = settings
 }
 
-// recordedChanges counts the times the hub said the number of listeners is no longer what it was.
+// recordedChanges counts the times the hub said the number of listeners is no longer what it was, and
+// passes the occurrence on to whoever else was told — which is how a test wires the hub to the
+// application's debounced report without either of them knowing about the other.
 type recordedChanges struct {
 	mutex sync.Mutex
 	times int
+	also  []ListenerChanges
 }
 
 func (c *recordedChanges) ListenerChanged() {
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
 
 	c.times++
+
+	also := append([]ListenerChanges{}, c.also...)
+
+	c.mutex.Unlock()
+
+	for _, next := range also {
+		next.ListenerChanged()
+	}
 }
 
 func (c *recordedChanges) count() int {
@@ -903,7 +992,7 @@ type recordingDispatch struct {
 	frames []Message
 }
 
-func (d *recordingDispatch) handle(clientID string, message Message) error {
+func (d *recordingDispatch) handle(ctx context.Context, clientID string, message Message) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 

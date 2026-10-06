@@ -86,11 +86,15 @@ type ListenerChanges interface {
 	ListenerChanged()
 }
 
-// Dispatch hands one frame to the server that owns this hub, and reports a failure the hub writes to
-// its console and then ignores. A frame the server cannot act on is not a reason to end the connection
-// it arrived on: a client that sends one frame the server does not know is still a client, and the
-// native applications send commands older servers do not have.
-type Dispatch func(clientID string, message Message) error
+// Dispatch hands one frame to the server that owns this hub, and reports a failure the hub writes to its
+// console and then ignores. A frame the server cannot act on is not a reason to end the connection it
+// arrived on: a client that sends one frame the server does not know is still a client, and the native
+// applications send commands older servers do not have.
+//
+// The context belongs to the session and not to the request that opened it: a listener connection outlives
+// the handler that upgraded it, and the work the server is doing for that listener should stop when the
+// listener goes away rather than when the request that started it was answered.
+type Dispatch func(ctx context.Context, clientID string, message Message) error
 
 // Hub is the set of listener connections the server is holding, and the thing the application talks
 // to when it has something to tell a listener.
@@ -314,18 +318,18 @@ func (hub *Hub) SendLivefeedMap(clientID string, watching bool) {
 
 // RequestAccessCode asks a listener for its access code.
 func (hub *Hub) RequestAccessCode(clientID string) {
-	hub.send(clientID, Message{Command: CommandAccessCode})
+	hub.Send(clientID, Message{Command: CommandAccessCode})
 }
 
 // ReportAccessExpired tells a listener that its access has run out.
 func (hub *Hub) ReportAccessExpired(clientID string) {
-	hub.send(clientID, Message{Command: CommandAccessExpired})
+	hub.Send(clientID, Message{Command: CommandAccessExpired})
 }
 
 // ReportAccessLimit tells a listener that its identity already has as many sessions open as it is
 // allowed.
 func (hub *Hub) ReportAccessLimit(clientID string) {
-	hub.send(clientID, Message{Command: CommandAccessLimit})
+	hub.Send(clientID, Message{Command: CommandAccessLimit})
 }
 
 // SendVersion reports what server this is. The branding and the contact address are the ones the server
@@ -343,7 +347,7 @@ func (hub *Hub) SendVersion(clientID string, version string) {
 		payload["email"] = settings.Email
 	}
 
-	hub.send(clientID, Message{Command: CommandVersion, Payload: payload})
+	hub.Send(clientID, Message{Command: CommandVersion, Payload: payload})
 }
 
 // BroadcastListenersCount reports how many listeners are watching, to every listener.
@@ -472,8 +476,13 @@ func (hub *Hub) RemoteAddrOf(clientID string) string {
 	return session.remoteAddr
 }
 
-// send hands one frame to one session.
-func (hub *Hub) send(clientID string, frame Message) {
+// Send hands one frame to one session.
+//
+// It is not part of ports.Hub, and that is the point: the application does not get to write an arbitrary
+// frame to a listener, because what the application holds are commands, queries, and domain values. The
+// listener endpoint does, because the answers it writes are frames of the protocol built from payloads
+// that belong to the presentation layer.
+func (hub *Hub) Send(clientID string, frame Message) {
 	hub.mutex.Lock()
 
 	session, ok := hub.sessions[clientID]
@@ -560,6 +569,8 @@ func (hub *Hub) disconnect(session *listener) {
 		return
 	}
 
+	session.cancel()
+
 	// Every connection the server has taken over is reported when it goes, even one that never became
 	// a listener: the legacy server reports the departure of a connection it was holding, and the
 	// listeners count is re-reported five seconds later either way.
@@ -618,6 +629,12 @@ type listener struct {
 	quit    chan struct{}
 	stopped atomic.Bool
 
+	// ctx belongs to the session and not to the request that opened it: a listener connection outlives
+	// the handler that upgraded it, and it is the session going away that should stop the work the
+	// server is still doing for it.
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	// handshake is the window a connection has to become a listener. It is stopped by the first
 	// configuration written on the connection, and when it is not stopped the connection is ended —
 	// which is what drops a connection on a restricted server whose access code never arrives.
@@ -636,11 +653,15 @@ type listener struct {
 }
 
 func newListener(hub *Hub, id string, conn *websocket.Conn, remoteAddr string) *listener {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &listener{
+		cancel:     cancel,
+		conn:       conn,
+		ctx:        ctx,
 		handshake:  time.AfterFunc(hub.handshakeWait, func() { conn.Close() }),
 		hub:        hub,
 		id:         id,
-		conn:       conn,
 		livefeed:   domain.NewLivefeed(),
 		quit:       make(chan struct{}),
 		remoteAddr: remoteAddr,
@@ -682,7 +703,7 @@ func (session *listener) read(dispatch Dispatch) {
 			continue
 		}
 
-		if err := dispatch(session.id, message); err != nil {
+		if err := dispatch(session.ctx, session.id, message); err != nil {
 			fmt.Fprintf(session.hub.console, "client.processmessage: %v\n", err)
 		}
 	}
