@@ -1,0 +1,272 @@
+{
+  "frames": [
+    {
+      "command": "CFG"
+    },
+    {
+      "command": "LFM",
+      "payload": true
+    },
+    {
+      "command": "CAL",
+      "payload": {
+        "audioName": "call.wav",
+        "audioType": "audio/wav",
+        "dateTime": "2026-10-06T12:00:00Z",
+        "delayed": false,
+        "id": 1,
+        "patches": [],
+        "system": 10001,
+        "talkgroup": 1514000,
+        "talkgroupLabel": "Main",
+        "talkgroupName": "Dispatch 1",
+        "audioBytes": 2092
+      }
+    },
+    {
+      "command": "CFG"
+    },
+    {
+      "command": "CAL",
+      "payload": {
+        "audioName": "120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3",
+        "audioType": "audio/mpeg",
+        "dateTime": "2026-10-06T12:00:00Z",
+        "delayed": false,
+        "id": 2,
+        "patches": [],
+        "sources": [
+          {
+            "pos": 0,
+            "src": 6789
+          }
+        ],
+        "system": 4660,
+        "talkgroup": 1514000,
+        "talkgroupLabel": "Dispatch",
+        "talkgroupName": "Talkgroup 1514000",
+        "audioBytes": 2048
+      }
+    }
+  ],
+  "calls": [
+    {
+      "audioBytes": 2092,
+      "audioFilename": "call.wav",
+      "audioMime": "audio/wav",
+      "callId": 1,
+      "siteRef": 0,
+      "systemId": 1,
+      "talkgroupId": 1,
+      "timestamp": 1791288000000
+    },
+    {
+      "audioBytes": 2048,
+      "audioFilename": "120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3",
+      "audioMime": "audio/mpeg",
+      "callId": 2,
+      "siteRef": 0,
+      "systemId": 2,
+      "talkgroupId": 2,
+      "timestamp": 1791288000000
+    }
+  ],
+  "logs": [
+    {
+      "level": "info",
+      "message": "new listener from ip 127.0.0.1"
+    },
+    {
+      "level": "info",
+      "message": "newcall: system=10001 talkgroup=1514000 file=call.wav success"
+    },
+    {
+      "level": "info",
+      "message": "newcall: system=4660 talkgroup=1514000 file=120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3 success"
+    },
+    {
+      "level": "info",
+      "message": "listeners count is 1"
+    },
+    {
+      "level": "info",
+      "message": "listener disconnected from ip 127.0.0.1"
+    }
+  ],
+  "groups": [
+    {
+      "alert": "",
+      "groupId": 1,
+      "label": "Air",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 2,
+      "label": "EMS",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 3,
+      "label": "Fire",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 4,
+      "label": "Interop",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 5,
+      "label": "Law",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 6,
+      "label": "Unknown",
+      "led": "",
+      "order": 0
+    }
+  ],
+  "tags": [
+    {
+      "alert": "",
+      "label": "Air Traffic Control",
+      "led": "",
+      "order": 0,
+      "tagId": 1
+    },
+    {
+      "alert": "",
+      "label": "Emergency ",
+      "led": "",
+      "order": 0,
+      "tagId": 2
+    },
+    {
+      "alert": "",
+      "label": "Fire Dispatch",
+      "led": "",
+      "order": 0,
+      "tagId": 3
+    },
+    {
+      "alert": "",
+      "label": "Fire Tac",
+      "led": "",
+      "order": 0,
+      "tagId": 4
+    },
+    {
+      "alert": "",
+      "label": "Fire Talk",
+      "led": "",
+      "order": 0,
+      "tagId": 5
+    },
+    {
+      "alert": "",
+      "label": "Interop",
+      "led": "",
+      "order": 0,
+      "tagId": 6
+    },
+    {
+      "alert": "",
+      "label": "Security",
+      "led": "",
+      "order": 0,
+      "tagId": 7
+    },
+    {
+      "alert": "",
+      "label": "Service",
+      "led": "",
+      "order": 0,
+      "tagId": 8
+    },
+    {
+      "alert": "",
+      "label": "Untagged",
+      "led": "",
+      "order": 0,
+      "tagId": 9
+    }
+  ],
+  "talkgroups": [
+    {
+      "alert": "",
+      "delay": 0,
+      "frequency": 0,
+      "label": "Main",
+      "led": "",
+      "name": "Dispatch 1",
+      "order": 0,
+      "systemId": 1,
+      "tagId": 9,
+      "talkgroupId": 1,
+      "talkgroupRef": 1514000,
+      "type": ""
+    },
+    {
+      "alert": "",
+      "delay": 0,
+      "frequency": 0,
+      "label": "Dispatch",
+      "led": "",
+      "name": "Talkgroup 1514000",
+      "order": 0,
+      "systemId": 2,
+      "tagId": 9,
+      "talkgroupId": 2,
+      "talkgroupRef": 1514000,
+      "type": ""
+    }
+  ],
+  "units": [
+    {
+      "label": "Car 4",
+      "order": 0,
+      "systemId": 2,
+      "unitFrom": 0,
+      "unitId": 1,
+      "unitRef": 6789,
+      "unitTo": 0
+    }
+  ],
+  "systems": [
+    {
+      "alert": "",
+      "autoPopulate": 0,
+      "blacklists": "",
+      "delay": 0,
+      "label": "Grand Metro",
+      "led": "",
+      "order": 0,
+      "systemId": 1,
+      "systemRef": 10001,
+      "type": ""
+    },
+    {
+      "alert": "",
+      "autoPopulate": 0,
+      "blacklists": "",
+      "delay": 0,
+      "label": "System 4660",
+      "led": "",
+      "order": 0,
+      "systemId": 2,
+      "systemRef": 4660,
+      "type": ""
+    }
+  ]
+}

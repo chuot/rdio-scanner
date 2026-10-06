@@ -12,6 +12,18 @@ testdata/golden/              what the legacy server said, one file per thing it
 testdata/golden/manifest.json which legacy source these were taken from
 ```
 
+There is a second capture, for the one thing a request-and-reply capture cannot reach: a recording a
+recording tool leaves in a watched directory.
+
+```text
+testdata/capture/capture-dirwatch.sh   the same legacy server, on a seeded configuration, with two
+                                       recordings dropped into directories it is watching
+testdata/capture/capture-dirwatch.mjs  the listener side, and the recordings themselves
+testdata/capture/assemble-dirwatch.mjs frames plus the database rows the run left behind, into one file
+testdata/capture/sqlite/               what the script hands the database and reads back out of it
+testdata/golden/dirwatch-end-to-end.json  what that run produced
+```
+
 ## Running it
 
 ```console
@@ -110,6 +122,39 @@ Every command in [contract-server-protocol.md](../../../docs/specs/FEAT-002-vani
 
 `PUT /api/admin/config` and `GET /api/admin/config` answer with the same payload (`SendConfig` in
 both paths), so `rest-config.json` covers both.
+
+## The end-to-end capture
+
+`./capture-dirwatch.sh` captures a different thing, so it is set up differently. The golden it writes is
+what [server-ng/cmd/rdio-scanner/dirwatch_test.go](../../../server-ng/cmd/rdio-scanner/dirwatch_test.go)
+compares against, frame for frame and column for column.
+
+Three choices make the run reproducible, and each one is a choice about what the golden is allowed to pin:
+
+- **The systems and talkgroups the recordings land on are seeded.** The run is about a recording becoming
+  a call and reaching a listener. What a server creates when it has never seen a system before is a
+  different run, with its own test, and mixing them would make a failure in one look like a failure in the
+  other. The seeded configuration also names the system references the listener subscribes to, which it
+  has to know before the recordings arrive: a server broadcasts a call only to a listener that asked for
+  that talkgroup, and a talkgroup that does not exist yet cannot be asked for.
+- **Audio conversion is turned off**, by a stored `audioConversion` option of `0`. The recording a watch
+  hands over is then the recording the capture wrote, byte for byte, and the golden pins the server passing
+  it along whole rather than pinning what one version of `ffmpeg` makes of it. Conversion is compared where
+  conversion is the subject.
+- **The recordings are dropped one at a time**, the second only after the first has been broadcast. Two
+  recordings dropped together arrive in whatever order two directory watchers happen to notice them in.
+
+The recordings are written by the capture script rather than kept as fixture files, and they are the same
+bytes the server-ng test writes, so the two runs are the same run.
+
+The log rows the golden holds are the rows the captured boot added after its own `server started`, which is
+why the script boots the server twice — once to let it build and migrate its own database, once to be
+captured — and drops the first two log rows.
+
+The listener stays connected past the five-second listener-count report and hangs up afterwards, which is
+the order the log rows in the golden are in. Hanging up earlier would put a different count in the log: the
+report counts the listeners that are there when it is written, not the ones that were there when it was
+scheduled.
 
 ## Re-capturing
 
