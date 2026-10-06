@@ -329,17 +329,25 @@ func sendFrame(t *testing.T, conn *websocket.Conn, frame string) {
 func assertFrame(t *testing.T, conn *websocket.Conn, want string) {
 	t.Helper()
 
+	if got := readRawFrame(t, conn); got != want {
+		t.Errorf("the server wrote\n  %s\nwant\n  %s", got, want)
+	}
+}
+
+// readRawFrame waits for one frame and returns it as the bytes the server wrote, because these tests
+// compare what a server said rather than what they think it meant.
+func readRawFrame(t *testing.T, conn *websocket.Conn) string {
+	t.Helper()
+
 	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	defer conn.SetReadDeadline(time.Time{})
 
 	_, b, err := conn.ReadMessage()
 	if err != nil {
-		t.Fatalf("waiting for %s: %v", want, err)
+		t.Fatalf("waiting for a frame: %v", err)
 	}
 
-	if string(b) != want {
-		t.Errorf("the server wrote\n  %s\nwant\n  %s", b, want)
-	}
+	return string(b)
 }
 
 // encodeAccessCode encodes an access code the way a client does, because the wire carries it that way.
