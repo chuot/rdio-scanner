@@ -74,7 +74,7 @@ func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t
 	postedAt := time.Now()
 	happenedAt := postedAt.Add(-55 * time.Second)
 
-	answered := srv.uploadRecording(t, heldUpload{
+	answered := srv.uploadRecording(t, uploadedRecording{
 		key:       heldUploadKey,
 		systemRef: 10001,
 		talkgroup: 1514000,
@@ -225,21 +225,7 @@ func TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow(t *testing.T
 func seedDelayedTalkgroup(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	seed(t, db,
-		seedStatement{
-			query: `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (1, 0, '', 0, 'Grand Metro', '', 0, 10001, '')`,
-		},
-		seedStatement{
-			query: fmt.Sprintf(`INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (1, '', %d, 0, 'Main', '', 'Dispatch 1', 0, 1, 9, 1514000, '')`, heldTalkgroupDelay),
-		},
-		seedStatement{
-			query: `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (1, 0, 'held upload', ?, 0, '"*"')`,
-			args:  []any{heldUploadKey},
-		},
-		seedStatement{
-			query: `INSERT INTO "options" ("key", "value") VALUES ('audioConversion', '0')`,
-		},
-	)
+	seedUploadTarget(t, db, heldTalkgroupDelay, heldUploadKey)
 }
 
 // seedHeldCall writes a recorded call and the waiting-list row that says it is being held back until the
@@ -298,9 +284,9 @@ func heldUntil(t *testing.T, db *sql.DB) time.Time {
 	return until
 }
 
-// heldUpload is a recording posted to the upload endpoint, with the moment it happened named the way an
-// uploader names it.
-type heldUpload struct {
+// uploadedRecording is a recording posted to the upload endpoint, with the moment it happened named the way
+// an uploader names it.
+type uploadedRecording struct {
 	key       string
 	systemRef uint
 	talkgroup uint
@@ -312,7 +298,7 @@ type heldUpload struct {
 // uploadRecording posts a recording the way an uploader posts one, and reports how the server answered. The
 // upload is how these tests put a call into the ingest path without waiting for a watched directory to
 // settle, which is what makes a hold of a few seconds testable.
-func (s *server) uploadRecording(t *testing.T, upload heldUpload) *httptest.ResponseRecorder {
+func (s *server) uploadRecording(t *testing.T, upload uploadedRecording) *httptest.ResponseRecorder {
 	t.Helper()
 
 	body := bytes.Buffer{}

@@ -858,6 +858,31 @@ func readOptionValue(t *testing.T, db *sql.DB, key string) string {
 	return value
 }
 
+// seedUploadTarget installs what a test needs to put a call into the ingest path through the upload
+// endpoint: the system and talkgroup the recording names, the credential the post is made with, and the
+// switch that leaves the recording as it was uploaded so that what a test is about is the server and not
+// ffmpeg. The hold is named in the unit the configuration stores it in, so a test can say whether the call
+// it posts is one the server holds back.
+func seedUploadTarget(t *testing.T, db *sql.DB, hold uint, key string) {
+	t.Helper()
+
+	seed(t, db,
+		seedStatement{
+			query: `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (1, 0, '', 0, 'Grand Metro', '', 0, 10001, '')`,
+		},
+		seedStatement{
+			query: fmt.Sprintf(`INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (1, '', %d, 0, 'Main', '', 'Dispatch 1', 0, 1, 9, 1514000, '')`, hold),
+		},
+		seedStatement{
+			query: `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (1, 0, 'test upload', ?, 0, '"*"')`,
+			args:  []any{key},
+		},
+		seedStatement{
+			query: `INSERT INTO "options" ("key", "value") VALUES ('audioConversion', '0')`,
+		},
+	)
+}
+
 // loginAnswered starts a server against a base directory the test has already prepared and reports how a
 // login was answered.
 func loginAnswered(t *testing.T, base, credential string) int {
