@@ -21,8 +21,38 @@
       ]
     }
   ],
-  "dirwatch": [],
-  "downstreams": [],
+  "dirwatch": [
+    {
+      "id": 0,
+      "delay": 1000,
+      "deleteAfter": true,
+      "directory": "/tmp/opencode/capture-watch",
+      "disabled": true,
+      "extension": ".wav",
+      "frequency": 151400000,
+      "mask": "#S#TG#YYYY-MM-DDTHH-mm-ss",
+      "order": 1,
+      "siteId": 1,
+      "systemId": 1,
+      "talkgroupId": 1,
+      "type": "default"
+    }
+  ],
+  "downstreams": [
+    {
+      "id": 0,
+      "apikey": "capture-apikey-open",
+      "disabled": true,
+      "order": 1,
+      "systems": [
+        {
+          "id": 10001,
+          "talkgroups": [1514000]
+        }
+      ],
+      "url": "http://127.0.0.1:39999/api/call-upload"
+    }
+  ],
   "groups": [
     {
       "id": 1,

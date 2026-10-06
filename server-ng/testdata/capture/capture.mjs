@@ -526,6 +526,18 @@ if (!fetched.endsWith(',"p"]')) {
 
 save("payload-cal-fetch.json", payloadOf(fetched));
 
+// The first uploaded call is the one that carries everything an upload can name: frequencies with a
+// signal level, a site, patched talkgroups, and the units heard in it. The live call and the one
+// fetched above carry none of those, so without this the golden set would pin a call payload with
+// every optional key missing.
+const firstCallId = JSON.parse(payloadOf(lcl)).results[0].id;
+
+open.send(["CAL", String(firstCallId), "d"]);
+
+const detailed = await open.expect("CAL");
+
+save("payload-cal-detailed.json", payloadOf(detailed));
+
 const second = new Session("second");
 
 await second.open();

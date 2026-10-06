@@ -1,1 +1,1 @@
-[]
+[{"delay":1000,"deleteAfter":true,"directory":"/tmp/opencode/capture-watch","disabled":true,"extension":".wav","frequency":151400000,"id":1,"mask":"#S#TG#YYYY-MM-DDTHH-mm-ss","order":1,"siteId":1,"systemId":1,"talkgroupId":1,"type":"default"}]

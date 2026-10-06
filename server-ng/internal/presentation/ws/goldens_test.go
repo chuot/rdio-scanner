@@ -50,6 +50,7 @@ func TestEveryGoldenCaptureIsThere(t *testing.T) {
 		"payload-cfg.json",
 		"payload-cal-live.json",
 		"payload-cal-fetch.json",
+		"payload-cal-detailed.json",
 		"payload-lcl.json",
 		"ws-frames-open.json",
 
