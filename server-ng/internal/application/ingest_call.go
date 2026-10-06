@@ -85,6 +85,7 @@ type IngestCallHandler struct {
 	logs        ports.LogRepository
 	converter   ports.AudioConverter
 	hub         ports.Hub
+	delayer     ports.CallDelayer
 	downstreams ports.DownstreamRepository
 	forwarder   ports.DownstreamForwarder
 	clock       ports.Clock
@@ -108,6 +109,10 @@ type IngestCallHandler struct {
 // which other servers this one posts its calls to and for which systems, and the forwarder
 // does the posting. A deployment with no downstreams is a repository that returns nothing,
 // not a handler built without them.
+//
+// The delayer is the part that decides whether a stored call is told to anybody now or later. A
+// deployment whose talkgroups and systems name no delay is a delayer that never takes a call, not
+// a handler built without one.
 func NewIngestCallHandler(
 	calls ports.CallRepository,
 	systems ports.SystemRepository,
@@ -117,6 +122,7 @@ func NewIngestCallHandler(
 	logs ports.LogRepository,
 	converter ports.AudioConverter,
 	hub ports.Hub,
+	delayer ports.CallDelayer,
 	downstreams ports.DownstreamRepository,
 	forwarder ports.DownstreamForwarder,
 	clock ports.Clock,
@@ -130,6 +136,7 @@ func NewIngestCallHandler(
 		logs:        logs,
 		converter:   converter,
 		hub:         hub,
+		delayer:     delayer,
 		downstreams: downstreams,
 		forwarder:   forwarder,
 		clock:       clock,
@@ -384,17 +391,33 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 	logCall(domain.LogLevelInfo, stored, "success")
 
-	handler.emitCall(ctx, stored)
+	handler.DeliverCall(ctx, stored)
 
 	return IngestCallResult{Outcome: IngestCallAccepted, CallID: stored.ID}, nil
 }
 
-// emitCall tells everyone about a call this server has just stored.
+// DeliverCall tells everyone about a call this server has stored: the other servers first, then the
+// listeners.
 //
-// This is the step the delay belongs in front of: a call recorded on a talkgroup or system
-// with a delay is not told to anybody when it is recorded but when its delay runs out, and
-// the delay re-uses this same step rather than carrying its own copy of the fan-out.
-func (handler *IngestCallHandler) emitCall(ctx context.Context, call domain.Call) {
+// It is the step the ingest path ends with, and it is the step a held call returns to when its hold
+// runs out, which is why the delay is decided here and nowhere else, and why a call that waited is
+// not delivered by a copy of this fan-out.
+func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.Call) {
+	held, err := handler.delayer.Hold(ctx, call)
+
+	if err != nil {
+		// The call is in the recording history and nothing is going to tell anybody about it. That is
+		// what the legacy server does when it cannot write the hold down: report it, and accept that
+		// this one call was recorded and never delivered.
+		handler.log(ctx, domain.LogLevelError, err.Error())
+
+		return
+	}
+
+	if held {
+		return
+	}
+
 	// The order is the legacy order: the other servers are told first, the listeners second.
 	// Neither waits for the other, and neither waits for a downstream server to answer.
 	handler.forwardCall(ctx, call)

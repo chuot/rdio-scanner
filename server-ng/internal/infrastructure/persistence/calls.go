@@ -86,10 +86,12 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 // readCall reads one call row and the three child tables that belong to it.
 func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, error) {
 	// The system and talkgroup are read as the pair of references the call history and the
-	// access rules compare, plus the labels the call payload carries. The rest of the two
-	// aggregates belongs to the configuration repositories, and a call fetch has no business
-	// loading every talkgroup, site, and unit of a system to answer it.
-	const query = `SELECT c."audio", c."audioFilename", c."audioMime", c."siteRef", c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef", t."label", t."name" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = ?`
+	// access rules compare, plus the labels the call payload carries, plus the delays that decide
+	// whether the call is being held back: the only moment a call fetch has to know a delay is when
+	// a call that was being held back has to be armed again for the delay its talkgroup or system
+	// names now. The rest of the two aggregates belongs to the configuration repositories, and a
+	// call fetch has no business loading every talkgroup, site, and unit of a system to answer it.
+	const query = `SELECT c."audio", c."audioFilename", c."audioMime", c."siteRef", c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef", t."label", t."name", s."delay", t."delay" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = ?`
 
 	var (
 		audio          []byte
@@ -103,9 +105,11 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 		talkgroupRef   int64
 		talkgroupLabel string
 		talkgroupName  string
+		systemDelay    int64
+		talkgroupDelay int64
 	)
 
-	err := tx.queryRow(ctx, query, id).Scan(&audio, &filename, &mime, &siteRef, &timestamp, &systemID, &talkgroupID, &systemRef, &talkgroupRef, &talkgroupLabel, &talkgroupName)
+	err := tx.queryRow(ctx, query, id).Scan(&audio, &filename, &mime, &siteRef, &timestamp, &systemID, &talkgroupID, &systemRef, &talkgroupRef, &talkgroupLabel, &talkgroupName, &systemDelay, &talkgroupDelay)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// The legacy server does not stop here: it falls through its own no-rows result with
@@ -127,8 +131,8 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 	call.AudioMime = mime
 	call.SiteRef = uint(siteRef)
 	call.Timestamp = instantOf(timestamp)
-	call.System = domain.System{ID: uint64(systemID), SystemRef: uint(systemRef)}
-	call.Talkgroup = domain.Talkgroup{ID: uint64(talkgroupID), TalkgroupRef: uint(talkgroupRef), Label: talkgroupLabel, Name: talkgroupName}
+	call.System = domain.System{ID: uint64(systemID), Delay: uint(systemDelay), SystemRef: uint(systemRef)}
+	call.Talkgroup = domain.Talkgroup{ID: uint64(talkgroupID), Delay: uint(talkgroupDelay), TalkgroupRef: uint(talkgroupRef), Label: talkgroupLabel, Name: talkgroupName}
 
 	if call.PatchTalkgroupRefs, err = readCallPatches(ctx, tx, id); err != nil {
 		return domain.Call{}, err

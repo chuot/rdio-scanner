@@ -91,6 +91,57 @@ func TestGetCallReadsACallTheLegacyServerWrote(t *testing.T) {
 	}
 }
 
+// A call that was being held back when the server stopped is armed again for the delay its talkgroup or
+// system names *now*, which is what lets an administrator change a delay and have the calls already
+// waiting follow the new one. That decision is made from the call the history read hands back, so the
+// read carries the two delays it is made from — read from the configuration rows, not from anything the
+// call itself was written with.
+func TestGetCallCarriesTheDelaysThatHoldACallBack(t *testing.T) {
+	fixture := newCallsFixture(t)
+
+	stored := fixture.storeCall(t, 10001, 1514000, time.Unix(1791288000, 0))
+
+	if _, err := fixture.db.Exec(`UPDATE "systems" SET "delay" = ? WHERE "systemId" = ?`, 5, fixture.systemID(10001)); err != nil {
+		t.Fatalf("delaying the system: %v", err)
+	}
+
+	if _, err := fixture.db.Exec(`UPDATE "talkgroups" SET "delay" = ? WHERE "talkgroupId" = ?`, 3, fixture.talkgroupID(1514000)); err != nil {
+		t.Fatalf("delaying the talkgroup: %v", err)
+	}
+
+	call, err := fixture.calls.GetCall(context.Background(), stored.ID)
+	if err != nil {
+		t.Fatalf("GetCall: %v", err)
+	}
+
+	if call.Talkgroup.Delay != 3 {
+		t.Errorf("Talkgroup.Delay = %d, want the 3 minutes the talkgroup is configured with now", call.Talkgroup.Delay)
+	}
+
+	if call.System.Delay != 5 {
+		t.Errorf("System.Delay = %d, want the 5 minutes the system is configured with now", call.System.Delay)
+	}
+
+	// A talkgroup with no delay of its own carries none, and the system's delay is still there for the
+	// rule to fall back on.
+	if _, err := fixture.db.Exec(`UPDATE "talkgroups" SET "delay" = 0 WHERE "talkgroupId" = ?`, fixture.talkgroupID(1514000)); err != nil {
+		t.Fatalf("undelaying the talkgroup: %v", err)
+	}
+
+	call, err = fixture.calls.GetCall(context.Background(), stored.ID)
+	if err != nil {
+		t.Fatalf("GetCall: %v", err)
+	}
+
+	if call.Talkgroup.Delay != 0 {
+		t.Errorf("Talkgroup.Delay = %d after the talkgroup's delay was removed, want nothing", call.Talkgroup.Delay)
+	}
+
+	if call.System.Delay != 5 {
+		t.Errorf("System.Delay = %d, want the system's delay to be read whatever the talkgroup names", call.System.Delay)
+	}
+}
+
 // TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte is the audio half of REQ-007: a
 // recording written by one server is read back by the other without a byte moving.
 func TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte(t *testing.T) {

@@ -41,6 +41,7 @@ import (
 	"rdio-scanner/server-ng/internal/application/ports"
 	"rdio-scanner/server-ng/internal/domain"
 	"rdio-scanner/server-ng/internal/infrastructure/clock"
+	"rdio-scanner/server-ng/internal/infrastructure/delayer"
 	"rdio-scanner/server-ng/internal/infrastructure/dirwatch"
 	"rdio-scanner/server-ng/internal/infrastructure/dirwatch/parsers"
 	"rdio-scanner/server-ng/internal/infrastructure/downstream"
@@ -96,10 +97,15 @@ type server struct {
 	// settings answers what the server requires of listeners, which the hub is asked rather than told.
 	settings *listenerSettings
 
-	// watches and pruning are the two things the server starts running and has to stop again.
+	// watches, pruning, and held calls are the things the server starts running and has to stop again.
 	watches *dirwatch.Dirwatchers
 	pruning ports.Timer
 	prune   *application.PruneOldCallsHandler
+	held    *delayer.Delayer
+
+	// ingest is the path every recorded call goes through, kept because the calls whose hold has run
+	// out are delivered through the same path rather than through a copy of it.
+	ingest *application.IngestCallHandler
 
 	// serving holds the addresses this server is answering on, so that stopping the server stops them.
 	serving []*http.Server
@@ -179,6 +185,7 @@ func (s *server) wire() error {
 	accesses := persistence.NewAccesses(s.db, s.dialect)
 	apikeys := persistence.NewApikeys(s.db, s.dialect)
 	calls := persistence.NewCalls(s.db, s.dialect)
+	delayed := persistence.NewDelayedCalls(s.db, s.dialect)
 	dirwatches := persistence.NewDirwatches(s.db, s.dialect)
 	downstreams := persistence.NewDownstreams(s.db, s.dialect)
 	groups := persistence.NewGroups(s.db, s.dialect)
@@ -214,6 +221,20 @@ func (s *server) wire() error {
 	forwarder := downstream.NewForwarder(groups, tags)
 	reader := parsers.New(systems, s.clock)
 
+	// The calls that are being held back are held here: written down with the instant they stop being
+	// held back, so that a server that stops and starts again picks them up. What the delayer hands
+	// back is delivered by the same step an ingested call ends with, which is the wiring the legacy
+	// server gets from its one ingest queue and this server has to do on purpose.
+	held := delayer.New(delayer.Deps{
+		Delayed:   delayed,
+		Calls:     calls,
+		Scheduler: s.scheduler,
+		Clock:     s.clock,
+		Logs:      s.logs,
+	})
+
+	s.held = held
+
 	// The credential a server accepts when its stored configuration has none is made at every startup and
 	// never written down, which is what the legacy server does — and why a session started before a
 	// restart does not survive it. It has to be supplied before the first read, because the read that
@@ -241,8 +262,10 @@ func (s *server) wire() error {
 	tokensAdapter := tokens.New(optionsSecrets{options: options})
 
 	ingest := application.NewIngestCallHandler(
-		calls, systems, groups, tags, options, s.logs, converter, hub, downstreams, forwarder, s.clock,
+		calls, systems, groups, tags, options, s.logs, converter, hub, held, downstreams, forwarder, s.clock,
 	)
+
+	s.ingest = ingest
 
 	watches := dirwatch.NewDirwatchers(reader, s.logs, &ingestSink{ingest: ingest}, s.clock)
 	s.watches = watches
@@ -321,15 +344,14 @@ func (s *server) wire() error {
 }
 
 // start runs the startup the legacy server runs: the notice that the server is up, the base folder it was
-// given, the configuration read out of the database, the pruning timer, and the directory watches.
+// given, the configuration read out of the database, the calls this server was holding when it last
+// stopped, the pruning timer, and the directory watches.
 //
 // Three parts of the legacy startup are not here because they are not things this server has. The ingest
 // consumer goroutine is gone: a call is finished before the thing that found it is answered, which is
 // recorded in decision-internal-ports.md §17. The register-and-forget loop is gone: the hub holds its own
 // sessions, and the listener-count debouncer is the thing the hub tells when the count of listeners
 // changes. The administrator's socket has nothing to start: it starts when an administrator connects.
-//
-// The delayer is the remaining part, and it joins this sequence when it is built.
 func (s *server) start(ctx context.Context) error {
 	// The legacy server ignores a startup notice it cannot store, and the line has already reached the
 	// console by the time the log view is asked for it.
@@ -347,6 +369,18 @@ func (s *server) start(ctx context.Context) error {
 		return err
 	}
 
+	// The calls this server was holding when it last stopped are picked up here, which is where the
+	// legacy server picks them up: before anything is answered, so that a hold that ran out while the
+	// server was down is delivered now and a hold still running is armed again.
+	//
+	// The loop that carries them into the pipeline starts before they are read back, so that the ones
+	// handed over at once have somewhere to go.
+	go s.deliverHeldCalls(ctx)
+
+	if err := s.held.Restore(ctx); err != nil {
+		return err
+	}
+
 	s.pruning = pruneHourly(s.scheduler, s.prune)
 
 	watches, err := s.repos.Dirwatches.AllDirwatches(ctx)
@@ -357,6 +391,30 @@ func (s *server) start(ctx context.Context) error {
 	s.watches.Start(ctx, watches)
 
 	return nil
+}
+
+// deliverHeldCalls carries the calls whose hold has run out back into the pipeline: the same delivery
+// step an ingested call ends with, so that a call that waited out its hold is told to the other servers
+// and to the listeners by the one path every other call takes, and not by a copy of it written for
+// delayed calls.
+//
+// It runs for as long as the server does. A hold that runs out after the server has stopped is not
+// delivered by this loop, and the call is still where it was written down, which is how the next
+// startup finds it.
+func (s *server) deliverHeldCalls(ctx context.Context) {
+	for {
+		select {
+		case call := <-s.held.Waiting():
+			if ctx.Err() != nil {
+				return
+			}
+
+			s.ingest.DeliverCall(ctx, call)
+
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // readConfiguration reads the stored configuration in the order the legacy server reads it, and stops at
@@ -395,8 +453,9 @@ func (s *server) readConfiguration(ctx context.Context) error {
 	return nil
 }
 
-// stop ends what the server started running — the pruning timer, the directory watches, and the addresses
-// it was answering on — and then the database it was given.
+// stop ends what the server started running — the pruning timer, the holds armed for calls that are
+// waiting out a delay, the directory watches, and the addresses it was answering on — and then the
+// database it was given.
 //
 // The legacy server's Terminate calls os.Exit, which is how a blocked ListenAndServe is stopped. This one
 // shuts the addresses down instead, so the goroutine that was serving returns and the process ends by
@@ -408,6 +467,10 @@ func (s *server) stop(ctx context.Context) {
 	s.stopping.Do(func() {
 		if s.pruning != nil {
 			s.pruning.Cancel()
+		}
+
+		if s.held != nil {
+			s.held.Close()
 		}
 
 		if s.watches != nil {

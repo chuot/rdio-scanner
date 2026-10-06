@@ -42,6 +42,7 @@ type ingestFixture struct {
 	logs      *fakes.Logs
 	converter *fakes.Converter
 	hub       *fakes.Hub
+	delayer   *fakes.Delayer
 	clock     *fakes.Clock
 
 	downstreams *fakes.Downstreams
@@ -65,6 +66,7 @@ func newIngestFixture() *ingestFixture {
 		logs:        &fakes.Logs{},
 		converter:   fakes.NewConverter(),
 		hub:         fakes.NewHub(),
+		delayer:     &fakes.Delayer{Now: ingestTime},
 		clock:       fakes.NewClock(ingestTime),
 		downstreams: &fakes.Downstreams{},
 		forwarder:   &fakes.Forwarder{},
@@ -79,6 +81,7 @@ func newIngestFixture() *ingestFixture {
 		fixture.logs,
 		fixture.converter,
 		fixture.hub,
+		fixture.delayer,
 		fixture.downstreams,
 		fixture.forwarder,
 		fixture.clock,
@@ -115,11 +118,17 @@ func validIngestCall() domain.Call {
 	return call
 }
 
-func (fixture *ingestFixture) ingest(call domain.Call) (IngestCallResult, error) {
+// listen opens a listener that has asked for the fixture's system and talkgroup, which is what a
+// delivered call has to reach.
+func (fixture *ingestFixture) listen() {
 	fixture.hub.Open("listener", "10.0.0.1")
 	fixture.hub.SetLivefeed("listener", domain.ParseLivefeed(map[string]any{
 		"1": map[string]any{"123": true},
 	}))
+}
+
+func (fixture *ingestFixture) ingest(call domain.Call) (IngestCallResult, error) {
+	fixture.listen()
 
 	return fixture.handler.Handle(context.Background(), IngestCallCommand{Call: call})
 }

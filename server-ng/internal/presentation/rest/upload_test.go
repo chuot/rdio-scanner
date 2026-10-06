@@ -63,6 +63,7 @@ type uploadFixture struct {
 	options     *fakes.Options
 	logs        *fakes.Logs
 	hub         *fakes.Hub
+	delayer     *fakes.Delayer
 	converter   *fakes.Converter
 	downstreams *fakes.Downstreams
 	forwarder   *fakes.Forwarder
@@ -88,6 +89,7 @@ func newUploadFixture() *uploadFixture {
 		options:     &fakes.Options{Stored: domain.DefaultOptions()},
 		logs:        &fakes.Logs{},
 		hub:         fakes.NewHub(),
+		delayer:     &fakes.Delayer{Now: uploadMoment},
 		converter:   fakes.NewConverter(),
 		downstreams: &fakes.Downstreams{},
 		forwarder:   &fakes.Forwarder{},
@@ -104,6 +106,7 @@ func newUploadFixture() *uploadFixture {
 		fixture.logs,
 		fixture.converter,
 		fixture.hub,
+		fixture.delayer,
 		fixture.downstreams,
 		fixture.forwarder,
 		fixture.clock,
