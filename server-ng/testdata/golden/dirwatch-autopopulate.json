@@ -1,0 +1,278 @@
+{
+  "calls": [
+    {
+      "audioBytes": 2092,
+      "audioFilename": "first.wav",
+      "audioMime": "audio/wav",
+      "callId": 1,
+      "siteRef": 0,
+      "systemId": 1,
+      "talkgroupId": 1,
+      "timestamp": 1791288000000
+    },
+    {
+      "audioBytes": 2092,
+      "audioFilename": "second.wav",
+      "audioMime": "audio/wav",
+      "callId": 2,
+      "siteRef": 0,
+      "systemId": 1,
+      "talkgroupId": 1,
+      "timestamp": 1791288060000
+    },
+    {
+      "audioBytes": 2092,
+      "audioFilename": "third.wav",
+      "audioMime": "audio/wav",
+      "callId": 3,
+      "siteRef": 0,
+      "systemId": 2,
+      "talkgroupId": 2,
+      "timestamp": 1791288120000
+    },
+    {
+      "audioBytes": 2048,
+      "audioFilename": "120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3",
+      "audioMime": "audio/mpeg",
+      "callId": 4,
+      "siteRef": 0,
+      "systemId": 3,
+      "talkgroupId": 3,
+      "timestamp": 1791288000000
+    }
+  ],
+  "logs": [
+    {
+      "level": "info",
+      "message": "newcall: system=1 talkgroup=1514000 file=first.wav success"
+    },
+    {
+      "level": "info",
+      "message": "newcall: system=1 talkgroup=1514000 file=second.wav success"
+    },
+    {
+      "level": "info",
+      "message": "newcall: system=2 talkgroup=3001 file=third.wav success"
+    },
+    {
+      "level": "info",
+      "message": "newcall: system=4660 talkgroup=1514000 file=120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3 success"
+    }
+  ],
+  "groups": [
+    {
+      "alert": "",
+      "groupId": 1,
+      "label": "Air",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 2,
+      "label": "EMS",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 3,
+      "label": "Fire",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 4,
+      "label": "Interop",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 5,
+      "label": "Law",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 6,
+      "label": "Unknown",
+      "led": "",
+      "order": 0
+    },
+    {
+      "alert": "",
+      "groupId": 7,
+      "label": "Marine",
+      "led": "",
+      "order": 0
+    }
+  ],
+  "tags": [
+    {
+      "alert": "",
+      "label": "Air Traffic Control",
+      "led": "",
+      "order": 0,
+      "tagId": 1
+    },
+    {
+      "alert": "",
+      "label": "Emergency ",
+      "led": "",
+      "order": 0,
+      "tagId": 2
+    },
+    {
+      "alert": "",
+      "label": "Fire Dispatch",
+      "led": "",
+      "order": 0,
+      "tagId": 3
+    },
+    {
+      "alert": "",
+      "label": "Fire Tac",
+      "led": "",
+      "order": 0,
+      "tagId": 4
+    },
+    {
+      "alert": "",
+      "label": "Fire Talk",
+      "led": "",
+      "order": 0,
+      "tagId": 5
+    },
+    {
+      "alert": "",
+      "label": "Interop",
+      "led": "",
+      "order": 0,
+      "tagId": 6
+    },
+    {
+      "alert": "",
+      "label": "Security",
+      "led": "",
+      "order": 0,
+      "tagId": 7
+    },
+    {
+      "alert": "",
+      "label": "Service",
+      "led": "",
+      "order": 0,
+      "tagId": 8
+    },
+    {
+      "alert": "",
+      "label": "Untagged",
+      "led": "",
+      "order": 0,
+      "tagId": 9
+    },
+    {
+      "alert": "",
+      "label": "Toll",
+      "led": "",
+      "order": 0,
+      "tagId": 10
+    }
+  ],
+  "talkgroups": [
+    {
+      "alert": "",
+      "delay": 0,
+      "frequency": 0,
+      "label": "Main",
+      "led": "",
+      "name": "Dispatch 1",
+      "order": 0,
+      "systemId": 1,
+      "tagId": 9,
+      "talkgroupId": 1,
+      "talkgroupRef": 1514000,
+      "type": ""
+    },
+    {
+      "alert": "",
+      "delay": 0,
+      "frequency": 0,
+      "label": "Harbour Toll",
+      "led": "",
+      "name": "Bridge Toll",
+      "order": 0,
+      "systemId": 2,
+      "tagId": 10,
+      "talkgroupId": 2,
+      "talkgroupRef": 3001,
+      "type": ""
+    },
+    {
+      "alert": "",
+      "delay": 0,
+      "frequency": 0,
+      "label": "Dispatch",
+      "led": "",
+      "name": "Talkgroup 1514000",
+      "order": 0,
+      "systemId": 3,
+      "tagId": 9,
+      "talkgroupId": 3,
+      "talkgroupRef": 1514000,
+      "type": ""
+    }
+  ],
+  "units": [
+    {
+      "label": "Car 4",
+      "order": 0,
+      "systemId": 3,
+      "unitFrom": 0,
+      "unitId": 1,
+      "unitRef": 6789,
+      "unitTo": 0
+    }
+  ],
+  "systems": [
+    {
+      "alert": "",
+      "autoPopulate": 0,
+      "blacklists": "",
+      "delay": 0,
+      "label": "Grand Metro",
+      "led": "",
+      "order": 0,
+      "systemId": 1,
+      "systemRef": 1,
+      "type": ""
+    },
+    {
+      "alert": "",
+      "autoPopulate": 0,
+      "blacklists": "",
+      "delay": 0,
+      "label": "Harbour Bridge",
+      "led": "",
+      "order": 0,
+      "systemId": 2,
+      "systemRef": 2,
+      "type": ""
+    },
+    {
+      "alert": "",
+      "autoPopulate": 0,
+      "blacklists": "",
+      "delay": 0,
+      "label": "System 4660",
+      "led": "",
+      "order": 0,
+      "systemId": 3,
+      "systemRef": 4660,
+      "type": ""
+    }
+  ]
+}

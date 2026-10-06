@@ -19,9 +19,10 @@
 // See API_ACCESS_POLICY.md for full terms.
 
 // assemble-dirwatch.mjs puts the frames the listener saw and the rows the server left behind into the one
-// file the server-ng end-to-end test reads as its expectation.
+// file the server-ng end-to-end tests read as their expectation.
 //
 //   node assemble-dirwatch.mjs --frames frames.json --dump dumpdir --out golden.json
+//   node assemble-dirwatch.mjs --dump dumpdir --out golden.json      (a run with no listener)
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,7 +33,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   args[process.argv[i]] = process.argv[i + 1];
 }
 
-for (const name of ['--frames', '--dump', '--out']) {
+for (const name of ['--dump', '--out']) {
   if (!args[name]) {
     console.error(`assemble-dirwatch.mjs: ${name} is required`);
 
@@ -42,9 +43,11 @@ for (const name of ['--frames', '--dump', '--out']) {
 
 const tables = ['calls', 'logs', 'groups', 'tags', 'talkgroups', 'units', 'systems'];
 
-const golden = {
-  frames: JSON.parse(fs.readFileSync(args['--frames'], 'utf8')),
-};
+const golden = {};
+
+if (args['--frames']) {
+  golden.frames = JSON.parse(fs.readFileSync(args['--frames'], 'utf8'));
+}
 
 for (const table of tables) {
   golden[table] = JSON.parse(fs.readFileSync(path.join(args['--dump'], `${table}.json`), 'utf8'));

@@ -24,6 +24,15 @@ testdata/capture/sqlite/               what the script hands the database and re
 testdata/golden/dirwatch-end-to-end.json  what that run produced
 ```
 
+And a third, which is the second one with the configuration taken away:
+
+```text
+testdata/capture/capture-autopopulate.sh    two watches and nothing else, with four recordings dropped
+                                            one at a time
+testdata/capture/fixtures-autopopulate.mjs  those four recordings, and the sidecars that say what they are
+testdata/golden/dirwatch-autopopulate.json  the configuration the server created from them
+```
+
 ## Running it
 
 ```console
@@ -155,6 +164,28 @@ The listener stays connected past the five-second listener-count report and hang
 the order the log rows in the golden are in. Hanging up earlier would put a different count in the log: the
 report counts the listeners that are there when it is written, not the ones that were there when it was
 scheduled.
+
+## The auto-populate capture
+
+`./capture-autopopulate.sh` is the end-to-end capture with the configuration taken away: two watches and
+nothing else, so that everything the run ends up with is something the server created while taking a
+recording in. Its golden is what
+[server-ng/cmd/rdio-scanner/autopopulate_test.go](../../../server-ng/cmd/rdio-scanner/autopopulate_test.go)
+compares against.
+
+There is no listener in this run, and there cannot be one: a listener subscribes to system references, and
+the systems this run ends up with do not exist yet. What the golden holds is therefore only the rows the run
+left behind.
+
+The recordings are dropped one at a time, and the next is not dropped until the previous one has become a
+call — the script polls the `calls` table between drops. The order is what each recording is testing:
+
+| Recording | What it names | What the server makes of it |
+| --- | --- | --- |
+| `first.wav` | a system by label, a talkgroup by reference only | a system with the first reference nothing else is using; a talkgroup whose label is its own reference written out as a number, filed under the group and tag a fresh deployment starts with |
+| `second.wav` | the same system and talkgroup, and this time what they are called | nothing new: the placeholder label and name are replaced with the ones the sidecar names, and the group and tag it names are left alone because the talkgroup was already filed somewhere |
+| `third.wav` | a system, a group and a tag the server has never seen | a system, a group, a tag, and a talkgroup filed under the tag its group names and labelled with the one its own tag names |
+| a dsd+ recording | a system by reference, and a radio | a system keeping the reference the recording carries, labelled `System 4660`; a talkgroup named for its reference; a radio on that system |
 
 ## Re-capturing
 

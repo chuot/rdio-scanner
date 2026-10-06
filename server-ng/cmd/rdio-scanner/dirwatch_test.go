@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,7 +55,11 @@ func init() {
 // The two recordings are dropped one at a time, the second only after the first has been broadcast, so
 // that the frames arrive in an order both servers can be expected to produce.
 func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
-	golden := readEndToEndGolden(t)
+	golden := readGoldenRun(t, "dirwatch-end-to-end.json")
+
+	if _, ok := golden["frames"]; !ok {
+		t.Fatalf("the captured run has no frames to compare against")
+	}
 
 	srv := testServer(t)
 
@@ -157,47 +162,67 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	}
 }
 
-// The configuration both servers were given. The systems and talkgroups are there before the recordings
-// arrive, so that a call reaching a listener does not depend on the server inventing them on the way; the
-// audio conversion is turned off, so that the recording a watch hands over is the recording the test wrote,
-// byte for byte, and the golden pins the server passing it along rather than pinning what one version of
-// ffmpeg makes of it. Conversion is compared where ffmpeg is the subject.
+// seedStatement is one of the statements that put a configuration in front of the server, with the values
+// it needs passed in rather than written into it.
+type seedStatement struct {
+	query string
+	args  []any
+}
+
+// seedEndToEndConfiguration is the configuration the end-to-end run is given. The systems and talkgroups
+// are there before the recordings arrive, so that a call reaching a listener does not depend on the server
+// inventing them on the way; the audio conversion is turned off, so that the recording a watch hands over
+// is the recording the test wrote, byte for byte, and the golden pins the server passing it along rather
+// than pinning what one version of ffmpeg makes of it. Conversion is compared where ffmpeg is the subject.
 func seedEndToEndConfiguration(t *testing.T, db *sql.DB, dsd, trunk string) {
 	t.Helper()
 
-	statements := []struct {
-		query string
-		args  []any
-	}{
-		{
-			`INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (1, 0, '', 0, 'Grand Metro', '', 0, 10001, '')`,
-			nil,
+	seedWatches(t, db, dsd, trunk)
+
+	// The two systems and their talkgroups, named the way the recordings name them: the trunk-recorder
+	// recording matches its system by label and the dsd+ recording matches its system by reference, which
+	// together are both ways a call is matched.
+	seed(t, db,
+		seedStatement{
+			query: `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (1, 0, '', 0, 'Grand Metro', '', 0, 10001, '')`,
 		},
-		{
-			`INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (2, 0, '', 0, 'System 4660', '', 0, 4660, '')`,
-			nil,
+		seedStatement{
+			query: `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (2, 0, '', 0, 'System 4660', '', 0, 4660, '')`,
 		},
-		{
-			`INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (1, '', 0, 0, 'Main', '', 'Dispatch 1', 0, 1, 9, 1514000, '')`,
-			nil,
+
+		seedStatement{
+			query: `INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (1, '', 0, 0, 'Main', '', 'Dispatch 1', 0, 1, 9, 1514000, '')`,
 		},
-		{
-			`INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (2, '', 0, 0, 'Dispatch', '', 'Talkgroup 1514000', 0, 2, 9, 1514000, '')`,
-			nil,
+		seedStatement{
+			query: `INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (2, '', 0, 0, 'Dispatch', '', 'Talkgroup 1514000', 0, 2, 9, 1514000, '')`,
 		},
-		{
-			`INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (1, 2000, 1, ?, 0, '', 0, '', 1, 0, 0, 0, 'dsdplus')`,
-			[]any{dsd},
+	)
+}
+
+// seedWatches gives the server the two watches and the one option that keeps ffmpeg out of the run. It is
+// the whole configuration the auto-populate run is given: everything else that run ends up with is named
+// by the recordings, and is what the server is expected to create from them.
+func seedWatches(t *testing.T, db *sql.DB, dsd, trunk string) {
+	t.Helper()
+
+	seed(t, db,
+		seedStatement{
+			query: `INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (1, 2000, 1, ?, 0, '', 0, '', 1, 0, 0, 0, 'dsdplus')`,
+			args:  []any{dsd},
 		},
-		{
-			`INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (2, 2000, 1, ?, 0, '', 0, '', 2, 0, 0, 0, 'trunk-recorder')`,
-			[]any{trunk},
+		seedStatement{
+			query: `INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (2, 2000, 1, ?, 0, '', 0, '', 2, 0, 0, 0, 'trunk-recorder')`,
+			args:  []any{trunk},
 		},
-		{
-			`INSERT INTO "options" ("key", "value") VALUES ('audioConversion', '0')`,
-			nil,
+
+		seedStatement{
+			query: `INSERT INTO "options" ("key", "value") VALUES ('audioConversion', '0')`,
 		},
-	}
+	)
+}
+
+func seed(t *testing.T, db *sql.DB, statements ...seedStatement) {
+	t.Helper()
 
 	for _, statement := range statements {
 		if _, err := db.Exec(statement.query, statement.args...); err != nil {
@@ -379,26 +404,59 @@ func endToEndRows(t *testing.T, db *sql.DB, table string) []map[string]any {
 	return found
 }
 
-// waitForLogMessage waits for the server to have written a log entry, because some of what it writes is
-// something that happens on its own schedule rather than the answer to a request.
+// waitForLogMessage waits for the server to have written a log entry with exactly this message.
 func waitForLogMessage(t *testing.T, db *sql.DB, message string) {
+	t.Helper()
+
+	waitForLog(t, db, message, func(found string) bool { return found == message })
+}
+
+// waitForLogMentioning waits for a log entry whose message contains this fragment, which is how a test
+// waits for a run to have reached a particular recording without repeating the parts of the line that the
+// recording's own configuration decides.
+func waitForLogMentioning(t *testing.T, db *sql.DB, fragment string) {
+	t.Helper()
+
+	waitForLog(t, db, fragment, func(found string) bool { return strings.Contains(found, fragment) })
+}
+
+// waitForLog waits for the server to have written a log entry that matches, because some of what it writes
+// is something that happens on its own schedule rather than the answer to a request.
+func waitForLog(t *testing.T, db *sql.DB, what string, matches func(string) bool) {
 	t.Helper()
 
 	deadline := time.Now().Add(20 * time.Second)
 
 	for {
-		var count int
-
-		if err := db.QueryRow(`SELECT COUNT(*) FROM "logs" WHERE "message" = ?`, message).Scan(&count); err != nil {
+		rows, err := db.Query(`SELECT "message" FROM "logs"`)
+		if err != nil {
 			t.Fatalf("reading the server log: %v", err)
 		}
 
-		if count > 0 {
-			return
+		for rows.Next() {
+			var message string
+
+			if err := rows.Scan(&message); err != nil {
+				rows.Close()
+
+				t.Fatalf("reading a server log entry: %v", err)
+			}
+
+			if matches(message) {
+				rows.Close()
+
+				return
+			}
+		}
+
+		rows.Close()
+
+		if err := rows.Err(); err != nil {
+			t.Fatalf("reading the server log: %v", err)
 		}
 
 		if time.Now().After(deadline) {
-			t.Fatalf("the server never logged %q", message)
+			t.Fatalf("the server never logged %s", what)
 		}
 
 		time.Sleep(100 * time.Millisecond)
@@ -429,12 +487,12 @@ func findFiles(t *testing.T, directory string) []string {
 	return left
 }
 
-// readEndToEndGolden reads the captured run, keeping each table as it was written so that it can be
-// compared in the same canonical shape the server's own rows are put in.
-func readEndToEndGolden(t *testing.T) map[string]json.RawMessage {
+// readGoldenRun reads a captured run, keeping each table as it was written so that it can be compared in
+// the same canonical shape the server's own rows are put in.
+func readGoldenRun(t *testing.T, name string) map[string]json.RawMessage {
 	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "golden", "dirwatch-end-to-end.json"))
+	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "golden", name))
 	if err != nil {
 		t.Fatalf("reading the captured run: %v", err)
 	}
@@ -445,9 +503,9 @@ func readEndToEndGolden(t *testing.T) map[string]json.RawMessage {
 		t.Fatalf("the captured run is not the run a capture writes: %v", err)
 	}
 
-	for _, name := range []string{"frames", "calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
-		if _, ok := golden[name]; !ok {
-			t.Fatalf("the captured run has no %s to compare against", name)
+	for _, table := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
+		if _, ok := golden[table]; !ok {
+			t.Fatalf("the captured run has no %s to compare against", table)
 		}
 	}
 
