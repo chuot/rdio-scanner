@@ -82,6 +82,19 @@ func (sites Sites) ByRef(ref uint) (Site, bool) {
 	return Site{}, false
 }
 
+// ByLabel finds a site by the name the ingest source gave it. The default directory-watch
+// mask names a site by label, and only for a call whose system was resolved, because a site
+// belongs to a system.
+func (sites Sites) ByLabel(label string) (Site, bool) {
+	for _, site := range sites {
+		if site.Label == label {
+			return site, true
+		}
+	}
+
+	return Site{}, false
+}
+
 // Ordered returns the sites sorted by their display order.
 func (sites Sites) Ordered() Sites {
 	out := append(Sites{}, sites...)

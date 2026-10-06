@@ -43,6 +43,12 @@ type IngestMeta struct {
 	TalkgroupTag   string
 	UnitRefs       []uint
 	UnitLabels     []string
+
+	// ChannelType is what the upload endpoint says the talkgroup is — trunked or
+	// conventional — and nothing else in the server acts on it. It is kept because the call
+	// payload a client is handed for a call that is happening now carries it, and the calls
+	// table has no column for it, so the live frame is the only place it ever appears.
+	ChannelType string
 }
 
 // ResolveSystem finds the system an ingested call belongs to, trying the database
