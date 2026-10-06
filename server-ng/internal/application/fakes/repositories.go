@@ -27,6 +27,7 @@ package fakes
 import (
 	"context"
 	"sort"
+	"sync"
 	"time"
 
 	"rdio-scanner/server-ng/internal/application/ports"
@@ -606,15 +607,32 @@ func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, erro
 }
 
 // Logs is an in-memory log repository.
+//
+// The entries are behind a mutex because a log is written from the goroutines that fail — a
+// directory watcher, an ingest path — and a test that waits for a log line reads it from another
+// one.
 type Logs struct {
 	Stored []domain.LogEntry
 	Err    error
+
+	mutex sync.Mutex
 }
 
 var _ ports.LogRepository = (*Logs)(nil)
 
+// Recorded returns the entries as they were written, oldest first.
+func (logs *Logs) Recorded() []domain.LogEntry {
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
+
+	return append([]domain.LogEntry{}, logs.Stored...)
+}
+
 // AppendLog records an entry.
 func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
+
 	if logs.Err != nil {
 		return logs.Err
 	}
@@ -630,6 +648,9 @@ func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 
 // SearchLogs applies the criteria to the stored entries.
 func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (ports.LogSearchPage, error) {
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
+
 	if logs.Err != nil {
 		return ports.LogSearchPage{}, logs.Err
 	}
@@ -680,6 +701,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 // DeleteLogsBefore removes the entries older than the given instant.
 func (logs *Logs) DeleteLogsBefore(ctx context.Context, before time.Time) (int, error) {
+	logs.mutex.Lock()
+	defer logs.mutex.Unlock()
+
 	if logs.Err != nil {
 		return 0, logs.Err
 	}
