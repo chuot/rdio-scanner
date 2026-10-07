@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { computeTodos } from '../admin/domain/todos.js';
-import { importTalkgroups, importUnits, parseCsv } from '../admin/domain/csv-import.js';
-import { migrateLegacyConfig } from '../admin/domain/config-legacy-keys.js';
+import { computeTodos } from '../domain/todos.js';
+import { importTalkgroups, importUnits, parseCsv } from '../domain/csv-import.js';
+import { migrateLegacyConfig } from '../domain/config-legacy-keys.js';
 
 describe('domain/todos — exact legacy messages', () => {
     const fullConfig = { systems: [{ id: 1 }], apikeys: [{ id: 1 }], dirwatch: [] };

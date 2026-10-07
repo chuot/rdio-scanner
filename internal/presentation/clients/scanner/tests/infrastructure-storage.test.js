@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createStorage } from '../scanner/infrastructure/storage.js';
-import { clearPin, readPin, savePin } from '../scanner/domain/pin.js';
+import { createStorage } from '../infrastructure/storage.js';
+import { clearPin, readPin, savePin } from '../domain/pin.js';
 
 function createFakes() {
     const make = () => {

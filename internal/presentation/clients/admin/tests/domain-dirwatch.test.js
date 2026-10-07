@@ -6,7 +6,7 @@ import {
   validDirectory,
   validExtension,
   validateDirwatchRow,
-} from '../admin/domain/dirwatch.js';
+} from '../domain/dirwatch.js';
 
 const validRow = () => ({
     delay: 2000,

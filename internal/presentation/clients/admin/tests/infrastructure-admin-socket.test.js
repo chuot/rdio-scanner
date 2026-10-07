@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createAdminSocket } from '../admin/infrastructure/admin-socket.js';
+import { createAdminSocket } from '../infrastructure/admin-socket.js';
 
 class FakeWebSocket {
     static instances = [];

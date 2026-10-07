@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 
 import { fileURLToPath } from 'node:url';
 
-const DOC_PATH = fileURLToPath(new URL('../../../../docs/specs/FEAT-002-vanilla-client-ng/openapi-admin.json', import.meta.url));
+const DOC_PATH = fileURLToPath(new URL('../../../../../docs/specs/FEAT-002-vanilla-client-ng/openapi-admin.json', import.meta.url));
 
 const doc = JSON.parse(readFileSync(DOC_PATH, 'utf8'));
 

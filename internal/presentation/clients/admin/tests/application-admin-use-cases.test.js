@@ -4,8 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAdminUseCases } from '../admin/application/admin-use-cases.js';
-import { createStore } from '../shared/application/store.js';
+import { createAdminUseCases } from '../application/admin-use-cases.js';
+import { createStore } from '../../shared/application/store.js';
 
 function fakeStorage(token = null) {
   let stored = token;

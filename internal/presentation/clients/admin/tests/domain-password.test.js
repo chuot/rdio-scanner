@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { validatePasswordChange } from '../admin/domain/password.js';
+import { validatePasswordChange } from '../domain/password.js';
 
 const valid = {
   currentPassword: 'old-secret',

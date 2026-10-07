@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { expireAvoid, nextAvoidStep } from '../scanner/domain/avoid.js';
-import { decodeMap, avoidMinutes, isAvoided, toggleTalkgroup } from '../scanner/domain/livefeed-map.js';
+import { expireAvoid, nextAvoidStep } from '../domain/avoid.js';
+import { decodeMap, avoidMinutes, isAvoided, toggleTalkgroup } from '../domain/livefeed-map.js';
 
 describe('domain/avoid — cycle state machine', () => {
     it('first press on an active talkgroup avoids it indefinitely', () => {

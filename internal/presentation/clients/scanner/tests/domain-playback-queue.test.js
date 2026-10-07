@@ -7,7 +7,7 @@ import {
     filterActive,
     playbackQueueCount,
     shift,
-} from '../scanner/domain/playback-queue.js';
+} from '../domain/playback-queue.js';
 
 describe('domain/playback-queue', () => {
     const callA = { id: 1, system: 10, talkgroup: 100 };

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { ADMIN_TOKEN_KEY, createTokenStorage } from '../admin/infrastructure/token-storage.js';
+import { ADMIN_TOKEN_KEY, createTokenStorage } from '../infrastructure/token-storage.js';
 
 function createFakes() {
     const sessionStorage = new Map();

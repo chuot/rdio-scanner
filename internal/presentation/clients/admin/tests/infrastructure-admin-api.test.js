@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createAdminApi } from '../admin/infrastructure/admin-api.js';
-import { createTokenStorage } from '../admin/infrastructure/token-storage.js';
+import { createAdminApi } from '../infrastructure/admin-api.js';
+import { createTokenStorage } from '../infrastructure/token-storage.js';
 
 function createFakes() {
     const requests = [];
