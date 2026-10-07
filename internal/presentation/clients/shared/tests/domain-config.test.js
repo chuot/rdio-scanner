@@ -7,7 +7,7 @@ import {
     normalizeListenerConfig,
     serializeAdminConfig,
     transformCall,
-} from '../shared/domain/config.js';
+} from '../domain/config.js';
 
 describe('domain/config — listener config normalization', () => {
     it('applies defensive defaults to a partial CFG payload', () => {

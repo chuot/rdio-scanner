@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createStore } from '../shared/application/store.js';
+import { createStore } from '../application/store.js';
 
 describe('application/store — slice subscriptions', () => {
     it('notifies subscribers of the slice that changed with its value', () => {

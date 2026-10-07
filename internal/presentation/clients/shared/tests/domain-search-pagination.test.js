@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { clientSlice, needsRefetch, serverOffset } from '../shared/domain/search-pagination.js';
+import { clientSlice, needsRefetch, serverOffset } from '../domain/search-pagination.js';
 
 const SERVER_PAGE = 200;
 const CLIENT_PAGE = 10;
