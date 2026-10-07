@@ -469,14 +469,24 @@ func TestAdminPasswordModeIsTheCredentialTheServerAccepts(t *testing.T) {
 // T055 — so what the application answers is the 404 it gives for a file it does not have. That is the
 // application answering: a request handed to the listener endpoint would have been answered as an upgrade,
 // and a request that reached nothing would not have been answered by this path at all.
+// An ordinary path is answered by the web application, the same way the application root is answered: with the
+// application shell when the binary carries one, and with nothing when it does not. A binary built from a
+// repository that has never run `make webapp-ng-server` carries only the placeholder that keeps the embedded
+// directory in the repository, so this compares the two answers instead of naming one.
 func TestServerAnswersAnOrdinaryRequestAtTheApplicationPathAsTheApplication(t *testing.T) {
 	srv := startedTestServer(t)
 
-	rec := srv.get("/settings")
+	root := srv.get("/")
+	route := srv.get("/settings")
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("GET /settings was answered %d, want the web application's own answer for a file its bundle "+
-			"does not carry: %s", rec.Code, rec.Body.String())
+	if route.Code != root.Code {
+		t.Fatalf("GET /settings was answered %d, want the answer the application root gets, which is %d",
+			route.Code, root.Code)
+	}
+
+	if route.Body.String() != root.Body.String() {
+		t.Errorf("GET /settings was answered with a different body than the application root, which is what a "+
+			"path the bundle does not carry gets: %s", route.Body.String())
 	}
 }
 

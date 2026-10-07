@@ -9,6 +9,5 @@
 /autocert
 /rdio-scanner
 /server-ng
-/webapp/*
-!/webapp
-!/webapp/.gitkeep
+/internal/presentation/webapp/webapp/*
+!/internal/presentation/webapp/webapp/.gitkeep
