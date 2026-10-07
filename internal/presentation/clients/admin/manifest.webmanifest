@@ -1,0 +1,23 @@
+{
+  "name": "Rdio Scanner Administration",
+  "short_name": "Rdio Admin",
+  "theme_color": "#1e1e1e",
+  "background_color": "#1e1e1e",
+  "display": "standalone",
+  "scope": "/admin/",
+  "start_url": "/admin/",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ]
+}
