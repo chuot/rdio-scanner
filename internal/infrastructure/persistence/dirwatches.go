@@ -27,8 +27,8 @@ import (
 	"strings"
 	"sync"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Dirwatches is the stored directory-watch configuration.

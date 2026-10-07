@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // maskToken is one token an administrator writes into a watch's mask: the text they type,

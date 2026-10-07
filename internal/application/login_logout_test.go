@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 var loginTime = time.Date(2026, 4, 2, 8, 15, 0, 0, time.UTC)

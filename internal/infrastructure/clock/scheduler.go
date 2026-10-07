@@ -23,7 +23,7 @@ package clock
 import (
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // Scheduler runs work after a delay, which is the other half of what this package is for: the clock

@@ -32,9 +32,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/presentation/dto"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/presentation/dto"
 )
 
 // The intervals a listener connection is held to. They are the protocol's own and are not choices

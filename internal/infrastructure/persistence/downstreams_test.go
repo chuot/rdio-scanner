@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // openDownstreamTestDatabase opens an empty database with the legacy schema applied, for the tests

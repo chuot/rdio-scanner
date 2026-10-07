@@ -23,8 +23,8 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // SearchLogsQuery asks for the server's own log view: the entries the criteria match, and how

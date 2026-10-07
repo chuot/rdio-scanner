@@ -33,8 +33,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // recordedRecording is one second of a 440 Hz tone, in the 8 kHz 16-bit mono wav the recording

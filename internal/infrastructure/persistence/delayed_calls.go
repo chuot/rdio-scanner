@@ -25,7 +25,7 @@ import (
 	"database/sql"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // DelayedCalls stores the calls that are waiting out a talkgroup or system delay.

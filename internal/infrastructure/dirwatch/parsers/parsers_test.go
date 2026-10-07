@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // watchedFileIn puts a recording in a named directory under the watched directory, which is

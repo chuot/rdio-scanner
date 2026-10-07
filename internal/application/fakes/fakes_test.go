@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 func testCall(id uint64, systemRef, talkgroupRef uint, at time.Time) domain.Call {

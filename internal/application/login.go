@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 const (

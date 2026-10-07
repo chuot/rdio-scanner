@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // TestConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of CA-004.1 for a

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // TestAdminConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of CA-004.1 for the whole

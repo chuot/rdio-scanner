@@ -23,7 +23,7 @@ package dto
 import (
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // AdminLoginReply is what a login is answered with: the credential that stands for the new session, and

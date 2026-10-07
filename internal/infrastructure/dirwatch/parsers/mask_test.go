@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 // recordedAt is the moment the parsers run at, in a time zone that is not UTC so that a

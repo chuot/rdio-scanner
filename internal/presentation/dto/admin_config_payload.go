@@ -24,8 +24,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // AdminConfigPayload is the whole configuration an administrator is shown: every section of it, and

@@ -23,7 +23,7 @@ package clock
 import (
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // Clock is the server's clock: the moment, in the time zone the server runs in.

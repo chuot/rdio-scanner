@@ -30,11 +30,11 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/presentation/dto"
-	"rdio-scanner/server-ng/internal/presentation/httpaddr"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/presentation/dto"
+	"rdio-scanner/internal/presentation/httpaddr"
 )
 
 // Deps are the use cases the listener endpoint answers each command with, and the things it needs in

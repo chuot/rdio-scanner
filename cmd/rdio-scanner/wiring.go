@@ -29,13 +29,13 @@ import (
 	"sync"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/infrastructure/dirwatch"
-	"rdio-scanner/server-ng/internal/infrastructure/tokens"
-	"rdio-scanner/server-ng/internal/presentation/upgrade"
-	"rdio-scanner/server-ng/internal/presentation/ws"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/dirwatch"
+	"rdio-scanner/internal/infrastructure/tokens"
+	"rdio-scanner/internal/presentation/upgrade"
+	"rdio-scanner/internal/presentation/ws"
 )
 
 // pruneInterval is how often the server applies its retention, which is the legacy server's hourly

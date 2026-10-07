@@ -24,8 +24,8 @@ import (
 	"encoding/json"
 	"sort"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // ConfigPayload is the configuration one listener is allowed to see: the systems and talkgroups its

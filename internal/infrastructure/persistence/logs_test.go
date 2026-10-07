@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // TestAppendLogStoresAMessageContainingSingleQuotes is Q21, the one defect this task is allowed to

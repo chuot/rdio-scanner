@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // The recording every captured call carries, byte for byte as the capture wrote it.

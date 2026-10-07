@@ -36,8 +36,8 @@ import (
 
 	"github.com/dhowden/tag"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Extracted is what a file that appeared in a watched directory is worth to the ingest

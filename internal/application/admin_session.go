@@ -23,7 +23,7 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // CheckAdminSessionQuery asks whether a credential presented to an administrator endpoint stands for a

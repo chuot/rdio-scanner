@@ -24,8 +24,8 @@ import (
 	"context"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Delayer is the fake call delayer the use cases are tested against.

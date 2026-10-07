@@ -26,8 +26,8 @@ import (
 	"strings"
 	"sync"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Accesses is the server's listener access list.

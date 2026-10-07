@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // TestAllTagsReadsTheTagsTheLegacyServerWrote is the tags half of REQ-007. The trailing space of the

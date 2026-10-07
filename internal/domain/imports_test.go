@@ -32,7 +32,7 @@ import (
 // TestDomainImportsStandardLibraryOnly enforces CA-003.1 on every run of the suite,
 // so the layer boundary cannot regress unnoticed.
 func TestDomainImportsStandardLibraryOnly(t *testing.T) {
-	const module = "rdio-scanner/server-ng"
+	const module = "rdio-scanner"
 
 	fset := token.NewFileSet()
 

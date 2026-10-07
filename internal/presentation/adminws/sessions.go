@@ -34,10 +34,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/presentation/dto"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/presentation/dto"
 )
 
 // writeWait bounds how long the server is willing to spend writing to one administrator connection.

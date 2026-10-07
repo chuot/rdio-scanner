@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 // errCredentialStoreUnreadable is what a credential store says when it cannot be read at all.

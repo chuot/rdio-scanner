@@ -23,8 +23,8 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // SearchCallsQuery asks for one page of the call history.

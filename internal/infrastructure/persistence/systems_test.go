@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // TestAllSystemsReadsTheSystemsTheLegacyServerWrote is the REQ-007 half that concerns the systems

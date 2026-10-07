@@ -26,8 +26,8 @@ import (
 	"encoding/json"
 	"sync"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Options is the server's options, held as the configuration in effect.

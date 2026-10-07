@@ -24,7 +24,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // CallSearchPagePayload is the answer to a call search: the page, and the criteria the listener asked

@@ -25,7 +25,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // The per-section administrator endpoints, ported from the suite the legacy server carries for them.

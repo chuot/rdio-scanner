@@ -27,8 +27,8 @@ import (
 	"strings"
 	"sync"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Systems is the stored system catalog: the repository adapter that owns a system and everything

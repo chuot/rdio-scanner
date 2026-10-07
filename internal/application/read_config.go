@@ -23,8 +23,8 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // GetConfigQuery asks for the configuration the server is running with, which is what an

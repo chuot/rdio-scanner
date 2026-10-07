@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // The call-upload endpoints declare the reading they need themselves, because they may not import this

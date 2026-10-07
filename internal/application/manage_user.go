@@ -24,8 +24,8 @@ import (
 	"context"
 	"fmt"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // AddAccessUserCommand adds a listener access, or updates the one already configured under the

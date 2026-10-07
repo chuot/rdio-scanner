@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 var adminTime = time.Date(2026, 6, 14, 9, 30, 0, 0, time.UTC)

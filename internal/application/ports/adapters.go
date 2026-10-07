@@ -24,7 +24,7 @@ import (
 	"context"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // AudioFile is a chunk of audio together with the name and media type it is presented

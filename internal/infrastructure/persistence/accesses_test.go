@@ -35,7 +35,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // wildcardScope is the scope the legacy server stores as the text `"*"`: every system, every

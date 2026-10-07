@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 func TestAllApikeysReadsTheCredentialsTheLegacyServerStored(t *testing.T) {

@@ -34,10 +34,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // The administrator's configuration socket is how the web app learns that something changed while it was

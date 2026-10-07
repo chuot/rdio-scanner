@@ -27,9 +27,9 @@ import (
 	"net/http"
 	"strings"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/presentation/dto"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/presentation/dto"
 )
 
 // errUnreadableBody says that a save was asked for with a body this endpoint cannot read. It is not a

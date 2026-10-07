@@ -23,7 +23,7 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // AdminSigningSecretOutcome reports what the server decided about its signing secret.

@@ -32,8 +32,8 @@ import (
 	"strings"
 	"sync"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Converter is the audio converter that runs ffmpeg.

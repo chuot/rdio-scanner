@@ -28,8 +28,8 @@ import (
 	"sync"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Converter is an in-memory audio converter. It renames and re-types the audio the way

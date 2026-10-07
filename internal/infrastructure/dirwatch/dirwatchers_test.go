@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/infrastructure/dirwatch/parsers"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/dirwatch/parsers"
 )
 
 // The watched-directory tests are integration tests over real directories and real filesystem

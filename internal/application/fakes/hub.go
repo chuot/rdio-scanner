@@ -21,8 +21,8 @@
 package fakes
 
 import (
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Hub is an in-memory listener hub. It holds the same per-session state the real hub

@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // uploadPath is the endpoint every Rdio Scanner server accepts a call upload on. The

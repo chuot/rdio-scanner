@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // store is the database a repository adapter works on, together with the dialect it was opened

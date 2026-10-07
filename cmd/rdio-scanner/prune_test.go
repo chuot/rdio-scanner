@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application"
+	"rdio-scanner/internal/application"
 )
 
 // The retention is the server's own schedule, and what it discards is the history the server itself wrote.

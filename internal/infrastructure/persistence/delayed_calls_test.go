@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // openDelayedCallTestDatabase opens an empty database with the legacy schema applied, for the tests

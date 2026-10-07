@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Logs is the server's own event log: the entries the administrator's log view reads.

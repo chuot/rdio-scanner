@@ -23,7 +23,7 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // AdminLogoutOutcome reports what the server decided about an attempt to end an

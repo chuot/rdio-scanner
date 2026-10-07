@@ -35,7 +35,7 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // The -cmd mode is how an operator drives a server that is already running: log in, read the configuration,

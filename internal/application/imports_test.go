@@ -34,7 +34,7 @@ import (
 // never infrastructure, presentation, or a third-party module.
 func TestApplicationImportsInwardOnly(t *testing.T) {
 	const (
-		module        = "rdio-scanner/server-ng"
+		module        = "rdio-scanner"
 		allowedDomain = module + "/internal/domain"
 		allowedPorts  = module + "/internal/application"
 	)

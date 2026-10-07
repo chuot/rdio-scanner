@@ -31,7 +31,7 @@ import (
 
 	"github.com/kardianos/service"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // The -service mode is the server under the operating system's service manager. What these tests can prove

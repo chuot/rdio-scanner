@@ -25,7 +25,7 @@ import (
 	"errors"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // ErrNotFound is returned by a repository when the thing asked for is not there. It is

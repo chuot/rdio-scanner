@@ -26,8 +26,8 @@ import (
 	"strings"
 	"sync"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Apikeys is the server's upload credential list, held the same way the access list is held:

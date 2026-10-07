@@ -24,7 +24,7 @@ import (
 	"context"
 	"database/sql"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // Seed writes the groups and tags a fresh server is expected to start with, and is the half of what

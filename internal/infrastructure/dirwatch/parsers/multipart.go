@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // ApplyMultipart reads one form field of a call upload into the call.

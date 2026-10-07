@@ -26,7 +26,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // Bcrypt is the credential adapter the server runs with: it compares and stores administrator

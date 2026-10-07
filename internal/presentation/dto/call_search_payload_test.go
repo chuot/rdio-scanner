@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // TestCallSearchPageMatchesTheCapturedPage is the byte-for-byte half of CA-004.1 for a history page,

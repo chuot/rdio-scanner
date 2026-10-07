@@ -31,9 +31,9 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 // The call-upload endpoints are what an outside program posts recordings to: a radio bridge, another

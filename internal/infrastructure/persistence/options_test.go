@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 func TestReadOptionsReportsTheOptionsTheLegacyServerStored(t *testing.T) {

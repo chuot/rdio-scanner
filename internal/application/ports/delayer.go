@@ -23,7 +23,7 @@ package ports
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // CallDelayer is the part of the server that takes responsibility for the calls that have a delay

@@ -24,7 +24,7 @@ import (
 	"sort"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // Scheduler is an in-memory scheduler. Nothing runs on its own: a test schedules work and

@@ -23,8 +23,8 @@ package fakes
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // AdministratorSessions records what the open administrator connections were told.

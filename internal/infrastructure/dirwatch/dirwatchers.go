@@ -32,9 +32,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/infrastructure/dirwatch/parsers"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/dirwatch/parsers"
 )
 
 // minimumWatchDelay is how long a watched directory waits after a file stops changing before it

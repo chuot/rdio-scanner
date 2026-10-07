@@ -1,4 +1,4 @@
-module rdio-scanner/server-ng
+module rdio-scanner
 
 go 1.26.0
 

@@ -26,7 +26,7 @@ import (
 
 	"github.com/kardianos/service"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // The -service mode is the server running under the operating system's service manager: systemd on a Linux

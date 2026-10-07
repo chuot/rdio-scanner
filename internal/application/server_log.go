@@ -23,8 +23,8 @@ package application
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // appendServerLog writes an entry to the server's own log view.

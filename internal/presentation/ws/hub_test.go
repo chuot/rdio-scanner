@@ -32,9 +32,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // openSettings are the settings of a server that admits listeners, which is what most of these tests

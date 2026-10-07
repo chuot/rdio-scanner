@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 // The administrator endpoints are tested against the captures taken from the legacy server, so that a

@@ -38,10 +38,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
-	"rdio-scanner/server-ng/internal/infrastructure/persistence"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/persistence"
 )
 
 // A server pointed at a database it has never seen starts that database, reads its configuration out of

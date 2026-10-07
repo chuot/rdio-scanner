@@ -30,9 +30,9 @@ import (
 	"strings"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application"
-	"rdio-scanner/server-ng/internal/application/ports"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // Upload is the surface an outside program posts recordings to: a radio bridge, a capture application,

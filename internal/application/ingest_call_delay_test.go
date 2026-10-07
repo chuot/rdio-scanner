@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // A talkgroup or a system can hold its calls back from the operators who read them. The call is

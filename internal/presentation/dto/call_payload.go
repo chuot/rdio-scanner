@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // CallPayload is one recorded call, as the listener protocol carries it — in a live push, in the

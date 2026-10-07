@@ -23,7 +23,7 @@ package fakes
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/application/ports"
+	"rdio-scanner/internal/application/ports"
 )
 
 // PasswordVerifier is an in-memory credential check. It reports a match when the submitted

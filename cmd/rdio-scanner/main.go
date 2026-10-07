@@ -28,7 +28,7 @@ import (
 	"log"
 	"os"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 func main() {

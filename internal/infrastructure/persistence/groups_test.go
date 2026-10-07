@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // TestAllGroupsReadsTheGroupsTheLegacyServerWrote is the groups half of REQ-007: every column the

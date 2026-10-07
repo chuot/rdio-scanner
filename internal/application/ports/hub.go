@@ -20,7 +20,7 @@
 
 package ports
 
-import "rdio-scanner/server-ng/internal/domain"
+import "rdio-scanner/internal/domain"
 
 // ConfigSnapshot is the configuration in effect, handed to the hub so that it can be
 // delivered to listeners. The hub decides what each individual listener is allowed to

@@ -25,7 +25,7 @@ import (
 	"errors"
 	"testing"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 func TestBindLeavesTheQuestionMarkPlaceholdersAloneExceptForPostgresql(t *testing.T) {

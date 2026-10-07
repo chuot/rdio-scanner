@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"rdio-scanner/server-ng/internal/application/fakes"
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/domain"
 )
 
 var pruneTime = time.Date(2026, 4, 2, 12, 0, 0, 0, time.UTC)

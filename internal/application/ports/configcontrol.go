@@ -23,7 +23,7 @@ package ports
 import (
 	"context"
 
-	"rdio-scanner/server-ng/internal/domain"
+	"rdio-scanner/internal/domain"
 )
 
 // Dirwatchers are the directory watchers the server keeps running to ingest calls from
