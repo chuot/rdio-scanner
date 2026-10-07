@@ -5,3 +5,18 @@
 /dist
 client-ng/node_modules
 data-dev/
+
+# server build outputs and the local state a running server writes
+/*.db
+/*.db-journal
+/*.crt
+/*.json
+/*.key
+/*.ini
+/*.sqlite
+/__debug_bin
+/autocert
+/rdio-scanner
+/server-ng
+/internal/presentation/webapp/webapp/*
+!/internal/presentation/webapp/webapp/.gitkeep
