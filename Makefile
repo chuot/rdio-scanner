@@ -40,10 +40,7 @@ clean:
 	@find internal/presentation/webapp/bundle -mindepth 1 -not -name .gitkeep -delete
 
 container: webapp linux-amd64
-	@podman login docker.io
-	@podman manifest rm localhost/rdio-scanner:latest || true
-	@podman build --platform linux/amd64,linux/arm,linux/arm64 --pull --manifest rdio-scanner:latest .
-	@podman manifest push --format v2s2 localhost/rdio-scanner:latest docker://docker.io/chuot/rdio-scanner:latest
+	@podman build --pull -t $(app):latest .
 
 dist: freebsd linux macos windows
 

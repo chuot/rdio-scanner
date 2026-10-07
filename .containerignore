@@ -1,11 +1,24 @@
-client/.angular/cache
-client/node_modules
-server/*.db
-server/*.crt
-server/*.json
-server/*.key
-server/*.ini
-server/*.sqlite
-server/__debug_bin
-server/autocert
-server/server
+# the image is built from the module, not from the repository
+.git
+Containerfile
+.containerignore
+docs/
+dist/
+data-dev/
+testdata/
+
+# the client is built by `make webapp` before the image is built; the server embeds
+# the result from internal/presentation/webapp/bundle/, which is copied
+internal/presentation/client/
+
+# the state a server run from the repository root leaves behind
+/*.db
+/*.db-journal
+/*.crt
+/*.key
+/*.ini
+/*.json
+/*.sqlite
+/__debug_bin
+/autocert
+/rdio-scanner

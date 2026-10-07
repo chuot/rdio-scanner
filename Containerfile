@@ -2,13 +2,13 @@ FROM docker.io/alpine:latest
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 WORKDIR /app
 ENV DOCKER=1
-COPY server/. server/.
+COPY go.mod go.sum ./
+COPY cmd/ cmd/
+COPY internal/ internal/
 RUN mkdir -p /app/data && \
     apk --no-cache --no-progress --virtual .build add go && \
-    cd server && \
-    go build -o ../rdio-scanner && \
-    cd .. && \
-    rm -fr server /root/.cache /root/go && \
+    go build -o ./rdio-scanner ./cmd/rdio-scanner && \
+    rm -fr cmd internal go.mod go.sum /root/.cache /root/go && \
     apk del .build && \
     apk --no-cache --no-progress add ffmpeg mailcap tzdata
 VOLUME [ "/app/data" ]
