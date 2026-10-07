@@ -1,14 +1,13 @@
 # The web application conformance harness
 
-`run.sh` drives the real web application — the one `client-ng/build.mjs` builds and `go:embed` puts inside the
-server-ng binary — in a real headless Chrome, against a real server-ng, and works through the checklist in
-[quickstart.md §6](../../../docs/specs/FEAT-003-server-ng-refactor/quickstart.md). It exits 0 when every item
-passed.
+`run.sh` drives the real web application — the one `internal/presentation/client/build.mjs` builds and
+`go:embed` puts inside the server binary — in a real headless Chrome, against a real server, and works through
+the checklist in [quickstart.md §6](../../../docs/specs/FEAT-003-server-ng-refactor/quickstart.md). It exits 0
+when every item passed.
 
 ```console
-cd server-ng/testdata/conformance
-./run.sh                    # the checklist, then the drop-in
-./run.sh --no-drop-in       # the checklist only
+cd testdata/conformance
+./run.sh                    # the checklist
 ./run.sh --keep             # leave the databases, the browser profile, and the server logs behind
 ```
 
@@ -55,27 +54,33 @@ can debug a week later.
 | `a-token-that-is-no-good-returns-to-the-login` | a page holding a token the server refuses is put back at the login form and drops the token |
 | `the-administrator-logs-out` | the logout control ends the session and leaves no token behind |
 
-## The drop-in
+## The drop-in, and why it is not here any more
 
-The last part is the claim that matters most for a rewrite: a database the **legacy** server wrote is served by
-server-ng to the web application, and the application is asked whether its configuration and its stored calls
-are there and playable.
+This harness used to end with the claim that matters most for a rewrite: a database the **legacy** server wrote
+is served by the new server to the web application, and the application is asked whether its configuration and
+its stored calls are there and playable.
 
-The legacy server is built from `server/`, started on a database of its own, given the harness seed and one
-ingested call through its own administrator api, and stopped. Its database — with whatever the engine kept
-beside it — is copied, server-ng is started on the copy, and the checklist item `a-database-the-legacy-server-
-wrote-is-served-to-the-client` opens the listener page and searches.
+Producing that database required the legacy source. It built `server/`, started it, gave it the harness seed and
+one ingested call through its own administrator api, stopped it, and copied the database it wrote. `server/` is
+gone, so the harness cannot make one.
 
-`--no-drop-in` skips it, which is the fast way to run the checklist while the harness itself is being worked
-on.
+The claim itself is not given up. It is answered two ways:
+
+- **`testdata/legacydb/`, `testdata/legacyv6/`, `testdata/legacydamaged/`** are databases the legacy server
+  actually wrote, kept in the repository. The migration and drop-in tests in
+  `internal/infrastructure/persistence/` start the new server on copies of them and assert what it finds.
+- **This harness** proves the other half: the embedded application works against a server that carries it.
+
+What is lost is the single end-to-end run that put a legacy-written database in front of a *browser*. The
+migration tests read the same databases without one.
 
 ## Things the harness arranges
 
 - **`TZ=UTC` for every server**, so that the moments the pages show are the moments the harness wrote into the
   calls.
-- **A real audio file.** The recording this harness uploads is a second of 8 kHz mono 16-bit PCM. The
-  differential harness is content with meaningless bytes because it only compares what the server passed along;
-  this one puts the bytes in a browser, and a browser only plays audio it can decode.
+- **A real audio file.** The recording this harness uploads is a second of 8 kHz mono 16-bit PCM. A comparison
+  of what two servers passed along would be content with meaningless bytes; this one puts the bytes in a browser,
+  and a browser only plays audio it can decode.
 - **`--autoplay-policy=no-user-gesture-required`**, because a harness has no hands and the listener's audio
   context is created on the first gesture.
 - **`--disable-background-timer-throttling`** and its two companions, because a page the browser treats as
@@ -85,10 +90,11 @@ on.
 - **A page that has forgotten the unlock code**, because a listener remembers the code it was given in local
   storage and the gate is only worth checking against a listener that has not been let in yet.
 - **The seed applied through the administrator api**, the way an administrator applies a configuration, using
-  the same `fixtures/seed.json` the differential harness uses.
+  `fixtures/seed.json` beside this harness.
 
-## The pin
+## The tree the pinned fixtures point back to
 
-The drop-in builds `server/` from the repository, and `server/` is pinned to git tree
-`02ae33d4651fee4c46a93bdcf574d0aead89e542` — the same tree the golden captures under `testdata/capture/` and the
-differential harness are pinned to. If the legacy server changes, this harness says so and stops.
+The goldens under `testdata/golden/` and the databases under `testdata/legacydb/`, `testdata/legacyv6/`, and
+`testdata/legacydamaged/` were taken from the legacy server at git tree
+`02ae33d4651fee4c46a93bdcf574d0aead89e542`. This harness no longer pins anything: it has no legacy source to
+build, and a pin on a directory that does not exist only produces an error message. fixture generators name when they explain how to obtain the source they drive. [spec.md, Baseline](../../docs/specs/FEAT-005-server-ng-cutover/spec.md#baseline) is where that tree is recorded.

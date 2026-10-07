@@ -1166,45 +1166,6 @@ async function editSomethingIn(page, section) {
 // The drop-in: a database the legacy server wrote, served to the web application
 // ---------------------------------------------------------------------------
 
-async function dropInItems(app) {
-  const base = app.server.base;
-
-  await app.item('a-database-the-legacy-server-wrote-is-served-to-the-client', async () => {
-    const listener = await app.page(`${base}/`);
-
-    await listener.waitFor(`document.querySelector('rdio-display .link')?.textContent !== 'NO LINK'`, {
-      timeout: 45000,
-      what: 'the listener socket to open',
-    });
-
-    await listener.waitFor(
-      `Array.from(document.querySelectorAll('select[name="system"] option')).some((o) => o.textContent.includes('Grand Metro'))`,
-      { timeout: 45000, what: 'the systems the legacy server had stored' },
-    );
-
-    await listener.click('button[data-action="search"]');
-
-    await listener.waitFor(`document.querySelectorAll('rdio-search-panel tbody tr').length >= 1`, {
-      timeout: 30000,
-      what: 'the calls the legacy server had stored',
-    });
-
-    const rows = await listener.evaluate(`
-      Array.from(document.querySelectorAll('rdio-search-panel tbody tr')).slice(0, 3).map((row) =>
-        Array.from(row.querySelectorAll('td span')).map((span) => span.textContent).join(' | '))
-    `);
-
-    await listener.click('rdio-search-panel tbody tr button[data-play]');
-
-    await listener.waitFor(`!!document.querySelector('rdio-search-panel tbody tr button[data-stop]')`, {
-      timeout: 30000,
-      what: 'the stored call to start playing',
-    });
-
-    return `the configuration and the stored calls are there: ${rows.join('  //  ')}, and one of them plays`;
-  });
-}
-
 // ---------------------------------------------------------------------------
 
 function sleep(ms) {
@@ -1261,17 +1222,7 @@ const app = new Conformance(server, browser);
 let failed = 0;
 
 try {
-  if (args.phase === 'seed') {
-    // The writing half of the drop-in: a server is given a configuration and a call, and is then left alone,
-    // so that another server can be started on the database it wrote.
-    await server.login(adminPassword);
-
-    await server.request('PUT', '/api/admin/config', { body: seed, expect: [200] });
-
-    const uploaded = await server.upload('/api/call-upload', uploadFields('harness-apikey-open'));
-
-    console.log(`  ok       seeded and ingested one call: ${uploaded.status}`);
-  } else if (args.phase === 'probe') {
+  if (args.phase === 'probe') {
     // A diagnostic for this harness itself: open the listener page and write down the frames the application
     // exchanges with the server. It is not part of the checklist.
     await browser.launch();
@@ -1305,14 +1256,10 @@ try {
 
     await server.login(adminPassword);
 
-    if (args.phase === 'drop-in') {
-      await dropInItems(app);
-    } else {
-      await server.request('PUT', '/api/admin/config', { body: seed, expect: [200] });
+    await server.request('PUT', '/api/admin/config', { body: seed, expect: [200] });
 
-      await listenerItems(app);
-      await adminItems(app);
-    }
+    await listenerItems(app);
+    await adminItems(app);
   }
 } catch (error) {
   console.log(`  FAILED   the harness itself: ${error.message ?? error}`);
