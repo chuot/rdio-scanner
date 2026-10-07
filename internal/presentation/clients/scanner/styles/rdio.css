@@ -762,11 +762,23 @@ rdio-search-panel {
   user-select: none;
 }
 
-/* Legacy mat-card appearance="outlined" surfaces. */
+/* Legacy mat-card appearance="outlined" surfaces: a white surface, a hairline
+ * of the light theme's outline-variant, and level 0 elevation, which Material
+ * spells as three shadow layers with nothing to spread. The baseline builds a
+ * light Material theme, so these cards are light surfaces on the dark drawer. */
 rdio-search-panel .rdio-list,
 rdio-search-panel .rdio-filters {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: white;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 4px;
+  box-shadow:
+    rgba(0, 0, 0, 0.2) 0 0 0 0,
+    rgba(0, 0, 0, 0.14) 0 0 0 0,
+    rgba(0, 0, 0, 0.12) 0 0 0 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
 
 rdio-search-panel .rdio-filters {
