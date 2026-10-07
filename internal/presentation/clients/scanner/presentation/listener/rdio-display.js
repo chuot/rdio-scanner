@@ -63,8 +63,7 @@ class RdioDisplay extends HTMLElement {
         <div class="auth">
           <form autocomplete="off">
             <rdio-form-field>
-              <label for="unlock-code">Unlock code</label>
-              <input id="unlock-code" name="password" type="password" autocomplete="off" />
+              <div class="rdio-field-box"><div class="rdio-field-flex"><input id="unlock-code" name="password" type="password" autocomplete="off" placeholder="Unlock code" aria-label="Unlock code" /></div></div>
             </rdio-form-field>
           </form>
         </div>

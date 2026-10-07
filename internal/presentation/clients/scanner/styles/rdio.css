@@ -552,19 +552,18 @@ rdio-display .auth form {
   padding: 8px 32px;
 }
 
-/* The unlock field sits on the light LCD overlay, not on the dark theme. */
-rdio-display .auth rdio-form-field {
-  width: 220px;
-}
-
-rdio-display .auth rdio-form-field label {
-  color: rgba(0, 0, 0, 0.6);
+/* The unlock field is the same 78px Material field the six filters are, but the
+ * baseline sizes it to 212px — the width a native password input of its default
+ * size takes inside Material's 16px of padding — centres the value, and the field
+ * stays inline-flex because its form is a block rather than a flex container. The
+ * text "Unlock code" is the placeholder, as it is in the baseline, and the field
+ * keeps its accessible name through aria-label. */
+rdio-display .auth form rdio-form-field {
+  display: inline-flex;
+  width: 212px;
 }
 
 rdio-display .auth rdio-form-field input {
-  background: rgb(255, 255, 255);
-  border-color: rgb(150, 150, 150);
-  color: rgba(0, 0, 0, 0.8);
   text-align: center;
 }
 
@@ -1093,21 +1092,24 @@ rdio-search-panel .rdio-filters form {
 }
 
 /* Legacy mat-form-field in its fill appearance, which is what the baseline uses
- * for the six filters: a 56px box filled with #f6f6f6 and carrying the 1px
- * active indicator along its bottom edge; inside it, inset 16px, a flex row that
- * holds the value on a 24px line starting 24px below the top of the box; the
- * label floated into the space above the value; and under the box a 22px
- * subscript line that is reserved whether or not there is an error. The field is
- * 78px tall in total. */
-rdio-search-panel .rdio-filters rdio-form-field {
+ * for the six filters and for the unlock field: a 56px box filled with #f6f6f6
+ * and carrying the 1px active indicator along its bottom edge; inside it, inset
+ * 16px, a flex row that holds the value on a 24px line starting 24px below the
+ * top of the box; the label floated into the space above the value; and under the
+ * box a 22px subscript line that is reserved whether or not there is an error.
+ * The field is 78px tall in total. */
+rdio-search-panel .rdio-filters rdio-form-field,
+rdio-display .auth rdio-form-field {
   display: flex;
   flex-direction: column;
+  font-size: 16px;
   letter-spacing: 0.5px;
   line-height: 24px;
   margin: 0;
 }
 
-rdio-search-panel .rdio-filters .rdio-field-box {
+rdio-search-panel .rdio-filters .rdio-field-box,
+rdio-display .auth .rdio-field-box {
   background-color: #f6f6f6;
   border-radius: 4px 4px 0 0;
   box-sizing: border-box;
@@ -1118,7 +1120,8 @@ rdio-search-panel .rdio-filters .rdio-field-box {
 
 /* The active indicator is a line of its own in Material, not a border on the
  * box, so it does not take any of the 56px away from the value. */
-rdio-search-panel .rdio-filters .rdio-field-box::after {
+rdio-search-panel .rdio-filters .rdio-field-box::after,
+rdio-display .auth .rdio-field-box::after {
   background-color: rgba(0, 0, 0, 0.54);
   bottom: 0;
   content: "";
@@ -1140,11 +1143,30 @@ rdio-search-panel .rdio-filters .rdio-field-box::before {
   width: 10px;
 }
 
-rdio-search-panel .rdio-filters .rdio-field-box:hover::after {
+rdio-search-panel .rdio-filters .rdio-field-box:hover::after,
+rdio-display .auth .rdio-field-box:hover::after {
   background-color: rgba(0, 0, 0, 0.87);
 }
 
-rdio-search-panel .rdio-filters .rdio-field-flex {
+/* Material shows focus by thickening the indicator to 2px in the primary colour
+ * rather than by drawing an outline, which is what keeps keyboard focus visible
+ * here without the black ring a native control draws around itself. */
+rdio-search-panel .rdio-filters .rdio-field-box:focus-within::after,
+rdio-display .auth .rdio-field-box:focus-within::after {
+  background-color: #424242;
+  height: 2px;
+}
+
+/* A field that carries an error has the error colour for its indicator, which is
+ * how the baseline's expired unlock code reads. rdio-form-field marks the control
+ * aria-invalid when it sets the message. */
+rdio-search-panel .rdio-filters .rdio-field-box:has([aria-invalid])::after,
+rdio-display .auth .rdio-field-box:has([aria-invalid])::after {
+  background-color: #f44336;
+}
+
+rdio-search-panel .rdio-filters .rdio-field-flex,
+rdio-display .auth .rdio-field-flex {
   align-items: baseline;
   box-sizing: border-box;
   display: flex;
@@ -1162,7 +1184,8 @@ rdio-search-panel .rdio-filters rdio-form-field label {
 }
 
 rdio-search-panel .rdio-filters rdio-form-field select,
-rdio-search-panel .rdio-filters rdio-form-field input {
+rdio-search-panel .rdio-filters rdio-form-field input,
+rdio-display .auth rdio-form-field input {
   appearance: none;
   background: none;
   border: none;
@@ -1175,17 +1198,20 @@ rdio-search-panel .rdio-filters rdio-form-field input {
   height: 56px;
   letter-spacing: 0.5px;
   line-height: 24px;
+  outline: none;
   padding: 24px 0 8px;
   width: 100%;
 }
 
-rdio-search-panel .rdio-filters rdio-form-field input::placeholder {
+rdio-search-panel .rdio-filters rdio-form-field input::placeholder,
+rdio-display .auth rdio-form-field input::placeholder {
   color: rgba(0, 0, 0, 0.54);
 }
 
 /* The subscript line is 22px whether or not there is an error, which is what
  * keeps the card the height the baseline's is. */
-rdio-search-panel .rdio-filters .rdio-form-error {
+rdio-search-panel .rdio-filters .rdio-form-error,
+rdio-display .auth .rdio-form-error {
   box-sizing: border-box;
   display: block;
   letter-spacing: 0.4px;
