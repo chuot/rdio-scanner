@@ -6,18 +6,18 @@
 data-dev/
 
 # the client's dependencies
-src/internal/presentation/client/node_modules
+internal/presentation/client/node_modules
 
 # server build outputs and the local state a running server writes
-/src/*.db
-/src/*.db-journal
-/src/*.crt
-/src/*.json
-/src/*.key
-/src/*.ini
-/src/*.sqlite
-/src/__debug_bin
-/src/autocert
-/src/rdio-scanner
-/src/internal/presentation/webapp/bundle/*
-!/src/internal/presentation/webapp/bundle/.gitkeep
+/*.db
+/*.db-journal
+/*.crt
+/*.json
+/*.key
+/*.ini
+/*.sqlite
+/__debug_bin
+/autocert
+/rdio-scanner
+/internal/presentation/webapp/bundle/*
+!/internal/presentation/webapp/bundle/.gitkeep
