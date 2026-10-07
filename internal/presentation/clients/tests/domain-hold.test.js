@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { holdSystemMap, holdTalkgroupMap } from '../src/domain/hold.js';
-import { decodeMap } from '../shared/domain/livefeed-map.js';
+import { decodeMap } from '../scanner/domain/livefeed-map.js';
 
 describe('domain/hold — HOLD SYS snapshot semantics', () => {
     const map = decodeMap({ 10: { 100: true, 101: false }, 20: { 200: true } });

@@ -12,7 +12,7 @@ import {
     toggleAll as toggleAllMap,
     setSystemStatus as setSystemStatusMap,
     toggleTalkgroup,
-} from '../../shared/domain/livefeed-map.js';
+} from '../../scanner/domain/livefeed-map.js';
 import { deriveCategories, toggleCategory as toggleCategoryMap } from '../domain/categories.js';
 import { expireAvoid, nextAvoidStep } from '../domain/avoid.js';
 import { holdSystemMap, holdTalkgroupMap } from '../domain/hold.js';

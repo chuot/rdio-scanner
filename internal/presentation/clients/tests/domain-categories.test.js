@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { deriveCategories, toggleCategory } from '../src/domain/categories.js';
-import { decodeMap } from '../shared/domain/livefeed-map.js';
+import { decodeMap } from '../scanner/domain/livefeed-map.js';
 
 // groups map: { label: { systemRef: [talkgroupRef...] } }
 const groupsMap = {

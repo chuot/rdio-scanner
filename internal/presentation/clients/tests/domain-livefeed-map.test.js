@@ -13,7 +13,7 @@ import {
     toggleAll,
     toggleSystem,
     toggleTalkgroup,
-} from '../shared/domain/livefeed-map.js';
+} from '../scanner/domain/livefeed-map.js';
 
 describe('domain/livefeed-map — encoding', () => {
     it('encodes the internal map to the wire/storage shape (active booleans only)', () => {

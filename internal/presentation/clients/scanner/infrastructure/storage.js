@@ -2,7 +2,7 @@
 // localStorage: rdio-scanner (legacy livefeed fallback), rdio-scanner-lfm-<id>,
 // rdio-scanner-pin (handled by domain/pin against `local`).
 
-import { STORAGE_KEY_LEGACY, STORAGE_KEY_LFM } from '../../shared/domain/livefeed-map.js';
+import { STORAGE_KEY_LEGACY, STORAGE_KEY_LFM } from '../domain/livefeed-map.js';
 
 export function createStorage({ localStorage }) {
   return {

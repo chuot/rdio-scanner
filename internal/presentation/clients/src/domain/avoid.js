@@ -1,7 +1,7 @@
 // AVOID button cycle state machine (legacy main.component.ts avoid()):
 // active → avoided indefinitely → 30M → 60M → 120M → active.
 
-import { cloneMap } from '../../shared/domain/livefeed-map.js';
+import { cloneMap } from '../../scanner/domain/livefeed-map.js';
 
 export function nextAvoidStep({ avoided, minutes }) {
   if (!avoided) return { status: false };
