@@ -535,25 +535,33 @@ func TestMigrateTalkgroupsReportAForeignKeyFailureForATalkgroupInNoGroup(t *test
 	}
 }
 
-// TestMigrateUnitsStoreEveryMigratedUnitWithAZeroUnitReference is a legacy defect: the legacy
-// insert names the identity the unit object never had in the position the unit reference belongs
-// in, so every migrated unit loses the v6 reference its row was read for.
+// TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld is the repaired half of Q22.
 //
-// See server/migrations.go, migrateUnits: the insert ends with `unit.Id`, and `NewUnit()` never
-// gives a unit an id.
-func TestMigrateUnitsStoreEveryMigratedUnitWithAZeroUnitReference(t *testing.T) {
+// The legacy insert named `unit.Id` — the identity `NewUnit()` never gave the unit — in the position the
+// unit reference belongs in, so every migrated unit landed with `unitRef` 0 and the v6 reference its row
+// was read for was thrown away. The v6 `id` column is the radio's own number, and it is what
+// `callUnits.unitRef` and the call migration's unit lookup go looking for, so losing it is what made a
+// migrated unit unfindable at the very next step of the same migration. See
+// docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+func TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
 	// The call migration adds a unit of its own later on; this test is about the units the unit
 	// migration wrote from the v6 table.
 	got := readRows(t, db, `SELECT "unitId", "label", "order", "systemId", "unitRef" FROM "units" WHERE "unitId" IN (301, 302) ORDER BY 1`)
 	want := [][]string{
-		{"301", "Engine 12", "1", "101", "0"},
-		{"302", "Car 4", "2", "101", "0"},
+		{"301", "Engine 12", "1", "101", "12345"},
+		{"302", "Car 4", "2", "101", "6789"},
 	}
 
 	if !equalStrings(flat(got), flat(want)) {
 		t.Errorf("the migrated units:\n  got  %v\n  want %v", got, want)
+	}
+
+	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "unitRef"`) {
+		if row[2] == "0" {
+			t.Errorf("the migrated unit %v holds no radio reference, want the v6 reference its row was read for", row)
+		}
 	}
 }
 
@@ -761,7 +769,7 @@ func TestMigrateCallsStoreTheCallWithItsFrequenciesPatchesAndUnits(t *testing.T)
 	}
 
 	got = rowsOf(t, db, "callUnits", `"callId", "offset", "unitRef"`)
-	want = [][]string{{"701", "1.5", "12345"}, {"702", "2.5", "99999"}}
+	want = [][]string{{"701", "1.5", "12345"}, {"702", "2.5", "99999"}, {"706", "0", "6789"}}
 
 	if !equalStrings(flat(got), flat(want)) {
 		t.Errorf("the migrated call units:\n  got  %v\n  want %v", got, want)
@@ -874,69 +882,124 @@ func TestMigrateCallsStoreTheSingleFrequencyWhenTheListIsAnEmptyString(t *testin
 	t.Errorf("the call whose frequency list is an empty string stored no frequency: %v", got)
 }
 
-// TestMigrateCallsTreatsAMigratedUnitAsAUnitThatDoesNotExist is what the unit reference defect
-// costs: the call asks whether its source unit is already in the units table by the reference the
-// unit migration threw away, finds nothing, and creates the unit a second time.
+// TestMigrateCallsUseTheUnitTheUnitMigrationAlreadyWrote is the repaired half of Q23.
 //
-// See TestMigrateUnitsStoreEveryMigratedUnitWithAZeroUnitReference.
-func TestMigrateCallsTreatsAMigratedUnitAsAUnitThatDoesNotExist(t *testing.T) {
+// The call migration asks whether the unit a call came from is already in the units table, by the number
+// the call names and the system the call belongs to. With the unit reference kept, the unit the unit
+// migration wrote is found, no second unit is created for it, and the call gets its `callUnits` row —
+// which the legacy migration wrote only on the branch where the unit insert had failed, leaving every
+// call whose unit had to be created without its source. See
+// docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+func TestMigrateCallsUseTheUnitTheUnitMigrationAlreadyWrote(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
-	duplicates := 0
-
 	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "systemId", "unitRef"`) {
-		if row[1] == "6789" && row[2] == "101" && row[3] == "6789" {
-			duplicates++
-		}
-
-		if row[1] == "Car 4" && row[3] != "0" {
-			t.Fatalf("the migrated unit %v lost its reference in the wrong way", row)
+		if row[1] == "6789" {
+			t.Errorf("the call migration created a unit labelled with the number %v, want it to use the unit "+
+				"the unit migration already wrote: %v", row[1], row)
 		}
 	}
 
-	if duplicates != 1 {
-		t.Errorf("the source unit of call 706, which the migration had already migrated as unit 302, was created %d times, want 1", duplicates)
+	got := readRows(t, db, `SELECT "callId", "offset", "unitRef" FROM "callUnits" WHERE "callId" = 706`)
+	want := [][]string{{"706", "0", "6789"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("call 706's source units:\n  got  %v\n  want %v", got, want)
 	}
 }
 
-// TestMigrateCallsReportsNoFailureForTheUnitItCreated is the legacy defect that takes the whole
-// upgrade down. The legacy migration reports the unit insert from the branch that only runs when
-// the insert succeeded, with the error it just tested for being nil, and its error formatter calls
-// Error() on that nil: running the legacy binary over this fixture panics at
-// server/migrations.go:435 and the calls migration is rolled back.
+// TestMigrateCallsReportNoFailureForWorkThatSucceeded is the repaired half of Q24.
 //
-// server-ng reports the line instead of crashing, and keeps the legacy outcome that matters: the
-// call is left without its source unit, because the callUnits row is written only when the unit
-// insert failed.
-func TestMigrateCallsReportsNoFailureForTheUnitItCreated(t *testing.T) {
-	db, progress := migrateLegacyV6Fixture(t)
-
-	found := 0
+// The legacy migration reported the unit insert from the branch that only runs when the insert succeeded,
+// with the error it had just tested for being nil, and its error formatter called `Error()` on that nil and
+// took the whole server down. A migration that had nothing to complain about now says nothing.
+func TestMigrateCallsReportNoFailureForWorkThatSucceeded(t *testing.T) {
+	_, progress := migrateLegacyV6Fixture(t)
 
 	for _, line := range progress {
-		if !strings.HasPrefix(line, "migration.migrateCalls:") {
-			continue
+		if strings.HasPrefix(line, "migration.migrateCalls:") {
+			t.Errorf("the calls migration reported a failure it did not have: %q", line)
 		}
+	}
+}
 
-		if !strings.Contains(line, `%!s(<nil>)`) {
-			t.Errorf("the failure the legacy migration reported with no error at all came out as %q", line)
+// TestMigrateCallsCreateOneUnitPerUnitNumberTheyHaveNeverSeen keeps the unit the call migration creates
+// a unit: one row per number per system, found by the next call that names the same number instead of
+// created again, and created for the system the call belongs to rather than wherever a matching number
+// happens to live.
+func TestMigrateCallsCreateOneUnitPerUnitNumberTheyHaveNeverSeen(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	const insert = `INSERT INTO "rdioScannerCalls" ("id", "audio", "audioName", "audioType", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	// Two calls on Grand Metro naming a unit number the migration has never seen, and one call on Harbour
+	// naming a number Grand Metro already has a unit for.
+	for _, call := range []struct {
+		id        int
+		system    int
+		talkgroup int
+		source    int
+	}{
+		{707, 10001, 1514000, 55555},
+		{708, 10001, 1514000, 55555},
+		{709, 10002, 1514002, 12345},
+	} {
+		const audio = "audio for a call the fixture did not hold"
+
+		_, err := db.Exec(insert, call.id, []byte(audio), fmt.Sprintf("%d.wav", call.id), "audio/wav",
+			"2025-06-15 13:00:00.000 +0000 UTC", "[]", 1514000000, "[]", call.source, "[]",
+			call.system, call.talkgroup)
+
+		if err != nil {
+			t.Fatalf("%s: %v", insert, err)
 		}
-
-		if !strings.Contains(line, `INSERT INTO "units" ("label", "systemId", "unitRef") VALUES (?, ?, ?)`) {
-			t.Errorf("the failure the legacy migration reported with no error at all names %q", line)
-		}
-
-		found++
 	}
 
-	if found != 1 {
-		t.Errorf("the unit the call migration created was reported %d times, want 1; progress: %v", found, progress)
+	migrateDatabase(t, db)
+
+	created := 0
+
+	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "systemId", "unitRef"`) {
+		if row[3] == "55555" {
+			created++
+
+			if row[2] != "101" {
+				t.Errorf("the unit created for the number 55555 belongs to system %s, want the system the calls "+
+					"that named it belong to: %v", row[2], row)
+			}
+
+			if row[1] != "55555" {
+				t.Errorf("the unit created for the number 55555 is labelled %q, want the number as the text the "+
+					"legacy statement put in that column: %v", row[1], row)
+			}
+		}
 	}
 
-	for _, row := range rowsOf(t, db, "callUnits", `"callId"`) {
-		if row[0] == "706" {
-			t.Errorf("call 706 got its source unit row, which the legacy migration writes only when the unit insert fails")
-		}
+	if created != 1 {
+		t.Errorf("the number 55555, named by two calls of one system, produced %d units, want one; the calls "+
+			"that name a unit number the migration has never seen create it once and share it", created)
+	}
+
+	got := readRows(t, db, `SELECT "callId", "unitRef" FROM "callUnits" WHERE "unitRef" = 55555 ORDER BY "callId"`)
+	want := [][]string{{"707", "55555"}, {"708", "55555"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the calls naming the new unit:\n  got  %v\n  want %v", got, want)
+	}
+
+	// The number 12345 is already a unit of Grand Metro. A Harbour call naming it belongs to Harbour, and
+	// gets a unit of Harbour; the Grand Metro unit is left where it is.
+	harbour := readRows(t, db, `SELECT "label", "systemId", "unitRef" FROM "units" WHERE "unitRef" = 12345 AND "systemId" = 102`)
+
+	if len(harbour) != 1 {
+		t.Errorf("the Harbour call naming unit 12345 left %v, want one unit of Harbour: %v", harbour,
+			readRows(t, db, `SELECT "unitId", "label", "systemId", "unitRef" FROM "units" WHERE "unitRef" = 12345`))
+	}
+
+	grandMetro := readRows(t, db, `SELECT "unitId", "label", "systemId", "unitRef" FROM "units" WHERE "unitId" = 301`)
+
+	if len(grandMetro) != 1 || grandMetro[0][2] != "101" {
+		t.Errorf("the Grand Metro unit whose number a Harbour call also named came back as %v, want it left alone", grandMetro)
 	}
 }
 

@@ -25,6 +25,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -102,10 +103,10 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(mes
 // `log.Println(formatError(err, query))` line had. The statement it names is the parameterized one,
 // as `statementError` documents.
 //
-// One call site hands it a nil error, because the legacy migration it mirrors does: the legacy
-// error formatter calls `Error()` on that nil and takes the server down, where this renders it as
-// `%!s(<nil>)` and carries on. See `migrateCalls` and
-// `TestMigrateCallsReportsNoFailureForTheUnitItCreated`.
+// It used to have a call site that handed it a nil error, because the legacy migration it mirrored did:
+// the legacy error formatter called `Error()` on that nil and took the server down, where this rendered it
+// as `%!s(<nil>)` and carried on. The repaired calls migration reports only failures it actually has, so
+// no call site hands it a nil error.
 func reportFailure(progress func(message string), section, operation string, err error, query string) {
 	progress(statementError(section, operation, err, query).Error())
 }
@@ -615,7 +616,6 @@ func migrateUnits(ctx context.Context, s store, progress func(string)) error {
 		}
 
 		unit := struct {
-			id      int64
 			label   string
 			order   int64
 			unitRef int64
@@ -633,14 +633,14 @@ func migrateUnits(ctx context.Context, s store, progress func(string)) error {
 			unit.unitRef = int64(unitRef.Int32)
 		}
 
-		// The legacy insert names `unit.Id` — the identity `NewUnit()` never gave the unit — in
-		// the position the unit reference belongs in, so every migrated unit lands with
-		// `unitRef` 0 and the v6 reference the row was read for is thrown away. Reproduced
-		// verbatim; `TestMigrateUnitsStoreEveryMigratedUnitWithAZeroUnitReference` pins it, and
-		// `TestMigrateCallsTreatsAMigratedUnitAsAUnitThatDoesNotExist` is what it costs.
+		// The v6 `id` column is the radio's own number, and it is what `callUnits.unitRef` and the call
+		// migration's unit lookup go looking for. The legacy insert named `unit.Id` — the identity
+		// `NewUnit()` never gave the unit — in this position instead, so every migrated unit landed with
+		// `unitRef` 0 and the number its row was read for was thrown away. Repaired rather than
+		// preserved; see docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
 		query = `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (?, ?, ?, ?, ?)`
 
-		if _, err := tx.exec(ctx, query, unitID.Int64, unit.label, unit.order, systems[systemID.Int32], unit.id); err != nil {
+		if _, err := tx.exec(ctx, query, unitID.Int64, unit.label, unit.order, systems[systemID.Int32], unit.unitRef); err != nil {
 			reportFailure(progress, section, operation, err, query)
 		}
 	}
@@ -1400,31 +1400,40 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 			}
 
 		} else if source.Valid && source.Int32 > 0 {
+			// The unit the call came from is looked up by the number the call names, in the system the
+			// call belongs to. A number no unit holds gets a unit of its own, once: the next call naming
+			// the same number in the same system finds the unit this one made. The `callUnits` row is
+			// written whether the unit was already there or was just created.
+			//
+			// The legacy migration wrote the row only on the branch where the unit insert had failed, and
+			// reported the insert from the branch where it had succeeded — with a nil error its formatter
+			// then dereferenced, which is what took the legacy upgrade down. Repaired rather than
+			// preserved; see docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
 			var count int
 
 			query = `SELECT COUNT(*) FROM "units" WHERE "systemId" = ? AND "unitRef" = ?`
 
-			if err := tx.queryRow(ctx, query, systems[systemRef.Int32], int64(source.Int32)).Scan(&count); err == nil && count == 0 {
+			if err := tx.queryRow(ctx, query, systems[systemRef.Int32], int64(source.Int32)).Scan(&count); err != nil {
+				reportFailure(progress, section, operation, err, query)
+
+				continue
+			}
+
+			if count == 0 {
 				query = `INSERT INTO "units" ("label", "systemId", "unitRef") VALUES (?, ?, ?)`
 
-				if _, err := tx.exec(ctx, query, int64(source.Int32), systems[systemRef.Int32], int64(source.Int32)); err != nil {
-					query = `INSERT INTO "callUnits" ("callId", "offset", "unitRef") VALUES (?, ?, ?)`
-
-					if _, err := tx.exec(ctx, query, int64(callID.Int32), 0, int64(source.Int32)); err != nil {
-						reportFailure(progress, section, operation, err, query)
-					}
-
-				} else {
-					// The legacy migration reports the unit insert from the branch that only runs
-					// when it succeeded, with the error it just tested for being nil. Its error
-					// formatter calls `Error()` on that nil and takes the whole server down; see
-					// `TestMigrateCallsReportsNoFailureForTheUnitItCreated` and the note on
-					// `statementError`. Either way the call is left without its source unit: the
-					// `callUnits` row is written only when the unit insert failed.
+				// The label is the number as text, which is what the legacy statement — a number
+				// interpolated straight into a text column — leaves in that column.
+				if _, err := tx.exec(ctx, query, strconv.FormatInt(int64(source.Int32), 10), systems[systemRef.Int32], int64(source.Int32)); err != nil {
 					reportFailure(progress, section, operation, err, query)
-				}
 
-			} else if err != nil {
+					continue
+				}
+			}
+
+			query = `INSERT INTO "callUnits" ("callId", "offset", "unitRef") VALUES (?, ?, ?)`
+
+			if _, err := tx.exec(ctx, query, int64(callID.Int32), 0, int64(source.Int32)); err != nil {
 				reportFailure(progress, section, operation, err, query)
 			}
 		}
