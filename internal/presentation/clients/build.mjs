@@ -72,6 +72,20 @@ const scannerBundle = resolveOutDir('../serving/scanner/bundle', args);
 /** The admin bundle sits beside the Go package that embeds it. */
 const adminBundle = resolveOutDir('../serving/admin/bundle', args);
 
+/**
+ * The asset directories a bundle carries, named one by one instead of copying `assets` wholesale.
+ *
+ * `assets/` holds two kinds of file, and a recursive copy cannot tell them apart. Fonts and icons are URLs
+ * that `external` leaves in the emitted CSS and manifest, so the build has to copy the files. Badges are
+ * imported by `rdio-promo.js` with a relative path, `loader: { '.svg': 'text' }` inlines their markup into
+ * the JS, and a copy of them in a bundle would be bytes no request ever fetches. Naming the subdirectories
+ * is what stops a badge added under `assets/` from being copied along with everything else.
+ */
+const copiedAssets = [
+    { from: join(sharedDir, 'assets', 'fonts'), to: 'assets/fonts' },
+    { from: join(sharedDir, 'assets', 'icons'), to: 'assets/icons' },
+];
+
 /** The scanner application: the listener page, its service worker, and its manifest. */
 export const scannerConfig = {
     name: 'scanner',
@@ -80,7 +94,7 @@ export const scannerConfig = {
     indexHtml: join(scannerDir, 'index.html'),
     serviceWorker: { source: join(scannerDir, 'sw.js'), register: 'sw.js', scope: '/' },
     staticFiles: [join(sharedDir, 'favicon.ico'), join(scannerDir, 'manifest.webmanifest')],
-    staticDirs: [join(sharedDir, 'assets')],
+    staticDirs: copiedAssets,
     outDir: scannerBundle,
 };
 
@@ -92,7 +106,7 @@ export const adminConfig = {
     indexHtml: join(adminDir, 'index.html'),
     serviceWorker: null,
     staticFiles: [join(sharedDir, 'favicon.ico'), join(adminDir, 'manifest.webmanifest')],
-    staticDirs: [join(sharedDir, 'assets')],
+    staticDirs: copiedAssets,
     outDir: adminBundle,
 };
 
@@ -115,7 +129,7 @@ function copyStatic(config) {
         cpSync(file, join(config.outDir, basename(file)));
     }
     for (const dir of config.staticDirs) {
-        cpSync(dir, join(config.outDir, basename(dir)), { recursive: true });
+        cpSync(dir.from, join(config.outDir, dir.to), { recursive: true });
     }
 }
 
@@ -204,8 +218,7 @@ function listStaticAssets(config) {
         }
     };
     for (const dir of config.staticDirs) {
-        const copied = basename(dir);
-        if (existsSync(join(config.outDir, copied))) walk(copied);
+        if (existsSync(join(config.outDir, dir.to))) walk(dir.to);
     }
     return files.sort();
 }
@@ -273,7 +286,16 @@ async function buildApp(config) {
 // importing it must not rebuild the webapp.
 const runThisBuild = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
+// `--scanner` or `--admin` builds one application; with neither, the build produces both. The Makefile
+// always builds both, because each bundle is written beside the Go package that embeds it and a build
+// that produced only one would leave the other stale without saying so.
+const only = args.includes('--scanner') ? 'scanner' : args.includes('--admin') ? 'admin' : null;
+
 if (runThisBuild) {
-    await buildApp(scannerConfig);
-    await buildApp(adminConfig);
+    if (only !== 'admin') {
+        await buildApp(scannerConfig);
+    }
+    if (only !== 'scanner') {
+        await buildApp(adminConfig);
+    }
 }

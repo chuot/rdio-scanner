@@ -56,9 +56,16 @@ scanner: internal/presentation/serving/scanner/bundle/index.html
 
 admin: internal/presentation/serving/admin/bundle/index.html
 
-internal/presentation/serving/scanner/bundle/index.html internal/presentation/serving/admin/bundle/index.html: $(clientSrc)
+# Each bundle is built by the rule for the Go package that embeds it, so `make scanner` cannot leave the
+# admin bundle stale and `make admin` cannot leave the scanner bundle stale. Both rules watch the same
+# client sources, because the two applications share modules and a stylesheet.
+internal/presentation/serving/scanner/bundle/index.html: $(clientSrc)
 	@cd internal/presentation/clients && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd internal/presentation/clients && npm run build
+	@cd internal/presentation/clients && npm run build:scanner
+
+internal/presentation/serving/admin/bundle/index.html: $(clientSrc)
+	@cd internal/presentation/clients && test -d node_modules || npm ci --loglevel=error --no-progress
+	@cd internal/presentation/clients && npm run build:admin
 
 freebsd: freebsd-amd64
 freebsd-amd64: client dist/$(app)-freebsd-amd64-v$(ver).zip

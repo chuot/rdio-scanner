@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "node build.mjs --production",
+    "build:scanner": "node build.mjs --production --scanner",
+    "build:admin": "node build.mjs --production --admin",
     "watch": "node build.mjs --watch",
     "test": "node --test"
   },
