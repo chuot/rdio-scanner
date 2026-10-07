@@ -23,7 +23,7 @@
  * must never open the listener socket (contract-server-protocol.md §1).
  */
 
-import './styles/theme.css';
+import '../shared/styles/theme.css';
 import './styles/rdio.css';
 import './styles/admin.css';
 

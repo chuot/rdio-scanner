@@ -34,6 +34,7 @@ import esbuild from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, 'src');
+const sharedDir = join(here, 'shared');
 
 const args = process.argv.slice(2);
 const production = args.includes('--production');
@@ -64,11 +65,11 @@ const outDir = resolveOutDir(args);
 
 const packageInfo = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
 
-/** Files copied verbatim into the webapp root. */
-const staticFiles = ['favicon.ico', 'manifest.webmanifest'];
+/** Absolute paths copied verbatim into the webapp root, by their own name. */
+const staticFiles = [join(sharedDir, 'favicon.ico'), join(srcDir, 'manifest.webmanifest')];
 
-/** Directories copied verbatim (assets/icons, assets/fonts). */
-const staticDirs = ['assets'];
+/** Absolute directories copied verbatim (shared assets/icons, shared assets/fonts). */
+const staticDirs = [join(sharedDir, 'assets')];
 
 function cleanOutdir() {
     // The output directory is a tracked directory in the repository: the server keeps a placeholder in it so
@@ -86,10 +87,10 @@ function cleanOutdir() {
 
 function copyStatic() {
     for (const file of staticFiles) {
-        cpSync(join(srcDir, file), join(outDir, file));
+        cpSync(file, join(outDir, basename(file)));
     }
     for (const dir of staticDirs) {
-        cpSync(join(srcDir, dir), join(outDir, dir), { recursive: true });
+        cpSync(dir, join(outDir, basename(dir)), { recursive: true });
     }
 }
 
@@ -173,7 +174,8 @@ function listStaticAssets() {
         }
     };
     for (const dir of staticDirs) {
-        if (existsSync(join(outDir, dir))) walk(dir);
+        const copied = basename(dir);
+        if (existsSync(join(outDir, copied))) walk(copied);
     }
     return files.sort();
 }
@@ -191,7 +193,11 @@ const buildOptions = {
     },
     entryNames: production ? '[name].[hash]' : '[name]',
     entryPoints: [join(srcDir, 'main.js')],
-    external: ['/assets/*'],
+    // Both spellings of an asset URL are left exactly as written. The absolute form is what the
+    // listener has always emitted; the relative form is what the shared stylesheet now uses, so the
+    // same CSS resolves against whichever bundle serves it. Without the relative pattern esbuild
+    // would try to open `assets/fonts/…` from the stylesheet's own directory and fail the build.
+    external: ['/assets/*', 'assets/*'],
     format: 'esm',
     legalComments: 'none',
     loader: {
