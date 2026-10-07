@@ -19,5 +19,5 @@ src/internal/presentation/client/node_modules
 /src/__debug_bin
 /src/autocert
 /src/rdio-scanner
-/src/internal/presentation/webapp/webapp/*
-!/src/internal/presentation/webapp/webapp/.gitkeep
+/src/internal/presentation/webapp/bundle/*
+!/src/internal/presentation/webapp/bundle/.gitkeep

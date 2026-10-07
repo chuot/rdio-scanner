@@ -88,7 +88,7 @@ func wireContentType(header http.Header) (string, bool) {
 
 func TestRootServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
 	}
 
 	status, header, body := get(t, files, "/", nil)
@@ -108,8 +108,8 @@ func TestRootServesTheApplicationShell(t *testing.T) {
 
 func TestJavaScriptIsServedAsTextJavaScriptWithoutACharset(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	status, header, body := get(t, files, "/sw.js", nil)
@@ -132,7 +132,7 @@ func TestJavaScriptIsServedAsTextJavaScriptWithoutACharset(t *testing.T) {
 
 func TestHtmlIsServedWithTheMimeTableContentType(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
 	}
 
 	status, header, body := get(t, files, "/index.html", nil)
@@ -152,8 +152,8 @@ func TestHtmlIsServedWithTheMimeTableContentType(t *testing.T) {
 
 func TestCssIsServedWithTheMimeTableContentType(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html":     &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/assets/app.css": &fstest.MapFile{Data: []byte(appCSS)},
+		"bundle/index.html":     &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/assets/app.css": &fstest.MapFile{Data: []byte(appCSS)},
 	}
 
 	status, header, body := get(t, files, "/assets/app.css", nil)
@@ -173,8 +173,8 @@ func TestCssIsServedWithTheMimeTableContentType(t *testing.T) {
 
 func TestUnknownExtensionIsServedWithAnEmptyContentType(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html":           &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/manifest.webmanifest": &fstest.MapFile{Data: []byte(manifestText)},
+		"bundle/index.html":           &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/manifest.webmanifest": &fstest.MapFile{Data: []byte(manifestText)},
 	}
 
 	status, header, body := get(t, files, "/manifest.webmanifest", nil)
@@ -203,8 +203,8 @@ func TestUnknownExtensionIsServedWithAnEmptyContentType(t *testing.T) {
 
 func TestUppercaseJavaScriptExtensionIsServedWithTheMimeTableContentType(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/SW.JS":      &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/SW.JS":      &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	status, header, _ := get(t, files, "/SW.JS", nil)
@@ -222,8 +222,8 @@ func TestUppercaseJavaScriptExtensionIsServedWithTheMimeTableContentType(t *test
 
 func TestMissingRouteServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	status, header, body := get(t, files, "/listener/1234", nil)
@@ -244,14 +244,14 @@ func TestMissingRouteServesTheApplicationShell(t *testing.T) {
 // TestFallbackContentTypeComesFromTheBodyNotTheExtension pins the half of the fallback
 // that is easy to lose: the legacy handler never sets a Content-Type on it, so Go
 // sniffs. The same bytes therefore reach the client under a different header than the
-// same bytes served as webapp/index.html.
+// same bytes served as bundle/index.html.
 //
 // The shell here is plain text rather than HTML on purpose. With a real HTML shell the
 // sniffed type and the mime table's type for .html happen to be the same string, and
 // the difference would be invisible on the wire.
 func TestFallbackContentTypeComesFromTheBodyNotTheExtension(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellText)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellText)},
 	}
 
 	_, fileHeader, fileBody := get(t, files, "/index.html", nil)
@@ -275,7 +275,7 @@ func TestFallbackContentTypeComesFromTheBodyNotTheExtension(t *testing.T) {
 // with a slash takes the fallback, not the 404.
 func TestMissingRouteEndingInSlashServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
 	}
 
 	status, header, body := get(t, files, "/some/route/", nil)
@@ -295,8 +295,8 @@ func TestMissingRouteEndingInSlashServesTheApplicationShell(t *testing.T) {
 
 func TestDirectoryRequestEndingInSlashServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html":     &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/assets/app.css": &fstest.MapFile{Data: []byte(appCSS)},
+		"bundle/index.html":     &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/assets/app.css": &fstest.MapFile{Data: []byte(appCSS)},
 	}
 
 	status, _, body := get(t, files, "/assets/", nil)
@@ -312,8 +312,8 @@ func TestDirectoryRequestEndingInSlashServesTheApplicationShell(t *testing.T) {
 
 func TestDirectoryRequestServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html":     &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/assets/app.css": &fstest.MapFile{Data: []byte(appCSS)},
+		"bundle/index.html":     &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/assets/app.css": &fstest.MapFile{Data: []byte(appCSS)},
 	}
 
 	status, _, body := get(t, files, "/assets", nil)
@@ -332,8 +332,8 @@ func TestDirectoryRequestServesTheApplicationShell(t *testing.T) {
 // but path.Ext has already been taken from the uncleaned path and is empty.
 func TestTrailingSlashOnAnEmbeddedFileServesItWithAnEmptyContentType(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	status, header, body := get(t, files, "/sw.js/", nil)
@@ -359,8 +359,8 @@ func TestTrailingSlashOnAnEmbeddedFileServesItWithAnEmptyContentType(t *testing.
 
 func TestDotDotCannotReadOutsideTheBundle(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	for _, url := range []string{"/../secret", "/../../etc/passwd", "/.."} {
@@ -377,15 +377,15 @@ func TestDotDotCannotReadOutsideTheBundle(t *testing.T) {
 }
 
 // TestDotDotResolvesAgainstTheBundleRoot pins where the cleaned path lands: joining
-// resolves `..` against the webapp prefix, so the file it reaches is still inside the
+// resolves `..` against the bundle prefix, so the file it reaches is still inside the
 // bundle.
 func TestDotDotResolvesAgainstTheBundleRoot(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
-		"webapp/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/sw.js":      &fstest.MapFile{Data: []byte(appJS)},
 	}
 
-	status, header, body := get(t, files, "/../webapp/sw.js", nil)
+	status, header, body := get(t, files, "/../bundle/sw.js", nil)
 
 	if status != http.StatusOK {
 		t.Errorf("status = %d, want the embedded file the cleaned path names", status)
@@ -402,7 +402,7 @@ func TestDotDotResolvesAgainstTheBundleRoot(t *testing.T) {
 
 func TestMissingApplicationShellAnswersFourOhFourForARoute(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/sw.js": &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/sw.js": &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	status, header, body := get(t, files, "/some/route", nil)
@@ -422,7 +422,7 @@ func TestMissingApplicationShellAnswersFourOhFourForARoute(t *testing.T) {
 
 func TestMissingApplicationShellAnswersFourOhFourForTheRoot(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/sw.js": &fstest.MapFile{Data: []byte(appJS)},
+		"bundle/sw.js": &fstest.MapFile{Data: []byte(appJS)},
 	}
 
 	status, _, body := get(t, files, "/", nil)
@@ -441,7 +441,7 @@ func TestMissingApplicationShellAnswersFourOhFourForTheRoot(t *testing.T) {
 // more character, which is the only shape the legacy condition rejects.
 func TestFourOhFourCarriesNoBodyAndNoContentType(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
 	}
 
 	status, header, body := get(t, files, "//x", nil)
@@ -461,7 +461,7 @@ func TestFourOhFourCarriesNoBodyAndNoContentType(t *testing.T) {
 
 func TestDoubleSlashServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
 	}
 
 	status, _, body := get(t, files, "//", nil)
@@ -480,7 +480,7 @@ func TestDoubleSlashServesTheApplicationShell(t *testing.T) {
 // this one does not look at the upgrade header at all.
 func TestUpgradeRequestIsServedAsAFileNotAnUpgrade(t *testing.T) {
 	files := fstest.MapFS{
-		"webapp/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
+		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
 	}
 
 	status, _, body := get(t, files, "/", http.Header{"Upgrade": []string{"websocket"}})

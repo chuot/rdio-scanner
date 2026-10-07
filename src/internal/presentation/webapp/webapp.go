@@ -31,19 +31,18 @@ import (
 // bundle is the single-page application compiled into the binary.
 //
 // The directory has to be inside this package: a `go:embed` pattern cannot name a
-// path outside the package directory it is written in, so the build step that copies
-// the `client-ng` bundle in (T055) writes it here rather than into the
-// `server-ng/webapp/` directory the scaffold created.
+// path outside the package directory it is written in, so the build step that compiles
+// the client writes its output here, at `bundle/`, rather than somewhere the package
+// could not reach.
 //
-// `all:` is the one departure from the legacy `//go:embed webapp/*` of
-// server/webapp.go, and it exists only so this package compiles before the client has
-// ever been built. `webapp/.gitkeep` is the placeholder that keeps the directory in
-// the repository, and a pattern without `all:` refuses to match a directory whose only
-// entry is a hidden file — the embed would fail with "matches no files". A `client-ng`
-// build writes no hidden files, so once the bundle is in place the two patterns embed
-// exactly the same set.
+// `all:` is the one departure from the legacy `//go:embed webapp/*`, and it exists only
+// so this package compiles before the client has ever been built. `bundle/.gitkeep` is
+// the placeholder that keeps the directory in the repository, and a pattern without
+// `all:` refuses to match a directory whose only entry is a hidden file — the embed
+// would fail with "matches no files". A client build writes no hidden files, so once
+// the bundle is in place the two patterns embed exactly the same set.
 //
-//go:embed all:webapp
+//go:embed all:bundle
 var bundle embed.FS
 
 // bundleRoot is the directory a request path is resolved against, exactly as the
@@ -52,7 +51,7 @@ var bundle embed.FS
 // The prefix is what bounds `..`. Joining cleans the path lexically, so a request for
 // `/../secret` is resolved to `secret` — the root of the file set — and the root of an
 // embedded file set contains nothing but this directory. Nothing above it can be read.
-const bundleRoot = "webapp"
+const bundleRoot = "bundle"
 
 // indexFile is the application shell every route that is not a file falls back to.
 const indexFile = "index.html"
@@ -66,8 +65,8 @@ func Embedded() http.Handler {
 // files: an embedded file when the path names one, the application shell when it does
 // not, and an empty 404 in the one case the legacy handler answers 404.
 //
-// files is shaped the way `//go:embed all:webapp` shapes it: every path inside it is
-// rooted at `webapp/`. That is not an artifact of the embed. The handler resolves a
+// files is shaped the way `//go:embed all:bundle` shapes it: every path inside it is
+// rooted at `bundle/`. That is not an artifact of the embed. The handler resolves a
 // request against that prefix because the prefix is what stops `..` from climbing out
 // of the bundle, and a file set handed to this handler is expected to be a bundle, not
 // an arbitrary directory tree.
@@ -114,7 +113,7 @@ func New(files fs.FS) http.Handler {
 				// No Content-Type is set on this path, and none is added here: the
 				// legacy handler does not set one, so Go sniffs the body. The same bytes
 				// therefore reach the client with a different header than the same bytes
-				// served as `webapp/index.html`.
+				// served as `bundle/index.html`.
 				w.Write(b)
 
 				return
