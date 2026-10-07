@@ -274,7 +274,7 @@ func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *te
 }
 
 // TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores pins the stored shape, key by
-// key, against the legacy server's own key list.
+// key, against the legacy server's own key list, plus the one key the legacy list was missing.
 func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 
@@ -293,6 +293,7 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 	}{
 		{"adminPassword", `"$2a$10$abcdefghijklmnopqrstuvwxyzabcdefgh"`},
 		{"adminPasswordNeedChange", "true"},
+		{"audioConversion", "1"},
 		{"autoPopulate", "true"},
 		{"branding", `"Acme Dispatch"`},
 		{"dimmerDelay", "1234"},
@@ -313,18 +314,19 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 		}
 	}
 
-	if count := countRows(t, db, "options"); count != 16 {
-		t.Errorf("the options table has %d rows, want the 16 keys the legacy server writes", count)
+	if count := countRows(t, db, "options"); count != 17 {
+		t.Errorf("the options table has %d rows, want the 16 keys the legacy server writes plus the audio-conversion mode it never stored", count)
 	}
 }
 
-// TestWriteOptionsDoesNotStoreTheAudioConversionMode pins a defect of the same family as Q1,
-// reproduced rather than fixed.
+// TestWriteOptionsStoresTheAudioConversionMode is the repaired half of Q53.
 //
-// server/options.go `Read` looks for a stored `audioConversion` row that `Write` never writes, so
-// the conversion mode the administrator chose is not re-applied after a restart or a password
-// change: every re-derivation answers the default mode.
-func TestWriteOptionsDoesNotStoreTheAudioConversionMode(t *testing.T) {
+// The legacy `Options.Write` stored sixteen keys and `Options.Read` looked for a stored
+// `audioConversion` row among them, so the conversion mode the administrator chose applied until the
+// next thing that re-read the options — a restart, or the re-derivation a password change runs — and
+// then reverted to the default. Storing the mode is what makes the reader's lookup find something.
+// See docs/specs/FEAT-004-legacy-defect-repairs/decision-audio-conversion-stored.md.
+func TestWriteOptionsStoresTheAudioConversionMode(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
 
@@ -348,8 +350,12 @@ func TestWriteOptionsDoesNotStoreTheAudioConversionMode(t *testing.T) {
 
 	lookup := `SELECT "value" FROM "options" WHERE "key" = 'audioConversion'`
 
-	if err := db.QueryRow(lookup).Scan(&stored); err == nil {
-		t.Errorf("%s found %s, want no such row: the legacy server never stores the conversion mode", lookup, stored)
+	if err := db.QueryRow(lookup).Scan(&stored); err != nil {
+		t.Fatalf("%s: %v, want the submitted mode on record", lookup, err)
+	}
+
+	if stored != "3" {
+		t.Errorf("the conversion mode is stored as %s, want the JSON number 3", stored)
 	}
 
 	reloaded, err := options.ReloadOptions(context.Background())
@@ -357,8 +363,8 @@ func TestWriteOptionsDoesNotStoreTheAudioConversionMode(t *testing.T) {
 		t.Fatalf("ReloadOptions: %v", err)
 	}
 
-	if reloaded.AudioConversion != domain.AudioConversionEnabled {
-		t.Errorf("the re-derived conversion mode = %d, want the 1 default: the mode was never stored", reloaded.AudioConversion)
+	if reloaded.AudioConversion != domain.AudioConversionEnabledLoudNorm {
+		t.Errorf("the re-derived conversion mode = %d, want the stored 3: the mode the administrator saved has to survive the re-derivation", reloaded.AudioConversion)
 	}
 }
 

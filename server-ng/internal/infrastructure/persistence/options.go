@@ -403,17 +403,20 @@ func (options *Options) write(ctx context.Context, next domain.Options) error {
 	return nil
 }
 
-// optionRows is the key list the legacy `Options.Write` stores, in its order.
+// optionRows is the key list the legacy `Options.Write` stores, in its order, plus the one key its
+// reader was looking for.
 //
-// `audioConversion` is absent from it, and that is a defect of the same family as Q1 rather than
-// an omission here: `Options.Read` looks for a stored `audioConversion` row that `Options.Write`
-// never writes, so the audio-conversion mode the administrator chose is not re-applied after a
-// restart or a password change — every re-derivation answers the default mode. Reproduced as it
-// is, and reported.
+// The legacy list held sixteen keys and `Options.Read` looked for a stored `audioConversion` row among
+// them, so the audio-conversion mode the administrator chose was never on record: every re-derivation —
+// a restart, or the re-derivation a password change runs — answered the default mode. It is stored here
+// as the JSON number the reader already reads it as, in the alphabetical slot the legacy list's own
+// ordering gives it. Repaired rather than preserved by the owner's decision; see
+// docs/specs/FEAT-004-legacy-defect-repairs/decision-audio-conversion-stored.md.
 func optionRows(options domain.Options) []optionRow {
 	return []optionRow{
 		{"adminPassword", options.AdminPasswordHash},
 		{"adminPasswordNeedChange", options.AdminPasswordNeedChange},
+		{"audioConversion", options.AudioConversion},
 		{"autoPopulate", options.AutoPopulate},
 		{"branding", options.Branding},
 		{"dimmerDelay", options.DimmerDelay},
