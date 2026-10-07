@@ -19,13 +19,16 @@
 
 /*
  * Admin entry point: boots the admin context and mounts the rdio-admin shell
- * (login screen or sidebar navigation, decided by the auth store slice).
+ * (login screen or sidebar navigation, decided by the auth store slice). The shell
+ * element is in index.html, which is what lets this page be served from /admin/ with
+ * nothing but its own bundle.
  */
+
+import '../shared/styles/theme.css';
+import './styles/admin.css';
 
 import './presentation/admin/rdio-admin.js';
 
 import { getAdminContext } from './application/admin-context.js';
 
 getAdminContext().useCases.boot();
-
-document.body.append(document.createElement('rdio-admin'));

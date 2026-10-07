@@ -20,7 +20,7 @@ date := 2026/05/16
 ver := 7.0.0-dev
 
 client := $(wildcard internal/presentation/clients/*.json internal/presentation/clients/*.mjs) \
-	$(shell find internal/presentation/clients/src internal/presentation/clients/shared -type f)
+	$(shell find internal/presentation/clients/scanner internal/presentation/clients/admin internal/presentation/clients/shared -type f)
 server := $(shell find cmd internal -type f -name '*.go')
 
 build = @GOOS=$(1) GOARCH=$(3) go build -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner

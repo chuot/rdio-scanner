@@ -39,12 +39,6 @@ const scannerDir = join(here, 'scanner');
 const adminDir = join(here, 'admin');
 const sharedDir = join(here, 'shared');
 
-/**
- * The dispatcher that dynamically imports exactly one page entry. It is deleted when each
- * application gets its own entry; until then it is the entry point of the single bundle.
- */
-const dispatcher = join(here, 'src', 'main.js');
-
 const args = process.argv.slice(2);
 const production = args.includes('--production');
 const watch = args.includes('--watch');
@@ -72,38 +66,37 @@ export function resolveOutDir(argv, from = here) {
     return resolve(from, '..', 'webapp', 'bundle');
 }
 
-const bundleDir = resolveOutDir(args);
+const scannerBundle = resolveOutDir(args);
 
 /**
- * The listener application. Until the two applications are split, its entry is the
- * dispatcher that dynamically imports either the listener or the admin page, which is
- * what today's single bundle is made of.
+ * The admin bundle sits beside the Go package that will embed it. That package is created later in
+ * this feature; the build writes here from the moment the two applications are built separately, so
+ * no commit in between has a build with nowhere to put the admin application.
  */
+const adminBundle = resolve(here, '..', 'serving', 'admin', 'bundle');
+
+/** The scanner application: the listener page, its service worker, and its manifest. */
 export const scannerConfig = {
     name: 'scanner',
     srcDir: scannerDir,
-    entryPoints: [dispatcher],
+    entryPoints: [join(scannerDir, 'main.js')],
     indexHtml: join(scannerDir, 'index.html'),
     serviceWorker: { source: join(scannerDir, 'sw.js'), register: 'sw.js', scope: '/' },
     staticFiles: [join(sharedDir, 'favicon.ico'), join(scannerDir, 'manifest.webmanifest')],
     staticDirs: [join(sharedDir, 'assets')],
-    outDir: bundleDir,
+    outDir: scannerBundle,
 };
 
-/**
- * The admin application. Declared now so the two output directories are visible in one
- * place; it starts building when its own sources and shell exist. It has no service
- * worker and no offline cache.
- */
+/** The admin application: no service worker, no offline cache, its own shell and manifest. */
 export const adminConfig = {
     name: 'admin',
     srcDir: adminDir,
-    entryPoints: [join(adminDir, 'admin.js')],
+    entryPoints: [join(adminDir, 'main.js')],
     indexHtml: join(adminDir, 'index.html'),
     serviceWorker: null,
     staticFiles: [join(sharedDir, 'favicon.ico'), join(adminDir, 'manifest.webmanifest')],
     staticDirs: [join(sharedDir, 'assets')],
-    outDir: bundleDir,
+    outDir: adminBundle,
 };
 
 function cleanOutdir(config) {
@@ -285,4 +278,5 @@ const runThisBuild = process.argv[1] && resolve(process.argv[1]) === fileURLToPa
 
 if (runThisBuild) {
     await buildApp(scannerConfig);
+    await buildApp(adminConfig);
 }

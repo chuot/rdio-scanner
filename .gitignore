@@ -21,3 +21,5 @@ internal/presentation/clients/node_modules
 /rdio-scanner
 /internal/presentation/webapp/bundle/*
 !/internal/presentation/webapp/bundle/.gitkeep
+/internal/presentation/serving/admin/bundle/*
+!/internal/presentation/serving/admin/bundle/.gitkeep

@@ -18,9 +18,13 @@
  */
 
 /*
- * Listener entry point: registers the listener elements and boots the app
- * context (reached from main.js only on non-admin paths).
+ * Scanner entry point: registers the listener elements, boots the listener context, and
+ * prompts for a service-worker update. This is the only application with a service worker,
+ * so the update prompt lives here and not in a shared bootstrap.
  */
+
+import '../shared/styles/theme.css';
+import './styles/rdio.css';
 
 import './presentation/listener/rdio-app.js';
 import './presentation/listener/rdio-controls.js';
@@ -29,6 +33,39 @@ import './presentation/listener/rdio-search-panel.js';
 import './presentation/listener/rdio-select-panel.js';
 import './presentation/listener/rdio-status.js';
 
+import { openDialog } from '../shared/presentation/ui/primitives.js';
 import { getAppContext } from './application/context.js';
+
+/*
+ * PWA update prompt (decision-pwa-custom-sw.md §3): a waiting service
+ * worker posts AppUpdateAvailable; the dialog reproduces the legacy
+ * AppUpdateComponent text and Yes applies the update before reloading
+ * (SwUpdate.activateUpdate() equivalent).
+ */
+let updatePrompted = false;
+
+navigator.serviceWorker?.addEventListener('message', (ev) => {
+  if (ev.data?.type !== 'AppUpdateAvailable' || updatePrompted) return;
+
+  updatePrompted = true;
+
+  openDialog({
+    title: 'New version available',
+    content: 'A new version of this webapp is available. Would you like to reload the page?',
+    actions: [
+      { label: 'No' },
+      {
+        label: 'Yes',
+        onClick: async () => {
+          const registration = await navigator.serviceWorker.getRegistration();
+
+          registration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
+
+          document.location.reload();
+        },
+      },
+    ],
+  });
+});
 
 getAppContext();
