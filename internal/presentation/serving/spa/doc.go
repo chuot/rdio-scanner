@@ -18,6 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package webapp serves the embedded single-page application: embedded files, the
-// text/javascript content type for .js, and the SPA fallback rules.
-package webapp
+// Package spa serves a single-page application out of a file set: embedded files, the
+// text/javascript content type for .js, the SPA fallback rules, and the mount prefix a
+// bundle is served under. It owns no embed; the application packages that use it do.
+package spa

@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package webapp
+package spa
 
 import (
 	"io"
@@ -47,7 +47,7 @@ const (
 func get(t *testing.T, files fs.FS, url string, header http.Header) (int, http.Header, []byte) {
 	t.Helper()
 
-	srv := httptest.NewServer(New(files))
+	srv := httptest.NewServer(New(files, ""))
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+url, nil)
