@@ -80,6 +80,12 @@ self.addEventListener('fetch', (event) => {
   // API calls and the WebSockets behind them are never intercepted.
   if (url.pathname.startsWith('/api/')) return;
 
+  // The administration application is served from its own bundle and has no worker of its own. This
+  // worker's scope is the whole origin, so without this it would answer an admin request out of the
+  // listener's cache: the listener's shell for an admin route, and the listener's copy of a shared
+  // font for an admin font.
+  if (isAdminApplication(url)) return;
+
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request, '/index.html'));
     return;
@@ -93,13 +99,19 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(networkFirst(request));
 });
 
-// Content-hashed bundles and copied assets can never go stale by name.
+// The administration application lives under /admin/. The server redirects /admin to that subtree, so
+// both spellings are the administration application's paths, and neither is this worker's to answer.
+function isAdminApplication(url) {
+  return url.pathname === '/admin' || url.pathname.startsWith('/admin/');
+}
+
+// Content-hashed bundles and copied assets can never go stale by name. These are the names this build
+// emits: one hashed module and one hashed stylesheet, and the asset directories copied beside them. The
+// legacy client's admin., listener., styles. and chunk. bundles and its /media/ assets are emitted by
+// nothing in this repository, and answering them from the cache would keep a file alive under a name the
+// server now answers with its shell.
 function isHashedAsset(url) {
-  return (
-    /^\/(main|admin|listener|styles|chunk)(\.[A-Za-z0-9]+)?\.(js|css)$/.test(url.pathname) ||
-    url.pathname.startsWith('/assets/') ||
-    url.pathname.startsWith('/media/')
-  );
+  return /^\/main(\.[A-Za-z0-9]+)?\.(js|css)$/.test(url.pathname) || url.pathname.startsWith('/assets/');
 }
 
 async function cacheFirst(request) {
