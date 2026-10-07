@@ -724,7 +724,7 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 	b, err := os.ReadFile(fixture)
 	if err != nil {
 		t.Fatalf("%s is missing: %v\n"+
-			"regenerate it with server-ng/testdata/legacydamaged/generate.sh", fixture, err)
+			"regenerate it with testdata/legacydamaged/generate.sh", fixture, err)
 	}
 
 	if err := os.WriteFile(filepath.Join(baseDir, "rdio-scanner.db"), b, 0o600); err != nil {

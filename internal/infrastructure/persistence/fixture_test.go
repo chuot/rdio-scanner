@@ -45,7 +45,7 @@ func copyLegacyFixture(t *testing.T) string {
 	b, err := os.ReadFile(legacyFixture)
 	if err != nil {
 		t.Fatalf("the database written by the legacy server is missing: %v\n"+
-			"regenerate it with server-ng/testdata/legacydb/generate.sh", err)
+			"regenerate it with testdata/legacydb/generate.sh, whose header says how to obtain the legacy source it drives", err)
 	}
 
 	path := filepath.Join(t.TempDir(), "rdio-scanner.db")

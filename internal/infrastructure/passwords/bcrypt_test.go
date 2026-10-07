@@ -27,7 +27,7 @@ import (
 )
 
 // legacyStoredCredential is the hash the legacy server wrote into
-// server-ng/testdata/legacydb/rdio-scanner.db for the default administrator credential, taken from
+// testdata/legacydb/rdio-scanner.db for the default administrator credential, taken from
 // that database's options table with its JSON quoting removed. It is the credential a real
 // deployment has on record, and the point of these tests is that this adapter reads it.
 const legacyStoredCredential = `$2a$10$1GFizQ/sWHxheggO6YSNk.D4RnbiFbnTnuiMEuuf3mCsYQhRcsBQ6`

@@ -49,7 +49,7 @@ func copyLegacyV6Fixture(t *testing.T) string {
 	b, err := os.ReadFile(legacyV6Fixture)
 	if err != nil {
 		t.Fatalf("the v6-shaped fixture is missing: %v\n"+
-			"regenerate it with server-ng/testdata/legacyv6/generate.sh", err)
+			"regenerate it with testdata/legacyv6/generate.sh", err)
 	}
 
 	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
@@ -103,7 +103,7 @@ func openDamagedFixture(t *testing.T, fixture string) *sql.DB {
 	b, err := os.ReadFile(fixture)
 	if err != nil {
 		t.Fatalf("the damaged fixture %s is missing: %v\n"+
-			"regenerate it with server-ng/testdata/legacydamaged/generate.sh", fixture, err)
+			"regenerate it with testdata/legacydamaged/generate.sh", fixture, err)
 	}
 
 	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
