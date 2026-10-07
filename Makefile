@@ -23,7 +23,7 @@ client := $(wildcard internal/presentation/client/*.json internal/presentation/c
 	$(shell find internal/presentation/client/src -type f)
 server := $(shell find cmd internal -type f -name '*.go')
 
-build = @cd server && GOOS=$(1) GOARCH=$(3) go build -o ../dist/$(2)-$(3)/$(4)
+build = @GOOS=$(1) GOARCH=$(3) go build -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
