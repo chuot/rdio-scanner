@@ -15,7 +15,7 @@ import {
   setSystem,
   setTag,
   setTalkgroup,
-} from '../src/domain/systems-selection.js';
+} from '../admin/domain/systems-selection.js';
 
 // Config fixture:
 //   system 10 (TESTSYS): TG 101 (group 1 "Dispatch", tag 2 "Law"), TG 102 (group 2 "Fire", no tag)

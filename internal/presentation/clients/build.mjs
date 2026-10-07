@@ -35,8 +35,15 @@ import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const srcDir = join(here, 'src');
+const scannerDir = join(here, 'scanner');
+const adminDir = join(here, 'admin');
 const sharedDir = join(here, 'shared');
+
+/**
+ * The dispatcher that dynamically imports exactly one page entry. It is deleted when each
+ * application gets its own entry; until then it is the entry point of the single bundle.
+ */
+const dispatcher = join(here, 'src', 'main.js');
 
 const args = process.argv.slice(2);
 const production = args.includes('--production');
@@ -74,11 +81,11 @@ const bundleDir = resolveOutDir(args);
  */
 export const scannerConfig = {
     name: 'scanner',
-    srcDir,
-    entryPoints: [join(srcDir, 'main.js')],
-    indexHtml: join(srcDir, 'index.html'),
-    serviceWorker: { source: join(srcDir, 'sw.js'), register: 'sw.js', scope: '/' },
-    staticFiles: [join(sharedDir, 'favicon.ico'), join(srcDir, 'manifest.webmanifest')],
+    srcDir: scannerDir,
+    entryPoints: [dispatcher],
+    indexHtml: join(scannerDir, 'index.html'),
+    serviceWorker: { source: join(scannerDir, 'sw.js'), register: 'sw.js', scope: '/' },
+    staticFiles: [join(sharedDir, 'favicon.ico'), join(scannerDir, 'manifest.webmanifest')],
     staticDirs: [join(sharedDir, 'assets')],
     outDir: bundleDir,
 };
@@ -90,11 +97,11 @@ export const scannerConfig = {
  */
 export const adminConfig = {
     name: 'admin',
-    srcDir,
-    entryPoints: [join(srcDir, 'admin.js')],
-    indexHtml: join(srcDir, 'index.html'),
+    srcDir: adminDir,
+    entryPoints: [join(adminDir, 'admin.js')],
+    indexHtml: join(adminDir, 'index.html'),
     serviceWorker: null,
-    staticFiles: [join(sharedDir, 'favicon.ico'), join(srcDir, 'manifest.webmanifest')],
+    staticFiles: [join(sharedDir, 'favicon.ico'), join(adminDir, 'manifest.webmanifest')],
     staticDirs: [join(sharedDir, 'assets')],
     outDir: bundleDir,
 };

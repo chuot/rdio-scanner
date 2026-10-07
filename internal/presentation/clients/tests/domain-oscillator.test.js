@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { scheduleOscillators } from '../shared/domain/oscillator.js';
-import { resolveAlert, resolveLedColor } from '../src/domain/alert-priority.js';
+import { resolveAlert, resolveLedColor } from '../scanner/domain/alert-priority.js';
 
 function createMockAudioContext() {
     const oscillators = [];

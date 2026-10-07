@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { computeFilterOptions } from '../src/domain/search-filters.js';
+import { computeFilterOptions } from '../scanner/domain/search-filters.js';
 
 const config = {
     groups: {

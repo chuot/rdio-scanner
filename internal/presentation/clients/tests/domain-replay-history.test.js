@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { advanceReplayOffset, recordHistory } from '../src/domain/replay-history.js';
+import { advanceReplayOffset, recordHistory } from '../scanner/domain/replay-history.js';
 
 describe('domain/replay-history — last 5 history', () => {
     it('records played calls, newest first, capped at 5', () => {

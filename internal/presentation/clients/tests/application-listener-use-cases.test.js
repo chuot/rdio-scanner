@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createListenerUseCases } from '../src/application/listener-use-cases.js';
+import { createListenerUseCases } from '../scanner/application/listener-use-cases.js';
 import { createStore } from '../shared/application/store.js';
 
 function createFakeSocket() {

@@ -2,8 +2,8 @@
 // Shown 10 s after boot on Android/iPad/iPhone user agents, with a 10 s
 // countdown and the inline-SVG store badges ported from the legacy client.
 
-import appStoreBadge from '../../badges/app-store-badge.svg';
-import googlePlayBadge from '../../badges/google-play-badge.svg';
+import appStoreBadge from '../../assets/badges/app-store-badge.svg';
+import googlePlayBadge from '../../assets/badges/google-play-badge.svg';
 import { showSnackbar } from '../../../shared/presentation/ui/primitives.js';
 import { startCountdown } from './rdio-help.js';
 

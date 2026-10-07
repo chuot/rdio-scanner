@@ -11,7 +11,7 @@ import {
   systemsSectionInvalid,
   talkgroupErrors,
   unitErrors,
-} from '../src/domain/systems-validation.js';
+} from '../admin/domain/systems-validation.js';
 
 test('system: label required, systemRef required/min/duplicate', () => {
   const systems = [

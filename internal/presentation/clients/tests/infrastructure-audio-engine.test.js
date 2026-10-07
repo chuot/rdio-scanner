@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PLAYBACK_GAP_MS, PROGRESS_TICK_MS, createAudioEngine } from '../src/infrastructure/audio-engine.js';
+import { PLAYBACK_GAP_MS, PROGRESS_TICK_MS, createAudioEngine } from '../scanner/infrastructure/audio-engine.js';
 
 class FakeAudioContext {
     static instances = [];

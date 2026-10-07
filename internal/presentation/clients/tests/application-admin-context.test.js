@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createAdminContext } from '../src/application/admin-context.js';
+import { createAdminContext } from '../admin/application/admin-context.js';
 
 function createFakes() {
     const make = () => {

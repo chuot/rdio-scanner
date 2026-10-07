@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createListenerSocket } from '../src/infrastructure/listener-socket.js';
+import { createListenerSocket } from '../scanner/infrastructure/listener-socket.js';
 
 class FakeWebSocket {
     static instances = [];

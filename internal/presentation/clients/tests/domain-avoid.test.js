@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { expireAvoid, nextAvoidStep } from '../src/domain/avoid.js';
+import { expireAvoid, nextAvoidStep } from '../scanner/domain/avoid.js';
 import { decodeMap, avoidMinutes, isAvoided, toggleTalkgroup } from '../scanner/domain/livefeed-map.js';
 
 describe('domain/avoid — cycle state machine', () => {

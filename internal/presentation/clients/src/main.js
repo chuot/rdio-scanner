@@ -24,8 +24,8 @@
  */
 
 import '../shared/styles/theme.css';
-import './styles/rdio.css';
-import './styles/admin.css';
+import '../scanner/styles/rdio.css';
+import '../admin/styles/admin.css';
 
 import { openDialog } from '../shared/presentation/ui/primitives.js';
 
@@ -64,7 +64,7 @@ navigator.serviceWorker?.addEventListener('message', (ev) => {
 const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin';
 
 if (isAdmin) {
-  import('./admin.js');
+  import('../admin/admin.js');
 } else {
-  import('./listener.js');
+  import('../scanner/listener.js');
 }

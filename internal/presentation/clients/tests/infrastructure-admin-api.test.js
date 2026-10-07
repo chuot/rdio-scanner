@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createAdminApi } from '../src/infrastructure/admin-api.js';
+import { createAdminApi } from '../admin/infrastructure/admin-api.js';
 import { createTokenStorage } from '../admin/infrastructure/token-storage.js';
 
 function createFakes() {

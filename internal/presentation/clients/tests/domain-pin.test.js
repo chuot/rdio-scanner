@@ -10,7 +10,7 @@ import {
     nextAuthState,
     readPin,
     savePin,
-} from '../src/domain/pin.js';
+} from '../scanner/domain/pin.js';
 
 function createStorage() {
     const store = new Map();
