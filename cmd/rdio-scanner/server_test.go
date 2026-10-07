@@ -168,6 +168,190 @@ func TestListenerPathHandsAnUpgradeToTheSocketAndEverythingElseToTheApplication(
 	}
 }
 
+// The two applications the binary carries are served from two paths, and the paths are the whole difference
+// between them: the scanner application from the root, the administration application from /admin/. The
+// handlers here say which application they are, because a checkout that has never built the client embeds
+// nothing but a placeholder in each bundle, and a routing decision is not something a missing bundle should
+// be able to hide.
+func TestTheTwoApplicationsAreServedFromTheirOwnPaths(t *testing.T) {
+	mux := http.NewServeMux()
+
+	serveApplications(mux, mark("socket"), mark("rdio-app"), mark("rdio-admin"))
+
+	for _, testCase := range []struct {
+		path string
+		want string
+	}{
+		{path: "/", want: "rdio-app"},
+		{path: "/index.html", want: "rdio-app"},
+		{path: "/some/route", want: "rdio-app"},
+		{path: "/admin/", want: "rdio-admin"},
+		{path: "/admin/whatever", want: "rdio-admin"},
+		{path: "/admin/systems/edit", want: "rdio-admin"},
+	} {
+		status, _, answered := request(mux, testCase.path, false)
+
+		if status != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want the application to answer", testCase.path, status)
+		}
+
+		if answered != testCase.want {
+			t.Errorf("GET %s: reached %s, want %s", testCase.path, answered, testCase.want)
+		}
+	}
+}
+
+// The listener endpoint is kept on both application routes. A native application opens its connection on
+// whatever path it was on, and the upgrade header — not the path — is what decides.
+func TestTheListenerSocketIsKeptOnBothApplicationRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+
+	serveApplications(mux, mark("socket"), mark("rdio-app"), mark("rdio-admin"))
+
+	for _, path := range []string{"/", "/admin/", "/admin/some/route"} {
+		status, _, answered := request(mux, path, true)
+
+		if status != http.StatusOK {
+			t.Errorf("GET %s upgrade: status = %d, want the listener to answer", path, status)
+		}
+
+		if answered != "socket" {
+			t.Errorf("GET %s upgrade: reached %s, want the listener socket", path, answered)
+		}
+	}
+}
+
+// `/admin` is deliberately not registered. A subtree pattern redirects a request for the subtree root by
+// adding the trailing slash, and that redirect is what makes every relative URL in the admin shell resolve
+// inside the admin bundle instead of at the root of the server.
+//
+// The status is 307, not 301: Go's ServeMux redirects a cleaned path and a subtree root with a Temporary
+// Redirect, and the body it writes is its own redirect notice rather than an application's shell.
+func TestAdminWithoutTheTrailingSlashIsRedirectedToTheSubtree(t *testing.T) {
+	mux := http.NewServeMux()
+
+	serveApplications(mux, mark("socket"), mark("rdio-app"), mark("rdio-admin"))
+
+	status, location, answered := request(mux, "/admin", false)
+
+	if status != http.StatusTemporaryRedirect {
+		t.Fatalf("GET /admin: status = %d, want the mux to redirect the subtree root to /admin/", status)
+	}
+
+	if location != "/admin/" {
+		t.Errorf("GET /admin: Location = %q, want /admin/", location)
+	}
+
+	if strings.Contains(answered, "rdio-app") || strings.Contains(answered, "rdio-admin") {
+		t.Errorf("GET /admin: body = %q, want the redirect to answer before any application does", answered)
+	}
+}
+
+// The administrator's API lives under /api/admin, which is a different subtree from the administration
+// application's /admin/. Registering the application is what could have disturbed the API, so this pins
+// that it does not.
+func TestTheAdministratorApiIsNotInsideTheAdministrationSubtree(t *testing.T) {
+	mux := http.NewServeMux()
+
+	serveApplications(mux, mark("socket"), mark("rdio-app"), mark("rdio-admin"))
+	mux.Handle("/api/admin/", mark("api"))
+
+	for _, path := range []string{"/api/admin/login", "/api/admin/config", "/api/admin/config/tags"} {
+		status, _, answered := request(mux, path, false)
+
+		if status != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want the API to answer", path, status)
+		}
+
+		if answered != "api" {
+			t.Errorf("GET %s: reached %s, want the administrator API", path, answered)
+		}
+	}
+}
+
+// A relative path under the admin subtree is sanitized by the mux before any handler sees it, and what
+// survives is a path at the root of the server. This records that: the request is redirected to the cleaned
+// path, and the cleaned path belongs to the scanner application. Nothing reaches outside a bundle, because
+// no handler was given the path at all.
+func TestARelativePathUnderTheAdminSubtreeIsSanitizedByTheMux(t *testing.T) {
+	mux := http.NewServeMux()
+
+	serveApplications(mux, mark("socket"), mark("rdio-app"), mark("rdio-admin"))
+
+	for _, testCase := range []struct {
+		path string
+		want string
+	}{
+		{path: "/admin/../x", want: "/x"},
+		{path: "/admin/..", want: "/"},
+		{path: "/admin/../../etc/passwd", want: "/etc/passwd"},
+	} {
+		status, location, answered := request(mux, testCase.path, false)
+
+		if status != http.StatusTemporaryRedirect {
+			t.Errorf("GET %s: status = %d, want the mux to redirect to the cleaned path", testCase.path, status)
+			continue
+		}
+
+		if location != testCase.want {
+			t.Errorf("GET %s: Location = %q, want the cleaned path %q", testCase.path, location, testCase.want)
+			continue
+		}
+
+		if strings.Contains(answered, "rdio-admin") {
+			t.Errorf("GET %s: body = %q, want the redirect to answer before any application does", testCase.path, answered)
+		}
+
+		status, _, answered = request(mux, location, false)
+
+		if status != http.StatusOK || answered != "rdio-app" {
+			t.Errorf("GET %s: status = %d reached %s, want the scanner application to answer the cleaned path",
+				location, status, answered)
+		}
+	}
+}
+
+// The routing the tests above describe is the routing the started server installs. This is the one case
+// that goes through the real routes, and it is the case that does not depend on a client having been built:
+// the redirect happens before either bundle is read.
+func TestTheStartedServerRedirectsAdminToItsOwnSubtree(t *testing.T) {
+	srv := startedTestServer(t)
+
+	rec := srv.get("/admin")
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("GET /admin: status = %d, want the started server to redirect the subtree root", rec.Code)
+	}
+
+	if got := rec.Header().Get("Location"); got != "/admin/" {
+		t.Errorf("GET /admin: Location = %q, want /admin/", got)
+	}
+}
+
+// mark returns a handler that answers with the name of the application it stands for, which is how these
+// routing tests say which handler a request reached without building a client.
+func mark(name string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(name))
+	})
+}
+
+// request issues one GET against a mux and reports the status, the redirect target, and which application
+// answered.
+func request(mux http.Handler, path string, upgrade bool) (int, string, string) {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if upgrade {
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+	}
+
+	mux.ServeHTTP(rec, req)
+
+	return rec.Code, rec.Header().Get("Location"), strings.TrimSpace(rec.Body.String())
+}
+
 // A listener that connects to the path the web application is served from is taken over by the listener
 // endpoint, and is greeted the way the legacy server greets it.
 func TestServerTakesAListenerSocketAtThePathTheWebApplicationIsServedFrom(t *testing.T) {
