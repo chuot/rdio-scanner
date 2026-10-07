@@ -578,12 +578,12 @@ func TestSaveSystemsRemovesAStoredSystemTheSubmittedListOmits(t *testing.T) {
 }
 
 // TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne pins the one place where
-// server-ng deliberately behaves unlike the legacy server, recorded as Q33 in
+// This server deliberately behaves unlike the legacy server, recorded as Q33 in
 // decision-preserved-quirks.md.
 //
-// server/system.go `Systems.Write` tests `system.Id == 0 || system.Id == systemId` for every stored
+// The legacy `server/system.go` `Systems.Write` tests `system.Id == 0 || system.Id == systemId` for every stored
 // identifier, so the scan stops at the first system that has no identity yet and a save that adds a
-// system silently keeps every system the list removed. server-ng repairs the rule for every
+// system silently keeps every system the list removed. This server repairs the rule for every
 // configuration section: the list you save is the list you get.
 func TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -953,7 +953,7 @@ func TestSaveTalkgroupsDoesNotStoreAGroupMembershipTwice(t *testing.T) {
 // The legacy `Talkgroups.WriteTx` reads the join rows as `"groupId", "talkgroupGroupId"` and then
 // tests the submitted group identifiers against `talkgroupGroupId` — the join row's own number, not
 // the group it names. A talkgroup in groups 2 and 1, saved as group 2 alone, therefore lost the join
-// row numbered 2 (the one naming group 2) and kept the one naming the dropped group 1. server-ng
+// row numbered 2 (the one naming group 2) and kept the one naming the dropped group 1. This server
 // compares against `groupId`, so the membership the list drops is the membership that goes.
 func TestSaveTalkgroupsRemovesAGroupMembershipTheSubmittedListOmits(t *testing.T) {
 	db := openSchemaDatabase(t)

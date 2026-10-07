@@ -226,7 +226,7 @@ func storedUnitByRef(system domain.System, ref uint) (domain.Unit, bool) {
 }
 
 // The five cases ported from the legacy ingest tests
-// (server/controller_test.go), which run against a real temporary database. Here they run
+// (`server/controller_test.go`), which run against a real temporary database. Here they run
 // against the in-memory repositories, which is what makes the rules they pin testable
 // without a database.
 

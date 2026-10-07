@@ -34,13 +34,13 @@ import (
 //
 // It is the two halves of what the legacy server's `NewDatabase` does after it configures the
 // connection pool: `ApplySchema` first, then the thirteen migrations of
-// [server/migrations.go](../../../../server/migrations.go), in the legacy order — groups, tags,
+// `server/migrations.go`, in the legacy order — groups, tags,
 // systems, talkgroups, units, options, meta, logs, downstreams, dirwatches, calls, apikeys,
 // accesses. The order is load-bearing rather than incidental: the talkgroup, unit, dirwatch, and
 // call migrations resolve the v6 references against the tables the earlier migrations have
 // already filled, so running them in another order migrates a different database.
 //
-// A database that has no v6 tables — every database server-ng itself creates, and every database
+// A database that has no v6 tables — every database this server itself creates, and every database
 // a v7 deployment already migrated — is left exactly as it was: each migration probes its own
 // v6 table, and a table that is not there ends that migration with nothing said and nothing
 // done. See the note on `migrateGroups` for what the probe does, and does not, look at.
@@ -54,7 +54,7 @@ import (
 //
 // A failure the legacy migration *returned* is returned here, wrapped the way `Database.migrate`
 // wrapped it (`database.migrate: migration.migrateGroups: …`). A failure it *printed* is not an
-// error: it goes to `progress` and the migration continues, which is legacy behavior server-ng
+// error: it goes to `progress` and the migration continues, which is legacy behavior this server
 // has to keep because a deployment's upgrade either finishes or does not, and a per-row failure
 // in one table has never stopped the others.
 //
@@ -65,6 +65,11 @@ import (
 // call audio type, so a single quote in one of those columns made its `INSERT` a syntax error and
 // the row was lost. Those rows migrate here. See Q32 of
 // [decision-preserved-quirks.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md).
+//
+// The `server/…` names in this file are the legacy server's own files, which are not in this
+// repository. They are named so a reader can see which behavior is being mirrored, and they resolve
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
+// docs/specs/FEAT-005-server-ng-cutover/spec.md.
 func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(message string)) error {
 	if progress == nil {
 		progress = func(string) {}
@@ -120,7 +125,7 @@ func reportFailure(progress func(message string), section, operation string, err
 	progress(statementError(section, operation, err, query).Error())
 }
 
-// migrateGroups mirrors `migrateGroups` in [server/migrations.go](../../../../server/migrations.go).
+// migrateGroups mirrors `migrateGroups` in `server/migrations.go`.
 //
 // The probe every legacy migration starts with is worth reading carefully, because it decides
 // "is there anything to migrate" by asking a question whose answer it throws away: it runs
@@ -211,7 +216,7 @@ func migrateGroups(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateTags mirrors `migrateTags` in [server/migrations.go](../../../../server/migrations.go):
+// migrateTags mirrors `migrateTags` in `server/migrations.go`:
 // the same probe, the same sort by label, the same 1..n display order, the same v6 identifiers.
 func migrateTags(ctx context.Context, s store, progress func(string)) error {
 	const section, operation = "migration", "migrateTags"
@@ -292,7 +297,7 @@ func migrateTags(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateSystems mirrors `migrateSystems` in [server/migrations.go](../../../../server/migrations.go).
+// migrateSystems mirrors `migrateSystems` in `server/migrations.go`.
 //
 // The v6 system's `id` column is its radio-system reference — the number a call upload names —
 // and it becomes `systemRef`; the v6 `_id` becomes `systemId`, which is what every later
@@ -393,7 +398,7 @@ func migrateSystems(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateTalkgroups mirrors `migrateTalkgroups` in [server/migrations.go](../../../../server/migrations.go).
+// migrateTalkgroups mirrors `migrateTalkgroups` in `server/migrations.go`.
 //
 // The v6 talkgroup names its system by the v6 system's `id` — its radio-system reference — and
 // the migration resolves that against the `systems` table the systems migration has already
@@ -550,7 +555,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress func(string)) erro
 	return nil
 }
 
-// migrateUnits mirrors `migrateUnits` in [server/migrations.go](../../../../server/migrations.go).
+// migrateUnits mirrors `migrateUnits` in `server/migrations.go`.
 //
 // The v6 unit names its system by the v6 system's `id`, resolved the same way the talkgroups
 // migration resolves it, so a unit whose system is not in the `systems` table is skipped without
@@ -667,7 +672,7 @@ func migrateUnits(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateOptions mirrors `migrateOptions` in [server/migrations.go](../../../../server/migrations.go).
+// migrateOptions mirrors `migrateOptions` in `server/migrations.go`.
 //
 // The v6 configuration table is a key/value table whose `options` row holds the whole options
 // section as one JSON blob. The migration unpacks a fixed list of names out of that blob, in the
@@ -818,7 +823,7 @@ func migrateOptions(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateMeta mirrors `migrateMeta` in [server/migrations.go](../../../../server/migrations.go):
+// migrateMeta mirrors `migrateMeta` in `server/migrations.go`:
 // the v6 migration bookkeeping table has no v7 counterpart, so it is dropped, and unlike every
 // other migration its failure is returned rather than printed — the legacy server stops there,
 // with the v6 tables the later migrations would have consumed still in place.
@@ -839,7 +844,7 @@ func migrateMeta(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateLogs mirrors `migrateLogs` in [server/migrations.go](../../../../server/migrations.go).
+// migrateLogs mirrors `migrateLogs` in `server/migrations.go`.
 //
 // The v6 log timestamp is a datetime; the v7 one is Unix milliseconds, which is what every
 // timestamp in this schema is. A row with no timestamp, no level, or no message is skipped
@@ -914,7 +919,7 @@ func migrateLogs(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateDownstreams mirrors `migrateDownstreams` in [server/migrations.go](../../../../server/migrations.go).
+// migrateDownstreams mirrors `migrateDownstreams` in `server/migrations.go`.
 // A downstream with no apikey, no scope, or no url is skipped silently, as the legacy migration
 // skips it: those three columns are the whole row's meaning.
 func migrateDownstreams(ctx context.Context, s store, progress func(string)) error {
@@ -1002,7 +1007,7 @@ func migrateDownstreams(ctx context.Context, s store, progress func(string)) err
 	return nil
 }
 
-// migrateDirwatches mirrors `migrateDirwatches` in [server/migrations.go](../../../../server/migrations.go).
+// migrateDirwatches mirrors `migrateDirwatches` in `server/migrations.go`.
 //
 // Two legacy details are reproduced here rather than tidied away.
 //
@@ -1182,7 +1187,7 @@ func migrateDirwatches(ctx context.Context, s store, progress func(string)) erro
 	return nil
 }
 
-// migrateCalls mirrors `migrateCalls` in [server/migrations.go](../../../../server/migrations.go).
+// migrateCalls mirrors `migrateCalls` in `server/migrations.go`.
 //
 // A call is migrated only when its audio, its timestamp, and both of its aggregate references
 // resolve against the tables the earlier migrations filled; anything that does not resolve is
@@ -1463,7 +1468,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateApikeys mirrors `migrateApikeys` in [server/migrations.go](../../../../server/migrations.go).
+// migrateApikeys mirrors `migrateApikeys` in `server/migrations.go`.
 // Only a missing identifier skips a row: an apikey with no identity or no key is still stored,
 // with the empty value the legacy migration stored.
 func migrateApikeys(ctx context.Context, s store, progress func(string)) error {
@@ -1554,7 +1559,7 @@ func migrateApikeys(ctx context.Context, s store, progress func(string)) error {
 	return nil
 }
 
-// migrateAccesses mirrors `migrateAccesses` in [server/migrations.go](../../../../server/migrations.go).
+// migrateAccesses mirrors `migrateAccesses` in `server/migrations.go`.
 //
 // `accesses.expiration` is the one timestamp in this schema that is not Unix milliseconds: the
 // legacy server stores it in whole seconds, both here and in its own access writes, and the
@@ -1658,7 +1663,7 @@ func migrateAccesses(ctx context.Context, s store, progress func(string)) error 
 // migration failure is, because a diagnostic is not a reason to refuse to start.
 //
 // The two shapes are the two the legacy statements of
-// [server/migrations.go](../../../../server/migrations.go) write. A unit at `unitRef` 0 is a unit whose
+// `server/migrations.go` write. A unit at `unitRef` 0 is a unit whose
 // v6 reference the legacy unit insert threw away; the number it was migrated from is not in this
 // database any more, and inventing one would hand a deployment a radio reference nobody can check. A
 // unit labelled with its own number is a unit the migration made for a number it could not find rather

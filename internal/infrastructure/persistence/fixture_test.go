@@ -86,9 +86,9 @@ func countRows(t *testing.T, db *sql.DB, table string) int {
 	return count
 }
 
-// openEmptyDatabase opens the file a server-ng deployment that has never run before gets: nothing
-// in it. Migrate is what puts the tables there, so a test of Migrate must not have applied them
-// first.
+// openEmptyDatabase opens the file a deployment of this server that has never run before gets:
+// nothing in it. Migrate is what puts the tables there, so a test of Migrate must not have applied
+// them first.
 func openEmptyDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 

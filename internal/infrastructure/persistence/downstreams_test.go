@@ -155,7 +155,7 @@ func TestAllDownstreamsReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 
 	// The legacy server's own INSERT, with the `%t` slot resolved to the bare `false` token it
 	// produces, and the scope it marshalled — the wildcard arrives as the JSON text `"*"`. The
-	// statement is a constant reproduced from server/downstream.go Downstreams.Write; no Go value
+	// statement is a constant reproduced from `server/downstream.go` Downstreams.Write; no Go value
 	// is interpolated into it.
 	const legacyRow = `INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ('enabled-downstream', false, 9, '"*"', 'http://127.0.0.1:4000/api/call-upload')`
 
@@ -194,7 +194,7 @@ func TestAllDownstreamsReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 }
 
 // TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack is the CA-007.2 half for this adapter: the
-// row server-ng writes is read by the legacy server's own read statement, scanning into the field
+// row this server writes is read by the legacy server's own read statement, scanning into the field
 // types its Downstream has, and the flag lands with the storage class its rows have.
 func TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
@@ -228,7 +228,7 @@ func TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	const legacyRead = `SELECT "downstreamId", "apikey", "disabled", "order", "systems", "url" FROM "downstreams"`
 
 	if err := db.QueryRow(legacyRead).Scan(&id, &apikey, &disabled, &order, &systems, &url); err != nil {
-		t.Fatalf("the legacy server's own read cannot read the row server-ng wrote: %v", err)
+		t.Fatalf("the legacy server's own read cannot read the row this server wrote: %v", err)
 	}
 
 	want := submitted[0]
@@ -243,14 +243,14 @@ func TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 
 	if len(systems) > 0 {
 		if err := json.Unmarshal([]byte(systems), &legacy); err != nil {
-			t.Fatalf("the legacy server cannot unmarshal the scope server-ng wrote (%s): %v", systems, err)
+			t.Fatalf("the legacy server cannot unmarshal the scope this server wrote (%s): %v", systems, err)
 		}
 	}
 
 	legacyScope, present := domain.ParseAccessScope(legacy)
 
 	if !present || !legacyScope.GrantsReferences(10001, 1514001) {
-		t.Errorf("the scope server-ng wrote reads back in the legacy server as %#v", legacyScope)
+		t.Errorf("the scope this server wrote reads back in the legacy server as %#v", legacyScope)
 	}
 
 	var disabledType string
@@ -296,7 +296,7 @@ func TestAllDownstreamsReadsAnEmptyScopeColumnAsNoScopeSupplied(t *testing.T) {
 }
 
 // TestSaveDownstreamsStoresANoScopeDownstreamSoTheLegacyServerReadsItAsNone covers the other
-// direction. server-ng writes the shared scope text, which names a scope that was never supplied as
+// direction. This server writes the shared scope text, which names a scope that was never supplied as
 // `null` rather than the empty string the legacy server writes; the legacy server's own read rule
 // turns that into the same thing it stores.
 func TestSaveDownstreamsStoresANoScopeDownstreamSoTheLegacyServerReadsItAsNone(t *testing.T) {
@@ -326,12 +326,12 @@ func TestSaveDownstreamsStoresANoScopeDownstreamSoTheLegacyServerReadsItAsNone(t
 
 	if len(systems) > 0 {
 		if err := json.Unmarshal([]byte(systems), &legacy); err != nil {
-			t.Fatalf("the legacy server cannot read the scope server-ng wrote (%s): %v", systems, err)
+			t.Fatalf("the legacy server cannot read the scope this server wrote (%s): %v", systems, err)
 		}
 	}
 
 	if _, present := domain.ParseAccessScope(legacy); present {
-		t.Errorf("the legacy server reads the scope server-ng wrote as supplied, want it read as no scope")
+		t.Errorf("the legacy server reads the scope this server wrote as supplied, want it read as no scope")
 	}
 }
 

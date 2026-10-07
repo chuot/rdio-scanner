@@ -291,8 +291,9 @@ func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 	}
 }
 
-// TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing is the case every server-ng deployment
-// is in: there are no v6 tables, so the pass creates the schema and then does and says nothing.
+// TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing is the case a deployment of this server
+// that has never run is in: there are no v6 tables, so the pass creates the schema and then does and
+// says nothing.
 func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -485,7 +486,7 @@ func TestMigrateSystemsStoresTheBlacklistWithoutItsBrackets(t *testing.T) {
 // which then takes its talkgroups, units, calls, and dirwatches with it because nothing resolves to
 // it any more. Here the value is a parameter, the row lands, and the rows that hang off it resolve.
 //
-// See server/migrations.go, migrateSystems: `system.Blacklists` and `system.Led` are assigned
+// See the legacy `server/migrations.go`, migrateSystems: `system.Blacklists` and `system.Led` are assigned
 // without escapeQuotes and then interpolated into the INSERT.
 func TestMigrateSystemsStoresAQuoteTheLegacyStatementCouldNotHold(t *testing.T) {
 	db := openLegacyV6Database(t)
@@ -519,7 +520,7 @@ func TestMigrateSystemsStoresAQuoteTheLegacyStatementCouldNotHold(t *testing.T) 
 // legacy migration writes into its statement without escaping them: the talkgroup color, the log
 // level, the dirwatch type, and the call audio type. Each one is stored as the v6 row held it.
 //
-// See server/migrations.go: `talkgroup.Led`, `l.Level`, `dirwatch.Kind`, and `call.AudioMime` are
+// See the legacy `server/migrations.go`: `talkgroup.Led`, `l.Level`, `dirwatch.Kind`, and `call.AudioMime` are
 // assigned raw and interpolated into an INSERT that quotes them.
 func TestMigrateStoresTextTheLegacyInterpolatedWithoutEscaping(t *testing.T) {
 	db := openLegacyV6Database(t)
@@ -769,7 +770,7 @@ func TestMigrateDirwatchesStoreZeroForATalkgroupThatDoesNotResolve(t *testing.T)
 // dirwatch rows never scan into. When the lookup finds no talkgroup, that variable is still NULL
 // from the lookup, the reference is handed on as a NULL, and the row is rejected and lost.
 //
-// See server/migrations.go, migrateDirwatches: `talkgroupId` is scanned only by the lookup query,
+// See the legacy `server/migrations.go`, migrateDirwatches: `talkgroupId` is scanned only by the lookup query,
 // and the insert is built from it.
 func TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated(t *testing.T) {
 	db := openLegacyV6Database(t)
@@ -880,7 +881,7 @@ func TestMigrateCallsSkipACallWhoseSystemDoesNotResolve(t *testing.T) {
 // backend this server supports reads as a cross product, so every talkgroup is known to every
 // system.
 //
-// See server/migrations.go, migrateCalls and migrateDirwatches: the lookup query has no ON clause.
+// See the legacy `server/migrations.go`, migrateCalls and migrateDirwatches: the lookup query has no ON clause.
 func TestMigrateCallsResolvesATalkgroupOfAnotherSystemBecauseTheLookupJoinHasNoOnClause(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -905,7 +906,7 @@ func TestMigrateCallsResolvesATalkgroupOfAnotherSystemBecauseTheLookupJoinHasNoO
 // frequency column names one. The source list is tested for the empty array as well, which is why
 // the same call still gets its source unit.
 //
-// See server/migrations.go, migrateCalls: `frequencies.String` is only tested for length, while
+// See the legacy `server/migrations.go`, migrateCalls: `frequencies.String` is only tested for length, while
 // `sources.String` is also tested against `[]`.
 func TestMigrateCallsStoreNoFrequencyWhenTheListIsTheEmptyArray(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)

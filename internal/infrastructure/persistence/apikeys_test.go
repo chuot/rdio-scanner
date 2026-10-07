@@ -136,7 +136,7 @@ func TestAllApikeysAnswersFromTheLoadedListRatherThanFromTheDatabase(t *testing.
 //
 // The legacy server writes the flag with `%t` into an `integer(1)` column, and sqlite reads the
 // bare `true` and `false` that produces as the integer literals 1 and 0 — which is what the
-// fixture's `downstreams.disabled` actually holds. server-ng writes the flag as a bound boolean,
+// fixture's `downstreams.disabled` actually holds. This server writes the flag as a bound boolean,
 // which the same column stores the same way, and both servers read it back with a plain scan into
 // a Go bool.
 func TestSaveApikeysStoresADisabledCredentialTheLegacyServerReadsBack(t *testing.T) {
@@ -251,7 +251,7 @@ func TestSaveApikeysRemovesTheStoredCredentialTheSubmittedListDrops(t *testing.T
 
 // TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne pins the same repaired
 // reconcile as the accesses one, recorded as Q33 in decision-preserved-quirks.md:
-// server/apikey.go `Apikeys.Write` stops its "is this stored row still named?" loop at the first
+// The legacy `server/apikey.go` `Apikeys.Write` stops its "is this stored row still named?" loop at the first
 // submitted credential with no identity, so a save that adds one credential deletes none.
 func TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
@@ -293,7 +293,7 @@ func TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne
 
 // TestSaveApikeysStoresACredentialWhoseIdentContainsASingleQuote pins the parameterized write.
 //
-// server/apikey.go `Apikeys.Write` interpolates `ident` and `key` with `fmt.Sprintf` and no
+// The legacy `server/apikey.go` `Apikeys.Write` interpolates `ident` and `key` with `fmt.Sprintf` and no
 // escaping at all — unlike `Accesses.Write`, which calls `escapeQuotes` — so a credential named
 // with an apostrophe has always failed the whole save, transaction and all.
 func TestSaveApikeysStoresACredentialWhoseIdentContainsASingleQuote(t *testing.T) {

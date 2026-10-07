@@ -71,10 +71,10 @@ func Embedded() http.Handler {
 // of the bundle, and a file set handed to this handler is expected to be a bundle, not
 // an arbitrary directory tree.
 //
-// The websocket branch of the legacy catch-all (server/main.go:140) is deliberately
+// The websocket branch of the legacy catch-all (`server/main.go:140`) is deliberately
 // absent, and a reader comparing the two files should look for it and not find it. The
 // legacy handler decided for itself whether a request was a listener upgrade; in
-// server-ng the composition root makes that decision before a request reaches this
+// This server the composition root makes that decision before a request reaches this
 // package, so this handler only serves files and answers an upgrade request with the
 // file the path names.
 func New(files fs.FS) http.Handler {
@@ -106,7 +106,7 @@ func New(files fs.FS) http.Handler {
 		//
 		// Reproduced rather than corrected: the deployed server answers `/some/route/`
 		// with the application shell, and a browser cannot tell a deliberate rule from an
-		// off-by-one. Correcting it here would make server-ng answer 404 to URLs the
+		// off-by-one. Correcting it here would make this server answer 404 to URLs the
 		// legacy server answers 200.
 		if url[:len(url)-1] != "/" {
 			if b, err := fs.ReadFile(files, path.Join(bundleRoot, indexFile)); err == nil {

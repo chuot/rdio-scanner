@@ -474,7 +474,7 @@ func downstreamLine(call domain.Call, url string, outcome string) string {
 
 // convertAudio converts the call's audio and replaces it with the converted file. When
 // the converter cannot convert, the original audio is kept, which is what the legacy
-// server ends up storing; the difference is that server-ng records why.
+// server ends up storing; the difference is that this server records why.
 func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain.Call, options domain.Options, tags domain.Tags) error {
 	if options.AudioConversion == domain.AudioConversionDisabled {
 		return nil

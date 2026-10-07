@@ -303,7 +303,7 @@ func TestFramingReproducesTheCapturedFrames(t *testing.T) {
 // is not marshalled from a map, which the framing above cannot reproduce and which the payload layer
 // therefore has to get right on its own.
 //
-// server/call.go `CallsSearchResult` and `CallsSearchResults` are structs, so their keys come out in
+// The legacy `server/call.go` `CallsSearchResult` and `CallsSearchResults` are structs, so their keys come out in
 // the order the fields are declared — `id`, `system`, `talkgroup`, `dateTime` — while a call payload
 // is a map and comes out sorted. A search result row and a call of the same shape therefore disagree
 // about the order of the same four keys, and a client that compares the bytes of the two sees it.

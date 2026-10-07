@@ -34,7 +34,7 @@ import (
 // Systems is the stored system catalog: the repository adapter that owns a system and everything
 // hanging off it — its talkgroups, the talkgroupGroups rows that say which groups a talkgroup
 // belongs to, its sites, and its units — because the legacy server writes all of it inside one
-// system transaction ([server/system.go](../../../../server/system.go) `Systems.Write`, calling
+// system transaction (`server/system.go` `Systems.Write`, calling
 // `Sites.WriteTx`, `Talkgroups.WriteTx`, and `Units.WriteTx`).
 //
 // It is the configuration the server is running with, not a view of the tables: the catalog is
@@ -44,6 +44,11 @@ import (
 // configuration broadcast. See
 // [decision-internal-ports.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
 // §9.
+//
+// The `server/…` names in this file are the legacy server's own files, which are not in this
+// repository. They are named so a reader can see which behavior is being mirrored, and they resolve
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
+// docs/specs/FEAT-005-server-ng-cutover/spec.md.
 type Systems struct {
 	store store
 
@@ -514,7 +519,7 @@ func writeTalkgroups(ctx context.Context, tx transaction, dialect Dialect, syste
 // The legacy `Talkgroups.WriteTx` reads the join rows as `"groupId", "talkgroupGroupId"` and then
 // tests the submitted group identifiers against `talkgroupGroupId` — the join row's own number
 // rather than the group it names — so removing a membership removed whichever join row happened to
-// be numbered like a group the save kept. server-ng compares against `groupId`, which is the column
+// be numbered like a group the save kept. This server compares against `groupId`, which is the column
 // the comparison means; see Q34 in decision-preserved-quirks.md.
 func writeTalkgroupGroups(ctx context.Context, tx transaction, talkgroupID uint64, groupIDs []uint64) error {
 	const storedQuery = `SELECT "groupId" FROM "talkgroupGroups" WHERE "talkgroupId" = ?`
@@ -642,7 +647,7 @@ func readColumnIDs(ctx context.Context, tx transaction, section, operation, quer
 // legacy `Systems.Write`, `Groups.Write`, `Tags.Write`, `Sites.WriteTx`, `Units.WriteTx`,
 // `Accesses.Write`, `Apikeys.Write`, `Dirwatches.Write`, and `Downstreams.Write` each stop their
 // scan at the first submitted entry that has no identity yet, so a save that adds something new
-// silently removes nothing. server-ng repairs that rule for every section, which is the one place
+// silently removes nothing. This server repairs that rule for every section, which is the one place
 // where it deliberately behaves unlike the legacy server; see Q33 in
 // decision-preserved-quirks.md, and note that a system or talkgroup deleted by a corrected save
 // takes its recorded calls with it through `ON DELETE CASCADE`.

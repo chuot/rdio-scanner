@@ -626,7 +626,7 @@ func readGolden(t *testing.T, name string) string {
 // The second is Q60. The captured push carries a display order for every talkgroup, and those numbers exist
 // only because computing a listener's configuration sorts the talkgroups the server holds and rewrites each
 // one's order to its new position — on the objects the server itself keeps. The listeners were configured
-// before this push was captured, so the administrator was handed numbers the server had invented. server-ng
+// before this push was captured, so the administrator was handed numbers the server had invented. This server
 // copies a system's talkgroups before it sorts or numbers them, so its push carries no talkgroup order keys
 // here at all, and the comparison says so instead of skipping the capture.
 func capturedConfigGolden(t *testing.T) string {

@@ -249,7 +249,7 @@ func (downstreams *Downstreams) selectObsolete(ctx context.Context, tx transacti
 // downstreamNamed reports whether the submitted list still names a stored downstream.
 //
 // The legacy `Downstreams.Write` stops its scan at the first submitted downstream whose id is zero,
-// so a save that adds a downstream silently keeps every downstream the list removed. server-ng
+// so a save that adds a downstream silently keeps every downstream the list removed. This server
 // repairs that rule; see Q33 in decision-preserved-quirks.md.
 func downstreamNamed(next domain.Downstreams, id uint64) bool {
 	for _, downstream := range next {

@@ -166,7 +166,7 @@ func TestAllAccessesOrdersTheStoredAccessesByTheirDisplayOrder(t *testing.T) {
 // TestAllAccessesKeepsAccessesThatShareAnOrderInTheOrderTheTableReturnsThem records the one place
 // where this code is deliberately better than the legacy server rather than equal to it.
 //
-// server/access.go `Read` sorts with `sort.Slice`, which is not stable: two accesses stored under
+// The legacy `server/access.go` `Read` sorts with `sort.Slice`, which is not stable: two accesses stored under
 // the same display order came back in whatever order the sort happened to produce, so the access
 // list the administrator saw changed between restarts. domain.Accesses.Ordered sorts stably, and
 // the order the table returns rows in is what survives.
@@ -370,11 +370,11 @@ func TestSaveAccessesRemovesTheStoredAccessTheSubmittedListDrops(t *testing.T) {
 // TestSaveAccessesRemovesAStoredAccessEvenWhenTheSubmittedListNamesANewOne pins the repaired
 // reconcile recorded as Q33 in decision-preserved-quirks.md.
 //
-// server/access.go `Accesses.Write` decides whether a stored row is still wanted by walking the
+// The legacy `server/access.go` `Accesses.Write` decides whether a stored row is still wanted by walking the
 // submitted list and returning at the first access with no identity — the loop that answers "is this
 // stored id in the new list?" treats a brand-new access as a match. A save that adds one user and
 // removes another therefore deletes nothing, and the read-back that follows a successful write puts
-// the removed user back in the configuration the administrator is shown. server-ng repairs the rule.
+// the removed user back in the configuration the administrator is shown. This server repairs the rule.
 func TestSaveAccessesRemovesAStoredAccessEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 	accesses := NewAccesses(db, DialectSqlite)

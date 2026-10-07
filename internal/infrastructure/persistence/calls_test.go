@@ -44,7 +44,7 @@ import (
 //     table because that talkgroup carries a 90 minute delay.
 //
 // The read tests below read those two calls rather than calls this package wrote, which is the
-// half of REQ-007 that says server-ng opens a database the other server created.
+// half of REQ-007 that says this server opens a database the other server created.
 const (
 	fixtureCallID        = uint64(1)
 	fixtureDelayedCallID = uint64(2)
@@ -268,7 +268,7 @@ func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
 // TestGetCallLeavesTheDatabaseFreeForTheNextWrite pins the consequence the legacy leak had, which
 // is the only reason a fetch of a call that is not there is interesting at all.
 //
-// server/call.go `GetCall` returns without rolling back when the call it found names a system or a
+// The legacy `server/call.go` `GetCall` returns without rolling back when the call it found names a system or a
 // talkgroup it cannot resolve — and a call id that does not exist falls through its own no-rows
 // result with the system id still zero, so that is the ordinary case. The transaction stays open
 // until the garbage collector collects it, and on a SQLite deployment it holds the read lock that

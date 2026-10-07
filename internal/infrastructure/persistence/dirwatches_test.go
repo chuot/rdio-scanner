@@ -108,7 +108,7 @@ func TestAllDirwatchesReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 
 	// The legacy server's own INSERT, with the `%t` slots already resolved to the bare `true`
 	// and `false` tokens it produces. Nothing here is a Go value interpolated into SQL: the
-	// statement is a constant, reproduced from server/dirwatch.go Dirwatches.Write.
+	// statement is a constant, reproduced from `server/dirwatch.go` Dirwatches.Write.
 	const legacyRow = `INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (2000, true, '/spool/legacy-flags', false, '.mp3', 0, '', 9, 0, 0, 0, 'default')`
 
 	if _, err := db.Exec(legacyRow); err != nil {
@@ -147,7 +147,7 @@ func TestAllDirwatchesReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 }
 
 // TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack is the CA-007.2 half for this adapter: the
-// row server-ng writes is read by the legacy server's own read statement, scanning into the field
+// row this server writes is read by the legacy server's own read statement, scanning into the field
 // types its Dirwatch has, and lands with the same storage class its rows have.
 func TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
@@ -195,7 +195,7 @@ func TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 		&id, &delay, &deleteAfter, &directory, &disabled, &extension,
 		&frequency, &mask, &order, &siteID, &systemID, &talkgroupID, &kind,
 	); err != nil {
-		t.Fatalf("the legacy server's own read cannot read the row server-ng wrote: %v", err)
+		t.Fatalf("the legacy server's own read cannot read the row this server wrote: %v", err)
 	}
 
 	want := submitted[0]
@@ -216,7 +216,7 @@ func TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	}
 
 	// The legacy server's own rows hold the two flags as integers, which is what a `true`/`false`
-	// token becomes. A row server-ng writes has to land the same way, or the two servers disagree
+	// token becomes. A row this server writes has to land the same way, or the two servers disagree
 	// about what the column holds.
 	var deleteAfterType, disabledType string
 
@@ -450,7 +450,7 @@ func TestSaveDirwatchesRemovesTheWatchesTheSubmittedListNoLongerNames(t *testing
 // the submitted list and stopping at the first entry whose identifier is zero or equal — so one new,
 // identifier-less watch keeps every stored watch, and a save that adds a watch and drops another
 // leaves the dropped one stored until a later save that adds nothing. The same shape is in
-// Systems.Write, Groups.Write, Tags.Write, Accesses.Write, and Apikeys.Write, and server-ng repairs
+// Systems.Write, Groups.Write, Tags.Write, Accesses.Write, and Apikeys.Write, and this server repairs
 // all of them.
 func TestSaveDirwatchesRemovesAStoredWatchEvenWhenTheSubmittedListAddsANewOne(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
@@ -612,7 +612,7 @@ func TestAllDirwatchesReportsAnUnreachableStore(t *testing.T) {
 }
 
 // TestSaveDirwatchesOnADatabaseTheLegacyServerWroteKeepsTheStoredWatch is the direction a
-// deployment actually takes over: server-ng saves the configuration it just read out of a
+// deployment actually takes over: this server saves the configuration it just read out of a
 // legacy-written database and the legacy-written row is still there afterwards.
 func TestSaveDirwatchesOnADatabaseTheLegacyServerWroteKeepsTheStoredWatch(t *testing.T) {
 	db := openLegacyDatabase(t)

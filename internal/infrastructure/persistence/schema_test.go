@@ -53,7 +53,7 @@ var legacyTables = []string{
 }
 
 // TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt is the CA-007.1 half that concerns
-// the schema: server-ng starts against a database the legacy server created and leaves it alone,
+// the schema: this server starts against a database the legacy server created and leaves it alone,
 // so the legacy server can still open it afterwards.
 func TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -114,7 +114,7 @@ func TestApplySchemaTwiceIsTheSameAsOnce(t *testing.T) {
 }
 
 // TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase is the other direction of REQ-007: a
-// database server-ng creates is one the legacy server can open, so it has to contain every table
+// database this server creates is one the legacy server can open, so it has to contain every table
 // the legacy server expects, and the index its call history queries are written against.
 func TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase(t *testing.T) {
 	db, err := Open(Settings{

@@ -535,6 +535,6 @@ func compareCanonical(t *testing.T, what string, want json.RawMessage, got any) 
 	}
 
 	if string(wanted) != string(gotten) {
-		t.Errorf("%s\ncaptured: %s\nserver-ng: %s", what, wanted, gotten)
+		t.Errorf("%s\ncaptured: %s\nthis server: %s", what, wanted, gotten)
 	}
 }

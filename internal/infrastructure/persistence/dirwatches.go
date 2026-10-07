@@ -278,7 +278,7 @@ func (dirwatches *Dirwatches) selectObsolete(ctx context.Context, tx transaction
 // dirwatchNamed reports whether the submitted list still names a stored watch.
 //
 // The legacy `Dirwatches.Write` stops its scan at the first submitted watch whose id is zero, so a
-// save that adds a watch silently keeps every watch the list removed. server-ng repairs that rule;
+// save that adds a watch silently keeps every watch the list removed. This server repairs that rule;
 // see Q33 in decision-preserved-quirks.md.
 func dirwatchNamed(next domain.Dirwatches, id uint64) bool {
 	for _, dirwatch := range next {

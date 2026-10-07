@@ -36,10 +36,15 @@ import (
 // `accesses` table once, every read answers from what was loaded, and a save replaces what
 // the server runs with before it stores it — so a list that could not be stored is still the
 // list the server enforces for the rest of the run. That is the legacy server's behavior
-// ([server/access.go](../../../../server/access.go) `Read` / `Write`, driven by
-// [server/admin.go](../../../../server/admin.go) `ConfigHandler`), and it is what
+// (`server/access.go` `Read` / `Write`, driven by
+// `server/admin.go` `ConfigHandler`), and it is what
 // [decision-internal-ports.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
 // §9 requires of every configuration repository here.
+//
+// The `server/…` names in this file are the legacy server's own files, which are not in this
+// repository. They are named so a reader can see which behavior is being mirrored, and they resolve
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
+// docs/specs/FEAT-005-server-ng-cutover/spec.md.
 type Accesses struct {
 	store store
 
@@ -270,7 +275,7 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 // accessIsNamed reports whether the submitted list still names a stored access.
 //
 // The legacy `Accesses.Write` stops its scan at the first submitted access whose id is zero, so a
-// save that adds a user silently keeps every user the list removed. server-ng repairs that rule;
+// save that adds a user silently keeps every user the list removed. This server repairs that rule;
 // see Q33 in decision-preserved-quirks.md.
 func accessIsNamed(list domain.Accesses, id uint64) bool {
 	for _, access := range list {

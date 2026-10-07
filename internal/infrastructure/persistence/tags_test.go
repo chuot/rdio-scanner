@@ -214,9 +214,9 @@ func TestSaveTagsRemovesAStoredTagAndCascadesTheTalkgroupsThatNameIt(t *testing.
 }
 
 // TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile
-// recorded as Q33 in decision-preserved-quirks.md: server/tag.go `Tags.Write` tests
+// recorded as Q33 in decision-preserved-quirks.md: `server/tag.go` `Tags.Write` tests
 // `tag.Id == 0 || tag.Id == tagId`, so one submitted tag with no identity yet keeps every stored
-// tag. server-ng deletes what the list removed.
+// tag. This server deletes what the list removed.
 func TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 

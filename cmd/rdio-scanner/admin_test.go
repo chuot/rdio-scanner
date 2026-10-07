@@ -184,7 +184,7 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 // against testdata/golden/rest-config.json.
 //
 // The capture's answer says every site belongs to no system, because the legacy server's query for sites
-// never asks for that column. server-ng reports the system the site is stored under, which is the approved
+// never asks for that column. This server reports the system the site is stored under, which is the approved
 // divergence Q58, so the comparison states it by rewriting the capture rather than by loosening itself.
 func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguration(t *testing.T) {
 	fixture := readCaptureFixture(t)

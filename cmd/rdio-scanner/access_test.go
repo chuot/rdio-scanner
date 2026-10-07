@@ -36,7 +36,7 @@ import (
 // saved by an administrator, read back from the database at start — and then hold a real listener socket
 // against it. The frames are compared as the bytes the server wrote, against the bytes the legacy server
 // wrote in the same configuration, which is what makes them parity tests rather than a description of what
-// server-ng happens to do.
+// This server happens to do.
 //
 // The configuration is the one the golden captures were taken from, installed through the same administrator
 // endpoints in the same order, so that the two servers are answering in a configuration the legacy server's
@@ -197,7 +197,7 @@ func configuredTestServer(t *testing.T) (*server, string) {
 	// The capture also re-saved the tags and the groups after this point, and those two saves are left
 	// out. Each of them names one row with no identity yet, which is the case Q33 is about: the legacy
 	// server keeps every stored row it is not shown and inserts the new one again, so those saves left
-	// duplicate groups and tags behind without changing anything a listener sees. server-ng reconciles
+	// duplicate groups and tags behind without changing anything a listener sees. This server reconciles
 	// every section the same way — the list you save is the list you get — and running the same saves
 	// here would drop the group the talkgroups are filed under and re-create it under a new identity,
 	// which is a difference the golden has nothing to do with. What both servers reach from the

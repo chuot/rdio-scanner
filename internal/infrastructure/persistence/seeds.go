@@ -29,7 +29,7 @@ import (
 
 // Seed writes the groups and tags a fresh server is expected to start with, and is the half of what
 // the legacy server's `NewDatabase` does after migrating: `seedGroups` and then `seedTags`, from
-// [server/seeds.go](../../../../server/seeds.go), in that order.
+// `server/seeds.go`, in that order.
 //
 // It runs after [Migrate](migrations.go), as the legacy server runs it after `migrate`, and the
 // order is what makes a migrated deployment keep what it had: the migration has already filled
@@ -42,6 +42,11 @@ import (
 // seeds.seedgroups: …`), including a failure of the count that decides whether to seed at all —
 // unlike a migration, which shrugs off a table it cannot read, a seed that cannot ask how many
 // rows a table holds is an error.
+//
+// The `server/…` names in this file are the legacy server's own files, which are not in this
+// repository. They are named so a reader can see which behavior is being mirrored, and they resolve
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
+// docs/specs/FEAT-005-server-ng-cutover/spec.md.
 func Seed(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	s := newStore(db, dialect)
 
@@ -56,7 +61,7 @@ func Seed(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	return nil
 }
 
-// seedGroups mirrors `seedGroups` in [server/seeds.go](../../../../server/seeds.go).
+// seedGroups mirrors `seedGroups` in `server/seeds.go`.
 //
 // The count that decides whether to seed is read into an unsigned integer, which is what the legacy
 // server reads it into, and the labels are written in the order the domain lists them with the
@@ -100,7 +105,7 @@ func seedGroups(ctx context.Context, s store) error {
 	return nil
 }
 
-// seedTags mirrors `seedTags` in [server/seeds.go](../../../../server/seeds.go), including the label
+// seedTags mirrors `seedTags` in `server/seeds.go`, including the label
 // the legacy server seeded with a trailing space in it, which
 // [domain.DefaultTagLabels](../../domain/tag.go) keeps.
 func seedTags(ctx context.Context, s store) error {

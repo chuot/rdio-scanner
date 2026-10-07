@@ -103,7 +103,7 @@ func TestSeedKeepsTheTrailingSpaceInTheEmergencyTag(t *testing.T) {
 // migration gives the groups it moves a display order of 1..n, the seed gives the groups it writes
 // none at all, so a fresh server's groups are ordered by identity.
 //
-// See server/seeds.go: the insert names only the label.
+// See the legacy `server/seeds.go`: the insert names only the label.
 func TestSeedGroupsLeaveTheirDisplayOrderAtZero(t *testing.T) {
 	db := openEmptyDatabase(t)
 

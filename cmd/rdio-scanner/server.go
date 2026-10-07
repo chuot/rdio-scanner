@@ -591,7 +591,7 @@ func (s *server) listenTLS(addresses addresses, tlsConfig *tls.Config) {
 // The timeouts are the legacy server's, and so is keeping keep-alives on. What is not the legacy server's
 // is the logger: the legacy server hands the HTTP server a logger that throws everything away, which is
 // quirk Q52 — a recovered panic and its stack, a TLS handshake failure, a broken write, none of it reaching
-// anybody. server-ng hands it the console the operator is reading. What the client sees is unchanged.
+// anybody. This server hands it the console the operator is reading. What the client sees is unchanged.
 func (s *server) httpServer(addr string) *http.Server {
 	server := &http.Server{
 		Addr:         addr,

@@ -213,9 +213,9 @@ func TestSaveGroupsRemovesAStoredGroupTheSubmittedListOmits(t *testing.T) {
 }
 
 // TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile
-// recorded as Q33 in decision-preserved-quirks.md: server/group.go `Groups.Write` tests
+// recorded as Q33 in decision-preserved-quirks.md: `server/group.go` `Groups.Write` tests
 // `group.Id == 0 || group.Id == groupId`, so one submitted group with no identity yet keeps every
-// stored group and a save that adds a group deletes none. server-ng deletes what the list removed.
+// stored group and a save that adds a group deletes none. This server deletes what the list removed.
 func TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 

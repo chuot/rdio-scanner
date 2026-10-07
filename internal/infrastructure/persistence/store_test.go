@@ -133,7 +133,7 @@ func TestParseScopeReadsBackEveryShapeTheColumnCarries(t *testing.T) {
 }
 
 // TestScopeTextRoundTripsThroughTheStoredColumn proves the two servers agree on the column: the
-// text server-ng writes is the text the legacy server wrote in the fixture, and the text the
+// text this server writes is the text the legacy server wrote in the fixture, and the text the
 // fixture carries reads back as the scope it was written from.
 func TestScopeTextRoundTripsThroughTheStoredColumn(t *testing.T) {
 	stored := `[{"id":10001,"talkgroups":[1514000,1514001]}]`

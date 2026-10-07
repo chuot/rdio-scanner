@@ -124,7 +124,7 @@ func TestReadOptionsAnswersFromTheLoadedValueRatherThanFromTheDatabase(t *testin
 // TestReloadOptionsRestoresTheDefaultDuplicateDetectionWindow is Q1 proven against a database the
 // legacy server wrote.
 //
-// server/options.go `Write` stores the window under `duplicateDetectionTimeFrame` (capital F) and
+// The legacy `server/options.go` `Write` stores the window under `duplicateDetectionTimeFrame` (capital F) and
 // `Read` looks for `duplicateDetectionTimeframe` (lowercase f), so the stored window is never
 // among the rows the re-derivation applies: the fixture stores 750 and the server runs on 500 ms.
 // Reproduced, not fixed — fixing the key would silently start applying a setting every existing
@@ -446,7 +446,7 @@ func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 // TestReloadOptionsKeepsTheBrandingEmailAndTwelveHourFormatTheServerIsRunningWith pins the part of
 // the legacy reset that is not a reset.
 //
-// server/options.go `Read` resets every option it has a default for except `branding`, `email`,
+// The legacy `server/options.go` `Read` resets every option it has a default for except `branding`, `email`,
 // and `time12hFormat` — and not the secret either. A stored row replaces them in every database
 // the legacy server wrote; when the row is missing, the value the server was already running with
 // survives the re-derivation instead of falling back to the default.
@@ -563,7 +563,7 @@ func TestReloadOptionsReportsTheNeedToChangeFromTheStoredRow(t *testing.T) {
 // The legacy `Read` puts a freshly generated bcrypt hash of the default administrator password in
 // place before it applies the stored rows, so a server whose options table has no `adminPassword`
 // row still accepts the default password. bcrypt belongs to the password adapter (T060) and not to
-// this package, so server-ng leaves the credential empty and the composition root (T042) has to
+// this package, so this server leaves the credential empty and the composition root (T042) has to
 // store the initial one. Every database the legacy server wrote has the row, including the
 // fixture, so this only shows on a database with no options at all.
 func TestReloadOptionsLeavesNoCredentialOnRecordWhenNoneIsStored(t *testing.T) {

@@ -32,7 +32,7 @@ import (
 // TestAppendLogStoresAMessageContainingSingleQuotes is Q21, the one defect this task is allowed to
 // fix.
 //
-// server/log.go `LogEvent` interpolates the message into its `INSERT` with `fmt.Sprintf`, so a
+// The legacy `server/log.go` `LogEvent` interpolates the message into its `INSERT` with `fmt.Sprintf`, so a
 // message containing a single quote produces broken SQL. Every line that names a failed statement
 // contains the statement, and therefore contains quotes: the insert fails, `LogEvent` returns the
 // error, and every caller discards it — so the administrator's log view is missing exactly the
@@ -437,7 +437,7 @@ func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
 }
 
 // TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults pins a legacy read rule rather than a
-// fix: server/log.go `Search` counts every row the criteria matches, and then drops from the
+// fix: `server/log.go` `Search` counts every row the criteria matches, and then drops from the
 // results any row that carries no identity, no level, no message, or a timestamp that is not a
 // real instant.
 func TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults(t *testing.T) {
@@ -581,7 +581,7 @@ func TestDeleteLogsBeforeReportsTheLegacyFailureShape(t *testing.T) {
 // span taken from the page would move its ends every time the page changed.
 //
 // The legacy server reads the span with two queries of its own — the matching timestamps ascending and
-// descending — before it counts or pages anything, and server-ng asks the same three questions in the
+// descending — before it counts or pages anything, and this server asks the same three questions in the
 // same order.
 func TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch(t *testing.T) {
 	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)

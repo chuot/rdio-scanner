@@ -48,8 +48,8 @@ func schemaFor(dialect Dialect) ([]string, error) {
 
 // ApplySchema creates the tables the server works with, on a database that may already have them.
 //
-// It is safe to run on every start, which is what lets server-ng open a database the legacy
-// server created — and lets the legacy server open one server-ng wrote — without either of them
+// It is safe to run on every start, which is what lets this server open a database the legacy
+// server created — and lets the legacy server open one this server wrote — without either of them
 // changing the other's schema. Every statement is `IF NOT EXISTS`, so a database that already has
 // the tables is left exactly as it was, down to the definitions themselves.
 //

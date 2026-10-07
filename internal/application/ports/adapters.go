@@ -54,7 +54,7 @@ type AudioMetadata struct {
 //
 // An adapter that cannot convert — because the converter is not installed, or because it
 // failed on this particular audio — reports an error, and the use case keeps the
-// original audio. The legacy server does the same thing silently; server-ng makes the
+// original audio. The legacy server does the same thing silently; this server makes the
 // failure visible instead of swallowing it.
 type AudioConverter interface {
 	Convert(ctx context.Context, in AudioFile, mode uint, metadata *AudioMetadata) (AudioFile, error)

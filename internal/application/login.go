@@ -94,7 +94,7 @@ type AdminLoginResult struct {
 	//
 	// The legacy login response reports it as true on every successful login, whatever the
 	// stored option says; the option itself is only ever reported by the configuration
-	// endpoints. server-ng reproduces that, so a client that branches on this flag at login
+	// endpoints. This server reproduces that, so a client that branches on this flag at login
 	// keeps branching the same way.
 	PasswordNeedChange bool
 }
