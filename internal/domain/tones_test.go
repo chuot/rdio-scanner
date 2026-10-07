@@ -21,19 +21,26 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"testing"
 )
 
-// oscillatorPattern matches one oscillator literal in the legacy tone tables.
-var oscillatorPattern = regexp.MustCompile(`(?s)\{\s*Begin:\s*([0-9.]+),\s*End:\s*([0-9.]+),\s*Frequency:\s*(\d+),\s*Kind:\s*"(\w+)",\s*\}`)
+// The alert and keypad tone tables were copied out of the legacy server verbatim, and these two
+// tests used to prove it by reading server/alert.go and server/keypad.go. The legacy source is not
+// in this repository, so both tests skipped — every day, since the legacy trees were deleted — and
+// a test that always skips asserts nothing.
+//
+// The authority is now a pinned capture: testdata/legacy-alert-tones.json and
+// testdata/legacy-keypad-tones.json hold the oscillator tables as the legacy server wrote them,
+// taken from git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542 and spelled with the same decimal
+// literals the legacy source spells, so the float32 values compared here are the float32 values the
+// legacy server built.
 
 func TestAlertTablesMatchTheLegacyServerVerbatim(t *testing.T) {
-	legacy := readLegacyOscillators(t, "alert.go")
+	legacy := pinnedOscillators(t, "legacy-alert-tones.json")
 
 	alerts := Alerts()
 
@@ -51,7 +58,7 @@ func TestAlertTablesMatchTheLegacyServerVerbatim(t *testing.T) {
 }
 
 func TestKeypadBeepTablesMatchTheLegacyServerVerbatim(t *testing.T) {
-	legacy := readLegacyOscillators(t, "keypad.go")
+	legacy := pinnedOscillators(t, "legacy-keypad-tones.json")
 
 	uniden := KeypadBeepsFor(Options{KeypadBeeps: KeypadBeepsUniden})
 	whistler := KeypadBeepsFor(Options{KeypadBeeps: KeypadBeepsWhistler})
@@ -80,44 +87,46 @@ func TestUnknownKeypadBeepSelectionYieldsEmptySequences(t *testing.T) {
 	}
 }
 
-func readLegacyOscillators(t *testing.T, name string) []Oscillator {
+// pinnedOscillators reads a pinned capture of the legacy server's tone tables.
+func pinnedOscillators(t *testing.T, name string) []Oscillator {
 	t.Helper()
 
-	path := filepath.Join("..", "..", "..", "server", name)
+	path := filepath.Join("testdata", name)
 
 	src, err := os.ReadFile(path)
 	if err != nil {
-		t.Skipf("legacy %s not available: %v", name, err)
+		t.Fatalf("%s is missing: %v\n"+
+			"it is a pinned capture of the legacy tone tables, taken from git tree 02ae33d4…; nothing regenerates it", path, err)
+	}
+
+	var capture struct {
+		LegacyServerTree string `json:"legacyServerTree"`
+		LegacySourceFile string `json:"legacySourceFile"`
+		Oscillators      []struct {
+			Begin     float32 `json:"begin"`
+			End       float32 `json:"end"`
+			Frequency uint    `json:"frequency"`
+			Kind      string  `json:"kind"`
+		} `json:"oscillators"`
+	}
+
+	if err := json.Unmarshal(src, &capture); err != nil {
+		t.Fatalf("%s does not parse: %v", path, err)
+	}
+
+	if capture.LegacyServerTree != "02ae33d4651fee4c46a93bdcf574d0aead89e542" {
+		t.Fatalf("%s is pinned to tree %s, not the tree the goldens and legacy fixtures are pinned to",
+			path, capture.LegacyServerTree)
 	}
 
 	var out []Oscillator
 
-	for _, m := range oscillatorPattern.FindAllStringSubmatch(string(src), -1) {
-		begin, err := strconv.ParseFloat(m[1], 32)
-		if err != nil {
-			t.Fatalf("parsing Begin %q in %s: %v", m[1], name, err)
-		}
-
-		end, err := strconv.ParseFloat(m[2], 32)
-		if err != nil {
-			t.Fatalf("parsing End %q in %s: %v", m[2], name, err)
-		}
-
-		frequency, err := strconv.ParseUint(m[3], 10, 32)
-		if err != nil {
-			t.Fatalf("parsing Frequency %q in %s: %v", m[3], name, err)
-		}
-
-		out = append(out, Oscillator{
-			Begin:     float32(begin),
-			End:       float32(end),
-			Frequency: uint(frequency),
-			Kind:      m[4],
-		})
+	for _, o := range capture.Oscillators {
+		out = append(out, Oscillator{Begin: o.Begin, End: o.End, Frequency: o.Frequency, Kind: o.Kind})
 	}
 
 	if len(out) == 0 {
-		t.Fatalf("no oscillator found in legacy %s; the pattern no longer matches the legacy source", name)
+		t.Fatalf("%s holds no oscillators", path)
 	}
 
 	return out
