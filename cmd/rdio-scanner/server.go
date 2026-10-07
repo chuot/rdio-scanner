@@ -51,7 +51,7 @@ import (
 	"rdio-scanner/internal/infrastructure/tokens"
 	"rdio-scanner/internal/presentation/adminws"
 	"rdio-scanner/internal/presentation/rest"
-	"rdio-scanner/internal/presentation/webapp"
+	"rdio-scanner/internal/presentation/serving/scanner"
 	"rdio-scanner/internal/presentation/ws"
 )
 
@@ -361,7 +361,7 @@ func (s *server) wire() error {
 	// The path the web application is served from is also the path a listener connects to, and the
 	// upgrade header decides which. This is the legacy server's one catch-all handler, and the only place
 	// in this server where a request can be either.
-	mux.HandleFunc("/", catchAll(listener, webapp.Embedded()))
+	mux.HandleFunc("/", catchAll(listener, scanner.Embedded()))
 
 	s.routes = mux
 

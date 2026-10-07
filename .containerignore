@@ -7,8 +7,9 @@ dist/
 data-dev/
 testdata/
 
-# the client is built by `make webapp` before the image is built; the server embeds
-# the result from internal/presentation/webapp/bundle/, which is copied
+# the client is built by `make client` before the image is built; the server embeds
+# the result from internal/presentation/serving/scanner/bundle/ and
+# internal/presentation/serving/admin/bundle/, which are copied
 internal/presentation/clients/
 
 # the state a server run from the repository root leaves behind

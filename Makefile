@@ -19,7 +19,7 @@ app := rdio-scanner
 date := 2026/05/16
 ver := 7.0.0-dev
 
-client := $(wildcard internal/presentation/clients/*.json internal/presentation/clients/*.mjs) \
+clientSrc := $(wildcard internal/presentation/clients/*.json internal/presentation/clients/*.mjs) \
 	$(shell find internal/presentation/clients/scanner internal/presentation/clients/admin internal/presentation/clients/shared -type f)
 server := $(shell find cmd internal -type f -name '*.go')
 
@@ -27,7 +27,7 @@ build = @GOOS=$(1) GOARCH=$(3) go build -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanne
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
-.PHONY: all clean container dist sed
+.PHONY: all clean client container dist scanner admin sed
 .PHONY: freebsd freebsd-amd64
 .PHONY: linux linux-386 linux-amd64 linux-arm linux-arm64
 .PHONY: macos macos-amd64 macos-arm64
@@ -37,9 +37,9 @@ all: clean dist
 
 clean:
 	@rm -fr internal/presentation/clients/node_modules dist
-	@find internal/presentation/webapp/bundle -mindepth 1 -not -name .gitkeep -delete
+	@find internal/presentation/serving/scanner/bundle internal/presentation/serving/admin/bundle -mindepth 1 -not -name .gitkeep -delete
 
-container: webapp linux-amd64
+container: client linux-amd64
 	@podman build --pull -t $(app):latest .
 
 dist: freebsd linux macos windows
@@ -50,14 +50,18 @@ sed:
 	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
 
-webapp: internal/presentation/webapp/bundle/index.html
+client: scanner admin
 
-internal/presentation/webapp/bundle/index.html: $(client)
+scanner: internal/presentation/serving/scanner/bundle/index.html
+
+admin: internal/presentation/serving/admin/bundle/index.html
+
+internal/presentation/serving/scanner/bundle/index.html internal/presentation/serving/admin/bundle/index.html: $(clientSrc)
 	@cd internal/presentation/clients && test -d node_modules || npm ci --loglevel=error --no-progress
 	@cd internal/presentation/clients && npm run build
 
 freebsd: freebsd-amd64
-freebsd-amd64: webapp dist/$(app)-freebsd-amd64-v$(ver).zip
+freebsd-amd64: client dist/$(app)-freebsd-amd64-v$(ver).zip
 
 dist/$(app)-freebsd-amd64-v$(ver).zip: $(server)
 	$(call pandoc,freebsd,amd64,rdio-scanner.pdf,docs/platforms/freebsd.md)
@@ -65,10 +69,10 @@ dist/$(app)-freebsd-amd64-v$(ver).zip: $(server)
 	$(call zip,freebsd,amd64,$(app))
 
 linux: linux-386 linux-amd64 linux-arm linux-arm64
-linux-386: webapp dist/$(app)-linux-386-v$(ver).zip
-linux-amd64: webapp dist/$(app)-linux-amd64-v$(ver).zip
-linux-arm: webapp dist/$(app)-linux-arm-v$(ver).zip
-linux-arm64: webapp dist/$(app)-linux-arm64-v$(ver).zip
+linux-386: client dist/$(app)-linux-386-v$(ver).zip
+linux-amd64: client dist/$(app)-linux-amd64-v$(ver).zip
+linux-arm: client dist/$(app)-linux-arm-v$(ver).zip
+linux-arm64: client dist/$(app)-linux-arm64-v$(ver).zip
 
 dist/$(app)-linux-386-v$(ver).zip: $(server)
 	$(call pandoc,linux,386,rdio-scanner.pdf,docs/platforms/linux.md)
@@ -91,8 +95,8 @@ dist/$(app)-linux-arm64-v$(ver).zip: $(server)
 	$(call zip,linux,arm64,$(app))
 
 macos: macos-amd64 macos-arm64
-macos-amd64: webapp dist/$(app)-macos-amd64-v$(ver).zip
-macos-arm64: webapp dist/$(app)-macos-arm64-v$(ver).zip
+macos-amd64: client dist/$(app)-macos-amd64-v$(ver).zip
+macos-arm64: client dist/$(app)-macos-arm64-v$(ver).zip
 
 dist/$(app)-macos-amd64-v$(ver).zip: $(server)
 	$(call pandoc,macos,amd64,rdio-scanner.pdf,docs/platforms/macos.md)
@@ -105,7 +109,7 @@ dist/$(app)-macos-arm64-v$(ver).zip: $(server)
 	$(call zip,macos,arm64,$(app))
 
 windows: windows-amd64
-windows-amd64: webapp dist/$(app)-windows-amd64-v$(ver).zip
+windows-amd64: client dist/$(app)-windows-amd64-v$(ver).zip
 
 dist/$(app)-windows-amd64-v$(ver).zip: $(server)
 	$(call pandoc,windows,amd64,rdio-scanner.pdf,docs/platforms/windows.md)

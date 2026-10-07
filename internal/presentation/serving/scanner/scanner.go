@@ -12,13 +12,13 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
 
-// Package webapp is the transitional home of the scanner bundle. The handler it used to
-// own lives in internal/presentation/serving/spa, and the embed moves to
-// internal/presentation/serving/scanner in the next step of the same feature. Until the
-// composition root points there, this package keeps the bundle embedded where the client
-// build writes it, so the server keeps serving a built application at every commit.
-package webapp
+package scanner
 
 import (
 	"embed"
@@ -29,16 +29,24 @@ import (
 
 // bundle is the scanner application compiled into the binary.
 //
+// The directory has to be inside this package: a `go:embed` pattern cannot name a path
+// outside the package directory it is written in, so the client build writes its scanner
+// output here, at `bundle/`, rather than somewhere this package could not reach.
+//
 // `all:` is the departure from the legacy `//go:embed webapp/*`, and it exists only so
-// this package compiles before the client has ever been built: `bundle/.gitkeep` is the
+// this package compiles before the client has ever been built. `bundle/.gitkeep` is the
 // placeholder that keeps the directory in the repository, and a pattern without `all:`
-// refuses to match a directory whose only entry is a hidden file. A client build writes
-// no hidden files, so once the bundle is in place the two patterns embed the same set.
+// refuses to match a directory whose only entry is a hidden file — the embed would fail
+// with "matches no files". A client build writes no hidden files, so once the bundle is
+// in place the two patterns embed exactly the same set.
 //
 //go:embed all:bundle
 var bundle embed.FS
 
-// Embedded returns the catch-all handler for the application compiled into the binary.
+// Embedded returns the catch-all handler for the scanner application, served from the
+// root of the server: the path a listener connects to is the path the page is served
+// from, and the composition root decides which one a request is before this handler
+// ever sees it.
 func Embedded() http.Handler {
 	return spa.New(bundle, "")
 }

@@ -19,7 +19,7 @@ internal/presentation/clients/node_modules
 /__debug_bin
 /autocert
 /rdio-scanner
-/internal/presentation/webapp/bundle/*
-!/internal/presentation/webapp/bundle/.gitkeep
+/internal/presentation/serving/scanner/bundle/*
+!/internal/presentation/serving/scanner/bundle/.gitkeep
 /internal/presentation/serving/admin/bundle/*
 !/internal/presentation/serving/admin/bundle/.gitkeep

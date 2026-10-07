@@ -46,34 +46,31 @@ const watch = args.includes('--watch');
 const packageInfo = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
 
 /**
- * The directory a config writes to: the bundle of the Go package that embeds this client.
+ * The directory an application writes to: the bundle of the Go package that embeds it.
  *
  * There was a `--out <dir>` flag here while the repository carried two servers, because the same client had to
- * be able to feed the legacy `server/webapp/` and the new one. There is one server now, each client sits inside
- * its presentation layer, and the destination is a fact about where the application lives rather than a choice
- * made per build. Passing the old flag is refused rather than silently ignored: a build that looks like it
- * targets somewhere else should fail loudly instead of writing into the bundle anyway.
+ * be able to feed the legacy `server/webapp/` and the new one. There is one server now, each application sits
+ * inside its presentation layer, and the destination is a fact about where the application lives rather than a
+ * choice made per build. Passing the old flag is refused rather than silently ignored: a build that looks like
+ * it targets somewhere else should fail loudly instead of writing into a bundle anyway.
  */
-export function resolveOutDir(argv, from = here) {
+export function resolveOutDir(bundlePath, argv) {
     const taken = argv.find((arg) => arg === '--out' || arg.startsWith('--out='));
 
     if (taken !== undefined) {
         throw new Error(
-            'build: --out is gone — there is one server, and this client builds into ../webapp/bundle'
+            'build: --out is gone — each application builds into the bundle beside the Go package that embeds it'
         );
     }
 
-    return resolve(from, '..', 'webapp', 'bundle');
+    return resolve(here, bundlePath);
 }
 
-const scannerBundle = resolveOutDir(args);
+/** The scanner bundle sits beside the Go package that embeds it. */
+const scannerBundle = resolveOutDir('../serving/scanner/bundle', args);
 
-/**
- * The admin bundle sits beside the Go package that will embed it. That package is created later in
- * this feature; the build writes here from the moment the two applications are built separately, so
- * no commit in between has a build with nowhere to put the admin application.
- */
-const adminBundle = resolve(here, '..', 'serving', 'admin', 'bundle');
+/** The admin bundle sits beside the Go package that embeds it. */
+const adminBundle = resolveOutDir('../serving/admin/bundle', args);
 
 /** The scanner application: the listener page, its service worker, and its manifest. */
 export const scannerConfig = {
