@@ -4,9 +4,24 @@
 # integration tests read, written entirely by the legacy server.
 #
 # The fixture is committed so the tests are hermetic. Run this script only when the fixture
-# itself has to change, and from a checkout of the branch the legacy server is on:
+# itself has to change.
 #
-#   server-ng/testdata/legacydb/generate.sh
+# The legacy server is not in this repository any more, and this script builds it, so it has
+# to be brought back first. The source it must be built from is pinned — the tree every golden
+# and every legacy fixture in this directory is pinned to:
+#
+#   git tree   02ae33d4651fee4c46a93bdcf574d0aead89e542   (server/)
+#   commit     3d45ee7d2e253b7894891a2ff2255b5a821a1df0   (the last commit that carried it)
+#
+# From the repository root:
+#
+#   git archive 3d45ee7d2e253b7894891a2ff2255b5a821a1df0 server | tar -x
+#   testdata/legacydb/generate.sh
+#   rm -rf server
+#
+# The archive is the only way to obtain that source now, and the commit is recorded in
+# docs/specs/FEAT-005-server-ng-cutover/spec.md. Building anything other than that tree
+# produces a fixture the tests are not pinned to.
 #
 # What it does, in order, all through the legacy server's own code paths:
 #
@@ -41,7 +56,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(cd "$here/../../.." && pwd)"
+repo="$(cd "$here/../.." && pwd)"
 
 port="${PORT:-3111}"
 

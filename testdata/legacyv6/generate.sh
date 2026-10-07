@@ -3,10 +3,12 @@
 # deployment leaves behind, which is what the v6 -> v7 migration pass reads.
 #
 # The schema below is the v6.6.3 SQLite schema, copied from the sqlite branches of the
-# migration chain in server/database.go at tag v6.6.3 — the create/alter/drop statements of
-# migration20191028144433 through migration20220101070000, replayed in order, with the tables
-# that chain renames or replaces already replaced and its indexes kept. It is the end state a
-# v6.6.3 server leaves, not any single migration's statements.
+# migration chain in the legacy `server/database.go` at tag `v6.6.3` — the create/alter/drop
+# statements of migration20191028144433 through migration20220101070000, replayed in order, with
+# the tables that chain renames or replaces already replaced and its indexes kept. It is the end
+# state a v6.6.3 server leaves, not any single migration's statements. The legacy source these
+# statements were read from is not in this repository; the commit and tree to read them at are
+# recorded in docs/specs/FEAT-005-server-ng-cutover/spec.md.
 #
 # The rows cover what the migration pass reads:
 #
@@ -28,10 +30,11 @@
 # The last of those calls is what the legacy server cannot survive: its source unit reaches the
 # branch of migrateCalls() that reports the unit insert from the branch that only runs when the
 # insert succeeded, with the error it just tested for being nil, and the legacy error formatter
-# calls Error() on that nil (server/error.go:30, reached at server/migrations.go:435). Running the
-# legacy binary over this fixture therefore panics inside the calls migration and rolls the whole
-# call set back — which is what a v6 deployment holding such a call gets today. server-ng reports
-# the line instead of crashing; see TestMigrateCallsReportsNoFailureForTheUnitItCreated.
+# calls Error() on that nil (the legacy `server/error.go:30`, reached at
+# `server/migrations.go:435`). Running the legacy binary over this fixture therefore panics
+# inside the calls migration and rolls the whole call set back — which is what a v6 deployment
+# holding such a call gets today. This server reports the line instead of crashing; see
+# TestMigrateCallsReportsNoFailureForTheUnitItCreated.
 #
 # Run from any directory: bash generate.sh
 set -euo pipefail

@@ -23,14 +23,14 @@
 #                the calls and their unit links come back out of the surviving v6 table.
 #
 # The v7 statements below are copied from
-# server-ng/internal/infrastructure/persistence/schema_sqlite.go, the same way
-# ../legacyv6/generate.sh copies the v6 schema from server/database.go. Only the tables this fixture
-# fills are written here; Migrate applies the rest of the schema itself. The v6 statements are copied
-# from ../legacyv6/generate.sh.
+# internal/infrastructure/persistence/schema_sqlite.go, the same way
+# ../legacyv6/generate.sh copies the v6 schema from the legacy `server/database.go`. Only the
+# tables this fixture fills are written here; Migrate applies the rest of the schema itself. The
+# v6 statements are copied from ../legacyv6/generate.sh.
 #
-# The damage is written as SQL that mirrors the legacy statements of server/migrations.go rather than
-# by running the legacy binary, because the legacy binary cannot produce migrated.db at all: it
-# panics on the call that needs a unit created, which is crashed.db.
+# The damage is written as SQL that mirrors the legacy statements of `server/migrations.go` rather
+# than by running the legacy binary, because the legacy binary cannot produce migrated.db at all:
+# it panics on the call that needs a unit created, which is crashed.db.
 #
 # Only rdioScannerCalls survives in crashed.db. A real crashed deployment still has the v6 apikey and
 # access tables too, because those migrations come after the calls one and never ran; they are left
