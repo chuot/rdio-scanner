@@ -323,20 +323,46 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 	}
 }
 
-// TestLoginHandlerLegacyZeroAttemptWindowQuirk pins a legacy defect rather than fixing it.
-// The login attempt window the legacy server means to be ten minutes is built with
-// `time.Duration(time.Duration.Minutes(10))`, a method expression that converts ten
-// nanoseconds to minutes and back and truncates to zero. The window that is enforced is
-// therefore zero: an address's attempt count never ages out, and an address that has spent
-// its budget stays refused long after the ten minutes the contract describes.
+// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of Q10: the window the
+// contract describes is the window the server enforces.
 //
-// Reported to the plan owner as a candidate entry for decision-preserved-quirks.md; the
-// fix belongs in its own decision, not in this refactor.
-func TestLoginHandlerLegacyZeroAttemptWindowQuirk(t *testing.T) {
-	if loginAttemptsWindow != 0 {
-		t.Fatalf("attempt window = %v, want the zero window the legacy server enforces", loginAttemptsWindow)
+// The legacy server built its window with `time.Duration(time.Duration.Minutes(10))`, a method
+// expression that converts ten nanoseconds to minutes and back and truncates to zero, so an address's
+// attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
+// has spent its budget is refused while that window is still open.
+// See docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
+func TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow(t *testing.T) {
+	if loginAttemptsWindow != 10*time.Minute {
+		t.Fatalf("attempt window = %v, want the ten minutes the contract describes", loginAttemptsWindow)
 	}
 
+	fixture := newLoginFixture()
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		if _, err := fixture.attempt("wrong credential"); err != nil {
+			t.Fatalf("login attempt %d: %v", attempt, err)
+		}
+	}
+
+	fixture.clock.At = loginTime.Add(9 * time.Minute)
+
+	result, err := fixture.attempt(adminCredential)
+	if err != nil {
+		t.Fatalf("login inside the window: %v", err)
+	}
+
+	if result.Outcome != AdminLoginAttemptLimit {
+		t.Errorf("outcome inside the window = %q, want the address still refused", result.Outcome)
+	}
+
+	if fixture.passwords.AskedFor() != 3 {
+		t.Errorf("credential checks = %d, want a refused attempt to leave the credential unexamined", fixture.passwords.AskedFor())
+	}
+}
+
+// TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow is the other half of the repair: the budget is
+// measured over a window, so an address that waits out the window is answered on its merits again.
+func TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow(t *testing.T) {
 	fixture := newLoginFixture()
 
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -349,11 +375,49 @@ func TestLoginHandlerLegacyZeroAttemptWindowQuirk(t *testing.T) {
 
 	result, err := fixture.attempt(adminCredential)
 	if err != nil {
-		t.Fatalf("login past the intended window: %v", err)
+		t.Fatalf("login past the window: %v", err)
+	}
+
+	if result.Outcome != AdminLoginAccepted {
+		t.Errorf("outcome past the window = %q, want the budget restored once the window it was measured over had passed", result.Outcome)
+	}
+
+	if result.Token == "" {
+		t.Errorf("token = %q, want the session the restored budget pays for", result.Token)
+	}
+}
+
+// TestLoginHandlerCountsAFreshWindowAsAFreshBudget keeps the restored budget a budget: the address gets
+// three attempts in the new window, not an unlimited run at the server.
+func TestLoginHandlerCountsAFreshWindowAsAFreshBudget(t *testing.T) {
+	fixture := newLoginFixture()
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		if _, err := fixture.attempt("wrong credential"); err != nil {
+			t.Fatalf("login attempt %d: %v", attempt, err)
+		}
+	}
+
+	fixture.clock.At = loginTime.Add(11 * time.Minute)
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		result, err := fixture.attempt("wrong credential")
+		if err != nil {
+			t.Fatalf("login attempt %d of the new window: %v", attempt, err)
+		}
+
+		if result.Outcome != AdminLoginInvalidCredential {
+			t.Fatalf("outcome = %q, want attempt %d of the new window answered on its merits", result.Outcome, attempt)
+		}
+	}
+
+	result, err := fixture.attempt(adminCredential)
+	if err != nil {
+		t.Fatalf("login past the new window's budget: %v", err)
 	}
 
 	if result.Outcome != AdminLoginAttemptLimit {
-		t.Errorf("outcome past the intended ten-minute window = %q, want the address still refused, because the enforced window is zero", result.Outcome)
+		t.Errorf("outcome = %q, want the fourth attempt of the new window refused", result.Outcome)
 	}
 }
 

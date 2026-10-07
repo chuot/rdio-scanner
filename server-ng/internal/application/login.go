@@ -41,20 +41,17 @@ const (
 
 	// loginAttemptsWindow is the interval an address's attempt count is measured over.
 	//
-	// The legacy server means this to be ten minutes, but it builds it with
-	// `time.Duration(time.Duration.Minutes(10))`, which is a method expression rather than
-	// a duration: the number 10 is taken as a Duration — ten nanoseconds — converted to
-	// minutes (1.6e-10) and converted back to a Duration, which truncates to zero. The
-	// window the legacy server enforces is therefore zero, and the half of the refusal
-	// rule that was meant to refuse an attempt made too soon after the previous one is
-	// never true.
+	// The legacy server meant ten minutes here and enforced zero: it built the window with
+	// `time.Duration(time.Duration.Minutes(10))`, a method expression that takes the 10 as a
+	// Duration — ten nanoseconds — converts it to minutes and back, and truncates to zero. The
+	// consequence was that an address's count never aged out, so an address that had spent its
+	// budget stayed refused until a successful login or a restart.
 	//
-	// server-ng reproduces the window that is enforced, not the one that was intended, per
-	// the policy of preserving observable legacy defects. The observable consequence is
-	// that an address's attempt count never ages out on its own: only a successful login
-	// clears it. Pinned by TestLoginHandlerLegacyZeroAttemptWindowQuirk, and reported to
-	// the plan owner as a candidate entry for decision-preserved-quirks.md.
-	loginAttemptsWindow = time.Duration(0)
+	// The window is the one the contract describes, per the owner's decision: see
+	// docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md. `countAttempt`
+	// ages a history out over it, which is what makes "three attempts per window" mean what it
+	// says.
+	loginAttemptsWindow = 10 * time.Minute
 )
 
 // AdminLoginOutcome reports what the server decided about one attempt to start an
@@ -182,10 +179,11 @@ func NewAdminLoginHandler(
 func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginCommand) (AdminLoginResult, error) {
 	attempt := handler.countAttempt(cmd.RemoteAddr)
 
-	if attempt.Count > loginAttemptsMax || handler.clock.Now().Sub(attempt.Date) < loginAttemptsWindow {
+	if attempt.Count > loginAttemptsMax {
 		// The warning is written once, on the attempt that crosses the limit, and never
 		// again for the same address: the legacy server counts it the same way, so a
-		// log view shows one entry per lockout rather than one per refused request.
+		// log view shows one entry per lockout rather than one per refused request. A
+		// lockout in a new window is a new lockout, and gets its own warning.
 		if attempt.Count == loginAttemptsMax+1 {
 			handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("too many login attempts for ip=\"%v\"", cmd.RemoteAddr))
 		}
@@ -225,9 +223,11 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 
 // countAttempt records that an address made one more attempt and returns its history.
 //
-// The instant is refreshed on every attempt, including the refused ones, which is what the
-// legacy server does and is what keeps a locked-out address locked out: its count only ever
-// grows, and the age of its history never gets past the gap between two attempts.
+// The instant is refreshed on every attempt, including the refused ones, which is what the legacy
+// server does. What the legacy server never did was let a history age: its window was zero, so a
+// count that had been spent stayed spent until a successful login or a restart. Here a history whose
+// most recent attempt is older than the window starts over, because a budget measured over a window
+// is a budget the window renews.
 func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
@@ -238,33 +238,33 @@ func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt 
 		handler.attempts[remoteAddr] = attempt
 	}
 
+	if handler.clock.Now().Sub(attempt.Date) > loginAttemptsWindow {
+		attempt.Count = 0
+	}
+
 	attempt.Count++
 	attempt.Date = handler.clock.Now()
 
 	return attempt
 }
 
-// forgetAttempts drops the addresses whose attempt history is old enough to be forgotten.
+// forgetAttempts clears every address's attempt history.
 //
-// With the window the legacy server enforces, that is every address: the legacy server
-// compares the age of each history against zero on the success path only, so any successful
-// login clears the count for every address, including the ones that were locked out. The
-// comparison is written as "at least" rather than "more than" because the injected clock
-// reports the very instant the current attempt was made, and the outcome the legacy server
-// produces — every address forgotten — is the one being reproduced.
+// That is the legacy behavior, kept deliberately: the legacy server compares each history's age
+// against its zero window on the success path only, so any successful login clears the count for
+// every address, including one that was locked out. Repairing the window without repairing this
+// would leave the documented limit true for an address nobody else signs in for; repairing this one
+// too is a separate decision, recorded as a residual risk in
+// docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
 //
 // It runs only after a session has been started: a login that failed on the way out leaves
 // the counts where they were.
 func (handler *AdminLoginHandler) forgetAttempts() {
-	now := handler.clock.Now()
-
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 
-	for remoteAddr, attempt := range handler.attempts {
-		if now.Sub(attempt.Date) >= loginAttemptsWindow {
-			delete(handler.attempts, remoteAddr)
-		}
+	for remoteAddr := range handler.attempts {
+		delete(handler.attempts, remoteAddr)
 	}
 }
 
