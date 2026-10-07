@@ -752,8 +752,10 @@ rdio-select-panel .rdio-button-mini.all-on {
   background: rgb(50, 100, 50);
 }
 
+/* The baseline prints "No talkgroup configured!" as bare text inside a host that
+ * already has 8px of padding, so the line gets no padding of its own. */
 rdio-select-panel .empty {
-  padding: 8px;
+  padding: 0;
 }
 
 @media (min-width: 720px) {
