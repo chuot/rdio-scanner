@@ -82,6 +82,8 @@ const scenarioSetup = {
   'access-limit': { showListenersCount: false },
   'scope-normalization': {},
   'dirwatch-calls': { showListenersCount: false, dirwatches: true },
+  'cross-write': { showListenersCount: false },
+  'cross-read': { showListenersCount: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -613,7 +615,62 @@ const scenarios = {
 
     await listener.session.close();
   },
+
+  // cross-write and cross-read are the two halves of the handoff the harness calls T052: one server writes a
+  // database, the other one is started on a copy of it and reads it back.
+  //
+  // cross-write seeds a configuration, ingests a call, and then reads the whole thing back. Only the reading
+  // is recorded: what the writing did is visible in the database dump, and what has to match is what the two
+  // servers say about the same stored rows.
+  'cross-write': async (run) => {
+    await run.seed();
+
+    await run.upload('/api/call-upload', uploadFields(openKey), 'a-call-is-uploaded');
+
+    await readBack(run);
+  },
+
+  // cross-read is the server that was handed a database it did not write, reading it with nothing seeded and
+  // nothing saved. Its login is not recorded, because the writer's login is part of its seed and is not
+  // recorded either: what is compared is what each server says about the stored rows.
+  'cross-read': async (run) => {
+    const login = await run.request('POST', '/api/admin/login', { name: 'the-administrator-logs-in', body: { password: adminPassword } });
+
+    if (login.status !== 200) {
+      throw new Error(`the administrator could not log in to a database the other server wrote: ${JSON.stringify(login)}`);
+    }
+
+    run.token = login.token ?? JSON.parse(login.body).token;
+
+    await readBack(run);
+  },
 };
+
+// readBack is the reading half, which both halves of the handoff do identically: the configuration as the
+// server has it, the sections an administrator opens, and the calls a listener can find and ask for.
+async function readBack(run) {
+  run.record(await run.request('GET', '/api/admin/config', { name: 'the-whole-configuration', token: run.token }));
+
+  for (const section of ['access', 'apikeys', 'groups', 'options', 'systems', 'tags']) {
+    run.record(await run.request('GET', `/api/admin/config/${section}`, { name: `the-${section}-section`, token: run.token }));
+  }
+
+  const listener = await run.listen('the-configuration-is-sent-to-a-listener');
+
+  listener.session.send(['LCL', { limit: 200, offset: 0, sort: 'date' }]);
+
+  const search = await listener.session.expect('the-calls-are-searched');
+
+  run.record(search);
+
+  const callId = JSON.parse(search.frame)[1].results[0].id;
+
+  listener.session.send(['CAL', String(callId), 'p']);
+
+  run.record(await listener.session.expect('the-call-is-fetched'));
+
+  await listener.session.close();
+}
 
 // ---------------------------------------------------------------------------
 

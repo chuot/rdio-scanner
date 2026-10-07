@@ -55,23 +55,55 @@ compared exactly.
 | `access-limit` | an access with a limit of one, two listeners, the access saved again, and a third listener |
 | `scope-normalization` | a scope whose talkgroups are named as neither the wildcard nor a list |
 | `dirwatch-calls` | two watched directories, a trunk-recorder pair and a dsd+ recording, and a listener that subscribed before either |
+| `cross-legacy-to-ng` | a database the legacy server wrote, read by server-ng |
+| `cross-ng-to-legacy` | a database server-ng wrote, read by the legacy server |
 
 Each scenario runs on a fresh copy of a database each server made for itself, so what one scenario ingests
 cannot change what another is compared on.
 
-## The five differences this harness expects
+## The two handoffs
 
-They are the approved divergences in
+The last two scenarios are not two live servers compared with each other; they are one server reading what the
+other one left behind.
+
+One server is started on a database of its own, seeds a configuration, ingests a call, reads the whole thing
+back, and is stopped. Its database is dumped, and then copied — with whatever the engine kept beside it — and
+the other server is started on the copy and reads it back with nothing seeded and nothing saved.
+
+What is compared is:
+
+- **what each server says about the same stored rows**: the whole configuration, the six sections an
+  administrator opens, the calls a listener can search for, and the call it asks for by id. The only
+  differences allowed are the site system id (Q58) and `audioConversion` (Q53, below).
+- **what the reader changed in the database**: every table except the log is compared byte for byte between
+  the writer's database and the reader's, and the log is compared as a prefix — the reader may append the
+  record of its own running (its boot line, the listeners it connected and lost) and may write nothing about
+  the stored configuration or the stored calls.
+
+Both directions are run, because a schema one server can read and the other cannot is exactly the kind of
+breakage a rewrite makes.
+
+
+## The differences this harness expects
+
+The five approved divergences in
 [decision-preserved-quirks.md](../../../docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md),
-and each one is *asserted* to appear, in the scenario named:
+plus one thing that is not a divergence between the servers but is only visible in a handoff, and each one is
+*asserted* to appear, in the scenario named:
 
 | Quirk | Scenario | What the two servers do differently |
 | --- | --- | --- |
 | Q51 | `scoped-upload` | the legacy server dereferences a call's unresolved system while checking an apikey scope, and the request ends with no reply at all; server-ng resolves the references first, answers, and ingests the call |
 | Q56 | `missing-call-fetch` | the legacy server leaves its transaction open when the call it was asked for is not there, and the next write waits out the ten-second busy timeout and fails; server-ng rolls back and answers at once |
-| Q58 | `admin-rest`, `admin-config-socket` | the legacy server reports every site as belonging to no system; server-ng gives it the system it was found under |
+| Q58 | `admin-rest`, `admin-config-socket`, both handoffs | the legacy server reports every site as belonging to no system; server-ng gives it the system it was found under |
 | Q61 | `scope-normalization` | the legacy server stores a scope it could not use exactly as it was submitted; server-ng stores the scope it understood |
 | Q62 | `access-limit` | the legacy server counts the sessions holding an access by the in-memory object it holds, so saving the access again stops the limit counting and the third connection is let in; server-ng counts the access itself and refuses |
+| Q53 | both handoffs | not a difference between the servers: `audioConversion` is a setting a server applies and never stores, so the server that was handed it answers `0` and the server that reads the database answers the default. Both servers do this, and the handoff is what makes it visible |
+
+A step is allowed to carry more than one of them — the whole configuration holds both the systems and the
+settings — and each declaration written for that step has to describe at least one of the differences there,
+while together they have to describe all of them.
+
 
 ## Things the harness arranges so that it can compare anything at all
 

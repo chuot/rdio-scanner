@@ -241,4 +241,135 @@ export const expectations = [
       return true;
     },
   },
+
+  // The two handoffs: a database one server wrote, read by the other. The configuration the reader reports has
+  // the same site difference every other read of it has, and the reader is allowed to change nothing in the
+  // database but write its own boot line.
+  {
+    id: 'Q58',
+    kind: 'step',
+    scenario: 'cross-legacy-to-ng',
+    step: 'the-whole-configuration',
+    summary: 'server-ng reads a database the legacy server wrote, and reports every site with the system it belongs to',
+    paths: [/^body\.config\.systems\[\d+\]\.sites\[\d+\]\.systemId$/],
+  },
+  {
+    id: 'Q58',
+    kind: 'step',
+    scenario: 'cross-legacy-to-ng',
+    step: 'the-systems-section',
+    summary: 'server-ng reads a database the legacy server wrote, and reports every site with the system it belongs to',
+    paths: [/^body\[\d+\]\.sites\[\d+\]\.systemId$/],
+  },
+  {
+    id: 'Q58',
+    kind: 'step',
+    scenario: 'cross-ng-to-legacy',
+    step: 'the-whole-configuration',
+    summary: 'the legacy server reads a database server-ng wrote, and reports every site as belonging to no system',
+    paths: [/^body\.config\.systems\[\d+\]\.sites\[\d+\]\.systemId$/],
+  },
+  {
+    id: 'Q58',
+    kind: 'step',
+    scenario: 'cross-ng-to-legacy',
+    step: 'the-systems-section',
+    summary: 'the legacy server reads a database server-ng wrote, and reports every site as belonging to no system',
+    paths: [/^body\[\d+\]\.sites\[\d+\]\.systemId$/],
+  },
+  {
+    id: 'handoff',
+    kind: 'dump',
+    scenario: 'cross-legacy-to-ng',
+    table: 'logs',
+    summary: 'server-ng read a database the legacy server wrote, changed no row, and wrote nothing into it about the stored rows',
+    check: handoffLeftNothingBehind('ng'),
+  },
+  {
+    id: 'handoff',
+    kind: 'dump',
+    scenario: 'cross-ng-to-legacy',
+    table: 'logs',
+    summary: 'the legacy server read a database server-ng wrote, changed no row, and wrote nothing into it about the stored rows',
+    check: handoffLeftNothingBehind('legacy'),
+  },
+
+  // Q53 is the setting a server never stores: audioConversion is applied when it is given, and is gone when the
+  // server is started again from what its database holds. Both servers do this, so it is not a divergence
+  // between them; it is what a handoff makes visible — the server that was handed the setting answers 0, the
+  // server that read the database answers the default.
+  {
+    id: 'Q53',
+    kind: 'step',
+    scenario: 'cross-legacy-to-ng',
+    step: 'the-whole-configuration',
+    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
+    paths: [/^body\.config\.options\.audioConversion$/],
+  },
+  {
+    id: 'Q53',
+    kind: 'step',
+    scenario: 'cross-legacy-to-ng',
+    step: 'the-options-section',
+    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
+    paths: [/^body\.audioConversion$/],
+  },
+  {
+    id: 'Q53',
+    kind: 'step',
+    scenario: 'cross-ng-to-legacy',
+    step: 'the-whole-configuration',
+    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
+    paths: [/^body\.config\.options\.audioConversion$/],
+  },
+  {
+    id: 'Q53',
+    kind: 'step',
+    scenario: 'cross-ng-to-legacy',
+    step: 'the-options-section',
+    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
+    paths: [/^body\.audioConversion$/],
+  },
 ];
+
+// handoffLeftNothingBehind is the promise a handoff makes: the reader started on rows the other server wrote,
+// changed none of them, and added nothing about the stored configuration or the stored calls. What it is
+// allowed to add is the record of its own running — its boot line, and the listeners it connected and lost
+// while reading. The reader is named because in one handoff it is server-ng and in the other it is the legacy
+// server.
+function handoffLeftNothingBehind(readerFlavor) {
+  const itsOwnRunning = ['server started', 'new listener from ip', 'listener disconnected from ip', 'listeners count is'];
+
+  const aboutTheStoredRows = (message) =>
+    message.startsWith('newcall:') ||
+    message.startsWith('configuration changed') ||
+    message.startsWith('admin password changed.') ||
+    message.startsWith('database pruning');
+
+  return ({ legacy, ng }) => {
+    const writer = readerFlavor === 'ng' ? legacy : ng;
+    const reader = readerFlavor === 'ng' ? ng : legacy;
+
+    if (JSON.stringify(reader.slice(0, writer.length)) !== JSON.stringify(writer)) {
+      return 'the reader changed or removed a row the other server had already written';
+    }
+
+    const added = reader.slice(writer.length);
+
+    if (added.length === 0) {
+      return 'the reader wrote nothing at all, not even the line its own boot writes';
+    }
+
+    for (const row of added) {
+      if (aboutTheStoredRows(row.message)) {
+        return `the reader wrote ${JSON.stringify(row.message)} about rows it was only reading`;
+      }
+
+      if (!itsOwnRunning.some((prefix) => row.message.startsWith(prefix))) {
+        return `the reader wrote a line that is not about its own running: ${JSON.stringify(row.message)}`;
+      }
+    }
+
+    return true;
+  };
+}

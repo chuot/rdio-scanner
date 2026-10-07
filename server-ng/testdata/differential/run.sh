@@ -29,6 +29,9 @@
 # Every scenario is run on a fresh copy of a database each server made for itself, so that what one scenario
 # does cannot change what another is compared on: the call a server ingests, the row it writes, and the
 # identifiers it hands out are all part of what is being compared.
+#
+# Two of the scenarios are handoffs rather than comparisons of two live servers: one server writes a database,
+# stops, and the other one is started on a copy of it and reads it back.
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 server_ng=$(cd "${here}/../.." && pwd)
@@ -47,6 +50,8 @@ all_scenarios=(
 	access-limit
 	scope-normalization
 	dirwatch-calls
+	cross-legacy-to-ng
+	cross-ng-to-legacy
 )
 
 # The tables the two databases are compared on, and the query that reads each one. The audio of a call is
@@ -72,6 +77,9 @@ tables=(
 	talkgroupGroups
 	units
 )
+
+# The directory a dsd+ recording is dropped into, which is where the moment it is stamped with comes from.
+dsd_day=20261006
 
 keep=false
 allow_legacy_changes=false
@@ -178,9 +186,77 @@ wait_for_server() {
 	done
 
 	echo "run.sh: nothing came up on 127.0.0.1:${1}" >&2
-	echo "run.sh: the server's own log is ${work}/logs" >&2
+	echo "run.sh: the servers' own logs are in ${work}/logs" >&2
 
 	exit 1
+}
+
+binary_of() {
+	if [[ "${1}" == ng ]]; then
+		echo "${work}/rdio-scanner-ng"
+	else
+		echo "${work}/rdio-scanner-legacy"
+	fi
+}
+
+start_server() {
+	local binary=$1 base=$2 port=$3 log=$4
+
+	if answering "${port}"; then
+		echo "run.sh: something is already answering on 127.0.0.1:${port}" >&2
+
+		exit 1
+	fi
+
+	TZ=UTC "${binary}" \
+		-base_dir "${base}" \
+		-db_type sqlite \
+		-db_file rdio-scanner.db \
+		-listen "127.0.0.1:${port}" >"${work}/logs/${log}.log" 2>&1 &
+
+	pids+=("$!")
+
+	wait_for_server "${port}"
+}
+
+# Both servers are left running for a moment before they are stopped, so that the debounced reports they
+# scheduled land while they are alive: a scenario that connected a listener is compared on the log row that
+# report writes.
+stop_servers() {
+	sleep 6
+
+	for pid in "${pids[@]}"; do
+		if kill -0 "${pid}" 2>/dev/null; then
+			kill -INT "${pid}" 2>/dev/null || true
+			wait "${pid}" 2>/dev/null || true
+		fi
+	done
+
+	pids=()
+}
+
+dump_database() {
+	local db=$1 out=$2
+
+	mkdir -p "${out}"
+
+	for table in "${tables[@]}"; do
+		query="SELECT * FROM \"${table}\" ORDER BY 1"
+
+		case "${table}" in
+		calls)
+			query='SELECT "callId", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp", length("audio") AS "audioBytes" FROM "calls" ORDER BY "callId"'
+			;;
+		logs)
+			query='SELECT "level", "message" FROM "logs" ORDER BY "logid"'
+			;;
+		options)
+			query='SELECT "key", "value" FROM "options" ORDER BY "key"'
+			;;
+		esac
+
+		"${work}/sqlite" rows "${db}" "${query}" >"${out}/${table}.json"
+	done
 }
 
 echo "run.sh: building the legacy server" >&2
@@ -200,40 +276,62 @@ mkdir -p "${work}/transcripts" "${work}/dumps" "${work}/logs"
 # Each server makes the database it expects for itself, once, and every scenario starts from a copy of it.
 # Both servers write the same schema and the same starting rows, which is the first thing this harness proves.
 for flavor in legacy ng; do
-	binary="${work}/rdio-scanner-legacy"
-
-	if [[ "${flavor}" == ng ]]; then
-		binary="${work}/rdio-scanner-ng"
-	fi
-
 	base="${work}/template/${flavor}/base"
-	port=$((3138))
 
 	mkdir -p "${base}"
 
-	if answering "${port}"; then
-		echo "run.sh: something is already answering on 127.0.0.1:${port}" >&2
-
-		exit 1
-	fi
-
 	echo "run.sh: starting the ${flavor} server once, to make its database" >&2
 
-	TZ=UTC "${binary}" \
-		-base_dir "${base}" \
-		-db_type sqlite \
-		-db_file rdio-scanner.db \
-		-listen "127.0.0.1:${port}" >"${work}/logs/template-${flavor}.log" 2>&1 &
-	pid=$!
-	pids+=("${pid}")
+	start_server "$(binary_of "${flavor}")" "${base}" 3138 "template-${flavor}"
 
-	wait_for_server "${port}"
-
-	kill -INT "${pid}" 2>/dev/null || true
-	wait "${pid}" 2>/dev/null || true
-
-	pids=()
+	stop_servers
 done
+
+# A database one server wrote, read by the other. The writer is started on a database of its own, does its
+# writing, and is stopped. Its database is copied, the other server is started on the copy, reads it back, and
+# is stopped. What is compared is what each server said about the same stored rows, and what the reader
+# changed — which has to be nothing but its own boot.
+cross_phase() {
+	local direction=$1 writer=$2 reader=$3 writer_port=$4 reader_port=$5
+
+	local dir="${work}/run/cross-${direction}"
+
+	mkdir -p "${dir}/writer/base" "${dir}/reader/base" \
+		"${dir}/writer/watch/dsd/${dsd_day}" "${dir}/writer/watch/trunk" \
+		"${dir}/reader/watch/dsd/${dsd_day}" "${dir}/reader/watch/trunk"
+
+	cp "${work}/template/${writer}/base/rdio-scanner.db" "${dir}/writer/base/rdio-scanner.db"
+
+	start_server "$(binary_of "${writer}")" "${dir}/writer/base" "${writer_port}" "cross-${direction}-writes-${writer}"
+
+	node "${here}/differential.mjs" \
+		--scenario cross-write \
+		--base "http://127.0.0.1:${writer_port}" \
+		--out "${work}/transcripts/cross-${direction}.${writer}.json" \
+		--watch-dsd "${dir}/writer/watch/dsd" \
+		--watch-trunk "${dir}/writer/watch/trunk"
+
+	stop_servers
+
+	dump_database "${dir}/writer/base/rdio-scanner.db" "${work}/dumps/cross-${direction}/${writer}"
+
+	# The copy the other server is started on: the database exactly as the first server left it, with whatever
+	# the engine kept beside it.
+	cp "${dir}/writer/base"/rdio-scanner.db* "${dir}/reader/base/"
+
+	start_server "$(binary_of "${reader}")" "${dir}/reader/base" "${reader_port}" "cross-${direction}-reads-${reader}"
+
+	node "${here}/differential.mjs" \
+		--scenario cross-read \
+		--base "http://127.0.0.1:${reader_port}" \
+		--out "${work}/transcripts/cross-${direction}.${reader}.json" \
+		--watch-dsd "${dir}/reader/watch/dsd" \
+		--watch-trunk "${dir}/reader/watch/trunk"
+
+	stop_servers
+
+	dump_database "${dir}/reader/base/rdio-scanner.db" "${work}/dumps/cross-${direction}/${reader}"
+}
 
 # --- the scenarios ---------------------------------------------------------
 
@@ -245,103 +343,56 @@ for scenario in "${scenarios[@]}"; do
 	legacy_port=$((3140 + index))
 	ng_port=$((3150 + index))
 
-	echo "run.sh: scenario ${scenario} — legacy on ${legacy_port}, server-ng on ${ng_port}" >&2
+	case "${scenario}" in
+	cross-legacy-to-ng)
+		echo "run.sh: handoff ${scenario} — the legacy server writes, server-ng reads" >&2
 
-	dirs=()
+		cross_phase legacy-to-ng legacy ng "${legacy_port}" "${ng_port}"
+		continue
+		;;
+	cross-ng-to-legacy)
+		echo "run.sh: handoff ${scenario} — server-ng writes, the legacy server reads" >&2
+
+		cross_phase ng-to-legacy ng legacy "${legacy_port}" "${ng_port}"
+		continue
+		;;
+	esac
+
+	echo "run.sh: scenario ${scenario} — legacy on ${legacy_port}, server-ng on ${ng_port}" >&2
 
 	for flavor in legacy ng; do
 		base="${work}/run/${scenario}/${flavor}/base"
 		watch="${work}/run/${scenario}/${flavor}/watch"
 
-		mkdir -p "${base}" "${watch}/dsd/20261006" "${watch}/trunk"
+		mkdir -p "${base}" "${watch}/dsd/${dsd_day}" "${watch}/trunk"
 
 		cp "${work}/template/${flavor}/base/rdio-scanner.db" "${base}/rdio-scanner.db"
-
-		dirs+=("${flavor}:${base}:${watch}")
 	done
 
-	if answering "${legacy_port}" || answering "${ng_port}"; then
-		echo "run.sh: something is already answering on one of the harness ports" >&2
-
-		exit 1
-	fi
-
-	started=()
+	start_server "$(binary_of legacy)" "${work}/run/${scenario}/legacy/base" "${legacy_port}" "${scenario}-legacy"
+	start_server "$(binary_of ng)" "${work}/run/${scenario}/ng/base" "${ng_port}" "${scenario}-ng"
 
 	for flavor in legacy ng; do
-		binary="${work}/rdio-scanner-legacy"
 		port=${legacy_port}
 
 		if [[ "${flavor}" == ng ]]; then
-			binary="${work}/rdio-scanner-ng"
 			port=${ng_port}
-		fi
-
-		base="${work}/run/${scenario}/${flavor}/base"
-
-		TZ=UTC "${binary}" \
-			-base_dir "${base}" \
-			-db_type sqlite \
-			-db_file rdio-scanner.db \
-			-listen "127.0.0.1:${port}" >"${work}/logs/${scenario}-${flavor}.log" 2>&1 &
-		pid=$!
-		pids+=("${pid}")
-		started+=("${pid}")
-
-		wait_for_server "${port}"
-	done
-
-	for flavor in legacy ng; do
-		binary_port=${legacy_port}
-
-		if [[ "${flavor}" == ng ]]; then
-			binary_port=${ng_port}
 		fi
 
 		watch="${work}/run/${scenario}/${flavor}/watch"
 
 		node "${here}/differential.mjs" \
 			--scenario "${scenario}" \
-			--base "http://127.0.0.1:${binary_port}" \
+			--base "http://127.0.0.1:${port}" \
 			--out "${work}/transcripts/${scenario}.${flavor}.json" \
 			--watch-dsd "${watch}/dsd" \
 			--watch-trunk "${watch}/trunk"
 	done
 
-	# Both servers are left running while the debounced reports they scheduled land, so that a scenario that
-	# connected a listener is compared on the log row that report writes.
-	sleep 6
+	stop_servers
 
-	for pid in "${started[@]}"; do
-		kill -INT "${pid}" 2>/dev/null || true
-		wait "${pid}" 2>/dev/null || true
-	done
-
-	pids=()
-
-	mkdir -p "${work}/dumps/${scenario}/legacy" "${work}/dumps/${scenario}/ng"
-
-	for flavor in legacy ng; do
-		db="${work}/run/${scenario}/${flavor}/base/rdio-scanner.db"
-
-		for table in "${tables[@]}"; do
-			query="SELECT * FROM \"${table}\" ORDER BY 1"
-
-			case "${table}" in
-			calls)
-				query='SELECT "callId", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp", length("audio") AS "audioBytes" FROM "calls" ORDER BY "callId"'
-				;;
-			logs)
-				query='SELECT "level", "message" FROM "logs" ORDER BY "logid"'
-				;;
-			options)
-				query='SELECT "key", "value" FROM "options" ORDER BY "key"'
-				;;
-			esac
-
-			"${work}/sqlite" rows "${db}" "${query}" >"${work}/dumps/${scenario}/${flavor}/${table}.json"
-		done
-	done
+	dump_database "${work}/run/${scenario}/legacy/base/rdio-scanner.db" "${work}/dumps/${scenario}/legacy"
+	dump_database "${work}/run/${scenario}/ng/base/rdio-scanner.db" "${work}/dumps/${scenario}/ng"
 done
 
 # --- the comparison --------------------------------------------------------
