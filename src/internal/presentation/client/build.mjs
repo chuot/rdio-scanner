@@ -18,13 +18,13 @@
  */
 
 /*
- * client-ng build script (esbuild, single dev dependency).
+ * Client build script (esbuild, single dev dependency).
  *
  * Contract: docs/specs/FEAT-002-vanilla-client-ng/contract-client-ng.md §1-§2, §6.
- * Output: ../server/webapp/ — flat, content-hashed (production), consumable by
- * //go:embed webapp/* with SPA fallback. `--out <dir>` redirects it, which is how
- * server-ng gets this client embedded in its own binary
- * (docs/specs/FEAT-003-server-ng-refactor/decision-build-integration.md §1).
+ * Output: ../webapp/bundle/ — flat, content-hashed (production), consumable by
+ * //go:embed all:bundle with SPA fallback. The client lives beside the Go package
+ * that embeds it, so that output is a relative path inside the presentation layer
+ * and there is nothing left for a flag to redirect it to.
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -40,24 +40,24 @@ const production = args.includes('--production');
 const watch = args.includes('--watch');
 
 /**
- * The directory the build writes to. `--out <dir>`, or `--out=<dir>`, redirects it; without the flag it is
- * ../server/webapp, which is what it has always been and what the legacy pipeline builds into. A path is
- * taken relative to this client directory, the way `npm run build` is always run from here.
+ * The directory the build writes to: the bundle of the Go package that embeds this client, one directory up.
+ *
+ * There was a `--out <dir>` flag here while the repository carried two servers, because the same client had to
+ * be able to feed the legacy `server/webapp/` and the new one. There is one server now, the client sits inside
+ * its presentation layer, and the destination is a fact about where the client lives rather than a choice made
+ * per build. Passing the old flag is refused rather than silently ignored: a build that looks like it targets
+ * somewhere else should fail loudly instead of writing into the bundle anyway.
  */
 export function resolveOutDir(argv, from = here) {
-    const taken = argv.findIndex((arg) => arg === '--out' || arg.startsWith('--out='));
+    const taken = argv.find((arg) => arg === '--out' || arg.startsWith('--out='));
 
-    if (taken === -1) {
-        return resolve(from, '..', 'server', 'webapp');
+    if (taken !== undefined) {
+        throw new Error(
+            'build: --out is gone — there is one server, and this client builds into ../webapp/bundle'
+        );
     }
 
-    const given = argv[taken] === '--out' ? argv[taken + 1] : argv[taken].slice('--out='.length);
-
-    if (!given || given.startsWith('--')) {
-        throw new Error('build: --out needs a directory');
-    }
-
-    return resolve(from, given);
+    return resolve(from, '..', 'webapp', 'bundle');
 }
 
 const outDir = resolveOutDir(args);
