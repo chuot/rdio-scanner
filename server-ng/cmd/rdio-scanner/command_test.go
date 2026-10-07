@@ -54,11 +54,17 @@ func TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow(t *testi
 		t.Errorf("the login said %q, want the operator to be told it worked", out)
 	}
 
-	// The session is kept where the mode keeps it: the base directory and the executable name joined with
-	// nothing between them, which is what the legacy server does and what puts the file beside the data
-	// directory rather than inside it. Recorded as Q69.
-	if filepath.Dir(tokenFile) == baseDir {
-		t.Errorf("the session is kept at %s, want the legacy server's join to have put it beside %s", tokenFile, baseDir)
+	// The session is kept inside the deployment's base directory, named after the executable. The legacy
+	// server concatenated the base directory and the executable name with no separator between them, so
+	// with the base directory an installed server actually has — one with no trailing slash — the file
+	// landed beside the data directory rather than inside it. Repaired rather than preserved; see
+	// docs/specs/FEAT-004-legacy-defect-repairs/decision-command-token-file.md.
+	if filepath.Dir(tokenFile) != baseDir {
+		t.Errorf("the session is kept at %s, want it inside the base directory %s", tokenFile, baseDir)
+	}
+
+	if name := filepath.Base(tokenFile); !strings.HasSuffix(name, ".token") || name == ".token" {
+		t.Errorf("the session file is named %s, want the name of the executable with the token suffix", name)
 	}
 
 	info, err := os.Stat(tokenFile)
@@ -362,10 +368,12 @@ func TestACommandThatNeedsASessionSaysItIsNotLoggedIn(t *testing.T) {
 	}
 }
 
-// TestACommandAgainstAServerThatIsNotAnsweringSaysNothingAtAll is Q70: for five of the seven commands the
-// legacy server reports a request it could not make by saying nothing and ending as if the command had
-// worked. A script that ran the command while the server was down is told nothing.
-func TestACommandAgainstAServerThatIsNotAnsweringSaysNothingAtAll(t *testing.T) {
+// TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported is the repaired half of Q70. The legacy server
+// reported a request it could not make for two of the seven commands and said nothing at all for the other
+// five — no message, and the exit code of a command that worked — so a script that ran a command while the
+// server was down was told the command had happened. Every action now names the failure and ends as a
+// failure. See docs/specs/FEAT-004-legacy-defect-repairs/decision-command-failure-reporting.md.
+func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	url := commandTestServer(t)
 
 	baseDir := t.TempDir()
@@ -374,27 +382,49 @@ func TestACommandAgainstAServerThatIsNotAnsweringSaysNothingAtAll(t *testing.T) 
 		t.Fatalf("login ended with %d: %s", code, out)
 	}
 
-	out := filepath.Join(t.TempDir(), "none")
+	dead := anAddressNothingAnswersOn(t)
 
-	code, console := runTheCommandMode(t, baseDir, "config-get", commandArgURL, anAddressNothingAnswersOn(t), commandArgOut, out)
-
-	if code != 0 {
-		t.Errorf("config-get against a server that is not answering ended with %d, want the legacy server's silence: %s", code, console)
+	in := filepath.Join(t.TempDir(), "configuration.json")
+	if err := os.WriteFile(in, []byte(`{"options":{"dimmerDelay":6000}}`), 0600); err != nil {
+		t.Fatalf("writing the configuration the operator holds: %v", err)
 	}
 
-	if console != "" {
-		t.Errorf("config-get against a server that is not answering said %q, want nothing said at all", console)
-	}
+	for _, action := range []struct {
+		name string
+		args []string
+	}{
+		{commandConfigGet, []string{commandArgOut, filepath.Join(t.TempDir(), "none")}},
+		{commandConfigSet, []string{commandArgIn, in}},
+		{commandAdminPassword, []string{commandArgPassword, "a new credential"}},
+		{commandUserAdd, []string{commandArgIdent, "car-4", commandArgCode, "a-code"}},
+		{commandUserRemove, []string{commandArgIdent, "car-4"}},
+	} {
+		code, console := runTheCommandMode(t, baseDir, append([]string{action.name, commandArgURL, dead}, action.args...)...)
 
-	if _, err := os.Stat(out + ".json"); !os.IsNotExist(err) {
-		t.Errorf("config-get wrote a configuration file for a server it never reached, want nothing written")
+		if code == 0 {
+			t.Errorf("%s against a server that is not answering ended with the code of a command that worked, "+
+				"want a failure: %s", action.name, console)
+		}
+
+		if console == "" {
+			t.Errorf("%s against a server that is not answering said nothing, want the operator to be told "+
+				"the request could not be made", action.name)
+
+			continue
+		}
+
+		if !strings.Contains(console, strings.TrimPrefix(dead, "http://")) {
+			t.Errorf("%s said %q, want a message naming the address it could not reach, %s", action.name, console, dead)
+		}
 	}
 }
 
-// TestALoginAgainstAServerThatIsNotAnsweringIsReported is the other half of Q70: the two commands the legacy
-// server does report are login and logout, and a script that cannot log in is told so.
+// TestALoginAgainstAServerThatIsNotAnsweringIsReported is the half of Q70 the legacy server already got
+// right: login and logout report a request they could not make, and a script that cannot log in is told so.
 func TestALoginAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
-	code, out := runTheCommandMode(t, t.TempDir(), "login", commandArgURL, anAddressNothingAnswersOn(t))
+	dead := anAddressNothingAnswersOn(t)
+
+	code, out := runTheCommandMode(t, t.TempDir(), "login", commandArgURL, dead)
 
 	if code == 0 {
 		t.Fatalf("login against a server that is not answering ended with the code of a command that worked, want a failure: %s", out)
@@ -402,6 +432,23 @@ func TestALoginAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 
 	if out == "" {
 		t.Errorf("login against a server that is not answering said nothing, want the operator to be told it could not be done")
+	}
+
+	// Logout is the other command the legacy server reported, and it keeps its report.
+	baseDir := t.TempDir()
+
+	if code, out := runTheCommandMode(t, baseDir, "login", commandArgURL, commandTestServer(t)); code != 0 {
+		t.Fatalf("login ended with %d: %s", code, out)
+	}
+
+	code, out = runTheCommandMode(t, baseDir, "logout", commandArgURL, dead)
+
+	if code == 0 {
+		t.Errorf("logout against a server that is not answering ended with the code of a command that worked, want a failure: %s", out)
+	}
+
+	if out == "" {
+		t.Errorf("logout against a server that is not answering said nothing, want the operator to be told it could not be done")
 	}
 }
 
@@ -416,7 +463,9 @@ func TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing(t *tes
 
 	app := filepath.Base(exePath)
 
-	code, out := runTheCommandMode(t, t.TempDir(), "bogus")
+	baseDir := t.TempDir()
+
+	code, out := runTheCommandMode(t, baseDir, "bogus")
 
 	if code != 0 {
 		t.Fatalf("an unknown action ended with %d, want the code of a command that printed the usage: %s", code, out)
@@ -426,7 +475,12 @@ func TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing(t *tes
 		"Available Commands:",
 		"admin-password – Change administrator password.",
 		"$ RDIO_ADMIN_PASSWORD=<password> ./" + app + " -cmd login",
-		"Session token keystore. Default is `." + app + ".token`.",
+
+		// The session file the usage text promises is the one the mode keeps: inside the base directory,
+		// named after the executable. The legacy text promised `.<executable>.token`, a path in the
+		// directory the operator happened to be standing in.
+		"Session token keystore. Default is `" + tokenFileOf(baseDir) + "`.",
+
 		"Server remote address. Default is `http://localhost:3000/`.",
 	} {
 		if !strings.Contains(out, want) {
@@ -577,14 +631,15 @@ func runTheCommandMode(t *testing.T, baseDir string, args ...string) (int, strin
 	return code, out.String()
 }
 
-// tokenFileOf is where the command mode keeps the session of a deployment with this base directory.
+// tokenFileOf is where the command mode keeps the session of a deployment with this base directory: inside
+// it, named after the executable.
 func tokenFileOf(baseDir string) string {
 	exePath, err := os.Executable()
 	if err != nil {
 		exePath = ""
 	}
 
-	return baseDir + filepath.Base(exePath) + ".token"
+	return filepath.Join(baseDir, filepath.Base(exePath)+".token")
 }
 
 // getConfiguration asks a running server for its configuration through the command mode and reports the file
@@ -653,9 +708,17 @@ func TestTheUsageTextNamesTheLoginTheOperatorRuns(t *testing.T) {
 		t.Fatalf("os.Executable: %v", err)
 	}
 
-	_, out := runTheCommandMode(t, t.TempDir(), "help")
+	baseDir := t.TempDir()
+
+	_, out := runTheCommandMode(t, baseDir, "help")
 
 	if !strings.Contains(out, filepath.Base(exePath)+" -cmd login +password <password>") {
 		t.Errorf("the usage text does not show the login with the name of the executable the operator is holding:\n%s", out)
+	}
+
+	// The token file the usage text promises is the one the mode actually writes: inside the base
+	// directory, named after the executable.
+	if !strings.Contains(out, "Default is `"+tokenFileOf(baseDir)+"`") {
+		t.Errorf("the usage text does not name the session file the mode keeps, %s:\n%s", tokenFileOf(baseDir), out)
 	}
 }

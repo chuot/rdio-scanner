@@ -77,12 +77,6 @@ const (
 	commandDefaultURL = "http://localhost:3000/"
 )
 
-// commandFailedSilently stands for the legacy server's habit of saying nothing at all when the request
-// itself cannot be made, for five of the seven commands: no message, and the exit code of a command that
-// worked. It is reproduced rather than corrected, and recorded as Q70 in
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
-var commandFailedSilently = errors.New("the request could not be made")
-
 // commandNoSession is the refusal this mode produces itself, before it has any dealings with the server. The
 // legacy server reports it for every command, which is what separates it from a request that could not be
 // made.
@@ -93,23 +87,13 @@ var commandNoSession = errors.New("Not logged in.")
 // it looks at any session.
 var commandInvalidURL = errors.New("invalid URL")
 
-// commandSaidNothing is what the five commands the legacy server does not report a failure for do with a
-// request it could not make. A refusal the mode produced on its own is still reported, because the legacy
-// server reports those too.
-func commandSaidNothing(err error) error {
-	if errors.Is(err, commandNoSession) {
-		return err
-	}
-
-	return fmt.Errorf("%w: %w", commandFailedSilently, err)
-}
-
 var commandURLScheme = regexp.MustCompile(`^https?://`)
 
 // command is one invocation of the -cmd mode: what the operator asked for, the options that came with it,
 // and the session the server handed out.
 type command struct {
 	app        string
+	baseDir    string
 	code       string
 	ident      string
 	expiration string
@@ -148,12 +132,15 @@ func newCommand(config *Config, exePath string, getenv func(string) string, stdo
 	}
 
 	return &command{
-		app: app,
+		app:     app,
+		baseDir: config.BaseDir,
 
-		// The token file is named by joining the base directory and the executable name with nothing
-		// between them, which is what the legacy server does: with a base directory the installed server
-		// actually has, the file lands beside it rather than inside it. Recorded as Q69.
-		tokenFile: config.BaseDir + app + ".token",
+		// The session token is kept inside the deployment's base directory, named after the executable.
+		// The legacy server joined the base directory and the executable name with nothing between them,
+		// so with the base directory an installed server actually has — one with no trailing slash — the
+		// file landed beside the data directory instead of inside it. Repaired rather than preserved; see
+		// docs/specs/FEAT-004-legacy-defect-repairs/decision-command-token-file.md.
+		tokenFile: filepath.Join(config.BaseDir, app+".token"),
 
 		password: password,
 		url:      commandDefaultURL,
@@ -212,11 +199,11 @@ func (cmd *command) do(action string) int {
 		return 0
 	}
 
-	if errors.Is(err, commandFailedSilently) {
-		return 0
-	}
-
 	if err != nil {
+		// Every action that could not be done is reported, with the failure as it happened. The legacy
+		// server said nothing at all for five of the seven commands and ended as if the command had
+		// worked, which is Q70 and is repaired rather than preserved: an operator whose script ran a
+		// command against a server that was not answering is told the command did not happen.
 		fmt.Fprintf(cmd.stdout, "%v\n", err)
 
 		return 1
@@ -320,9 +307,7 @@ func (cmd *command) adminPassword() error {
 
 	res, err := cmd.submit(http.MethodPost, "/api/admin/password", body, true)
 	if err != nil {
-		// A request this server could not make is the legacy server's silence: the command is
-		// reported as having worked.
-		return commandSaidNothing(err)
+		return err
 	}
 
 	if res.StatusCode != http.StatusOK {
@@ -342,9 +327,7 @@ func (cmd *command) configGet() error {
 
 	res, err := cmd.submit(http.MethodGet, "/api/admin/config", nil, true)
 	if err != nil {
-		// A request this server could not make is the legacy server's silence: the command is
-		// reported as having worked.
-		return commandSaidNothing(err)
+		return err
 	}
 
 	if res.StatusCode != http.StatusOK {
@@ -415,9 +398,7 @@ func (cmd *command) configSet() error {
 
 	res, err := cmd.submit(http.MethodPut, "/api/admin/config", body, true)
 	if err != nil {
-		// A request this server could not make is the legacy server's silence: the command is
-		// reported as having worked.
-		return commandSaidNothing(err)
+		return err
 	}
 
 	if res.StatusCode != http.StatusOK {
@@ -566,9 +547,7 @@ func (cmd *command) userAdd() error {
 
 	res, err := cmd.submit(http.MethodPost, "/api/admin/user-add", body, true)
 	if err != nil {
-		// A request this server could not make is the legacy server's silence: the command is
-		// reported as having worked.
-		return commandSaidNothing(err)
+		return err
 	}
 
 	if res.StatusCode != http.StatusOK {
@@ -593,9 +572,7 @@ func (cmd *command) userRemove() error {
 
 	res, err := cmd.submit(http.MethodPost, "/api/admin/user-remove", body, true)
 	if err != nil {
-		// A request this server could not make is the legacy server's silence: the command is
-		// reported as having worked.
-		return commandSaidNothing(err)
+		return err
 	}
 
 	if res.StatusCode != http.StatusOK {
@@ -636,9 +613,8 @@ func (cmd *command) submit(method, path string, body []byte, auth bool) (*http.R
 
 	res, err := http.DefaultClient.Do(request)
 	if err != nil {
-		// The legacy server reports a request it could not make for two of the seven commands and says
-		// nothing at all for the other five. Which is which is decided by the commands, not here: what
-		// comes back from here is the failure as it happened.
+		// The failure as it happened, for the caller to report. It used to be the five callers that
+		// dropped it, and the mode ended as if the command had worked.
 		return nil, err
 	}
 
@@ -677,6 +653,6 @@ func (cmd *command) printUsage() {
 	fmt.Fprintf(cmd.stdout, "  %-11s – Remove a user access.\n\n", commandUserRemove)
 	fmt.Fprintf(cmd.stdout, "    %-11s %s%s -%s %s %s <ident>\n\n", "", prompt, cmd.app, commandArg, commandUserRemove, commandArgIdent)
 	fmt.Fprintf(cmd.stdout, "Global Options:\n\n")
-	fmt.Fprintf(cmd.stdout, "  %-11s – Session token keystore. Default is `.%s.token`.\n", commandArgToken, cmd.app)
+	fmt.Fprintf(cmd.stdout, "  %-11s – Session token keystore. Default is `%s`.\n", commandArgToken, filepath.Join(cmd.baseDir, cmd.app+".token"))
 	fmt.Fprintf(cmd.stdout, "  %-11s – Server remote address. Default is `%s`.\n\n", commandArgURL, commandDefaultURL)
 }
