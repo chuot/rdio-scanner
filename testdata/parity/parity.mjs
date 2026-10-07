@@ -52,6 +52,17 @@ class Browser {
   }
 
   async launch() {
+    // A browser left over from an earlier run holds the debugging port, and attaching to it would measure the
+    // previous run's pages against servers that have long gone away.
+    const stale = await fetch(`http://127.0.0.1:${this.port}/json/version`).then(() => true).catch(() => false);
+
+    if (stale) {
+      throw new Error(
+        `something is already answering on the debugging port ${this.port}, most likely a browser left over ` +
+          'from an earlier run; nothing this harness wrote can be trusted until it is gone',
+      );
+    }
+
     this.process = spawn(
       process.env.CHROME || 'google-chrome',
       [
@@ -107,14 +118,22 @@ class Browser {
     throw new Error('the browser never answered on its debugging port');
   }
 
-  close() {
+  async close() {
+    // Chrome is asked to shut itself down first, because a browser left running holds the debugging port and the
+    // next run would attach to it instead of to its own.
+    try {
+      await Promise.race([this.send('Browser.close'), sleep(1000)]);
+    } catch {
+      // the browser was already gone
+    }
+
     try {
       this.ws?.close();
     } catch {
       // already gone
     }
 
-    this.process?.kill('SIGINT');
+    this.process?.kill('SIGKILL');
   }
 
   send(method, params = {}) {
@@ -261,7 +280,7 @@ class Page {
 
   // The element is found in the page, and then the mouse is pressed and released over it. A click synthesized
   // inside the page is not a user gesture, and several of these surfaces only answer to one.
-  async click(locator) {
+  async click(locator, { settle = 250 } = {}) {
     const box = await this.evaluate(`
       (() => {
         const nodes = [...document.querySelectorAll(${JSON.stringify(locator.css)})];
@@ -291,7 +310,9 @@ class Page {
       await this.send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 });
     }
 
-    await sleep(250);
+    if (settle) {
+      await sleep(settle);
+    }
   }
 
   async type(locator, value) {
@@ -531,6 +552,7 @@ class Side {
     this.page = null;
     this.values = {};
     this.shots = [];
+    this.motion = [];
   }
 
   locator(pair) {
@@ -560,6 +582,8 @@ class Side {
 
     this.page = await this.browser.openPage(this.origin);
 
+    let entered = false;
+
     for (const state of states) {
       const inState = chosen.filter((p) => p.states.includes(state));
 
@@ -568,7 +592,13 @@ class Side {
       }
 
       try {
+        // Every state starts from a loaded page, so the load happens even in a run that measures no idle surface.
+        if (!entered && state !== 'idle') {
+          await this.enter('idle');
+        }
+
         await this.enter(state);
+        entered = true;
 
         // A state is measured once the page has stopped moving: the drawer and the snack bar both animate into
         // place, and a box read halfway through a transition is not a measurement of either application.
@@ -597,6 +627,53 @@ class Side {
     }
 
     return this.values;
+  }
+
+  // A drawer that snaps open and a drawer that slides look identical once they are open, so the harness keeps a
+  // frame from part-way through the motion, together with the box the drawer had at that moment, as the proof that
+  // the motion is there at all.
+  // A drawer that snaps open and a drawer that slides look identical once they are open. Before the press that
+  // opens one, the harness installs a sampler in the page that records the drawer's box every frame for the length
+  // of the motion, so the trace of the slide is kept as the proof that the motion is there at all.
+  async startMotionTrace(name) {
+    const css = this.locator(this.pair(name)).css;
+
+    await this.page.evaluate(`(() => {
+      window.__rdioMotion = [];
+
+      const started = performance.now();
+      const sample = () => {
+        const rect = document.querySelector(${JSON.stringify(css)})?.getBoundingClientRect();
+
+        window.__rdioMotion.push({
+          t: Math.round(performance.now() - started),
+          x: rect ? Math.round(rect.x) : null,
+          width: rect ? Math.round(rect.width) : null,
+        });
+
+        if (performance.now() - started < 700) requestAnimationFrame(sample);
+      };
+
+      requestAnimationFrame(sample);
+    })()`);
+  }
+
+  async captureMidTransition(state) {
+    const name = state === 'select-open' ? 'select drawer' : 'search drawer';
+    const shot = `${this.seedDir}/${this.name}-${slug(state)}-midtransition.png`;
+
+    // 150ms into a 400ms slide is a little under halfway along it, which is far enough from both ends to tell a
+    // sliding drawer from one that simply appears.
+    await sleep(150);
+    await this.page.screenshot(shot);
+    this.shots.push(shot);
+
+    // The frame is the picture; the trace beside it is the number, and it is read once the motion has finished.
+    await sleep(400);
+
+    const trace = await this.page.evaluate('window.__rdioMotion ?? []');
+
+    this.motion.push({ side: this.name, state, pair: name, trace });
   }
 
   // A wait on printed text is written this way because innerText hands back what the page actually rendered, and
@@ -630,19 +707,29 @@ class Side {
         break;
 
       case 'select-open':
-        await page.click(this.control('select'));
+        await this.startMotionTrace('select drawer');
+        await page.click(this.control('select'), { settle: 0 });
+        await this.captureMidTransition(state);
         await page.waitFor(`!!document.querySelector(${JSON.stringify(this.locator(this.pair('select panel')).css)})`, { what: 'the select panel' });
         break;
 
       case 'search-open-24h':
         await this.reloadWith({ time12h: false });
-        await page.click(this.control('search'));
+        // The legacy drawer does not animate the open that happens the instant its page has loaded, so the press
+        // waits for the page to settle and the motion is measured from there.
+        await sleep(600);
+        await this.startMotionTrace('search drawer');
+        await page.click(this.control('search'), { settle: 0 });
+        await this.captureMidTransition(state);
         await page.waitFor(`document.querySelectorAll(${JSON.stringify(this.locator(this.pair('table body row')).css)}).length > 0`, { what: 'a page of search results' });
         break;
 
       case 'search-open-12h':
         await this.reloadWith({ time12h: true });
-        await page.click(this.control('search'));
+        await sleep(600);
+        await this.startMotionTrace('search drawer');
+        await page.click(this.control('search'), { settle: 0 });
+        await this.captureMidTransition(state);
         await page.waitFor(`document.querySelectorAll(${JSON.stringify(this.locator(this.pair('table body row')).css)}).length > 0`, { what: 'a page of search results in 12-hour time' });
         break;
 
@@ -1033,7 +1120,21 @@ try {
   const { rows, broken } = buildMatrix(legacyValues, currentValues, chosen);
 
   writeFileSync(`${out}/values.json`, JSON.stringify({ legacy: legacyValues, current: currentValues }, null, 2));
+  writeFileSync(`${out}/motion.json`, JSON.stringify([...legacy.motion, ...current.motion], null, 2));
   writeMatrix(`${out}/matrix.md`, rows);
+
+  for (const frame of [...legacy.motion, ...current.motion]) {
+    const samples = frame.trace.filter((s) => s.x !== null);
+    const near = (ms) =>
+      samples.reduce((best, s) => (Math.abs(s.t - ms) < Math.abs(best.t - ms) ? s : best), samples[0]);
+
+    console.log(
+      `parity.mjs: ${frame.side} ${frame.pair} during ${frame.state}: ` +
+        `x=${samples[0]?.x ?? 'none'} at the press, ` +
+        `${near(150)?.x ?? 'none'} at 150ms, ` +
+        `${samples[samples.length - 1]?.x ?? 'none'} settled`,
+    );
+  }
 
   const gaps = rows.filter((r) => r.differences.length);
 
@@ -1055,7 +1156,7 @@ try {
 
   status = 2;
 } finally {
-  browser.close();
+  await browser.close();
 }
 
 process.exit(status);

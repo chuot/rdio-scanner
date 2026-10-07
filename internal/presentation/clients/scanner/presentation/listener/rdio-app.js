@@ -47,6 +47,7 @@ class RdioApp extends HTMLElement {
       search: this.querySelector('.panel.search'),
       select: this.querySelector('.panel.select'),
     };
+    this.closings = new Map();
 
     const display = this.querySelector('rdio-display');
     const controls = this.querySelector('rdio-controls');
@@ -89,7 +90,14 @@ class RdioApp extends HTMLElement {
   openPanel(name) {
     const panel = this.panels[name];
 
+    this.cancelClosing(panel);
+
     panel.hidden = false;
+
+    // The closed position has to be laid out before the open one is applied,
+    // otherwise there is nothing for the drawer to slide from.
+    panel.getBoundingClientRect();
+    panel.classList.add('open');
 
     // legacy scrollTop(): the panel content is scrolled back to the top
     setTimeout(() => panel.querySelector('.scroll').scrollTo(0, 0));
@@ -98,7 +106,33 @@ class RdioApp extends HTMLElement {
   }
 
   closePanel(panel) {
-    panel.hidden = true;
+    panel.classList.remove('open');
+
+    // A drawer leaves the page when it has finished sliding out, not before:
+    // hiding it earlier would cut the motion short, and leaving it shown would
+    // keep an off-screen panel in the tab order.
+    const finished = (event) => {
+      if (event.target !== panel || event.propertyName !== 'transform') {
+        return;
+      }
+
+      this.cancelClosing(panel);
+      panel.hidden = true;
+    };
+
+    panel.addEventListener('transitionend', finished);
+    this.closings.set(panel, finished);
+  }
+
+  cancelClosing(panel) {
+    const finished = this.closings.get(panel);
+
+    if (!finished) {
+      return;
+    }
+
+    panel.removeEventListener('transitionend', finished);
+    this.closings.delete(panel);
   }
 
   renderHelp() {

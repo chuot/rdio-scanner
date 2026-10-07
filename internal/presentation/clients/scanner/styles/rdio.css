@@ -81,6 +81,22 @@ rdio-app > .panel[hidden] {
   display: none;
 }
 
+/* Legacy mat-drawer motion: the drawer slides in on transform, and rdio-app.js
+ * hides it only once the slide has finished, which is how Material does it and
+ * keeps a closed panel out of the page. */
+rdio-app > .panel {
+  transform: translateX(-100%);
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+rdio-app > .panel.select {
+  transform: translateX(100%);
+}
+
+rdio-app > .panel.open {
+  transform: none;
+}
+
 /* Legacy mat-sidenav: a block, elevated, and 64px of toolbar above a scroll
  * area that takes the rest. Material's own drawer elevation is level 16. */
 rdio-app .panel {
