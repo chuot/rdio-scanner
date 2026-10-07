@@ -13,17 +13,21 @@ class RdioApp extends HTMLElement {
     this.innerHTML = `
       <aside class="panel search" hidden>
         <div class="toolbar">
-          <button class="panel-close" type="button" aria-label="Close search panel">
-            <i class="material-icons">arrow_forward</i>
-          </button>
+          <div>
+            <button class="panel-close" type="button" aria-label="Close search panel">
+              <i class="material-icons">arrow_forward</i>
+            </button>
+          </div>
         </div>
         <div class="scroll"><rdio-search-panel></rdio-search-panel></div>
       </aside>
       <aside class="panel select" hidden>
         <div class="toolbar">
-          <button class="panel-close" type="button" aria-label="Close select panel">
-            <i class="material-icons">arrow_back</i>
-          </button>
+          <div>
+            <button class="panel-close" type="button" aria-label="Close select panel">
+              <i class="material-icons">arrow_back</i>
+            </button>
+          </div>
         </div>
         <div class="scroll"><rdio-select-panel></rdio-select-panel></div>
       </aside>

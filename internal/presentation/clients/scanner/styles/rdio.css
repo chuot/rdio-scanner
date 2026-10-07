@@ -81,29 +81,62 @@ rdio-app > .panel[hidden] {
   display: none;
 }
 
+/* Legacy mat-sidenav: a block, elevated, and 64px of toolbar above a scroll
+ * area that takes the rest. Material's own drawer elevation is level 16. */
 rdio-app .panel {
-  display: flex;
-  flex-direction: column;
+  --rdio-toolbar-height: 64px;
+
+  box-shadow: rgba(0, 0, 0, 0.2) 0 8px 10px -5px, rgba(0, 0, 0, 0.14) 0 16px 24px 2px,
+    rgba(0, 0, 0, 0.12) 0 6px 30px 5px;
+  box-sizing: border-box;
   height: 100%;
 }
 
-rdio-app .panel > div {
-  flex: 1;
-  height: 100%;
+/* Legacy mat-toolbar mobile height, which Material applies below 600px. */
+@media (max-width: 599px) {
+  rdio-app .panel {
+    --rdio-toolbar-height: 56px;
+  }
+}
+
+rdio-app .panel > div.scroll {
+  height: calc(100% - var(--rdio-toolbar-height));
   overflow: auto;
 }
 
+/* Legacy mat-toolbar: a 64px bar, 16px of horizontal padding, and the toolbar
+ * typography Material gives a standard toolbar. */
 rdio-app .panel .toolbar {
+  align-items: center;
   background-color: inherit;
   box-shadow: 0 4px 8px rgba(30, 30, 30, 0.8);
+  box-sizing: border-box;
   color: currentColor;
   display: flex;
   flex-direction: row;
+  font-size: 20px;
+  font-weight: 500;
+  height: var(--rdio-toolbar-height);
+  letter-spacing: 0.25px;
+  line-height: 32px;
+  padding: 0 16px;
+  white-space: nowrap;
   z-index: 2;
 }
 
-/* Legacy .panel.search .mat-toolbar > div { justify-content: flex-end }. */
-rdio-app .panel.search .toolbar {
+/* Legacy ".mat-toolbar > div": the centered 1200px column the toolbar's
+ * controls sit in. */
+rdio-app .panel .toolbar > div {
+  display: flex;
+  flex-direction: row;
+  margin: 0 auto;
+  max-width: 1200px;
+  width: 100%;
+}
+
+/* Only the search panel pushes its toolbar control to the end; the select
+ * panel's arrow stays at the start. */
+rdio-app .panel.search .toolbar > div {
   justify-content: flex-end;
 }
 
@@ -111,9 +144,16 @@ rdio-app .panel.search .toolbar {
 rdio-app .panel .panel-close {
   background: none;
   border: none;
+  border-radius: 50%;
+  box-sizing: border-box;
   color: inherit;
   cursor: pointer;
-  padding: 4px;
+  font-size: 24px;
+  height: 48px;
+  padding: 12px;
+  position: relative;
+  white-space: nowrap;
+  width: 48px;
 }
 
 /* Legacy "> div > div" inner column: the panel bodies stay centered at
@@ -608,9 +648,15 @@ rdio-app .rdio-help[hidden] {
 rdio-app .rdio-help button {
   background: none;
   border: none;
+  border-radius: 50%;
+  box-sizing: border-box;
   color: inherit;
   cursor: pointer;
-  padding: 4px;
+  font-size: 24px;
+  height: 48px;
+  padding: 12px;
+  position: relative;
+  width: 48px;
 }
 
 /* ---------------------------------------------------------------------------
