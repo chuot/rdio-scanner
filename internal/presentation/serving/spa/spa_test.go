@@ -25,6 +25,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -47,7 +48,15 @@ const (
 func get(t *testing.T, files fs.FS, url string, header http.Header) (int, http.Header, []byte) {
 	t.Helper()
 
-	srv := httptest.NewServer(New(files, ""))
+	return getMounted(t, files, "", url, header)
+}
+
+// getMounted issues the same request against a handler mounted under a prefix, which is
+// how an application served from a subtree rather than from the origin is exercised.
+func getMounted(t *testing.T, files fs.FS, mount, url string, header http.Header) (int, http.Header, []byte) {
+	t.Helper()
+
+	srv := httptest.NewServer(New(files, mount))
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+url, nil)
@@ -495,5 +504,87 @@ func TestUpgradeRequestIsServedAsAFileNotAnUpgrade(t *testing.T) {
 
 	if string(body) != shellHTML {
 		t.Errorf("body = %q, want the application shell bytes", body)
+	}
+}
+
+// The two bundles a mounted handler must keep apart. Each shell says which application it
+// belongs to, so a response that reached across the boundary is visible in the body rather
+// than something a test has to infer from a status code.
+const (
+	scannerShellHTML = "<!doctype html>\n<html>\n<head><title>Rdio Scanner</title></head>\n<body><rdio-app></rdio-app></body>\n</html>\n"
+	adminShellHTML   = "<!doctype html>\n<html>\n<head><title>Rdio Scanner Administration</title></head>\n<body><rdio-admin></rdio-admin></body>\n</html>\n"
+	adminJS          = "export const admin = 'rdio-scanner-admin';\n"
+)
+
+// adminBundle is the file set a client build produces for the administration application:
+// a shell, a hashed module, a hashed stylesheet, and no service worker.
+func adminBundle() fstest.MapFS {
+	return fstest.MapFS{
+		"bundle/index.html":           &fstest.MapFile{Data: []byte(adminShellHTML)},
+		"bundle/main.AAA.js":          &fstest.MapFile{Data: []byte(adminJS)},
+		"bundle/main.BBB.css":         &fstest.MapFile{Data: []byte(appCSS)},
+		"bundle/manifest.webmanifest": &fstest.MapFile{Data: []byte(manifestText)},
+	}
+}
+
+// TestMountedBundleServesItsOwnFilesUnderTheMount is the reason the mount exists: a request
+// for /admin/main.AAA.js is answered from bundle/main.AAA.js, so the bundle stays flat and
+// holds no copy of the prefix inside itself.
+func TestMountedBundleServesItsOwnFilesUnderTheMount(t *testing.T) {
+	status, header, body := getMounted(t, adminBundle(), "/admin", "/admin/main.AAA.js", nil)
+
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want the module the admin bundle holds", status)
+	}
+
+	if got, _ := wireContentType(header); got != "text/javascript" {
+		t.Errorf("Content-Type = %q, want text/javascript with no charset", got)
+	}
+
+	if string(body) != adminJS {
+		t.Errorf("body = %q, want the admin module bytes", body)
+	}
+}
+
+// TestMountedBundleCannotBeLeftByRelativePath is the mount-level half of the dot-dot rule.
+// Every one of these paths is cleaned or rejected inside the bundle, and the answer is the
+// mounted application's own shell — never a file from the other bundle, and never a file
+// above the bundle.
+func TestMountedBundleCannotBeLeftByRelativePath(t *testing.T) {
+	files := adminBundle()
+
+	for _, url := range []string{"/admin/..", "/admin/../x", "/admin/../../etc/passwd", "/admin/some/route"} {
+		status, _, body := getMounted(t, files, "/admin", url, nil)
+
+		if status != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want the mounted application shell", url, status)
+		}
+
+		if string(body) != adminShellHTML {
+			t.Errorf("GET %s: body = %q, want the administration shell and nothing else", url, body)
+		}
+
+		if strings.Contains(string(body), scannerShellHTML) || strings.Contains(string(body), "passwd") {
+			t.Errorf("GET %s: body left the admin bundle", url)
+		}
+	}
+}
+
+// TestMountedBundleRefusesAPathOutsideItsMount is the other half of the mount: a handler
+// mounted at /admin answers for /admin and nothing else, so a path that merely starts with
+// the prefix is not its request to answer.
+func TestMountedBundleRefusesAPathOutsideItsMount(t *testing.T) {
+	files := adminBundle()
+
+	for _, url := range []string{"/", "/other", "/administrator"} {
+		status, _, body := getMounted(t, files, "/admin", url, nil)
+
+		if status != http.StatusNotFound {
+			t.Errorf("GET %s: status = %d, want 404 from a handler mounted at /admin", url, status)
+		}
+
+		if len(body) != 0 {
+			t.Errorf("GET %s: body = %q, want an empty 404", url, body)
+		}
 	}
 }
