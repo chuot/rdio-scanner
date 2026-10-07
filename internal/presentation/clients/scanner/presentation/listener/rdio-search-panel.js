@@ -22,8 +22,8 @@ class RdioSearchPanel extends HTMLElement {
         </table>
         <div class="progress-bar"></div>
         <div class="paginator">
-          <rdio-toggle aria-label="Download mode"></rdio-toggle>
-          <rdio-paginator page-size="${CLIENT_PAGE}" length="0"></rdio-paginator>
+          <rdio-toggle aria-label="Download mode" icon="save_alt"></rdio-toggle>
+          <rdio-paginator page-size="${CLIENT_PAGE}" length="0" material></rdio-paginator>
         </div>
       </div>
       <div class="rdio-filters">
@@ -40,6 +40,7 @@ class RdioSearchPanel extends HTMLElement {
     `;
 
     this.form = this.querySelector('form');
+    this.table = this.querySelector('table');
     this.tbody = this.querySelector('tbody');
     this.paginator = this.querySelector('rdio-paginator');
     this.downloadMode = this.querySelector('rdio-toggle');
@@ -196,6 +197,10 @@ class RdioSearchPanel extends HTMLElement {
     const rows = clientSlice(list.results ?? [], from, to, SERVER_PAGE, CLIENT_PAGE);
     const time12h = state.config?.time12hFormat ?? false;
     const downloadMode = this.downloadMode.checked;
+
+    // The legacy marks each time cell with the clock format; marking the table
+    // says the same thing to every cell at once.
+    this.table.classList.toggle('time12h', time12h);
 
     this.tbody.innerHTML = rows.map((row) => {
       if (!row) return '<tr><td colspan="6"></td></tr>';

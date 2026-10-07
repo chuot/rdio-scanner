@@ -796,25 +796,45 @@ rdio-search-panel .rdio-list table {
   width: 100%;
 }
 
+/* Legacy mat-table cells: a 52px row, the 1px row outline on the cell, and the
+ * light theme's text. The baseline's table reaches its boxes with flex rows and
+ * flex-basis columns; this one is a real table, which is the same picture by a
+ * different route (decision-parity-dispositions.md D-19). */
+rdio-search-panel .rdio-list tr {
+  background-color: white;
+  box-sizing: border-box;
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+rdio-search-panel .rdio-list thead tr {
+  font-weight: 500;
+  line-height: 22px;
+}
+
 rdio-search-panel .rdio-list th,
 rdio-search-panel .rdio-list td {
+  background-color: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 14px;
+  height: 52px;
+  letter-spacing: 0.25px;
+  line-height: 20px;
   padding: 0 8px;
   text-align: start;
+  vertical-align: middle;
 }
 
 rdio-search-panel .rdio-list th:first-child,
 rdio-search-panel .rdio-list td:first-child {
-  padding-left: 8px;
+  padding-left: 0;
 }
 
-rdio-search-panel .rdio-list th:last-child,
-rdio-search-panel .rdio-list td:last-child {
-  padding-right: 8px;
-}
-
-/* Legacy mat-table column flexes: action 48px, date 55px, time 53px
- * (78px in 12-hour format — kept fixed so both formats fit), system and
- * talkgroup 20% each, name takes the rest. */
+/* Legacy mat-table column flexes: action 48px, date 55px, time 53px (78px in
+ * the 12-hour format), system and talkgroup 20% each, name takes the rest. */
 rdio-search-panel .rdio-list th:nth-child(1),
 rdio-search-panel .rdio-list td:nth-child(1) {
   width: 48px;
@@ -827,6 +847,11 @@ rdio-search-panel .rdio-list td:nth-child(2) {
 
 rdio-search-panel .rdio-list th:nth-child(3),
 rdio-search-panel .rdio-list td:nth-child(3) {
+  width: 53px;
+}
+
+rdio-search-panel .rdio-list table.time12h th:nth-child(3),
+rdio-search-panel .rdio-list table.time12h td:nth-child(3) {
   width: 78px;
 }
 
@@ -837,9 +862,12 @@ rdio-search-panel .rdio-list td:nth-child(5) {
   width: 20%;
 }
 
+/* Legacy mat-header-cell: the header is the body's 14px text, only heavier. */
 rdio-search-panel .rdio-list th {
-  font-size: 12px;
   font-weight: 500;
+  height: 56px;
+  letter-spacing: 0.1px;
+  line-height: 22px;
 }
 
 rdio-search-panel .rdio-list td > span {

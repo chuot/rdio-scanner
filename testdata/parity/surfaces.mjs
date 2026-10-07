@@ -282,22 +282,22 @@ export const pairs = [
   {
     id: 37, name: 'table header row',
     legacy: { css: 'mat-header-row' }, current: { css: 'rdio-search-panel thead tr' },
-    states: ['search-open-24h'], viewports: ['wide'],
+    states: ['search-open-24h', 'search-open-12h'], viewports: ['wide', 'narrow'],
   },
   {
     id: 38, name: 'table header cell',
     legacy: { css: 'mat-header-cell' }, current: { css: 'rdio-search-panel thead th' },
-    states: ['search-open-24h'], viewports: ['wide'],
+    states: ['search-open-24h', 'search-open-12h'], viewports: ['wide', 'narrow'],
   },
   {
     id: 39, name: 'table body row',
     legacy: { css: 'mat-row' }, current: { css: 'rdio-search-panel tbody tr' },
-    states: ['search-open-24h'], viewports: ['wide'],
+    states: ['search-open-24h', 'search-open-12h'], viewports: ['wide', 'narrow'],
   },
   {
     id: 40, name: 'table cell',
     legacy: { css: 'mat-cell' }, current: { css: 'rdio-search-panel tbody td' },
-    states: ['search-open-24h'], viewports: ['wide'],
+    states: ['search-open-24h', 'search-open-12h'], viewports: ['wide', 'narrow'],
   },
   {
     id: 41, name: 'row control',
@@ -388,6 +388,13 @@ export const pairs = [
     id: 58, name: 'document typography',
     legacy: { css: 'body' }, current: { css: 'body' },
     states: ['idle'], viewports: ['wide'],
+  },
+  {
+    // The one column whose width the clock format changes: 53px in 24-hour time
+    // and 78px in 12-hour time.
+    id: 59, name: 'table time cell',
+    legacy: { css: 'mat-row mat-cell:nth-child(3)' }, current: { css: 'rdio-search-panel tbody td:nth-child(3)' },
+    states: ['search-open-24h', 'search-open-12h'], viewports: ['wide'],
   },
 ];
 
