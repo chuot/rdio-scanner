@@ -6,7 +6,7 @@
 data-dev/
 
 # the client's dependencies
-internal/presentation/client/node_modules
+internal/presentation/clients/node_modules
 
 # server build outputs and the local state a running server writes
 /*.db

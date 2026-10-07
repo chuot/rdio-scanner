@@ -9,7 +9,7 @@ testdata/
 
 # the client is built by `make webapp` before the image is built; the server embeds
 # the result from internal/presentation/webapp/bundle/, which is copied
-internal/presentation/client/
+internal/presentation/clients/
 
 # the state a server run from the repository root leaves behind
 /*.db

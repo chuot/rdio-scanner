@@ -19,8 +19,8 @@ app := rdio-scanner
 date := 2026/05/16
 ver := 7.0.0-dev
 
-client := $(wildcard internal/presentation/client/*.json internal/presentation/client/*.mjs) \
-	$(shell find internal/presentation/client/src -type f)
+client := $(wildcard internal/presentation/clients/*.json internal/presentation/clients/*.mjs) \
+	$(shell find internal/presentation/clients/src internal/presentation/clients/shared -type f)
 server := $(shell find cmd internal -type f -name '*.go')
 
 build = @GOOS=$(1) GOARCH=$(3) go build -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner
@@ -36,7 +36,7 @@ zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 all: clean dist
 
 clean:
-	@rm -fr internal/presentation/client/node_modules dist
+	@rm -fr internal/presentation/clients/node_modules dist
 	@find internal/presentation/webapp/bundle -mindepth 1 -not -name .gitkeep -delete
 
 container: webapp linux-amd64
@@ -45,7 +45,7 @@ container: webapp linux-amd64
 dist: freebsd linux macos windows
 
 sed:
-	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" internal/presentation/client/package.json
+	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" internal/presentation/clients/package.json
 	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" cmd/rdio-scanner/version.go
 	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
@@ -53,8 +53,8 @@ sed:
 webapp: internal/presentation/webapp/bundle/index.html
 
 internal/presentation/webapp/bundle/index.html: $(client)
-	@cd internal/presentation/client && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd internal/presentation/client && npm run build
+	@cd internal/presentation/clients && test -d node_modules || npm ci --loglevel=error --no-progress
+	@cd internal/presentation/clients && npm run build
 
 freebsd: freebsd-amd64
 freebsd-amd64: webapp dist/$(app)-freebsd-amd64-v$(ver).zip
