@@ -22,7 +22,9 @@
  *
  * Contract: docs/specs/FEAT-002-vanilla-client-ng/contract-client-ng.md §1-§2, §6.
  * Output: ../server/webapp/ — flat, content-hashed (production), consumable by
- * //go:embed webapp/* with SPA fallback.
+ * //go:embed webapp/* with SPA fallback. `--out <dir>` redirects it, which is how
+ * server-ng gets this client embedded in its own binary
+ * (docs/specs/FEAT-003-server-ng-refactor/decision-build-integration.md §1).
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,11 +34,33 @@ import esbuild from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, 'src');
-const outDir = resolve(here, '..', 'server', 'webapp');
 
 const args = process.argv.slice(2);
 const production = args.includes('--production');
 const watch = args.includes('--watch');
+
+/**
+ * The directory the build writes to. `--out <dir>`, or `--out=<dir>`, redirects it; without the flag it is
+ * ../server/webapp, which is what it has always been and what the legacy pipeline builds into. A path is
+ * taken relative to this client directory, the way `npm run build` is always run from here.
+ */
+export function resolveOutDir(argv, from = here) {
+    const taken = argv.findIndex((arg) => arg === '--out' || arg.startsWith('--out='));
+
+    if (taken === -1) {
+        return resolve(from, '..', 'server', 'webapp');
+    }
+
+    const given = argv[taken] === '--out' ? argv[taken + 1] : argv[taken].slice('--out='.length);
+
+    if (!given || given.startsWith('--')) {
+        throw new Error('build: --out needs a directory');
+    }
+
+    return resolve(from, given);
+}
+
+const outDir = resolveOutDir(args);
 
 const packageInfo = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
 
@@ -47,8 +71,17 @@ const staticFiles = ['favicon.ico', 'manifest.webmanifest'];
 const staticDirs = ['assets'];
 
 function cleanOutdir() {
+    // The output directory is a tracked directory in the repository: the server keeps a placeholder in it so
+    // its binary compiles before the client has ever been built. Cleaning the built files must not delete
+    // that placeholder.
+    const placeholder = existsSync(join(outDir, '.gitkeep')) ? readFileSync(join(outDir, '.gitkeep')) : null;
+
     rmSync(outDir, { recursive: true, force: true });
     mkdirSync(outDir, { recursive: true });
+
+    if (placeholder) {
+        writeFileSync(join(outDir, '.gitkeep'), placeholder);
+    }
 }
 
 function copyStatic() {
@@ -173,21 +206,27 @@ const buildOptions = {
     write: true,
 };
 
-cleanOutdir();
+// The build runs when this file is run. A test imports resolveOutDir from it, and importing it must not
+// rebuild the webapp.
+const runThisBuild = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-if (watch) {
-    const context = await esbuild.context(buildOptions);
-    copyStatic();
-    postProcess(await context.rebuild());
-    console.log('[client-ng] watching for changes…');
-    context.watch();
-} else {
-    copyStatic();
-    const result = await esbuild.build(buildOptions);
-    postProcess(result);
+if (runThisBuild) {
+    cleanOutdir();
 
-    const sizes = Object.entries(result.metafile.outputs)
-        .map(([p, o]) => `  ${outName(p)}  ${(o.bytes / 1024).toFixed(1)} KB`)
-        .join('\n');
-    console.log(`[client-ng] built v${packageInfo.version} into ${outDir}\n${sizes}`);
+    if (watch) {
+        const context = await esbuild.context(buildOptions);
+        copyStatic();
+        postProcess(await context.rebuild());
+        console.log('[client-ng] watching for changes…');
+        context.watch();
+    } else {
+        copyStatic();
+        const result = await esbuild.build(buildOptions);
+        postProcess(result);
+
+        const sizes = Object.entries(result.metafile.outputs)
+            .map(([p, o]) => `  ${outName(p)}  ${(o.bytes / 1024).toFixed(1)} KB`)
+            .join('\n');
+        console.log(`[client-ng] built v${packageInfo.version} into ${outDir}\n${sizes}`);
+    }
 }
