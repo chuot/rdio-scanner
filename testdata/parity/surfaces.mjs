@@ -402,6 +402,16 @@ export const pairs = [
     states: ['select-open'], viewports: ['wide'], force: ['hover'],
   },
   {
+    // The baseline's own stylesheet erases the focus ring of its buttons. The current client keeps one on purpose,
+    // which is the accessibility deviation FEAT-002 REQ-014 records; this pair is the proof that it is still there.
+    // The outline is read here and nowhere else: on an element that is not focused it is a colour and a width
+    // behind a style of `none`, so measuring it on every surface would compare three values that paint nothing.
+    id: 64, name: 'control button, focused',
+    legacy: { css: '.rdio-control .rdio-button' }, current: { css: 'rdio-controls .rdio-button' },
+    states: ['controls'], viewports: ['wide'],
+    force: ['focus-visible'], properties: ['outline-color', 'outline-style', 'outline-width'],
+  },
+  {
     id: 57, name: 'snackbar countdown',
     legacy: { css: '.countdown' }, current: { css: 'rdio-snackbar .countdown' },
     states: ['snackbar-help', 'snackbar-promo'], viewports: ['wide'],
@@ -434,3 +444,109 @@ export const controls = {
   // it asks the server for a page of results.
   dateFilter: { legacy: { css: '.rdio-filters input[type="datetime-local"]' }, current: { css: 'rdio-search-panel .rdio-filters input[name="date"]' } },
 };
+
+// ---------------------------------------------------------------------------
+// The administration application, measured against itself
+// ---------------------------------------------------------------------------
+
+// REQ-010 says this work must not change what the administration renders. The probe proves it by measuring the
+// administration built before the work against the administration built after it, through the same machinery that
+// compares the two scanner pages. Here `legacy` is the build from before the work and `current` the build from
+// after it, and every row is expected to match exactly: a difference there is not a parity gap, it is the
+// regression the requirement forbids.
+
+export const adminStates = ['login', 'todos', 'options', 'logs', 'snackbar'];
+
+export const adminPairs = [
+  {
+    id: 1, name: 'login card',
+    legacy: { css: 'rdio-admin-login' }, current: { css: 'rdio-admin-login' },
+    states: ['login'], viewports: ['wide'],
+  },
+  {
+    id: 2, name: 'login field',
+    legacy: { css: 'rdio-admin-login rdio-form-field' }, current: { css: 'rdio-admin-login rdio-form-field' },
+    states: ['login'], viewports: ['wide'],
+  },
+  {
+    id: 3, name: 'login button',
+    legacy: { css: 'rdio-admin-login button' }, current: { css: 'rdio-admin-login button' },
+    states: ['login'], viewports: ['wide'],
+  },
+  {
+    id: 4, name: 'header',
+    legacy: { css: '.rdio-admin-header' }, current: { css: '.rdio-admin-header' },
+    states: ['todos'], viewports: ['wide'],
+  },
+  {
+    id: 5, name: 'section nav',
+    legacy: { css: '.rdio-admin-nav' }, current: { css: '.rdio-admin-nav' },
+    states: ['todos'], viewports: ['wide'],
+  },
+  {
+    id: 6, name: 'section nav item',
+    legacy: { css: '.rdio-admin-nav button' }, current: { css: '.rdio-admin-nav button' },
+    states: ['todos'], viewports: ['wide'],
+  },
+  {
+    id: 7, name: 'section content',
+    legacy: { css: '.rdio-admin-content' }, current: { css: '.rdio-admin-content' },
+    states: ['todos'], viewports: ['wide'],
+  },
+  {
+    id: 8, name: 'section bar',
+    legacy: { css: 'rdio-admin-options rdio-admin-section-bar' },
+    current: { css: 'rdio-admin-options rdio-admin-section-bar' },
+    states: ['options'], viewports: ['wide'],
+  },
+  {
+    id: 9, name: 'option row',
+    legacy: { css: 'rdio-admin-options .row' }, current: { css: 'rdio-admin-options .row' },
+    states: ['options'], viewports: ['wide'],
+  },
+  {
+    // The toggle is one of the two primitives this feature gave an optional attribute. The administration sets
+    // neither and must render the box it always rendered.
+    id: 10, name: 'option toggle',
+    legacy: { css: 'rdio-admin-options rdio-toggle' }, current: { css: 'rdio-admin-options rdio-toggle' },
+    states: ['options'], viewports: ['wide'],
+  },
+  {
+    id: 11, name: 'option field',
+    legacy: { css: 'rdio-admin-options rdio-form-field' }, current: { css: 'rdio-admin-options rdio-form-field' },
+    states: ['options'], viewports: ['wide'],
+  },
+  {
+    id: 12, name: 'logs card',
+    legacy: { css: 'rdio-admin-logs .rdio-admin-card' }, current: { css: 'rdio-admin-logs .rdio-admin-card' },
+    states: ['logs'], viewports: ['wide'],
+  },
+  {
+    id: 13, name: 'logs table',
+    legacy: { css: 'rdio-admin-logs table' }, current: { css: 'rdio-admin-logs table' },
+    states: ['logs'], viewports: ['wide'],
+  },
+  {
+    id: 14, name: 'logs header cell',
+    legacy: { css: 'rdio-admin-logs th' }, current: { css: 'rdio-admin-logs th' },
+    states: ['logs'], viewports: ['wide'],
+  },
+  {
+    // The paginator is the other primitive this feature gave an optional attribute.
+    id: 15, name: 'logs paginator',
+    legacy: { css: 'rdio-admin-logs rdio-paginator' }, current: { css: 'rdio-admin-logs rdio-paginator' },
+    states: ['logs'], viewports: ['wide'],
+  },
+  {
+    id: 16, name: 'logs filter field',
+    legacy: { css: 'rdio-admin-logs rdio-form-field' }, current: { css: 'rdio-admin-logs rdio-form-field' },
+    states: ['logs'], viewports: ['wide'],
+  },
+  {
+    // The snack bar is the primitive this feature rebuilt. The administration creates the host itself, asks for
+    // nothing of the baseline's shape, and must get the box it always had.
+    id: 17, name: 'snackbar',
+    legacy: { css: 'rdio-snackbar' }, current: { css: 'rdio-snackbar' },
+    states: ['snackbar'], viewports: ['wide'],
+  },
+];

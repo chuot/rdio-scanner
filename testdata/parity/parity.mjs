@@ -35,7 +35,16 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { computedProperties, controls, pairs, states, tolerance, viewports } from './surfaces.mjs';
+import {
+  adminPairs,
+  adminStates,
+  computedProperties,
+  controls,
+  pairs,
+  states,
+  tolerance,
+  viewports,
+} from './surfaces.mjs';
 
 // ---------------------------------------------------------------------------
 // The browser
@@ -355,11 +364,11 @@ class Page {
   }
 
   // The box and the computed style of every surface, read in one pass so the page is not asked 51 times.
-  async measure(locators) {
+  async measure(locators, extra = []) {
     const raw = await this.evaluate(`
       (() => {
         const locators = ${JSON.stringify(locators.map((l) => ({ css: l.css, text: l.text ?? null })))};
-        const props = ${JSON.stringify(computedProperties)};
+        const props = ${JSON.stringify([...computedProperties, ...extra])};
 
         return JSON.stringify(locators.map((loc) => {
           const nodes = [...document.querySelectorAll(loc.css)];
@@ -580,12 +589,15 @@ function seedConfig({ time12h = true, access = [] } = {}) {
 // ---------------------------------------------------------------------------
 
 class Side {
-  constructor(name, origin, browser, seedDir, pidFile) {
+  constructor(name, origin, browser, seedDir, pidFile, app = 'scanner') {
     this.name = name;
     this.origin = origin;
     this.browser = browser;
     this.seedDir = seedDir;
     this.pidFile = pidFile ?? null;
+    this.app = app;
+    this.pairs = app === 'admin' ? adminPairs : pairs;
+    this.states = app === 'admin' ? adminStates : states;
     this.server = new Server(origin);
     this.page = null;
     this.values = {};
@@ -598,10 +610,10 @@ class Side {
   }
 
   pair(name) {
-    const found = pairs.find((p) => p.name === name);
+    const found = this.pairs.find((p) => p.name === name);
 
     if (!found) {
-      throw new Error(`surfaces.mjs has no pair named ${name}`);
+      throw new Error(`surfaces.mjs has no ${this.app} pair named ${name}`);
     }
 
     return found;
@@ -612,7 +624,7 @@ class Side {
   }
 
   async run(only) {
-    const chosen = pairs.filter((p) => !only || p.name.includes(only));
+    const chosen = this.pairs.filter((p) => !only || p.name.includes(only));
 
     await this.server.login('rdio-scanner');
     await this.server.saveConfig(seedConfig());
@@ -622,7 +634,7 @@ class Side {
 
     let entered = false;
 
-    for (const state of states) {
+    for (const state of this.states) {
       const inState = chosen.filter((p) => p.states.includes(state));
 
       if (!inState.length) {
@@ -631,8 +643,8 @@ class Side {
 
       try {
         // Every state starts from a loaded page, so the load happens even in a run that measures no idle surface.
-        if (!entered && state !== 'idle') {
-          await this.enter('idle');
+        if (!entered && state !== this.states[0]) {
+          await this.enter(this.states[0]);
         }
 
         await this.enter(state);
@@ -652,7 +664,9 @@ class Side {
           const resting = inState.filter((p) => !p.force?.length);
           const forced = inState.filter((p) => p.force?.length);
 
-          const measured = await this.page.measure(resting.map((p) => this.locator(p)));
+          // A pair may ask for properties the matrix does not read everywhere. They are read for the batch and
+          // compared only for the pair that asked for them.
+          const measured = await this.page.measure(resting.map((p) => this.locator(p)), extras(resting));
 
           for (let i = 0; i < resting.length; i++) {
             this.values[key(resting[i].id, state, viewport.name)] = measured[i];
@@ -663,7 +677,7 @@ class Side {
 
             await this.page.forcePseudoClasses(locators);
 
-            const held = await this.page.measure(locators);
+            const held = await this.page.measure(locators, extras(forced));
 
             await this.page.forcePseudoClasses(locators.map((l) => ({ css: l.css, force: [] })));
 
@@ -686,9 +700,6 @@ class Side {
     return this.values;
   }
 
-  // A drawer that snaps open and a drawer that slides look identical once they are open, so the harness keeps a
-  // frame from part-way through the motion, together with the box the drawer had at that moment, as the proof that
-  // the motion is there at all.
   // A drawer that snaps open and a drawer that slides look identical once they are open. Before the press that
   // opens one, the harness installs a sampler in the page that records the drawer's box every frame for the length
   // of the motion, so the trace of the slide is kept as the proof that the motion is there at all.
@@ -740,6 +751,10 @@ class Side {
   }
 
   async enter(state) {
+    if (this.app === 'admin') {
+      return this.enterAdmin(state);
+    }
+
     const page = this.page;
 
     switch (state) {
@@ -852,6 +867,64 @@ class Side {
     }
   }
 
+  // The administration is driven the way an administrator drives it: log in, then press the section the measurement
+  // is about. Both sides are the same application built from two different commits, so every state has to be reached
+  // the same way on both.
+  async enterAdmin(state) {
+    const page = this.page;
+
+    switch (state) {
+      case 'login':
+        await page.goto(`${this.origin}/admin/`);
+        await page.waitFor(`!!document.querySelector('rdio-admin-login input[name="password"]')`, {
+          what: 'the administration login form',
+        });
+        break;
+
+      case 'todos':
+        // The seeded server password, the same one the probe logs the API in with.
+        await page.type({ css: 'rdio-admin-login input[name="password"]' }, 'rdio-scanner');
+        await page.submit({ css: 'rdio-admin-login input[name="password"]' });
+        await page.waitFor(`!!document.querySelector('.rdio-admin-nav [data-section="todos"]')`, {
+          timeout: 20000,
+          what: 'the administration navigation, after logging in',
+        });
+        break;
+
+      case 'options':
+        await page.click({ css: '.rdio-admin-nav [data-section="options"]' });
+        await page.waitFor('!!document.querySelector("rdio-admin-options rdio-toggle")', {
+          what: 'the options section and its toggles',
+        });
+        break;
+
+      case 'logs':
+        await page.click({ css: '.rdio-admin-nav [data-section="logs"]' });
+        await page.waitFor('!!document.querySelector("rdio-admin-logs rdio-paginator")', {
+          what: 'the logs section and its paginator',
+        });
+        break;
+
+      case 'snackbar':
+        // The password section is the administration's own way of putting a message on the screen without changing
+        // anything: a change the server refuses prints "Unable to change password" in the snack bar, and that snack
+        // bar is the box pair 17 measures.
+        await page.click({ css: '.rdio-admin-nav [data-section="password"]' });
+        await page.waitFor('!!document.querySelector("rdio-admin-password button.save")', {
+          what: 'the password section',
+        });
+        await page.type({ css: 'rdio-admin-password input[name="currentPassword"]' }, 'parity-wrong-password');
+        await page.type({ css: 'rdio-admin-password input[name="newPassword"]' }, 'parity-new-password');
+        await page.type({ css: 'rdio-admin-password input[name="verifyNewPassword"]' }, 'parity-new-password');
+        await page.click({ css: 'rdio-admin-password button.save' });
+        await page.waitFor('!!document.querySelector("rdio-snackbar:not([hidden])")', {
+          timeout: 20000,
+          what: 'the administration snack bar',
+        });
+        break;
+    }
+  }
+
   // The countdown begins at "10", and its box hugs whatever it prints. Roboto's digits all share one advance, so the
   // box is the same for every single digit and a whole character wider for the first second: the probe waits for that
   // second to pass so that both applications are measured printing one digit.
@@ -942,7 +1015,12 @@ function shadowLayers(value) {
   });
 }
 
-function compareValues(legacy, current) {
+// The properties a batch of pairs asks to be read on top of the ones the matrix reads everywhere.
+function extras(pairs) {
+  return [...new Set(pairs.flatMap((p) => p.properties ?? []))];
+}
+
+function compareValues(legacy, current, pair) {
   const differences = [];
 
   for (const [name, a, b] of [
@@ -956,7 +1034,7 @@ function compareValues(legacy, current) {
     }
   }
 
-  for (const property of computedProperties) {
+  for (const property of [...computedProperties, ...(pair.properties ?? [])]) {
     const a = legacy.computed[property];
     const b = current.computed[property];
 
@@ -1083,7 +1161,7 @@ function buildMatrix(legacyValues, currentValues, chosen) {
           continue;
         }
 
-        rows.push({ pair, state, viewport, differences: compareValues(a, b) });
+        rows.push({ pair, state, viewport, differences: compareValues(a, b, pair) });
       }
     }
   }
@@ -1091,12 +1169,12 @@ function buildMatrix(legacyValues, currentValues, chosen) {
   return { rows, broken };
 }
 
-function writeMatrix(path, rows) {
+function writeMatrix(path, rows, { title = 'Parity matrix', sides = ['Legacy', 'Current'] } = {}) {
   const matched = rows.filter((r) => r.differences.length === 0);
   const gaps = rows.filter((r) => r.differences.length > 0);
 
   const lines = [
-    '# Parity matrix',
+    `# ${title}`,
     '',
     `Measured rows: ${rows.length}. Matching: ${matched.length}. Gaps: ${gaps.length}.`,
     '',
@@ -1118,7 +1196,7 @@ function writeMatrix(path, rows) {
 
   for (const row of gaps) {
     lines.push(`### ${row.pair.id} ${row.pair.name} — ${row.state} at ${row.viewport}`, '');
-    lines.push('| Property | Legacy | Current | Delta |', '| --- | --- | --- | --- |');
+    lines.push(`| Property | ${sides[0]} | ${sides[1]} | Delta |`, '| --- | --- | --- | --- |');
 
     for (const d of row.differences) {
       lines.push(`| \`${d.property}\` | ${cell(d.legacy)} | ${cell(d.current)} | ${d.delta ?? ''} |`);
@@ -1168,7 +1246,10 @@ for (const needed of ['current', 'legacy', 'out']) {
 
 const out = args.out;
 const only = args.only ?? null;
-const chosen = pairs.filter((p) => !only || p.name.includes(only));
+// The probe measures two things with the same machinery: the scanner page against the baseline it is meant to
+// match, and the administration page against itself, built from before the work and from after it.
+const app = args.app === 'admin' ? 'admin' : 'scanner';
+const chosen = (app === 'admin' ? adminPairs : pairs).filter((p) => !only || p.name.includes(only));
 
 mkdirSync(out, { recursive: true });
 
@@ -1177,8 +1258,8 @@ const browser = await new Browser(Number(args.cdpPort ?? 9444), `${out}/profile`
 let status = 0;
 
 try {
-  const legacy = new Side('legacy', args.legacy, browser, out, args.legacyPid);
-  const current = new Side('current', args.current, browser, out, args.currentPid);
+  const legacy = new Side('legacy', args.legacy, browser, out, args.legacyPid, app);
+  const current = new Side('current', args.current, browser, out, args.currentPid, app);
 
   const legacyValues = await legacy.run(only);
   console.log(`parity.mjs: measured ${Object.keys(legacyValues).length} legacy values`);
@@ -1190,7 +1271,13 @@ try {
 
   writeFileSync(`${out}/values.json`, JSON.stringify({ legacy: legacyValues, current: currentValues }, null, 2));
   writeFileSync(`${out}/motion.json`, JSON.stringify([...legacy.motion, ...current.motion], null, 2));
-  writeMatrix(`${out}/matrix.md`, rows);
+  writeMatrix(
+    `${out}/matrix.md`,
+    rows,
+    app === 'admin'
+      ? { title: 'Administration regression matrix', sides: ['Before', 'After'] }
+      : {},
+  );
 
   for (const frame of [...legacy.motion, ...current.motion]) {
     const samples = frame.trace.filter((s) => s.x !== null);
