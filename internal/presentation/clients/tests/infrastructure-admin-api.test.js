@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { createAdminApi } from '../src/infrastructure/admin-api.js';
-import { createStorage } from '../shared/infrastructure/storage.js';
+import { createTokenStorage } from '../admin/infrastructure/token-storage.js';
 
 function createFakes() {
     const requests = [];
     const responses = new Map();
 
-    const localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {}, clear: () => {} };
     const sessionStore = new Map();
     const sessionStorage = {
         getItem: (key) => (sessionStore.has(key) ? sessionStore.get(key) : null),
@@ -30,7 +29,7 @@ function createFakes() {
 
     const respond = (url, status, body) => responses.set(url, { status, body });
 
-    return { requests, respond, storage: createStorage({ localStorage, sessionStorage }), fetchImpl };
+    return { requests, respond, storage: createTokenStorage({ sessionStorage }), fetchImpl };
 }
 
 describe('infrastructure/admin-api — login and token', () => {

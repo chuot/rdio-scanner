@@ -2,15 +2,15 @@
 // admin REST adapter, the config WebSocket, the admin store, and the admin
 // use-cases. Never touches the listener socket or the listener context.
 
-import { createStorage } from '../../shared/infrastructure/storage.js';
+import { createTokenStorage } from '../../admin/infrastructure/token-storage.js';
 import { createAdminApi } from '../infrastructure/admin-api.js';
 import { createAdminSocket } from '../infrastructure/admin-socket.js';
 import { ADMIN_CONFIG_SECTIONS } from '../../shared/domain/config.js';
 import { createStore } from '../../shared/application/store.js';
 import { createAdminUseCases } from './admin-use-cases.js';
 
-export function createAdminContext({ location, localStorage, sessionStorage }) {
-  const storage = createStorage({ localStorage, sessionStorage });
+export function createAdminContext({ location, sessionStorage }) {
+  const storage = createTokenStorage({ sessionStorage });
 
   const sections = Object.fromEntries(
     ADMIN_CONFIG_SECTIONS.map((name) => [
@@ -52,7 +52,6 @@ export function getAdminContext() {
   if (!context) {
     context = createAdminContext({
       location: window.location,
-      localStorage: window.localStorage,
       sessionStorage: window.sessionStorage,
     });
   }

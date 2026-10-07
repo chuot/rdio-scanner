@@ -1,7 +1,7 @@
 // Application context: single composition point wiring the ports and the
 // listener use-cases. Imported by listener.js and the listener elements.
 
-import { createStorage } from '../../shared/infrastructure/storage.js';
+import { createStorage } from '../../scanner/infrastructure/storage.js';
 import { createListenerSocket } from '../infrastructure/listener-socket.js';
 import { createAudioEngine } from '../infrastructure/audio-engine.js';
 import { createStore } from '../../shared/application/store.js';
@@ -12,10 +12,10 @@ export function parseInstanceId(url) {
   return params.get('id') || 'default';
 }
 
-export function createAppContext({ location, localStorage, sessionStorage, document }) {
+export function createAppContext({ location, localStorage, document }) {
   const instanceId = parseInstanceId(location.href);
 
-  const storage = createStorage({ localStorage, sessionStorage });
+  const storage = createStorage({ localStorage });
 
   if (location.pathname.endsWith('/reset')) {
     storage.clearAll();
@@ -60,7 +60,6 @@ export function getAppContext() {
     context = createAppContext({
       location: window.location,
       localStorage: window.localStorage,
-      sessionStorage: window.sessionStorage,
       document: window.document,
     });
   }

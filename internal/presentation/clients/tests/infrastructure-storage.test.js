@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createStorage } from '../shared/infrastructure/storage.js';
+import { createStorage } from '../scanner/infrastructure/storage.js';
 import { clearPin, readPin, savePin } from '../src/domain/pin.js';
 
 function createFakes() {
@@ -18,9 +18,8 @@ function createFakes() {
     };
 
     const localStorage = make();
-    const sessionStorage = make();
 
-    return { localStorage, sessionStorage, createStorage: () => createStorage({ localStorage, sessionStorage }) };
+    return { localStorage, createStorage: () => createStorage({ localStorage }) };
 }
 
 describe('infrastructure/storage — livefeed map', () => {
@@ -75,36 +74,24 @@ describe('infrastructure/storage — pin', () => {
     });
 });
 
-describe('infrastructure/storage — admin token session', () => {
-    it('keeps the admin token in sessionStorage under the legacy key', () => {
-        const { sessionStorage, createStorage } = createFakes();
-        const storage = createStorage();
-
-        assert.equal(storage.getAdminToken(), '');
-
-        storage.setAdminToken('jwt-token');
-
-        assert.equal(sessionStorage.getItem('rdio-scanner-admin-token'), 'jwt-token');
-        assert.equal(storage.getAdminToken(), 'jwt-token');
-
-        storage.clearAdminToken();
-
-        assert.equal(storage.getAdminToken(), '');
-    });
-});
-
 describe('infrastructure/storage — /reset', () => {
     it('clearAll wipes localStorage entirely', () => {
-        const { localStorage, sessionStorage, createStorage } = createFakes();
+        const { localStorage, createStorage } = createFakes();
         const storage = createStorage();
 
         storage.writeLivefeedMap('default', { 10: { 100: true } });
         savePin(storage.local, 'x');
-        storage.setAdminToken('jwt');
 
         storage.clearAll();
 
         assert.equal(localStorage.store.size, 0);
-        assert.notEqual(sessionStorage.getItem('rdio-scanner-admin-token'), null);
+    });
+
+    it('reaches no session storage at all', () => {
+        const storage = createFakes().createStorage();
+
+        for (const name of ['session', 'getAdminToken', 'setAdminToken', 'clearAdminToken']) {
+            assert.equal(name in storage, false, `the listener storage must not carry ${name}`);
+        }
     });
 });

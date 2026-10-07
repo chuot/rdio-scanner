@@ -1,16 +1,12 @@
-// Browser storage adapter: exact legacy keys (data-model.md §5).
+// Scanner storage adapter: exact legacy keys (data-model.md §5).
 // localStorage: rdio-scanner (legacy livefeed fallback), rdio-scanner-lfm-<id>,
 // rdio-scanner-pin (handled by domain/pin against `local`).
-// sessionStorage: rdio-scanner-admin-token.
 
-import { STORAGE_KEY_LEGACY, STORAGE_KEY_LFM } from '../domain/livefeed-map.js';
+import { STORAGE_KEY_LEGACY, STORAGE_KEY_LFM } from '../../shared/domain/livefeed-map.js';
 
-export const ADMIN_TOKEN_KEY = 'rdio-scanner-admin-token';
-
-export function createStorage({ localStorage, sessionStorage }) {
+export function createStorage({ localStorage }) {
   return {
     local: localStorage,
-    session: sessionStorage,
 
     readLivefeedMap(instanceId) {
       try {
@@ -32,18 +28,6 @@ export function createStorage({ localStorage, sessionStorage }) {
 
     clearAll() {
       localStorage.clear();
-    },
-
-    getAdminToken() {
-      return sessionStorage.getItem(ADMIN_TOKEN_KEY) || '';
-    },
-
-    setAdminToken(token) {
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
-    },
-
-    clearAdminToken() {
-      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     },
   };
 }
