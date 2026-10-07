@@ -3,20 +3,21 @@
 *.token
 /build
 /dist
-internal/presentation/client/node_modules
 data-dev/
 
+# the client's dependencies
+src/internal/presentation/client/node_modules
+
 # server build outputs and the local state a running server writes
-/*.db
-/*.db-journal
-/*.crt
-/*.json
-/*.key
-/*.ini
-/*.sqlite
-/__debug_bin
-/autocert
-/rdio-scanner
-/server-ng
-/internal/presentation/webapp/webapp/*
-!/internal/presentation/webapp/webapp/.gitkeep
+/src/*.db
+/src/*.db-journal
+/src/*.crt
+/src/*.json
+/src/*.key
+/src/*.ini
+/src/*.sqlite
+/src/__debug_bin
+/src/autocert
+/src/rdio-scanner
+/src/internal/presentation/webapp/webapp/*
+!/src/internal/presentation/webapp/webapp/.gitkeep
