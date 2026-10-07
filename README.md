@@ -36,7 +36,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
    | Linux            | arm64        | rdio-scanner-linux-arm64-v7.0.0.zip   |
    | macOS            | amd64        | rdio-scanner-macos-amd64-v7.0.0.zip   |
    | macOS            | arm64        | rdio-scanner-macos-arm64-v7.0.0.zip   |
-   | Windows          | amd64        | rdio-scanner-macos-amd64-v7.0.0.zip   |
+   | Windows          | amd64        | rdio-scanner-windows-amd64-v7.0.0.zip |
 
 2. Extract the contents of the archive somewhere on your computer.
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
