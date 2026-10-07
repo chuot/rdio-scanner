@@ -22,9 +22,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"testing"
 )
 
@@ -42,22 +42,50 @@ func TestVersionModePrintsVersionAndExitsWithoutError(t *testing.T) {
 	}
 }
 
-func TestVersionMatchesLegacyServerVersion(t *testing.T) {
-	// Drop-in parity (REQ-006): the -version output must match the legacy binary.
-	// The legacy value is read from server/version.go so this test fails if the two drift.
-	src, err := os.ReadFile(filepath.Join("..", "..", "..", "server", "version.go"))
+func TestVersionMatchesThePinnedWireContract(t *testing.T) {
+	// This comparison used to read the version out of the legacy server's own version.go. That file
+	// is not in this repository, so the test skipped — every day, since the legacy trees were
+	// deleted — and a test that always skips asserts nothing.
+	//
+	// What the legacy server reported is not lost. testdata/golden/payload-ver.json is the payload
+	// the legacy server put on the wire for a version request, captured in the configuration every
+	// golden was taken in and pinned to the tree the goldens are pinned to. Seven of the pinned
+	// captures carry that version, because what a server reports is part of what a client is told.
+	// Comparing against the contract is what comparing against the legacy source was for, and it
+	// does not reach into a directory that is no longer here.
+	//
+	// A release moves this test deliberately. The version is the one value in the goldens a release
+	// changes, and a release that changes what the server tells clients should be seen doing it.
+	if got, want := Version, pinnedWireVersion(t); got != want {
+		t.Errorf("Version = %q, the pinned wire contract reports %q", got, want)
+	}
+}
+
+// pinnedWireVersion reads the version out of the pinned capture of a version response.
+func pinnedWireVersion(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "testdata", "golden", "payload-ver.json")
+
+	b, err := os.ReadFile(path)
 	if err != nil {
-		t.Skipf("legacy server/version.go not available: %v", err)
+		t.Fatalf("%s is missing: %v\n"+
+			"the goldens are pinned bytes and nothing regenerates them; see testdata/golden/manifest.json", path, err)
 	}
 
-	match := regexp.MustCompile(`const Version = "([^"]+)"`).FindStringSubmatch(string(src))
-	if match == nil {
-		t.Fatal("could not read the Version constant from the legacy server")
+	var payload struct {
+		Version string `json:"version"`
 	}
 
-	if Version != match[1] {
-		t.Errorf("Version = %q, legacy server reports %q", Version, match[1])
+	if err := json.Unmarshal(b, &payload); err != nil {
+		t.Fatalf("%s does not parse: %v", path, err)
 	}
+
+	if payload.Version == "" {
+		t.Fatalf("%s names no version", path)
+	}
+
+	return payload.Version
 }
 
 func TestUnknownFlagIsRejected(t *testing.T) {

@@ -18,14 +18,16 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Command rdio-scanner is the server-ng composition root: it loads configuration,
+// Command rdio-scanner is this server's composition root: it loads configuration,
 // wires the concrete infrastructure adapters into the application use cases, and
 // serves the HTTP and WebSocket interfaces.
 //
-// It carries the same version value as the legacy server so that a drop-in binary
-// swap reports the same version to clients and to the -version flag.
+// It is a drop-in for the legacy server: the same configuration files, the same
+// database a legacy deployment left behind, and the same interfaces clients already
+// speak to — including the version it reports, which is pinned in testdata/golden/.
 package main
 
-// Version is the server-ng release version, kept equal to the legacy
-// server/version.go value at scaffold time.
+// Version is the release version this binary reports. `make sed` stamps it from the
+// Makefile's `ver :=`; the value committed here is the one the pinned wire contract
+// carries, and TestVersionMatchesThePinnedWireContract holds the two together.
 const Version = "7.0.0"
