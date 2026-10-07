@@ -381,6 +381,44 @@ class Page {
     return JSON.parse(raw);
   }
 
+  // Chrome answers a forced pseudo-class to getComputedStyle exactly as it answers the real one, which is how the
+  // probe measures what a pointer over a control, or a control that is disabled, does to it. Nothing in either
+  // application disables a beveled button, so the disabled state can only be reached this way.
+  async forcePseudoClasses(locators) {
+    if (!locators.length) {
+      return;
+    }
+
+    await this.send('DOM.enable');
+    await this.send('CSS.enable');
+
+    const doc = await this.send('DOM.getDocument', { depth: -1 });
+    const root = doc?.result?.root;
+
+    if (!root) {
+      throw new Error('the browser answered the document request with no document');
+    }
+
+    for (const loc of locators) {
+      const found = await this.send('DOM.querySelector', { nodeId: root.nodeId, selector: loc.css });
+
+      if (!found?.result?.nodeId) {
+        continue;
+      }
+
+      const forced = await this.send('CSS.forcePseudoState', {
+        nodeId: found.result.nodeId,
+        forcedPseudoClasses: loc.force ?? [],
+      });
+
+      if (forced?.error) {
+        throw new Error(
+          `the browser refused to force ${loc.force?.join(', ') ?? 'nothing'} on ${loc.css}: ${forced.error.message}`,
+        );
+      }
+    }
+  }
+
   async screenshot(path) {
     const shot = await this.send('Page.captureScreenshot', { format: 'png' });
     const data = shot?.result?.data;
@@ -609,10 +647,29 @@ class Side {
         for (const viewport of viewports.filter((v) => inState.some((p) => p.viewports.includes(v.name)))) {
           await this.page.setViewport(viewport);
 
-          const measured = await this.page.measure(inState.map((p) => this.locator(p)));
+          // A pair measured with a forced pseudo-class is measured in a pass of its own: forcing hover on a button
+          // would otherwise change what that same button measures at rest.
+          const resting = inState.filter((p) => !p.force?.length);
+          const forced = inState.filter((p) => p.force?.length);
 
-          for (let i = 0; i < inState.length; i++) {
-            this.values[key(inState[i].id, state, viewport.name)] = measured[i];
+          const measured = await this.page.measure(resting.map((p) => this.locator(p)));
+
+          for (let i = 0; i < resting.length; i++) {
+            this.values[key(resting[i].id, state, viewport.name)] = measured[i];
+          }
+
+          if (forced.length) {
+            const locators = forced.map((p) => ({ ...this.locator(p), force: p.force }));
+
+            await this.page.forcePseudoClasses(locators);
+
+            const held = await this.page.measure(locators);
+
+            await this.page.forcePseudoClasses(locators.map((l) => ({ css: l.css, force: [] })));
+
+            for (let i = 0; i < forced.length; i++) {
+              this.values[key(forced[i].id, state, viewport.name)] = held[i];
+            }
           }
 
           const shot = `${this.seedDir}/${this.name}-${slug(state)}-${viewport.name}.png`;

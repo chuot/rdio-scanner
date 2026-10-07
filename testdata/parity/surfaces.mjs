@@ -385,6 +385,23 @@ export const pairs = [
     states: ['snackbar-help'], viewports: ['wide'],
   },
   {
+    // The beveled buttons are measured with the pointer over them and with the control disabled, because the
+    // baseline has no hover rule and no disabled rule at all and the shared theme has both.
+    id: 61, name: 'control button, hovered',
+    legacy: { css: '.rdio-control .rdio-button' }, current: { css: 'rdio-controls .rdio-button' },
+    states: ['controls'], viewports: ['wide'], force: ['hover'],
+  },
+  {
+    id: 62, name: 'control button, disabled',
+    legacy: { css: '.rdio-control .rdio-button' }, current: { css: 'rdio-controls .rdio-button' },
+    states: ['controls'], viewports: ['wide'], force: ['disabled'],
+  },
+  {
+    id: 63, name: 'select mini button, hovered',
+    legacy: { css: 'rdio-scanner-select .rdio-button-mini' }, current: { css: 'rdio-select-panel .rdio-button-mini' },
+    states: ['select-open'], viewports: ['wide'], force: ['hover'],
+  },
+  {
     id: 57, name: 'snackbar countdown',
     legacy: { css: '.countdown' }, current: { css: 'rdio-snackbar .countdown' },
     states: ['snackbar-help', 'snackbar-promo'], viewports: ['wide'],

@@ -238,6 +238,31 @@ rdio-search-panel .rdio-filters .reset button:focus-visible {
   outline-offset: 2px;
 }
 
+/* The baseline's beveled buttons carry no hover rule and no disabled rule at all:
+ * common.scss changes their colour only through the status classes, and the
+ * pointer does nothing to them. theme.css's shared hover and disabled rules reach
+ * them because they carry a pseudo-class, so the scanner answers them at the same
+ * weight and names the background each of them already has. */
+rdio-controls .rdio-button:hover:not(:disabled),
+rdio-select-panel .rdio-button:hover:not(:disabled),
+rdio-select-panel .rdio-button-mini:hover:not(:disabled) {
+  background: var(--def);
+}
+
+rdio-select-panel .rdio-button-mini.all-off:hover:not(:disabled) {
+  background: rgb(100, 50, 50);
+}
+
+rdio-select-panel .rdio-button-mini.all-on:hover:not(:disabled) {
+  background: rgb(50, 100, 50);
+}
+
+rdio-controls .rdio-button:disabled,
+rdio-select-panel .rdio-button:disabled,
+rdio-select-panel .rdio-button-mini:disabled {
+  opacity: 1;
+}
+
 rdio-controls .rdio-button.off::after,
 rdio-controls .rdio-button.on::after,
 rdio-controls .rdio-button.partial::after,
