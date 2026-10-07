@@ -52,9 +52,11 @@ const (
 // Three wrong credentials are answered on their merits. The fourth is refused before the credential is
 // looked at, and it is the only refusal the server says anything about.
 //
-// This is Q10 preserved: the attempt window the legacy server meant to have evaluates to zero, so an
-// address's count never ages out. The consequence is that a machine which has guessed three times is
-// locked out of a correct credential until a successful login clears the counts — which it cannot get.
+// This is Q10 repaired, seen through the server a deployment runs: the attempts are counted inside a
+// ten-minute window, and the guesses below are all made inside one window, so the address has spent its
+// budget and the correct credential that follows is refused with it. The window itself — a count that ages
+// out, and the budget that comes back when it does — is pinned in
+// [internal/application/login_logout_test.go](../../internal/application/login_logout_test.go).
 func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -94,19 +96,20 @@ func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 		t.Errorf("the server wrote %d lines about the limit, want the attempts past the limit refused without saying anything", got)
 	}
 
-	// The credential that would have worked is refused, because the count is what is checked first and
-	// nothing ages it out.
+	// The credential that would have worked is refused, because the count is what is checked first and all
+	// four guesses fall inside one attempt window.
 	rec = srv.post("/api/admin/login", `{"password":"`+defaultAdminCredential+`"}`)
 
 	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("the correct credential was answered %d after four attempts, want 401: the attempt count never ages out", rec.Code)
+		t.Errorf("the correct credential was answered %d after four attempts inside one attempt window, want 401", rec.Code)
 	}
 }
 
 // A login hands out a session, and only the five most recent ones are sessions. The sixth ends the first.
 //
 // Repeated logins from one address are not stopped by the attempt count, because a login that succeeds
-// clears the counts of every address — the other half of what Q10 makes of a zero-length window.
+// clears the counts of every address — the half of Q10 the repair keeps, for the reason recorded in
+// docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
 func TestASixthAdministratorSessionEndsTheFirstOne(t *testing.T) {
 	srv := startedTestServer(t)
 

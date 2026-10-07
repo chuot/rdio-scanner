@@ -24,8 +24,10 @@
 // difference that is not declared fails the run. A declaration whose difference is not there also fails it:
 // an approved divergence that quietly stopped applying is news, and the harness is how it gets heard.
 //
-// The five are the approved divergences recorded in
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
+// Most of them are the approved divergences recorded in
+// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md. The rest are the differences the
+// repairs of docs/specs/FEAT-004-legacy-defect-repairs/spec.md create on purpose, and each of those names
+// the repair that caused it.
 
 export const expectations = [
   {
@@ -294,16 +296,18 @@ export const expectations = [
     check: handoffLeftNothingBehind('legacy'),
   },
 
-  // Q53 is the setting a server never stores: audioConversion is applied when it is given, and is gone when the
-  // server is started again from what its database holds. Both servers do this, so it is not a divergence
-  // between them; it is what a handoff makes visible — the server that was handed the setting answers 0, the
-  // server that read the database answers the default.
+  // Q53 and Q54 are the audio conversion mode, which the legacy server applies when it is given and never
+  // stores. server-ng stores it, which is the repair; the two servers now disagree about it in both
+  // directions, and each of the four declarations below says which direction it is about.
+  //
+  // A server handed a database the *legacy* server wrote has no stored mode to read, and reports the
+  // default. That is still what a handoff makes visible.
   {
     id: 'Q53',
     kind: 'step',
     scenario: 'cross-legacy-to-ng',
     step: 'the-whole-configuration',
-    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
+    summary: 'the legacy server never stored audioConversion, so server-ng reading a database it did not write reports the default',
     paths: [/^body\.config\.options\.audioConversion$/],
   },
   {
@@ -311,25 +315,22 @@ export const expectations = [
     kind: 'step',
     scenario: 'cross-legacy-to-ng',
     step: 'the-options-section',
-    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
+    summary: 'the legacy server never stored audioConversion, so server-ng reading a database it did not write reports the default',
     paths: [/^body\.audioConversion$/],
   },
-  {
-    id: 'Q53',
-    kind: 'step',
-    scenario: 'cross-ng-to-legacy',
-    step: 'the-whole-configuration',
-    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
-    paths: [/^body\.config\.options\.audioConversion$/],
-  },
-  {
-    id: 'Q53',
-    kind: 'step',
-    scenario: 'cross-ng-to-legacy',
-    step: 'the-options-section',
-    summary: 'audioConversion is not a setting a server stores, so the server reading a database it did not write reports the default',
-    paths: [/^body\.audioConversion$/],
-  },
+
+  // The other direction is the repair showing up in the stored rows: a server-ng database holds the mode as a
+  // JSON number, the legacy server reads it, and the two agree — so the two handoff declarations that used to
+  // sit here are gone, and what is left to declare is the options table of every scenario that saves a
+  // configuration. See docs/specs/FEAT-004-legacy-defect-repairs/decision-legacy-parity.md.
+  ...optionsTableStoresAudioConversion('access-limit'),
+  ...optionsTableStoresAudioConversion('admin-config-socket'),
+  ...optionsTableStoresAudioConversion('admin-rest'),
+  ...optionsTableStoresAudioConversion('dirwatch-calls'),
+  ...optionsTableStoresAudioConversion('listener-frames'),
+  ...optionsTableStoresAudioConversion('missing-call-fetch'),
+  ...optionsTableStoresAudioConversion('scope-normalization'),
+  ...optionsTableStoresAudioConversion('scoped-upload'),
 ];
 
 // handoffLeftNothingBehind is the promise a handoff makes: the reader started on rows the other server wrote,
@@ -372,4 +373,61 @@ function handoffLeftNothingBehind(readerFlavor) {
 
     return true;
   };
+}
+
+// optionsTableStoresAudioConversion is the difference the Q53/Q54 repair puts in the options table of every
+// scenario that saves a configuration: server-ng stores the audio conversion mode as the JSON number the
+// native applications send it, and the legacy server applies the mode and never stores it. Everything else
+// the legacy server put on record is still there, with the value it was given — which is the part of the
+// promise worth checking: a new row is a declared difference, a changed row is a regression.
+function optionsTableStoresAudioConversion(scenario) {
+  return [
+    {
+      id: 'Q53',
+      kind: 'dump',
+      scenario,
+      table: 'options',
+      summary: 'server-ng stores the audio conversion mode as a JSON number, the legacy server stores every setting except that one',
+      check: ({ table, legacy, ng }) => {
+        if (table !== 'options') {
+          return `this declaration is about the options table, and it was asked about ${table}`;
+        }
+
+        const onRecord = (rows) => new Map(rows.map((row) => [row.key, row.value]));
+
+        const before = onRecord(legacy);
+        const after = onRecord(ng);
+
+        if (before.has('audioConversion')) {
+          return 'the legacy server stored audioConversion, which is the defect the repair removes';
+        }
+
+        if (!after.has('audioConversion')) {
+          return 'server-ng did not store audioConversion';
+        }
+
+        if (!/^-?\d+(\.\d+)?$/.test(after.get('audioConversion'))) {
+          return `server-ng stored audioConversion as ${after.get('audioConversion')}, want the JSON number the native applications send`;
+        }
+
+        for (const [key, value] of before) {
+          if (!after.has(key)) {
+            return `server-ng no longer stores ${key}, which the legacy server stores`;
+          }
+
+          if (after.get(key) !== value) {
+            return `${key} is stored as ${after.get(key)}, want the JSON the legacy server stores: ${value}`;
+          }
+        }
+
+        for (const key of after.keys()) {
+          if (key !== 'audioConversion' && !before.has(key)) {
+            return `server-ng stores ${key}, which the legacy server does not, and this declaration is about audioConversion alone`;
+          }
+        }
+
+        return true;
+      },
+    },
+  ];
 }
