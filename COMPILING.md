@@ -25,6 +25,14 @@ Clone the official repository on your computer and start the build process.
         cd rdio-scanner
         make
 
+The build compiles the two web applications before it compiles the server. The listener application and the administration console are two applications, in `internal/presentation/clients/scanner` and `internal/presentation/clients/admin`, and the modules they both use are in `internal/presentation/clients/shared`. Each application is built into the bundle directory of the Go package that embeds it, so `internal/presentation/serving/scanner/bundle` and `internal/presentation/serving/admin/bundle` are build output and hold nothing else.
+
+        make client      # both applications
+        make scanner     # the listener application only
+        make admin       # the administration console only
+
+The server binary carries both bundles. One executable serves the listener application at `/` and the administration console at `/admin/`.
+
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 
         rdio-scanner-freebsd-amd64-v7.0.0.zip
