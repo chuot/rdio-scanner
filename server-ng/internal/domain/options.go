@@ -88,6 +88,37 @@ func DefaultOptions() Options {
 	}
 }
 
+// AcceptSecret takes the signing secret a stored configuration holds.
+//
+// A secret is a secret only at the length the server signs with: a value of any other length — the
+// short string a legacy database actually holds, or the empty string one a server that has never saved
+// its configuration holds — cannot sign a token, so it is not taken and the options keep what they had.
+func (options Options) AcceptSecret(value string) Options {
+	if len(value) != SecretLength {
+		return options
+	}
+
+	options.Secret = value
+
+	return options
+}
+
+// WithSigningSecret gives the options a secret they can sign sessions with, making a fresh one when
+// they hold nothing usable.
+//
+// It reports whether a secret was made, which is what tells the caller the new one has to be put on
+// record: a secret that only exists in this process is gone at the next start, and every token issued
+// with it dies with it.
+func (options Options) WithSigningSecret() (Options, bool) {
+	if len(options.Secret) == SecretLength {
+		return options, false
+	}
+
+	options.Secret = GenerateSecret(SecretLength)
+
+	return options, true
+}
+
 // ApplyMap merges an administrator configuration payload into the options. Absent or
 // wrongly typed keys fall back to the defaults, except the free-text branding and
 // email which keep their current value, matching the legacy server key by key.

@@ -75,15 +75,14 @@ func TestServerStartsAgainstAFreshDatabaseAndAnswersTheAdministrator(t *testing.
 }
 
 // The default credential is what a fresh server accepts, and it is not what a fresh server stores. The
-// legacy server generates a hash of it at every startup and writes nothing, which is also why the signing
-// secret a session was signed with is regenerated at the next startup.
+// legacy server generates a hash of it at every startup and writes nothing.
 func TestServerAcceptsTheDefaultCredentialWithoutStoringIt(t *testing.T) {
 	srv := startedTestServer(t)
 
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "options" WHERE "key" = 'adminPassword'`); rows != 0 {
-		t.Errorf("the options table holds %d adminPassword rows after a fresh start, want none: writing the "+
-			"initial credential would write the signing secret with it, and a server that stores its secret "+
-			"keeps sessions across a restart the legacy server does not keep", rows)
+		t.Errorf("the options table holds %d adminPassword rows after a fresh start, want none: the startup "+
+			"step stores the signing secret it makes, and storing the credential with it would be a change "+
+			"to what the legacy server stores", rows)
 	}
 
 	if rec := srv.post("/api/admin/login", `{"password":"not-the-default"}`); rec.Code != http.StatusUnauthorized {
@@ -602,8 +601,9 @@ func TestServerReportsWhatTheHttpLayerItselfReports(t *testing.T) {
 	}
 }
 
-// The composition root is where the legacy server's startup rule lives: a server whose stored
-// configuration has no administrator credential accepts the one the server ships with.
+// The composition root is where the legacy server's startup rules live: a server whose stored
+// configuration has no administrator credential accepts the one the server ships with, and a server whose
+// stored configuration has no signing secret makes one and puts it on record.
 func TestServerReadsItsConfigurationBeforeItStartsAnswering(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -616,13 +616,137 @@ func TestServerReadsItsConfigurationBeforeItStartsAnswering(t *testing.T) {
 		t.Fatalf("the server is running with no administrator credential at all")
 	}
 
-	// A deployment that has never saved its configuration has no signing secret on record, and the legacy
-	// server generates one only when a stored secret is there and the wrong length — not when there is no
-	// secret at all. A fresh server therefore signs with nothing, in both servers, until the administrator
-	// saves the configuration once.
-	if options.Secret != "" {
-		t.Errorf("the server generated a signing secret of its own, want the legacy server's behavior of not "+
-			"generating one until a stored secret needs replacing: %q", options.Secret)
+	// A deployment that has never saved its configuration has no signing secret on record. The legacy
+	// server signed with nothing in that case, and with a different random key on every start when a
+	// stored secret was unusable. The startup step makes a secret once and puts it on record, so the key
+	// in use is the key on record. See
+	// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+	if len(options.Secret) != domain.SecretLength {
+		t.Errorf("the server is running with a %d-character signing secret, want one it can sign sessions with",
+			len(options.Secret))
+	}
+
+	stored := storedSecret(t, srv.db)
+
+	if len(stored) != domain.SecretLength {
+		t.Errorf("the secret on record is %d characters, want the %d-character secret the server made at startup",
+			len(stored), domain.SecretLength)
+	}
+
+	if stored != options.Secret {
+		t.Errorf("the secret on record is not the secret the server is signing with")
+	}
+}
+
+// TestServerReplacesAStoredSecretItCannotSignWith is the legacy database's case: the stored secret is a
+// short string an old version wrote, it cannot sign a session, and the replacement is written down rather
+// than used once and forgotten.
+func TestServerReplacesAStoredSecretItCannotSignWith(t *testing.T) {
+	srv := testServer(t)
+
+	// A fresh database has no option rows at all until an administrator saves the configuration, so the
+	// legacy shape has to be written by hand: a `secret` row holding a short string.
+	const query = `INSERT INTO "options" ("key", "value") VALUES ('secret', ?)`
+
+	if _, err := srv.db.Exec(query, `"a legacy secret"`); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	stored := storedSecret(t, srv.db)
+
+	if len(stored) != domain.SecretLength {
+		t.Fatalf("the secret on record after the start is %d characters, want the unusable one replaced by a "+
+			"%d-character one: %q", len(stored), domain.SecretLength, stored)
+	}
+
+	options, err := srv.options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if options.Secret != stored {
+		t.Errorf("the server is signing with a secret that is not the one it put on record")
+	}
+}
+
+// TestServerKeepsTheSigningSecretItPutOnRecord is what the repair is for: the second start on the same
+// database finds the key the first one made, and renewing it in place writes no further row.
+func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
+	baseDir := t.TempDir()
+
+	first := startedTestServerIn(t, baseDir)
+
+	secret := storedSecret(t, first.db)
+	rows := countRows(t, first.db, `SELECT COUNT(*) FROM "options"`)
+
+	if len(secret) != domain.SecretLength {
+		t.Fatalf("the first start left a %d-character secret on record, want %d", len(secret), domain.SecretLength)
+	}
+
+	first.stop(context.Background())
+
+	second := startedTestServerIn(t, baseDir)
+
+	if again := storedSecret(t, second.db); again != secret {
+		t.Errorf("the secret on record after the second start is a different one, want the one the first start " +
+			"wrote: a new key kills every session the old one signed")
+	}
+
+	if got := countRows(t, second.db, `SELECT COUNT(*) FROM "options"`); got != rows {
+		t.Errorf("the options table has %d rows after the second start, want the %d the first start left: a "+
+			"secret that is already on record is left there", got, rows)
+	}
+
+	options, err := second.options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if options.Secret != secret {
+		t.Errorf("the second start is signing with a secret that is not the one on record")
+	}
+}
+
+// TestAPasswordChangeLeavesTheSessionsItWasStartedWith is the re-derivation the legacy server ran against
+// a secret it had never stored: the password change reset the options, the reset found nothing usable,
+// and every session the server had started died with the key it was signed with.
+func TestAPasswordChangeLeavesTheSessionsItWasStartedWith(t *testing.T) {
+	srv := startedTestServer(t)
+
+	rec := srv.post("/api/admin/login", `{"password":"rdio-scanner"}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var answered struct {
+		Token string `json:"token"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &answered); err != nil {
+		t.Fatalf("the login answer: %v", err)
+	}
+
+	if answered.Token == "" {
+		t.Fatalf("the login answer carries no session: %s", rec.Body.String())
+	}
+
+	rec = srv.postAuthorized("/api/admin/password", answered.Token,
+		`{"currentPassword":"rdio-scanner","newPassword":"a new credential"}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("changing the credential was answered %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = srv.getAuthorized("/api/admin/config", answered.Token)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("the session started before the credential change was answered %d afterwards, want it still "+
+			"accepted: the re-derivation the credential change runs replaced the signing secret", rec.Code)
 	}
 }
 
@@ -703,6 +827,56 @@ func testConfig(t *testing.T) *Config {
 	}
 }
 
+// testConfigIn is the configuration pointed at a directory a test has already chosen, which is how a test
+// starts a second server on the database the first one wrote.
+func testConfigIn(baseDir string) *Config {
+	return &Config{
+		BaseDir: baseDir,
+		DbFile:  "rdio-scanner.db",
+		DbType:  DbTypeSqlite,
+		Listen:  ":3000",
+	}
+}
+
+// startedTestServerIn is a server that has been through the start sequence on a directory the test chose.
+func startedTestServerIn(t *testing.T, baseDir string) *server {
+	t.Helper()
+
+	srv, err := newServer(testConfigIn(baseDir), io.Discard, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	return srv
+}
+
+// storedSecret reads the signing secret the database holds, out of the JSON string the options store it in.
+func storedSecret(t *testing.T, db *sql.DB) string {
+	t.Helper()
+
+	const query = `SELECT "value" FROM "options" WHERE "key" = 'secret'`
+
+	var raw string
+
+	if err := db.QueryRow(query).Scan(&raw); err != nil {
+		t.Fatalf("%s: %v, want the signing secret the server signs sessions with on record", query, err)
+	}
+
+	var secret string
+
+	if err := json.Unmarshal([]byte(raw), &secret); err != nil {
+		t.Fatalf("the stored secret is %s, want the JSON string the options store it as: %v", raw, err)
+	}
+
+	return secret
+}
+
 func (s *server) get(path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 
@@ -725,6 +899,31 @@ func (s *server) put(path, token, body string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 
 	req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(body))
+	req.Header.Set("Authorization", token)
+
+	s.routes.ServeHTTP(rec, req)
+
+	return rec
+}
+
+// postAuthorized is the same request with the verb an administrator's own form uses, which is how a test
+// follows a session through the thing that re-derives the configuration.
+func (s *server) postAuthorized(path, token, body string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Authorization", token)
+
+	s.routes.ServeHTTP(rec, req)
+
+	return rec
+}
+
+// getAuthorized asks an administrator endpoint for what it holds with a session on the request.
+func (s *server) getAuthorized(path, token string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("Authorization", token)
 
 	s.routes.ServeHTTP(rec, req)

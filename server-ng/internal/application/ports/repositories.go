@@ -172,6 +172,16 @@ type OptionsRepository interface {
 	ReloadOptions(ctx context.Context) (domain.Options, error)
 }
 
+// SigningSecretStore puts the signing secret the server issues its administrator sessions with on
+// record.
+//
+// It is its own port rather than another method on OptionsRepository: the startup step that needs it
+// reads the configuration and writes one value back, and it has no business with saving or
+// re-deriving the rest of it. The options adapter satisfies both.
+type SigningSecretStore interface {
+	StoreSecret(ctx context.Context, secret string) error
+}
+
 // LogSearchPage is the log view's envelope: the total number of entries the criteria
 // matches, the span of time everything that matches covers, and the matching entries
 // themselves.

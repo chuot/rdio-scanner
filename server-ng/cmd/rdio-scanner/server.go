@@ -91,6 +91,10 @@ type server struct {
 	options  *persistence.Options
 	accesses *persistence.Accesses
 
+	// signing is the startup step that gives the server a signing secret it can sign sessions with and
+	// puts it on record, so the key outlives the process that made it.
+	signing *application.EnsureAdminSigningSecretHandler
+
 	// logs is the log the whole server writes into, including the server's own notices.
 	logs ports.LogRepository
 
@@ -261,6 +265,12 @@ func (s *server) wire() error {
 
 	options.StoreInitialCredential(initial)
 
+	// The startup step that makes sure the server has a signing secret worth having, and the one that puts
+	// it on record. It is built here because it needs the options adapter, and it is run by start after the
+	// configuration has been read: the options the step decides about are the ones the server is running
+	// with, and a step that read them before the start sequence had loaded them would decide about nothing.
+	s.signing = application.NewEnsureAdminSigningSecretHandler(options, options)
+
 	s.settings = &listenerSettings{accesses: accesses, options: options}
 
 	changes := &listenerChanges{}
@@ -382,6 +392,21 @@ func (s *server) start(ctx context.Context) error {
 
 	if err := s.readConfiguration(ctx); err != nil {
 		return err
+	}
+
+	// The signing secret is the startup rule the legacy server never finished: it made a fresh random key
+	// every time the stored one was unusable and never wrote it down, so a deployment that had never saved
+	// its configuration signed sessions with nothing, and a legacy database holding a short secret changed
+	// keys at every start and killed every session issued before it. This step makes a key once and puts it
+	// on record, after the configuration has been read and before anything is answered from it. See
+	// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+	result, err := s.signing.Handle(ctx, application.EnsureAdminSigningSecretCommand{})
+	if err != nil {
+		return err
+	}
+
+	if result.Outcome == application.AdminSigningSecretStored {
+		s.console.println("generated a new signing secret")
 	}
 
 	// The calls this server was holding when it last stopped are picked up here, which is where the

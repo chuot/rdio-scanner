@@ -159,7 +159,12 @@ func TestReloadOptionsRestoresTheDefaultDuplicateDetectionWindow(t *testing.T) {
 // The legacy `Read` accepts a stored secret only at its full length and generates a fresh random
 // one otherwise — and a legacy database stores the empty string. The regenerated secret is never
 // written back, so the secret that signs administrator tokens is not the one on record.
-func TestReloadOptionsGeneratesAFreshSecretAndLeavesTheStoredOneAlone(t *testing.T) {
+// TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable is the repaired half of Q66: the reader no
+// longer invents a secret. A stored secret the server cannot sign with leaves the options without one,
+// and the stored row stays where it was — putting a usable secret on record is the startup use case's
+// job, not the reader's. See
+// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+func TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable(t *testing.T) {
 	db := openLegacyDatabase(t)
 
 	if stored := readOptionValue(t, db, "secret"); stored != `""` {
@@ -171,28 +176,21 @@ func TestReloadOptionsGeneratesAFreshSecretAndLeavesTheStoredOneAlone(t *testing
 		t.Fatalf("ReloadOptions: %v", err)
 	}
 
-	if len(reloaded.Secret) != domain.SecretLength {
-		t.Fatalf("the re-derived secret is %d characters, want the generated %d", len(reloaded.Secret), domain.SecretLength)
-	}
-
-	if reloaded.Secret == "" {
-		t.Error("the re-derived secret is the stored empty string, want a generated one")
+	if reloaded.Secret != "" {
+		t.Errorf("the re-derived secret = %q, want nothing on the options: the reader does not make secrets", reloaded.Secret)
 	}
 
 	if stored := readOptionValue(t, db, "secret"); stored != `""` {
-		t.Errorf("the stored secret is now %s, want it left as the empty string: the secret in use is not the one on record", stored)
-	}
-
-	again, err := NewOptions(db, DialectSqlite).ReloadOptions(context.Background())
-	if err != nil {
-		t.Fatalf("ReloadOptions: %v", err)
-	}
-
-	if again.Secret == reloaded.Secret {
-		t.Error("two re-derivations produced the same secret, want a fresh one each time")
+		t.Errorf("the stored secret is now %s, want it left exactly as the legacy server wrote it", stored)
 	}
 }
 
+// TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength keeps the legacy reader's length rule and
+// drops what the legacy reader did with a value that failed it.
+//
+// The legacy server generated a fresh secret for anything unusable and never wrote it down, so every
+// start signed with a different key and every token issued before it was dead. Here an unusable value
+// is simply not taken, and the options are left without a secret for the startup use case to fill.
 func TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength(t *testing.T) {
 	kept := strings.Repeat("a", domain.SecretLength)
 
@@ -202,9 +200,9 @@ func TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength(t *testing.T) {
 		want   string
 	}{
 		{"the stored secret is kept", strconv.Quote(kept), kept},
-		{"a short stored secret is replaced", `"short"`, ""},
-		{"a stored secret that is not a string is replaced", "123", ""},
-		{"a stored secret that is null is replaced", "null", ""},
+		{"a short stored secret is not taken", `"short"`, ""},
+		{"a stored secret that is not a string is not taken", "123", ""},
+		{"a stored secret that is null is not taken", "null", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
@@ -214,23 +212,59 @@ func TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength(t *testing.T) {
 			if _, err := db.Exec(query, tc.stored); err != nil {
 				t.Fatalf("%s: %v", query, err)
 			}
+
 			reloaded, err := NewOptions(db, DialectSqlite).ReloadOptions(context.Background())
 			if err != nil {
 				t.Fatalf("ReloadOptions: %v", err)
 			}
 
-			if len(reloaded.Secret) != domain.SecretLength {
-				t.Fatalf("the secret re-derived from %s is %d characters, want %d", tc.stored, len(reloaded.Secret), domain.SecretLength)
-			}
-
-			if tc.want != "" && reloaded.Secret != tc.want {
-				t.Errorf("the secret re-derived from %s is %q, want the stored one", tc.stored, reloaded.Secret)
-			}
-
-			if tc.want == "" && reloaded.Secret == tc.stored {
-				t.Errorf("the secret re-derived from %s is the stored value, want a generated one", tc.stored)
+			if reloaded.Secret != tc.want {
+				t.Errorf("the secret re-derived from %s = %q, want %q", tc.stored, reloaded.Secret, tc.want)
 			}
 		})
+	}
+}
+
+// TestStoreSecretPutsTheSigningSecretOnRecord is the write the legacy server never had: one option row,
+// written on its own, so the secret the server signs with is the secret the database holds.
+func TestStoreSecretPutsTheSigningSecretOnRecord(t *testing.T) {
+	ctx := context.Background()
+
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	options := NewOptions(db, DialectSqlite)
+
+	next := domain.DefaultOptions()
+	next.Branding = "Acme Dispatch"
+
+	if err := options.WriteOptions(ctx, next); err != nil {
+		t.Fatalf("WriteOptions: %v", err)
+	}
+
+	secret := strings.Repeat("k", domain.SecretLength)
+
+	if err := options.StoreSecret(ctx, secret); err != nil {
+		t.Fatalf("StoreSecret: %v", err)
+	}
+
+	if stored := readOptionValue(t, db, "secret"); stored != strconv.Quote(secret) {
+		t.Errorf("the stored secret = %s, want the generated secret as the JSON the reader unmarshals", stored)
+	}
+
+	if count := countRows(t, db, "options"); count != 17 {
+		t.Errorf("the options table has %d rows, want the secret row updated in place and nothing else written", count)
+	}
+
+	if branding := readOptionValue(t, db, "branding"); branding != `"Acme Dispatch"` {
+		t.Errorf("the stored branding = %s, want it left alone: storing a secret is not saving the configuration", branding)
+	}
+
+	live, err := options.ReadOptions(ctx)
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if live.Secret != secret {
+		t.Errorf("the secret the next read applies = %q, want the one that was stored", live.Secret)
 	}
 }
 

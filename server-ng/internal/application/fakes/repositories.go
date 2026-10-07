@@ -590,9 +590,19 @@ type Options struct {
 	// option to its default and then applies the stored rows, so an option it stores under one
 	// name and reads under another comes back as the default.
 	Reloaded *domain.Options
+
+	// Secrets records what was put on record by StoreSecret, in the order it was put there. A test
+	// asserts that the secret the server signs with is the secret the store holds.
+	Secrets []string
+
+	// SecretErr makes storing the secret fail, the way SaveErr makes saving the configuration fail.
+	SecretErr error
 }
 
-var _ ports.OptionsRepository = (*Options)(nil)
+var (
+	_ ports.OptionsRepository  = (*Options)(nil)
+	_ ports.SigningSecretStore = (*Options)(nil)
+)
 
 // ReadOptions returns the stored options.
 func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error) {
@@ -634,6 +644,19 @@ func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, erro
 	}
 
 	return options.Stored, nil
+}
+
+// StoreSecret records the signing secret, and holds it in the options from here on, which is what a
+// store that round-trips every key does.
+func (options *Options) StoreSecret(ctx context.Context, secret string) error {
+	if options.SecretErr != nil {
+		return options.SecretErr
+	}
+
+	options.Secrets = append(options.Secrets, secret)
+	options.Stored.Secret = secret
+
+	return nil
 }
 
 // Logs is an in-memory log repository.

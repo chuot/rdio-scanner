@@ -312,21 +312,15 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 		}
 
 	case "secret":
-		// The stored secret is accepted only at its full length; anything else — including the
-		// empty string a legacy database actually holds, and a value that is not a string at
-		// all — gets a fresh random one. The regenerated secret is not written back, so the
-		// secret in use is not the one on record until the next options save.
+		// A stored secret is taken only at the length the server signs with, and a value that fails
+		// that rule is not taken at all. The legacy reader generated a fresh secret for anything
+		// unusable and never wrote it down, so a deployment that had never saved its configuration
+		// signed with an empty key and a legacy database holding an unusable secret got a different
+		// key on every start. Making a secret and putting it on record is now the startup use case's
+		// job; see docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
 		if v, ok := row.value.(string); ok {
-			if len(v) == domain.SecretLength {
-				options.Secret = v
-			} else {
-				options.Secret = domain.GenerateSecret(domain.SecretLength)
-			}
-
-			break
+			options = options.AcceptSecret(v)
 		}
-
-		options.Secret = domain.GenerateSecret(domain.SecretLength)
 
 	case "showListenersCount":
 		if v, ok := row.value.(bool); ok {
@@ -349,47 +343,16 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 
 // write stores the options the way the legacy `Options.Write` does: one transaction, and for
 // each key an update that becomes an insert when no row carries that key. The keys and their
-// order are the legacy ones.
-//
-// The legacy `set` helper reports nothing — a failed update is dropped and a failed insert is
-// only printed — so the legacy save answers success for options that were never stored. The
-// port contract is the opposite: a failed persist is returned, which is what the fakes' `SaveErr`
-// knob models and what §9 requires.
+// order are the legacy ones, and `setOptionRow` is where the legacy helper's silence stops being
+// the contract's silence.
 func (options *Options) write(ctx context.Context, next domain.Options) error {
 	tx, err := options.store.begin(ctx)
 	if err != nil {
 		return operationError("options", "write", err)
 	}
 
-	set := func(key string, value any) error {
-		b, err := json.Marshal(value)
-		if err != nil {
-			return operationError("options", "write", err)
-		}
-
-		res, err := tx.exec(ctx, optionsUpdateQuery, string(b), key)
-		if err != nil {
-			return statementError("options", "write", err, optionsUpdateQuery)
-		}
-
-		stored, err := res.RowsAffected()
-		if err != nil {
-			return operationError("options", "write", err)
-		}
-
-		if stored > 0 {
-			return nil
-		}
-
-		if _, err := tx.exec(ctx, optionsInsertQuery, key, string(b)); err != nil {
-			return statementError("options", "write", err, optionsInsertQuery)
-		}
-
-		return nil
-	}
-
 	for _, entry := range optionRows(next) {
-		if err := set(entry.key, entry.value); err != nil {
+		if err := setOptionRow(ctx, tx, "write", entry.key, entry.value); err != nil {
 			tx.rollback()
 			return err
 		}
@@ -398,6 +361,75 @@ func (options *Options) write(ctx context.Context, next domain.Options) error {
 	if err := tx.commit(); err != nil {
 		tx.rollback()
 		return operationError("options", "write", err)
+	}
+
+	return nil
+}
+
+// StoreSecret puts the signing secret the server issues its administrator sessions with on record.
+//
+// It writes the one option row and nothing else: saving the whole configuration as a side effect of
+// starting the server would persist values nobody asked to save. The legacy server had no such write,
+// which is why the secret it generated for an unusable stored one existed only until the process ended.
+func (options *Options) StoreSecret(ctx context.Context, secret string) error {
+	const section, operation = "options", "storeSecret"
+
+	tx, err := options.store.begin(ctx)
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if err := setOptionRow(ctx, tx, operation, "secret", secret); err != nil {
+		tx.rollback()
+		return err
+	}
+
+	if err := tx.commit(); err != nil {
+		tx.rollback()
+		return operationError(section, operation, err)
+	}
+
+	// The options this adapter reports are the ones the server runs with, so the secret it just put
+	// on record is the secret it reports from here on. Without this, a server that stored a secret at
+	// startup would keep signing with the empty one it had already read.
+	options.mutex.Lock()
+	defer options.mutex.Unlock()
+
+	options.live.Secret = secret
+
+	return nil
+}
+
+// setOptionRow updates one option row and inserts it when no row carries that key, which is the shape
+// the legacy `set` helper had.
+//
+// The legacy helper reported nothing: a failed update was dropped and a failed insert was only printed,
+// so the legacy save answered success for options it never stored. The port contract is the opposite —
+// a failed persist is returned — which is what the fakes' `SaveErr` knob models and §9 requires.
+func setOptionRow(ctx context.Context, tx transaction, operation, key string, value any) error {
+	const section = "options"
+
+	b, err := json.Marshal(value)
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	res, err := tx.exec(ctx, optionsUpdateQuery, string(b), key)
+	if err != nil {
+		return statementError(section, operation, err, optionsUpdateQuery)
+	}
+
+	stored, err := res.RowsAffected()
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if stored > 0 {
+		return nil
+	}
+
+	if _, err := tx.exec(ctx, optionsInsertQuery, key, string(b)); err != nil {
+		return statementError(section, operation, err, optionsInsertQuery)
 	}
 
 	return nil

@@ -21,6 +21,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -196,6 +197,56 @@ func TestSecretIsGeneratedOnceAndStaysStable(t *testing.T) {
 
 	if GenerateSecret(256) == secret {
 		t.Error("two generated secrets are identical; the secret must be random")
+	}
+}
+
+// TestOptionsAcceptOnlyASecretTheyCanSignWith puts the rule about a stored signing secret where it
+// belongs: on the options. A secret is a secret only at the length the server signs with, and a value
+// that cannot sign is not taken.
+func TestOptionsAcceptOnlyASecretTheyCanSignWith(t *testing.T) {
+	usable := strings.Repeat("a", SecretLength)
+
+	options := DefaultOptions()
+	if options.Secret != "" {
+		t.Fatalf("a fresh server's secret = %q, want nothing on record until one is made", options.Secret)
+	}
+
+	if got := options.AcceptSecret(usable); got.Secret != usable {
+		t.Errorf("accepting a %d-character secret left %q, want the stored secret taken", SecretLength, got.Secret)
+	}
+
+	for _, unusable := range []string{"", "short", strings.Repeat("a", SecretLength-1), strings.Repeat("a", SecretLength+1)} {
+		if got := options.AcceptSecret(unusable); got.Secret != "" {
+			t.Errorf("accepting a %d-character value left %q, want the options left as they were", len(unusable), got.Secret)
+		}
+	}
+}
+
+// TestOptionsWithSigningSecretGeneratesOneOnlyWhenTheyCannotSign is the half the legacy server did
+// inside its options read: it made a secret whenever the stored one was unusable, and never wrote it
+// down. Here the options decide whether they can sign, and say whether they had to make a secret, so
+// the caller knows the new one has to be put on record.
+func TestOptionsWithSigningSecretGeneratesOneOnlyWhenTheyCannotSign(t *testing.T) {
+	options := DefaultOptions()
+
+	withSecret, generated := options.WithSigningSecret()
+
+	if !generated {
+		t.Fatal("the options reported no secret generated, want one made for a server that cannot sign")
+	}
+
+	if len(withSecret.Secret) != SecretLength {
+		t.Errorf("the generated secret is %d characters, want %d", len(withSecret.Secret), SecretLength)
+	}
+
+	kept, generated := withSecret.WithSigningSecret()
+
+	if generated {
+		t.Error("the options generated a second secret, want the one they already hold")
+	}
+
+	if kept.Secret != withSecret.Secret {
+		t.Errorf("the secret changed under a call that should have left it alone: %q against %q", kept.Secret, withSecret.Secret)
 	}
 }
 
