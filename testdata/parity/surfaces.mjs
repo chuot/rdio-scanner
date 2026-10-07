@@ -356,7 +356,7 @@ export const pairs = [
   },
   {
     id: 52, name: 'filter field box',
-    legacy: { css: 'mat-card.rdio-filters .mat-mdc-form-field-flex' }, current: { css: 'rdio-search-panel .rdio-filters select' },
+    legacy: { css: 'mat-card.rdio-filters .mat-mdc-form-field-flex' }, current: { css: 'rdio-search-panel .rdio-filters .rdio-field-flex' },
     states: ['search-open-24h'], viewports: ['wide'],
   },
   {

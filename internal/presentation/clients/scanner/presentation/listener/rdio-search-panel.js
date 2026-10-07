@@ -28,12 +28,12 @@ class RdioSearchPanel extends HTMLElement {
       </div>
       <div class="rdio-filters">
         <form autocomplete="off">
-          <rdio-form-field><label>Sort order</label><select name="sort"><option value="1">Ascending</option><option value="-1" selected>Descending</option></select></rdio-form-field>
-          <rdio-form-field><label>Date</label><input name="date" type="datetime-local" /></rdio-form-field>
-          <rdio-form-field><label>System</label><select name="system"><option value="">All Systems</option></select></rdio-form-field>
-          <rdio-form-field><label>Talkgroup</label><select name="talkgroup"><option value="">All Talkgroups</option></select></rdio-form-field>
-          <rdio-form-field><label>Group</label><select name="group"><option value="">All Groups</option></select></rdio-form-field>
-          <rdio-form-field><label>Tag</label><select name="tag"><option value="">All Tags</option></select></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Sort order</label><select name="sort"><option value="1">Ascending</option><option value="-1" selected>Descending</option></select></div></div></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Date</label><input name="date" type="datetime-local" /></div></div></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>System</label><select name="system"><option value="">All Systems</option></select></div></div></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Talkgroup</label><select name="talkgroup"><option value="">All Talkgroups</option></select></div></div></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Group</label><select name="group"><option value="">All Groups</option></select></div></div></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Tag</label><select name="tag"><option value="">All Tags</option></select></div></div></rdio-form-field>
           <div class="reset"><button type="button" class="rdio-button-mini reset">Reset</button></div>
         </form>
       </div>

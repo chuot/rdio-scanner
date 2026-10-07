@@ -1091,6 +1091,108 @@ rdio-search-panel .rdio-filters form {
   flex-wrap: wrap;
 }
 
+/* Legacy mat-form-field in its fill appearance, which is what the baseline uses
+ * for the six filters: a 56px box filled with #f6f6f6 and carrying the 1px
+ * active indicator along its bottom edge; inside it, inset 16px, a flex row that
+ * holds the value on a 24px line starting 24px below the top of the box; the
+ * label floated into the space above the value; and under the box a 22px
+ * subscript line that is reserved whether or not there is an error. The field is
+ * 78px tall in total. */
+rdio-search-panel .rdio-filters rdio-form-field {
+  display: flex;
+  flex-direction: column;
+  letter-spacing: 0.5px;
+  line-height: 24px;
+  margin: 0;
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box {
+  background-color: #f6f6f6;
+  border-radius: 4px 4px 0 0;
+  box-sizing: border-box;
+  height: 56px;
+  padding: 0 16px;
+  position: relative;
+}
+
+/* The active indicator is a line of its own in Material, not a border on the
+ * box, so it does not take any of the 56px away from the value. */
+rdio-search-panel .rdio-filters .rdio-field-box::after {
+  background-color: rgba(0, 0, 0, 0.54);
+  bottom: 0;
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+/* Material draws the select arrow as an element of its own. The control is a
+ * native select, so the arrow belongs to the field rather than to the control. */
+rdio-search-panel .rdio-filters .rdio-field-box::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath fill='rgba%280,0,0,0.54%29' d='M0 3l5 5 5-5z'/%3E%3C/svg%3E");
+  content: "";
+  height: 10px;
+  position: absolute;
+  right: 16px;
+  top: 23px;
+  width: 10px;
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:hover::after {
+  background-color: rgba(0, 0, 0, 0.87);
+}
+
+rdio-search-panel .rdio-filters .rdio-field-flex {
+  align-items: baseline;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  height: 56px;
+}
+
+rdio-search-panel .rdio-filters rdio-form-field label {
+  color: rgba(0, 0, 0, 0.54);
+  font-size: 12px;
+  left: 16px;
+  line-height: 16px;
+  position: absolute;
+  top: 8px;
+}
+
+rdio-search-panel .rdio-filters rdio-form-field select,
+rdio-search-panel .rdio-filters rdio-form-field input {
+  appearance: none;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-sizing: border-box;
+  caret-color: #424242;
+  color: rgba(0, 0, 0, 0.87);
+  font-family: inherit;
+  font-size: 16px;
+  height: 56px;
+  letter-spacing: 0.5px;
+  line-height: 24px;
+  padding: 24px 0 8px;
+  width: 100%;
+}
+
+rdio-search-panel .rdio-filters rdio-form-field input::placeholder {
+  color: rgba(0, 0, 0, 0.54);
+}
+
+/* The subscript line is 22px whether or not there is an error, which is what
+ * keeps the card the height the baseline's is. */
+rdio-search-panel .rdio-filters .rdio-form-error {
+  box-sizing: border-box;
+  display: block;
+  letter-spacing: 0.4px;
+  line-height: 20px;
+  min-height: 22px;
+  position: relative;
+}
+
 rdio-search-panel .rdio-filters form rdio-form-field:nth-of-type(1) {
   order: 1;
 }
