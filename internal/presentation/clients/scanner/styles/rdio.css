@@ -876,19 +876,32 @@ rdio-search-panel .rdio-list td > span {
   white-space: nowrap;
 }
 
-/* Legacy row control mat-icon-button (play/stop/download/cached). */
+/* Legacy row control: a mat-icon-button, which is a 48px circle with 12px of
+ * padding around a 24px Material Icon. */
 rdio-search-panel .row-action {
   background: none;
   border: none;
-  color: inherit;
+  border-radius: 50%;
+  box-sizing: border-box;
+  color: rgba(0, 0, 0, 0.87);
   cursor: pointer;
-  font-size: 16px;
-  padding: 4px;
+  display: block;
+  font-size: 24px;
+  height: 48px;
+  padding: 12px;
+  position: relative;
+  width: 48px;
 }
 
 rdio-search-panel .row-action:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+/* Material lifts the icon of an icon button above the ripple this client does
+ * not draw, which is the only reason the icon is positioned. */
+rdio-search-panel .row-action .material-icons {
+  position: relative;
 }
 
 /* Legacy .spin mat-icon (cached) while results are pending. */
@@ -899,16 +912,19 @@ rdio-search-panel .spin {
   animation-timing-function: linear;
 }
 
-/* Indeterminate stand-in for the legacy spinner while a server page of
- * results is being fetched. */
+/* Legacy mat-progress-bar: 4px tall and always in the layout, so the card
+ * below it does not move when a search starts. The query animation flips the
+ * bar the way MDC does it. */
 rdio-search-panel .progress-bar {
-  display: none;
   height: 4px;
   overflow: hidden;
+  position: relative;
+  transform: translate(0);
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.6, 1);
 }
 
 rdio-search-panel .progress-bar.pending {
-  display: block;
+  transform: scaleX(-1);
 }
 
 rdio-search-panel .progress-bar.pending::after {
@@ -920,12 +936,153 @@ rdio-search-panel .progress-bar.pending::after {
   width: 100%;
 }
 
+/* Legacy .rdio-list .paginator: the download-mode toggle at one end and the
+ * paginator at the other. */
 rdio-search-panel .paginator {
   align-items: center;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
   padding-left: 8px;
+}
+
+/* Legacy mat-slide-toggle: a block host, a centred row, the icon of the mode in
+ * a label of its own, and a 36px track with a 20px handle. The toggle is a
+ * light-theme component, so it keeps its dark hairline colours even on the dark
+ * drawer. */
+rdio-search-panel rdio-toggle {
+  display: block;
+}
+
+rdio-search-panel rdio-toggle .rdio-toggle-row {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+}
+
+rdio-search-panel rdio-toggle .rdio-toggle-label {
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 14px;
+  line-height: 20px;
+  padding-right: 4px;
+}
+
+rdio-search-panel rdio-toggle .material-icons {
+  font-size: 24px;
+  line-height: 24px;
+}
+
+rdio-search-panel rdio-toggle .rdio-toggle {
+  background: rgba(0, 0, 0, 0.12);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  height: 14px;
+  padding: 0;
+  position: relative;
+  transition: background 75ms cubic-bezier(0.4, 0, 0.6, 1);
+  width: 36px;
+}
+
+/* The handle carries the state: a dash when the mode is off, a check when it is
+ * on, which is what the legacy switch draws inside its handle. */
+rdio-search-panel rdio-toggle .rdio-toggle::after {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.54);
+  border-radius: 50%;
+  color: white;
+  content: "remove";
+  display: flex;
+  font-family: "Material Icons";
+  font-size: 16px;
+  height: 20px;
+  justify-content: center;
+  left: 4px;
+  line-height: 20px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: left 75ms cubic-bezier(0.4, 0, 0.2, 1);
+  width: 20px;
+}
+
+rdio-search-panel rdio-toggle .rdio-toggle.on {
+  background: #e0e0e0;
+}
+
+rdio-search-panel rdio-toggle .rdio-toggle.on::after {
+  background: #424242;
+  content: "check";
+  left: 12px;
+}
+
+@media (min-width: 460px) {
+  rdio-search-panel rdio-toggle .material-icons {
+    padding: 0 16px 0 4px;
+  }
+}
+
+/* Legacy mat-paginator: a 56px band, 12px text with 0.4px of tracking, the
+ * range it is showing, and four 48px icon buttons. */
+rdio-search-panel rdio-paginator {
+  align-items: normal;
+  background-color: white;
+  color: rgba(0, 0, 0, 0.87);
+  display: block;
+  font-size: 12px;
+  justify-content: normal;
+  letter-spacing: 0.4px;
+  line-height: 20px;
+  margin: 0;
+}
+
+rdio-search-panel rdio-paginator .rdio-paginator-range {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  min-height: 56px;
+  padding: 0 8px;
+  width: 100%;
+}
+
+rdio-search-panel rdio-paginator .rdio-paginator-label {
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  line-height: 20px;
+  margin: 0 32px 0 24px;
+}
+
+rdio-search-panel rdio-paginator .rdio-button-mini {
+  background: none;
+  border: none;
+  border-radius: 50%;
+  box-sizing: border-box;
+  color: rgba(0, 0, 0, 0.54);
+  cursor: pointer;
+  font-family: Arial;
+  font-size: 24px;
+  height: 48px;
+  padding: 12px;
+  position: relative;
+  text-align: center;
+  width: 48px;
+}
+
+rdio-search-panel rdio-paginator .rdio-button-mini .material-icons {
+  line-height: 24px;
+}
+
+rdio-search-panel rdio-paginator .rdio-button-mini:disabled {
+  color: color-mix(in srgb, rgba(0, 0, 0, 0.87) 38%, transparent);
+  cursor: default;
+  opacity: 1;
+}
+
+rdio-search-panel rdio-paginator .rdio-button-mini:hover:not(:disabled) {
+  background: none;
 }
 
 rdio-search-panel .rdio-filters form {

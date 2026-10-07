@@ -208,9 +208,35 @@ customElements.define('rdio-select', RdioSelect);
 class RdioToggle extends HTMLElement {
   connectedCallback() {
     const button = document.createElement('button');
+
     button.type = 'button';
     button.className = 'rdio-toggle';
     button.setAttribute('role', 'switch');
+
+    // The listener's toggle is the legacy slide toggle: the icon of the mode it
+    // switches, set in a label of its own before the switch. The administration
+    // toggle has no icon and renders exactly as it did before.
+    const iconName = this.getAttribute('icon');
+
+    if (iconName) {
+      const icon = document.createElement('i');
+
+      icon.className = 'material-icons';
+      icon.textContent = iconName;
+
+      const label = document.createElement('span');
+
+      label.className = 'rdio-toggle-label';
+      label.append(icon);
+
+      const row = document.createElement('span');
+
+      row.className = 'rdio-toggle-row';
+      row.append(label, button);
+      this.append(row);
+    } else {
+      this.append(button);
+    }
 
     const sync = () => {
       const on = this.getAttribute('checked') === 'true';
@@ -226,7 +252,6 @@ class RdioToggle extends HTMLElement {
     });
 
     this.button = button;
-    this.append(button);
     sync();
   }
 
@@ -243,30 +268,76 @@ class RdioToggle extends HTMLElement {
 
 customElements.define('rdio-toggle', RdioToggle);
 
+const paginatorControls = (material) =>
+  material
+    ? [
+        ['first', 'first_page', 'First page'],
+        ['prev', 'chevron_left', 'Previous page'],
+        ['next', 'chevron_right', 'Next page'],
+        ['last', 'last_page', 'Last page'],
+      ]
+    : [
+        ['prev', '‹', 'Previous page'],
+        ['next', '›', 'Next page'],
+      ];
+
+const paginatorMove = (paginator, name) =>
+  ({
+    first: () => paginator.setPage(0),
+    prev: () => paginator.setPage(paginator.pageIndex - 1),
+    next: () => paginator.setPage(paginator.pageIndex + 1),
+    last: () => paginator.setPage(paginator.pageCount - 1),
+  })[name];
+
 class RdioPaginator extends HTMLElement {
   connectedCallback() {
     if (this.dom) return;
 
-    const prev = document.createElement('button');
-    prev.type = 'button';
-    prev.className = 'rdio-button-mini';
-    prev.textContent = '‹';
-    prev.setAttribute('aria-label', 'Previous page');
+    // The listener's paginator is the four-control one that labels the range it
+    // is showing ("1 of 10"). The administration paginator keeps the two
+    // controls and the page counter it has always had.
+    this.material = this.hasAttribute('material');
 
     const label = document.createElement('span');
+
     label.className = 'rdio-paginator-label';
 
-    const next = document.createElement('button');
-    next.type = 'button';
-    next.className = 'rdio-button-mini';
-    next.textContent = '›';
-    next.setAttribute('aria-label', 'Next page');
+    const dom = { label };
+    const parts = [label];
 
-    prev.addEventListener('click', () => this.setPage(this.pageIndex - 1));
-    next.addEventListener('click', () => this.setPage(this.pageIndex + 1));
+    for (const [name, glyph, ariaLabel] of paginatorControls(this.material)) {
+      const button = document.createElement('button');
 
-    this.dom = { prev, label, next };
-    this.append(prev, label, next);
+      button.type = 'button';
+      button.className = 'rdio-button-mini';
+      button.setAttribute('aria-label', ariaLabel);
+
+      if (this.material) {
+        const icon = document.createElement('i');
+
+        icon.className = 'material-icons';
+        icon.textContent = glyph;
+        button.append(icon);
+      } else {
+        button.textContent = glyph;
+      }
+
+      button.addEventListener('click', paginatorMove(this, name));
+      dom[name] = button;
+      parts.push(button);
+    }
+
+    if (this.material) {
+      const range = document.createElement('div');
+
+      range.className = 'rdio-paginator-range';
+      range.append(...parts);
+      this.append(range);
+    } else {
+      this.append(dom.prev, label, dom.next);
+    }
+
+    this.dom = dom;
 
     this.render();
   }
@@ -283,8 +354,12 @@ class RdioPaginator extends HTMLElement {
     return Number(this.getAttribute('length') ?? 0);
   }
 
+  get pageCount() {
+    return Math.max(1, Math.ceil(this.length / this.pageSize));
+  }
+
   setPage(index) {
-    const max = Math.max(0, Math.ceil(this.length / this.pageSize) - 1);
+    const max = this.pageCount - 1;
     index = Math.min(Math.max(0, index), max);
 
     if (index === this.pageIndex) return;
@@ -306,15 +381,31 @@ class RdioPaginator extends HTMLElement {
     }
   }
 
+  rangeLabel() {
+    if (this.length === 0) return '0 of 0';
+
+    const from = this.pageIndex * this.pageSize + 1;
+    const to = Math.min(from + this.pageSize - 1, this.length);
+
+    // The legacy range label is written with an en dash, not a hyphen.
+    return `${from} – ${to} of ${this.length}`;
+  }
+
   render() {
     if (!this.dom) return;
 
-    const { prev, label, next } = this.dom;
-    const pages = Math.max(1, Math.ceil(this.length / this.pageSize));
+    const { first, prev, label, next, last } = this.dom;
+    const pages = this.pageCount;
+    const atFirst = this.pageIndex === 0;
+    const atLast = this.pageIndex >= pages - 1;
 
-    label.textContent = `Page ${this.pageIndex + 1} of ${pages}`;
-    prev.disabled = this.pageIndex === 0;
-    next.disabled = this.pageIndex >= pages - 1;
+    label.textContent = this.material ? this.rangeLabel() : `Page ${this.pageIndex + 1} of ${pages}`;
+
+    if (first) first.disabled = atFirst;
+    if (last) last.disabled = atLast;
+
+    prev.disabled = atFirst;
+    next.disabled = atLast;
   }
 }
 

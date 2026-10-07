@@ -208,13 +208,13 @@ class RdioSearchPanel extends HTMLElement {
       let control = '';
 
       if (downloadMode) {
-        control = `<button type="button" class="row-action" data-download="${row.id}" aria-label="Download">⤓</button>`;
+        control = `<button type="button" class="row-action" data-download="${row.id}" aria-label="Download"><i class="material-icons">save_alt</i></button>`;
       } else if (row.id === useCases.playbackPending) {
-        control = '<button type="button" class="row-action spin" disabled>⟳</button>';
+        control = '<button type="button" class="row-action" disabled aria-label="Loading"><i class="material-icons spin">cached</i></button>';
       } else if (state.call && row.id === state.call.id) {
-        control = `<button type="button" class="row-action" data-stop="${row.id}" aria-label="Stop">■</button>`;
+        control = `<button type="button" class="row-action" data-stop="${row.id}" aria-label="Stop"><i class="material-icons">stop</i></button>`;
       } else {
-        control = `<button type="button" class="row-action" data-play="${row.id}" aria-label="Play">▶</button>`;
+        control = `<button type="button" class="row-action" data-play="${row.id}" aria-label="Play"><i class="material-icons">play_arrow</i></button>`;
       }
 
       const date = new Date(row.dateTime);
