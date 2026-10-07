@@ -43,6 +43,7 @@
  * ------------------------------------------------------------------------ */
 
 rdio-app {
+  align-items: center;
   background-color: var(--rdio-background);
   color: var(--rdio-foreground);
   display: flex;
