@@ -51,6 +51,7 @@ import (
 	"rdio-scanner/internal/infrastructure/tokens"
 	"rdio-scanner/internal/presentation/adminws"
 	"rdio-scanner/internal/presentation/rest"
+	"rdio-scanner/internal/presentation/serving/admin"
 	"rdio-scanner/internal/presentation/serving/scanner"
 	"rdio-scanner/internal/presentation/ws"
 )
@@ -318,7 +319,7 @@ func (s *server) wire() error {
 		Logs:                      s.logs,
 	}
 
-	admin := rest.NewAdmin(rest.Deps{
+	adminAPI := rest.NewAdmin(rest.Deps{
 		AddUser:              application.NewAddAccessUserHandler(accessUserPorts),
 		Config:               application.NewGetConfigHandler(s.repos),
 		ConfigSocket:         adminSessions,
@@ -355,13 +356,10 @@ func (s *server) wire() error {
 
 	mux := http.NewServeMux()
 
-	admin.Register(mux)
+	adminAPI.Register(mux)
 	upload.Register(mux)
 
-	// The path the web application is served from is also the path a listener connects to, and the
-	// upgrade header decides which. This is the legacy server's one catch-all handler, and the only place
-	// in this server where a request can be either.
-	mux.HandleFunc("/", catchAll(listener, scanner.Embedded()))
+	serveApplications(mux, listener, scanner.Embedded(), admin.Embedded())
 
 	s.routes = mux
 

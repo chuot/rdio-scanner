@@ -248,6 +248,25 @@ func catchAll(listener http.Handler, app http.Handler) http.HandlerFunc {
 	}
 }
 
+// serveApplications registers the two applications the binary carries and the paths they are served from.
+//
+// The path the scanner application is served from is also the path a listener connects to, and the upgrade
+// header decides which. That is the legacy server's one catch-all handler, and this is the only place in this
+// server where a request can be either.
+//
+// The administration application is served from its own subtree, and `/admin` itself is deliberately not
+// registered: a subtree pattern redirects a request for the subtree root by adding the trailing slash, so
+// `/admin` becomes a 307 to `/admin/`, and every relative URL in the admin shell then resolves inside the
+// admin bundle. Registering `/admin` as well would answer it without the redirect and leave those relative
+// URLs resolving at the root of the server instead.
+//
+// The listener stays on the admin route too. No native application opens a listener connection at `/admin`,
+// which is what makes the redirect at that one path an accepted behavior change rather than a break.
+func serveApplications(mux *http.ServeMux, listener, scannerApp, adminApp http.Handler) {
+	mux.HandleFunc("/", catchAll(listener, scannerApp))
+	mux.HandleFunc("/admin/", catchAll(listener, adminApp))
+}
+
 // pruneHourly reproduces the legacy server's scheduler: a pruning an hour, each one reading the retention
 // the server is configured with at the moment it runs, and a failure reported in the log view and
 // otherwise forgotten — the next hour tries again.
