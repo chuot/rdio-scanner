@@ -34,7 +34,7 @@ class RdioSearchPanel extends HTMLElement {
           <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Talkgroup</label><select name="talkgroup"><option value="">All Talkgroups</option></select></div></div></rdio-form-field>
           <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Group</label><select name="group"><option value="">All Groups</option></select></div></div></rdio-form-field>
           <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Tag</label><select name="tag"><option value="">All Tags</option></select></div></div></rdio-form-field>
-          <div class="reset"><button type="button" class="rdio-button-mini reset">Reset</button></div>
+          <div class="reset"><button type="button" class="rdio-button-mini">Reset</button></div>
         </form>
       </div>
     `;
