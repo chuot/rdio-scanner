@@ -24,17 +24,25 @@ export function showPromo(userAgent = navigator.userAgent) {
   const message = document.createElement('p');
   message.textContent = `Do you know that Rdio Scanner works natively on ${deviceType} devices?`;
 
-  const badge = document.createElement('div');
+  const messageBox = document.createElement('div');
+  messageBox.append(message);
+
+  const badgeBox = document.createElement('div');
 
   if (deviceType === 'Android') {
-    badge.innerHTML = `<a href="https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner" target="_blank">${googlePlayBadge}</a>`;
+    badgeBox.innerHTML = `<a href="https://play.google.com/store/apps/details?id=solutions.saubeo.rdioScanner" target="_blank">${googlePlayBadge}</a>`;
   } else {
-    badge.innerHTML = `<a href="https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone" target="_blank">${appStoreBadge}</a>`;
+    badgeBox.innerHTML = `<a href="https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone" target="_blank">${appStoreBadge}</a>`;
   }
 
-  const countdown = startCountdown();
+  // legacy native.component.html: one row holding the message and the badge side
+  // by side, with the countdown outside it.
+  const row = document.createElement('div');
+  row.append(messageBox, badgeBox);
 
-  content.append(message, badge, countdown.node);
+  const countdown = startCountdown('div');
+
+  content.append(row, countdown.node);
   showSnackbar(content, null);
 
   return true;

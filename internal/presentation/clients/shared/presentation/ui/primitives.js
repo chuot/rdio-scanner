@@ -16,12 +16,62 @@ class RdioSnackbar extends HTMLElement {
     if (typeof duration === 'number') host.timer = setTimeout(() => host.render(''), duration);
   }
 
+  connectedCallback() {
+    this.addEventListener('animationend', (event) => this.animationEnd(event));
+  }
+
   render(message) {
-    this.hidden = !message;
     this.setAttribute('role', 'status');
 
-    if (typeof message === 'string') this.textContent = message;
-    else this.replaceChildren(message);
+    if (!this.hasAttribute('material')) {
+      this.hidden = !message;
+
+      if (typeof message === 'string') this.textContent = message;
+      else this.replaceChildren(message);
+
+      return;
+    }
+
+    // The scanner asks for the shape the baseline has: a surface carrying the
+    // colour, the shape, and the elevation, with the message in a label inside
+    // it, and the 150ms enter and 75ms exit animations the baseline plays. The
+    // administration application asks for nothing of the kind and renders as it
+    // always did.
+    const content = typeof message === 'string' ? document.createTextNode(message) : message;
+
+    if (!message) {
+      if (this.hidden || this.classList.contains('rdio-snackbar-exit')) return;
+
+      this.classList.remove('rdio-snackbar-enter');
+      this.classList.add('rdio-snackbar-exit');
+
+      return;
+    }
+
+    const label = document.createElement('div');
+    label.className = 'rdio-snackbar-label';
+    label.append(content);
+
+    const surface = document.createElement('div');
+    surface.className = 'rdio-snackbar-surface';
+    surface.append(label);
+
+    this.hidden = false;
+    this.replaceChildren(surface);
+    this.classList.remove('rdio-snackbar-exit');
+    this.classList.remove('rdio-snackbar-enter');
+    // Reading the layout is what lets the same enter animation play again on a
+    // host that has already played it once.
+    void this.offsetWidth;
+    this.classList.add('rdio-snackbar-enter');
+  }
+
+  animationEnd(event) {
+    if (event.animationName !== 'rdio-snackbar-exit') return;
+
+    this.classList.remove('rdio-snackbar-exit');
+    this.hidden = true;
+    this.replaceChildren();
   }
 }
 

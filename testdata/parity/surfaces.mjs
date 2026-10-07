@@ -376,7 +376,12 @@ export const pairs = [
   },
   {
     id: 56, name: 'snackbar surface',
-    legacy: { css: '.mdc-snackbar__surface' }, current: { css: 'rdio-snackbar' },
+    legacy: { css: '.mdc-snackbar__surface' }, current: { css: 'rdio-snackbar .rdio-snackbar-surface' },
+    states: ['snackbar-help'], viewports: ['wide'],
+  },
+  {
+    id: 60, name: 'snackbar label',
+    legacy: { css: '.mat-mdc-snack-bar-label' }, current: { css: 'rdio-snackbar .rdio-snackbar-label' },
     states: ['snackbar-help'], viewports: ['wide'],
   },
   {

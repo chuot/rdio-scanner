@@ -783,14 +783,26 @@ class Side {
         );
         await page.click(this.control('help'));
         await page.waitFor(`!!document.querySelector(${JSON.stringify(this.locator(this.pair('snackbar')).css)})`, { what: 'the help snackbar' });
+        await this.awaitSingleDigitCountdown(page);
         break;
 
       case 'snackbar-promo':
         await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
         await page.goto(this.origin);
         await page.waitFor(this.hasText('works natively on'), { timeout: 25000, what: 'the native-application promo' });
+        await this.awaitSingleDigitCountdown(page);
         break;
     }
+  }
+
+  // The countdown begins at "10", and its box hugs whatever it prints. Roboto's digits all share one advance, so the
+  // box is the same for every single digit and a whole character wider for the first second: the probe waits for that
+  // second to pass so that both applications are measured printing one digit.
+  async awaitSingleDigitCountdown(page) {
+    await page.waitFor(
+      `(() => { const el = document.querySelector('.countdown'); return !!el && el.textContent.trim().length === 1; })()`,
+      { timeout: 15000, what: 'the countdown printing a single digit' },
+    );
   }
 
   async reloadWith(options) {

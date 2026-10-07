@@ -23,9 +23,11 @@ export function showHelp(email) {
   showSnackbar(content, null);
 }
 
-// Shared 10 s countdown footer used by the help and promo snackbars.
-export function startCountdown() {
-  const node = document.createElement('span');
+// Shared 10 s countdown footer used by the help and promo snackbars. The baseline
+// writes the support footer as a span and the native one as a div, and the tag is
+// what makes the native footer a flex row like every other row of that component.
+export function startCountdown(tag = 'span') {
+  const node = document.createElement(tag);
   node.className = 'countdown';
 
   let remaining = 10;
