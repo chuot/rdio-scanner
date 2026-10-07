@@ -27,18 +27,20 @@ import (
 	"testing"
 )
 
-// The golden captures in server-ng/testdata/golden are what the legacy server put on the wire, and
+// The golden captures in testdata/golden are what the legacy server put on the wire, and
 // they are what this package's marshaling is compared against. These tests do not compare payloads:
 // they prove the capture is complete, so that a payload test which finds no golden for a command
 // cannot quietly pass without one.
 //
-// testdata/capture/README.md is how they are taken, and
-// docs/specs/FEAT-003-server-ng-refactor/decision-parity-verification.md is why they are the
-// yardstick rather than a reading of the legacy source.
+// They are pinned bytes, taken from the legacy server at git tree
+// 02ae33d4651fee4c46a93bdcf574d0aead89e542. The harness that took them was retired with the legacy
+// source, so these files are the contract now rather than something a build step regenerates, and
+// docs/specs/FEAT-003-server-ng-refactor/decision-parity-verification.md is why they are the yardstick
+// rather than a reading of the legacy source.
 
 const goldenDir = "../../../testdata/golden"
 
-// TestEveryGoldenCaptureIsThere is the completeness half: the files the differential tests read are
+// TestEveryGoldenCaptureIsThere is the completeness half: the files the payload tests read are
 // named here, so a capture that stopped early fails here rather than leaving a payload test with
 // nothing to compare against.
 func TestEveryGoldenCaptureIsThere(t *testing.T) {

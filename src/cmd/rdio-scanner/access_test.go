@@ -40,7 +40,8 @@ import (
 //
 // The configuration is the one the golden captures were taken from, installed through the same administrator
 // endpoints in the same order, so that the two servers are answering in a configuration the legacy server's
-// answers were recorded in.
+// answers were recorded in. It is `testdata/config.json` beside this package: the harness that originally
+// installed it is retired, so the file it wrote is kept here, next to the tests that still install it.
 
 // The access codes the capture configures for its restricted phase, and what each one is there to be
 // tested for: one that names systems, one whose date has passed, and one that allows one session.
@@ -230,7 +231,7 @@ type captureFixture struct {
 func readCaptureFixture(t *testing.T) captureFixture {
 	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "capture", "fixtures", "config.json"))
+	b, err := os.ReadFile(filepath.Join("testdata", "config.json"))
 	if err != nil {
 		t.Fatalf("reading the configuration the captures install: %v", err)
 	}

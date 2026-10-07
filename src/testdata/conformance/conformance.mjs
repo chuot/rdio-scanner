@@ -29,8 +29,9 @@
 // The browser is driven over the DevTools protocol with nothing but node's own websocket and fetch, because
 // the repository adds no test dependency for it and the point of this harness is the application as shipped.
 //
-// It knows nothing about the legacy server. Parity with it is the differential harness's job; this one answers
-// a different question: does the client work against the server it is now embedded in.
+// It knows nothing about the legacy server. Parity with it is answered by the pinned goldens under
+// `testdata/golden` and the databases the legacy server wrote under `testdata/legacydb`; this harness answers a
+// different question: does the client work against the server it is now embedded in.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -475,13 +476,13 @@ const newPassword = 'conformance-new-password';
 // something that exists.
 let watchDir = '';
 
-// The configuration both harnesses give a server, and the audio both harnesses upload: nothing looks inside the
-// recording, and the point is that the server passes the bytes it was given along.
-const seed = JSON.parse(readFileSync(new URL('../differential/fixtures/seed.json', import.meta.url), 'utf8'));
+// The configuration the harness gives a server, and the audio it uploads: nothing looks inside the recording, and
+// the point is that the server passes the bytes it was given along.
+const seed = JSON.parse(readFileSync(new URL('./fixtures/seed.json', import.meta.url), 'utf8'));
 
-// recording is a real, if tiny, audio file: a second of 8 kHz mono 16-bit PCM. The differential harness is
-// content with meaningless bytes because it only compares what the server passed along; this harness puts the
-// bytes in a browser, and a browser only plays audio it can decode.
+// recording is a real, if tiny, audio file: a second of 8 kHz mono 16-bit PCM. A harness that only compares what
+// the server passed along would be content with meaningless bytes; this one puts the bytes in a browser, and a
+// browser only plays audio it can decode.
 function wavFile() {
   const rate = 8000;
   const samples = rate;
@@ -528,8 +529,7 @@ const trunkRecorderSidecar = `{
 }
 `;
 
-// The fields a recording tool actually posts to /api/call-upload, which is what the differential harness posts
-// to the same endpoint when it compares the two servers.
+// The fields a recording tool actually posts to /api/call-upload.
 function uploadFields(key) {
   return {
     key,

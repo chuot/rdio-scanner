@@ -653,6 +653,6 @@ func capturedSessionCommands(t *testing.T) []string {
 	}
 
 	// The captured session goes on from here with a second listener and two configuration changes,
-	// which belong to the hub's own tests and to the differential harness rather than to this one.
+	// which belong to the hub's own tests rather than to this one.
 	return commands[:8]
 }

@@ -1669,7 +1669,7 @@ func migrateAccesses(ctx context.Context, s store, progress func(string)) error 
 //
 // The report is console-only: it writes no row and no log entry. A startup notice is not something the
 // two servers are asked to agree about, and a log entry would put a difference in the `logs` table the
-// differential harness compares.
+// parity fixtures are read from.
 //
 // The comparison that finds the second shape is done here rather than in the query, because `label` is
 // text and `unitRef` is a number, and the three dialects this package serves cast between them three
