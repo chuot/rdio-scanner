@@ -93,7 +93,12 @@ class RdioDisplay extends HTMLElement {
     this.callHistory = new Array(HISTORY_SIZE).fill(null);
     this.callTime = 0;
     this.replayOffset = 0;
+    // The legacy display starts dimmed: the dimmer lights it only when a call
+    // arrives or the listener presses a control, and dims it again dimmerDelay
+    // after that. The configuration arriving is not one of those occasions.
     this.dimmer = false;
+    this.classList.add('idle');
+    this.lastCall = null;
     this.clock = new Date();
     this.lastSubmittedPin = null;
 
@@ -121,7 +126,6 @@ class RdioDisplay extends HTMLElement {
 
     this.syncClock();
     this.startProgressTick();
-    this.updateDimmer();
     this.render();
   }
 
@@ -176,6 +180,9 @@ class RdioDisplay extends HTMLElement {
 
       if (!pause) this.callTime = Math.floor((Date.now() - this.callStart) / 1000);
 
+      // The legacy re-arms the dimmer on every progress update, so the display
+      // stays lit for as long as a call is playing.
+      this.updateDimmer();
       this.render();
     }, 500);
   }
@@ -245,6 +252,11 @@ class RdioDisplay extends HTMLElement {
     const { store } = getAppContext();
     const state = store.getState();
     const { call, config, linked, listeners, pause, queue, auth } = state;
+
+    // A call arriving is what lights the display, as it is in the legacy. Neither
+    // the configuration arriving nor the clock ticking arms the dimmer, which is
+    // why the display sits dimmed from the moment the page loads.
+    if (call && call !== this.lastCall) this.updateDimmer();
 
     const time12h = config?.time12hFormat ?? false;
 
