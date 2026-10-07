@@ -19,8 +19,9 @@ app := rdio-scanner
 date := 2026/05/16
 ver := 7.0.0-dev
 
-client := $(wildcard client/*.json client/*.ts)
-server := $(wildcard server/*.go)
+client := $(wildcard internal/presentation/client/*.json internal/presentation/client/*.mjs) \
+	$(shell find internal/presentation/client/src -type f)
+server := $(shell find cmd internal -type f -name '*.go')
 
 build = @cd server && GOOS=$(1) GOARCH=$(3) go build -o ../dist/$(2)-$(3)/$(4)
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
@@ -31,13 +32,12 @@ zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 .PHONY: linux linux-386 linux-amd64 linux-arm linux-arm64
 .PHONY: macos macos-amd64 macos-arm64
 .PHONY: windows windows-amd64
-.PHONY: webapp-ng
-.PHONY: webapp-ng-server server-ng
 
 all: clean dist
 
 clean:
-	@rm -fr client/node_modules dist server/webapp
+	@rm -fr internal/presentation/client/node_modules dist
+	@find internal/presentation/webapp/bundle -mindepth 1 -not -name .gitkeep -delete
 
 container: webapp linux-amd64
 	@podman login docker.io
@@ -53,23 +53,11 @@ sed:
 	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
 
-webapp: server/webapp/index.html
+webapp: internal/presentation/webapp/bundle/index.html
 
-server/webapp/index.html: $(client)
-	@cd client && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd client && npm run build
-
-webapp-ng:
-	@cd client-ng && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd client-ng && npm run build
-
-webapp-ng-server:
-	@cd client-ng && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd client-ng && npm run build -- --out ../server-ng/internal/presentation/webapp/webapp
-
-server-ng: webapp-ng-server
-	@test -d dist/linux-amd64 || mkdir -p dist/linux-amd64
-	@cd server-ng && go build -o ../dist/linux-amd64/$(app)-ng ./cmd/rdio-scanner
+internal/presentation/webapp/bundle/index.html: $(client)
+	@cd internal/presentation/client && test -d node_modules || npm ci --loglevel=error --no-progress
+	@cd internal/presentation/client && npm run build
 
 freebsd: freebsd-amd64
 freebsd-amd64: webapp dist/$(app)-freebsd-amd64-v$(ver).zip
