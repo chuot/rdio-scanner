@@ -30,4 +30,4 @@ package main
 // Version is the release version this binary reports. `make sed` stamps it from the
 // Makefile's `ver :=`; the value committed here is the one the pinned wire contract
 // carries, and TestVersionMatchesThePinnedWireContract holds the two together.
-const Version = "7.0.0"
+const Version = "8.0.0"
