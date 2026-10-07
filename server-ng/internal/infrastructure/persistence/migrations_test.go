@@ -86,6 +86,71 @@ func migrateLegacyV6Fixture(t *testing.T) (*sql.DB, []string) {
 	return db, migrateDatabase(t, db)
 }
 
+// The damaged fixtures are databases a legacy server has already migrated, in the two states the
+// legacy migration pass actually leaves behind: migrated.db, where the pass finished and left the
+// damage in the units and the missing source links, and crashed.db, where the calls migration was
+// rolled back and the v6 calls table is still there. See testdata/legacydamaged/generate.sh.
+const (
+	damagedMigratedFixture = "../../../testdata/legacydamaged/migrated.db"
+	damagedCrashedFixture  = "../../../testdata/legacydamaged/crashed.db"
+)
+
+// openDamagedFixture opens a private copy of one of the damaged fixtures, so that a test which
+// writes to it cannot damage the committed one.
+func openDamagedFixture(t *testing.T, fixture string) *sql.DB {
+	t.Helper()
+
+	b, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("the damaged fixture %s is missing: %v\n"+
+			"regenerate it with server-ng/testdata/legacydamaged/generate.sh", fixture, err)
+	}
+
+	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
+
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatalf("copying %s: %v", fixture, err)
+	}
+
+	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: path})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	t.Cleanup(func() { db.Close() })
+
+	return db
+}
+
+// damageReport keeps the lines the startup damage report wrote out of a progress report.
+func damageReport(progress []string) []string {
+	found := []string{}
+
+	for _, line := range progress {
+		if strings.HasPrefix(line, "migration.damage:") {
+			found = append(found, line)
+		}
+	}
+
+	return found
+}
+
+// tableSnapshot reads the tables the startup report is asked to leave alone, so that a test can
+// prove the report read the database instead of writing it.
+func tableSnapshot(t *testing.T, db *sql.DB) string {
+	t.Helper()
+
+	out := strings.Builder{}
+
+	for _, table := range []string{"systems", "talkgroups", "units", "calls", "callUnits"} {
+		for _, row := range rowsOf(t, db, table, "*") {
+			fmt.Fprintf(&out, "%s %s\n", table, strings.Join(row, "|"))
+		}
+	}
+
+	return out.String()
+}
+
 // migrateDatabase runs the migration pass and collects what it reports.
 func migrateDatabase(t *testing.T, db *sql.DB) []string {
 	t.Helper()
@@ -1065,6 +1130,139 @@ func TestMigrateAcceptsANilProgressCallback(t *testing.T) {
 
 	if got := countRows(t, db, "groups"); got != 6 {
 		t.Errorf("migrating with a nil callback stored %d groups, want 6", got)
+	}
+}
+
+// TestMigrateRecoversTheCallsASurvivingV6TableStillHolds is the recoverable half of REQ-010: the
+// legacy server committed the units migration with its damage, crashed in the calls migration, and
+// rolled the call set back, leaving the v6 calls table in place. The repaired pass finishes the job
+// the legacy server could not — the calls come back with their unit links, and the v6 table is
+// dropped the way the legacy pass drops it.
+func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
+	db := openDamagedFixture(t, damagedCrashedFixture)
+
+	progress := migrateDatabase(t, db)
+
+	if got := announcements(progress); !equalStrings(got, []string{"migrating calls..."}) {
+		t.Errorf("the pass found %v, want the calls table and nothing else: the other v6 tables were "+
+			"migrated and dropped before the crash", got)
+	}
+
+	got := readRows(t, db, `SELECT "callId", "systemId", "talkgroupId" FROM "calls" ORDER BY "callId"`)
+	want := [][]string{{"701", "101", "201"}, {"702", "101", "202"}, {"706", "101", "201"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the recovered calls:\n  got  %v\n  want %v", got, want)
+	}
+
+	got = readRows(t, db, `SELECT "callId", "offset", "unitRef" FROM "callUnits" ORDER BY "callId"`)
+	want = [][]string{{"701", "1.5", "12345"}, {"702", "2.5", "99999"}, {"706", "0", "6789"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the recovered source units:\n  got  %v\n  want %v", got, want)
+	}
+
+	// Call 706 names a number no unit holds any more — the unit that held it is unit 302, left with
+	// reference 0 — so the call migration makes a unit for it, as it does for any number it has never
+	// seen. The reference unit 302 lost is not recovered, and the startup report names it.
+	if got := readRows(t, db, `SELECT "label", "systemId", "unitRef" FROM "units" WHERE "unitRef" = 6789`); len(got) != 1 {
+		t.Errorf("the unit for the number call 706 names:\n  got  %v\n  want one unit of Grand Metro at 6789", got)
+	}
+
+	if _, err := db.Exec(`SELECT COUNT(*) FROM "rdioScannerCalls"`); err == nil {
+		t.Errorf("the v6 calls table is still there after the calls it holds were migrated, want it dropped " +
+			"the way the legacy pass drops it")
+	}
+}
+
+// TestMigrateReportsTheDamageItCannotRepair is the unrecoverable half of REQ-010: a database the
+// legacy server finished migrating holds units whose radio reference was thrown away, and the numbers
+// they were migrated from are nowhere in it. The startup report names each one, and invents nothing.
+func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
+	db := openDamagedFixture(t, damagedMigratedFixture)
+
+	before := tableSnapshot(t, db)
+
+	got := damageReport(migrateDatabase(t, db))
+	want := []string{
+		"migration.damage: 2 units hold no radio reference, the numbers they were migrated from are not in this database",
+		`migration.damage:   unit 301 "Engine 12" of Grand Metro (10001)`,
+		`migration.damage:   unit 302 "Car 4" of Grand Metro (10001)`,
+		"migration.damage: 1 unit is labelled with its own number, the shape of a unit the migration created rather than a deployment named",
+		`migration.damage:   unit 303 "6789" of Grand Metro (10001)`,
+	}
+
+	if !equalStrings(got, want) {
+		t.Errorf("the startup report:\n  got  %v\n  want %v", got, want)
+	}
+
+	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "unitRef"`) {
+		if row[0] != "301" && row[0] != "302" {
+			continue
+		}
+
+		if row[2] != "0" {
+			t.Errorf("the report left unit %s %q holding reference %s, want it left with none: the number it "+
+				"was migrated from is not in this database and none is invented", row[0], row[1], row[2])
+		}
+	}
+
+	if after := tableSnapshot(t, db); after != before {
+		t.Errorf("the startup report changed the database:\n  got  %s\n  want %s", after, before)
+	}
+}
+
+// TestMigrateReportsTheSameDamageAtEveryStart is the idempotence rule: the report is a reading, not a
+// pass that leaves the database in a state the next start reads differently, so a second start on the
+// same damaged database says the same thing about the same rows.
+func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
+	db := openDamagedFixture(t, damagedMigratedFixture)
+
+	first := damageReport(migrateDatabase(t, db))
+	before := tableSnapshot(t, db)
+
+	second := damageReport(migrateDatabase(t, db))
+
+	if !equalStrings(second, first) {
+		t.Errorf("the second start reported:\n  got  %v\n  want %v", second, first)
+	}
+
+	if after := tableSnapshot(t, db); after != before {
+		t.Errorf("the second start changed the database:\n  got  %s\n  want %s", after, before)
+	}
+}
+
+// TestMigrateDeletesNoRowItIsAskedToRepair is CA-010.3: the repair recovers rows and reports rows, and
+// removes nothing. The v6 tables it drops are the ones whose rows it has just migrated, which is what
+// the legacy pass does too.
+func TestMigrateDeletesNoRowItIsAskedToRepair(t *testing.T) {
+	for _, fixture := range []string{damagedMigratedFixture, damagedCrashedFixture} {
+		db := openDamagedFixture(t, fixture)
+
+		before := map[string]int{}
+
+		for _, table := range []string{"units", "calls", "callUnits"} {
+			before[table] = countRows(t, db, table)
+		}
+
+		migrateDatabase(t, db)
+
+		for _, table := range []string{"units", "calls", "callUnits"} {
+			if got := countRows(t, db, table); got < before[table] {
+				t.Errorf("%s holds %d rows after the startup pass, want at least the %d it held before: %s",
+					fixture, got, before[table], table)
+			}
+		}
+	}
+}
+
+// TestMigrateReportsNothingForADatabaseWithNoDamage keeps the report off a database that has nothing
+// to report, which is every database that has never been through the legacy migration pass.
+func TestMigrateReportsNothingForADatabaseWithNoDamage(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 0 {
+		t.Errorf("the startup report on a database whose migration this server ran itself: %v, want nothing said", got)
 	}
 }
 

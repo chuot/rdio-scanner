@@ -29,6 +29,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -708,6 +709,59 @@ func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
 
 	if options.Secret != secret {
 		t.Errorf("the second start is signing with a secret that is not the one on record")
+	}
+}
+
+// TestServerReportsTheDamageALegacyMigrationLeftBehind is the operator's half of the startup repair:
+// the report the migration pass writes reaches the console the operator is reading, the damaged rows
+// are left exactly as they were, and the server starts anyway — a report is not a reason to refuse to
+// run. See docs/specs/FEAT-004-legacy-defect-repairs/decision-migrated-database-repair.md.
+func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
+	baseDir := t.TempDir()
+
+	fixture := filepath.Join("..", "..", "testdata", "legacydamaged", "migrated.db")
+
+	b, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("%s is missing: %v\n"+
+			"regenerate it with server-ng/testdata/legacydamaged/generate.sh", fixture, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(baseDir, "rdio-scanner.db"), b, 0o600); err != nil {
+		t.Fatalf("placing the fixture where the server opens it: %v", err)
+	}
+
+	console := strings.Builder{}
+
+	srv, err := newServer(testConfigIn(baseDir), &console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	out := console.String()
+
+	for _, want := range []string{
+		"2 units hold no radio reference",
+		`unit 301 "Engine 12" of Grand Metro (10001)`,
+		`unit 302 "Car 4" of Grand Metro (10001)`,
+		`unit 303 "6789" of Grand Metro (10001)`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the startup console does not say %q:\n%s", want, out)
+		}
+	}
+
+	// Reported, not rewritten: the two units are left with no reference, because the numbers they were
+	// migrated from are not in this database.
+	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (301, 302) AND "unitRef" = 0`); rows != 2 {
+		t.Errorf("the startup report left %d of the two units it reported on without a reference, want both "+
+			"left exactly as they were", rows)
 	}
 }
 

@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,7 +48,9 @@ import (
 // `progress` receives every line the legacy server wrote with `log.Println` while migrating: the
 // `migrating groups...` announcement of each table it found, and each per-row failure it printed
 // and carried on from. The composition root (T042) routes them to the server log; a test can
-// collect them. A nil `progress` is accepted and simply discards them.
+// collect them. A nil `progress` is accepted and simply discards them. After the last migration,
+// `progress` also receives the damage report of `reportMigrationDamage`, which the legacy server
+// never wrote: it is what this server says about a database the legacy server already migrated.
 //
 // A failure the legacy migration *returned* is returned here, wrapped the way `Database.migrate`
 // wrapped it (`database.migrate: migration.migrateGroups: …`). A failure it *printed* is not an
@@ -95,6 +98,12 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(mes
 			return operationError("database", "migrate", err)
 		}
 	}
+
+	// The pass is over, and the database is what it is. A database the legacy server already migrated
+	// can hold damage this pass will not touch, because the v6 rows it was read from are gone; reading
+	// what is left and saying what it is belongs at the end of the startup pass, before the server
+	// starts answering from the result.
+	reportMigrationDamage(ctx, s, progress)
 
 	return nil
 }
@@ -1641,4 +1650,102 @@ func migrateAccesses(ctx context.Context, s store, progress func(string)) error 
 	}
 
 	return nil
+}
+
+// reportMigrationDamage reads the two shapes the legacy migration pass leaves in a database that pass
+// has already run over, and writes what it finds to `progress`. It reads only: it changes no row,
+// invents no reference, and a failure to read is reported and carried on from, the way a per-row
+// migration failure is, because a diagnostic is not a reason to refuse to start.
+//
+// The two shapes are the two the legacy statements of
+// [server/migrations.go](../../../../server/migrations.go) write. A unit at `unitRef` 0 is a unit whose
+// v6 reference the legacy unit insert threw away; the number it was migrated from is not in this
+// database any more, and inventing one would hand a deployment a radio reference nobody can check. A
+// unit labelled with its own number is a unit the migration made for a number it could not find rather
+// than a unit a deployment named.
+//
+// Neither is repaired here, because neither can be. See
+// [decision-migrated-database-repair.md](../../../../docs/specs/FEAT-004-legacy-defect-repairs/decision-migrated-database-repair.md).
+//
+// The report is console-only: it writes no row and no log entry. A startup notice is not something the
+// two servers are asked to agree about, and a log entry would put a difference in the `logs` table the
+// differential harness compares.
+//
+// The comparison that finds the second shape is done here rather than in the query, because `label` is
+// text and `unitRef` is a number, and the three dialects this package serves cast between them three
+// different ways.
+func reportMigrationDamage(ctx context.Context, s store, progress func(string)) {
+	const section, operation = "migration", "damage"
+
+	query := `SELECT u."unitId", u."label", u."unitRef", s."label", s."systemRef" FROM "units" AS u LEFT JOIN "systems" AS s ON s."systemId" = u."systemId" ORDER BY u."unitId"`
+
+	rows, err := s.query(ctx, query)
+	if err != nil {
+		progress(statementError(section, operation, err, query).Error())
+
+		return
+	}
+
+	defer rows.Close()
+
+	lost, made := []string{}, []string{}
+
+	for rows.Next() {
+		var (
+			unitID      sql.NullInt64
+			label       sql.NullString
+			unitRef     sql.NullInt64
+			systemLabel sql.NullString
+			systemRef   sql.NullInt64
+		)
+
+		if err := rows.Scan(&unitID, &label, &unitRef, &systemLabel, &systemRef); err != nil {
+			continue
+		}
+
+		line := fmt.Sprintf("migration.damage:   unit %d %q of %s", unitID.Int64, label.String, damagedSystem(systemLabel, systemRef))
+
+		switch {
+		case unitRef.Int64 == 0:
+			lost = append(lost, line)
+
+		case label.String == strconv.FormatInt(unitRef.Int64, 10):
+			made = append(made, line)
+		}
+	}
+
+	reportDamaged(progress, lost, "unit holds no radio reference", "units hold no radio reference",
+		"the numbers they were migrated from are not in this database")
+
+	reportDamaged(progress, made, "unit is labelled with its own number",
+		"units are labelled with their own numbers",
+		"the shape of a unit the migration created rather than a deployment named")
+}
+
+// damagedSystem names the system a unit belongs to the way an operator names one: its label, and the
+// radio system reference in parentheses. A unit whose system row is gone is named by what is left.
+func damagedSystem(label sql.NullString, ref sql.NullInt64) string {
+	if !label.Valid || label.String == "" {
+		return fmt.Sprintf("system %d", ref.Int64)
+	}
+
+	return fmt.Sprintf("%s (%d)", label.String, ref.Int64)
+}
+
+// reportDamaged writes one summary line and then one line per unit, and says nothing at all when there
+// is nothing to say.
+func reportDamaged(progress func(string), found []string, singular, plural, cause string) {
+	if len(found) == 0 {
+		return
+	}
+
+	if len(found) == 1 {
+		progress(fmt.Sprintf("migration.damage: 1 %s, %s", singular, cause))
+	} else {
+		progress(fmt.Sprintf("migration.damage: %d %s, %s", len(found), plural, cause))
+	}
+
+	for _, line := range found {
+		progress(line)
+	}
 }
