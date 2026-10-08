@@ -312,8 +312,20 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		search := domain.ParseLogSearch(submitted)
+
+		// The one criterion this endpoint refuses instead of ignoring. A subsystem the server does not have
+		// is not a filter that matches nothing: it is a caller asking about a part of the server that does
+		// not exist, and answering them with an empty log view is how a typo becomes an operator concluding
+		// that nothing happened.
+		if search.SourceWasRejected() {
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+
 		page, err := admin.logs.Handle(r.Context(), application.SearchLogsQuery{
-			Search: domain.ParseLogSearch(submitted),
+			Search: search,
 		})
 		if err != nil {
 			w.WriteHeader(http.StatusExpectationFailed)

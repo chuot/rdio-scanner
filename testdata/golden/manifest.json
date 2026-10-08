@@ -5,6 +5,18 @@
     "loginToken": "<token>",
     "logTime": "<datetime>"
   },
+  "shapeSuperseded": {
+    "rest-logs.json": {
+      "contract": "docs/specs/FEAT-010-logging-subsystems/contract-logs-search.md",
+      "decidedBy": "docs/specs/FEAT-010-logging-subsystems/decision-source-column.md",
+      "carries": [
+        "\"sources\"",
+        "\"source\":"
+      ],
+      "whatChanged": "The log view's answer carries the part of the server that wrote each entry, and a count of how many entries each part wrote among everything the criteria match. The legacy server has no such thing to report, so this capture is the shape this server's contract declares over the captured scenario, and not the bytes the legacy tree wrote.",
+      "unchanged": "count, dateStart, dateStop and the echoed options are the legacy server's shape and still match what it wrote; so are the three entries, their order, and the criteria the capture script submitted."
+    }
+  },
   "versionField": {
     "pinned": "8.0.0",
     "movedFrom": "7.0.0",
@@ -16,6 +28,6 @@
       "rest-config.json",
       "adminws-config.json"
     ],
-    "note": "What a server reports about itself is part of what a client is told, so the version is the one field in a pinned capture that a release moves, and it moves when the release declares a core in VERSION.txt. Every other byte of every capture is still the bytes the legacy tree wrote."
+    "note": "What a server reports about itself is part of what a client is told, so the version is the one field in a pinned capture that a release moves, and it moves when the release declares a core in VERSION.txt. Every other byte of every capture is still the bytes the legacy tree wrote, except for the captures declared in shapeSuperseded, which a feature gave a new shape and which name the contract that did it."
   }
 }

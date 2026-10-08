@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // AdminLoginReply is what a login is answered with: the credential that stands for the new session, and
@@ -62,19 +63,36 @@ func Alerts() AlertsPayload {
 //
 // The criteria are echoed back as they were submitted, so that the view can ask again for the next page
 // without remembering anything of its own.
+//
+// The per-subsystem counts are answered on every search and not only on one that asks for them: they are
+// what the view offers the operator before they narrow to anything, and they describe everything the
+// criteria match except the subsystem filter itself — see
+// [decision-per-source-counts-and-the-total.md](../../../docs/specs/FEAT-010-logging-subsystems/decision-per-source-counts-and-the-total.md).
 type AdminLogsPagePayload struct {
 	Count     uint64            `json:"count"`
 	DateStart time.Time         `json:"dateStart"`
 	DateStop  time.Time         `json:"dateStop"`
 	Options   logSearchCriteria `json:"options"`
+	Sources   []AdminLogSource  `json:"sources"`
 	Logs      []AdminLogEntry   `json:"logs"`
 }
 
+// AdminLogSource is how many entries one part of the server wrote among everything the criteria match.
+type AdminLogSource struct {
+	Source string `json:"source"`
+	Count  uint64 `json:"count"`
+}
+
 // AdminLogEntry is one recorded server event, as the log view shows it.
+//
+// The source is the part of the server that wrote the entry, which is what the log view narrows on. It
+// comes from the search, which reports a row written without one as `legacy` — this payload does not
+// decide that, and a row written by another server is not this server's to refile.
 type AdminLogEntry struct {
 	ID       uint64    `json:"id"`
 	DateTime time.Time `json:"dateTime"`
 	Level    string    `json:"level"`
+	Source   string    `json:"source"`
 	Message  string    `json:"message"`
 }
 
@@ -84,6 +102,10 @@ type AdminLogEntry struct {
 // The criteria are echoed from the request and not from the parsed search, because the two are not the
 // same thing: a limit larger than the most the search will ever return is used as the smaller number and
 // echoed as the number that was asked for.
+//
+// The per-subsystem counts are passed through in the order the search reported them, most first. Deciding
+// what they count is the search's business — it is the search that knows the criteria as submitted except
+// for the subsystem — and this function does not recompute or reorder them.
 func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsPagePayload {
 	logs := []AdminLogEntry{}
 
@@ -92,8 +114,17 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 			ID:       entry.ID,
 			DateTime: entry.DateTime,
 			Level:    entry.Level,
+			Source:   string(entry.Source),
 			Message:  entry.Message,
 		})
+	}
+
+	// An empty list and not a null: a log view that matches nothing has no subsystems in it, and the view
+	// reads this list to build what it offers.
+	sources := []AdminLogSource{}
+
+	for _, count := range page.SourceCounts {
+		sources = append(sources, AdminLogSource{Source: string(count.Source), Count: count.Count})
 	}
 
 	return AdminLogsPagePayload{
@@ -101,6 +132,7 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 		DateStart: page.DateStart,
 		DateStop:  page.DateStop,
 		Options:   echoLogSearch(criteria),
+		Sources:   sources,
 		Logs:      logs,
 	}
 }
@@ -109,10 +141,12 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 // it and the server understood it: a criterion that was not submitted is not invented, and one that did
 // not parse is not claimed.
 //
-// The five fields are written in this order, and the order is what the log view reads.
+// The seven fields are written in this order, and the order is what the log view reads.
 type logSearchCriteria struct {
 	Date   any `json:"date,omitempty"`
 	Level  any `json:"level,omitempty"`
+	Source any `json:"source,omitempty"`
+	Text   any `json:"text,omitempty"`
 	Limit  any `json:"limit,omitempty"`
 	Offset any `json:"offset,omitempty"`
 	Sort   any `json:"sort,omitempty"`
@@ -134,6 +168,20 @@ func echoLogSearch(criteria map[string]any) logSearchCriteria {
 
 	if v, ok := criteria["level"].(string); ok {
 		echo.Level = v
+	}
+
+	// A subsystem is read through the vocabulary, as the search reads it. A name that is not in it applied
+	// no filter, and echoing it would be the answer claiming a criterion the search did not run with.
+	// The endpoint refuses such a request outright, so what is left here is the shape of an answer that
+	// never gets sent.
+	if named, ok := criteria["source"]; ok {
+		if source, valid := domain.ParseLogSource(named); valid {
+			echo.Source = string(source)
+		}
+	}
+
+	if v, ok := criteria["text"].(string); ok {
+		echo.Text = v
 	}
 
 	if v, ok := criteria["limit"].(float64); ok {

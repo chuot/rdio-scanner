@@ -272,6 +272,35 @@ func decodedSection(t *testing.T, rec *httptest.ResponseRecorder) []map[string]a
 	return out
 }
 
+// decodedLogEntries reads the entries out of a log view answer, which is an envelope and not a list: the
+// entries travel inside it with the total, the span and the criteria that were echoed back.
+func decodedLogEntries(t *testing.T, rec *httptest.ResponseRecorder) []map[string]any {
+	t.Helper()
+
+	body, ok := decodedBody(t, rec).(map[string]any)
+	if !ok {
+		t.Fatalf("the log view answer is not a set of answers: %s", rec.Body.String())
+	}
+
+	list, ok := body["logs"].([]any)
+	if !ok {
+		t.Fatalf("the log view answer carries no entries: %s", rec.Body.String())
+	}
+
+	out := []map[string]any{}
+
+	for _, entry := range list {
+		object, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatalf("the log view holds an entry that is not an entry: %s", rec.Body.String())
+		}
+
+		out = append(out, object)
+	}
+
+	return out
+}
+
 // loggedContaining reports whether the server wrote a log entry mentioning the given text, which is how
 // these tests pin the wording the legacy server's log view has always shown.
 func (fixture *adminFixture) loggedContaining(fragment string) bool {
@@ -812,6 +841,10 @@ func TestAlertsEndpointRefusesAMethodItDoesNotAnswerBeforeAskingForASession(t *t
 
 // The log view, byte for byte. The capture's timestamps are placeholders, and the test fills them back in
 // with the instants its own log holds, which is what the capture's clock reported.
+//
+// The capture is the shape this server's log search contract declares, over the scenario the capture script
+// ran: a deployment whose log holds the startup line the legacy server wrote — which is why it reads back
+// as `legacy` — and the two configuration changes made afterwards.
 func TestLogsEndpointAnswersTheCapturedLogView(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -903,6 +936,123 @@ func TestLogsEndpointReportsAFailureToReadTheLogView(t *testing.T) {
 
 	if !fixture.loggedContaining("logs.search:") {
 		t.Errorf("the failure to read the log view is not in the log view: %v", fixture.logs.Stored)
+	}
+}
+
+// A subsystem this server does not have is answered as a bad request, and not as a log view that happens
+// to be empty. An operator who types `dirwatches` and gets an empty page has been told that nothing
+// happened, which is a different and much worse thing than being told they asked for something the server
+// does not have.
+func TestLogsEndpointRefusesASubsystemThisServerDoesNotHave(t *testing.T) {
+	fixture := newAdminFixture()
+
+	fixture.logs.Stored = []domain.LogEntry{
+		{ID: 1, DateTime: captureTime, Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped: no such file or directory"},
+	}
+
+	rec := fixture.authorized(http.MethodPost, "/api/admin/logs", `{"source":"dirwatches"}`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("logs status = %d, want 400 for a subsystem that is not a part of this server: %s",
+			rec.Code, rec.Body.String())
+	}
+
+	// Refused outright: not a page, not an empty page.
+	if body := rec.Body.String(); body != "" {
+		t.Errorf("the answer to a refused subsystem is %q, want nothing: the caller asked a question this "+
+			"server cannot answer, and a body would be an answer to some other question", body)
+	}
+
+	// And the search did not run with a criterion it could not honour, which is what an empty page would
+	// have meant: the one entry the log holds is a dirwatch entry, and a search that ignored the submitted
+	// name would have returned it.
+	rec = fixture.authorized(http.MethodPost, "/api/admin/logs", `{"source":"dirwatch"}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("logs status = %d, want 200 for a subsystem this server does have: %s", rec.Code, rec.Body.String())
+	}
+
+	if got := decodedLogEntries(t, rec); len(got) != 1 {
+		t.Errorf("a search narrowed to %q holds %d entries, want the one entry the log holds", "dirwatch", len(got))
+	}
+}
+
+// The subsystem of each entry, and the counts that let the operator decide what to narrow to, are answered
+// by the endpoint and not only by the payload: the log view reads them out of the answer.
+func TestLogsEndpointAnswersTheSubsystemOfEachEntryAndHowManyEachWrote(t *testing.T) {
+	fixture := newAdminFixture()
+
+	fixture.logs.Stored = []domain.LogEntry{
+		{ID: 1, DateTime: captureTime, Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped: no such file or directory"},
+		{ID: 2, DateTime: captureTime.Add(time.Second), Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/outgoing stopped: no such file or directory"},
+		{ID: 3, DateTime: captureTime.Add(2 * time.Second), Level: domain.LogLevelWarn, Source: domain.LogSourceLogin, Message: "a login attempt from 203.0.113.7 was refused"},
+	}
+
+	rec := fixture.authorized(http.MethodPost, "/api/admin/logs", `{"level":"warn"}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("logs status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	body, ok := decodedBody(t, rec).(map[string]any)
+
+	if !ok {
+		t.Fatalf("the log view answer is not a set of answers: %s", rec.Body.String())
+	}
+
+	for _, entry := range decodedLogEntries(t, rec) {
+		if entry["source"] == nil || entry["source"] == "" {
+			t.Errorf("the entry %v carries no subsystem, and an entry that does not say who wrote it cannot be "+
+				"narrowed to one", entry)
+		}
+	}
+
+	counts, ok := body["sources"].([]any)
+
+	if !ok {
+		t.Fatalf("the answer carries no per-subsystem counts: %s", rec.Body.String())
+	}
+
+	if len(counts) != 2 {
+		t.Fatalf("the answer reports %d subsystems, want the two that wrote these entries: %v", len(counts), counts)
+	}
+
+	first, ok := counts[0].(map[string]any)
+
+	if !ok {
+		t.Fatalf("a per-subsystem count is not a count: %v", counts[0])
+	}
+
+	// Most first, so the log view can put the noisiest part of the server where the operator will see it.
+	if first["source"] != "dirwatch" || first["count"] != float64(2) {
+		t.Errorf("the first per-subsystem count is %v, want dirwatch with 2: the counts are offered most first", first)
+	}
+
+	// The counts describe the match the criteria make, and the subsystem filter is not one of them: an
+	// operator who has already narrowed to dirwatch is being offered the rest of the log to narrow to next.
+	rec = fixture.authorized(http.MethodPost, "/api/admin/logs", `{"level":"warn","source":"login"}`)
+
+	body, ok = decodedBody(t, rec).(map[string]any)
+
+	if !ok {
+		t.Fatalf("the log view answer is not a set of answers: %s", rec.Body.String())
+	}
+
+	counts, ok = body["sources"].([]any)
+
+	if !ok {
+		t.Fatalf("the answer carries no per-subsystem counts: %s", rec.Body.String())
+	}
+
+	if len(counts) != 2 {
+		t.Errorf("a search narrowed to login reports %d subsystems, want the two the level matches: the counts "+
+			"are what the operator narrows next with, and narrowing them to the one already chosen answers one "+
+			"row that is true and useless: %v", len(counts), counts)
+	}
+
+	if got := body["count"]; got != float64(1) {
+		t.Errorf("the total of a search narrowed to login is %v, want 1: the narrowed match is what the page "+
+			"pages through", got)
 	}
 }
 

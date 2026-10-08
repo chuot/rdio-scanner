@@ -106,7 +106,20 @@ type goldenManifest struct {
 	LegacyServerTree string            `json:"legacyServerTree"`
 	Timezone         string            `json:"timezone"`
 	Placeholders     map[string]string `json:"placeholders"`
-	VersionField     struct {
+
+	// ShapeSuperseded names the captures that are no longer the bytes the legacy server wrote, because a
+	// feature gave this server something to report that the legacy server never had. The manifest's default
+	// is that every capture is the legacy tree's bytes; a capture that is not has to say so here, with the
+	// contract that superseded it and the decision that authorized that.
+	ShapeSuperseded map[string]struct {
+		Contract    string   `json:"contract"`
+		DecidedBy   string   `json:"decidedBy"`
+		Carries     []string `json:"carries"`
+		WhatChanged string   `json:"whatChanged"`
+		Unchanged   string   `json:"unchanged"`
+	} `json:"shapeSuperseded"`
+
+	VersionField struct {
 		Pinned    string   `json:"pinned"`
 		MovedFrom string   `json:"movedFrom"`
 		MovedBy   string   `json:"movedBy"`
@@ -217,6 +230,56 @@ func TestGoldenCapturesRecordTheOneFieldAReleaseMoves(t *testing.T) {
 
 		if carriesVersion(b, manifest.VersionField.MovedFrom) {
 			t.Errorf("%s still carries %s, the version the manifest says a release moved off", name, manifest.VersionField.MovedFrom)
+		}
+	}
+}
+
+// TestGoldenCapturesNameTheOnesWhoseShapeThisServerSuperseded keeps the manifest's declaration honest in the
+// direction a test can reach: a capture that says it was superseded still exists, the contract and the
+// decision that superseded it are still in the repository, and the capture still carries the shape it was
+// superseded to. A capture quietly reverted to something else, or a specification moved out from under a
+// capture that cites it, is what this catches.
+//
+// The other direction — a capture drifting away from the legacy server without being declared here — is not
+// something a Go test can see, because the legacy server is not running. That is what the parity harness is
+// for: it runs both servers over the same scenario and compares what they answer. See testdata/parity.
+func TestGoldenCapturesNameTheOnesWhoseShapeThisServerSuperseded(t *testing.T) {
+	manifest := readGoldenManifest(t)
+
+	for name, superseded := range manifest.ShapeSuperseded {
+		capture := readGoldenFile(t, name)
+
+		if superseded.Contract == "" {
+			t.Errorf("%s is declared superseded and names no contract", name)
+		}
+
+		if superseded.DecidedBy == "" {
+			t.Errorf("%s is declared superseded and names no decision", name)
+		}
+
+		if superseded.WhatChanged == "" {
+			t.Errorf("%s is declared superseded and does not say what changed", name)
+		}
+
+		if superseded.Unchanged == "" {
+			t.Errorf("%s is declared superseded and does not say what did not change", name)
+		}
+
+		// A capture citing a specification that is no longer there is a capture whose shape nobody owns.
+		for _, document := range []string{superseded.Contract, superseded.DecidedBy} {
+			if _, err := os.Stat(filepath.Join("..", "..", "..", document)); err != nil {
+				t.Errorf("%s says %s superseded it, and that file is not in the repository: %v", name, document, err)
+			}
+		}
+
+		if len(superseded.Carries) == 0 {
+			t.Fatalf("%s is declared superseded and names nothing it has to carry", name)
+		}
+
+		for _, fragment := range superseded.Carries {
+			if !bytes.Contains(capture, []byte(fragment)) {
+				t.Errorf("%s is declared as carrying %s and does not:\n%s", name, fragment, capture)
+			}
 		}
 	}
 }
