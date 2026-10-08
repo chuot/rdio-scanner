@@ -43,7 +43,57 @@ const args = process.argv.slice(2);
 const production = args.includes('--production');
 const watch = args.includes('--watch');
 
-const packageInfo = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
+/** The repository root, three directories above the client directory this file sits in. */
+const repoRoot = resolve(here, '..', '..', '..');
+
+/** A semantic-versioning core and nothing else: the same rule `internal/buildinfo` applies to the file. */
+const corePattern = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+
+/**
+ * The version a bundle carries, resolved in the order the two sources are worth asking.
+ *
+ * 1. the version the build tool named, in `RDIO_VERSION`, which is the only one that knows whether this
+ *    build is a prerelease and which commit it came from;
+ * 2. the core the repository declared in `VERSION.txt`, so `npm run build` on its own still produces a
+ *    sane version rather than a made-up one;
+ * 3. `dev`, which is a version no release ever had and which nobody mistakes for one.
+ *
+ * `package.json` is not one of the sources. It carried a version nobody maintained, and a manifest that
+ * is private and unpublished has no reason to hold one.
+ *
+ * A declared version that is not a bare core is refused rather than repaired: a bundle that reported
+ * `8.0.0` because somebody wrote `v8.0.0` would be reporting a version the repository never wrote down.
+ */
+export function resolveVersion(env, root) {
+    const named = env && env.RDIO_VERSION;
+
+    if (typeof named === 'string' && named.trim() !== '') {
+        return named.trim();
+    }
+
+    let contents;
+
+    try {
+        contents = readFileSync(join(root, 'VERSION.txt'), 'utf8');
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            return 'dev';
+        }
+
+        throw err;
+    }
+
+    const core = contents.replace(/^\uFEFF/, '').trim();
+
+    if (!corePattern.test(core)) {
+        throw new Error(`build: VERSION.txt must hold one bare core version in the form X.Y.Z, and holds ${JSON.stringify(core)}`);
+    }
+
+    return core;
+}
+
+/** The version this build carries, resolved once and given to every bundle the build produces. */
+const version = resolveVersion(process.env, repoRoot);
 
 /**
  * The directory an application writes to: the bundle of the Go package that embeds it.
@@ -233,7 +283,7 @@ function buildOptions(config) {
     return {
         bundle: true,
         define: {
-            __RDIO_VERSION__: JSON.stringify(packageInfo.version),
+            __RDIO_VERSION__: JSON.stringify(version),
         },
         entryNames: production ? '[name].[hash]' : '[name]',
         entryPoints: config.entryPoints,
@@ -277,7 +327,7 @@ async function buildApp(config) {
     const sizes = Object.entries(result.metafile.outputs)
         .map(([p, o]) => `  ${outName(config, p)}  ${(o.bytes / 1024).toFixed(1)} KB`)
         .join('\n');
-    console.log(`[${config.name}] built v${packageInfo.version} into ${config.outDir}\n${sizes}`);
+    console.log(`[${config.name}] built v${version} into ${config.outDir}\n${sizes}`);
 
     return result;
 }

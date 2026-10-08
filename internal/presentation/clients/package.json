@@ -1,6 +1,5 @@
 {
   "name": "rdio-scanner-client-ng",
-  "version": "7.0.0-dev",
   "private": true,
   "type": "module",
   "description": "Rdio Scanner webapp - vanilla JavaScript web components rewrite",
