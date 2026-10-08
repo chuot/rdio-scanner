@@ -27,6 +27,7 @@ package fakes
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -703,7 +704,11 @@ func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 	return nil
 }
 
-// SearchLogs applies the criteria to the stored entries.
+// SearchLogs applies the criteria to the stored entries, the way the stored repository applies them:
+// the level, the subsystem, a case-insensitive substring of the message, and the date window.
+//
+// The per-source counts are computed over everything the criteria match except the subsystem itself, so a
+// component test that checks what the log view offers sees the same shape the stored repository answers.
 func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (ports.LogSearchPage, error) {
 	logs.mutex.Lock()
 	defer logs.mutex.Unlock()
@@ -716,10 +721,18 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		return ports.LogSearchPage{}, logs.SearchErr
 	}
 
-	matching := []domain.LogEntry{}
+	// The match one criterion wider than the entries: every criterion except the subsystem, which is the
+	// match the counts describe.
+	wider := []domain.LogEntry{}
 
 	for _, entry := range logs.Stored {
 		if search.HasLevel() && entry.Level != search.Level {
+			continue
+		}
+
+		// The submitted text is matched literally and case-insensitively, exactly as the stored query
+		// matches it after escaping: a percent sign in what the operator typed is a percent sign.
+		if search.HasText() && !strings.Contains(strings.ToLower(entry.Message), strings.ToLower(search.Text)) {
 			continue
 		}
 
@@ -731,7 +744,21 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			}
 		}
 
-		matching = append(matching, entry)
+		wider = append(wider, entry)
+	}
+
+	matching := wider
+
+	if search.HasSource() {
+		matching = []domain.LogEntry{}
+
+		for _, entry := range wider {
+			if logSourceOf(entry) != search.Source {
+				continue
+			}
+
+			matching = append(matching, entry)
+		}
 	}
 
 	sort.SliceStable(matching, func(i, j int) bool {
@@ -761,6 +788,24 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		}
 	}
 
+	counts := map[domain.LogSource]uint64{}
+
+	for _, entry := range wider {
+		counts[logSourceOf(entry)]++
+	}
+
+	for source, n := range counts {
+		page.SourceCounts = append(page.SourceCounts, ports.LogSourceCount{Source: source, Count: n})
+	}
+
+	sort.Slice(page.SourceCounts, func(i, j int) bool {
+		if page.SourceCounts[i].Count != page.SourceCounts[j].Count {
+			return page.SourceCounts[i].Count > page.SourceCounts[j].Count
+		}
+
+		return page.SourceCounts[i].Source < page.SourceCounts[j].Source
+	})
+
 	for i, entry := range matching {
 		if uint(i) < search.Offset {
 			continue
@@ -771,10 +816,24 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			break
 		}
 
+		// Reported as the log view reports it, which is how the stored repository reads a row written
+		// without a source. Recorded is the half that reports what a writer actually wrote.
+		entry.Source = logSourceOf(entry)
+
 		page.Results = append(page.Results, entry)
 	}
 
 	return page, nil
+}
+
+// logSourceOf is the source an entry is reported under: an entry written without one is legacy, which is
+// what the stored repository does with the rows the other server writes.
+func logSourceOf(entry domain.LogEntry) domain.LogSource {
+	if entry.Source == "" {
+		return domain.LogSourceLegacy
+	}
+
+	return entry.Source
 }
 
 // DeleteLogsBefore removes the entries older than the given instant.

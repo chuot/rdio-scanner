@@ -285,6 +285,118 @@ func TestLogsSearchAppliesTheDateWindowAndPaging(t *testing.T) {
 	}
 }
 
+// TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource keeps the in-memory log repository a
+// stand-in for the stored one: a component test that filters by subsystem or by text has to be answered
+// the way the real repository answers it, or the component test proves nothing.
+//
+// An entry written without a source is reported as legacy, which is what the stored repository does with
+// the rows the other server writes. Recorded is the other half: it reports what a writer actually wrote,
+// blank included, which is what the guard over the writers reads.
+func TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource(t *testing.T) {
+	logs := &Logs{Stored: []domain.LogEntry{
+		{ID: 1, DateTime: baseTime(), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{ID: 2, DateTime: baseTime().Add(time.Minute), Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{ID: 3, DateTime: baseTime().Add(2 * time.Minute), Level: domain.LogLevelWarn, Source: domain.LogSourceIngest, Message: "the recording could not be ingested"},
+		{ID: 4, DateTime: baseTime().Add(3 * time.Minute), Level: domain.LogLevelInfo, Source: domain.LogSourceUpload, Message: "the upload was refused: 100% full"},
+		{ID: 5, DateTime: baseTime().Add(4 * time.Minute), Level: domain.LogLevelInfo, Message: "written by a server that names no subsystem"},
+	}}
+
+	for _, tc := range []struct {
+		what   string
+		search domain.LogSearch
+		want   []uint64
+		counts []ports.LogSourceCount
+	}{
+		{
+			"one subsystem",
+			domain.LogSearch{Source: domain.LogSourceDirwatch, Limit: domain.DefaultLogSearchLimit},
+			[]uint64{1, 2},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceDirwatch, Count: 2},
+				{Source: domain.LogSourceIngest, Count: 1},
+				{Source: domain.LogSourceLegacy, Count: 1},
+				{Source: domain.LogSourceUpload, Count: 1},
+			},
+		},
+		{
+			"the text the operator typed, in any case",
+			domain.LogSearch{Text: "COULD NOT", Limit: domain.DefaultLogSearchLimit},
+			[]uint64{3},
+			[]ports.LogSourceCount{{Source: domain.LogSourceIngest, Count: 1}},
+		},
+		{
+			"the text the operator typed, where a percent sign is a percent sign",
+			domain.LogSearch{Text: "100%", Limit: domain.DefaultLogSearchLimit},
+			[]uint64{4},
+			[]ports.LogSourceCount{{Source: domain.LogSourceUpload, Count: 1}},
+		},
+		{
+			"legacy, which is where an entry naming nothing is filed",
+			domain.LogSearch{Source: domain.LogSourceLegacy, Limit: domain.DefaultLogSearchLimit},
+			[]uint64{5},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceDirwatch, Count: 2},
+				{Source: domain.LogSourceIngest, Count: 1},
+				{Source: domain.LogSourceLegacy, Count: 1},
+				{Source: domain.LogSourceUpload, Count: 1},
+			},
+		},
+		{
+			"a page far smaller than the match, which does not shrink the counts",
+			domain.LogSearch{Limit: 1},
+			[]uint64{1},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceDirwatch, Count: 2},
+				{Source: domain.LogSourceIngest, Count: 1},
+				{Source: domain.LogSourceLegacy, Count: 1},
+				{Source: domain.LogSourceUpload, Count: 1},
+			},
+		},
+	} {
+		tc.search.Ascending = true
+
+		page, err := logs.SearchLogs(context.Background(), tc.search)
+		if err != nil {
+			t.Fatalf("SearchLogs for %s: %v", tc.what, err)
+		}
+
+		if len(page.Results) != len(tc.want) {
+			t.Fatalf("%s returned %d entries, want %d", tc.what, len(page.Results), len(tc.want))
+		}
+
+		for i, id := range tc.want {
+			if page.Results[i].ID != id {
+				t.Errorf("%s returned entry %d at position %d, want entry %d", tc.what, page.Results[i].ID, i, id)
+			}
+		}
+
+		if len(page.SourceCounts) != len(tc.counts) {
+			t.Fatalf("%s reports %d source counts %v, want %v", tc.what, len(page.SourceCounts), page.SourceCounts, tc.counts)
+		}
+
+		for i, want := range tc.counts {
+			if page.SourceCounts[i] != want {
+				t.Errorf("%s reports %s %d at position %d, want %s %d", tc.what, page.SourceCounts[i].Source, page.SourceCounts[i].Count, i, want.Source, want.Count)
+			}
+		}
+	}
+
+	// The entry that names nothing is reported as legacy by the search, and Recorded still reports what
+	// the writer actually wrote.
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Results[4].Source != domain.LogSourceLegacy {
+		t.Errorf("the search reports source %q for an entry written without one, want %q", page.Results[4].Source, domain.LogSourceLegacy)
+	}
+
+	if got := logs.Recorded()[4].Source; got != "" {
+		t.Errorf("Recorded reports source %q for an entry written without one, want the blank the writer wrote: the guard over the writers reads this, not the search", got)
+	}
+}
+
 func TestTokensRollingWindowRetiresTheOldest(t *testing.T) {
 	tokens := NewTokens()
 
