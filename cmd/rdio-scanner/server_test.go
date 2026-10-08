@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -797,12 +798,123 @@ func TestServerStopsTheWatchersAndTheDatabaseItWasGiven(t *testing.T) {
 	}
 }
 
-// The stop is what says the server terminated, and two goroutines can ask for it at the same moment: the
+// TestTheServerRecordsThatItStopped is the end of the timeline. The legacy server said `terminated` on a
+// terminal and wrote nothing, so a log view that records everything else could not say when the server had
+// stopped — which is the first question about any gap in it.
+func TestTheServerRecordsThatItStopped(t *testing.T) {
+	base := t.TempDir()
+
+	console := &consoleCapture{}
+
+	srv, err := newServer(testConfigIn(base), console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	srv.stop(context.Background())
+
+	db := openTestDatabase(t, base)
+
+	const message = "the server stopped"
+
+	if !hasLogMessage(t, db, message) {
+		t.Errorf("the log view does not record that the server stopped")
+	}
+
+	if got := logSourceOfMessage(t, db, message); got != "server" {
+		t.Errorf("the stop is filed under %q, want %q", got, "server")
+	}
+
+	if !strings.Contains(console.String(), "info server: "+message) {
+		t.Errorf("the terminal holds %q, want the stop said with its level and the part of the server that "+
+			"wrote it", console.String())
+	}
+}
+
+// refusesToClose is a listener that reports a failure when it is asked to close. It is the thing a
+// graceful shutdown can genuinely fail at: the shutdown closes the listeners it was given, and a listener
+// that cannot be closed is a shutdown step that did not complete.
+type refusesToClose struct {
+	net.Listener
+}
+
+var errListenerWouldNotClose = errors.New("the listener would not close")
+
+func (l refusesToClose) Close() error {
+	// The socket underneath is closed, so the server's accept loop ends. What fails is the closing of the
+	// address the server was answering on — a listener that lets go of the connection it holds and then
+	// reports that it could not finish letting go.
+	l.Listener.Close()
+
+	return errListenerWouldNotClose
+}
+
+// TestAShutdownStepThatDidNotCompleteSaysSo is the shutdown that could not finish: an address the server
+// was answering on, and a listener that would not close. Until now the only trace of that was a raw error
+// on a terminal, and nothing at all on a deployment running as a service.
+func TestAShutdownStepThatDidNotCompleteSaysSo(t *testing.T) {
+	base := t.TempDir()
+
+	console := &consoleCapture{}
+
+	srv, err := newServer(testConfigIn(base), console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	// The listener is the test's own, on a port the operating system chose, so the test never has to hope
+	// a port is free. Handing it to the server's own Serve is what makes it one of the listeners the
+	// server's shutdown has to close.
+	address, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("opening a listener: %v", err)
+	}
+
+	serving := srv.httpServer(address.Addr().String())
+
+	go serving.Serve(refusesToClose{Listener: address})
+
+	// The server is only asked to stop once it has already answered something on that address, which is
+	// how the test knows the listener is one the shutdown knows about. Without this, the test would be
+	// racing the server's own bookkeeping, and a shutdown with nothing to close is a shutdown that
+	// succeeds.
+	answer, err := http.Get("http://" + address.Addr().String() + "/")
+	if err != nil {
+		t.Fatalf("asking the server an ordinary question: %v", err)
+	}
+
+	answer.Body.Close()
+
+	srv.stop(context.Background())
+
+	db := openTestDatabase(t, base)
+
+	entry := storedLogMentioning(t, db, "the server could not stop answering")
+
+	if !strings.Contains(entry, address.Addr().String()) {
+		t.Errorf("the entry is %q, want it to name the address the server could not stop answering", entry)
+	}
+
+	if !strings.Contains(entry, errListenerWouldNotClose.Error()) {
+		t.Errorf("the entry is %q, want it to carry the failure's own text after the sentence", entry)
+	}
+
+	if got := logSourceOfMessage(t, db, entry); got != "server" {
+		t.Errorf("the failed shutdown is filed under %q, want %q", got, "server")
+	}
+
+	if !strings.Contains(console.String(), "error server: "+entry) {
+		t.Errorf("the terminal holds %q, want the failure said with its level and the part of the server "+
+			"that wrote it", console.String())
+	}
+}
+
+// The stop is what says the server stopped, and two goroutines can ask for it at the same moment: the
 // one that was waiting for the operator's interrupt, and the one that was serving and is unblocked by it.
-// The line has to be said once, and the goroutine that arrives second has to wait for the one that got
+// The entry has to be written once, and the goroutine that arrives second has to wait for the one that got
 // there first — otherwise the process ends while the first stop is still saying so, and an operator who
 // interrupted the server sees a server that stopped without ever saying it did.
-func TestServerSaysItTerminatedOnceEvenWhenTwoGoroutinesStopIt(t *testing.T) {
+func TestTheServerSaysItStoppedOnceEvenWhenTwoGoroutinesStopIt(t *testing.T) {
 	console := &consoleCapture{}
 
 	srv := testServerOn(t, console)
@@ -827,8 +939,8 @@ func TestServerSaysItTerminatedOnceEvenWhenTwoGoroutinesStopIt(t *testing.T) {
 
 	written := console.String()
 
-	if said := strings.Count(written, "terminated"); said != 1 {
-		t.Errorf("the server said it terminated %d times, want once, wrote:\n%s", said, written)
+	if said := strings.Count(written, "info server: the server stopped"); said != 1 {
+		t.Errorf("the server said it stopped %d times, want once, wrote:\n%s", said, written)
 	}
 }
 
@@ -1579,6 +1691,42 @@ func logSourceOfMessage(t *testing.T, db *sql.DB, message string) string {
 	}
 
 	return source
+}
+
+// storedLogMentioning reads the first stored server log entry that mentions a fragment, from a database the
+// test opened itself. It is how a test looks at what a stopped server left behind: the server's own
+// connection is closed by then, so the only way in is through the file.
+func storedLogMentioning(t *testing.T, db *sql.DB, fragment string) string {
+	t.Helper()
+
+	const query = `SELECT "message" FROM "logs" ORDER BY "logid"`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var message string
+
+		if err := rows.Scan(&message); err != nil {
+			t.Fatalf("reading a server log entry: %v", err)
+		}
+
+		if strings.Contains(message, fragment) {
+			return message
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	t.Fatalf("the server log holds no entry mentioning %s", fragment)
+
+	return ""
 }
 
 func readOptionValue(t *testing.T, db *sql.DB, key string) string {

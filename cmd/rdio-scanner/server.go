@@ -555,6 +555,21 @@ func (s *server) readConfiguration(ctx context.Context) error {
 	return nil
 }
 
+// shutdownTimeout bounds how long the server waits for what it was answering to stop answering.
+//
+// The legacy server's Terminate called os.Exit, which stops everything at once. This server shuts its
+// addresses down instead, and a graceful shutdown waits for the connections that are still in use. Most of
+// them it closes on the spot — a client that connected and has sent nothing is closed, not waited for — so
+// the wait is for the connection the server cannot let go of: one whose handler never returns. Without a
+// bound, that is a server that stops stopping, and because the entry saying the server stopped is written
+// after the addresses are shut down, the log never records that a stop was even asked for. With one, the
+// server stops waiting, says which address it could not stop answering and why, and ends.
+//
+// The bound covers the waiting, not the closing: a listener whose accept loop never ends blocks the
+// shutdown whatever deadline it is given, because the shutdown waits for that loop before it looks at the
+// clock. That is why the failure entry names the address rather than the timeout.
+const shutdownTimeout = 10 * time.Second
+
 // stop ends what the server started running — the pruning timer, the holds armed for calls that are
 // waiting out a delay, the directory watches, and the addresses it was answering on — and then the
 // database it was given.
@@ -567,6 +582,9 @@ func (s *server) readConfiguration(ctx context.Context) error {
 // still saying so.
 func (s *server) stop(ctx context.Context) {
 	s.stopping.Do(func() {
+		shuttingDown, cancel := context.WithTimeout(ctx, shutdownTimeout)
+		defer cancel()
+
 		if s.pruning != nil {
 			s.pruning.Cancel()
 		}
@@ -576,22 +594,40 @@ func (s *server) stop(ctx context.Context) {
 		}
 
 		if s.watches != nil {
-			s.watches.Stop(ctx)
+			s.watches.Stop(shuttingDown)
 		}
 
 		for _, serving := range s.serving {
-			if err := serving.Shutdown(ctx); err != nil {
-				s.console.println(err)
+			if err := serving.Shutdown(shuttingDown); err != nil {
+				_ = s.logs.AppendLog(ctx, domain.LogEntry{
+					DateTime: s.clock.Now(),
+					Level:    domain.LogLevelError,
+					Source:   domain.LogSourceServer,
+					Message:  fmt.Sprintf("the server could not stop answering %s: %v", serving.Addr, err),
+				})
 			}
 		}
+
+		// The stop is the last entry the server can write to its own log view: the log view lives in the
+		// database this method closes next. The legacy server said `terminated` on a terminal and wrote
+		// nothing, so a log that recorded everything else could not say when the server had stopped —
+		// which is the first question about any gap in it.
+		_ = s.logs.AppendLog(ctx, domain.LogEntry{
+			DateTime: s.clock.Now(),
+			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
+			Message:  "the server stopped",
+		})
 
 		if s.db != nil {
 			if err := s.db.Close(); err != nil {
-				s.console.println(err)
+				// This line cannot be filed: the log view is stored in the database that just failed to
+				// close. The terminal is the only copy left, so this is the one place the composition
+				// root says an entry itself rather than leaving the saying to the log.
+				s.console.println(renderLogEntry(domain.LogLevelError, domain.LogSourceDatabase,
+					fmt.Sprintf("the server could not close its database: %v", err)))
 			}
 		}
-
-		s.console.println("terminated")
 	})
 }
 
