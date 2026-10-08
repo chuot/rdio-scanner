@@ -628,8 +628,12 @@ func TestAdminPasswordModeStoresTheCredentialAndStops(t *testing.T) {
 			"is not the one the server ships with", stored)
 	}
 
-	if !hasLogMessage(t, db, "admin password changed.") {
+	if !hasLogMessage(t, db, "the administrator password was changed") {
 		t.Errorf("the log view does not record the password change")
+	}
+
+	if got := logSourceOfMessage(t, db, "the administrator password was changed"); got != "admin" {
+		t.Errorf("the password change is filed under %q, want it filed with the administrator account", got)
 	}
 
 	if _, err := db.Exec(`DELETE FROM "options" WHERE "key" = 'adminPassword'`); err != nil {

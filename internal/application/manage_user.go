@@ -231,15 +231,15 @@ func announceConfigurationToAdministrators(
 	return nil
 }
 
-// reportFailure records why an access-user change did not complete, in the wording the legacy
-// server uses for each of the two endpoints.
+// reportFailure records why an access-user change did not complete: what the server was trying to do,
+// then the failure's own text, which is the part that names the statement that failed.
 func (handler *AddAccessUserHandler) reportFailure(ctx context.Context, err error) {
-	handler.writeLog(ctx, fmt.Sprintf("admin.useraddhandler.post: %s", err))
+	handler.writeLog(ctx, fmt.Sprintf("the administrator user could not be added: %v", err))
 }
 
 // reportFailure records why a removal did not complete.
 func (handler *RemoveAccessUserHandler) reportFailure(ctx context.Context, err error) {
-	handler.writeLog(ctx, fmt.Sprintf("admin.userremovehandler.post: %s", err))
+	handler.writeLog(ctx, fmt.Sprintf("the administrator user could not be removed: %v", err))
 }
 
 func (handler *AddAccessUserHandler) writeLog(ctx context.Context, message string) {

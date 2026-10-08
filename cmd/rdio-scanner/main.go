@@ -175,7 +175,8 @@ func changeAdminPassword(config *Config) int {
 	if err := srv.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: srv.clock.Now(),
 		Level:    domain.LogLevelInfo,
-		Message:  "admin password changed.",
+		Source:   domain.LogSourceAdmin,
+		Message:  "the administrator password was changed",
 	}); err != nil {
 		return exitWithError(err)
 	}

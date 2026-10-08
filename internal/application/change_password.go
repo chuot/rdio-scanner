@@ -23,6 +23,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -146,7 +147,7 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 		return handler.reject(ctx, err, refused)
 	}
 
-	handler.writeLog(ctx, domain.LogLevelWarn, "admin password changed.")
+	handler.writeLog(ctx, domain.LogLevelWarn, "the administrator password was changed")
 
 	return ChangeAdminPasswordResult{
 		Outcome:            AdminPasswordChanged,
@@ -156,12 +157,11 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 
 // reject records a refused change and returns the reason to the caller.
 //
-// The server-log wording is fixed by the legacy server: whatever the actual reason was, it
-// writes that the current password is invalid. That is misleading, and it is what an operator
-// reading the log today sees, so it is reproduced rather than improved. The real reason is
-// returned so the composition root can surface it somewhere the log is not.
+// The legacy server writes one fixed sentence whatever went wrong, which sends an operator looking at the
+// current password when it was the disk. The reason is what the log now holds, because it is the only thing
+// in the entry that tells anybody what to look at.
 func (handler *ChangeAdminPasswordHandler) reject(ctx context.Context, reason error, result ChangeAdminPasswordResult) (ChangeAdminPasswordResult, error) {
-	handler.writeLog(ctx, domain.LogLevelError, "admin.passwordhandler.post: unable to change admin password, current password is invalid")
+	handler.writeLog(ctx, domain.LogLevelError, fmt.Sprintf("the administrator password was not changed: %v", reason))
 
 	return result, reason
 }

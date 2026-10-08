@@ -116,11 +116,12 @@ type adminFixture struct {
 	removeUser     *RemoveAccessUserHandler
 }
 
-// loggedContaining reports whether the server wrote a log line containing the fragment, which is
-// how these tests pin the legacy wording byte for byte.
-func (fixture *adminFixture) loggedContaining(fragment string) bool {
+// loggedAs reports whether the server wrote a log line naming that part of the server and saying the
+// fragment. The administrator endpoints write only about the administrator account, so the source is part
+// of what these tests pin.
+func (fixture *adminFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Stored {
-		if strings.Contains(entry.Message, fragment) {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
 			return true
 		}
 	}
@@ -228,11 +229,11 @@ func TestChangeAdminPasswordStoresTheNewCredentialAndSaysSoInItsLog(t *testing.T
 		t.Errorf("stored credential = %q, want the new credential on record", fixture.options.Stored.AdminPasswordHash)
 	}
 
-	if !fixture.loggedContaining("admin password changed.") {
-		t.Errorf("logs = %v, want the legacy notice with its trailing period", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAdmin, "the administrator password was changed") {
+		t.Errorf("logs = %v, want the change recorded under the administrator account", fixture.logs.Stored)
 	}
 
-	if fixture.loggedContaining("admin.passwordhandler.post") {
+	if fixture.loggedAs(domain.LogSourceAdmin, "the administrator password was not changed") {
 		t.Errorf("logs = %v, want no failure reported for a change that worked", fixture.logs.Stored)
 	}
 }
@@ -272,7 +273,7 @@ func TestChangeAdminPasswordRefusesACurrentCredentialThatDoesNotMatch(t *testing
 		t.Errorf("credentials stored = %v, want the new credential never stored", fixture.hashes.Hashed)
 	}
 
-	if fixture.loggedContaining("admin password changed.") {
+	if fixture.loggedAs(domain.LogSourceAdmin, "the administrator password was changed") {
 		t.Error("a refused change must not report that the password changed")
 	}
 }
@@ -410,27 +411,58 @@ func TestChangeAdminPasswordStillReportsTheNeedToChangeForTheDefaultCredential(t
 	}
 }
 
-// TestChangeAdminPasswordLogsTheSameWordsWhateverWentWrong pins that the legacy server discards
-// the real reason a change failed and writes one fixed sentence naming the current password.
-func TestChangeAdminPasswordLogsTheSameWordsWhateverWentWrong(t *testing.T) {
-	fixture := newAdminFixture()
-	fixture.options.SaveErr = errors.New("disk full")
-
-	result, err := fixture.changePassword.Handle(context.Background(), ChangeAdminPasswordCommand{
-		CurrentCredentialGiven: false,
-		NewCredential:          newCredential,
-	})
-
-	if result.Outcome != AdminPasswordRefused {
-		t.Fatalf("outcome = %q, want %q", result.Outcome, AdminPasswordRefused)
+// TestChangeAdminPasswordSaysWhyTheChangeDidNotHappen replaces TestChangeAdminPasswordLogsTheSameWordsWhateverWentWrong,
+// which pinned the legacy server discarding the reason a change failed and writing one fixed sentence
+// naming the current password. The outcome and the error the caller receives are unchanged; only what the
+// log view holds changes, and it now holds the reason.
+func TestChangeAdminPasswordSaysWhyTheChangeDidNotHappen(t *testing.T) {
+	cases := []struct {
+		what  string
+		setup func(fixture *adminFixture)
+		give  ChangeAdminPasswordCommand
+		want  string
+	}{
+		{
+			what:  "the credential would not hash",
+			setup: func(fixture *adminFixture) { fixture.hashes.Err = errors.New("no such hash") },
+			give:  ChangeAdminPasswordCommand{NewCredential: newCredential},
+			want:  "the administrator password was not changed: no such hash",
+		},
+		{
+			what:  "the options would not be written",
+			setup: func(fixture *adminFixture) { fixture.options.SaveErr = errors.New("disk full") },
+			give:  ChangeAdminPasswordCommand{NewCredential: newCredential},
+			want:  "the administrator password was not changed: disk full",
+		},
+		{
+			what:  "the current credential did not match",
+			setup: func(fixture *adminFixture) {},
+			give: ChangeAdminPasswordCommand{
+				CurrentCredential:      "not the credential on record",
+				CurrentCredentialGiven: true,
+				NewCredential:          newCredential,
+			},
+			want: "the administrator password was not changed: current password is invalid",
+		},
 	}
 
-	if !errors.Is(err, fixture.options.SaveErr) {
-		t.Errorf("error = %v, want the real reason returned to the caller even though the log does not name it", err)
-	}
+	for _, tc := range cases {
+		fixture := newAdminFixture()
+		tc.setup(fixture)
 
-	if !fixture.loggedContaining("admin.passwordhandler.post: unable to change admin password, current password is invalid") {
-		t.Errorf("logs = %v, want the fixed legacy wording, which names the current password whatever actually failed", fixture.logs.Stored)
+		result, err := fixture.changePassword.Handle(context.Background(), tc.give)
+
+		if result.Outcome != AdminPasswordRefused {
+			t.Fatalf("%s: outcome = %q, want %q", tc.what, result.Outcome, AdminPasswordRefused)
+		}
+
+		if err == nil {
+			t.Fatalf("%s: the caller is told the reason as well", tc.what)
+		}
+
+		if !fixture.loggedAs(domain.LogSourceAdmin, tc.want) {
+			t.Errorf("%s: logs = %v, want the reason the change did not happen, under the administrator account", tc.what, fixture.logs.Stored)
+		}
 	}
 }
 
@@ -552,8 +584,8 @@ func TestAddAccessUserReportsAFailureWhenTheAccessListCannotBeStored(t *testing.
 		t.Errorf("outcome = %q, want %q", result.Outcome, AccessUserSaveFailed)
 	}
 
-	if !fixture.loggedContaining("admin.useraddhandler.post: constraint failed") {
-		t.Errorf("logs = %v, want the legacy failure wording for this endpoint", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAdmin, "the administrator user could not be added: constraint failed") {
+		t.Errorf("logs = %v, want what the server was trying to do and the failure's own text after it", fixture.logs.Stored)
 	}
 
 	if fixture.admin.AnnouncedCount() != 0 {
@@ -630,7 +662,7 @@ func TestRemoveAccessUserReportsAFailureWhenTheAccessListCannotBeStored(t *testi
 		t.Errorf("outcome = %q, want %q", result.Outcome, AccessUserSaveFailed)
 	}
 
-	if !fixture.loggedContaining("admin.userremovehandler.post: constraint failed") {
-		t.Errorf("logs = %v, want the legacy failure wording for this endpoint", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAdmin, "the administrator user could not be removed: constraint failed") {
+		t.Errorf("logs = %v, want what the server was trying to do and the failure's own text after it", fixture.logs.Stored)
 	}
 }

@@ -946,8 +946,8 @@ func TestPasswordEndpointRefusesAChangeWhoseCurrentPasswordIsWrong(t *testing.T)
 		t.Fatalf("password status = %d, want 417: %s", rec.Code, rec.Body.String())
 	}
 
-	if !fixture.loggedContaining("admin.passwordhandler.post: unable to change admin password, current password is invalid") {
-		t.Errorf("the refusal is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedContaining("the administrator password was not changed: current password is invalid") {
+		t.Errorf("the refusal is not in the log view naming the reason it was refused: %v", fixture.logs.Stored)
 	}
 
 	if len(fixture.hashes.Hashed) != 0 {
