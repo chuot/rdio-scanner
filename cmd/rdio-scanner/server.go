@@ -45,7 +45,6 @@ import (
 	"rdio-scanner/internal/infrastructure/dirwatch"
 	"rdio-scanner/internal/infrastructure/dirwatch/parsers"
 	"rdio-scanner/internal/infrastructure/downstream"
-	"rdio-scanner/internal/infrastructure/ffmpeg"
 	"rdio-scanner/internal/infrastructure/passwords"
 	"rdio-scanner/internal/infrastructure/persistence"
 	"rdio-scanner/internal/infrastructure/tokens"
@@ -98,6 +97,11 @@ type server struct {
 
 	// logs is the log the whole server writes into, including the server's own notices.
 	logs ports.LogRepository
+
+	// converterNotice is what the operator has to be told about the ffmpeg this server converts with,
+	// and is empty when there is nothing to say. It is decided once while the server is wired, and
+	// said once when it starts.
+	converterNotice string
 
 	clock     ports.Clock
 	scheduler ports.Scheduler
@@ -237,7 +241,17 @@ func (s *server) wire() error {
 
 	s.logs = &loggedEvents{logs: logs, echo: echo}
 
-	converter := ffmpeg.New()
+	// The ffmpeg this server converts with is the one compiled for the architecture this binary was
+	// built for, written out of the binary into the server's own folder. A server whose target carries
+	// none — macOS, FreeBSD, and a developer's plain go build — converts with the ffmpeg its host
+	// installs instead, which is what those deployments have always done.
+	bundled, failure := bundledFFmpeg(s.config)
+
+	choice := theConverter(bundled, failure)
+
+	s.converterNotice = choice.Notice
+
+	converter := choice.converter()
 	forwarder := downstream.NewForwarder(groups, tags)
 	reader := parsers.New(systems, s.clock)
 
@@ -386,6 +400,17 @@ func (s *server) start(ctx context.Context) error {
 
 	if len(s.config.BaseDir) > 0 {
 		s.console.printf("base folder is %s\n", s.config.BaseDir)
+	}
+
+	// Which ffmpeg the server converts with is decided while it is wired and said here, once, so that
+	// an operator whose server could not use the ffmpeg it carries learns that at startup rather than
+	// from a recording that was never converted.
+	if s.converterNotice != "" {
+		_ = s.logs.AppendLog(ctx, domain.LogEntry{
+			DateTime: s.clock.Now(),
+			Level:    domain.LogLevelWarn,
+			Message:  s.converterNotice,
+		})
 	}
 
 	if err := s.readConfiguration(ctx); err != nil {

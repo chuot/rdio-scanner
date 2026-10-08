@@ -290,6 +290,12 @@ func (config *Config) GetAutocertCachePath() string {
 	return config.GetPath("autocert")
 }
 
+// GetFFmpegDirPath returns the directory the server writes the ffmpeg it carries inside its own binary
+// into, so that it has a program it can actually run.
+func (config *Config) GetFFmpegDirPath() string {
+	return config.GetPath("ffmpeg")
+}
+
 func (config *Config) isBaseDirWritable() bool {
 	return isWritableDir(config.BaseDir)
 }
