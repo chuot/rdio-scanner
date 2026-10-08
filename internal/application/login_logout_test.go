@@ -64,7 +64,7 @@ func newLoginFixture() *loginFixture {
 	}
 
 	fixture.login = NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.passwords, fixture.clock)
-	fixture.logout = NewAdminLogoutHandler(fixture.tokens)
+	fixture.logout = NewAdminLogoutHandler(fixture.tokens, fixture.logs, fixture.clock)
 	fixture.check = NewCheckAdminSessionHandler(fixture.tokens)
 
 	return fixture
@@ -113,6 +113,29 @@ func (fixture *loginFixture) warnings() []domain.LogEntry {
 
 	for _, entry := range fixture.logs.Stored {
 		if entry.Level == domain.LogLevelWarn {
+			out = append(out, entry)
+		}
+	}
+
+	return out
+}
+
+// entries returns everything the login and logout use cases wrote to the server log. A sign-out is not a
+// warning, so the tests that care about what the log view holds read it whole.
+func (fixture *loginFixture) entries() []domain.LogEntry {
+	out := []domain.LogEntry{}
+
+	out = append(out, fixture.logs.Stored...)
+
+	return out
+}
+
+// signedOut returns the entries that say a session was ended.
+func (fixture *loginFixture) signedOut() []domain.LogEntry {
+	out := []domain.LogEntry{}
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == domain.LogSourceLogin && entry.Message == "the administrator signed out" {
 			out = append(out, entry)
 		}
 	}
@@ -187,8 +210,12 @@ func TestLoginHandlerRefusesAWrongCredentialAndSaysWhyInItsOwnLog(t *testing.T) 
 		t.Fatalf("server log = %v, want one warning about the refused attempt", warnings)
 	}
 
-	if warnings[0].Message != "invalid login attempt for ip 203.0.113.7" {
-		t.Errorf("warning = %q, want the wording the legacy server writes for a refused credential", warnings[0].Message)
+	if warnings[0].Source != domain.LogSourceLogin {
+		t.Errorf("warning = %q, want it filed with the part of the server that opens administrator sessions", warnings[0].Source)
+	}
+
+	if warnings[0].Message != "a login attempt from 203.0.113.7 was refused" {
+		t.Errorf("warning = %q, want the refused attempt and the address it came from", warnings[0].Message)
 	}
 }
 
@@ -290,7 +317,12 @@ func TestLoginHandlerWarnsAboutTooManyAttemptsOncePerLockout(t *testing.T) {
 		t.Fatalf("server log = %v, want the three refused credentials and one lockout warning", warnings)
 	}
 
-	want := `too many login attempts for ip="203.0.113.7"`
+	want := "too many login attempts from 203.0.113.7"
+
+	if warnings[3].Source != domain.LogSourceLogin {
+		t.Errorf("lockout warning = %q, want it filed with the part of the server that opens administrator sessions", warnings[3].Source)
+	}
+
 	if warnings[3].Message != want {
 		t.Errorf("lockout warning = %q, want %q", warnings[3].Message, want)
 	}
@@ -539,6 +571,53 @@ func TestLogoutHandlerRetiresThePresentedToken(t *testing.T) {
 
 	if result.Outcome != AdminLogoutRefused {
 		t.Errorf("second logout outcome = %q, want a token that is already ended to be refused", result.Outcome)
+	}
+}
+
+// TestLogoutWritesThatTheAdministratorSignedOut is the entry the log view had nothing for before: ending
+// your own session was the one thing this server did in silence, so an operator could not tell when an
+// administrator stopped watching.
+func TestLogoutWritesThatTheAdministratorSignedOut(t *testing.T) {
+	fixture := newLoginFixture()
+
+	token := fixture.mustLogin(t, adminCredential)
+
+	if _, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: token}); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+
+	wrote := fixture.signedOut()
+
+	if len(wrote) != 1 {
+		t.Fatalf("server log = %v, want one entry saying the administrator signed out", fixture.entries())
+	}
+
+	if wrote[0].Level != domain.LogLevelInfo {
+		t.Errorf("the sign-out was written at level %q, want an ordinary entry, not a warning", wrote[0].Level)
+	}
+
+	if got := wrote[0].DateTime; !got.Equal(loginTime) {
+		t.Errorf("the sign-out was stamped %v, want the instant the session was ended", got)
+	}
+}
+
+// A logout the server refused did not end a session, so it is not a sign-out and writes no entry.
+func TestRefusedLogoutWritesNothingToTheServerLog(t *testing.T) {
+	fixture := newLoginFixture()
+
+	fixture.mustLogin(t, adminCredential)
+
+	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: "a token nobody was given"})
+	if err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+
+	if result.Outcome != AdminLogoutRefused {
+		t.Fatalf("outcome = %q, want a token the server never issued to be refused", result.Outcome)
+	}
+
+	if got := fixture.entries(); len(got) != 0 {
+		t.Errorf("server log = %v, want a refused logout to say nothing about itself", got)
 	}
 }
 

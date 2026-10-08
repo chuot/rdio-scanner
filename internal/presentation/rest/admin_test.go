@@ -133,7 +133,7 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		Config:               application.NewGetConfigHandler(fixture.repositories()),
 		ConfigSocket:         fixture.configSocket,
 		Docker:               fixture.Docker,
-		Logout:               application.NewAdminLogoutHandler(fixture.tokens),
+		Logout:               application.NewAdminLogoutHandler(fixture.tokens, fixture.logs, fixture.clock),
 		Logs:                 application.NewSearchLogsHandler(fixture.logs, fixture.clock),
 		Login:                application.NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.password, fixture.clock),
 		Password:             application.NewChangeAdminPasswordHandler(fixture.options, fixture.password, fixture.hashes, fixture.logs, fixture.clock),
@@ -420,8 +420,8 @@ func TestLoginEndpointRefusesTheWrongCredentialWithTheCapturedStatus(t *testing.
 		t.Errorf("a refused login answers %q, want nothing", rec.Body.String())
 	}
 
-	if !fixture.loggedContaining("invalid login attempt for ip " + captureAddress) {
-		t.Errorf("the refused attempt is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedContaining("a login attempt from " + captureAddress + " was refused") {
+		t.Errorf("the refused attempt is not in the log view naming the address it came from: %v", fixture.logs.Stored)
 	}
 }
 
@@ -458,8 +458,8 @@ func TestLoginEndpointRefusesTheFourthAttemptFromOneAddressWhateverItCarries(t *
 		t.Fatalf("the fourth attempt status = %d, want 401 even though the credential is the right one", rec.Code)
 	}
 
-	if !fixture.loggedContaining(`too many login attempts for ip="` + captureAddress + `"`) {
-		t.Errorf("the lockout is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedContaining("too many login attempts from " + captureAddress) {
+		t.Errorf("the lockout is not in the log view naming the address it is about: %v", fixture.logs.Stored)
 	}
 }
 
@@ -488,7 +488,7 @@ func TestLoginEndpointClearsTheAttemptsAfterASuccessfulLogin(t *testing.T) {
 		fixture.serve(adminRequest{body: `{"password":"wrong credential"}`, method: http.MethodPost, path: "/api/admin/login"})
 	}
 
-	if got := fixture.countLogged("invalid login attempt"); got != 5 {
+	if got := fixture.countLogged("a login attempt from "); got != 5 {
 		t.Errorf("the log view holds %d refused credentials, want the five that were made: an address whose budget "+
 			"was cleared is still being asked what its credential is", got)
 	}

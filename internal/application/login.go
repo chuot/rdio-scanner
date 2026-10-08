@@ -185,7 +185,7 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 		// log view shows one entry per lockout rather than one per refused request. A
 		// lockout in a new window is a new lockout, and gets its own warning.
 		if attempt.Count == loginAttemptsMax+1 {
-			handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("too many login attempts for ip=\"%v\"", cmd.RemoteAddr))
+			handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("too many login attempts from %v", cmd.RemoteAddr))
 		}
 
 		return AdminLoginResult{Outcome: AdminLoginAttemptLimit}, nil
@@ -200,7 +200,7 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 	// server never compares an empty submission against the stored credential, which
 	// matters on a server whose stored credential is itself empty.
 	if cmd.Credential == "" || !handler.passwords.Matches(ctx, options.AdminPasswordHash, cmd.Credential) {
-		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("invalid login attempt for ip %v", cmd.RemoteAddr))
+		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a login attempt from %v was refused", cmd.RemoteAddr))
 
 		return AdminLoginResult{Outcome: AdminLoginInvalidCredential}, nil
 	}
@@ -272,6 +272,7 @@ func (handler *AdminLoginHandler) log(ctx context.Context, level, message string
 	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: handler.clock.Now(),
 		Level:    level,
+		Source:   domain.LogSourceLogin,
 		Message:  message,
 	}); err != nil {
 		// A log entry that cannot be written must not change the login decision that has

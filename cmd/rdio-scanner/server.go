@@ -340,7 +340,7 @@ func (s *server) wire() error {
 		Configuration:        application.NewUpdateConfigurationHandler(configurationPorts),
 		ConfigurationSection: application.NewUpdateConfigurationSectionHandler(configurationPorts),
 		Docker:               os.Getenv("DOCKER") != "",
-		Logout:               application.NewAdminLogoutHandler(tokensAdapter),
+		Logout:               application.NewAdminLogoutHandler(tokensAdapter, s.logs, s.clock),
 		Logs:                 application.NewSearchLogsHandler(s.logs, s.clock),
 		Login:                application.NewAdminLoginHandler(options, s.logs, tokensAdapter, credentials, s.clock),
 		Password:             application.NewChangeAdminPasswordHandler(options, credentials, credentials, s.logs, s.clock),

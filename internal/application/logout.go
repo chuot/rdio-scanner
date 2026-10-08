@@ -24,6 +24,7 @@ import (
 	"context"
 
 	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // AdminLogoutOutcome reports what the server decided about an attempt to end an
@@ -62,17 +63,19 @@ type AdminLogoutCommand struct {
 
 // AdminLogoutHandler ends an administrator session.
 //
-// Only the presented token is retired. The legacy server keeps a rolling window of the
-// tokens it has issued rather than one session per administrator, so logging out of one
-// browser leaves another browser's session running, and a client that assumes otherwise
-// loses access it still had.
+// Only the presented token is retired. The legacy server keeps a rolling window of the tokens it has
+// issued rather than one session per administrator, so logging out of one browser leaves another
+// browser's session running, and a client that assumes otherwise loses access it still had.
 type AdminLogoutHandler struct {
 	tokens ports.TokenIssuer
+	logs   ports.LogRepository
+	clock  ports.Clock
 }
 
-// NewAdminLogoutHandler builds the handler from its port.
-func NewAdminLogoutHandler(tokens ports.TokenIssuer) *AdminLogoutHandler {
-	return &AdminLogoutHandler{tokens: tokens}
+// NewAdminLogoutHandler builds the handler from the ports it needs: the tokens it retires, and the
+// server log it reports a sign-out to.
+func NewAdminLogoutHandler(tokens ports.TokenIssuer, logs ports.LogRepository, clock ports.Clock) *AdminLogoutHandler {
+	return &AdminLogoutHandler{tokens: tokens, logs: logs, clock: clock}
 }
 
 // Handle retires the presented token, or refuses the request when the server does not
@@ -90,5 +93,26 @@ func (handler *AdminLogoutHandler) Handle(ctx context.Context, cmd AdminLogoutCo
 		return AdminLogoutResult{Outcome: AdminLogoutFailed}, err
 	}
 
+	// The legacy server says nothing when an administrator ends their own session, which leaves the
+	// log view with no record of when somebody stopped watching. A sign-out is an ordinary thing for
+	// an operator to want to place in a timeline, so it is written down.
+	//
+	// A refused logout is not written: it ended no session, and the login use case already reports
+	// the attempts that would explain one.
+	handler.logSignedOut(ctx)
+
 	return AdminLogoutResult{Outcome: AdminLogoutAccepted}, nil
+}
+
+// logSignedOut writes the sign-out to the server log. A log entry that cannot be written does not
+// change the fact that the session has ended.
+func (handler *AdminLogoutHandler) logSignedOut(ctx context.Context) {
+	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
+		DateTime: handler.clock.Now(),
+		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceLogin,
+		Message:  "the administrator signed out",
+	}); err != nil {
+		return
+	}
 }

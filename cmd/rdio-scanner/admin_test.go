@@ -68,7 +68,7 @@ func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 		}
 	}
 
-	if got := countLogLines(t, srv.db, "invalid login attempt for ip "+testRequestAddress); got != 3 {
+	if got := countLogLines(t, srv.db, "a login attempt from "+testRequestAddress+" was refused"); got != 3 {
 		t.Fatalf("the server wrote %d refusal lines, want one for each of the three guesses", got)
 	}
 
@@ -78,11 +78,11 @@ func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 		t.Fatalf("the fourth guess was answered %d, want 401", rec.Code)
 	}
 
-	if got := countLogLines(t, srv.db, "invalid login attempt for ip "+testRequestAddress); got != 3 {
+	if got := countLogLines(t, srv.db, "a login attempt from "+testRequestAddress+" was refused"); got != 3 {
 		t.Errorf("the fourth guess wrote another refusal line (%d in all), want the fourth refused before the credential is looked at", got)
 	}
 
-	if got := countLogLines(t, srv.db, `too many login attempts for ip="`+testRequestAddress+`"`); got != 1 {
+	if got := countLogLines(t, srv.db, "too many login attempts from "+testRequestAddress); got != 1 {
 		t.Errorf("the server wrote %d lines about the limit, want exactly one, for the attempt that reached it", got)
 	}
 
@@ -92,7 +92,7 @@ func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 		t.Fatalf("the fifth guess was answered %d, want 401", rec.Code)
 	}
 
-	if got := countLogLines(t, srv.db, `too many login attempts for ip="`+testRequestAddress+`"`); got != 1 {
+	if got := countLogLines(t, srv.db, "too many login attempts from "+testRequestAddress); got != 1 {
 		t.Errorf("the server wrote %d lines about the limit, want the attempts past the limit refused without saying anything", got)
 	}
 
