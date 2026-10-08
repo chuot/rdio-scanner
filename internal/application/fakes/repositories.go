@@ -673,6 +673,10 @@ type Logs struct {
 	// failures it cannot answer with, so a test needs the read to fail while the write still works.
 	SearchErr error
 
+	// DeleteErr, when set, is returned by DeleteLogsBefore and by nothing else. The retention pass records
+	// the half of its work it could not do, so a test needs the delete to fail while the write still works.
+	DeleteErr error
+
 	mutex sync.Mutex
 }
 
@@ -843,6 +847,10 @@ func (logs *Logs) DeleteLogsBefore(ctx context.Context, before time.Time) (int, 
 
 	if logs.Err != nil {
 		return 0, logs.Err
+	}
+
+	if logs.DeleteErr != nil {
+		return 0, logs.DeleteErr
 	}
 
 	kept := []domain.LogEntry{}

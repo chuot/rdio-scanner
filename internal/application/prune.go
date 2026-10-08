@@ -106,6 +106,8 @@ func NewPruneOldCallsHandler(
 func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCallsCommand) (PruneOldCallsResult, error) {
 	options, err := handler.options.ReadOptions(ctx)
 	if err != nil {
+		handler.reportFailure(ctx, "the retention pass could not read the retention it is configured with", err)
+
 		return PruneOldCallsResult{Outcome: PruneOldCallsFailed}, err
 	}
 
@@ -120,11 +122,15 @@ func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCal
 
 	callsPruned, err := handler.calls.DeleteCallsBefore(ctx, before)
 	if err != nil {
+		handler.reportFailure(ctx, "the retention pass could not prune the call history", err)
+
 		return PruneOldCallsResult{Outcome: PruneOldCallsFailed}, err
 	}
 
 	logsPruned, err := handler.logs.DeleteLogsBefore(ctx, before)
 	if err != nil {
+		handler.reportFailure(ctx, "the retention pass could not prune the log", err)
+
 		return PruneOldCallsResult{Outcome: PruneOldCallsFailed, CallsPruned: callsPruned}, err
 	}
 
@@ -143,4 +149,14 @@ func retentionReport(callsPruned, logsPruned int) string {
 		counted(callsPruned, "call", "calls"),
 		counted(logsPruned, "log entry", "log entries"),
 	)
+}
+
+// reportFailure records the half of the retention the server could not do.
+//
+// The hourly schedule discards this command's error, as the legacy server's scheduler discards it, and until
+// now the pass wrote nothing on a failure either: a deployment whose retention had been broken for a month
+// had a log view that looked healthy. The error still goes back to the caller, because the outcome the
+// caller reads is not this feature's to change.
+func (handler *PruneOldCallsHandler) reportFailure(ctx context.Context, what string, reason error) {
+	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourcePrune, fmt.Sprintf("%s: %v", what, reason))
 }

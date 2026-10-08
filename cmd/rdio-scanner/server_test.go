@@ -459,6 +459,43 @@ func TestServerPrunesOnceAnHourAndSchedulesTheNextOne(t *testing.T) {
 	}
 }
 
+// A retention pass that fails is the failure the schedule exists for: a server whose retention has been
+// broken for a month fills up, and the only thing its operator can look at is the log view. The pass names
+// what it was trying to do, and the next hour is still scheduled.
+func TestServerReportsAFailedRetentionPassAndStillSchedulesTheNextOne(t *testing.T) {
+	scheduler := fakes.NewScheduler()
+	logs := &fakes.Logs{DeleteErr: errors.New("logs table is missing")}
+
+	pruned := application.NewPruneOldCallsHandler(
+		fakes.NewCalls(),
+		logs,
+		&fakes.Options{Stored: domain.Options{PruneDays: 7}},
+		fakes.NewClock(time.Unix(1700000000, 0)),
+	)
+
+	pruneHourly(scheduler, pruned)
+
+	scheduler.RunDue(time.Hour)
+
+	report := ""
+
+	for _, entry := range logs.Recorded() {
+		if entry.Source == domain.LogSourcePrune {
+			report = entry.Message
+		}
+	}
+
+	if report != "the retention pass could not prune the log: logs table is missing" {
+		t.Errorf("the server log reports %q, want the retention pass naming what it was trying to do: %v",
+			report, logs.Recorded())
+	}
+
+	if scheduler.PendingCount() != 1 {
+		t.Errorf("after a retention pass that failed the server has %d prunings pending, want the next hour still scheduled",
+			scheduler.PendingCount())
+	}
+}
+
 // The listening address the configuration names is split the way the legacy server splits it: a name with
 // no port gets 3000, and an address with nothing in it means every interface.
 func TestServerSplitsTheListeningAddressTheConfigurationNames(t *testing.T) {

@@ -59,6 +59,22 @@ func (fixture *pruneFixture) run() (PruneOldCallsResult, error) {
 	return fixture.prune.Handle(context.Background(), PruneOldCallsCommand{})
 }
 
+// filedUnder reports the entry the retention pass filed with itself, which is the only thing a deployment
+// sees of a pass that ran, and of a pass that could not run.
+func (fixture *pruneFixture) filedUnder() (domain.LogEntry, bool) {
+	entry := domain.LogEntry{}
+	found := false
+
+	for _, stored := range fixture.logs.Stored {
+		if stored.Source == domain.LogSourcePrune {
+			entry = stored
+			found = true
+		}
+	}
+
+	return entry, found
+}
+
 // storeCall records a call whose only relevant detail is when it happened.
 func (fixture *pruneFixture) storeCall(id uint64, at time.Time) {
 	call := domain.NewCall()
@@ -276,6 +292,68 @@ func TestPruneOldCallsCommandLeavesTheLogAloneWhenTheCallHistoryCannotBePruned(t
 
 	if !found {
 		t.Errorf("server log = %v, want the old entry still there, because the legacy pruning stops at the call history", fixture.logs.Stored)
+	}
+}
+
+// A retention pass that cannot do its work currently writes nothing at all, and its caller throws the error
+// away, so a deployment whose retention has been broken for a month has a log that looks healthy. Each of
+// the three things the pass depends on gets its own entry naming what it was trying to do.
+func TestPruneOldCallsCommandReportsWhatItWasTryingToDoWhenItFailed(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		stub   func(fixture *pruneFixture, err error)
+		want   string
+		reason string
+	}{
+		{
+			name:   "the retention cannot be read",
+			stub:   func(fixture *pruneFixture, err error) { fixture.options.Err = err },
+			want:   "the retention pass could not read the retention it is configured with: options table is missing",
+			reason: "options table is missing",
+		},
+		{
+			name:   "the call history cannot be pruned",
+			stub:   func(fixture *pruneFixture, err error) { fixture.calls.Err = err },
+			want:   "the retention pass could not prune the call history: calls table is missing",
+			reason: "calls table is missing",
+		},
+		{
+			name:   "the log cannot be pruned",
+			stub:   func(fixture *pruneFixture, err error) { fixture.logs.DeleteErr = err },
+			want:   "the retention pass could not prune the log: logs table is missing",
+			reason: "logs table is missing",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newPruneFixture()
+
+			tc.stub(fixture, errors.New(tc.reason))
+
+			fixture.storeCall(1, pruneTime.AddDate(0, 0, -8))
+			fixture.storeLog(pruneTime.AddDate(0, 0, -8), "old event")
+
+			result, err := fixture.run()
+			if err == nil {
+				t.Fatalf("prune reported no error, want the failure reported to the scheduler")
+			}
+
+			if result.Outcome != PruneOldCallsFailed {
+				t.Errorf("outcome = %q, want a failed retention pass", result.Outcome)
+			}
+
+			entry, found := fixture.filedUnder()
+			if !found {
+				t.Fatalf("server log = %v, want the retention pass to say what it was trying to do", fixture.logs.Stored)
+			}
+
+			if entry.Level != domain.LogLevelError {
+				t.Errorf("level = %q, want a failed retention pass reported as an error", entry.Level)
+			}
+
+			if entry.Message != tc.want {
+				t.Errorf("report = %q, want what the pass was trying to do, then the failure's own text", entry.Message)
+			}
+		})
 	}
 }
 
