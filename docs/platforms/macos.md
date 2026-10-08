@@ -70,6 +70,19 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
 \pagebreak{}
 
+# Converting audio
+
+The macOS build carries no ffmpeg of its own: it converts recordings with the ffmpeg your Mac installs.
+Install it before starting the server, with [Homebrew](https://brew.sh/):
+
+        rdio@macos rdio-scanner % brew install ffmpeg
+
+A server that finds no ffmpeg says so once when it starts, and keeps every recording exactly as the
+recorder wrote it: a call is never lost because its audio would not convert.
+
+The Linux and Windows builds carry their own ffmpeg inside the binary, compiled for the architecture they
+were built for, and need nothing installed on the host.
+
 # Advanced customizations
 
 ## Listening on an alternate port

@@ -15,7 +15,7 @@ Your os distribution may have all of the following prerequisites available in it
 - latest version of Pandoc with pandoc-pdf ([here](https://pandoc.org/installing.html))
 - latest version of TeX Live ([here](https://www.tug.org/texlive/))
 - latest version of Info-Zip ([here](http://infozip.sourceforge.net/))
-- latest version of podman ([here](https://podman.io/)), only for building containers
+- latest version of podman ([here](https://podman.io/)), for building the container image and for compiling the ffmpeg each target carries
 
 ## Compile the app
 
@@ -32,10 +32,26 @@ The listener application and the administration console are two applications, in
         go run ./cmd/build client     # both applications
         go run ./cmd/build scanner    # the listener application only
         go run ./cmd/build admin      # the administration console only
+        go run ./cmd/build ffmpeg     # the ffmpeg this machine's target carries
         go run ./cmd/build server     # the server binary only, against the bundles on disk
         go run ./cmd/build version    # the version this build carries
 
 The server binary carries both bundles. One executable serves the listener application at `/` and the administration console at `/admin/`.
+
+## The ffmpeg the server carries
+
+A server compiled for `linux-386`, `linux-amd64`, `linux-arm`, `linux-arm64` or `windows-amd64` carries its own `ffmpeg` and `ffprobe` inside its own binary, and converts audio with nothing installed on the host.
+
+        go run ./cmd/build ffmpeg             # the target this machine is
+        go run ./cmd/build ffmpeg linux-arm64 # another target, which is how the release matrix cross-builds
+
+The version, the source, the configure recipe and the toolchain of every target are written once, in `internal/infrastructure/ffmpeg/bundle/manifest.json`. The tool fetches that release from ffmpeg.org, checks it against the sha256 the manifest records — ffmpeg.org signs its releases and publishes no checksum, so the pinned digest is what this build trusts — compiles the recipe in a container built from `Containerfile.ffmpeg`, and then runs what it produced through the converter's own argument list before accepting it. podman is what compiles it.
+
+What it fetches and compiles is build output: `.build/ffmpeg` holds the source tarball and the compiled pair, and `internal/infrastructure/ffmpeg/bundle/<target>` holds the gzipped pair the binary embeds. Deleting either costs a rebuild and nothing else. A second build whose ffmpeg version, target and recipe are unchanged compiles nothing again.
+
+A server whose target carries none — `macos-amd64`, `macos-arm64`, `freebsd-amd64`, and a plain `go build` a developer runs — converts with the ffmpeg its host installs, and says so once at startup when it cannot find one.
+
+The licence the compiled ffmpeg is under, the release it was compiled from, and the recipe it was compiled with are written next to the bundle and travel into each release archive as `FFMPEG.md`.
 
 ## Say what version you are building
 

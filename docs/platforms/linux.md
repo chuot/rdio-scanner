@@ -68,6 +68,11 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 
 ![admin dashboard todos](../images/admin-todos.png?raw=true)\
 
+# Converting audio
+
+The Linux build carries its own `ffmpeg` and `ffprobe` inside the binary, compiled for the architecture it
+runs on, so nothing has to be installed on the host for recordings to convert.
+
 # Advanced customizations
 
 ## Listening on an alternate port
