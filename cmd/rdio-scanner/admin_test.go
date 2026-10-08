@@ -103,6 +103,8 @@ func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("the correct credential was answered %d after four attempts inside one attempt window, want 401", rec.Code)
 	}
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // A login hands out a session, and only the five most recent ones are sessions. The sixth ends the first.
@@ -177,6 +179,8 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 	if code := closed(); code != websocket.CloseNormalClosure {
 		t.Errorf("the open administrator connection ended with %d after the logout, want it ended with a normal closure", code)
 	}
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // Saving the whole configuration and saving each section one at a time reach the same configuration, and

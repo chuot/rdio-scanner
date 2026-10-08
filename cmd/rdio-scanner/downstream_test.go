@@ -154,6 +154,8 @@ func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "calls"`); rows != 1 {
 		t.Errorf("the server stored %d calls, want the one it accepted", rows)
 	}
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIsFiledUnder is the part of the re-post that is not

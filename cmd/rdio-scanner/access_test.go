@@ -85,6 +85,8 @@ func TestARestrictedServerAsksForAnAccessCodeBeforeAnythingElse(t *testing.T) {
 	sendFrame(t, conn, `["PIN","`+encodeAccessCode("capture-scoped")+`"]`)
 
 	assertFrame(t, conn, golden.scoped[6])
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // Five access codes on one connection is the end of that connection: the fifth is refused even when the

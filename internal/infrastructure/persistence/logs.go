@@ -77,17 +77,20 @@ func NewLogs(db *sql.DB, dialect Dialect) *Logs {
 // their sources — and it is the state a row the other server writes is in permanently, because its insert
 // names the columns it knows and never mentions this one. The guard that makes a writer without a source a
 // failure is the one that lands once every writer names itself.
+// Every entry this server writes names the part of the server that wrote it, and this is the one boundary
+// every writer reaches. An entry that names nothing is refused rather than filed under legacy: a writer added
+// later without a source fails at the write instead of quietly producing a row the log view can only call
+// old.
+//
+// A row the *other* server writes is not a refusal and cannot be one. Its insert names the columns it knows
+// and never mentions this one, so rows with no source exist permanently in a database this server inherited;
+// the read side files them under legacy, which is what an operator filtering for legacy is looking for.
 func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
-	if entry.Source != "" && !domain.IsKnownLogSource(entry.Source) {
+	if !domain.IsKnownLogSource(entry.Source) {
 		return operationError("logs", "logevent", fmt.Errorf("%w: %q", errUnknownLogSource, entry.Source))
 	}
 
-	source := string(entry.Source)
-	if source == "" {
-		source = string(domain.LogSourceLegacy)
-	}
-
-	if _, err := logs.store.exec(ctx, logInsertQuery, entry.Level, source, entry.Message, millisOf(entry.DateTime)); err != nil {
+	if _, err := logs.store.exec(ctx, logInsertQuery, entry.Level, string(entry.Source), entry.Message, millisOf(entry.DateTime)); err != nil {
 		return statementError("logs", "logevent", err, logInsertQuery)
 	}
 

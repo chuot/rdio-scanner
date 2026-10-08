@@ -119,6 +119,8 @@ func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "delayed"`); rows != 0 {
 		t.Errorf("the waiting list holds %d rows after the call was delivered, want none", rows)
 	}
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener is the restart half: the calls a

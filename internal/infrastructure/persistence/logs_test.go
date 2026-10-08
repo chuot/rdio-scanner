@@ -875,24 +875,44 @@ func TestAppendLogRefusesASourceThatIsNotANameOfThisServer(t *testing.T) {
 	}
 }
 
-// TestAppendLogReadsBackAnEntryWithNoSourceAsLegacy is the row this server does not write and the row the
-// other server does: an insert that never mentions the column. The log view never shows a blank, and a
-// filter on legacy finds those rows.
-//
-// It also describes where the writers are while this feature is being built — the repository gained the
-// column before they gained their sources. The guard that makes a writer without a source a failure is the
-// one that lands once every writer names itself.
-func TestAppendLogReadsBackAnEntryWithNoSourceAsLegacy(t *testing.T) {
+// Every entry this server writes names the part of the server that wrote it. The store is the one boundary
+// every writer reaches, so refusing an entry that names nothing is where the vocabulary is enforced: a writer
+// added later without a source fails at the write instead of quietly producing a row the log view can only
+// file under legacy.
+func TestAppendLogRefusesAnEntryThatNamesNoPartOfTheServer(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "logs")
 	logs := NewLogs(db, DialectSqlite)
 
-	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+	err := logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
 		Level:    domain.LogLevelInfo,
 		Message:  "an entry written by a server that names no subsystem",
-	}); err != nil {
-		t.Fatalf("AppendLog: %v", err)
+	})
+
+	if err == nil {
+		t.Fatal("an entry naming no part of this server was stored, and every writer is required to name one")
 	}
+
+	if !strings.Contains(err.Error(), "no part of this server") {
+		t.Errorf("the failure says %q, want it to say the entry named no part of this server", err.Error())
+	}
+
+	var rows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "logs"`).Scan(&rows); err != nil {
+		t.Fatalf("counting the log view: %v", err)
+	}
+
+	if rows != 0 {
+		t.Errorf("the log view holds %d entries after a refused write, want nothing stored", rows)
+	}
+}
+
+// A row the other server writes is not a refusal. Its insert names the columns it knows and never mentions
+// this one, so rows with no source exist permanently in a database this server inherited, and the read side
+// files them under legacy — which is exactly what an operator filtering for legacy is trying to find.
+func TestTheLogViewReadsBackARowWrittenWithoutTheSourceColumnAsLegacy(t *testing.T) {
+	db := openMigratedLegacyDatabase(t, "logs")
+	logs := NewLogs(db, DialectSqlite)
 
 	// The legacy server's own insert, which does not know the column exists.
 	if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`,
@@ -907,8 +927,8 @@ func TestAppendLogReadsBackAnEntryWithNoSourceAsLegacy(t *testing.T) {
 		t.Fatalf("SearchLogs: %v", err)
 	}
 
-	if page.Count != 2 || len(page.Results) != 2 {
-		t.Fatalf("a search for legacy matched %d entries and returned %d, want the 2 written without a source", page.Count, len(page.Results))
+	if page.Count != 1 || len(page.Results) != 1 {
+		t.Fatalf("a search for legacy matched %d entries and returned %d, want the one written without a source", page.Count, len(page.Results))
 	}
 
 	for _, entry := range page.Results {

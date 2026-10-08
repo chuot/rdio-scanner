@@ -160,6 +160,8 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	for _, name := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
 		compareCanonical(t, "the "+name+" the server left behind", golden[name], endToEndRows(t, srv.db, name))
 	}
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // seedStatement is one of the statements that put a configuration in front of the server, with the values

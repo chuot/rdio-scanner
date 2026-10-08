@@ -125,6 +125,8 @@ func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *t
 	if rows := countRows(t, srv.db, fmt.Sprintf(`SELECT COUNT(*) FROM "logs" WHERE "timestamp" < %d`, older.Add(time.Second).UnixMilli())); rows != 0 {
 		t.Errorf("the log view still holds %d entries older than the retention, want none", rows)
 	}
+
+	assertEveryServerLogEntry(t, srv.db)
 }
 
 // TestTheServerKeepsItsHistoryWhenTheRetentionIsSwitchedOff is the other half of the option: a retention of
