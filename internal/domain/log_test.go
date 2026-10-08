@@ -188,3 +188,83 @@ func TestLogSearchLimitConstants(t *testing.T) {
 		t.Errorf("MaxLogSearchLimit = %d, want 500", MaxLogSearchLimit)
 	}
 }
+
+// T001: the source vocabulary is the operator's names for the parts of the server, and it is closed.
+// A name outside it is not a filter that matches nothing — it is a caller asking for a subsystem this
+// server does not have, and it has to be refused rather than answered with an empty log view.
+func TestKnownLogSourcesAreTheDeclaredVocabulary(t *testing.T) {
+	want := []LogSource{
+		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
+		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
+		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+		LogSourceCalls, LogSourceLegacy,
+	}
+
+	got := KnownLogSources()
+
+	if len(got) != len(want) {
+		t.Fatalf("KnownLogSources() = %v, want %v", got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("KnownLogSources()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestIsKnownLogSourceAcceptsEveryDeclaredName(t *testing.T) {
+	for _, source := range KnownLogSources() {
+		if !IsKnownLogSource(source) {
+			t.Errorf("IsKnownLogSource(%q) = false, want true for a declared name", source)
+		}
+	}
+}
+
+func TestIsKnownLogSourceRefusesANameThatIsNotOne(t *testing.T) {
+	// `dirwatcher` is the name a reader reaches for first, and `apikey` is a table the server has
+	// but a subsystem it does not report on: an apikey is only ever presented outbound.
+	for _, name := range []string{"", "dirwatcher", "apikey", "Dirwatch", "downstreams", "live feed"} {
+		if IsKnownLogSource(LogSource(name)) {
+			t.Errorf("IsKnownLogSource(%q) = true, want false: the vocabulary is closed", name)
+		}
+	}
+}
+
+func TestParseLogSourceReadsANameInTheVocabulary(t *testing.T) {
+	source, ok := ParseLogSource("dirwatch")
+
+	if !ok || source != LogSourceDirwatch {
+		t.Errorf("ParseLogSource(\"dirwatch\") = %q, %v, want %q, true", source, ok, LogSourceDirwatch)
+	}
+}
+
+func TestParseLogSourceRefusesWhatIsNotAName(t *testing.T) {
+	for _, submitted := range []any{"dirwatcher", "", "DIRWATCH", 7, nil, map[string]any{}} {
+		source, ok := ParseLogSource(submitted)
+
+		if ok {
+			t.Errorf("ParseLogSource(%v) = %q, true, want a refusal", submitted, source)
+		}
+
+		if source != "" {
+			t.Errorf("ParseLogSource(%v) returned %q with a refusal, want no source", submitted, source)
+		}
+	}
+}
+
+func TestLogEntryCarriesItsSource(t *testing.T) {
+	at := time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC)
+
+	entry := LogEntry{
+		ID:       12,
+		DateTime: at,
+		Level:    LogLevelError,
+		Source:   LogSourceDirwatch,
+		Message:  "the watcher for /data/incoming stopped: no such file or directory",
+	}
+
+	if entry.Source != LogSourceDirwatch {
+		t.Errorf("LogEntry.Source = %q, want %q", entry.Source, LogSourceDirwatch)
+	}
+}

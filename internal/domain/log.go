@@ -33,6 +33,83 @@ const (
 	LogLevelError = "error"
 )
 
+// LogSource is the part of the server that recorded an entry.
+//
+// The names are the operator's names for the parts of the server, not the names of the functions that
+// write them: an entry about a directory watcher that stopped is LogSourceDirwatch whether the failure
+// came from fsnotify, from the walk of the directory, or from the hand-off to the ingest path. A name is
+// in this list because a writer writes it — there is no LogSourceApikey, because an apikey is only ever
+// presented outbound to a downstream server and the apikeys.read: and apikeys.write: lines the log holds
+// are failed configuration section saves, which are LogSourceConfig.
+//
+// The list is closed on purpose. A search for a name that is not here is not a filter that matches
+// nothing, it is a caller asking for a subsystem this server does not have, and answering it with an
+// empty log view teaches an operator that nothing happened.
+type LogSource string
+
+const (
+	LogSourceServer     LogSource = "server"
+	LogSourceConfig     LogSource = "config"
+	LogSourceDirwatch   LogSource = "dirwatch"
+	LogSourceDownstream LogSource = "downstream"
+	LogSourceDelayer    LogSource = "delayer"
+	LogSourceIngest     LogSource = "ingest"
+	LogSourceLogin      LogSource = "login"
+	LogSourceAccess     LogSource = "access"
+	LogSourceLivefeed   LogSource = "livefeed"
+	LogSourceFFmpeg     LogSource = "ffmpeg"
+	LogSourceUpload     LogSource = "upload"
+	LogSourcePrune      LogSource = "prune"
+	LogSourceLogs       LogSource = "logs"
+	LogSourceDatabase   LogSource = "database"
+	LogSourceAdmin      LogSource = "admin"
+	LogSourceCalls      LogSource = "calls"
+
+	// LogSourceLegacy is what an entry is filed under when it arrived before this field existed, or
+	// when it was written by a server that does not write it. It is a read-side name as much as a
+	// stored one: the log view never shows a blank source.
+	LogSourceLegacy LogSource = "legacy"
+)
+
+// KnownLogSources is the vocabulary, in the order the log view lists it.
+func KnownLogSources() []LogSource {
+	return []LogSource{
+		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
+		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
+		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+		LogSourceCalls, LogSourceLegacy,
+	}
+}
+
+// IsKnownLogSource reports whether a name is one of the parts of this server.
+func IsKnownLogSource(source LogSource) bool {
+	for _, known := range KnownLogSources() {
+		if source == known {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ParseLogSource reads one source out of an administrator payload. Anything that is not a name in the
+// vocabulary is refused, which is the one criterion the log search refuses rather than ignores: the
+// others are filters the caller did not mean to apply, and this one is a subsystem the server does not
+// have.
+func ParseLogSource(value any) (LogSource, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+
+	source := LogSource(text)
+	if !IsKnownLogSource(source) {
+		return "", false
+	}
+
+	return source, true
+}
+
 // Log search paging: how many entries a search returns when the caller does not ask,
 // and the most it will ever return.
 const (
@@ -40,11 +117,13 @@ const (
 	MaxLogSearchLimit     = uint(500)
 )
 
-// LogEntry is one recorded server event.
+// LogEntry is one recorded server event. Source is the part of the server that recorded it, and it is
+// required: an entry that does not say where it came from is the defect this feature exists to remove.
 type LogEntry struct {
 	ID       uint64
 	DateTime time.Time
 	Level    string
+	Source   LogSource
 	Message  string
 }
 
