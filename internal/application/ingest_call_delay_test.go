@@ -67,7 +67,7 @@ func TestIngestCallHoldsBackACallOnADelayedTalkgroup(t *testing.T) {
 		t.Fatalf("the server stored %d calls, want the one it accepted", len(got))
 	}
 
-	if !fixture.loggedContaining("success") {
+	if !fixture.loggedAs(domain.LogSourceIngest, "call from system 1 talkgroup 123 success, test.m4a") {
 		t.Errorf("logs = %v, want the success line for a call that was recorded", fixture.logMessages())
 	}
 
@@ -180,8 +180,8 @@ func TestIngestCallReportsACallItCouldNotHoldBack(t *testing.T) {
 		t.Fatalf("outcome = %q, want %q: the recording was kept even though the hold was not", result.Outcome, IngestCallAccepted)
 	}
 
-	if !fixture.loggedContaining("delayer.push") {
-		t.Errorf("logs = %v, want the failure to write the hold down", fixture.logMessages())
+	if !fixture.loggedAs(domain.LogSourceDelayer, "the call could not be held for delivery: delayer.push") {
+		t.Errorf("logs = %v, want the hold that did not happen, with the failure's own text after it", fixture.logMessages())
 	}
 
 	if got := fixture.reposted(); len(got) != 0 {

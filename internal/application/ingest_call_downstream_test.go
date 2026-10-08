@@ -43,10 +43,6 @@ func claimedIngestCall() domain.Call {
 	return call
 }
 
-// forwardedAudioFilename is the name the stored call carries: the fixture's options convert
-// audio, and the log line and the re-post both describe the call after that happened.
-const forwardedAudioFilename = "test.m4a"
-
 func TestIngestCallForwardsAcceptedCallToDownstreamCoveringEverySystem(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -223,10 +219,8 @@ func TestIngestCallLogsEachCallItForwarded(t *testing.T) {
 		t.Fatalf("ingest failed: %v", err)
 	}
 
-	want := "downstream: system=1 talkgroup=123 file=" + forwardedAudioFilename + " to http://downstream.example success"
-
-	if !fixture.loggedEventually(want) {
-		t.Fatalf("logs = %q, want %q", fixture.logMessages(), want)
+	if !fixture.loggedAsEventually(domain.LogSourceDownstream, "call from system 1 talkgroup 123 sent to http://downstream.example: success") {
+		t.Fatalf("logs = %q, want the re-post recorded under the downstream it was sent to", fixture.logMessages())
 	}
 }
 
@@ -248,17 +242,33 @@ func TestIngestCallLogsACallTheDownstreamRefused(t *testing.T) {
 		t.Fatalf("ingest failed: %v", err)
 	}
 
-	want := "downstream: system=1 talkgroup=123 file=" + forwardedAudioFilename +
-		" to http://downstream.example downstream.send: bad status: 500 Internal Server Error"
-
-	if !fixture.loggedEventually(want) {
-		t.Fatalf("logs = %q, want %q", fixture.logMessages(), want)
+	if !fixture.loggedAsEventually(domain.LogSourceDownstream, "call from system 1 talkgroup 123 sent to http://downstream.example: downstream.send: bad status: 500 Internal Server Error") {
+		t.Fatalf("logs = %q, want the refusal recorded against the downstream that gave it", fixture.logMessages())
 	}
 
 	// A downstream that refuses a call is not the ingest's failure: the call was stored and
 	// delivered here, and the legacy server says nothing else about it.
-	if !fixture.loggedContaining("newcall: system=1 talkgroup=123 file=" + forwardedAudioFilename + " success") {
+	if !fixture.loggedAs(domain.LogSourceIngest, "call from system 1 talkgroup 123 success, test.m4a") {
 		t.Errorf("logs = %q, want the call to have been accepted", fixture.logMessages())
+	}
+}
+
+// TestIngestCallReportsDownstreamsItCouldNotRead is the line the re-post writes when it cannot even get
+// the list: the call was stored and delivered here, and the only trace of the re-post that never happened
+// is this entry.
+func TestIngestCallReportsDownstreamsItCouldNotRead(t *testing.T) {
+	fixture := newIngestFixture()
+
+	fixture.seedKnownSystem()
+
+	fixture.downstreams.Err = errors.New(`downstreams.all: no such table: downstreams in SELECT "id" FROM "downstreams"`)
+
+	if _, err := fixture.ingest(claimedIngestCall()); err != nil {
+		t.Fatalf("ingest failed: %v", err)
+	}
+
+	if !fixture.loggedAsEventually(domain.LogSourceDownstream, `the downstream servers could not be read: downstreams.all: no such table: downstreams in SELECT "id" FROM "downstreams"`) {
+		t.Fatalf("logs = %v, want what the server could not read and the failure's own text after it", fixture.logMessages())
 	}
 }
 

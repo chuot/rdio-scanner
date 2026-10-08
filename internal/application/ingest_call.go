@@ -174,15 +174,17 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		return handler.failed(err)
 	}
 
-	// The log line the legacy server writes for every ingest decision, reproduced byte
-	// for byte because the log view is part of what a deployment sees.
-	logCall := func(level string, call domain.Call, message string) {
-		handler.log(ctx, level, fmt.Sprintf("newcall: system=%v talkgroup=%v file=%v %v",
-			call.System.SystemRef, call.Talkgroup.TalkgroupRef, call.AudioFilename, message))
+	// The line every ingest decision gets: the call it is about, the decision, and the recording the
+	// call came from.
+	logCall := func(level string, call domain.Call, decision string) {
+		handler.log(ctx, level, domain.LogSourceIngest, fmt.Sprintf("call from system %v talkgroup %v %s, %s",
+			call.System.SystemRef, call.Talkgroup.TalkgroupRef, decision, call.AudioFilename))
 	}
 
+	// The line for a call the server could not finish with: what it was trying to do, then the
+	// failure's own text, which is the part that names the statement that failed.
 	logError := func(err error) (IngestCallResult, error) {
-		handler.log(ctx, domain.LogLevelError, fmt.Sprintf("controller.ingestcall: %v", err.Error()))
+		handler.log(ctx, domain.LogLevelError, domain.LogSourceIngest, fmt.Sprintf("the call could not be ingested: %v", err.Error()))
 
 		return IngestCallResult{Outcome: IngestCallFailed}, err
 	}
@@ -356,7 +358,10 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 	}
 
 	if !call.HasSystem() || !call.HasTalkgroup() {
-		logCall(domain.LogLevelWarn, call, "no matching system/talkgroup")
+		// Not the shared shape: this call has no system and no talkgroup to name, and naming the zeros
+		// they are stored as would tell an operator the call came from system 0. The recording is the
+		// only thing this line can name, and it is the thing the operator can go and look at.
+		handler.log(ctx, domain.LogLevelWarn, domain.LogSourceIngest, fmt.Sprintf("the recording %s does not match any system or talkgroup the server knows", call.AudioFilename))
 
 		return IngestCallResult{Outcome: IngestCallUnknown}, nil
 	}
@@ -381,7 +386,7 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 	}
 
 	if err := handler.convertAudio(ctx, &call, options, tags); err != nil {
-		handler.log(ctx, domain.LogLevelWarn, err.Error())
+		handler.log(ctx, domain.LogLevelWarn, domain.LogSourceFFmpeg, fmt.Sprintf("the recording could not be converted: %v", err.Error()))
 	}
 
 	stored, err := handler.calls.SaveCall(ctx, call)
@@ -409,7 +414,7 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 		// The call is in the recording history and nothing is going to tell anybody about it. That is
 		// what the legacy server does when it cannot write the hold down: report it, and accept that
 		// this one call was recorded and never delivered.
-		handler.log(ctx, domain.LogLevelError, err.Error())
+		handler.log(ctx, domain.LogLevelError, domain.LogSourceDelayer, fmt.Sprintf("the call could not be held for delivery: %v", err.Error()))
 
 		return
 	}
@@ -443,7 +448,7 @@ func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.C
 
 		downstreams, err := handler.downstreams.AllDownstreams(ctx)
 		if err != nil {
-			handler.log(ctx, domain.LogLevelError, err.Error())
+			handler.log(ctx, domain.LogLevelError, domain.LogSourceDownstream, fmt.Sprintf("the downstream servers could not be read: %v", err.Error()))
 
 			return
 		}
@@ -455,21 +460,22 @@ func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.C
 			}, call)
 
 			if err != nil {
-				handler.log(ctx, domain.LogLevelError, downstreamLine(call, downstream.URL, err.Error()))
+				handler.log(ctx, domain.LogLevelError, domain.LogSourceDownstream, downstreamLine(call, downstream.URL, err.Error()))
 
 				continue
 			}
 
-			handler.log(ctx, domain.LogLevelInfo, downstreamLine(call, downstream.URL, "success"))
+			handler.log(ctx, domain.LogLevelInfo, domain.LogSourceDownstream, downstreamLine(call, downstream.URL, "success"))
 		}
 	}()
 }
 
-// downstreamLine is the log line the legacy server writes for every downstream it posts a
-// call to, whether that server took it or refused it.
+// downstreamLine is the line for every downstream the server posts a call to, whether that server took
+// it or refused it. The recording is not named here: the neighbouring line the ingest wrote names it, and
+// this one is about which server the call went to.
 func downstreamLine(call domain.Call, url string, outcome string) string {
-	return fmt.Sprintf("downstream: system=%d talkgroup=%d file=%s to %s %s",
-		call.System.SystemRef, call.Talkgroup.TalkgroupRef, call.AudioFilename, url, outcome)
+	return fmt.Sprintf("call from system %d talkgroup %d sent to %s: %s",
+		call.System.SystemRef, call.Talkgroup.TalkgroupRef, url, outcome)
 }
 
 // convertAudio converts the call's audio and replaces it with the converted file. When
@@ -508,10 +514,16 @@ func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain
 	return nil
 }
 
-func (handler *IngestCallHandler) log(ctx context.Context, level, message string) {
+// log writes one entry to the server log, naming the part of the server the entry is about.
+//
+// The ingest path is not one subsystem: it decides about a call (ingest), converts its audio (ffmpeg),
+// hands it to the thing that holds it back (delayer) and re-posts it to the other servers (downstream).
+// Each line says which of those it is about, because the log view filters on it.
+func (handler *IngestCallHandler) log(ctx context.Context, level string, source domain.LogSource, message string) {
 	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: handler.clock.Now(),
 		Level:    level,
+		Source:   source,
 		Message:  message,
 	}); err != nil {
 		// A log entry that cannot be written must not change what the server did; the

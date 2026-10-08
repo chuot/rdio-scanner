@@ -44,19 +44,19 @@
   "logs": [
     {
       "level": "info",
-      "message": "newcall: system=1 talkgroup=1514000 file=first.wav success"
+      "message": "call from system 1 talkgroup 1514000 success, first.wav"
     },
     {
       "level": "info",
-      "message": "newcall: system=1 talkgroup=1514000 file=second.wav success"
+      "message": "call from system 1 talkgroup 1514000 success, second.wav"
     },
     {
       "level": "info",
-      "message": "newcall: system=2 talkgroup=3001 file=third.wav success"
+      "message": "call from system 2 talkgroup 3001 success, third.wav"
     },
     {
       "level": "info",
-      "message": "newcall: system=4660 talkgroup=1514000 file=120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3 success"
+      "message": "call from system 4660 talkgroup 1514000 success, 120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3"
     }
   ],
   "groups": [

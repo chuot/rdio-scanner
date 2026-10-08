@@ -604,7 +604,7 @@ func TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace(t *testing.T
 			"auto-populate is switched off", fixture.calls.Saved)
 	}
 
-	if !fixture.loggedContaining("no matching system/talkgroup") {
+	if !fixture.loggedContaining("the recording capture.wav does not match any system or talkgroup the server knows") {
 		t.Errorf("the call the server could not place is not in the log view: %v", fixture.logs.Stored)
 	}
 }

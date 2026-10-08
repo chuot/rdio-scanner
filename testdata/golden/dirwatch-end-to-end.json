@@ -78,11 +78,11 @@
     },
     {
       "level": "info",
-      "message": "newcall: system=10001 talkgroup=1514000 file=call.wav success"
+      "message": "call from system 10001 talkgroup 1514000 success, call.wav"
     },
     {
       "level": "info",
-      "message": "newcall: system=4660 talkgroup=1514000 file=120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3 success"
+      "message": "call from system 4660 talkgroup 1514000 success, 120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3"
     },
     {
       "level": "info",

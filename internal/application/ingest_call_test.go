@@ -143,26 +143,6 @@ func (fixture *ingestFixture) logMessages() []string {
 	return out
 }
 
-// loggedEventually waits for a log line that the ingest wrote on another goroutine — the
-// downstream fan-out — and gives up after a moment that no local log write needs.
-func (fixture *ingestFixture) loggedEventually(want string) bool {
-	deadline := time.Now().Add(2 * time.Second)
-
-	for {
-		for _, message := range fixture.logMessages() {
-			if message == want {
-				return true
-			}
-		}
-
-		if time.Now().After(deadline) {
-			return false
-		}
-
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 // reposted returns what the downstream fan-out re-posted.
 //
 // The fan-out runs on its own goroutine — that is what it is for — so the ingest returning
@@ -195,14 +175,37 @@ func (fixture *ingestFixture) reposted() []fakes.ForwardedCall {
 	return current
 }
 
-func (fixture *ingestFixture) loggedContaining(fragment string) bool {
-	for _, message := range fixture.logMessages() {
-		if strings.Contains(message, fragment) {
+// loggedAs reports whether the ingest wrote an entry naming that part of the server and saying the
+// fragment. The ingest path writes under four different sources — the call decisions under ingest, the
+// conversion under ffmpeg, the hold under delayer, the re-posts under downstream — so the source is part
+// of what these tests pin.
+func (fixture *ingestFixture) loggedAs(source domain.LogSource, fragment string) bool {
+	for _, entry := range fixture.logs.Recorded() {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// loggedAsEventually is loggedAs for the downstream fan-out, which writes on its own goroutine.
+func (fixture *ingestFixture) loggedAsEventually(source domain.LogSource, fragment string) bool {
+	deadline := time.Now().Add(2 * time.Second)
+
+	for {
+		for _, entry := range fixture.logs.Recorded() {
+			if entry.Source == source && strings.Contains(entry.Message, fragment) {
+				return true
+			}
+		}
+
+		if time.Now().After(deadline) {
+			return false
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func storedSystemByRef(systems domain.Systems, ref uint) (domain.System, bool) {
@@ -472,8 +475,8 @@ func TestIngestCallRefusesABlacklistedTalkgroup(t *testing.T) {
 		t.Error("a blacklisted call must not be stored")
 	}
 
-	if !fixture.loggedContaining("blacklisted") {
-		t.Errorf("logs = %v, want the blacklisted decision recorded", fixture.logMessages())
+	if !fixture.loggedAs(domain.LogSourceIngest, "call from system 1 talkgroup 123 blacklisted, test.wav") {
+		t.Errorf("logs = %v, want the blacklisted decision recorded, naming the call it is about", fixture.logMessages())
 	}
 }
 
@@ -498,8 +501,8 @@ func TestIngestCallReportsUnknownAggregatesWhenAutoPopulateIsOff(t *testing.T) {
 		t.Error("a call the server cannot place must not be stored")
 	}
 
-	if !fixture.loggedContaining("no matching system/talkgroup") {
-		t.Errorf("logs = %v, want the legacy warning the legacy server writes here", fixture.logMessages())
+	if !fixture.loggedAs(domain.LogSourceIngest, "the recording test.wav does not match any system or talkgroup the server knows") {
+		t.Errorf("logs = %v, want the call the server could not place, named by the recording it came from", fixture.logMessages())
 	}
 
 	if len(fixture.systems.Stored) != 0 {
@@ -537,8 +540,8 @@ func TestIngestCallRejectsADuplicateWithinTheWindow(t *testing.T) {
 		t.Error("a duplicate call must not be stored")
 	}
 
-	if !fixture.loggedContaining("duplicate call rejected") {
-		t.Errorf("logs = %v, want the duplicate decision recorded", fixture.logMessages())
+	if !fixture.loggedAs(domain.LogSourceIngest, "call from system 1 talkgroup 123 duplicate call rejected, test.wav") {
+		t.Errorf("logs = %v, want the duplicate decision recorded, naming the call it is about", fixture.logMessages())
 	}
 
 	if len(fixture.converter.Modes) != 0 {
@@ -610,12 +613,39 @@ func TestIngestCallStoresAndDeliversAKnownCall(t *testing.T) {
 		t.Errorf("stored audio = %q %q, want the converted name and media type", stored.AudioFilename, stored.AudioMime)
 	}
 
-	if !fixture.loggedContaining("success") {
-		t.Errorf("logs = %v, want the legacy success line", fixture.logMessages())
+	if !fixture.loggedAs(domain.LogSourceIngest, "call from system 1 talkgroup 123 success, test.m4a") {
+		t.Errorf("logs = %v, want the accepted call recorded, naming the call and the audio it was stored with", fixture.logMessages())
 	}
 
 	if len(fixture.hub.DeliveredCalls["listener"]) != 1 {
 		t.Error("an accepted call must be delivered to a listener that asked for it")
+	}
+}
+
+// TestIngestCallReportsACallItCouldNotStore is the one ingest line that carries the failure's own text:
+// the repository refused the write, and the statement that failed is the part an operator needs.
+func TestIngestCallReportsACallItCouldNotStore(t *testing.T) {
+	fixture := newIngestFixture()
+
+	fixture.seedKnownSystem()
+
+	fixture.calls.Err = errors.New(`calls.save: no such table: calls in INSERT INTO "calls" ("systemId", "talkgroupId") VALUES (1, 10)`)
+
+	call := validIngestCall()
+	call.System = fixture.systems.Stored[0]
+	call.Talkgroup = fixture.systems.Stored[0].Talkgroups[0]
+
+	result, err := fixture.ingest(call)
+	if err == nil {
+		t.Fatalf("ingest returned %v, want the failure the repository reported", result)
+	}
+
+	if result.Outcome != IngestCallFailed {
+		t.Errorf("outcome = %q, want %q", result.Outcome, IngestCallFailed)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceIngest, `the call could not be ingested: calls.save: no such table: calls in INSERT INTO "calls" ("systemId", "talkgroupId") VALUES (1, 10)`) {
+		t.Errorf("logs = %v, want what the server tried to do and the failure's own text after it", fixture.logMessages())
 	}
 }
 
@@ -644,8 +674,8 @@ func TestIngestCallKeepsTheOriginalAudioWhenConversionFails(t *testing.T) {
 		t.Errorf("stored audio filename = %q, want the original audio kept", stored.AudioFilename)
 	}
 
-	if !fixture.loggedContaining("ffmpeg is not available") {
-		t.Errorf("logs = %v, want the conversion failure recorded", fixture.logMessages())
+	if !fixture.loggedAs(domain.LogSourceFFmpeg, "the recording could not be converted: ffmpeg is not available, no audio conversion will be performed") {
+		t.Errorf("logs = %v, want the conversion failure recorded under the converter", fixture.logMessages())
 	}
 }
 

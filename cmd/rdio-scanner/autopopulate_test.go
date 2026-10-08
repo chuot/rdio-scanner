@@ -82,7 +82,7 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 	// the server has never heard of, which is created on the system the recording's system became.
 	dropRecording(t, filepath.Join(dsd, "20261006"), dsdRecordingName, recording(2048))
 
-	waitForLogMentioning(t, srv.db, "file="+dsdRecordingName+" success")
+	waitForLogMentioning(t, srv.db, "success, "+dsdRecordingName)
 
 	for _, directory := range []string{dsd, trunk} {
 		left := findFiles(t, directory)
@@ -141,5 +141,5 @@ func dropTrunkRecording(t *testing.T, srv *server, directory, name, sidecar stri
 	dropRecording(t, directory, name+".json", []byte(sidecar))
 	dropRecording(t, directory, name+".wav", recording(2092))
 
-	waitForLogMentioning(t, srv.db, "file="+name+".wav success")
+	waitForLogMentioning(t, srv.db, "success, "+name+".wav")
 }
