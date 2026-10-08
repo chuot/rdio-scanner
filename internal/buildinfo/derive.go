@@ -72,6 +72,23 @@ func (v Version) String() string {
 // without a leading zero or a run that carries at least one letter or hyphen.
 var prereleasePattern = regexp.MustCompile(`^(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*$`)
 
+// ValidatePre reports whether a name is a prerelease this version grammar accepts. An empty name is
+// not a prerelease at all and is accepted: it is the absence of one, not a bad one.
+//
+// A command line can ask before a build starts, so this is exported for the tool to refuse a name it
+// cannot honour before it has spent a build finding that out.
+func ValidatePre(pre string) error {
+	if pre == "" {
+		return nil
+	}
+
+	if !prereleasePattern.MatchString(pre) {
+		return fmt.Errorf("%q is not a prerelease name: use identifiers like beta1 or alpha.3", pre)
+	}
+
+	return nil
+}
+
 // tagPattern is a whole version as a tag names it: an optional v, a core, and an optional
 // prerelease. Build metadata is not part of it, because a tag names a release and a release does not
 // have a build.
@@ -90,8 +107,8 @@ func Derive(core, tag, commit, pre string) (Version, error) {
 		return Version{}, fmt.Errorf("%q is not a core version in the form X.Y.Z", core)
 	}
 
-	if pre != "" && !prereleasePattern.MatchString(pre) {
-		return Version{}, fmt.Errorf("%q is not a prerelease name: use identifiers like beta1 or alpha.3", pre)
+	if err := ValidatePre(pre); err != nil {
+		return Version{}, err
 	}
 
 	if tag != "" {
