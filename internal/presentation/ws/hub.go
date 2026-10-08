@@ -545,12 +545,12 @@ func (hub *Hub) register(session *listener) {
 	hub.changes.ListenerChanged()
 
 	if len(session.access.Ident) > 0 {
-		hub.logf("a listener joined from %s as %s", session.remoteAddr, session.access.Ident)
+		hub.logf(domain.LogLevelInfo, "a listener joined from %s as %s", session.remoteAddr, session.access.Ident)
 
 		return
 	}
 
-	hub.logf("a listener joined from %s", session.remoteAddr)
+	hub.logf(domain.LogLevelInfo, "a listener joined from %s", session.remoteAddr)
 }
 
 // disconnect forgets a session and says so. Every connection the server has taken over is reported when
@@ -577,21 +577,22 @@ func (hub *Hub) disconnect(session *listener) {
 	hub.changes.ListenerChanged()
 
 	if len(session.access.Ident) > 0 {
-		hub.logf("a listener left from %s as %s", session.remoteAddr, session.access.Ident)
+		hub.logf(domain.LogLevelInfo, "a listener left from %s as %s", session.remoteAddr, session.access.Ident)
 
 		return
 	}
 
-	hub.logf("a listener left from %s", session.remoteAddr)
+	hub.logf(domain.LogLevelInfo, "a listener left from %s", session.remoteAddr)
 }
 
-// logf writes one line to the server log. These lines are the server's log and not its console: they
-// are what an administrator reads afterwards, and they name the address a listener connected from.
-// logf writes one notice about a listener session to the server log. Every line the hub writes is about
-// feeding listeners, so the hub files them itself: a join, a departure and a message that went wrong are
-// the three things an operator filters the log view for, and an entry that does not name its author cannot
-// be filtered for.
-func (hub *Hub) logf(format string, args ...any) {
+// logf files one notice about a listener session in the server log. Every line the hub writes is about
+// feeding listeners, so the hub files them itself: a join, a departure and a message that went wrong are the
+// things an operator filters the log view for, and an entry that does not name its author cannot be filtered
+// for.
+//
+// The level is part of the call because a join is a notice and a frame the server could not act on is a
+// problem, and an operator narrowing the log view to what went wrong is asking about the second one.
+func (hub *Hub) logf(level string, format string, args ...any) {
 	if hub.logs == nil {
 		return
 	}
@@ -600,7 +601,7 @@ func (hub *Hub) logf(format string, args ...any) {
 	// lifetime and is not cancelled when one ends.
 	hub.logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Now(),
-		Level:    domain.LogLevelInfo,
+		Level:    level,
 		Source:   domain.LogSourceLivefeed,
 		Message:  fmt.Sprintf(format, args...),
 	})
@@ -677,9 +678,9 @@ func newListener(hub *Hub, id string, conn *websocket.Conn, remoteAddr string) *
 // read takes the frames a session sends, in the order they arrive, and hands each one to the server
 // behind the hub.
 //
-// A frame the server cannot read, or cannot act on, is written to the console and skipped: the
-// connection stays open and the next frame is read. Ending a connection over one bad frame is how a
-// server loses a client that is sending something the server is too old to know.
+// A frame the server cannot read, or cannot act on, is filed in the log view and skipped: the connection
+// stays open and the next frame is read. Ending a connection over one bad frame is how a server loses a
+// client that is sending something the server is too old to know.
 func (session *listener) read(dispatch Dispatch) {
 	defer func() {
 		session.hub.disconnect(session)
@@ -703,13 +704,13 @@ func (session *listener) read(dispatch Dispatch) {
 
 		message, err := ReadMessage(b)
 		if err != nil {
-			fmt.Fprintf(session.hub.console, "client.message.fromjson: %v\n", err)
+			session.hub.logf(domain.LogLevelWarn, "a message from a listener could not be read: %v", err)
 
 			continue
 		}
 
 		if err := dispatch(session.ctx, session.id, message); err != nil {
-			fmt.Fprintf(session.hub.console, "client.processmessage: %v\n", err)
+			session.hub.logf(domain.LogLevelWarn, "a message from a listener was not understood: %v", err)
 		}
 	}
 }

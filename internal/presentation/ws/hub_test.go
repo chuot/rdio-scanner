@@ -510,7 +510,9 @@ func TestAFrameTheServerCannotReadDoesNotEndTheConnection(t *testing.T) {
 		t.Fatalf("writing a broken frame: %v", err)
 	}
 
-	f.waitFor(t, func() bool { return strings.Contains(f.console.text(), "client.message.fromjson:") }, "the server to say something about the frame")
+	f.waitFor(t, func() bool {
+		return f.loggedAt(domain.LogSourceLivefeed, domain.LogLevelWarn, "a message from a listener could not be read")
+	}, "the server to file the frame it could not read")
 
 	if err := f.client.WriteMessage(websocket.TextMessage, []byte(`["VER"]`)); err != nil {
 		t.Fatalf("writing the frame that follows: %v", err)
@@ -530,7 +532,9 @@ func TestAFrameTheServerCannotActOnDoesNotEndTheConnection(t *testing.T) {
 		t.Fatalf("writing the frame: %v", err)
 	}
 
-	f.waitFor(t, func() bool { return strings.Contains(f.console.text(), "client.processmessage:") }, "the server to say something about the frame")
+	f.waitFor(t, func() bool {
+		return f.loggedAt(domain.LogSourceLivefeed, domain.LogLevelWarn, "a message from a listener was not understood")
+	}, "the server to file the frame it could not act on")
 
 	if got := f.hub.ListenerCount(); got != 0 {
 		t.Errorf("ListenerCount = %d, want 0: a refused frame does not make a listener out of a connection", got)
@@ -898,6 +902,19 @@ func (f *fixture) logAt(t *testing.T, at int) string {
 func (f *fixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range f.logs.Recorded() {
 		if entry.Source == source && strings.Contains(entry.Message, fragment) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// loggedAt reports whether the hub filed the entry under the level an operator filters for. A join is a
+// notice and a frame the server could not act on is a problem, and the log view's level filter is how an
+// operator finds one without reading the other.
+func (f *fixture) loggedAt(source domain.LogSource, level string, fragment string) bool {
+	for _, entry := range f.logs.Recorded() {
+		if entry.Source == source && entry.Level == level && strings.Contains(entry.Message, fragment) {
 			return true
 		}
 	}

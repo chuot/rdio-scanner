@@ -1193,6 +1193,20 @@ func (s *server) get(path string) *httptest.ResponseRecorder {
 	return rec
 }
 
+// askForAnUpgrade sends a request that claims to be a websocket upgrade and is not one: the Upgrade header
+// is the one header this server routes on, and everything else Go's upgrader insists on is left out. It is
+// how a test reaches the listener endpoint's refusal of a connection it would not take over.
+func (s *server) askForAnUpgrade(path string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Upgrade", "websocket")
+
+	s.routes.ServeHTTP(rec, req)
+
+	return rec
+}
+
 func (s *server) post(path, body string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 

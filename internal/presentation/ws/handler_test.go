@@ -168,7 +168,9 @@ func TestAnAccessCodeTheServerCannotDecodeSpendsNoAttempt(t *testing.T) {
 		f.send(t, conn, Message{Command: CommandAccessCode, Payload: "not base64 at all !!"})
 	}
 
-	f.waitFor(t, func() bool { return strings.Contains(f.console.text(), "controller.processmessage.commandpin:") }, "the server to say something about the code")
+	f.waitFor(t, func() bool {
+		return f.loggedAs(domain.LogSourceLivefeed, "a message from a listener was not understood: controller.processmessage.commandpin:")
+	}, "the server to file the code it could not decode")
 
 	f.send(t, conn, Message{Command: CommandAccessCode, Payload: base64.StdEncoding.EncodeToString([]byte("capture-open"))})
 
@@ -275,7 +277,9 @@ func TestAFetchOfOneCallThatDoesNotExistIsReportedAndDoesNotEndTheSession(t *tes
 
 	f.send(t, conn, Message{Command: CommandCall, Payload: float64(9999)})
 
-	f.waitFor(t, func() bool { return strings.Contains(f.console.text(), "client.processmessage:") }, "the server to say something about the call it could not find")
+	f.waitFor(t, func() bool {
+		return f.loggedAs(domain.LogSourceLivefeed, "a message from a listener was not understood")
+	}, "the server to file the call it could not find")
 
 	// The next thing this connection reads is the answer to the next thing it asked for: nothing was
 	// sent for the call the server could not find, and the connection is still there to be asked.
@@ -418,8 +422,31 @@ func TestACommandTheServerDoesNotActOnIsAnsweredWithNothing(t *testing.T) {
 		}
 	}
 
-	if got := f.console.text(); strings.Contains(got, "client.processmessage:") {
-		t.Errorf("an unknown command was reported as a failure: %s", got)
+	if f.loggedAs(domain.LogSourceLivefeed, "a message from a listener was not understood") {
+		t.Errorf("logs = %v, want an unknown command to be answered with nothing and filed nowhere", f.logs.Recorded())
+	}
+}
+
+// TestAConnectionTheServerWouldNotTakeOverIsFiled is the only trace an operator has of a client that
+// reached the listener endpoint and never became a listener. The server answers the request the way Go's
+// upgrader answers a request that is not an upgrade, and until this entry existed nothing in the log view
+// said that anything had arrived at all — the whole reason a listener problem and a broken client looked
+// identical.
+func TestAConnectionTheServerWouldNotTakeOverIsFiled(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	wiredTo(t, f)
+
+	resp, err := http.Get(f.server.URL + "/")
+	if err != nil {
+		t.Fatalf("reaching the listener endpoint without asking for an upgrade: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	if !f.loggedAt(domain.LogSourceLivefeed, domain.LogLevelWarn, "a listener connection was refused") {
+		t.Fatalf("logs = %v, want the connection the server would not take over, filed as a problem under the "+
+			"part of the server it reached", f.logs.Recorded())
 	}
 }
 
@@ -567,10 +594,10 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 			Systems:     w.systems,
 			Tags:        w.tags,
 		}),
-		Console:  f.console,
 		Gate:     application.NewAccessGate(w.accesses, f.hub),
 		Hub:      f.hub,
 		Livefeed: application.NewSetLivefeedHandler(f.hub),
+		Logs:     f.logs,
 		Search:   application.NewSearchCallsQueryHandler(w.calls, w.systems, w.groups, w.tags),
 		Settings: f.settings,
 		Version:  "8.0.0",

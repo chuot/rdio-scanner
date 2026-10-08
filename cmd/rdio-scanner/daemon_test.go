@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -169,6 +170,29 @@ func TestTheServiceLogTakesEachEntryAtTheLevelItIsFiledUnder(t *testing.T) {
 
 	if got := manager.count(); got != 3 {
 		t.Errorf("the service manager was told about %d entries, want the three whose levels it has a word for", got)
+	}
+}
+
+// TestAConnectionTheServerWouldNotTakeOverIsSaidOutLoud is the line the listener endpoint used to only
+// print, now stored as well: an operator reading the terminal and an operator reading the log view are told
+// about the same connection, in the shape each of them searches in.
+func TestAConnectionTheServerWouldNotTakeOverIsSaidOutLoud(t *testing.T) {
+	var terminal bytes.Buffer
+
+	srv := testServerOn(t, &terminal)
+
+	if rec := srv.askForAnUpgrade("/"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("a request that asks to become a listener connection and is not one was answered %d, want "+
+			"the answer Go's upgrader gives", rec.Code)
+	}
+
+	const message = "a listener connection was refused"
+
+	waitForLogMentioning(t, srv.db, message)
+
+	if !bytes.Contains(terminal.Bytes(), []byte("warn livefeed: "+message)) {
+		t.Errorf("the terminal holds %q, want the entry said with its level and the part of the server that "+
+			"wrote it", terminal.String())
 	}
 }
 

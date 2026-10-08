@@ -24,9 +24,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -50,10 +50,6 @@ type Deps struct {
 	// Config reads the configuration the server is running with.
 	Config *application.GetConfigHandler
 
-	// Console is where the endpoint writes the lines it says about a connection it could not take
-	// over. They are not the server's log and do not go into it.
-	Console io.Writer
-
 	// Gate decides whether a session may send a command at all, or is still being asked for its access
 	// code.
 	Gate *application.AccessGate
@@ -63,6 +59,11 @@ type Deps struct {
 
 	// Livefeed stores a listener's live-watch selection and answers it.
 	Livefeed *application.SetLivefeedHandler
+
+	// Logs is where the endpoint files what it decided about a connection, including the connections it
+	// would not take over. The operator's copy of the entry — the terminal, or the service manager's log —
+	// is the composition root's doing, and not something this package writes by hand.
+	Logs ports.LogRepository
 
 	// Search reads one page of the call history.
 	Search *application.SearchCallsQueryHandler
@@ -85,10 +86,10 @@ type Handler struct {
 	access   *application.AuthenticateAccessHandler
 	call     *application.GetCallQueryHandler
 	config   *application.GetConfigHandler
-	console  io.Writer
 	gate     *application.AccessGate
 	hub      *Hub
 	livefeed *application.SetLivefeedHandler
+	logs     ports.LogRepository
 	search   *application.SearchCallsQueryHandler
 	settings ServerSettings
 	version  string
@@ -98,19 +99,14 @@ var _ http.Handler = (*Handler)(nil)
 
 // NewHandler builds the endpoint from the use cases it answers with.
 func NewHandler(deps Deps) *Handler {
-	console := deps.Console
-	if console == nil {
-		console = io.Discard
-	}
-
 	return &Handler{
 		access:   deps.Access,
 		call:     deps.Call,
 		config:   deps.Config,
-		console:  console,
 		gate:     deps.Gate,
 		hub:      deps.Hub,
 		livefeed: deps.Livefeed,
+		logs:     deps.Logs,
 		search:   deps.Search,
 		settings: deps.Settings,
 		version:  deps.Version,
@@ -137,7 +133,7 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Fprintf(handler.console, "websocket.upgrade: %v\n", err)
+		handler.logf(domain.LogLevelWarn, "a listener connection was refused: %v", err)
 
 		return
 	}
@@ -145,8 +141,26 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.hub.Attach(conn, httpaddr.Address(r), handler.dispatch)
 }
 
-// dispatch decides which use case answers one frame, and reports a failure the hub writes to its console
-// and then ignores.
+// logf files one decision this endpoint made about a connection. It is the endpoint's own log and not a line
+// it prints: an entry reaches the log view the administrator filters, and the composition root says the same
+// entry out loud, so a connection that never became a listener leaves the same kind of trace as one that did.
+func (handler *Handler) logf(level string, format string, args ...any) {
+	if handler.logs == nil {
+		return
+	}
+
+	// A connection that was refused belongs to no session and to no request that is still being answered,
+	// so the entry is not cancelled when the request that produced it ends.
+	handler.logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Now(),
+		Level:    level,
+		Source:   domain.LogSourceLivefeed,
+		Message:  fmt.Sprintf(format, args...),
+	})
+}
+
+// dispatch decides which use case answers one frame, and hands a failure back to the hub, which files it and
+// carries on.
 //
 // The order is the legacy order and it is what the clients see. The version report is answered before
 // the access gate, because a client working out what server it has reached has not been asked for a code
