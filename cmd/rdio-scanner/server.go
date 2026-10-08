@@ -400,7 +400,15 @@ func (s *server) start(ctx context.Context) error {
 	})
 
 	if len(s.config.BaseDir) > 0 {
-		s.console.printf("base folder is %s\n", s.config.BaseDir)
+		// The folder the server was told to use is the fact behind every path it writes to, and until now
+		// it existed only on a terminal, at the moment the server came up. It is filed as a notice and not
+		// a warning: nothing is wrong, this is simply which folder this server is serving.
+		_ = s.logs.AppendLog(ctx, domain.LogEntry{
+			DateTime: s.clock.Now(),
+			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
+			Message:  "the server is serving " + s.config.BaseDir,
+		})
 	}
 
 	// Which ffmpeg the server converts with is decided while it is wired and said here, once, so that

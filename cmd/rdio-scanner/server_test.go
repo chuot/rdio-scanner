@@ -578,7 +578,8 @@ func TestServerAnnouncesAnAddressOnTheDefaultPortWithoutThePort(t *testing.T) {
 	}
 }
 
-// The base folder is where the server writes, and the legacy server names it when it was told one.
+// The base folder is where the server writes, and the legacy server names it when it was told one. The
+// console copy is the rendering of the entry below, not a separate line the startup prints.
 func TestServerAnnouncesTheBaseFolderItWasGiven(t *testing.T) {
 	base := t.TempDir()
 
@@ -598,8 +599,36 @@ func TestServerAnnouncesTheBaseFolderItWasGiven(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	if !strings.Contains(console.String(), "base folder is "+base) {
-		t.Errorf("the server wrote:\n%s\nwant the base folder it was given", console.String())
+	if !strings.Contains(console.String(), "info server: the server is serving "+base) {
+		t.Errorf("the server wrote:\n%s\nwant the base folder it was given, said with the level and the part "+
+			"of the server that recorded it", console.String())
+	}
+}
+
+// TestServerRecordsTheBaseFolderItWasGiven is the same fact in the log view. Until now the folder the server
+// was told to use existed only on the terminal at the moment the server started: an operator diagnosing a
+// recording that never appeared could not find out which folder the server had been given unless they had
+// been watching it come up.
+func TestServerRecordsTheBaseFolderItWasGiven(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := newServer(testConfigIn(base), io.Discard, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	message := "the server is serving " + base
+
+	if !hasLogMessage(t, srv.db, message) {
+		t.Errorf("the log view does not record the folder the server was given")
+	}
+
+	if got := logSourceOfMessage(t, srv.db, message); got != "server" {
+		t.Errorf("the base folder notice is filed under %q, want %q: it is a fact about the server itself", got, "server")
 	}
 }
 

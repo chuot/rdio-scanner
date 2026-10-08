@@ -349,7 +349,11 @@ func endToEndRows(t *testing.T, db *sql.DB, table string) []map[string]any {
 
 	queries := map[string]string{
 		"calls": `SELECT "callId", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp", length("audio") AS "audioBytes" FROM "calls" ORDER BY "callId"`,
-		"logs":  `SELECT "level", "message" FROM "logs" WHERE "message" != 'server started' ORDER BY "logid"`,
+		// The log view holds the entries this server writes that the legacy server never did — the startup
+		// notices, which name the server itself. They are outside a comparison against a capture of the other
+		// server's run, and each one is pinned by its own test instead. Everything the two servers are meant to
+		// agree about is what is left.
+		"logs": `SELECT "level", "message" FROM "logs" WHERE "source" != 'server' ORDER BY "logid"`,
 	}
 
 	query, ok := queries[table]
