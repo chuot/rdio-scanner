@@ -23,3 +23,9 @@ internal/presentation/clients/node_modules
 !/internal/presentation/serving/scanner/bundle/.gitkeep
 /internal/presentation/serving/admin/bundle/*
 !/internal/presentation/serving/admin/bundle/.gitkeep
+
+# the ffmpeg this project compiles per target: the gzipped pair the server binary embeds, and the
+# scratch the compile runs in. Deleting either costs a rebuild and nothing else.
+/internal/infrastructure/ffmpeg/bundle/*/*
+!/internal/infrastructure/ffmpeg/bundle/*/.gitkeep
+/.build/

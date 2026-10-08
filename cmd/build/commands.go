@@ -24,16 +24,18 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"rdio-scanner/internal/buildinfo"
 )
 
 // The subcommands the tool knows. An empty one is the whole pipeline: both applications, then the
-// server that carries them.
+// ffmpeg the server carries, then the server that carries both.
 const (
 	subClient  = "client"
 	subScanner = "scanner"
 	subAdmin   = "admin"
+	subFFmpeg  = "ffmpeg"
 	subServer  = "server"
 	subVersion = "version"
 )
@@ -50,6 +52,10 @@ type options struct {
 	pre    string
 	output string
 
+	// target is the platform the ffmpeg phase compiles for, which is how the release matrix cross-builds
+	// from one machine. An empty one is the target this tool is running on.
+	target string
+
 	// installClients is decided by the tool looking at the tree, not by the operator: a first run
 	// on a fresh clone has no esbuild to build with.
 	installClients bool
@@ -57,6 +63,10 @@ type options struct {
 
 func (o options) buildsClients() bool {
 	return o.sub == "" || o.sub == subClient || o.sub == subScanner || o.sub == subAdmin
+}
+
+func (o options) buildsFFmpeg() bool {
+	return o.sub == "" || o.sub == subFFmpeg
 }
 
 func (o options) buildsServer() bool {
@@ -101,12 +111,22 @@ func parseArgs(args []string) (options, error) {
 
 			o.output = args[i]
 
-		case subClient, subScanner, subAdmin, subServer, subVersion:
+		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
 			}
 
 			o.sub = arg
+
+			// The ffmpeg phase is the one thing this tool builds for a platform the operator names,
+			// because that is how the release matrix cross-builds from one machine. The platform has to
+			// be the word right after it, so that a target left lying at the end of a command line is
+			// refused instead of quietly building something else.
+			if arg == subFFmpeg && i+1 < len(args) && isTarget(args[i+1]) {
+				i++
+
+				o.target = args[i]
+			}
 
 		default:
 			return options{}, fmt.Errorf("%s is not something this tool builds or a flag it knows", arg)
@@ -114,6 +134,32 @@ func parseArgs(args []string) (options, error) {
 	}
 
 	return o, nil
+}
+
+// isTarget reports whether a word names a platform this tool can be asked to build for: a Go operating
+// system and a Go architecture, joined the way go names them. A word that does not fit is a mistake in
+// the command line, and refusing it here is cheaper than a build that goes the wrong way.
+//
+// A platform this project compiles no ffmpeg for still fits, and the ffmpeg phase says so.
+func isTarget(word string) bool {
+	goos, goarch, found := strings.Cut(word, "-")
+	if !found {
+		return false
+	}
+
+	for _, part := range []string{goos, goarch} {
+		if part == "" {
+			return false
+		}
+
+		for _, r := range part {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 // step is one external command the tool runs: a directory, a program, its arguments, and the extra
@@ -140,7 +186,8 @@ var appBundle = map[string]string{
 }
 
 // plan composes the commands the options asked for, in the order they have to happen: the scanner
-// application, then the administration application, then the server that embeds both.
+// application, then the administration application. The ffmpeg and the server that carries both come
+// after, because the server embeds the bundles and the ffmpeg the build produced.
 func plan(o options, repo string, version buildinfo.Version, npmName string) []step {
 	steps := []step{}
 
@@ -174,20 +221,23 @@ func plan(o options, repo string, version buildinfo.Version, npmName string) []s
 		}
 	}
 
-	if o.buildsServer() {
-		steps = append(steps, step{
-			label:  subServer,
-			result: o.output,
-			dir:    repo,
-			name:   "go",
-			args: []string{
-				"build",
-				"-ldflags", "-X main.Version=" + version.String(),
-				"-o", o.output,
-				"./cmd/rdio-scanner",
-			},
-		})
-	}
-
 	return steps
+}
+
+// serverStep is the server binary, built last because it embeds both applications and the ffmpeg this
+// machine compiled for it. The version reaches it through the linker, which is the mechanism that
+// replaced the source file an operator had to edit by hand.
+func serverStep(o options, repo string, version buildinfo.Version) step {
+	return step{
+		label:  subServer,
+		result: o.output,
+		dir:    repo,
+		name:   "go",
+		args: []string{
+			"build",
+			"-ldflags", "-X main.Version=" + version.String(),
+			"-o", o.output,
+			"./cmd/rdio-scanner",
+		},
+	}
 }

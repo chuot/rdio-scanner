@@ -42,13 +42,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	os.Exit(tool{
+	t := tool{
 		repo:      repo,
 		read:      readSource,
 		resolve:   resolveExecutable,
 		installed: directoryExists,
 		execute:   runStep,
-	}.run(os.Args[1:], os.Stdout))
+	}
+
+	t.ffmpeg = t.runFFmpeg
+
+	os.Exit(t.run(os.Args[1:], os.Stdout))
 }
 
 // tool is the build tool: where the repository is, how it asks that repository what it says about
@@ -59,13 +63,18 @@ type tool struct {
 	resolve   func(string) (string, error)
 	installed func(string) bool
 	execute   func(step) error
+
+	// ffmpeg produces the ffmpeg a server binary built here is going to carry. It is not one external
+	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
+	// through the converter's own argument list, and puts it where the server embeds it.
+	ffmpeg func(options, io.Writer) error
 }
 
 // run resolves the version, says what it resolved and why, and then runs the steps that build it.
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|server|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|version] [--pre <name>] [-o <path>]\n", err)
 		return 2
 	}
 
@@ -103,6 +112,24 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	}
 
 	for _, s := range plan(o, t.repo, version, npmName) {
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	}
+
+	// The ffmpeg is produced before the server is compiled, because the server embeds it: a server built
+	// before the ffmpeg its target carries exists is a server that quietly ships without one.
+	if o.buildsFFmpeg() {
+		if err := t.ffmpeg(o, stdout); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", subFFmpeg, err))
+		}
+	}
+
+	if o.buildsServer() {
+		s := serverStep(o, t.repo, version)
+
 		if err := t.execute(s); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
 		}

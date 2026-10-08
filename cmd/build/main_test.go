@@ -59,6 +59,14 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 
 			return nil
 		},
+
+		// The ffmpeg phase is not one external command, so the stand-in records that it ran rather than
+		// what it ran. What it does is tested in ffmpeg_test.go.
+		ffmpeg: func(o options, stdout io.Writer) error {
+			ran = append(ran, step{label: subFFmpeg, result: o.target})
+
+			return nil
+		},
 	}
 
 	return t, out, &ran
@@ -80,8 +88,9 @@ func TestRunningWithNoSubcommandBuildsBothApplicationsAndThenTheServer(t *testin
 	}
 
 	// Each bundle is written beside the Go package that embeds it, so a server built before both
-	// applications existed would embed a stale one.
-	want := []string{"scanner", "admin", "server"}
+	// applications existed would embed a stale one. The ffmpeg is compiled before the server for the
+	// same reason: it is embedded in it too.
+	want := []string{"scanner", "admin", "ffmpeg", "server"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("steps ran in the order %v, want %v", got, want)
 	}
@@ -95,6 +104,7 @@ func TestEachSubcommandRunsOnlyTheStepsItNames(t *testing.T) {
 		{args: []string{"client"}, want: []string{"scanner", "admin"}},
 		{args: []string{"scanner"}, want: []string{"scanner"}},
 		{args: []string{"admin"}, want: []string{"admin"}},
+		{args: []string{"ffmpeg"}, want: []string{"ffmpeg"}},
 		{args: []string{"server"}, want: []string{"server"}},
 		{args: []string{"version"}, want: []string{}},
 	}

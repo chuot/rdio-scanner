@@ -73,6 +73,20 @@ type Target struct {
 	Cross     []string `json:"cross"`
 	CFlags    []string `json:"cflags"`
 	LDFlags   []string `json:"ldflags"`
+
+	// Conformance is how the compiled program is run to be checked, which is not always the container
+	// that compiled it: a cross-compiled binary needs an interpreter, and a Windows program needs an
+	// operating system.
+	Conformance Conformance `json:"conformance"`
+}
+
+// Conformance is the environment the build runs the compiled ffmpeg in to prove it can do the job: the
+// container that holds it, which is empty when the build container is the one, the packages that
+// container needs on top, and the program that starts a binary the container cannot run by itself.
+type Conformance struct {
+	Container string   `json:"container"`
+	Packages  []string `json:"packages"`
+	Run       []string `json:"run"`
 }
 
 //go:embed manifest.json

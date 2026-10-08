@@ -121,6 +121,42 @@ func hasLoudnorm(line string) bool {
 	return major > 4 || (major == 4 && minor >= 3)
 }
 
+// Arguments returns the argument list the converter gives ffmpeg for one recording: the recording
+// arrives on the pipe and leaves on it, the tags are the ones the talkgroup has, and the filters are
+// the ones this release of ffmpeg and this conversion level ask for.
+//
+// It is the converter's own argument list, and the build's conformance run uses it to check the
+// ffmpeg it compiles, so that the arguments the server runs and the arguments the compiled ffmpeg was
+// checked against cannot drift apart.
+func Arguments(mode uint, metadata *ports.AudioMetadata, loudnorm bool) []string {
+	args := []string{"-i", "-"}
+
+	// The tags are written only for a talkgroup that has a tag, which is what the legacy
+	// checks: a call on an untagged talkgroup is converted with no tags at all, not even the
+	// title or the moment it happened.
+	if metadata != nil {
+		args = append(args,
+			"-metadata", fmt.Sprintf("album=%v", metadata.Album),
+			"-metadata", fmt.Sprintf("artist=%v", metadata.Artist),
+			"-metadata", fmt.Sprintf("date=%v", metadata.Date),
+			"-metadata", fmt.Sprintf("genre=%v", metadata.Genre),
+			"-metadata", fmt.Sprintf("title=%v", metadata.Title),
+		)
+	}
+
+	if loudnorm {
+		switch mode {
+		case domain.AudioConversionEnabledNorm:
+			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
+
+		case domain.AudioConversionEnabledLoudNorm:
+			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
+		}
+	}
+
+	return append(args, "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
+}
+
 // Convert turns one recording into the m4a the server stores.
 //
 // The disabled level returns the recording untouched without running anything. A converter that
@@ -137,32 +173,7 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 		return in, err
 	}
 
-	args := []string{"-i", "-"}
-
-	// The tags are written only for a talkgroup that has a tag, which is what the legacy
-	// checks: a call on an untagged talkgroup is converted with no tags at all, not even the
-	// title or the moment it happened.
-	if metadata != nil {
-		args = append(args,
-			"-metadata", fmt.Sprintf("album=%v", metadata.Album),
-			"-metadata", fmt.Sprintf("artist=%v", metadata.Artist),
-			"-metadata", fmt.Sprintf("date=%v", metadata.Date),
-			"-metadata", fmt.Sprintf("genre=%v", metadata.Genre),
-			"-metadata", fmt.Sprintf("title=%v", metadata.Title),
-		)
-	}
-
-	if converter.loudnorm {
-		switch mode {
-		case domain.AudioConversionEnabledNorm:
-			args = append(args, "-af", "apad=whole_dur=3s,loudnorm")
-
-		case domain.AudioConversionEnabledLoudNorm:
-			args = append(args, "-af", "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11")
-		}
-	}
-
-	args = append(args, "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
+	args := Arguments(mode, metadata, converter.loudnorm)
 
 	command := exec.CommandContext(ctx, converter.program, args...)
 
