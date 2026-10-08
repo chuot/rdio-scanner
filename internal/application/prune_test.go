@@ -408,3 +408,41 @@ func TestPruneOldCallsCommandAppliesTheRetentionTheConfigurationSetsNow(t *testi
 		t.Errorf("pruned calls = %d, want the retention the configuration names now, read afresh each run", result.CallsPruned)
 	}
 }
+
+// TestPruneOldCallsCommandAppliesTheRetentionWhenTheServerLogCannotBeWritten is CA-007 for the retention:
+// the administrator's data is what the pruning is for, and the report about it is a report. A deployment
+// whose log table is broken must still discard what has outlived the retention.
+//
+// The failure is set on the write alone. Deleting the old entries is part of what the retention pass *does*,
+// so a delete that fails changes its outcome and should; a write that fails is a report that could not be
+// filed, and must not.
+func TestPruneOldCallsCommandAppliesTheRetentionWhenTheServerLogCannotBeWritten(t *testing.T) {
+	fixture := newPruneFixture()
+	fixture.logs.AppendErr = errors.New("no such table: logs")
+
+	fixture.storeCall(1, pruneTime.AddDate(0, 0, -8))
+	fixture.storeCall(2, pruneTime.AddDate(0, 0, -2))
+	fixture.storeLog(pruneTime.AddDate(0, 0, -8), "old event")
+	fixture.storeLog(pruneTime.AddDate(0, 0, -2), "recent event")
+
+	result, err := fixture.run()
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+
+	if result.Outcome != PruneOldCallsDone {
+		t.Errorf("outcome = %q, want the retention applied even though the report could not be written", result.Outcome)
+	}
+
+	if _, kept := fixture.calls.Stored[1]; kept {
+		t.Error("the call older than the retention is still stored, want the failed report to change nothing about the retention")
+	}
+
+	if _, kept := fixture.calls.Stored[2]; !kept {
+		t.Error("the call inside the retention is gone, want the retention to have applied normally")
+	}
+
+	if result.LogsPruned != 1 {
+		t.Errorf("pruned logs = %d, want the entry older than the retention gone even though the report could not be written", result.LogsPruned)
+	}
+}

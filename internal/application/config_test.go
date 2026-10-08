@@ -640,3 +640,34 @@ func TestUpdateConfigurationSectionAnnouncesTheWholeConfigurationForOneSection(t
 		t.Errorf("announced tags = %v, want the announced configuration to be the one that resulted from the save", announced.Tags)
 	}
 }
+
+// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is CA-007 for the configuration:
+// the save is the operation and the announcement is a report about it. A deployment whose log table is
+// broken must still be able to change its configuration, and the listeners must still be told the new one.
+func TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten(t *testing.T) {
+	fixture := newConfigFixture()
+	fixture.logs.Err = errors.New("no such table: logs")
+
+	systems := domain.Systems{{ID: 4, SystemRef: 5, Label: "Harbour"}}
+
+	result, err := fixture.save(ConfigurationChanges{Systems: &systems})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != ConfigurationSaved {
+		t.Fatalf("outcome = %q, want the configuration saved even though the log could not be written", result.Outcome)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != SystemsSection {
+		t.Errorf("saved = %v, want the section the request named", result.Saved)
+	}
+
+	if len(fixture.systems.Stored) != 1 || fixture.systems.Stored[0].Label != "Harbour" {
+		t.Errorf("stored systems = %v, want the submitted system on record", fixture.systems.Stored)
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 1 {
+		t.Errorf("configuration broadcasts = %d, want the listeners still told the new configuration", len(fixture.hub.BroadcastConfigs))
+	}
+}

@@ -499,3 +499,45 @@ func TestAccessGateKeepsGatingAnAccessThatNamesNoSystems(t *testing.T) {
 		t.Error("RequiresAccessCode = false, want the legacy behavior preserved: an access naming no systems is indistinguishable from an anonymous session")
 	}
 }
+
+// TestAuthenticateAccessRefusesACodeWhenTheServerLogCannotBeWritten is CA-007 for listener access: the
+// warning about a refused code is a report, and the refusal is the decision. A deployment whose log table is
+// broken must still refuse a code it does not know, must still ask the session again, and must still grant a
+// code it does know.
+func TestAuthenticateAccessRefusesACodeWhenTheServerLogCannotBeWritten(t *testing.T) {
+	fixture := newAccessFixture()
+	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
+	fixture.hub.Open("listener", "10.0.0.1")
+
+	fixture.logs.Err = errors.New("no such table: logs")
+
+	result, err := fixture.presentCode("listener", "wrong-code")
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != AccessCodeInvalid {
+		t.Errorf("outcome = %q, want the code still refused even though the log could not be written", result.Outcome)
+	}
+
+	if _, ok := fixture.hub.AccessOf("listener"); ok {
+		t.Error("a refused code left an access on the session, want the log failure to change nothing about the refusal")
+	}
+
+	if len(fixture.hub.AccessRequests) != 1 || fixture.hub.AccessRequests[0] != "listener" {
+		t.Errorf("access-code requests = %v, want the session still asked for its code again", fixture.hub.AccessRequests)
+	}
+
+	granted, err := fixture.presentCode("listener", "dispatch-code")
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if granted.Outcome != AccessAuthenticated {
+		t.Errorf("outcome = %q, want the real code still granted even though the log could not be written", granted.Outcome)
+	}
+
+	if len(fixture.hub.DeliveredConfigs["listener"]) == 0 {
+		t.Error("the granted session was not sent its configuration, want the log failure to change nothing about the grant")
+	}
+}

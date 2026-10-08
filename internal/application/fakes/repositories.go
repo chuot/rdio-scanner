@@ -677,6 +677,11 @@ type Logs struct {
 	// the half of its work it could not do, so a test needs the delete to fail while the write still works.
 	DeleteErr error
 
+	// AppendErr, when set, is returned by AppendLog and by nothing else. Writing a log entry is
+	// best-effort and must not change the operation that wrote it, while reading and pruning the log view
+	// are part of the operations that do those things — so a test needs the write to fail on its own.
+	AppendErr error
+
 	mutex sync.Mutex
 }
 
@@ -697,6 +702,10 @@ func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 
 	if logs.Err != nil {
 		return logs.Err
+	}
+
+	if logs.AppendErr != nil {
+		return logs.AppendErr
 	}
 
 	if entry.ID == 0 {

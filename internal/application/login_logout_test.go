@@ -659,3 +659,54 @@ func TestLogoutHandlerLeavesOtherAdministratorSessionsRunning(t *testing.T) {
 		t.Errorf("outcome = %q, want ending one administrator session to leave the others open", result.Outcome)
 	}
 }
+
+// TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten is CA-007 for the administrator's
+// credential: every one of these use cases writes a log entry as a side effect, and a log view that cannot
+// be written is not allowed to change what the server decided or what it did. A deployment whose log table
+// is broken must still be able to sign in and sign out.
+func TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten(t *testing.T) {
+	fixture := newLoginFixture()
+	fixture.logs.Err = errors.New("no such table: logs")
+
+	accepted, err := fixture.login.Handle(context.Background(), AdminLoginCommand{
+		RemoteAddr: adminAddress,
+		Credential: adminCredential,
+	})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	if accepted.Outcome != AdminLoginAccepted {
+		t.Errorf("login outcome = %q, want the credential accepted even though the log could not be written", accepted.Outcome)
+	}
+
+	if !fixture.sessionIsOpen(accepted.Token) {
+		t.Error("the session the login issued is not open, want the log failure to change nothing about it")
+	}
+
+	refused, err := fixture.attempt("not the credential on record")
+	if err != nil {
+		t.Fatalf("refused login: %v", err)
+	}
+
+	if refused.Outcome != AdminLoginInvalidCredential {
+		t.Errorf("refused outcome = %q, want the credential still refused, with the warning it earns dropped", refused.Outcome)
+	}
+
+	if len(fixture.tokens.Issued) != 1 {
+		t.Errorf("tokens issued = %v, want the one session the accepted credential earned", fixture.tokens.Issued)
+	}
+
+	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: accepted.Token})
+	if err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+
+	if result.Outcome != AdminLogoutAccepted {
+		t.Errorf("logout outcome = %q, want the session ended even though the log could not be written", result.Outcome)
+	}
+
+	if fixture.sessionIsOpen(accepted.Token) {
+		t.Error("the session is still open after a logout, want the log failure to change nothing about it")
+	}
+}

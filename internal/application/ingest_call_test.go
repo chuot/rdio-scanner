@@ -953,3 +953,39 @@ observing:
 			firstStored, secondStored)
 	}
 }
+
+// TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten is CA-007 for the ingest path: the
+// call is the thing the server exists to store, and the line it writes about the call is a report. A log
+// view that cannot be written must not lose a recording, must not stop it reaching a listener, and must not
+// stop it reaching the downstream servers.
+func TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.logs.Err = errors.New("no such table: logs")
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallAccepted {
+		t.Errorf("outcome = %q, want the call accepted even though the log could not be written", result.Outcome)
+	}
+
+	if len(fixture.calls.Saved) != 1 {
+		t.Fatalf("stored calls = %v, want the recording stored even though the log could not be written", fixture.calls.Saved)
+	}
+
+	if len(fixture.hub.DeliveredCalls["listener"]) != 1 {
+		t.Error("the accepted call was not delivered to a listener that asked for it, want the log failure to change nothing about it")
+	}
+
+	if len(fixture.logs.Stored) != 0 {
+		t.Errorf("logs = %v, want nothing stored by a log view that refuses to store anything", fixture.logs.Stored)
+	}
+}
