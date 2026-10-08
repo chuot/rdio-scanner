@@ -53,7 +53,7 @@ $ docker run --detach --env TZ=America/Toronto --name rdio-scanner --publish 300
 520cdbf51fca11d8bacea12d81245f1cb4d984f80d2be2e3039727b59533a6a9
 
 $ docker logs rdio-scanner
-Rdio Scanner v7.0.0
+Rdio Scanner v8.0.0
 ----------------------------------
 2022/12/19 08:57:23 server started
 2022/12/19 08:57:23 base folder is /app/data

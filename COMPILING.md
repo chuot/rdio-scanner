@@ -23,25 +23,47 @@ Clone the official repository on your computer and start the build process.
 
         git clone https://github.com/chuot/rdio-scanner.git
         cd rdio-scanner
-        make
+        go run ./cmd/build
 
-The build compiles the two web applications before it compiles the server. The listener application and the administration console are two applications, in `internal/presentation/clients/scanner` and `internal/presentation/clients/admin`, and the modules they both use are in `internal/presentation/clients/shared`. Each application is built into the bundle directory of the Go package that embeds it, so `internal/presentation/serving/scanner/bundle` and `internal/presentation/serving/admin/bundle` are build output and hold nothing else.
+The tool compiles the two web applications before it compiles the server, because each bundle is written beside the Go package that embeds it and a server built before both existed would carry a stale one.
 
-        make client      # both applications
-        make scanner     # the listener application only
-        make admin       # the administration console only
+The listener application and the administration console are two applications, in `internal/presentation/clients/scanner` and `internal/presentation/clients/admin`, and the modules they both use are in `internal/presentation/clients/shared`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/serving/scanner/bundle` and `internal/presentation/serving/admin/bundle` are build output and hold nothing else.
+
+        go run ./cmd/build client     # both applications
+        go run ./cmd/build scanner    # the listener application only
+        go run ./cmd/build admin      # the administration console only
+        go run ./cmd/build server     # the server binary only, against the bundles on disk
+        go run ./cmd/build version    # the version this build carries
 
 The server binary carries both bundles. One executable serves the listener application at `/` and the administration console at `/admin/`.
 
+## Say what version you are building
+
+`VERSION.txt` at the repository root is the one place a version is declared. The tool reads it, asks git what it says about the commit being built, and passes the result to the applications through the environment and to the binary through the linker. No source file is rewritten to carry a version.
+
+        8.0.0                       a commit tagged v8.0.0
+        8.0.0+g1a2b3c4              a commit no tag names
+        8.0.0-beta1                 go run ./cmd/build --pre beta1
+        8.0.0-beta1+g1a2b3c4        both at once
+
+A repository with no `VERSION.txt` builds as `0.0.0`, which is a version no release ever had. A `VERSION.txt` that holds something other than a bare `X.Y.Z` stops the build rather than being repaired, and a tag that names a different core than the file does stops it too.
+
+A server built with plain `go build`, without the tool, reports `dev` — in its banner as well as in `-version` — so nobody mistakes it for a release.
+
+The release matrix is still the `Makefile`'s, and it reads the same file:
+
+        make dist          # the precompiled versions for every platform, and their archives
+        make container     # the container image
+
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 
-        rdio-scanner-freebsd-amd64-v7.0.0.zip
-        rdio-scanner-linux-386-v7.0.0.zip
-        rdio-scanner-linux-amd64-v7.0.0.zip
-        rdio-scanner-linux-arm64-v7.0.0.zip
-        rdio-scanner-linux-arm-v7.0.0.zip
-        rdio-scanner-macos-amd64-v7.0.0.zip
-        rdio-scanner-macos-arm64-v7.0.0.zip
-        rdio-scanner-windows-amd64-v7.0.0.zip
+        rdio-scanner-freebsd-amd64-v8.0.0.zip
+        rdio-scanner-linux-386-v8.0.0.zip
+        rdio-scanner-linux-amd64-v8.0.0.zip
+        rdio-scanner-linux-arm64-v8.0.0.zip
+        rdio-scanner-linux-arm-v8.0.0.zip
+        rdio-scanner-macos-amd64-v8.0.0.zip
+        rdio-scanner-macos-arm64-v8.0.0.zip
+        rdio-scanner-windows-amd64-v8.0.0.zip
 
 **Happy Rdio scanning !**

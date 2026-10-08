@@ -24,8 +24,9 @@
 #
 #	usage: ./run.sh [--keep]
 #
-# It builds the server the way the release does — `make webapp` and then the Go build — starts it on a database
-# of its own, and drives it.
+# It builds the server the way the release does — `go run ./cmd/build`, which compiles both web
+# applications and then the server that carries them — starts it on a database of its own, and drives
+# it.
 #
 # It exits 0 when every item passed.
 #
@@ -128,15 +129,30 @@ stop_servers() {
 
 # --- the server, built the way the release builds it -----------------------
 
-if [[ ! -f "${repo}/internal/presentation/webapp/bundle/index.html" ]]; then
-	echo "run.sh: building the web application into the server" >&2
+# Both applications are built on every run, into the bundle directories of the Go packages that embed
+# them. What used to be here checked a path this repository does not have — internal/presentation/
+# webapp/bundle/index.html — and ran a Makefile rule that does not exist either. The script does not
+# stop on a failed command, so both mistakes went unnoticed and the harness went on driving a server
+# that had embedded whatever bundles a previous build happened to have left in place.
+#
+# A harness that compares a real browser against the real application has to be sure of which
+# application it is comparing, so the two builds are run here and each one is checked.
 
-	make -C "${repo}" webapp >/dev/null
+echo "run.sh: building the two web applications" >&2
+
+if ! (cd "${repo}" && go run ./cmd/build client); then
+	echo "run.sh: the web applications did not build" >&2
+
+	exit 1
 fi
 
 echo "run.sh: building the server" >&2
 
-(cd "${repo}" && go build -o "${work}/rdio-scanner" ./cmd/rdio-scanner)
+if ! (cd "${repo}" && go run ./cmd/build server -o "${work}/rdio-scanner"); then
+	echo "run.sh: the server did not build" >&2
+
+	exit 1
+fi
 
 # --- the application, against a server of its own --------------------------
 
