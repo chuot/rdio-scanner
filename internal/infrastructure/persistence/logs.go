@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -41,6 +42,10 @@ type Logs struct {
 
 var _ ports.LogRepository = (*Logs)(nil)
 
+// errUnknownLogSource is what AppendLog reports for an entry that does not name a part of this server.
+// The vocabulary is owned by the Domain; this is the boundary the entries are written through.
+var errUnknownLogSource = errors.New("the log entry names no part of this server")
+
 // The legacy server's statements, with the values taken out of them.
 //
 // `Logs.LogEvent` builds its insert with `fmt.Sprintf` and puts the message in raw, so a message
@@ -49,7 +54,7 @@ var _ ports.LogRepository = (*Logs)(nil)
 // parameterized insert here is its fix: those lines are stored, and the administrator's log view
 // shows them.
 const (
-	logInsertQuery = `INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`
+	logInsertQuery = `INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES (?, ?, ?, ?)`
 	logDeleteQuery = `DELETE FROM "logs" WHERE "timestamp" < ?`
 )
 
@@ -59,9 +64,29 @@ func NewLogs(db *sql.DB, dialect Dialect) *Logs {
 }
 
 // AppendLog records one entry. The entry's own timestamp is what is stored, in the Unix
-// milliseconds the column carries.
+// milliseconds the column carries, and so is the part of the server that wrote it.
+//
+// A source that is a name this server does not have is refused. The vocabulary is owned by the Domain and
+// every writer reaches it through a constant, so arriving here with a name that is not one means a writer
+// was added with a misspelling, and a log table holding a misspelling is exactly the state this feature
+// exists to remove.
+//
+// An entry with no source at all is filed under legacy rather than stored as a blank. That is the state the
+// writers are in while this feature is being built — the repository gained the column before they gained
+// their sources — and it is the state a row the other server writes is in permanently, because its insert
+// names the columns it knows and never mentions this one. The guard that makes a writer without a source a
+// failure is the one that lands once every writer names itself.
 func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
-	if _, err := logs.store.exec(ctx, logInsertQuery, entry.Level, entry.Message, millisOf(entry.DateTime)); err != nil {
+	if entry.Source != "" && !domain.IsKnownLogSource(entry.Source) {
+		return operationError("logs", "logevent", fmt.Errorf("%w: %q", errUnknownLogSource, entry.Source))
+	}
+
+	source := string(entry.Source)
+	if source == "" {
+		source = string(domain.LogSourceLegacy)
+	}
+
+	if _, err := logs.store.exec(ctx, logInsertQuery, entry.Level, source, entry.Message, millisOf(entry.DateTime)); err != nil {
 		return statementError("logs", "logevent", err, logInsertQuery)
 	}
 
@@ -86,6 +111,26 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	if search.HasLevel() {
 		where = append(where, `"level" = ?`)
 		args = append(args, search.Level)
+	}
+
+	if search.HasSource() {
+		// A row stored without a source — the other server's insert, which never mentions the column — is
+		// the same thing the log view calls legacy, so asking for legacy has to find both spellings.
+		if search.Source == domain.LogSourceLegacy {
+			where = append(where, `("source" = '' OR "source" = ?)`)
+		} else {
+			where = append(where, `"source" = ?`)
+		}
+
+		args = append(args, string(search.Source))
+	}
+
+	// The message search is a substring, matched case-insensitively, with the submitted text escaped so
+	// that a % or an _ in what the operator typed matches itself. lower() on both sides is what makes the
+	// same statement case-insensitive on PostgreSQL, where LIKE is not.
+	if search.HasText() {
+		where = append(where, `lower("message") LIKE ? ESCAPE '!'`)
+		args = append(args, "%"+escapeLikeText(strings.ToLower(search.Text))+"%")
 	}
 
 	if search.HasDate() {
@@ -132,7 +177,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 	page.Count = uint64(count)
 
-	rowsQuery := `SELECT "logId", "level", "message", "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ` + order + ` LIMIT ? OFFSET ?`
+	rowsQuery := `SELECT "logId", "level", "source", "message", "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ` + order + ` LIMIT ? OFFSET ?`
 
 	rows, err := logs.store.query(ctx, rowsQuery, append(args, search.Limit, search.Offset)...)
 	if err != nil {
@@ -145,11 +190,12 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		var (
 			id        sql.NullInt64
 			level     sql.NullString
+			source    sql.NullString
 			message   sql.NullString
 			timestamp sql.NullInt64
 		)
 
-		if err := rows.Scan(&id, &level, &message, &timestamp); err != nil {
+		if err := rows.Scan(&id, &level, &source, &message, &timestamp); err != nil {
 			continue
 		}
 
@@ -177,11 +223,46 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			ID:       uint64(id.Int64),
 			DateTime: instantOf(timestamp.Int64),
 			Level:    level.String,
+			Source:   logSourceOf(source),
 			Message:  message.String,
 		})
 	}
 
 	return page, nil
+}
+
+// logSourceOf reads the source a row carries. A row written without one — by the legacy server, which
+// inserts into this table by named columns and never mentions a column it does not know — is filed under
+// legacy, so the log view never shows a blank and a filter on legacy finds those rows.
+//
+// This is a read-side mapping and not a write: this server does not rewrite rows another server is
+// writing.
+func logSourceOf(source sql.NullString) domain.LogSource {
+	if !source.Valid || source.String == "" {
+		return domain.LogSourceLegacy
+	}
+
+	return domain.LogSource(source.String)
+}
+
+// escapeLikeText prepares submitted text for a LIKE comparison so that the characters the operator typed
+// match themselves: a directory mask, a talkgroup wildcard, an underscore in a filename.
+//
+// The escape character is `!` rather than a backslash because MySQL reads a backslash as an escape inside a
+// string literal, and `ESCAPE '\'` is not the same statement on every backend this server supports.
+func escapeLikeText(text string) string {
+	out := strings.Builder{}
+
+	for _, r := range text {
+		switch r {
+		case '!', '%', '_':
+			out.WriteByte('!')
+		}
+
+		out.WriteRune(r)
+	}
+
+	return out.String()
 }
 
 // searchInstant reads one instant out of the entries the criteria match, which is how the two ends of

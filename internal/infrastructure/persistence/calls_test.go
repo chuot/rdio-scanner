@@ -277,7 +277,7 @@ func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
 // while capturing the wire protocol: a client asking for call id 999999 is answered with nothing,
 // and the listener-count broadcast that follows arrives ten seconds late. Recorded as Q56.
 func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := openMigratedLegacyDatabase(t)
 
 	if _, err := NewCalls(db, DialectSqlite).GetCall(context.Background(), 999999); !errors.Is(err, ports.ErrNotFound) {
 		t.Fatalf("GetCall error = %v, want ports.ErrNotFound", err)
@@ -289,6 +289,7 @@ func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
 	if err := NewLogs(db, DialectSqlite).AppendLog(ctx, domain.LogEntry{
 		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
 		Level:    domain.LogLevelWarn,
+		Source:   domain.LogSourceCalls,
 		Message:  "written immediately after a call fetch that found nothing",
 	}); err != nil {
 		t.Fatalf("AppendLog after a failed GetCall: %v", err)

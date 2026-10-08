@@ -87,6 +87,7 @@ func TestAServerAnOperatorStartedSaysItsLogEntriesToTheTerminal(t *testing.T) {
 	if err := srv.logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Now(),
 		Level:    domain.LogLevelError,
+		Source:   domain.LogSourceCalls,
 		Message:  message,
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)
@@ -117,6 +118,7 @@ func TestAServerTheServiceManagerStartedSaysItsLogEntriesToTheManager(t *testing
 	if err := srv.logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Now(),
 		Level:    domain.LogLevelError,
+		Source:   domain.LogSourceCalls,
 		Message:  message,
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)

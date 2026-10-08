@@ -497,3 +497,22 @@ func TestBackfillLogSourcesRunsOnce(t *testing.T) {
 		t.Errorf("the second run re-filed the entry as %q, want the legacy it was filed under left alone", source)
 	}
 }
+
+// openMigratedLegacyDatabase opens the database the legacy server wrote and brings it through the same
+// startup pass this server runs: the schema, the log source column and its indexes, and the v6 migrations,
+// which find nothing to migrate in this fixture.
+//
+// The log repository is only ever reached after that pass — cmd/rdio-scanner/server.go builds it from a
+// database the migration has already finished with — so a test that reaches it without the pass is testing
+// a state the server cannot be in.
+func openMigratedLegacyDatabase(t *testing.T, tables ...string) *sql.DB {
+	t.Helper()
+
+	db := openLegacyDatabaseWithout(t, tables...)
+
+	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	return db
+}

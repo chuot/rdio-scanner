@@ -38,7 +38,7 @@ import (
 // error, and every caller discards it — so the administrator's log view is missing exactly the
 // entries that explain a failed save. The parameterized insert stores them.
 func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
-	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 	logs := NewLogs(db, DialectSqlite)
 
 	const message = `accesses.write: constraint failed: FOREIGN KEY constraint failed (787) in INSERT INTO "accesses" ("ident") VALUES ('O'Brien')`
@@ -46,6 +46,7 @@ func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
 	if err := logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
 		Level:    domain.LogLevelError,
+		Source:   domain.LogSourceServer,
 		Message:  message,
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)
@@ -69,7 +70,7 @@ func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
 // database the legacy server wrote, which is the case REQ-007 is about: the log view a deployment
 // already has, and the line that has never been able to appear in it.
 func TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := openMigratedLegacyDatabase(t)
 	logs := NewLogs(db, DialectSqlite)
 
 	before, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
@@ -82,6 +83,7 @@ func TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase(t *
 	if err := logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
 		Level:    domain.LogLevelError,
+		Source:   domain.LogSourceServer,
 		Message:  message,
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)
@@ -112,7 +114,7 @@ func TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase(t *
 }
 
 func TestSearchLogsReturnsTheEntriesTheLegacyServerStored(t *testing.T) {
-	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
 	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
 	if err != nil {
@@ -152,13 +154,14 @@ func TestSearchLogsReturnsTheEntriesTheLegacyServerStored(t *testing.T) {
 // TestAppendLogReadsBackTheInstantItStored pins the millisecond rule: every timestamp in this
 // schema is Unix milliseconds, and an entry's own instant is what is stored.
 func TestAppendLogReadsBackTheInstantItStored(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	at := time.Date(2026, 3, 14, 9, 30, 15, 500_000_000, time.UTC)
 
 	if err := logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: at,
 		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceServer,
 		Message:  "stored with its own instant",
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)
@@ -179,7 +182,7 @@ func TestAppendLogReadsBackTheInstantItStored(t *testing.T) {
 }
 
 func TestSearchLogsCountsEveryEntryTheCriteriaMatches(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 
@@ -187,6 +190,7 @@ func TestSearchLogsCountsEveryEntryTheCriteriaMatches(t *testing.T) {
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: base.Add(time.Duration(i) * time.Minute),
 			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
 			Message:  "entry",
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -208,7 +212,7 @@ func TestSearchLogsCountsEveryEntryTheCriteriaMatches(t *testing.T) {
 }
 
 func TestSearchLogsOrdersByTheRequestedDirection(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 
@@ -223,6 +227,7 @@ func TestSearchLogsOrdersByTheRequestedDirection(t *testing.T) {
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: base.Add(entry.offset),
 			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
 			Message:  entry.message,
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -260,7 +265,7 @@ func TestSearchLogsOrdersByTheRequestedDirection(t *testing.T) {
 }
 
 func TestSearchLogsStartsAtTheRequestedOffset(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 
@@ -268,6 +273,7 @@ func TestSearchLogsStartsAtTheRequestedOffset(t *testing.T) {
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: base.Add(time.Duration(i) * time.Minute),
 			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
 			Message:  "entry",
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -297,11 +303,12 @@ func TestSearchLogsStartsAtTheRequestedOffset(t *testing.T) {
 // of zero asks for no rows at all, which is what the stored query does with it, while the count is
 // still the whole match.
 func TestSearchLogsReturnsNoRowsForAnExplicitZeroLimit(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	if err := logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC),
 		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceServer,
 		Message:  "entry",
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)
@@ -322,7 +329,7 @@ func TestSearchLogsReturnsNoRowsForAnExplicitZeroLimit(t *testing.T) {
 }
 
 func TestSearchLogsKeepsOnlyTheRequestedLevel(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 
@@ -330,6 +337,7 @@ func TestSearchLogsKeepsOnlyTheRequestedLevel(t *testing.T) {
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: base.Add(time.Duration(i) * time.Minute),
 			Level:    level,
+			Source:   domain.LogSourceServer,
 			Message:  level + " entry",
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -358,7 +366,7 @@ func TestSearchLogsKeepsOnlyTheRequestedLevel(t *testing.T) {
 // TestSearchLogsAppliesTheAscendingDateWindow pins the window `domain.LogSearch` models: the
 // submitted instant truncated to the minute, running forward a full day.
 func TestSearchLogsAppliesTheAscendingDateWindow(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	day := time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC)
 
@@ -371,6 +379,7 @@ func TestSearchLogsAppliesTheAscendingDateWindow(t *testing.T) {
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: at,
 			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
 			Message:  at.Format(time.RFC3339Nano),
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -398,7 +407,7 @@ func TestSearchLogsAppliesTheAscendingDateWindow(t *testing.T) {
 // TestSearchLogsAppliesTheDescendingDateWindow pins the other half of the asymmetry: a day back,
 // and then back again by the submitted hour and minute.
 func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
-	logs := NewLogs(openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
 	from := time.Date(2026, 3, 13, 0, 0, 0, 0, time.UTC)
 	to := from.Add(24*time.Hour - time.Millisecond - 9*time.Hour - 30*time.Minute)
@@ -412,6 +421,7 @@ func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: at,
 			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
 			Message:  at.Format(time.RFC3339Nano),
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -441,7 +451,7 @@ func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
 // results any row that carries no identity, no level, no message, or a timestamp that is not a
 // real instant.
 func TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults(t *testing.T) {
-	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 	logs := NewLogs(db, DialectSqlite)
 
 	const query = `INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`
@@ -457,6 +467,7 @@ func TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults(t *testing.T) {
 	if err := logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC),
 		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceServer,
 		Message:  "a real entry",
 	}); err != nil {
 		t.Fatalf("AppendLog: %v", err)
@@ -477,7 +488,7 @@ func TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults(t *testing.T) {
 }
 
 func TestDeleteLogsBeforeRemovesTheOlderEntriesAndReportsHowManyWent(t *testing.T) {
-	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 	logs := NewLogs(db, DialectSqlite)
 
 	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
@@ -486,6 +497,7 @@ func TestDeleteLogsBeforeRemovesTheOlderEntriesAndReportsHowManyWent(t *testing.
 		if err := logs.AppendLog(context.Background(), domain.LogEntry{
 			DateTime: base.Add(time.Duration(i) * 24 * time.Hour),
 			Level:    domain.LogLevelInfo,
+			Source:   domain.LogSourceServer,
 			Message:  "entry",
 		}); err != nil {
 			t.Fatalf("AppendLog: %v", err)
@@ -518,7 +530,7 @@ func TestDeleteLogsBeforeRemovesTheOlderEntriesAndReportsHowManyWent(t *testing.
 }
 
 func TestAppendLogReportsTheLegacyFailureShape(t *testing.T) {
-	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 
 	if _, err := db.Exec(`DROP TABLE "logs"`); err != nil {
 		t.Fatalf("DROP TABLE: %v", err)
@@ -527,6 +539,7 @@ func TestAppendLogReportsTheLegacyFailureShape(t *testing.T) {
 	err := NewLogs(db, DialectSqlite).AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Now(),
 		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceServer,
 		Message:  "nothing to store",
 	})
 
@@ -540,7 +553,7 @@ func TestAppendLogReportsTheLegacyFailureShape(t *testing.T) {
 }
 
 func TestSearchLogsReportsTheLegacyFailureShape(t *testing.T) {
-	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 
 	if _, err := db.Exec(`DROP TABLE "logs"`); err != nil {
 		t.Fatalf("DROP TABLE: %v", err)
@@ -558,7 +571,7 @@ func TestSearchLogsReportsTheLegacyFailureShape(t *testing.T) {
 }
 
 func TestDeleteLogsBeforeReportsTheLegacyFailureShape(t *testing.T) {
-	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 
 	if _, err := db.Exec(`DROP TABLE "logs"`); err != nil {
 		t.Fatalf("DROP TABLE: %v", err)
@@ -584,7 +597,7 @@ func TestDeleteLogsBeforeReportsTheLegacyFailureShape(t *testing.T) {
 // descending — before it counts or pages anything, and this server asks the same three questions in the
 // same order.
 func TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch(t *testing.T) {
-	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
 	whole, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
 	if err != nil {
@@ -623,7 +636,7 @@ func TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch(t *testing.T) {
 // criteria the log view submits, because the span belongs to the filtered set: an administrator who
 // asks for warnings only is shown the span of the warnings, and paging moves through those.
 func TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter(t *testing.T) {
-	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
 	warns, err := logs.SearchLogs(context.Background(), domain.LogSearch{Level: domain.LogLevelWarn, Limit: domain.DefaultLogSearchLimit, Ascending: true})
 	if err != nil {
@@ -650,7 +663,7 @@ func TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter(t *testing.
 // epoch, which is what its call search leaves behind — and the administrator's log view shows that
 // instant.
 func TestSearchLogsWithNothingToReportLeavesTheSpanUnset(t *testing.T) {
-	logs := NewLogs(openLegacyDatabase(t), DialectSqlite)
+	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
 	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Level: "not-a-level", Limit: domain.DefaultLogSearchLimit, Ascending: true})
 	if err != nil {
@@ -663,5 +676,243 @@ func TestSearchLogsWithNothingToReportLeavesTheSpanUnset(t *testing.T) {
 
 	if !page.DateStart.IsZero() || !page.DateStop.IsZero() {
 		t.Errorf("the span of nothing is %v to %v, want both ends unset", page.DateStart, page.DateStop)
+	}
+}
+
+// T008: the log table stores which part of the server wrote an entry, and the log view can be filtered by
+// it and by a substring of the message.
+func TestAppendLogStoresTheSourceAndTheSearchReadsItBack(t *testing.T) {
+	db := openMigratedLegacyDatabase(t, "logs")
+	logs := NewLogs(db, DialectSqlite)
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
+		Level:    domain.LogLevelError,
+		Source:   domain.LogSourceDirwatch,
+		Message:  "the watcher for /data/incoming stopped: no such file or directory",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if len(page.Results) != 1 {
+		t.Fatalf("the log view has %d entries, want the one entry that was just written", len(page.Results))
+	}
+
+	if page.Results[0].Source != domain.LogSourceDirwatch {
+		t.Errorf("the entry carries source %q, want %q", page.Results[0].Source, domain.LogSourceDirwatch)
+	}
+}
+
+// TestSearchLogsBySource is the filter the feature exists to give an operator: everything one subsystem
+// said, and nothing another one said.
+func TestSearchLogsBySource(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	store := []domain.LogEntry{
+		{DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{DateTime: time.Date(2026, 3, 14, 9, 1, 0, 0, time.UTC), Level: domain.LogLevelInfo, Source: domain.LogSourceDownstream, Message: "call sent to http://other:5002: success"},
+		{DateTime: time.Date(2026, 3, 14, 9, 2, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the recording /data/incoming/audio.wav could not be ingested"},
+	}
+
+	for _, entry := range store {
+		if err := logs.AppendLog(context.Background(), entry); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Source: domain.LogSourceDirwatch, Limit: domain.DefaultLogSearchLimit, Ascending: true,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 || len(page.Results) != 2 {
+		t.Fatalf("a search for dirwatch matched %d entries and returned %d, want the 2 dirwatch entries", page.Count, len(page.Results))
+	}
+
+	for _, entry := range page.Results {
+		if entry.Source != domain.LogSourceDirwatch {
+			t.Errorf("the log view returned an entry with source %q under a dirwatch filter", entry.Source)
+		}
+	}
+}
+
+// TestSearchLogsByTextMatchesASubstringOfTheMessage is the other half of diagnosing by subsystem: the one
+// path, call sign or URL the operator is chasing.
+//
+// The match is case-insensitive, and the % and _ of the submitted text match themselves: an operator
+// searching a directory mask or a talkgroup wildcard is looking for those characters, not asking the
+// database to interpret them.
+func TestSearchLogsByTextMatchesASubstringOfTheMessage(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	store := []domain.LogEntry{
+		{DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the recording /data/incoming/audio.wav could not be ingested"},
+		{DateTime: time.Date(2026, 3, 14, 9, 1, 0, 0, time.UTC), Level: domain.LogLevelInfo, Source: domain.LogSourceIngest, Message: "call from system 10001 talkgroup 1514000 success"},
+		{DateTime: time.Date(2026, 3, 14, 9, 2, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceConfig, Message: "the configuration could not be saved: 100% of the systems failed"},
+		{DateTime: time.Date(2026, 3, 14, 9, 3, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceConfig, Message: "the configuration could not be saved: a_b mask"},
+	}
+
+	for _, entry := range store {
+		if err := logs.AppendLog(context.Background(), entry); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		text string
+		want uint64
+	}{
+		{"/data/incoming", 1},
+		{"1514000", 1},
+		{"COULD NOT", 3},
+		{"could not be saved", 2},
+		{"100%", 1},
+		{"a_b", 1},
+		{"audio.wav", 1},
+		{"nothing like this", 0},
+	} {
+		page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+			Text: tc.text, Limit: domain.DefaultLogSearchLimit, Ascending: true,
+		})
+		if err != nil {
+			t.Fatalf("SearchLogs for %q: %v", tc.text, err)
+		}
+
+		if page.Count != tc.want || uint64(len(page.Results)) != tc.want {
+			t.Errorf("a search for %q matched %d entries and returned %d, want %d", tc.text, page.Count, len(page.Results), tc.want)
+		}
+	}
+}
+
+// TestSearchLogsCombinesTheCriteriaTheOperatorActuallySubmits is the shape of a real diagnosis: this
+// subsystem, this day, this bad, containing this word. Each row drops one criterion from the row above it,
+// so a criterion that silently matched nothing shows up as a count that did not move.
+func TestSearchLogsCombinesTheCriteriaTheOperatorActuallySubmits(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	store := []domain.LogEntry{
+		{DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{DateTime: time.Date(2026, 3, 14, 9, 1, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{DateTime: time.Date(2026, 3, 15, 9, 2, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{DateTime: time.Date(2026, 3, 15, 9, 3, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceIngest, Message: "the watcher for /data/incoming could not be ingested"},
+	}
+
+	for _, entry := range store {
+		if err := logs.AppendLog(context.Background(), entry); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	// The ascending window runs forward a full day from the submitted instant, so 15 March 09:00 covers
+	// the last two entries and not the first two.
+	at, _ := time.Parse(time.RFC3339, "2026-03-15T09:00:00Z")
+
+	for _, tc := range []struct {
+		what   string
+		search domain.LogSearch
+		want   uint64
+	}{
+		{"the day alone", domain.LogSearch{Date: at}, 2},
+		{"the day and the level", domain.LogSearch{Date: at, Level: domain.LogLevelWarn}, 2},
+		{"the day, the level and the subsystem", domain.LogSearch{Date: at, Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch}, 1},
+		{"the day, the level and the text", domain.LogSearch{Date: at, Level: domain.LogLevelWarn, Text: "ingested"}, 1},
+		{"the level, the subsystem and the text, with no day", domain.LogSearch{Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Text: "/data/incoming"}, 2},
+		{"every criterion at once", domain.LogSearch{Date: at, Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Text: "/data/incoming"}, 1},
+	} {
+		tc.search.Limit = domain.DefaultLogSearchLimit
+		tc.search.Ascending = true
+
+		page, err := logs.SearchLogs(context.Background(), tc.search)
+		if err != nil {
+			t.Fatalf("SearchLogs for %s: %v", tc.what, err)
+		}
+
+		if page.Count != tc.want || uint64(len(page.Results)) != tc.want {
+			t.Errorf("%s matched %d entries and returned %d, want %d", tc.what, page.Count, len(page.Results), tc.want)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Date: at, Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Text: "/data/incoming",
+		Limit: domain.DefaultLogSearchLimit, Ascending: true,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.DateStart.IsZero() || page.DateStop.IsZero() {
+		t.Errorf("the span of everything the criteria match is %v to %v, want both ends of the matching entry", page.DateStart, page.DateStop)
+	}
+}
+
+// TestAppendLogRefusesASourceThatIsNotANameOfThisServer keeps the vocabulary closed at the boundary the
+// entries are written through. Every writer reaches the vocabulary through a domain constant, so arriving
+// here with a name that is not one means a writer was added with a misspelling.
+func TestAppendLogRefusesASourceThatIsNotANameOfThisServer(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
+		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSource("dirwatcher"),
+		Message:  "an entry naming a subsystem this server does not have",
+	})
+
+	if err == nil {
+		t.Fatal("a source outside the vocabulary was stored, and the vocabulary is closed")
+	}
+
+	if !strings.Contains(err.Error(), "dirwatcher") {
+		t.Errorf("the failure says %q, want it to name the source it refused", err.Error())
+	}
+}
+
+// TestAppendLogReadsBackAnEntryWithNoSourceAsLegacy is the row this server does not write and the row the
+// other server does: an insert that never mentions the column. The log view never shows a blank, and a
+// filter on legacy finds those rows.
+//
+// It also describes where the writers are while this feature is being built — the repository gained the
+// column before they gained their sources. The guard that makes a writer without a source a failure is the
+// one that lands once every writer names itself.
+func TestAppendLogReadsBackAnEntryWithNoSourceAsLegacy(t *testing.T) {
+	db := openMigratedLegacyDatabase(t, "logs")
+	logs := NewLogs(db, DialectSqlite)
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC),
+		Level:    domain.LogLevelInfo,
+		Message:  "an entry written by a server that names no subsystem",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	// The legacy server's own insert, which does not know the column exists.
+	if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`,
+		"warn", "written by the other server", int64(1760000000000)); err != nil {
+		t.Fatalf("the legacy server's insert: %v", err)
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Source: domain.LogSourceLegacy, Limit: domain.DefaultLogSearchLimit, Ascending: true,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 || len(page.Results) != 2 {
+		t.Fatalf("a search for legacy matched %d entries and returned %d, want the 2 written without a source", page.Count, len(page.Results))
+	}
+
+	for _, entry := range page.Results {
+		if entry.Source != domain.LogSourceLegacy {
+			t.Errorf("the log view reports source %q for a row stored without one, want %q", entry.Source, domain.LogSourceLegacy)
+		}
 	}
 }
