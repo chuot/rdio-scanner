@@ -43,6 +43,10 @@ import (
 // server is running converts nothing until it restarts, and a deployment that removes it
 // keeps converting until it does.
 type Converter struct {
+	// program is the ffmpeg this converter runs: the one the server carries inside its own binary,
+	// or the name `ffmpeg` when the server's target carries none and the host's is used.
+	program string
+
 	// available is whether `ffmpeg -version` ran at all.
 	available bool
 
@@ -61,13 +65,23 @@ type Converter struct {
 	mutex sync.Mutex
 }
 
-// New probes the ffmpeg this deployment has and builds the converter for it.
+// New builds the converter for the ffmpeg this deployment installs, which is the one found on the
+// PATH. A server whose target carries no bundle of its own is a server in that situation.
 func New() *Converter {
-	converter := &Converter{}
+	return NewAt("ffmpeg")
+}
+
+// NewAt builds the converter for the ffmpeg at the path the server was given, which is the one it
+// carries inside its own binary and writes out to its data directory before running it.
+//
+// The release that program is gets asked of that program, so a bundled ffmpeg and a host ffmpeg are
+// not taken for the same release when they are not.
+func NewAt(program string) *Converter {
+	converter := &Converter{program: program}
 
 	stdout := bytes.NewBuffer([]byte(nil))
 
-	command := exec.Command("ffmpeg", "-version")
+	command := exec.Command(program, "-version")
 	command.Stdout = stdout
 
 	if err := command.Run(); err == nil {
@@ -150,7 +164,7 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 
 	args = append(args, "-c:a", "aac", "-b:a", "32k", "-movflags", "frag_keyframe+empty_moov", "-f", "ipod", "-")
 
-	command := exec.CommandContext(ctx, "ffmpeg", args...)
+	command := exec.CommandContext(ctx, converter.program, args...)
 
 	command.Stdin = bytes.NewReader(in.Data)
 
