@@ -548,6 +548,41 @@ rdio-admin .rdio-admin-card.logs .rdio-progress[hidden] {
   }
 }
 
+/* The per-subsystem counts are what the view offers the operator to narrow to, so they sit above the
+   table and not down with the filters: the operator decides from them before they choose a filter. */
+
+rdio-admin .rdio-admin-card.logs .rdio-log-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+rdio-admin .rdio-admin-card.logs .rdio-log-sources[hidden] {
+  display: none;
+}
+
+rdio-admin .rdio-admin-card.logs .rdio-log-source {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgb(60, 60, 60);
+  border-radius: 12px;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+rdio-admin .rdio-admin-card.logs .rdio-log-source:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+rdio-admin .rdio-admin-card.logs .rdio-log-source[aria-pressed="true"] {
+  background: var(--rdio-accent);
+  border-color: var(--rdio-accent-dark);
+  color: rgb(20, 20, 20);
+}
+
 rdio-admin .rdio-admin-card.logs .rdio-filters form {
   align-items: flex-end;
   display: flex;
