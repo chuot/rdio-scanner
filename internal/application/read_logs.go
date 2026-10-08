@@ -62,7 +62,7 @@ func NewSearchLogsHandler(logs ports.LogRepository, clock ports.Clock) *SearchLo
 func (handler *SearchLogsHandler) Handle(ctx context.Context, query SearchLogsQuery) (ports.LogSearchPage, error) {
 	page, err := handler.logs.SearchLogs(ctx, query.Search)
 	if err != nil {
-		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, err.Error())
+		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogs, err.Error())
 
 		return ports.LogSearchPage{}, err
 	}

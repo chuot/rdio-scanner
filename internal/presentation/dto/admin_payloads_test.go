@@ -83,8 +83,8 @@ func TestAdminLogsPagePayloadMatchesTheCapturedLogView(t *testing.T) {
 		DateStop:  third,
 		Results: []domain.LogEntry{
 			{ID: 1, DateTime: first, Level: domain.LogLevelWarn, Message: "server started"},
-			{ID: 2, DateTime: second, Level: domain.LogLevelWarn, Message: "configuration changed"},
-			{ID: 3, DateTime: third, Level: domain.LogLevelWarn, Message: "configuration changed"},
+			{ID: 2, DateTime: second, Level: domain.LogLevelWarn, Message: "the groups configuration changed"},
+			{ID: 3, DateTime: third, Level: domain.LogLevelWarn, Message: "the options configuration changed"},
 		},
 	}
 

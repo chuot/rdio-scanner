@@ -243,9 +243,9 @@ func (handler *RemoveAccessUserHandler) reportFailure(ctx context.Context, err e
 }
 
 func (handler *AddAccessUserHandler) writeLog(ctx context.Context, message string) {
-	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, message)
+	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceAdmin, message)
 }
 
 func (handler *RemoveAccessUserHandler) writeLog(ctx context.Context, message string) {
-	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, message)
+	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceAdmin, message)
 }

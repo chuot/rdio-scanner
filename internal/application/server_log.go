@@ -27,16 +27,18 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// appendServerLog writes an entry to the server's own log view.
+// appendServerLog writes an entry to the server's own log view, naming the part of the server that
+// wrote it.
 //
 // A log entry that cannot be written never changes the decision that has already been taken: the
 // legacy server writes its log entries and ignores the failure, and a use case that turned a
 // failed log write into a failed operation would report a different outcome to the caller than
 // the one it actually produced.
-func appendServerLog(ctx context.Context, logs ports.LogRepository, clock ports.Clock, level, message string) {
+func appendServerLog(ctx context.Context, logs ports.LogRepository, clock ports.Clock, level string, source domain.LogSource, message string) {
 	if err := logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: clock.Now(),
 		Level:    level,
+		Source:   source,
 		Message:  message,
 	}); err != nil {
 		return

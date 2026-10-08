@@ -265,24 +265,33 @@ func (saver configurationSaver) publish(ctx context.Context) error {
 	return nil
 }
 
-// announce records that the configuration changed. The legacy server writes it after it has
-// answered the administrator; the announcement is server-side, so the difference is not
-// something a client can see.
-func (saver configurationSaver) announce(ctx context.Context) {
-	saver.writeLog(ctx, domain.LogLevelWarn, "configuration changed")
+// announce records that the configuration changed, naming the section when the save was a per-section
+// one. The legacy server writes it after it has answered the administrator; the announcement is
+// server-side, so the difference is not something a client can see.
+//
+// An empty section is the whole-configuration save: it says the configuration changed, because it names
+// no single part of it.
+func (saver configurationSaver) announce(ctx context.Context, section ConfigSection) {
+	if section == "" {
+		saver.writeLog(ctx, domain.LogLevelWarn, domain.LogSourceConfig, "the configuration changed")
+
+		return
+	}
+
+	saver.writeLog(ctx, domain.LogLevelWarn, domain.LogSourceConfig, fmt.Sprintf("the %s configuration changed", section))
 }
 
 // reportFailure records a section the server could not store.
 //
-// The wording is kept exactly as the legacy server writes it, including the function names in
-// it, because these strings are what an operator greps for and what the log view has always
-// shown.
-func (saver configurationSaver) reportFailure(ctx context.Context, where string, err error) {
-	saver.writeLog(ctx, domain.LogLevelError, fmt.Sprintf("admin.%s.put: %s", where, err))
+// The line says what happened and then the failure's own text, which is the part an operator needs: the
+// error names the statement that failed. The legacy line named the handler instead —
+// `admin.confighandler.put:` — and the handler is what the source field now says.
+func (saver configurationSaver) reportFailure(ctx context.Context, err error) {
+	saver.writeLog(ctx, domain.LogLevelError, domain.LogSourceConfig, fmt.Sprintf("the configuration could not be saved: %s", err))
 }
 
-func (saver configurationSaver) writeLog(ctx context.Context, level, message string) {
-	appendServerLog(ctx, saver.logs, saver.clock, level, message)
+func (saver configurationSaver) writeLog(ctx context.Context, level string, source domain.LogSource, message string) {
+	appendServerLog(ctx, saver.logs, saver.clock, level, source, message)
 }
 
 // UpdateConfigurationHandler saves the whole configuration.
@@ -314,7 +323,7 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 
 	for _, section := range cmd.Changes.namedSections() {
 		if err := handler.saver.save(ctx, section, cmd.Changes); err != nil {
-			handler.saver.reportFailure(ctx, "confighandler", err)
+			handler.saver.reportFailure(ctx, err)
 
 			result.Failed = append(result.Failed, section)
 
@@ -332,7 +341,7 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 		return UpdateConfigurationResult{Outcome: ConfigurationSaveFailed}, err
 	}
 
-	handler.saver.announce(ctx)
+	handler.saver.announce(ctx, "")
 
 	return result, nil
 }
@@ -361,7 +370,7 @@ func (handler *UpdateConfigurationHandler) watchesToStart(ctx context.Context, c
 
 	watches, err := handler.saver.repos.Dirwatches.AllDirwatches(ctx)
 	if err != nil {
-		handler.saver.reportFailure(ctx, "confighandler", err)
+		handler.saver.reportFailure(ctx, err)
 
 		return submitted
 	}
@@ -394,7 +403,7 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 	failure := handler.saver.save(ctx, cmd.Section, cmd.Changes)
 	if failure != nil {
 		if !errors.Is(failure, ErrNoConfigurationChange) {
-			handler.saver.reportFailure(ctx, "sectionhandler", failure)
+			handler.saver.reportFailure(ctx, failure)
 		}
 
 		result.Outcome = ConfigurationSaveFailed
@@ -416,7 +425,7 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 		return UpdateConfigurationResult{Outcome: ConfigurationSaveFailed}, err
 	}
 
-	handler.saver.announce(ctx)
+	handler.saver.announce(ctx, cmd.Section)
 
 	return result, nil
 }
@@ -431,7 +440,7 @@ func (handler *UpdateConfigurationSectionHandler) watchesToRestart(ctx context.C
 	if cmd.Section != DirwatchSection || saved {
 		watches, err := handler.saver.repos.Dirwatches.AllDirwatches(ctx)
 		if err != nil {
-			handler.saver.reportFailure(ctx, "sectionhandler", err)
+			handler.saver.reportFailure(ctx, err)
 
 			return domain.Dirwatches{}
 		}

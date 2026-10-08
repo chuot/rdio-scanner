@@ -167,5 +167,5 @@ func (handler *ChangeAdminPasswordHandler) reject(ctx context.Context, reason er
 }
 
 func (handler *ChangeAdminPasswordHandler) writeLog(ctx context.Context, level, message string) {
-	appendServerLog(ctx, handler.logs, handler.clock, level, message)
+	appendServerLog(ctx, handler.logs, handler.clock, level, domain.LogSourceAdmin, message)
 }

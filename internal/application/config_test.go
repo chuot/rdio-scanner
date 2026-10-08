@@ -118,11 +118,12 @@ func (fixture *configFixture) read() (domain.Configuration, error) {
 	return fixture.get.Handle(context.Background(), GetConfigQuery{})
 }
 
-// loggedContaining reports whether the server wrote a log line containing the fragment, which
-// is how these tests pin the legacy wording byte for byte.
-func (fixture *configFixture) loggedContaining(fragment string) bool {
+// loggedAs reports whether the server wrote an entry that names that part of the server and says the
+// fragment. The source is part of the assertion: a line that says the right thing and is filed under
+// nothing is the state this feature exists to remove.
+func (fixture *configFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Stored {
-		if strings.Contains(entry.Message, fragment) {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
 			return true
 		}
 	}
@@ -322,8 +323,8 @@ func TestUpdateConfigurationKeepsGoingWhenASectionCannotBeStored(t *testing.T) {
 		t.Errorf("groups = %v, want the sections after a failure still saved", fixture.groups.Stored)
 	}
 
-	if !fixture.loggedContaining("admin.confighandler.put: constraint failed") {
-		t.Errorf("logs = %v, want the legacy failure wording naming the section that failed", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration could not be saved: constraint failed") {
+		t.Errorf("logs = %v, want the failure said as what happened, with the failure's own text after it", fixture.logs.Stored)
 	}
 }
 
@@ -364,8 +365,8 @@ func TestUpdateConfigurationRecordsThatTheConfigurationChanged(t *testing.T) {
 		t.Fatalf("Handle: %v", err)
 	}
 
-	if !fixture.loggedContaining("configuration changed") {
-		t.Errorf("logs = %v, want the legacy notice that the configuration changed", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration changed") {
+		t.Errorf("logs = %v, want the notice that the configuration changed, filed under the part of the server that saved it", fixture.logs.Stored)
 	}
 }
 
@@ -478,8 +479,8 @@ func TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching
 		t.Error("the configuration is still announced, as the legacy server announces it")
 	}
 
-	if !fixture.loggedContaining("configuration changed") {
-		t.Errorf("logs = %v, want the legacy notice written even though nothing changed", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration changed") {
+		t.Errorf("logs = %v, want the notice written even though nothing changed", fixture.logs.Stored)
 	}
 }
 
@@ -509,8 +510,8 @@ func TestUpdateConfigurationSectionSavesOnlyThatSection(t *testing.T) {
 		t.Errorf("groups = %v, want every other section left alone", fixture.groups.Stored)
 	}
 
-	if !fixture.loggedContaining("configuration changed") {
-		t.Errorf("logs = %v, want the legacy notice that the configuration changed", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceConfig, "the systems configuration changed") {
+		t.Errorf("logs = %v, want the notice naming the section that was saved", fixture.logs.Stored)
 	}
 }
 
@@ -534,8 +535,8 @@ func TestUpdateConfigurationSectionReportsAFailureAndChangesNothingElse(t *testi
 		t.Errorf("failed = %v, want the section reported as not stored", result.Failed)
 	}
 
-	if !fixture.loggedContaining("admin.sectionhandler.put: constraint failed") {
-		t.Errorf("logs = %v, want the per-section failure wording", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration could not be saved: constraint failed") {
+		t.Errorf("logs = %v, want the failure said as what happened, with the failure's own text after it", fixture.logs.Stored)
 	}
 
 	if fixture.admin.AnnouncedCount() != 0 {
@@ -546,7 +547,7 @@ func TestUpdateConfigurationSectionReportsAFailureAndChangesNothingElse(t *testi
 		t.Error("a save that did not work must not re-send the configuration to the listeners")
 	}
 
-	if fixture.loggedContaining("configuration changed") {
+	if fixture.loggedAs(domain.LogSourceConfig, "configuration changed") {
 		t.Error("a save that did not work must not record that the configuration changed")
 	}
 

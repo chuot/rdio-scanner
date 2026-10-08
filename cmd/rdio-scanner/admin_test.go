@@ -290,8 +290,8 @@ func TestAConfigurationSaveReachesEveryOpenAdministratorConnection(t *testing.T)
 		t.Errorf("the configuration sent to the open connection holds dimmerDelay %v, want the value the save stored", options["dimmerDelay"])
 	}
 
-	if got := countLogLines(t, srv.db, "configuration changed"); got != 1 {
-		t.Errorf("the server wrote %d lines about the change, want one", got)
+	if got := countLogLines(t, srv.db, "the options configuration changed"); got != 1 {
+		t.Errorf("the server wrote %d lines about the change, want one naming the section that was saved", got)
 	}
 }
 
