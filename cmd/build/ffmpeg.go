@@ -124,13 +124,19 @@ func sourceDir(manifest bundle.Manifest) string {
 	return strings.TrimSuffix(sourceName(manifest), ".tar.xz")
 }
 
-// cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the target, the
-// configure recipe, and that target's toolchain and check environment.
+// cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the source this
+// project pinned, the target, the configure recipe, and that target's toolchain and check environment.
+//
+// The digest is in here and not only in the check that runs before compiling, because a cache hit skips
+// that check: without it, a manifest whose pinned source was changed would quietly reuse what the old
+// source compiled.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
 	parts := []string{
 		manifest.FFmpeg,
+		manifest.Source.URL,
+		manifest.Source.SHA256,
 		target,
 		strings.Join(manifest.Recipe, "\n"),
 		record.Container,

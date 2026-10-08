@@ -270,6 +270,15 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 		t.Error("a changed configure recipe reuses the previous recipe's cache")
 	}
 
+	// The source is part of what the compiled pair is. A cache that survives the digest being changed
+	// is a cache that can be handed a tarball this project never pinned.
+	withSource := manifest
+	withSource.Source = bundle.Source{URL: manifest.Source.URL, SHA256: strings.Repeat("0", 64)}
+
+	if cacheKey(withSource, "linux-arm64") == same {
+		t.Error("a different pinned source digest reuses the previous source's cache")
+	}
+
 	record := manifest.Targets["linux-arm64"]
 	record.Cross = []string{"--enable-cross-compile", "--arch=aarch64"}
 
