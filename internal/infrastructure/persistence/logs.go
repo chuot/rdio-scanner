@@ -25,6 +25,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -113,18 +114,6 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		args = append(args, search.Level)
 	}
 
-	if search.HasSource() {
-		// A row stored without a source — the other server's insert, which never mentions the column — is
-		// the same thing the log view calls legacy, so asking for legacy has to find both spellings.
-		if search.Source == domain.LogSourceLegacy {
-			where = append(where, `("source" = '' OR "source" = ?)`)
-		} else {
-			where = append(where, `"source" = ?`)
-		}
-
-		args = append(args, string(search.Source))
-	}
-
 	// The message search is a substring, matched case-insensitively, with the submitted text escaped so
 	// that a % or an _ in what the operator typed matches itself. lower() on both sides is what makes the
 	// same statement case-insensitive on PostgreSQL, where LIKE is not.
@@ -138,6 +127,25 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 		where = append(where, `("timestamp" BETWEEN ? AND ?)`)
 		args = append(args, millisOf(from), millisOf(to))
+	}
+
+	// The per-source counts are computed from the criteria as submitted except for the source itself:
+	// asking "how many of each" while already filtered to one source answers one row, which is true and
+	// useless. The log view offers the narrowing from these counts, so they have to describe the whole
+	// match while the operator is still choosing.
+	countsWhere := append([]string{}, where...)
+	countsArgs := append([]any{}, args...)
+
+	if search.HasSource() {
+		// A row stored without a source — the other server's insert, which never mentions the column — is
+		// the same thing the log view calls legacy, so asking for legacy has to find both spellings.
+		if search.Source == domain.LogSourceLegacy {
+			where = append(where, `("source" = '' OR "source" = ?)`)
+		} else {
+			where = append(where, `"source" = ?`)
+		}
+
+		args = append(args, string(search.Source))
 	}
 
 	filter := strings.Join(where, " AND ")
@@ -176,6 +184,53 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	}
 
 	page.Count = uint64(count)
+
+	// The per-subsystem counts are read over the whole match and not over the page, so they stay the same
+	// while the log view pages through 200 entries at a time.
+	countsQuery := `SELECT "source", COUNT(*) FROM "logs" WHERE ` + strings.Join(countsWhere, " AND ") + ` GROUP BY "source"`
+
+	countRows, err := logs.store.query(ctx, countsQuery, countsArgs...)
+	if err != nil {
+		return ports.LogSearchPage{}, statementError("logs", "search", err, countsQuery)
+	}
+
+	defer countRows.Close()
+
+	counts := map[domain.LogSource]uint64{}
+
+	for countRows.Next() {
+		var (
+			source sql.NullString
+			n      int64
+		)
+
+		if err := countRows.Scan(&source, &n); err != nil {
+			continue
+		}
+
+		// The two spellings a row without a source can carry — the blank the other server's insert
+		// leaves, and the name this server files it under — are one group in the log view, so they are
+		// one group here.
+		counts[logSourceOf(source)] += uint64(n)
+	}
+
+	if err := countRows.Err(); err != nil {
+		return ports.LogSearchPage{}, statementError("logs", "search", err, countsQuery)
+	}
+
+	for source, n := range counts {
+		page.SourceCounts = append(page.SourceCounts, ports.LogSourceCount{Source: source, Count: n})
+	}
+
+	// Where the noise is, first. Ties are broken by the name so the same search always answers the same
+	// list.
+	sort.Slice(page.SourceCounts, func(i, j int) bool {
+		if page.SourceCounts[i].Count != page.SourceCounts[j].Count {
+			return page.SourceCounts[i].Count > page.SourceCounts[j].Count
+		}
+
+		return page.SourceCounts[i].Source < page.SourceCounts[j].Source
+	})
 
 	rowsQuery := `SELECT "logId", "level", "source", "message", "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ` + order + ` LIMIT ? OFFSET ?`
 

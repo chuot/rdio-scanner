@@ -198,7 +198,25 @@ type LogSearchPage struct {
 	DateStart time.Time
 	DateStop  time.Time
 
+	// SourceCounts says how many of the matching entries each part of the server wrote, ordered by
+	// descending count, so the log view can show where the noise is before the operator narrows to it.
+	//
+	// They describe everything the criteria match and not the page this envelope carries, and they are
+	// computed with the criteria as submitted except for the source itself: asking "how many of each"
+	// while already filtered to one source answers one row, which is true and useless. So the search
+	// reports two totals — `Count`, the narrowed match the page is paged through, and the total of the
+	// wider match these counts describe — and they are the same number whenever no source filter is
+	// submitted. See
+	// [decision-per-source-counts-and-the-total.md](../../../docs/specs/FEAT-010-logging-subsystems/decision-per-source-counts-and-the-total.md).
+	SourceCounts []LogSourceCount
+
 	Results []domain.LogEntry
+}
+
+// LogSourceCount is how many entries one part of the server wrote among everything a search matches.
+type LogSourceCount struct {
+	Source domain.LogSource
+	Count  uint64
 }
 
 // LogRepository stores recorded server events.

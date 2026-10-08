@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 )
 
@@ -989,5 +990,115 @@ func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
 
 	if !page.DateStart.Equal(instantOf(-62135596800000)) {
 		t.Errorf("the span of everything the criteria match begins at %v, want year one: the log view reports a log that begins in 1 AD", page.DateStart)
+	}
+}
+
+// TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch is the per-subsystem count the log view
+// offers the operator: where the noise is, before narrowing to it.
+//
+// The counts describe everything the criteria match and not the page that was returned, because the log
+// view pages through 200 entries at a time and the counts have to stay the same while the page moves. And
+// the source criterion does not restrict them: asking "how many of each" while already filtered to one
+// source answers one row, which is true and useless. So the search reports two totals — the narrowed match
+// the page is paged through, and the wider match the counts describe — and they are the same number
+// whenever no subsystem filter is submitted. See
+// docs/specs/FEAT-010-logging-subsystems/decision-per-source-counts-and-the-total.md.
+func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	store := []domain.LogEntry{
+		{DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{DateTime: time.Date(2026, 3, 14, 9, 1, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
+		{DateTime: time.Date(2026, 3, 14, 9, 2, 0, 0, time.UTC), Level: domain.LogLevelInfo, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming started"},
+		{DateTime: time.Date(2026, 3, 14, 9, 3, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceIngest, Message: "the recording could not be ingested"},
+		{DateTime: time.Date(2026, 3, 14, 9, 4, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceIngest, Message: "the recording could not be ingested"},
+		{DateTime: time.Date(2026, 3, 14, 9, 5, 0, 0, time.UTC), Level: domain.LogLevelInfo, Source: domain.LogSourceConfig, Message: "the configuration section options was saved"},
+		{DateTime: time.Date(2026, 3, 14, 9, 6, 0, 0, time.UTC), Level: domain.LogLevelInfo, Source: domain.LogSourceLivefeed, Message: "listeners count is 3"},
+	}
+
+	for _, entry := range store {
+		if err := logs.AppendLog(context.Background(), entry); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	for _, tc := range []struct {
+		what   string
+		search domain.LogSearch
+		want   []ports.LogSourceCount
+		// wantCount is the narrowed match the page is paged through; wantSum is the total of the match
+		// the counts describe. They are the same number whenever no subsystem filter is submitted.
+		wantCount uint64
+		wantSum   uint64
+	}{
+		{
+			"everything, with a page far smaller than the match",
+			domain.LogSearch{Limit: 2},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceDirwatch, Count: 3},
+				{Source: domain.LogSourceIngest, Count: 2},
+				{Source: domain.LogSourceConfig, Count: 1},
+				{Source: domain.LogSourceLivefeed, Count: 1},
+			},
+			7, 7,
+		},
+		{
+			"everything, already narrowed to one subsystem",
+			domain.LogSearch{Source: domain.LogSourceDirwatch, Limit: domain.DefaultLogSearchLimit},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceDirwatch, Count: 3},
+				{Source: domain.LogSourceIngest, Count: 2},
+				{Source: domain.LogSourceConfig, Count: 1},
+				{Source: domain.LogSourceLivefeed, Count: 1},
+			},
+			3, 7,
+		},
+		{
+			"the warnings only",
+			domain.LogSearch{Level: domain.LogLevelWarn, Limit: domain.DefaultLogSearchLimit},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceIngest, Count: 2},
+				{Source: domain.LogSourceDirwatch, Count: 1},
+			},
+			3, 3,
+		},
+		{
+			"one subsystem and the text the operator typed",
+			domain.LogSearch{Source: domain.LogSourceDirwatch, Text: "started", Limit: domain.DefaultLogSearchLimit},
+			[]ports.LogSourceCount{
+				{Source: domain.LogSourceDirwatch, Count: 1},
+			},
+			1, 1,
+		},
+		{"nothing at all", domain.LogSearch{Text: "no such entry", Limit: domain.DefaultLogSearchLimit}, nil, 0, 0},
+	} {
+		tc.search.Ascending = true
+
+		page, err := logs.SearchLogs(context.Background(), tc.search)
+		if err != nil {
+			t.Fatalf("SearchLogs for %s: %v", tc.what, err)
+		}
+
+		if len(page.SourceCounts) != len(tc.want) {
+			t.Fatalf("%s reports %d source counts %v, want %v", tc.what, len(page.SourceCounts), page.SourceCounts, tc.want)
+		}
+
+		var sum uint64
+
+		for i, got := range page.SourceCounts {
+			if got != tc.want[i] {
+				t.Errorf("%s reports %s %d at position %d, want %s %d", tc.what, got.Source, got.Count, i, tc.want[i].Source, tc.want[i].Count)
+			}
+
+			sum += got.Count
+		}
+
+		if sum != tc.wantSum {
+			t.Errorf("%s reports source counts summing to %d, want the %d entries the counts describe", tc.what, sum, tc.wantSum)
+		}
+
+		if page.Count != tc.wantCount {
+			t.Errorf("%s reports %d matching entries, want %d", tc.what, page.Count, tc.wantCount)
+		}
 	}
 }
