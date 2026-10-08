@@ -26,6 +26,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"rdio-scanner/internal/buildinfo"
 )
 
 func TestVersionModePrintsVersionAndExitsWithoutError(t *testing.T) {
@@ -49,20 +51,61 @@ func TestVersionMatchesThePinnedWireContract(t *testing.T) {
 	//
 	// What the legacy server reported is not lost. testdata/golden/payload-ver.json is the payload
 	// the legacy server put on the wire for a version request, captured in the configuration every
-	// golden was taken in and pinned to the tree the goldens are pinned to. Seven of the pinned
+	// golden was taken in and pinned to the tree the goldens are pinned to. Five of the pinned
 	// captures carry that version, because what a server reports is part of what a client is told.
 	// Comparing against the contract is what comparing against the legacy source was for, and it
 	// does not reach into a directory that is no longer here.
 	//
-	// A release moves this test deliberately. The version is the one value in the goldens a release
-	// changes, and a release that changes what the server tells clients should be seen doing it.
-	if got, want := Version, pinnedWireVersion(t); got != want {
-		t.Errorf("Version = %q, the pinned wire contract reports %q", got, want)
+	// The comparison is between cores. A build carries a prerelease and a commit hash to say which
+	// build of a release it is, and neither is a different release: a development build satisfies the
+	// same contract a tagged release does, and only a different core breaks it.
+	resolved, err := buildinfo.CoreOf(Version)
+	if err != nil {
+		t.Fatalf("Version = %q is not a version a client can compare: %v", Version, err)
+	}
+
+	if pinned := pinnedWireCore(t); resolved != pinned {
+		t.Errorf("this build reports the core %q, and the pinned wire contract reports %q", resolved, pinned)
 	}
 }
 
-// pinnedWireVersion reads the version out of the pinned capture of a version response.
-func pinnedWireVersion(t *testing.T) string {
+// TestThePinnedWireContractComparesCoresAndNotWholeVersions is that contract in both directions, so
+// that the comparison is not merely observed passing but seen refusing.
+func TestThePinnedWireContractComparesCoresAndNotWholeVersions(t *testing.T) {
+	pinned := pinnedWireCore(t)
+
+	if pinned != "8.0.0" {
+		t.Fatalf("the pinned capture carries the core %q, and the cases below name 8.0.0: they move with the capture", pinned)
+	}
+
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{version: "8.0.0", want: true},
+		{version: "8.0.0-beta1+gdb79311", want: true},
+		{version: "8.0.0+gdb79311", want: true},
+		{version: "8.0.0-alpha.3", want: true},
+
+		{version: "9.0.0", want: false},
+		{version: "8.1.0-beta1", want: false},
+		{version: "7.9.0", want: false},
+		{version: "dev", want: false},
+	}
+
+	for _, c := range cases {
+		core, err := buildinfo.CoreOf(c.version)
+
+		satisfies := err == nil && core == pinned
+
+		if satisfies != c.want {
+			t.Errorf("%s satisfies the pinned core %q = %v, want %v (CoreOf: %v)", c.version, pinned, satisfies, c.want, err)
+		}
+	}
+}
+
+// pinnedWireCore reads the core of the version out of the pinned capture of a version response.
+func pinnedWireCore(t *testing.T) string {
 	t.Helper()
 
 	path := filepath.Join("..", "..", "testdata", "golden", "payload-ver.json")
@@ -85,7 +128,12 @@ func pinnedWireVersion(t *testing.T) string {
 		t.Fatalf("%s names no version", path)
 	}
 
-	return payload.Version
+	core, err := buildinfo.CoreOf(payload.Version)
+	if err != nil {
+		t.Fatalf("%s pins %v", path, err)
+	}
+
+	return core
 }
 
 func TestUnknownFlagIsRejected(t *testing.T) {

@@ -222,7 +222,7 @@ func captureConfiguration() AdminConfigPayload {
 			},
 		},
 		Snapshot: snapshot,
-		Version:  "7.0.0",
+		Version:  "8.0.0",
 	}
 }
 

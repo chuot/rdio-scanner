@@ -360,7 +360,7 @@ func TestSessionsHoldingOneAccessAreCountedTogether(t *testing.T) {
 func TestTheVersionReportNamesOnlyWhatTheServerHasBeenGiven(t *testing.T) {
 	f := newFixture(t, Settings{Branding: "Capture Dispatch", Email: "dispatch@example.com", MaxClients: 200})
 
-	f.hub.SendVersion(f.id, "7.0.0")
+	f.hub.SendVersion(f.id, "8.0.0")
 
 	frame := f.expectFrame(t, f.id)
 
@@ -368,15 +368,15 @@ func TestTheVersionReportNamesOnlyWhatTheServerHasBeenGiven(t *testing.T) {
 		t.Fatalf("the listener received %v, want a version report", frame.Command)
 	}
 
-	if got, want := jsonOf(t, frame.Payload), `{"branding":"Capture Dispatch","email":"dispatch@example.com","version":"7.0.0"}`; got != want {
+	if got, want := jsonOf(t, frame.Payload), `{"branding":"Capture Dispatch","email":"dispatch@example.com","version":"8.0.0"}`; got != want {
 		t.Errorf("the version report = %s, want %s", got, want)
 	}
 
 	quiet := newFixture(t, openSettings)
 
-	quiet.hub.SendVersion(quiet.id, "7.0.0")
+	quiet.hub.SendVersion(quiet.id, "8.0.0")
 
-	if got := jsonOf(t, quiet.expectFrame(t, quiet.id).Payload); got != `{"version":"7.0.0"}` {
+	if got := jsonOf(t, quiet.expectFrame(t, quiet.id).Payload); got != `{"version":"8.0.0"}` {
 		t.Errorf("a server with no branding and no address reports %s, want only the version", got)
 	}
 }

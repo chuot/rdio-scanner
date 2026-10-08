@@ -49,8 +49,8 @@ func TestFrameCarriesCommandPayloadAndFlag(t *testing.T) {
 }
 
 func TestFrameCarriesCommandAndPayloadWithoutAFlag(t *testing.T) {
-	got := marshal(t, Message{Command: CommandVersion, Payload: map[string]any{"version": "7.0.0"}})
-	want := `["VER",{"version":"7.0.0"}]`
+	got := marshal(t, Message{Command: CommandVersion, Payload: map[string]any{"version": "8.0.0"}})
+	want := `["VER",{"version":"8.0.0"}]`
 
 	if got != want {
 		t.Errorf("frame = %s, want %s", got, want)

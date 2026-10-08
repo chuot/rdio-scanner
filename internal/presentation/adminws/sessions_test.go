@@ -52,7 +52,7 @@ import (
 const (
 	captureToken   = "capture-administrator-token"
 	captureRefused = "not-a-token"
-	captureVersion = "7.0.0"
+	captureVersion = "8.0.0"
 
 	// changedTagLabel names a tag that only the second of two pushes has, which is how a test tells them
 	// apart.

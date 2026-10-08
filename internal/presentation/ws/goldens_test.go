@@ -21,6 +21,7 @@
 package ws
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -98,24 +99,43 @@ func TestEveryGoldenCaptureIsThere(t *testing.T) {
 	}
 }
 
-// TestGoldenCapturesSayWhatEachPlaceholderStandsFor keeps the two redactions honest: a capture that
-// silently stopped redacting the session token would produce goldens that differ on every machine,
-// and a capture that redacted something else would hide it from the tests that read them.
-func TestGoldenCapturesSayWhatEachPlaceholderStandsFor(t *testing.T) {
+// goldenManifest is what testdata/golden/manifest.json declares about the captures: the legacy tree
+// they were taken at, the zone they were taken in, what each redaction stands for, and the one field
+// a release is allowed to move.
+type goldenManifest struct {
+	LegacyServerTree string            `json:"legacyServerTree"`
+	Timezone         string            `json:"timezone"`
+	Placeholders     map[string]string `json:"placeholders"`
+	VersionField     struct {
+		Pinned    string   `json:"pinned"`
+		MovedFrom string   `json:"movedFrom"`
+		MovedBy   string   `json:"movedBy"`
+		CarriesIt []string `json:"carriesIt"`
+	} `json:"versionField"`
+}
+
+func readGoldenManifest(t *testing.T) goldenManifest {
+	t.Helper()
+
+	var manifest goldenManifest
+
 	b, err := os.ReadFile(filepath.Join(goldenDir, "manifest.json"))
 	if err != nil {
 		t.Fatalf("reading the manifest: %v", err)
 	}
 
-	var manifest struct {
-		LegacyServerTree string            `json:"legacyServerTree"`
-		Timezone         string            `json:"timezone"`
-		Placeholders     map[string]string `json:"placeholders"`
-	}
-
 	if err := json.Unmarshal(b, &manifest); err != nil {
 		t.Fatalf("reading the manifest: %v", err)
 	}
+
+	return manifest
+}
+
+// TestGoldenCapturesSayWhatEachPlaceholderStandsFor keeps the two redactions honest: a capture that
+// silently stopped redacting the session token would produce goldens that differ on every machine,
+// and a capture that redacted something else would hide it from the tests that read them.
+func TestGoldenCapturesSayWhatEachPlaceholderStandsFor(t *testing.T) {
+	manifest := readGoldenManifest(t)
 
 	if manifest.LegacyServerTree == "" {
 		t.Error("the manifest names no legacy server tree, so the captures are not pinned to a legacy source")
@@ -133,6 +153,96 @@ func TestGoldenCapturesSayWhatEachPlaceholderStandsFor(t *testing.T) {
 			t.Errorf("placeholder %s = %q, want %q", name, got, placeholder)
 		}
 	}
+}
+
+// TestGoldenCapturesRecordTheOneFieldAReleaseMoves keeps the version move honest in both directions.
+//
+// The manifest names which captures carry a version and which version they carry; this checks each
+// named capture does carry it, that no capture the manifest does not name carries one, and that the
+// version a release moved off is nowhere left behind. A capture that gained a version field nobody
+// declared, or a capture that kept an old one, would make a release look like it had not changed what
+// it tells clients.
+func TestGoldenCapturesRecordTheOneFieldAReleaseMoves(t *testing.T) {
+	manifest := readGoldenManifest(t)
+
+	if manifest.VersionField.Pinned == "" {
+		t.Fatal("the manifest pins no version, so a reader of a capture cannot tell which release it describes")
+	}
+
+	if manifest.VersionField.MovedFrom == "" {
+		t.Error("the manifest does not record the version the captures were moved off")
+	}
+
+	if manifest.VersionField.MovedBy == "" {
+		t.Error("the manifest does not name the decision that moved the version")
+	}
+
+	if len(manifest.VersionField.CarriesIt) == 0 {
+		t.Fatal("the manifest names no capture that carries a version")
+	}
+
+	named := map[string]bool{}
+
+	for _, name := range manifest.VersionField.CarriesIt {
+		named[name] = true
+
+		b := readGoldenFile(t, name)
+
+		if !carriesVersion(b, manifest.VersionField.Pinned) {
+			t.Errorf("%s is named as carrying a version and does not carry %s", name, manifest.VersionField.Pinned)
+		}
+
+		if carriesVersion(b, manifest.VersionField.MovedFrom) {
+			t.Errorf("%s still carries %s, the version the manifest says a release moved off", name, manifest.VersionField.MovedFrom)
+		}
+	}
+
+	entries, err := os.ReadDir(goldenDir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", goldenDir, err)
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if entry.IsDir() || name == "manifest.json" || named[name] {
+			continue
+		}
+
+		b := readGoldenFile(t, name)
+
+		if bytes.Contains(b, []byte(`"version"`)) {
+			t.Errorf("%s carries a version field the manifest does not name", name)
+		}
+
+		if carriesVersion(b, manifest.VersionField.MovedFrom) {
+			t.Errorf("%s still carries %s, the version the manifest says a release moved off", name, manifest.VersionField.MovedFrom)
+		}
+	}
+}
+
+// carriesVersion reports whether a capture names this version as the version it reports, in either of
+// the two forms a capture writes it in: a JSON field of its own, or a JSON field inside a captured
+// frame, which is a JSON string and therefore escaped.
+func carriesVersion(capture []byte, version string) bool {
+	for _, form := range []string{`"version":"` + version + `"`, `\"version\":\"` + version + `\"`} {
+		if bytes.Contains(capture, []byte(form)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func readGoldenFile(t *testing.T, name string) []byte {
+	t.Helper()
+
+	b, err := os.ReadFile(filepath.Join(goldenDir, name))
+	if err != nil {
+		t.Fatalf("reading the golden capture %s: %v", name, err)
+	}
+
+	return b
 }
 
 // TestGoldenCapturesCoverEveryCommandTheProtocolExchanges is the coverage half of CA-011.1: every

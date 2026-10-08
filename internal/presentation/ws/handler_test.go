@@ -56,7 +56,7 @@ func TestTheVersionRequestIsAnsweredBeforeAnyAccessCode(t *testing.T) {
 		t.Fatalf("the version request was answered with %v, want a version report", frame.Command)
 	}
 
-	if got, want := jsonOf(t, frame.Payload), `{"version":"7.0.0"}`; got != want {
+	if got, want := jsonOf(t, frame.Payload), `{"version":"8.0.0"}`; got != want {
 		t.Errorf("the version report = %s, want %s", got, want)
 	}
 
@@ -563,7 +563,7 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 		Livefeed: application.NewSetLivefeedHandler(f.hub),
 		Search:   application.NewSearchCallsQueryHandler(w.calls, w.systems, w.groups, w.tags),
 		Settings: f.settings,
-		Version:  "7.0.0",
+		Version:  "8.0.0",
 	})
 
 	// A session on a whole server needs longer than the hub tests' window to get as far as its first

@@ -48,7 +48,7 @@ const (
 
 	// captureVersion is the version the server that produced the captures reported, and it is part of
 	// what those captures say.
-	captureVersion = "7.0.0"
+	captureVersion = "8.0.0"
 )
 
 // adminFixture is a server whose configuration, log, sessions, and watchers are the in-memory stand-ins
