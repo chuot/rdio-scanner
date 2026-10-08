@@ -22,6 +22,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -90,6 +91,12 @@ func (handler *AdminLogoutHandler) Handle(ctx context.Context, cmd AdminLogoutCo
 	}
 
 	if err := handler.tokens.Revoke(ctx, cmd.Token); err != nil {
+		// The session is still open, the caller is told, and the log says what the server was trying
+		// to do. An administrator reporting that they cannot log out used to leave nothing behind to
+		// check.
+		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogin,
+			fmt.Sprintf("the administrator session could not be ended: %v", err))
+
 		return AdminLogoutResult{Outcome: AdminLogoutFailed}, err
 	}
 

@@ -23,6 +23,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -519,6 +520,81 @@ func TestLoginHandlerReportsAFailureWhenNoSessionTokenCanBeIssued(t *testing.T) 
 	}
 }
 
+// TestALoginTheServerCouldNotCheckSaysSo is the sign-in a broken configuration makes impossible. The
+// credential is never examined, because the credential on record is in the options the server could not read,
+// and every sign-in on the deployment fails. The outcome and the error the caller receives are what they were:
+// what was missing was any trace that the server had been asked at all.
+func TestALoginTheServerCouldNotCheckSaysSo(t *testing.T) {
+	fixture := newLoginFixture()
+	fixture.options.Err = errors.New("no such table: options")
+
+	result, err := fixture.attempt(adminCredential)
+
+	if !errors.Is(err, fixture.options.Err) {
+		t.Fatalf("login error = %v, want the configuration's own failure", err)
+	}
+
+	if result.Outcome != AdminLoginFailed {
+		t.Fatalf("outcome = %q, want a login the server could not carry out", result.Outcome)
+	}
+
+	assertOneFailureEntry(t, fixture, "the login attempt could not be checked", fixture.options.Err)
+}
+
+// TestALoginThatCouldNotStartASessionSaysSo is the other step a sign-in depends on: the credential was right,
+// and the server could not mint the token that a session is made of. An operator looking at a log view that
+// says nothing cannot tell this apart from a server nobody tried to sign in to.
+func TestALoginThatCouldNotStartASessionSaysSo(t *testing.T) {
+	fixture := newLoginFixture()
+	fixture.tokens.Err = errors.New("signing secret is missing")
+
+	result, err := fixture.attempt(adminCredential)
+
+	if !errors.Is(err, fixture.tokens.Err) {
+		t.Fatalf("login error = %v, want the token issuer's own failure", err)
+	}
+
+	if result.Outcome != AdminLoginFailed {
+		t.Fatalf("outcome = %q, want a login the server could not carry out", result.Outcome)
+	}
+
+	assertOneFailureEntry(t, fixture, "the administrator session could not be started", fixture.tokens.Err)
+}
+
+// assertOneFailureEntry is what the two failures above have in common: one entry, filed under the logins, at
+// the level of a server that cannot let anybody in, naming the failure's own text.
+func assertOneFailureEntry(t *testing.T, fixture *loginFixture, beginsWith string, failure error) {
+	t.Helper()
+
+	wrote := fixture.entries()
+
+	if len(wrote) != 1 {
+		t.Fatalf("server log = %v, want one entry saying what the server was trying to do", wrote)
+	}
+
+	entry := wrote[0]
+
+	if entry.Source != domain.LogSourceLogin {
+		t.Errorf("entry source = %q, want %q", entry.Source, domain.LogSourceLogin)
+	}
+
+	if entry.Level != domain.LogLevelError {
+		t.Errorf("entry level = %q, want an error: every sign-in through this step is failing", entry.Level)
+	}
+
+	if !strings.HasPrefix(entry.Message, beginsWith+": ") {
+		t.Errorf("entry message = %q, want it to begin %q", entry.Message, beginsWith)
+	}
+
+	if !strings.HasSuffix(entry.Message, failure.Error()) {
+		t.Errorf("entry message = %q, want it to carry the failure's own text after the sentence", entry.Message)
+	}
+
+	if got := entry.DateTime; !got.Equal(loginTime) {
+		t.Errorf("entry stamped %v, want the instant the server was asked", got)
+	}
+}
+
 func TestLoginHandlerSixthSessionRetiresTheFirstToken(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -664,6 +740,33 @@ func TestLogoutHandlerLeavesOtherAdministratorSessionsRunning(t *testing.T) {
 // credential: every one of these use cases writes a log entry as a side effect, and a log view that cannot
 // be written is not allowed to change what the server decided or what it did. A deployment whose log table
 // is broken must still be able to sign in and sign out.
+// TestALogoutThatCouldNotEndTheSessionSaysSo is a sign-out the server could not carry out: the token was
+// accepted, and retiring it failed. The session stays open, the caller is told, and until now nothing was
+// written at all — so an administrator reporting "I cannot log out" left nothing to check.
+func TestALogoutThatCouldNotEndTheSessionSaysSo(t *testing.T) {
+	fixture := newLoginFixture()
+
+	token := fixture.mustLogin(t, adminCredential)
+
+	fixture.tokens.RevokeErr = errors.New("no such table: tokens")
+
+	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: token})
+
+	if !errors.Is(err, fixture.tokens.RevokeErr) {
+		t.Fatalf("logout error = %v, want the token store's own failure", err)
+	}
+
+	if result.Outcome != AdminLogoutFailed {
+		t.Fatalf("outcome = %q, want a logout the server could not carry out", result.Outcome)
+	}
+
+	if !fixture.sessionIsOpen(token) {
+		t.Error("the session was closed by a logout that failed, want the failure left where it happened")
+	}
+
+	assertOneFailureEntry(t, fixture, "the administrator session could not be ended", fixture.tokens.RevokeErr)
+}
+
 func TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.logs.Err = errors.New("no such table: logs")

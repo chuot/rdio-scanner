@@ -193,6 +193,8 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 
 	options, err := handler.options.ReadOptions(ctx)
 	if err != nil {
+		handler.reportFailure(ctx, "the login attempt could not be checked", err)
+
 		return AdminLoginResult{Outcome: AdminLoginFailed}, err
 	}
 
@@ -207,6 +209,8 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 
 	token, err := handler.tokens.Issue(ctx)
 	if err != nil {
+		handler.reportFailure(ctx, "the administrator session could not be started", err)
+
 		return AdminLoginResult{Outcome: AdminLoginFailed}, err
 	}
 
@@ -266,6 +270,17 @@ func (handler *AdminLoginHandler) forgetAttempts() {
 	for remoteAddr := range handler.attempts {
 		delete(handler.attempts, remoteAddr)
 	}
+}
+
+// reportFailure records a step of a sign-in the server could not carry out, and the failure's own text.
+//
+// The login decision is already taken by the time this runs: the caller gets the same outcome and the same
+// error it always got. What was missing was any trace that the server had been asked — a deployment whose
+// options table is broken refuses every sign-in and, until this, left no evidence of ever having been
+// approached.
+func (handler *AdminLoginHandler) reportFailure(ctx context.Context, what string, reason error) {
+	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogin,
+		fmt.Sprintf("%s: %v", what, reason))
 }
 
 func (handler *AdminLoginHandler) log(ctx context.Context, level, message string) {

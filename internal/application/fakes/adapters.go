@@ -172,6 +172,10 @@ type Tokens struct {
 
 	// Err, when set, is returned by Issue instead of a token.
 	Err error
+
+	// RevokeErr, when set, is returned by Revoke. Retiring a token is a step of its own, and a
+	// logout that cannot do it is a different failure from a login that cannot mint a token.
+	RevokeErr error
 }
 
 var _ ports.TokenIssuer = (*Tokens)(nil)
@@ -213,6 +217,10 @@ func (tokens *Tokens) Validate(ctx context.Context, token string) error {
 
 // Revoke removes a token from the rolling window.
 func (tokens *Tokens) Revoke(ctx context.Context, token string) error {
+	if tokens.RevokeErr != nil {
+		return tokens.RevokeErr
+	}
+
 	kept := []string{}
 
 	for _, held := range tokens.Window {
