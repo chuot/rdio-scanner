@@ -268,3 +268,89 @@ func TestLogEntryCarriesItsSource(t *testing.T) {
 		t.Errorf("LogEntry.Source = %q, want %q", entry.Source, LogSourceDirwatch)
 	}
 }
+
+// T003: the two new criteria. They follow the rule the existing ones follow — a criterion that is not
+// submitted is not applied — with one exception the log view depends on: a source that is not a name in
+// the vocabulary is reported, so the endpoint can refuse it instead of showing an empty log.
+func TestLogSearchHasNoSourceAndNoTextWhenNoneIsSubmitted(t *testing.T) {
+	search := ParseLogSearch(map[string]any{})
+
+	if search.HasSource() {
+		t.Error("an empty criteria must not filter by source")
+	}
+
+	if search.HasText() {
+		t.Error("an empty criteria must not filter by text")
+	}
+
+	if search.SourceWasRejected() {
+		t.Error("a criteria that names no source has nothing to refuse")
+	}
+}
+
+func TestLogSearchReadsASourceCriterion(t *testing.T) {
+	search := ParseLogSearch(map[string]any{"source": "dirwatch"})
+
+	if !search.HasSource() || search.Source != LogSourceDirwatch {
+		t.Errorf("Source = %q after submitting \"dirwatch\", want %q", search.Source, LogSourceDirwatch)
+	}
+
+	if search.SourceWasRejected() {
+		t.Error("a submitted name in the vocabulary is not a refusal")
+	}
+}
+
+func TestLogSearchReportsASourceThatIsNotAName(t *testing.T) {
+	search := ParseLogSearch(map[string]any{"source": "dirwatcher"})
+
+	if search.HasSource() {
+		t.Errorf("Source = %q, want no source applied for a name outside the vocabulary", search.Source)
+	}
+
+	if !search.SourceWasRejected() {
+		t.Error("a submitted source that is not a name must be reported, not ignored")
+	}
+}
+
+func TestLogSearchReadsATextCriterion(t *testing.T) {
+	search := ParseLogSearch(map[string]any{"text": "/data/incoming"})
+
+	if !search.HasText() || search.Text != "/data/incoming" {
+		t.Errorf("Text = %q, want %q", search.Text, "/data/incoming")
+	}
+
+	// An empty text is the log view clearing the box, not a search for the empty string.
+	if cleared := ParseLogSearch(map[string]any{"text": ""}); cleared.HasText() {
+		t.Error("an empty text must not filter anything")
+	}
+
+	// A text that is not a string is not a criterion the caller meant to apply, and is not applied.
+	if notText := ParseLogSearch(map[string]any{"text": 7}); notText.HasText() {
+		t.Errorf("Text = %q after submitting a number, want no text filter", notText.Text)
+	}
+}
+
+func TestLogSearchKeepsReadingTheCriteriaItAlreadyRead(t *testing.T) {
+	at, _ := time.Parse(time.RFC3339, "2026-03-14T09:30:00Z")
+
+	search := ParseLogSearch(map[string]any{
+		"date": "2026-03-14T09:30:00Z", "level": LogLevelWarn, "limit": float64(50),
+		"offset": float64(10), "sort": float64(-1), "source": "ingest", "text": "1514000",
+	})
+
+	if !search.HasDate() || !search.Date.Equal(at) {
+		t.Errorf("Date = %v, want the submitted instant", search.Date)
+	}
+
+	if !search.HasLevel() || search.Level != LogLevelWarn {
+		t.Errorf("Level = %q, want warn", search.Level)
+	}
+
+	if search.Limit != 50 || search.Offset != 10 || search.Ascending {
+		t.Errorf("limit/offset/sort = %d/%d/%v, want 50/10/descending", search.Limit, search.Offset, search.Ascending)
+	}
+
+	if search.Source != LogSourceIngest || search.Text != "1514000" {
+		t.Errorf("source/text = %q/%q, want ingest/1514000", search.Source, search.Text)
+	}
+}

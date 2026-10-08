@@ -127,14 +127,23 @@ type LogEntry struct {
 	Message  string
 }
 
-// LogSearch is the criteria the log view submits: which severity to keep, which day to
-// look at, how many entries to return, where to resume, and which end to start from.
+// LogSearch is the criteria the log view submits: which severity to keep, which subsystem wrote the
+// entries, which substring of the message to look for, which day to look at, how many entries to return,
+// where to resume, and which end to start from.
 type LogSearch struct {
 	Date      time.Time
 	Level     string
+	Source    LogSource
+	Text      string
 	Limit     uint
 	Offset    uint
 	Ascending bool
+
+	// sourceRejected records that the caller did name a source and that the name is not one of the
+	// parts of this server. It is kept apart from Source itself so that a search never runs with a
+	// criterion nothing can match, while the endpoint can still answer the caller with a refusal
+	// rather than an empty log view.
+	sourceRejected bool
 }
 
 // ParseLogSearch reads the criteria out of an administrator payload. Anything that does
@@ -150,6 +159,20 @@ func ParseLogSearch(m map[string]any) LogSearch {
 
 	if v, ok := m["level"].(string); ok {
 		search.Level = v
+	}
+
+	// A source is read through the vocabulary. A name that is not in it leaves no filter applied and
+	// is reported, which is the one criterion the log search does not silently ignore.
+	if named, ok := m["source"]; ok {
+		if source, valid := ParseLogSource(named); valid {
+			search.Source = source
+		} else {
+			search.sourceRejected = true
+		}
+	}
+
+	if v, ok := m["text"].(string); ok {
+		search.Text = v
 	}
 
 	if v, ok := m["limit"].(float64); ok {
@@ -170,6 +193,24 @@ func ParseLogSearch(m map[string]any) LogSearch {
 // HasLevel reports whether the criteria restricts the severity.
 func (search LogSearch) HasLevel() bool {
 	return search.Level != ""
+}
+
+// HasSource reports whether the criteria restricts the subsystem that wrote the entries.
+func (search LogSearch) HasSource() bool {
+	return search.Source != ""
+}
+
+// HasText reports whether the criteria restricts the entries to those whose message contains the
+// submitted substring.
+func (search LogSearch) HasText() bool {
+	return search.Text != ""
+}
+
+// SourceWasRejected reports whether the caller named a source that is not a part of this server. The
+// criteria carry no source filter in that case; what the caller is told is the endpoint's decision, and it
+// is a refusal rather than an empty page.
+func (search LogSearch) SourceWasRejected() bool {
+	return search.sourceRejected
 }
 
 // HasDate reports whether the criteria restricts the day.
