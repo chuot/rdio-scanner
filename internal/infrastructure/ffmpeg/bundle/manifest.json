@@ -41,8 +41,12 @@
   "targets": {
     "linux-amd64": {
       "container": "docker.io/debian:stable",
-      "packages": ["build-essential"],
-      "ldflags": ["-static"],
+      "packages": [
+        "build-essential"
+      ],
+      "ldflags": [
+        "-static"
+      ],
       "conformance": {
         "container": "",
         "packages": [],
@@ -51,46 +55,104 @@
     },
     "linux-arm64": {
       "container": "docker.io/debian:stable",
-      "packages": ["build-essential", "gcc-aarch64-linux-gnu"],
-      "cross": ["--enable-cross-compile", "--target-os=linux", "--arch=aarch64", "--cross-prefix=aarch64-linux-gnu-"],
-      "ldflags": ["-static"],
+      "packages": [
+        "build-essential",
+        "gcc-aarch64-linux-gnu",
+        "libc6-dev-arm64-cross"
+      ],
+      "cross": [
+        "--enable-cross-compile",
+        "--target-os=linux",
+        "--arch=aarch64",
+        "--cross-prefix=aarch64-linux-gnu-"
+      ],
+      "ldflags": [
+        "-static"
+      ],
       "conformance": {
         "container": "",
-        "packages": ["qemu-user-static"],
-        "run": ["qemu-aarch64"]
+        "packages": [
+          "qemu-user-static"
+        ],
+        "run": [
+          "qemu-aarch64"
+        ]
       }
     },
     "linux-arm": {
       "container": "docker.io/debian:stable",
-      "packages": ["build-essential", "gcc-arm-linux-gnueabihf"],
-      "cross": ["--enable-cross-compile", "--target-os=linux", "--arch=arm", "--cross-prefix=arm-linux-gnueabihf-"],
-      "ldflags": ["-static"],
+      "packages": [
+        "build-essential",
+        "gcc-arm-linux-gnueabihf",
+        "libc6-dev-armhf-cross"
+      ],
+      "cross": [
+        "--enable-cross-compile",
+        "--target-os=linux",
+        "--arch=arm",
+        "--cross-prefix=arm-linux-gnueabihf-"
+      ],
+      "ldflags": [
+        "-static"
+      ],
       "conformance": {
         "container": "",
-        "packages": ["qemu-user-static"],
-        "run": ["qemu-arm"]
+        "packages": [
+          "qemu-user-static"
+        ],
+        "run": [
+          "qemu-arm"
+        ]
       }
     },
     "linux-386": {
       "container": "docker.io/debian:stable",
-      "packages": ["build-essential", "gcc-multilib", "libc6-dev-i386"],
-      "cflags": ["-m32"],
-      "ldflags": ["-static", "-m32"],
+      "packages": [
+        "build-essential",
+        "gcc-multilib",
+        "libc6-dev-i386"
+      ],
+      "cflags": [
+        "-m32"
+      ],
+      "ldflags": [
+        "-static",
+        "-m32"
+      ],
       "conformance": {
         "container": "",
-        "packages": ["qemu-user-static"],
-        "run": ["qemu-i386"]
+        "packages": [
+          "qemu-user-static"
+        ],
+        "run": [
+          "qemu-i386"
+        ]
       }
     },
     "windows-amd64": {
       "container": "docker.io/alpine:latest",
-      "packages": ["build-base", "mingw-w64-gcc"],
-      "cross": ["--enable-cross-compile", "--target-os=win64", "--arch=x86_64", "--cross-prefix=x86_64-w64-mingw32-"],
-      "ldflags": ["-static", "-static-libgcc"],
+      "packages": [
+        "build-base",
+        "mingw-w64-gcc"
+      ],
+      "cross": [
+        "--enable-cross-compile",
+        "--target-os=win64",
+        "--arch=x86_64",
+        "--cross-prefix=x86_64-w64-mingw32-"
+      ],
+      "ldflags": [
+        "-static",
+        "-static-libgcc"
+      ],
       "conformance": {
         "container": "docker.io/debian:stable",
-        "packages": ["wine"],
-        "run": ["wine"]
+        "packages": [
+          "wine"
+        ],
+        "run": [
+          "wine"
+        ]
       }
     }
   }
