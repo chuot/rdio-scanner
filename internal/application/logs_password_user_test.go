@@ -23,6 +23,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -133,9 +134,9 @@ func TestSearchLogsQueryReturnsTheMatchingEntriesAndTheTotal(t *testing.T) {
 	fixture := newAdminFixture()
 
 	fixture.logs.Stored = []domain.LogEntry{
-		{DateTime: adminTime.Add(-3 * time.Hour), Level: domain.LogLevelInfo, Message: "server started"},
-		{DateTime: adminTime.Add(-2 * time.Hour), Level: domain.LogLevelWarn, Message: "invalid access code nope for ip 203.0.113.7"},
-		{DateTime: adminTime.Add(-1 * time.Hour), Level: domain.LogLevelWarn, Message: "configuration changed"},
+		{DateTime: adminTime.Add(-3 * time.Hour), Level: domain.LogLevelInfo, Source: domain.LogSourceServer, Message: "server started"},
+		{DateTime: adminTime.Add(-2 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceAccess, Message: "a listener from 203.0.113.7 presented an access code that is not valid"},
+		{DateTime: adminTime.Add(-1 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceConfig, Message: "the configuration changed"},
 	}
 
 	page, err := fixture.searchLogs.Handle(context.Background(), SearchLogsQuery{
@@ -153,7 +154,7 @@ func TestSearchLogsQueryReturnsTheMatchingEntriesAndTheTotal(t *testing.T) {
 		t.Fatalf("results = %d, want the limit applied to the rows", len(page.Results))
 	}
 
-	if page.Results[0].Message != "invalid access code nope for ip 203.0.113.7" {
+	if page.Results[0].Message != "a listener from 203.0.113.7 presented an access code that is not valid" {
 		t.Errorf("results = %v, want the oldest matching entry first for an ascending search", page.Results)
 	}
 
@@ -182,17 +183,21 @@ func TestSearchLogsRecordsTheFailureItCouldNotAnswerWith(t *testing.T) {
 	var recorded bool
 
 	for _, entry := range fixture.logs.Stored {
-		if entry.Message == err.Error() {
+		if entry.Message == fmt.Sprintf("the log search failed: %v", err) {
 			recorded = true
 
 			if entry.Level != domain.LogLevelError {
 				t.Errorf("the failure is recorded at level %q, want an error", entry.Level)
 			}
+
+			if entry.Source != domain.LogSourceLogs {
+				t.Errorf("the failure is filed under %q, want it filed with the log view", entry.Source)
+			}
 		}
 	}
 
 	if !recorded {
-		t.Errorf("the failure to read the log view is not in the log view: %v", fixture.logs.Stored)
+		t.Errorf("the failure to read the log view is not in the log view naming what failed: %v", fixture.logs.Stored)
 	}
 }
 

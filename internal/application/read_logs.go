@@ -22,6 +22,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -56,13 +57,14 @@ func NewSearchLogsHandler(logs ports.LogRepository, clock ports.Clock) *SearchLo
 
 // Handle returns the matching entries and the total the criteria matches.
 //
-// A search the store cannot answer is recorded with the failure's own text and nothing added to it, which
-// is how the legacy server recorded it: the failure already names the statement that failed, and a prefix
-// would only make the two servers' log lines differ.
+// A search the store cannot answer is recorded in the same view it was asked for. The failure's own text is
+// kept after the sentence, because it names the statement that failed and that is the part an operator needs;
+// the sentence in front of it is what tells the entry apart from every other failure in the log, and it is
+// what the log view can filter on.
 func (handler *SearchLogsHandler) Handle(ctx context.Context, query SearchLogsQuery) (ports.LogSearchPage, error) {
 	page, err := handler.logs.SearchLogs(ctx, query.Search)
 	if err != nil {
-		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogs, err.Error())
+		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogs, fmt.Sprintf("the log search failed: %v", err))
 
 		return ports.LogSearchPage{}, err
 	}
