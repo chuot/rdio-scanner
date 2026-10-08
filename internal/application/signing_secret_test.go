@@ -25,15 +25,35 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/domain"
 )
 
-func newSigningSecretFixture(stored string) (*EnsureAdminSigningSecretHandler, *fakes.Options) {
-	options := &fakes.Options{Stored: domain.Options{Secret: stored}}
+// signingSecretFixture is the signing-secret step together with the server log it reports to and the
+// instant it stamps an entry with. The step writes to the log the way the other startup steps do, so a
+// test of what it decided and a test of what it said are the same fixture.
+type signingSecretFixture struct {
+	options *fakes.Options
+	logs    *fakes.Logs
+	clock   *fakes.Clock
 
-	return NewEnsureAdminSigningSecretHandler(options, options), options
+	handler *EnsureAdminSigningSecretHandler
+}
+
+var signingSecretTime = time.Date(2026, 4, 2, 6, 30, 0, 0, time.UTC)
+
+func newSigningSecretFixture(stored string) *signingSecretFixture {
+	options := &fakes.Options{Stored: domain.Options{Secret: stored}}
+	logs := &fakes.Logs{}
+
+	return &signingSecretFixture{
+		options: options,
+		logs:    logs,
+		clock:   fakes.NewClock(signingSecretTime),
+		handler: NewEnsureAdminSigningSecretHandler(options, options, logs, fakes.NewClock(signingSecretTime)),
+	}
 }
 
 // TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone is the repaired half of Q66: a server
@@ -41,9 +61,10 @@ func newSigningSecretFixture(stored string) (*EnsureAdminSigningSecretHandler, *
 // is the key the database holds and the next start finds it. See
 // docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
 func TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone(t *testing.T) {
-	handler, options := newSigningSecretFixture("")
+	fixture := newSigningSecretFixture("")
+	options := fixture.options
 
-	result, err := handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
@@ -69,9 +90,10 @@ func TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone(t *testing.T)
 // case: a stored secret of the wrong length cannot sign a token, and the replacement is written down
 // rather than used once and forgotten.
 func TestEnsureAdminSigningSecretReplacesAStoredSecretTheServerCannotSignWith(t *testing.T) {
-	handler, options := newSigningSecretFixture("legacy secret value")
+	fixture := newSigningSecretFixture("legacy secret value")
+	options := fixture.options
 
-	result, err := handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
@@ -90,9 +112,10 @@ func TestEnsureAdminSigningSecretReplacesAStoredSecretTheServerCannotSignWith(t 
 func TestEnsureAdminSigningSecretLeavesAStoredSecretAlone(t *testing.T) {
 	kept := strings.Repeat("a", domain.SecretLength)
 
-	handler, options := newSigningSecretFixture(kept)
+	fixture := newSigningSecretFixture(kept)
+	options := fixture.options
 
-	result, err := handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
@@ -108,15 +131,20 @@ func TestEnsureAdminSigningSecretLeavesAStoredSecretAlone(t *testing.T) {
 	if options.Stored.Secret != kept {
 		t.Errorf("the options hold %q, want the stored secret kept exactly", options.Stored.Secret)
 	}
+
+	if len(fixture.logs.Stored) != 0 {
+		t.Errorf("server log = %v, want a secret that was already on record to say nothing", fixture.logs.Stored)
+	}
 }
 
 // TestEnsureAdminSigningSecretReportsASecretItCouldNotPutOnRecord keeps the failure visible: a secret
 // that was made but not stored is a secret the next start will not find.
 func TestEnsureAdminSigningSecretReportsASecretItCouldNotPutOnRecord(t *testing.T) {
-	handler, options := newSigningSecretFixture("")
+	fixture := newSigningSecretFixture("")
+	options := fixture.options
 	options.SecretErr = errors.New("the options table is read-only")
 
-	result, err := handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
 
 	if err == nil {
 		t.Fatal("Handle reported no failure, want the store's failure returned")
@@ -134,10 +162,11 @@ func TestEnsureAdminSigningSecretReportsASecretItCouldNotPutOnRecord(t *testing.
 // TestEnsureAdminSigningSecretReportsOptionsItCouldNotRead is the other way the step can fail before
 // it decides anything.
 func TestEnsureAdminSigningSecretReportsOptionsItCouldNotRead(t *testing.T) {
-	handler, options := newSigningSecretFixture("")
+	fixture := newSigningSecretFixture("")
+	options := fixture.options
 	options.Err = errors.New("the options table is not there")
 
-	result, err := handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
 
 	if err == nil {
 		t.Fatal("Handle reported no failure, want the read's failure returned")
@@ -151,9 +180,10 @@ func TestEnsureAdminSigningSecretReportsOptionsItCouldNotRead(t *testing.T) {
 // TestEnsureAdminSigningSecretCarriesNoCredential keeps the acknowledgement an acknowledgement: the
 // secret the server signs with never leaves the handler.
 func TestEnsureAdminSigningSecretCarriesNoCredential(t *testing.T) {
-	handler, options := newSigningSecretFixture("")
+	fixture := newSigningSecretFixture("")
+	options := fixture.options
 
-	result, err := handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
 	if err != nil {
 		t.Fatalf("Handle: %v", err)
 	}
@@ -168,5 +198,54 @@ func TestEnsureAdminSigningSecretCarriesNoCredential(t *testing.T) {
 
 	if len(options.Secrets) != 1 {
 		t.Errorf("stored secrets = %v, want the secret handed to the store and nowhere else", options.Secrets)
+	}
+}
+
+// TestANewSigningSecretIsRecordedAsTheEndOfEverySessionBeforeIt is the line the legacy server printed on
+// a terminal and never stored. A secret that changes ends every administrator session signed with the
+// previous one, so "everybody was logged out at six thirty" is a question this entry answers — but only if
+// it is in the log the operator can search.
+func TestANewSigningSecretIsRecordedAsTheEndOfEverySessionBeforeIt(t *testing.T) {
+	fixture := newSigningSecretFixture("")
+
+	result, err := fixture.handler.Handle(context.Background(), EnsureAdminSigningSecretCommand{})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != AdminSigningSecretStored {
+		t.Fatalf("outcome = %q, want the secret made and stored", result.Outcome)
+	}
+
+	wrote := fixture.logs.Stored
+
+	if len(wrote) != 1 {
+		t.Fatalf("server log = %v, want one entry saying the server made a new secret", wrote)
+	}
+
+	entry := wrote[0]
+
+	if entry.Source != domain.LogSourceAdmin {
+		t.Errorf("entry source = %q, want %q", entry.Source, domain.LogSourceAdmin)
+	}
+
+	if entry.Level != domain.LogLevelWarn {
+		t.Errorf("entry level = %q, want a warning: the sessions signed with the secret it replaces stop "+
+			"working", entry.Level)
+	}
+
+	const message = "the server generated a new administrator signing secret, which ends every session that " +
+		"was open before it"
+
+	if entry.Message != message {
+		t.Errorf("entry message = %q, want %q", entry.Message, message)
+	}
+
+	if got := entry.DateTime; !got.Equal(signingSecretTime) {
+		t.Errorf("entry stamped %v, want the instant the server made the secret", got)
+	}
+
+	if strings.Contains(entry.Message, fixture.options.Secrets[0]) {
+		t.Error("the entry names the secret it is reporting on, want the fact and not the credential")
 	}
 }

@@ -73,6 +73,10 @@
   ],
   "logs": [
     {
+      "level": "warn",
+      "message": "the server generated a new administrator signing secret, which ends every session that was open before it"
+    },
+    {
       "level": "info",
       "message": "a listener joined from 127.0.0.1"
     },

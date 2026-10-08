@@ -24,6 +24,7 @@ import (
 	"context"
 
 	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 )
 
 // AdminSigningSecretOutcome reports what the server decided about its signing secret.
@@ -62,19 +63,29 @@ type EnsureAdminSigningSecretCommand struct{}
 // key, and a legacy database holding a short secret got a different key on every start, killing every
 // token issued before it. The read no longer makes secrets; this step does, once, and stores what it
 // makes. See docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+//
+// Making one is reported, because it is the fact behind every session that stopped working at that
+// moment: the tokens issued under the secret it replaces no longer verify.
 type EnsureAdminSigningSecretHandler struct {
 	options ports.OptionsRepository
 	secrets ports.SigningSecretStore
+	logs    ports.LogRepository
+	clock   ports.Clock
 }
 
-// NewEnsureAdminSigningSecretHandler builds the handler from its ports.
+// NewEnsureAdminSigningSecretHandler builds the handler from the ports it needs: the configuration it
+// reads its secret from, the record it stores a new one in, and the server log it reports a new one to.
 func NewEnsureAdminSigningSecretHandler(
 	options ports.OptionsRepository,
 	secrets ports.SigningSecretStore,
+	logs ports.LogRepository,
+	clock ports.Clock,
 ) *EnsureAdminSigningSecretHandler {
 	return &EnsureAdminSigningSecretHandler{
 		options: options,
 		secrets: secrets,
+		logs:    logs,
+		clock:   clock,
 	}
 }
 
@@ -98,6 +109,11 @@ func (handler *EnsureAdminSigningSecretHandler) Handle(ctx context.Context, cmd 
 	if err := handler.secrets.StoreSecret(ctx, options.Secret); err != nil {
 		return EnsureAdminSigningSecretResult{Outcome: AdminSigningSecretFailed}, err
 	}
+
+	// The entry is written after the secret is on record, because the entry says the secret exists: a
+	// step that made one and could not store it has not generated the thing this line reports.
+	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelWarn, domain.LogSourceAdmin,
+		"the server generated a new administrator signing secret, which ends every session that was open before it")
 
 	return EnsureAdminSigningSecretResult{Outcome: AdminSigningSecretStored}, nil
 }

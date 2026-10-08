@@ -313,7 +313,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 	// it on record. It is built here because it needs the options adapter, and it is run by start after the
 	// configuration has been read: the options the step decides about are the ones the server is running
 	// with, and a step that read them before the start sequence had loaded them would decide about nothing.
-	s.signing = application.NewEnsureAdminSigningSecretHandler(options, options)
+	s.signing = application.NewEnsureAdminSigningSecretHandler(options, options, s.logs, s.clock)
 
 	s.settings = &listenerSettings{accesses: accesses, options: options}
 
@@ -462,13 +462,10 @@ func (s *server) start(ctx context.Context) error {
 	// keys at every start and killed every session issued before it. This step makes a key once and puts it
 	// on record, after the configuration has been read and before anything is answered from it. See
 	// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
-	result, err := s.signing.Handle(ctx, application.EnsureAdminSigningSecretCommand{})
-	if err != nil {
+	// The secret is the server's own, and the step reports to the server log what it decided about it:
+	// the composition root says that entry out loud the way it says every other one.
+	if _, err := s.signing.Handle(ctx, application.EnsureAdminSigningSecretCommand{}); err != nil {
 		return err
-	}
-
-	if result.Outcome == application.AdminSigningSecretStored {
-		s.console.println("generated a new signing secret")
 	}
 
 	// The calls this server was holding when it last stopped are picked up here, which is where the

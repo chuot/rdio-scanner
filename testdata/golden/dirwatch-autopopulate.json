@@ -43,6 +43,10 @@
   ],
   "logs": [
     {
+      "level": "warn",
+      "message": "the server generated a new administrator signing secret, which ends every session that was open before it"
+    },
+    {
       "level": "info",
       "message": "call from system 1 talkgroup 1514000 success, first.wav"
     },

@@ -1069,6 +1069,40 @@ func TestServerReplacesAStoredSecretItCannotSignWith(t *testing.T) {
 	}
 }
 
+// TestANewSigningSecretIsFiledAndSaidOutLoud is the line the legacy server printed on a terminal and never
+// stored. A secret that changes ends every administrator session signed with the previous one, so this entry
+// is what turns "everybody was logged out at six thirty" into a question the log view can answer.
+func TestANewSigningSecretIsFiledAndSaidOutLoud(t *testing.T) {
+	base := t.TempDir()
+
+	console := &consoleCapture{}
+
+	srv, err := newServer(testConfigIn(base), console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	const message = "the server generated a new administrator signing secret, which ends every session that " +
+		"was open before it"
+
+	if !hasLogMessage(t, srv.db, message) {
+		t.Errorf("the log view does not record the signing secret the server had to make")
+	}
+
+	if got := logSourceOfMessage(t, srv.db, message); got != "admin" {
+		t.Errorf("the new signing secret is filed under %q, want %q", got, "admin")
+	}
+
+	if !strings.Contains(console.String(), "warn admin: "+message) {
+		t.Errorf("the terminal holds %q, want the new secret said with its level and the part of the server "+
+			"that wrote it", console.String())
+	}
+}
+
 // TestServerKeepsTheSigningSecretItPutOnRecord is what the repair is for: the second start on the same
 // database finds the key the first one made, and renewing it in place writes no further row.
 func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
@@ -1104,6 +1138,17 @@ func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
 
 	if options.Secret != secret {
 		t.Errorf("the second start is signing with a secret that is not the one on record")
+	}
+
+	// The second start found the secret already on record, so it has nothing to report: the entry is
+	// written by the step that makes a secret, not by the step that looks for one.
+	const mentions = `SELECT COUNT(*) FROM "logs" WHERE "message" = '` +
+		"the server generated a new administrator signing secret, which ends every session that was open before it" +
+		`'`
+
+	if got := countRows(t, second.db, mentions); got != 1 {
+		t.Errorf("the log view mentions a new signing secret %d times after two starts, want once: the first "+
+			"start made the secret and the second found it already there", got)
 	}
 }
 
