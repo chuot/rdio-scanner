@@ -159,8 +159,9 @@ func (delayer *Delayer) Restore(ctx context.Context) error {
 		if err != nil {
 			// A hold that cannot be written down again is reported and left, which is what the legacy
 			// does with it: one call that will not wait is not a reason for the server to stop starting.
-			// The failure already names the part of the delayer that hit it.
-			delayer.logf(ctx, domain.LogLevelError, "%s", err.Error())
+			// The line says what the delayer was trying to do, and the failure's own text names the step
+			// that hit it.
+			delayer.logf(ctx, domain.LogLevelError, "a held call could not be put back on hold: %s", err.Error())
 
 			continue
 		}
@@ -249,7 +250,7 @@ func (delayer *Delayer) finished(ctx context.Context, call domain.Call) {
 		// A hold that will not be cleared is reported and the call is delivered anyway. The call was
 		// recorded and its hold is over; a row that is left behind is not a reason to keep a finished
 		// recording from the operators who were waiting for it.
-		delayer.logf(ctx, domain.LogLevelError, "delayer.pop: %s", err.Error())
+		delayer.logf(ctx, domain.LogLevelError, "the held calls could not be released: %s", err.Error())
 	}
 
 	call.Delayed = true
@@ -271,6 +272,9 @@ func (delayer *Delayer) deliver(call domain.Call) {
 
 // logf writes one line to the server log. These lines are the server's log and not its console: a
 // hold that went wrong is something an administrator reads afterwards.
+//
+// Every one of them is filed under the delayer, because the delayer is the part of the server they are
+// about: the log view filters on it, and a line that does not name its author cannot be found by it.
 func (delayer *Delayer) logf(ctx context.Context, level, format string, args ...any) {
 	if delayer.logs == nil {
 		return
@@ -279,6 +283,7 @@ func (delayer *Delayer) logf(ctx context.Context, level, format string, args ...
 	delayer.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: delayer.clock.Now(),
 		Level:    level,
+		Source:   domain.LogSourceDelayer,
 		Message:  fmt.Sprintf(format, args...),
 	})
 }

@@ -199,8 +199,49 @@ func TestAHoldThatCannotBeClearedIsReportedAndTheCallStillDelivered(t *testing.T
 		t.Errorf("the failure was written at level %q, want an error", reported[0].Level)
 	}
 
-	if reported[0].Message != "delayer.pop: the row will not go away" {
-		t.Errorf("the failure was written as %q, want the legacy server's own line", reported[0].Message)
+	if reported[0].Source != domain.LogSourceDelayer {
+		t.Errorf("the failure was written under %q, want it filed with the part of the server that holds calls back", reported[0].Source)
+	}
+
+	if reported[0].Message != "the held calls could not be released: the row will not go away" {
+		t.Errorf("the failure was written as %q, want what the delayer was trying to do and the failure's own text after it", reported[0].Message)
+	}
+}
+
+// A hold that was written down before the server stopped cannot be written down again at startup. It is
+// reported and left, because one call that will not wait is not a reason for the server to stop starting.
+func TestAStoredHoldThatCannotBeWrittenDownAgainIsReported(t *testing.T) {
+	fixture := newDelayerFixture()
+
+	fixture.delayed.Stored = []ports.DelayedCall{{CallID: 8, Timestamp: heldAt.Add(2 * time.Minute)}}
+
+	fixture.calls.Stored[8] = heldCall(8, heldAt.Add(-1*time.Minute), 3)
+
+	// The waiting list can be read but not written to again.
+	refusing := New(Deps{
+		Delayed:   &unwritableDelayed{DelayedCalls: fixture.delayed},
+		Calls:     fixture.calls,
+		Scheduler: fixture.scheduler,
+		Clock:     fixture.clock,
+		Logs:      fixture.logs,
+	})
+
+	if err := refusing.Restore(context.Background()); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+
+	reported := fixture.logs.Recorded()
+
+	if len(reported) != 1 {
+		t.Fatalf("the server wrote %d lines about the hold it could not write down again, want one: %v", len(reported), reported)
+	}
+
+	if reported[0].Source != domain.LogSourceDelayer {
+		t.Errorf("the failure was written under %q, want it filed with the part of the server that holds calls back", reported[0].Source)
+	}
+
+	if reported[0].Message != "a held call could not be put back on hold: delayer.delay: the row will not be written" {
+		t.Errorf("the failure was written as %q, want what the delayer was trying to do and the failure's own text after it", reported[0].Message)
 	}
 }
 
@@ -415,4 +456,14 @@ type stuckDelayed struct {
 
 func (stuck *stuckDelayed) UnscheduleDelayed(ctx context.Context, callID uint64) error {
 	return errors.New("the row will not go away")
+}
+
+// unwritableDelayed is a waiting list that can be read but never written to again, which is the failure a
+// stored hold meets when the server starts up.
+type unwritableDelayed struct {
+	*fakes.DelayedCalls
+}
+
+func (unwritable *unwritableDelayed) ScheduleDelayed(ctx context.Context, callID uint64, until time.Time) error {
+	return errors.New("the row will not be written")
 }
