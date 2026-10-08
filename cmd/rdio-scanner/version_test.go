@@ -30,6 +30,21 @@ import (
 	"rdio-scanner/internal/buildinfo"
 )
 
+// captureVersion is the version the server that produced the pinned captures reported.
+//
+// The parity tests in this package compare bytes against testdata/golden/, and the version a build
+// injects is a fact about the build, not a fact about a capture. So the tests name the release they
+// compare against instead of inheriting it from whatever the binary being compiled happens to carry:
+// a development build reporting `dev` still compares its bytes against a capture taken from 8.0.0,
+// which is what it is doing.
+const captureVersion = "8.0.0"
+
+func TestMain(m *testing.M) {
+	Version = captureVersion
+
+	os.Exit(m.Run())
+}
+
 func TestVersionModePrintsVersionAndExitsWithoutError(t *testing.T) {
 	var out bytes.Buffer
 
@@ -56,16 +71,20 @@ func TestVersionMatchesThePinnedWireContract(t *testing.T) {
 	// Comparing against the contract is what comparing against the legacy source was for, and it
 	// does not reach into a directory that is no longer here.
 	//
-	// The comparison is between cores. A build carries a prerelease and a commit hash to say which
-	// build of a release it is, and neither is a different release: a development build satisfies the
-	// same contract a tagged release does, and only a different core breaks it.
-	resolved, err := buildinfo.CoreOf(Version)
+	// What is compared is the core the build system resolves from VERSION.txt, not the value compiled
+	// into the binary being tested: a binary built without the tool reports the development fallback,
+	// and a fallback is not a release a contract can pin. The core is the only part of a version a
+	// pinned capture can pin, and it is the part VERSION.txt declares.
+	//
+	// A release moves this test deliberately. Moving VERSION.txt without moving the captures that
+	// carry the version is the drift this test exists to catch.
+	resolved, err := buildinfo.ReadCore(filepath.Join("..", "..", "VERSION.txt"))
 	if err != nil {
-		t.Fatalf("Version = %q is not a version a client can compare: %v", Version, err)
+		t.Fatalf("VERSION.txt at the repository root: %v", err)
 	}
 
 	if pinned := pinnedWireCore(t); resolved != pinned {
-		t.Errorf("this build reports the core %q, and the pinned wire contract reports %q", resolved, pinned)
+		t.Errorf("VERSION.txt resolves the core %q, and the pinned wire contract reports %q: a release moves both, or neither", resolved, pinned)
 	}
 }
 

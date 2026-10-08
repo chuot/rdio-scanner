@@ -17,13 +17,15 @@
 
 app := rdio-scanner
 date := 2026/05/16
-ver := 7.0.0-dev
+# The version this repository builds, read from the one place it is declared. GNU Make reads the file
+# itself: no shell is started, and the value comes back without the trailing newline.
+ver := $(file < VERSION.txt)
 
 clientSrc := $(wildcard internal/presentation/clients/*.json internal/presentation/clients/*.mjs) \
 	$(shell find internal/presentation/clients/scanner internal/presentation/clients/admin internal/presentation/clients/shared -type f)
 server := $(shell find cmd internal -type f -name '*.go')
 
-build = @GOOS=$(1) GOARCH=$(3) go build -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner
+build = @GOOS=$(1) GOARCH=$(3) go build -ldflags "-X main.Version=$(ver)" -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 
@@ -40,13 +42,11 @@ clean:
 	@find internal/presentation/serving/scanner/bundle internal/presentation/serving/admin/bundle -mindepth 1 -not -name .gitkeep -delete
 
 container: client linux-amd64
-	@podman build --pull -t $(app):latest .
+	@podman build --pull --build-arg VERSION=$(ver) -t $(app):latest .
 
 dist: freebsd linux macos windows
 
 sed:
-	@sed -i -re "s|^(\s*\"version\":).*$$|\1 \"$(ver)\"|" internal/presentation/clients/package.json
-	@sed -i -re "s|^(const\s+Version\s+=).*$$|\1 \"$(ver)\"|" cmd/rdio-scanner/version.go
 	@sed -i -re "s|v[0-9]+\.[0-9]+\.[0-9]+|v$(ver)|" COMPILING.md README.md docs/docker/README.md docs/platforms/*.md
 	@sed -i -re "s|[0-9]{4}/[0-9]{2}/[0-9]{2}|$(date)|" docs/docker/README.md docs/platforms/*.md
 

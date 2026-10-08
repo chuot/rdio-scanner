@@ -27,7 +27,11 @@
 // speak to — including the version it reports, which is pinned in testdata/golden/.
 package main
 
-// Version is the release version this binary reports. `make sed` stamps it from the
-// Makefile's `ver :=`; the value committed here is the one the pinned wire contract
-// carries, and TestVersionMatchesThePinnedWireContract holds the two together.
-const Version = "8.0.0"
+// Version is the release version this binary reports. cmd/build replaces it at build time with
+// -ldflags -X main.Version=<version>, where the tool resolves the version from VERSION.txt and git.
+//
+// A binary built by any other route reports this fallback, and reports it in its banner: `dev` is not
+// a version any release ever had, which is the point. It is not a version a pinned wire contract can
+// pin either, which is why TestVersionMatchesThePinnedWireContract compares the core the build system
+// resolves rather than the value compiled into the binary it happens to be running.
+var Version = "dev"
