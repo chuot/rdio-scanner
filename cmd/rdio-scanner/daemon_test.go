@@ -93,10 +93,14 @@ func TestAServerAnOperatorStartedSaysItsLogEntriesToTheTerminal(t *testing.T) {
 		t.Fatalf("AppendLog: %v", err)
 	}
 
-	if !bytes.Contains(terminal.Bytes(), []byte(message)) {
-		t.Errorf("the terminal holds %q, want the log entry the server wrote", terminal.String())
+	if !bytes.Contains(terminal.Bytes(), []byte("error calls: the recording could not be stored")) {
+		t.Errorf("the terminal holds %q, want the entry said with its level and the part of the server that "+
+			"wrote it", terminal.String())
 	}
 
+	// The stored copy is the sentence on its own. The level and the source belong to the rendering, not to
+	// what the log view holds, and an operator filtering the log view by subsystem must not have to know how
+	// the terminal prints it.
 	if !hasLogMessage(t, srv.db, message) {
 		t.Errorf("the log view does not hold the entry the server wrote")
 	}
@@ -124,8 +128,9 @@ func TestAServerTheServiceManagerStartedSaysItsLogEntriesToTheManager(t *testing
 		t.Fatalf("AppendLog: %v", err)
 	}
 
-	if !manager.has(domain.LogLevelError, message) {
-		t.Errorf("the service manager's log holds %q, want the log entry at the level it names", manager.String())
+	if !manager.has(domain.LogLevelError, "error calls: the recording could not be stored") {
+		t.Errorf("the service manager's log holds %q, want the entry at the level it names, with the part of "+
+			"the server that wrote it", manager.String())
 	}
 
 	if terminal.Len() != 0 {
@@ -147,15 +152,15 @@ func TestTheServiceLogTakesEachEntryAtTheLevelItIsFiledUnder(t *testing.T) {
 
 	log := serviceLog{logger: manager}
 
-	log.echo(domain.LogLevelError, "the recording could not be stored")
-	log.echo(domain.LogLevelWarn, "the watched directory is not there")
-	log.echo(domain.LogLevelInfo, "server started")
-	log.echo("verbose", "an entry filed under a level the manager has no word for")
+	log.echo(domain.LogLevelError, domain.LogSourceCalls, "the recording could not be stored")
+	log.echo(domain.LogLevelWarn, domain.LogSourceDirwatch, "the watched directory is not there")
+	log.echo(domain.LogLevelInfo, domain.LogSourceServer, "server started")
+	log.echo("verbose", domain.LogSourceServer, "an entry filed under a level the manager has no word for")
 
 	for _, want := range []struct{ level, message string }{
-		{domain.LogLevelError, "the recording could not be stored"},
-		{domain.LogLevelWarn, "the watched directory is not there"},
-		{domain.LogLevelInfo, "server started"},
+		{domain.LogLevelError, "error calls: the recording could not be stored"},
+		{domain.LogLevelWarn, "warn dirwatch: the watched directory is not there"},
+		{domain.LogLevelInfo, "info server: server started"},
 	} {
 		if !manager.has(want.level, want.message) {
 			t.Errorf("the service manager's log holds %q, want %q at the level %s", manager.String(), want.message, want.level)

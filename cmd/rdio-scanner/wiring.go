@@ -79,13 +79,27 @@ func (console *consoleLog) Write(b []byte) (int, error) {
 // reads. A server an operator is watching says them to the terminal; a server running as a service says them
 // to the service manager, which is what an operator of that deployment reads.
 type logEcho interface {
-	echo(level, message string)
+	echo(level string, source domain.LogSource, message string)
 }
 
-// echo is the terminal's copy of a log entry. The level is not said: the legacy server's console copy is the
-// message on its own, with the moment in front of it, whatever level the entry is filed under.
-func (console *consoleLog) echo(level, message string) {
-	console.println(message)
+// renderLogEntry is the operator's copy of a stored entry: the level it is filed under, the part of the
+// server that wrote it, then what happened.
+//
+// This is the shape an operator of a deployment that never opens the web log view greps for — `journalctl
+// -u rdio-scanner | grep dirwatch` — which is what carries the subsystem split to the deployments this
+// feature exists for.
+//
+// It is a rendering and not what the log view holds. The stored message says what happened and nothing else,
+// so filtering the log view by subsystem never depends on how one particular copy of it happens to be printed.
+func renderLogEntry(level string, source domain.LogSource, message string) string {
+	return level + " " + string(source) + ": " + message
+}
+
+// echo is the terminal's copy of a log entry. The legacy server's console copy is the message on its own,
+// with the moment in front of it and no level, so an operator watching a terminal saw the same line for an
+// info and an error.
+func (console *consoleLog) echo(level string, source domain.LogSource, message string) {
+	console.println(renderLogEntry(level, source, message))
 }
 
 var _ logEcho = (*consoleLog)(nil)
@@ -107,7 +121,7 @@ type loggedEvents struct {
 var _ ports.LogRepository = (*loggedEvents)(nil)
 
 func (events *loggedEvents) AppendLog(ctx context.Context, entry domain.LogEntry) error {
-	events.echo.echo(entry.Level, entry.Message)
+	events.echo.echo(entry.Level, entry.Source, entry.Message)
 
 	return events.logs.AppendLog(ctx, entry)
 }

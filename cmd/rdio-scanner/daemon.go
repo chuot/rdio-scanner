@@ -157,15 +157,17 @@ type serviceLog struct {
 
 var _ logEcho = serviceLog{}
 
-func (log serviceLog) echo(level, message string) {
+func (log serviceLog) echo(level string, source domain.LogSource, message string) {
+	line := renderLogEntry(level, source, message)
+
 	switch level {
 	case domain.LogLevelError:
-		log.logger.Error(message)
+		log.logger.Error(line)
 
 	case domain.LogLevelWarn:
-		log.logger.Warning(message)
+		log.logger.Warning(line)
 
 	case domain.LogLevelInfo:
-		log.logger.Info(message)
+		log.logger.Info(line)
 	}
 }
