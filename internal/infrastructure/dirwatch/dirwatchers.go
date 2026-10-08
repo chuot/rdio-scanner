@@ -141,7 +141,7 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 		}
 
 		if err := w.start(run); err != nil {
-			watchers.log(ctx, domain.LogLevelError, fmt.Sprintf("dirwatches.start: %s", err.Error()))
+			watchers.log(ctx, domain.LogLevelError, fmt.Sprintf("the directory watchers could not start: %s", err.Error()))
 
 			continue
 		}
@@ -153,11 +153,13 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 }
 
 // log writes one line to the administrator's log, which is the only place a watcher ever
-// reports anything.
+// reports anything. Every line a watcher writes is about the directory watchers, and the lines
+// name the directory they are about because the failure's own text names only the syscall.
 func (watchers *Dirwatchers) log(ctx context.Context, level, message string) {
 	if err := watchers.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: watchers.clock.Now(),
 		Level:    level,
+		Source:   domain.LogSourceDirwatch,
 		Message:  message,
 	}); err != nil {
 		// A log entry that cannot be written is the end of the reporting: a watcher has
@@ -238,7 +240,7 @@ func (w *watch) loop(ctx context.Context) {
 		// ingested from this directory.
 		if recovered := recover(); recovered != nil {
 			if err, ok := recovered.(error); ok {
-				w.log(ctx, domain.LogLevelError, err.Error())
+				w.log(ctx, domain.LogLevelError, fmt.Sprintf("the watcher for %s stopped unexpectedly: %s", w.dirwatch.Directory, err.Error()))
 			}
 		}
 
@@ -259,7 +261,7 @@ func (w *watch) loop(ctx context.Context) {
 
 		case err, ok := <-w.watcher.Errors:
 			if ok {
-				w.log(ctx, domain.LogLevelError, fmt.Sprintf("dirwatch.watcher: %s", err.Error()))
+				w.log(ctx, domain.LogLevelError, fmt.Sprintf("the watcher for %s stopped: %s", w.dirwatch.Directory, err.Error()))
 			}
 
 			// The legacy ends the loop on a notification failure rather than carrying on
@@ -278,7 +280,7 @@ func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
 			// nothing in it is read: a recording that was already in a directory that was
 			// already there is not a recording that just arrived.
 			if err := w.registerBelow(ctx, event.Name); err != nil {
-				w.log(ctx, domain.LogLevelError, fmt.Sprintf("dirwatch.watcher: %s", err.Error()))
+				w.log(ctx, domain.LogLevelError, fmt.Sprintf("the directory %s could not be watched: %s", event.Name, err.Error()))
 			}
 
 			return
@@ -296,7 +298,7 @@ func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
 		}
 
 		if err := w.watcher.Remove(event.Name); err != nil {
-			w.log(ctx, domain.LogLevelError, fmt.Sprintf("dirwatch.watcher: %s", err.Error()))
+			w.log(ctx, domain.LogLevelError, fmt.Sprintf("the directory %s could not be unwatched: %s", event.Name, err.Error()))
 
 			return
 		}
@@ -348,7 +350,7 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			if err, ok := recovered.(error); ok {
-				w.log(ctx, domain.LogLevelError, err.Error())
+				w.log(ctx, domain.LogLevelError, fmt.Sprintf("the directory %s could not be read at startup: %s", w.dirwatch.Directory, err.Error()))
 			}
 		}
 	}()
@@ -382,7 +384,7 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 
 		return nil
 	}); err != nil {
-		w.log(ctx, domain.LogLevelError, fmt.Sprintf("dirwatch.walkdir: %s", err.Error()))
+		w.log(ctx, domain.LogLevelError, fmt.Sprintf("the directory %s could not be read: %s", w.dirwatch.Directory, err.Error()))
 	}
 }
 
@@ -425,7 +427,7 @@ func (w *watch) ingest(ctx context.Context, path string) {
 	extracted, recognized, err := w.parsers.Extract(ctx, w.dirwatch, path)
 
 	if err != nil {
-		w.log(ctx, domain.LogLevelWarn, fmt.Sprintf("dirwatch.ingest: %s, %s", err.Error(), path))
+		w.log(ctx, domain.LogLevelWarn, fmt.Sprintf("the recording %s could not be ingested: %s", path, err.Error()))
 
 		return
 	}
@@ -446,7 +448,7 @@ func (w *watch) ingest(ctx context.Context, path string) {
 	// call over and deletes the recording before it knows what became of the call.
 	for _, file := range extracted.Files {
 		if err := os.Remove(file); err != nil {
-			w.log(ctx, domain.LogLevelWarn, fmt.Sprintf("dirwatch.ingest: %s, %s", err.Error(), path))
+			w.log(ctx, domain.LogLevelWarn, fmt.Sprintf("the recording %s could not be ingested: %s", path, err.Error()))
 
 			return
 		}

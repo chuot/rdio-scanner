@@ -63,6 +63,11 @@ type ingestRecorder struct {
 	// take is told about.
 	rejects error
 
+	// panics makes the ingest path panic, which is how the guard that catches a panic in the
+	// first pass over a watched directory is exercised. The panic is a value the guard can name,
+	// because that is what a panic in this server carries: the error the code was holding.
+	panics error
+
 	mutex    sync.Mutex
 	recorded []domain.Call
 }
@@ -76,6 +81,10 @@ var _ IngestSink = (*ingestRecorder)(nil)
 func (recorder *ingestRecorder) IngestCall(ctx context.Context, call domain.Call) error {
 	if recorder.rejects != nil {
 		return recorder.rejects
+	}
+
+	if recorder.panics != nil {
+		panic(recorder.panics)
 	}
 
 	recorder.mutex.Lock()
@@ -142,6 +151,14 @@ func watching(t *testing.T, configure func(domain.Dirwatch) domain.Dirwatch) *wa
 func watchingOver(t *testing.T, directory string, configure func(domain.Dirwatch) domain.Dirwatch) *watchedDirectory {
 	t.Helper()
 
+	return watchingOverWith(t, directory, configure, newIngestRecorder())
+}
+
+// watchingOverWith starts one watch over a directory the test already has, handing it a ingest path the
+// test has prepared. A test that needs the ingest path to panic uses this.
+func watchingOverWith(t *testing.T, directory string, configure func(domain.Dirwatch) domain.Dirwatch, calls *ingestRecorder) *watchedDirectory {
+	t.Helper()
+
 	watch := domain.NewDirwatch()
 	watch.Directory = directory
 	watch.Mask = "#SYS-#TG-#UNIT-#DATE-#TIME"
@@ -150,7 +167,6 @@ func watchingOver(t *testing.T, directory string, configure func(domain.Dirwatch
 		watch = configure(watch)
 	}
 
-	calls := newIngestRecorder()
 	logs := &fakes.Logs{}
 
 	watchers := NewDirwatchers(
@@ -198,6 +214,19 @@ func (watched *watchedDirectory) logLines() []string {
 	}
 
 	return lines
+}
+
+// loggedAs reports whether the watch wrote an entry naming that part of the server and saying the
+// fragment. The source is part of the assertion: a watcher that reports what went wrong and is filed
+// under nothing is the state this feature exists to remove.
+func (watched *watchedDirectory) loggedAs(source domain.LogSource, fragment string) bool {
+	for _, entry := range watched.logs.Recorded() {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // TestARecordingAlreadyInTheWatchedDirectoryIsIngested is the shortest path a watch has: the
@@ -492,8 +521,12 @@ func TestARecordingTheWatchCannotReadIsReportedToTheAdministratorLog(t *testing.
 		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying what it could not read", lines)
 	}
 
-	if !strings.Contains(lines[0], "dirwatch.ingest:") || !strings.Contains(lines[0], path) {
+	if !strings.Contains(lines[0], "the recording "+path+" could not be ingested:") {
 		t.Errorf("the watch wrote %q, want the ingest failure naming the file it could not read", lines[0])
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "could not be ingested") {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
 	}
 
 	if !strings.Contains(lines[0], "warn:") {
@@ -601,8 +634,93 @@ func TestAWatchedDirectoryThatIsNotThereIsReportedAndWatchesNothing(t *testing.T
 		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the directory is not there", lines)
 	}
 
-	if !strings.Contains(lines[0], "dirwatch.walkdir:") {
-		t.Errorf("the watch wrote %q, want the failure of the pass over the directory", lines[0])
+	if !strings.Contains(lines[0], "the directory "+gone+" could not be read:") {
+		t.Errorf("the watch wrote %q, want the failure of the pass over the directory, naming the directory it was reading", lines[0])
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "could not be read") {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
+	}
+}
+
+// TestADirectoryThatAppearsButCannotBeWatchedIsReportedAndTheWatchCarriesOn is the site where a
+// directory shows up inside a watched one and the server cannot register it: the watch keeps running and
+// keeps ingesting, so the line must not claim a watcher stopped.
+func TestADirectoryThatAppearsButCannotBeWatchedIsReportedAndTheWatchCarriesOn(t *testing.T) {
+	t.Parallel()
+
+	watched := watching(t, nil)
+
+	time.Sleep(settleWait)
+
+	unreadable := filepath.Join(watched.directory, "20261006")
+
+	if err := os.Mkdir(unreadable, 0o000); err != nil {
+		t.Fatalf("creating a directory the server cannot read: %v", err)
+	}
+
+	t.Cleanup(func() {
+		// The directory has to be readable again for the temporary tree to be removable.
+		_ = os.Chmod(unreadable, 0o755)
+	})
+
+	time.Sleep(500 * time.Millisecond)
+
+	lines := watched.logLines()
+
+	if len(lines) != 1 {
+		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the directory could not be watched", lines)
+	}
+
+	if !strings.Contains(lines[0], "the directory "+unreadable+" could not be watched:") {
+		t.Errorf("the watch wrote %q, want the directory it could not watch, named", lines[0])
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "could not be watched") {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
+	}
+
+	// The watch is still watching: a recording written into the directory it does watch arrives.
+	putRecording(t, watched.directory, recordedFile)
+
+	if call := watched.calls.next(t, liveWait); call.AudioFilename != recordedFile {
+		t.Errorf("the ingested call is named %q, want the recording written after the directory that could not be watched", call.AudioFilename)
+	}
+}
+
+// TestAPanicInTheFirstPassOverAWatchedDirectoryIsReportedNamesTheDirectory covers the guard that keeps a
+// panic in the startup pass from taking the server down. The legacy stored a bare error with nothing
+// saying which directory the pass was reading.
+func TestAPanicInTheFirstPassOverAWatchedDirectoryIsReportedNamesTheDirectory(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	putRecording(t, directory, recordedFile)
+
+	sink := newIngestRecorder()
+	sink.panics = errors.New("the ingest path was not prepared for this recording")
+
+	watched := watchingOverWith(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = true
+
+		return watch
+	}, sink)
+
+	watched.calls.nothingArrivesWithin(t, settleWait)
+
+	lines := watched.logLines()
+
+	if len(lines) != 1 {
+		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the startup pass was not completed", lines)
+	}
+
+	if !strings.Contains(lines[0], "the directory "+directory+" could not be read at startup: the ingest path was not prepared for this recording") {
+		t.Errorf("the watch wrote %q, want the directory the pass was reading and the panic's own text", lines[0])
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "could not be read at startup") {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
 	}
 }
 
