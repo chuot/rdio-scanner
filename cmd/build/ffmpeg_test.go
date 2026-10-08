@@ -365,6 +365,68 @@ func TestTheConformanceCheckNamesTheContainerItRunsTheCompiledFfmpegIn(t *testin
 	}
 }
 
+// A release archive has to say what ffmpeg is inside it, under what licence, and compiled from what.
+// The text is written from the manifest, so it cannot name a release the build did not compile.
+func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	licence := ffmpegLicence(manifest, "linux-arm64")
+
+	for _, want := range []string{
+		"Lesser General Public License",
+		manifest.FFmpeg,
+		manifest.Source.URL,
+		manifest.Source.SHA256,
+		"--enable-filter=loudnorm",
+		"go run ./cmd/build ffmpeg linux-arm64",
+	} {
+		if !strings.Contains(licence, want) {
+			t.Errorf("the licence text does not name %s", want)
+		}
+	}
+
+	// The licence posture is a promise this feature makes, and the licence text is only true while the
+	// recipe keeps it.
+	for _, flag := range manifest.Recipe {
+		if strings.HasPrefix(flag, "--enable-gpl") || strings.HasPrefix(flag, "--enable-nonfree") {
+			t.Errorf("the recipe carries %s, which is not the LGPL-only posture the licence text states", flag)
+		}
+	}
+
+	if !strings.Contains(licence, "without --enable-gpl") {
+		t.Error("the licence text does not say what was left out")
+	}
+}
+
+// A reused compile has to leave the same tree a fresh one does, licence text included: what a release
+// archive carries cannot depend on whether the cache happened to be warm.
+func TestAReusedFfmpegIsPublishedTheWayAFreshOneIs(t *testing.T) {
+	repo := t.TempDir()
+	manifest := bundle.ReadManifest()
+
+	paths := ffmpegPathsFor(repo, manifest, "linux-arm64")
+
+	if err := os.MkdirAll(paths.cached, 0755); err != nil {
+		t.Fatalf("the test cannot prepare the cache: %v", err)
+	}
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		if err := os.WriteFile(filepath.Join(paths.cached, name), []byte("compiled"), 0644); err != nil {
+			t.Fatalf("the test cannot fill the cache: %v", err)
+		}
+	}
+
+	if err := publishFFmpeg(paths, manifest, "linux-arm64"); err != nil {
+		t.Fatalf("the build refused to publish a compiled ffmpeg: %v", err)
+	}
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz", "LICENCE.md"} {
+		if !aFileIsThere(filepath.Join(paths.bundle, name)) {
+			t.Errorf("%s is not in the bundle directory the server embeds", name)
+		}
+	}
+}
+
 func hasArg(args []string, want string) bool {
 	for _, arg := range args {
 		if arg == want {

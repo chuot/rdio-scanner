@@ -25,7 +25,18 @@ clientSrc := $(wildcard internal/presentation/clients/*.json internal/presentati
 	$(shell find internal/presentation/clients/scanner internal/presentation/clients/admin internal/presentation/clients/shared -type f)
 server := $(shell find cmd internal -type f -name '*.go')
 
-build = @GOOS=$(1) GOARCH=$(3) go build -ldflags "-X main.Version=$(ver)" -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner
+# A server binary is built for one target, and the ffmpeg that target carries is compiled first: the
+# server embeds it, so a server built before the ffmpeg it is going to carry exists is a server that
+# quietly ships without one. A target this project compiles no ffmpeg for says so and is built the way it
+# always was, with the ffmpeg its host installs.
+#
+# The licence text the build wrote next to the bundle travels into the archive with the binary, because a
+# binary that carries an ffmpeg owes whoever receives it a statement of what that ffmpeg is.
+define build
+	@go run ./cmd/build ffmpeg $(2)-$(3)
+	@GOOS=$(1) GOARCH=$(3) go build -ldflags "-X main.Version=$(ver)" -o dist/$(2)-$(3)/$(4) ./cmd/rdio-scanner
+	@test ! -e internal/infrastructure/ffmpeg/bundle/$(2)-$(3)/LICENCE.md || cp internal/infrastructure/ffmpeg/bundle/$(2)-$(3)/LICENCE.md dist/$(2)-$(3)/FFMPEG.md
+endef
 pandoc = @test -d dist/$(1)-$(2) || mkdir -p dist/$(1)-$(2) && pandoc -f markdown -o dist/$(1)-$(2)/$(3) --resource-path docs:docs/platforms $(4) docs/webapp.md docs/faq.md CHANGELOG.md
 zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 

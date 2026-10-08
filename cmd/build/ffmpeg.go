@@ -463,49 +463,55 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Says)
 	}
 
-	if len(plan.Steps) == 0 {
-		return nil
-	}
+	if len(plan.Steps) > 0 {
+		if err := prepareFFmpeg(plan.Paths); err != nil {
+			return err
+		}
 
-	if err := prepareFFmpeg(plan.Paths); err != nil {
-		return err
-	}
+		if plan.Source.Fetch {
+			fmt.Fprintf(stdout, "%-7s %s\n", "fetch", plan.Source.URL)
 
-	if plan.Source.Fetch {
-		fmt.Fprintf(stdout, "%-7s %s\n", "fetch", plan.Source.URL)
+			if err := fetchSource(plan.Source); err != nil {
+				return err
+			}
+		}
 
-		if err := fetchSource(plan.Source); err != nil {
+		if err := checkSource(plan.Source.Path, manifest); err != nil {
+			return err
+		}
+
+		for _, s := range plan.Steps {
+			if err := t.execute(s); err != nil {
+				return fmt.Errorf("%s: %w", s.label, err)
+			}
+
+			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+		}
+
+		report, err := t.runConformance(podman, plan, manifest, record, target)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
+			strconv.FormatFloat(report.Shortest, 'f', 6, 64),
+			strconv.FormatFloat(report.Longest, 'f', 6, 64),
+		)
+
+		if err := gzipCompiled(plan.Paths, manifest, target); err != nil {
 			return err
 		}
 	}
 
-	if err := checkSource(plan.Source.Path, manifest); err != nil {
-		return err
-	}
-
-	for _, s := range plan.Steps {
-		if err := t.execute(s); err != nil {
-			return fmt.Errorf("%s: %w", s.label, err)
+	// A compiled ffmpeg and a reused one end the same way, so that what the server embeds and what the
+	// release archive carries do not depend on whether the cache was warm.
+	if covered {
+		if err := publishFFmpeg(plan.Paths, manifest, target); err != nil {
+			return err
 		}
 
-		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+		fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
 	}
-
-	report, err := t.runConformance(podman, plan, manifest, record, target)
-	if err != nil {
-		return err
-	}
-
-	fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
-		strconv.FormatFloat(report.Shortest, 'f', 6, 64),
-		strconv.FormatFloat(report.Longest, 'f', 6, 64),
-	)
-
-	if err := installFFmpeg(plan.Paths, manifest, target); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
 
 	return nil
 }
@@ -576,9 +582,9 @@ func inContainer(podman string, image string, scratch string) command {
 	}
 }
 
-// installFFmpeg gzips the two compiled programs into the cache and into the bundle directory the server
-// embeds. The placeholder that keeps a plain go build compiling is left where it is.
-func installFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string) error {
+// gzipCompiled puts the two programs the container produced into the cache, which is what makes a second
+// build with an unchanged recipe compile nothing at all.
+func gzipCompiled(paths ffmpegPaths, manifest bundle.Manifest, target string) error {
 	suffix := programSuffix(target)
 	source := filepath.Join(paths.scratch, sourceDir(manifest))
 
@@ -588,14 +594,72 @@ func installFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string) e
 			return fmt.Errorf("the build did not produce %s for %s: %w", name, target, err)
 		}
 
-		for _, dir := range []string{paths.cached, paths.bundle} {
-			if err := writeGzip(filepath.Join(dir, name+suffix+".gz"), body); err != nil {
-				return err
-			}
+		if err := writeGzip(paths.cachedProgram(name+".gz"), body); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// publishFFmpeg puts the compiled pair, and what a release archive has to say about them, into the bundle
+// directory the server embeds. The placeholder that keeps a plain go build compiling is left where it is.
+func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string) error {
+	if err := os.MkdirAll(paths.bundle, 0755); err != nil {
+		return fmt.Errorf("the build cannot prepare %s: %w", paths.bundle, err)
+	}
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		body, err := os.ReadFile(paths.cachedProgram(name))
+		if err != nil {
+			return fmt.Errorf("the build has no compiled %s for %s to embed: %w", strings.TrimSuffix(name, ".gz"), target, err)
+		}
+
+		if err := os.WriteFile(filepath.Join(paths.bundle, name), body, 0644); err != nil {
+			return fmt.Errorf("the build cannot write %s into the bundle: %w", name, err)
+		}
+	}
+
+	licence := ffmpegLicence(manifest, target)
+
+	if err := os.WriteFile(filepath.Join(paths.bundle, "LICENCE.md"), []byte(licence), 0644); err != nil {
+		return fmt.Errorf("the build cannot write the licence text for %s: %w", target, err)
+	}
+
+	return nil
+}
+
+// ffmpegLicence is what a release archive carries about the ffmpeg inside it: the licence the binary is
+// under, the release it was compiled from, and the exact recipe it was compiled with.
+//
+// It is written from the manifest rather than kept as a document somebody has to remember to update,
+// because a licence notice that names the wrong release is worse than none.
+func ffmpegLicence(manifest bundle.Manifest, target string) string {
+	var text strings.Builder
+
+	text.WriteString("# The ffmpeg this server carries\n\n")
+	text.WriteString(fmt.Sprintf(
+		"This build of rdio-scanner carries ffmpeg %s and ffprobe %s inside its own binary, compiled\nfrom source for %s. It converts audio with nothing installed on the host.\n\n",
+		manifest.FFmpeg, manifest.FFmpeg, target,
+	))
+
+	text.WriteString("ffmpeg is free software, copyright the FFmpeg developers. This binary is used under the GNU\nLesser General Public License version 2.1 or later, and was configured without --enable-gpl\nand without --enable-nonfree, so it carries no GPL or otherwise restricted component. The\nlicence text is at https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html\n\n")
+
+	text.WriteString("The source it was compiled from:\n\n")
+	text.WriteString(fmt.Sprintf("    %s\n    sha256 %s\n\n", manifest.Source.URL, manifest.Source.SHA256))
+
+	text.WriteString("The configure recipe it was built with:\n\n")
+
+	for _, flag := range manifest.Recipe {
+		text.WriteString("    " + flag + "\n")
+	}
+
+	text.WriteString(fmt.Sprintf(
+		"\nThe same recipe, the same digest and the same toolchain are recorded in this repository at\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and the command that produced this binary\nis `go run ./cmd/build ffmpeg %s`.\n",
+		target,
+	))
+
+	return text.String()
 }
 
 func writeGzip(path string, body []byte) error {
