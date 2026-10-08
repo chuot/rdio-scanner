@@ -319,7 +319,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 
 	changes := &listenerChanges{}
 
-	hub := ws.NewHub(s.settings, changes, s.logs, s.console)
+	hub := ws.NewHub(s.settings, changes, s.logs)
 
 	debouncer := application.NewListenerCountDebouncer(hub, s.logs, options, s.scheduler, s.clock)
 

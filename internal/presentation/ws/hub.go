@@ -24,7 +24,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -86,8 +85,8 @@ type ListenerChanges interface {
 	ListenerChanged()
 }
 
-// Dispatch hands one frame to the server that owns this hub, and reports a failure the hub writes to its
-// console and then ignores. A frame the server cannot act on is not a reason to end the connection it
+// Dispatch hands one frame to the server that owns this hub, and reports a failure the hub files in the server
+// log and then ignores. A frame the server cannot act on is not a reason to end the connection it
 // arrived on: a client that sends one frame the server does not know is still a client, and the native
 // applications send commands older servers do not have.
 //
@@ -108,7 +107,6 @@ type Hub struct {
 	settings ServerSettings
 	changes  ListenerChanges
 	logs     ports.LogRepository
-	console  io.Writer
 
 	mutex    sync.Mutex
 	sessions map[string]*listener
@@ -127,17 +125,17 @@ type Hub struct {
 
 var _ ports.Hub = (*Hub)(nil)
 
-// NewHub builds the hub from what it needs to know about the server, who it tells about listeners,
-// where its log goes, and where it writes the lines it says about a connection — which are not the
-// server's log and do not go into it.
-func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository, console io.Writer) *Hub {
-	if console == nil {
-		console = io.Discard
-	}
-
+// NewHub builds the hub from what it needs to know about the server, who it tells about listeners, and where
+// its log goes.
+//
+// The hub has no console of its own, and that is deliberate: every line it says about a connection is an entry
+// in the server log, and the composition root is what says those entries out loud. A listener that joined, a
+// frame that could not be encoded and a message that could not be read are then findable by filtering the log
+// view for the live feed, which is what an operator actually has, rather than by having been watching the
+// terminal at the moment they happened.
+func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository) *Hub {
 	return &Hub{
 		changes:       changes,
-		console:       console,
 		handshakeWait: pongWait,
 		listens:       map[string]*listener{},
 		logs:          logs,
@@ -758,7 +756,7 @@ func (session *listener) write() {
 
 			b, err := json.Marshal(out.frame)
 			if err != nil {
-				fmt.Fprintf(session.hub.console, "client.message.tojson: %v\n", err)
+				session.hub.logf(domain.LogLevelWarn, "a message for a listener could not be written: %v", err)
 
 				continue
 			}

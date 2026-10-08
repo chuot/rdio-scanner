@@ -23,6 +23,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -541,6 +542,35 @@ func TestAFrameTheServerCannotActOnDoesNotEndTheConnection(t *testing.T) {
 	}
 }
 
+// A frame the server could not put on the connection is the one delivery failure an operator could not see:
+// the listener stays connected, the frame is simply gone, and nothing was written about it. It is filed under
+// the live feed at the level an operator filters problems with, naming the encoding failure itself, and the
+// session survives it — the frame that follows reaches the listener.
+func TestAFrameTheServerCouldNotWriteIsFiledAndTheListenerKeepsItsConnection(t *testing.T) {
+	f := newFixture(t, openSettings)
+
+	f.register(t, f.id)
+
+	f.hub.Send(f.id, Message{Command: CommandVersion, Payload: math.NaN()})
+
+	f.waitFor(t, func() bool {
+		return f.loggedAt(domain.LogSourceLivefeed, domain.LogLevelWarn, "a message for a listener could not be written")
+	}, "the server to file the frame it could not write")
+
+	if !strings.Contains(f.logText(), "NaN") {
+		t.Errorf("the entry does not name the encoding failure itself:\n%s", f.logText())
+	}
+
+	f.hub.Send(f.id, Message{Command: CommandLivefeedMap, Payload: true})
+
+	frame := f.expectFrame(t, f.id)
+
+	if frame.Command != CommandLivefeedMap {
+		t.Errorf("the frame that follows = %v, want %v: a frame the server could not encode is not a reason "+
+			"to lose a listener", frame.Command, CommandLivefeedMap)
+	}
+}
+
 // The address a session connected from is what the server names when it refuses an access code, and it
 // is the address of the connection and not of the listener behind it.
 func TestASessionKnowsWhereItConnectedFrom(t *testing.T) {
@@ -624,7 +654,6 @@ type fixture struct {
 	logs     *fakes.Logs
 	settings *mutableSettings
 	changes  *recordedChanges
-	console  *recordedConsole
 	dispatch *recordingDispatch
 
 	attached chan string
@@ -655,20 +684,18 @@ func newBareFixture(t *testing.T, settings Settings) *fixture {
 	current := &mutableSettings{settings: settings}
 	logs := &fakes.Logs{}
 	changes := &recordedChanges{}
-	console := &recordedConsole{}
 	dispatch := &recordingDispatch{}
 
 	f := &fixture{
 		attached: make(chan string, 16),
 		clients:  map[string]*websocket.Conn{},
 		changes:  changes,
-		console:  console,
 		dispatch: dispatch,
 		logs:     logs,
 		settings: current,
 	}
 
-	f.hub = NewHub(current, changes, logs, console)
+	f.hub = NewHub(current, changes, logs)
 
 	// The intervals a connection is held to are the protocol's own, and a test cannot wait a minute
 	// for one of them. They are shortened here rather than made choices a server can pass to the
@@ -989,29 +1016,6 @@ func (c *recordedChanges) count() int {
 	defer c.mutex.Unlock()
 
 	return c.times
-}
-
-// recordedConsole is where the hub writes the lines it says about a connection, which are not the
-// server's log and do not go into it.
-type recordedConsole struct {
-	mutex sync.Mutex
-	lines []string
-}
-
-func (c *recordedConsole) Write(b []byte) (int, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.lines = append(c.lines, string(b))
-
-	return len(b), nil
-}
-
-func (c *recordedConsole) text() string {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	return strings.Join(c.lines, "")
 }
 
 // recordingDispatch is the server behind the hub: it remembers the frames it was handed and can be

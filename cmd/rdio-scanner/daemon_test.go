@@ -196,6 +196,30 @@ func TestAConnectionTheServerWouldNotTakeOverIsSaidOutLoud(t *testing.T) {
 	}
 }
 
+// TestWhatTheHubReportsAboutAListenerIsSaidOutLoud is the other half of the live feed's lines. The hub has no
+// console of its own: everything it says about a connection — a listener that joined, a frame it could not
+// read, a frame it could not write — is an entry in the server log, and the composition root is what says those
+// entries out loud. Driving a real listener through the real hub is what proves the wiring, because the hub
+// could be handed a log no operator ever reads and every test in the ws package would still pass.
+func TestWhatTheHubReportsAboutAListenerIsSaidOutLoud(t *testing.T) {
+	var terminal bytes.Buffer
+
+	srv := testServerOn(t, &terminal)
+
+	conn := srv.dial(t, "/")
+
+	sendFrame(t, conn, `["CFG"]`)
+
+	const message = "a listener joined from 127.0.0.1"
+
+	waitForLogMentioning(t, srv.db, message)
+
+	if !bytes.Contains(terminal.Bytes(), []byte("info livefeed: "+message)) {
+		t.Errorf("the terminal holds %q, want the hub's entry said with its level and the part of the server "+
+			"that wrote it", terminal.String())
+	}
+}
+
 // testServerUnderTheServiceManager is the server the composition root assembles when the service manager is
 // the one that started the program.
 func testServerUnderTheServiceManager(t *testing.T, out io.Writer, as *daemon) *server {
