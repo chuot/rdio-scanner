@@ -321,6 +321,19 @@ func (fixture *uploadFixture) loggedContaining(fragment string) bool {
 	return false
 }
 
+// loggedAs reports whether the upload endpoint filed a refusal with itself. Every one of these refusals is
+// about an upload, and an operator chasing a broken uploader filters the log view by the upload endpoint —
+// which only works if the entry says so.
+func (fixture *uploadFixture) loggedAs(source domain.LogSource, fragment string) bool {
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // An upload the server takes is answered with the plain line the legacy server has always answered with,
 // and the credential is taken out of the fields rather than handed to the parser: the parser has no
 // business knowing that a key exists.
@@ -381,8 +394,12 @@ func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(
 		t.Errorf("upload answer =\n  %q\nwant\n  %q", got, want)
 	}
 
-	if fixture.loggedContaining("Invalid API key") {
-		t.Errorf("the refused upload is written in the log view, which the legacy server does not do: %v", fixture.logs.Stored)
+	// The legacy server answers this refusal and writes nothing about it, which this feature supersedes: an
+	// operator chasing a capture box that stopped uploading has to be able to tell "it never reached the
+	// server" from "it reached the server and was refused". The refusal is now in the log view, filed with
+	// the upload endpoint. The answer the uploader receives is unchanged.
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: the apikey is not valid") {
+		t.Errorf("the refused credential is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 }
 
@@ -455,8 +472,20 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 			"and its error helper adds one", got, want)
 	}
 
-	if !fixture.loggedContaining("api: Incomplete call data: no audio") {
-		t.Errorf("the refused submission is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	// The exact sentence, not a fragment: the legacy helper passes the uploader's own body — which ends
+	// with a line break — straight into the log, and a stored message that carries the answer's line break
+	// is the answer pasted into the log rather than a statement of what happened.
+	stored := ""
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == domain.LogSourceUpload {
+			stored = entry.Message
+		}
+	}
+
+	if stored != "the upload was refused: Incomplete call data: no audio" {
+		t.Errorf("stored refusal = %q, want the refusal as one sentence filed with the upload endpoint, "+
+			"without the line break the uploader's answer carries: %v", stored, fixture.logs.Stored)
 	}
 }
 
@@ -479,8 +508,11 @@ func TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody(t *testin
 		t.Errorf("GET answer = %q, want %q", got, want)
 	}
 
-	if fixture.loggedContaining("Unsupported method") {
-		t.Errorf("the refused method is written in the log view, which the legacy server does not do: %v", fixture.logs.Stored)
+	// A client posting to the wrong endpoint, or with the wrong method, is a standing misconfiguration, and
+	// the log view is where an operator finds out that the server was reached at all. The legacy server
+	// answers this and writes nothing, which this feature supersedes.
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: the server does not answer this method") {
+		t.Errorf("the refused method is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 }
 
@@ -499,8 +531,8 @@ func TestCallUploadEndpointRefusesARequestThatIsNotAMultipartBody(t *testing.T) 
 		t.Errorf("upload answer = %q, want %q", got, want)
 	}
 
-	if !fixture.loggedContaining("api: Not a multipart content") {
-		t.Errorf("the refused request is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: Not a multipart content") {
+		t.Errorf("the refused request is not filed with the upload endpoint naming what it refused: %v", fixture.logs.Stored)
 	}
 }
 
@@ -519,8 +551,8 @@ func TestCallUploadEndpointRefusesARequestWhoseContentTypeItCannotRead(t *testin
 		t.Errorf("upload answer = %q, want %q", got, want)
 	}
 
-	if !fixture.loggedContaining("api: Invalid content-type") {
-		t.Errorf("the unreadable Content-Type is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: Invalid content-type") {
+		t.Errorf("the unreadable Content-Type is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 }
 
@@ -542,8 +574,8 @@ func TestCallUploadEndpointReportsAMultipartBodyItCannotRead(t *testing.T) {
 		t.Errorf("upload answer = %q, want the reader's own words wrapped the way the legacy server wraps them", got)
 	}
 
-	if !fixture.loggedContaining("api: multipart: ") {
-		t.Errorf("the unreadable body is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: multipart: ") {
+		t.Errorf("the unreadable body is not filed with the upload endpoint naming the step that failed: %v", fixture.logs.Stored)
 	}
 }
 
@@ -571,8 +603,8 @@ func TestCallUploadEndpointReportsABodyThatStopsBeingRead(t *testing.T) {
 		t.Errorf("upload answer = %q, want it to name the step that failed", got)
 	}
 
-	if !fixture.loggedContaining("api: ") {
-		t.Errorf("the broken body is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: ") {
+		t.Errorf("the broken body is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 }
 
@@ -675,8 +707,8 @@ func TestTrunkRecorderUploadEndpointRefusesASidecarItCannotRead(t *testing.T) {
 		t.Errorf("trunk-recorder upload answer = %q, want %q", got, want)
 	}
 
-	if !fixture.loggedContaining("api: Invalid call data") {
-		t.Errorf("the unreadable sidecar is not in the log view as the legacy server wrote it: %v", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: Invalid call data") {
+		t.Errorf("the unreadable sidecar is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 
 	if len(fixture.calls.Saved) != 0 {

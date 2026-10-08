@@ -248,6 +248,11 @@ func (upload *Upload) answer(w http.ResponseWriter, r *http.Request, key string,
 		upload.fail(w, http.StatusExpectationFailed, fmt.Sprintf("Incomplete call data: %s\n", err.Error()))
 
 	case application.UploadCallRefused:
+		// The legacy server answers this refusal and writes nothing about it, which sends an operator
+		// chasing a capture box that stopped uploading to guess whether the server was ever reached. The
+		// refusal is now filed with the upload endpoint. The answer the uploader receives is unchanged.
+		upload.logRefusal("the apikey is not valid")
+
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(uploadDenied))
 
@@ -264,22 +269,44 @@ func (upload *Upload) answer(w http.ResponseWriter, r *http.Request, key string,
 
 // refuseMethod answers a method these endpoints do not take. The body is unusual for this server — most of
 // it answers an unsupported method with nothing — and it is what the upload clients have always been given.
+//
+// It is also filed with the upload endpoint. A client posting with the wrong method is a standing
+// misconfiguration, and the log view is the only place an operator can find out that the server was reached
+// at all.
 func (upload *Upload) refuseMethod(w http.ResponseWriter) {
+	upload.logRefusal("the server does not answer this method")
+
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	w.Write([]byte("Unsupported method\n"))
 }
 
-// fail writes a failure the way the legacy server's error helper does: the reason goes into the server's own
-// log view at error level with the api: prefix, and then to the uploader with a line break of its own.
+// fail writes a failure the way the legacy server's error helper does: the reason is filed with the upload
+// endpoint at error level, and then given to the uploader with a line break of its own.
 func (upload *Upload) fail(w http.ResponseWriter, status int, message string) {
-	if upload.logs != nil {
-		upload.logs.AppendLog(context.Background(), domain.LogEntry{
-			DateTime: time.Now(),
-			Level:    domain.LogLevelError,
-			Message:  fmt.Sprintf("api: %s", message),
-		})
-	}
+	upload.logRefusal(message)
 
 	w.WriteHeader(status)
 	w.Write([]byte(fmt.Sprintf("%s\n", message)))
+}
+
+// logRefusal files one refusal of an upload with the upload endpoint, in the shape every other writer uses:
+// what the server did, then the reason.
+//
+// The reason is trimmed. The legacy error helper builds the uploader's body out of the same string, and one
+// of its call sites passes a message that already ends with a line break, so without this the log holds the
+// answer's line break instead of a sentence.
+//
+// An upload endpoint with no log repository is the one this server builds when it is run to do something
+// else; a refusal that cannot be filed is still a refusal the uploader is told about.
+func (upload *Upload) logRefusal(reason string) {
+	if upload.logs == nil {
+		return
+	}
+
+	upload.logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Now(),
+		Level:    domain.LogLevelError,
+		Source:   domain.LogSourceUpload,
+		Message:  fmt.Sprintf("the upload was refused: %s", strings.TrimSpace(reason)),
+	})
 }
