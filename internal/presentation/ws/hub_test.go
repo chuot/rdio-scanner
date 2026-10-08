@@ -66,8 +66,8 @@ func TestAListenerIsCountedOnlyOnceItsConfigurationHasBeenWritten(t *testing.T) 
 		t.Errorf("the listener count was reported as changed %d times, want once, when the listener joined", got)
 	}
 
-	if got := f.logAt(t, 0); !strings.Contains(got, "new listener from ip 203.0.113.7:41000") {
-		t.Errorf("the join notice = %q, want the address it connected from", got)
+	if !f.loggedAs(domain.LogSourceLivefeed, "a listener joined from 203.0.113.7:41000") {
+		t.Errorf("the server log = %q, want the join notice naming the address it connected from, under the livefeed", f.logText())
 	}
 }
 
@@ -81,8 +81,8 @@ func TestAListenerThatUnlockedAnAccessIsNamedByIt(t *testing.T) {
 
 	f.register(t, f.id)
 
-	if got := f.logAt(t, 0); !strings.HasSuffix(got, "with ident Capture open") {
-		t.Errorf("the join notice = %q, want the identity it unlocked", got)
+	if !f.loggedAs(domain.LogSourceLivefeed, "a listener joined from 203.0.113.7:41000 as Capture open") {
+		t.Errorf("the join notice = %q, want the identity it unlocked, under the livefeed", f.logText())
 	}
 }
 
@@ -401,8 +401,8 @@ func TestADisconnectedListenerIsReportedAndForgotten(t *testing.T) {
 		t.Errorf("the listener count was reported as changed %d times, want twice: once when it joined and once when it left", got)
 	}
 
-	if got := f.logAt(t, 1); !strings.Contains(got, "listener disconnected from ip 203.0.113.7:41000 with ident Capture open") {
-		t.Errorf("the disconnect notice = %q, want the address and the identity it unlocked", got)
+	if !f.loggedAs(domain.LogSourceLivefeed, "a listener left from 203.0.113.7:41000 as Capture open") {
+		t.Errorf("the server log = %q, want the departure naming the address and the identity it unlocked", f.logText())
 	}
 
 	f.hub.BroadcastCall(testCall(10001, 1514000))
@@ -890,6 +890,19 @@ func (f *fixture) logAt(t *testing.T, at int) string {
 	}
 
 	return recorded[at].Message
+}
+
+// loggedAs reports whether the hub wrote a log line naming that part of the server and saying the
+// fragment. A join, a departure and a refused message are all about feeding listeners, so the source is
+// part of what these tests pin.
+func (f *fixture) loggedAs(source domain.LogSource, fragment string) bool {
+	for _, entry := range f.logs.Recorded() {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // waitFor waits for something the hub does on its own, and says what it was waiting for when it does

@@ -139,11 +139,11 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	// The listener-count report is written five seconds after the count changes, and it counts the
 	// listeners that are there when it is written rather than the ones that were there when it was
 	// scheduled. Hanging up before that moment would put a different count in the log.
-	waitForLogMessage(t, srv.db, "listeners count is 1")
+	waitForLogMessage(t, srv.db, "there is 1 listener")
 
 	conn.Close()
 
-	waitForLogMessage(t, srv.db, "listener disconnected from ip 127.0.0.1")
+	waitForLogMessage(t, srv.db, "a listener left from 127.0.0.1")
 
 	compareCanonical(t, "the frames the listener saw", golden["frames"], observed)
 

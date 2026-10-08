@@ -161,7 +161,8 @@ func (debouncer *ListenerCountDebouncer) report(ctx context.Context) {
 	if err := debouncer.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: debouncer.clock.Now(),
 		Level:    domain.LogLevelInfo,
-		Message:  fmt.Sprintf("listeners count is %v", count),
+		Source:   domain.LogSourceLivefeed,
+		Message:  listenersCountPhrase(count),
 	}); err != nil {
 		return
 	}
@@ -174,4 +175,15 @@ func (debouncer *ListenerCountDebouncer) report(ctx context.Context) {
 	if options.ShowListenersCount {
 		debouncer.hub.BroadcastListenersCount(count)
 	}
+}
+
+// listenersCountPhrase is the count in the words an operator reads. "there are 1 listeners" is what the
+// approved wording produces for the most common count there is, and a log line that reads like a
+// substitution mistake is the kind of thing this feature exists to remove.
+func listenersCountPhrase(count int) string {
+	if count == 1 {
+		return "there is 1 listener"
+	}
+
+	return fmt.Sprintf("there are %v listeners", count)
 }

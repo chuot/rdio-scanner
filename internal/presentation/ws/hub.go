@@ -545,12 +545,12 @@ func (hub *Hub) register(session *listener) {
 	hub.changes.ListenerChanged()
 
 	if len(session.access.Ident) > 0 {
-		hub.logf("new listener from ip %s with ident %s", session.remoteAddr, session.access.Ident)
+		hub.logf("a listener joined from %s as %s", session.remoteAddr, session.access.Ident)
 
 		return
 	}
 
-	hub.logf("new listener from ip %s", session.remoteAddr)
+	hub.logf("a listener joined from %s", session.remoteAddr)
 }
 
 // disconnect forgets a session and says so. Every connection the server has taken over is reported when
@@ -577,16 +577,20 @@ func (hub *Hub) disconnect(session *listener) {
 	hub.changes.ListenerChanged()
 
 	if len(session.access.Ident) > 0 {
-		hub.logf("listener disconnected from ip %s with ident %s", session.remoteAddr, session.access.Ident)
+		hub.logf("a listener left from %s as %s", session.remoteAddr, session.access.Ident)
 
 		return
 	}
 
-	hub.logf("listener disconnected from ip %s", session.remoteAddr)
+	hub.logf("a listener left from %s", session.remoteAddr)
 }
 
 // logf writes one line to the server log. These lines are the server's log and not its console: they
 // are what an administrator reads afterwards, and they name the address a listener connected from.
+// logf writes one notice about a listener session to the server log. Every line the hub writes is about
+// feeding listeners, so the hub files them itself: a join, a departure and a message that went wrong are
+// the three things an operator filters the log view for, and an entry that does not name its author cannot
+// be filtered for.
 func (hub *Hub) logf(format string, args ...any) {
 	if hub.logs == nil {
 		return
@@ -597,6 +601,7 @@ func (hub *Hub) logf(format string, args ...any) {
 	hub.logs.AppendLog(context.Background(), domain.LogEntry{
 		DateTime: time.Now(),
 		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceLivefeed,
 		Message:  fmt.Sprintf(format, args...),
 	})
 }

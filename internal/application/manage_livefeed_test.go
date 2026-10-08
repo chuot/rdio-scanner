@@ -211,12 +211,36 @@ func TestListenerCountDebouncerCollapsesABurstIntoOneReport(t *testing.T) {
 		t.Fatalf("logs = %v, want exactly one report for the burst", fixture.logs.Stored)
 	}
 
-	if fixture.logs.Stored[0].Message != "listeners count is 3" {
-		t.Errorf("report = %q, want the legacy wording with the count at the moment of the report", fixture.logs.Stored[0].Message)
+	if fixture.logs.Stored[0].Source != domain.LogSourceLivefeed {
+		t.Errorf("the report was written under %q, want it filed with the part of the server that feeds listeners", fixture.logs.Stored[0].Source)
+	}
+
+	if fixture.logs.Stored[0].Message != "there are 3 listeners" {
+		t.Errorf("report = %q, want the count at the moment of the report", fixture.logs.Stored[0].Message)
 	}
 
 	if len(fixture.hub.ListenerCounts) != 1 || fixture.hub.ListenerCounts[0] != 3 {
 		t.Errorf("listener-count reports = %v, want one report of 3", fixture.hub.ListenerCounts)
+	}
+}
+
+// One is the count a server reports most often, and it is the count the wording has to survive: "there are
+// 1 listeners" is what a substitution produces and what an operator then distrusts.
+func TestListenerCountReportReadsAsOneListenerWhenThereIsOne(t *testing.T) {
+	fixture := newLivefeedFixture()
+	fixture.options.Stored.ShowListenersCount = true
+
+	fixture.hub.Open("one", "10.0.0.1")
+	fixture.debouncer.ListenerChanged()
+
+	fixture.scheduler.RunDue(ListenerCountReportDelay)
+
+	if len(fixture.logs.Stored) != 1 {
+		t.Fatalf("logs = %v, want one report", fixture.logs.Stored)
+	}
+
+	if got := fixture.logs.Stored[0].Message; got != "there is 1 listener" {
+		t.Errorf("report = %q, want the count said in the words an operator reads", got)
 	}
 }
 

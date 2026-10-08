@@ -440,8 +440,12 @@ func TestTheAddressTheServerNamesIsTheForwardedOneWithoutItsPort(t *testing.T) {
 
 	f.waitFor(t, func() bool { return len(f.logs.Recorded()) > 0 }, "the join notice")
 
-	if got := f.logAt(t, 0); got != "new listener from ip 198.51.100.9" {
+	if got := f.logAt(t, 0); got != "a listener joined from 198.51.100.9" {
 		t.Errorf("the join notice = %q, want the forwarded address without its port", got)
+	}
+
+	if got := f.logs.Recorded()[0].Source; got != domain.LogSourceLivefeed {
+		t.Errorf("the join notice was filed under %q, want it filed with the part of the server that feeds listeners", got)
 	}
 }
 

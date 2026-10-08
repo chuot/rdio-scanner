@@ -74,7 +74,7 @@
   "logs": [
     {
       "level": "info",
-      "message": "new listener from ip 127.0.0.1"
+      "message": "a listener joined from 127.0.0.1"
     },
     {
       "level": "info",
@@ -86,11 +86,11 @@
     },
     {
       "level": "info",
-      "message": "listeners count is 1"
+      "message": "there is 1 listener"
     },
     {
       "level": "info",
-      "message": "listener disconnected from ip 127.0.0.1"
+      "message": "a listener left from 127.0.0.1"
     }
   ],
   "groups": [
