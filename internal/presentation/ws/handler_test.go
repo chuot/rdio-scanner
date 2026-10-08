@@ -143,8 +143,12 @@ func TestARefusedAccessCodeAsksAgainAndSaysSoInTheServerLog(t *testing.T) {
 
 	f.waitFor(t, func() bool { return len(f.logs.Recorded()) > 0 }, "the server to say something about the refused code")
 
-	if got := f.logAt(t, 0); got != "invalid access code guessed for ip 127.0.0.1" {
-		t.Errorf("the refused code was reported as %q, want the code and the address that presented it", got)
+	if got := f.logAt(t, 0); got != "a listener from 127.0.0.1 presented an access code that is not valid" {
+		t.Errorf("the refused code was reported as %q, want the listener and the address it came from", got)
+	}
+
+	if got := f.logs.Recorded()[0].Source; got != domain.LogSourceAccess {
+		t.Errorf("the refused code was filed under %q, want it filed with the part of the server that admits listeners", got)
 	}
 }
 
@@ -211,7 +215,9 @@ func TestAnAcceptedAccessCodeClearsTheAttemptsThatSessionHasSpent(t *testing.T) 
 		t.Fatalf("a good code arriving on the fifth attempt was answered with %v, want a request for the code", frame.Command)
 	}
 
-	f.waitFor(t, func() bool { return strings.Contains(f.logText(), "locked access for ident Capture open locked") }, "the server to say the session was locked")
+	f.waitFor(t, func() bool {
+		return strings.Contains(f.logText(), "the access code for ident Capture open is locked after too many attempts")
+	}, "the server to say the session was locked")
 }
 
 // A fetch of one recorded call is answered with the call, and carries back the flag the listener asked

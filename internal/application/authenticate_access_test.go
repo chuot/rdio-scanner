@@ -83,11 +83,12 @@ func (fixture *accessFixture) presentCode(clientID, code string) (AuthenticateAc
 	return fixture.handler.Handle(context.Background(), AuthenticateAccessCommand{ClientID: clientID, Code: code})
 }
 
-// loggedContaining reports whether the server wrote a log line containing the fragment,
-// which is how these tests pin the legacy warning wording byte for byte.
-func (fixture *accessFixture) loggedContaining(fragment string) bool {
+// loggedAs reports whether the server wrote a log line naming that part of the server and saying the
+// fragment. Every line this use case writes is about a listener's access code, so the source is part of
+// what these tests pin.
+func (fixture *accessFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Stored {
-		if strings.Contains(entry.Message, fragment) {
+		if entry.Source == source && strings.Contains(entry.Message, fragment) {
 			return true
 		}
 	}
@@ -149,8 +150,8 @@ func TestAuthenticateAccessRefusesAnUnknownCodeAndAsksAgain(t *testing.T) {
 		t.Error("a refused code must not send any configuration")
 	}
 
-	if !fixture.loggedContaining("invalid access code wrong-code for ip 10.0.0.1") {
-		t.Errorf("logs = %v, want the legacy warning naming the code and the address", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAccess, "a listener from 10.0.0.1 presented an access code that is not valid") {
+		t.Errorf("logs = %v, want the refused listener and the address it came from", fixture.logs.Stored)
 	}
 }
 
@@ -182,8 +183,8 @@ func TestAuthenticateAccessLocksAValidCodeArrivingOnTheLastAttempt(t *testing.T)
 		t.Errorf("outcome = %q, want %q: a valid code on the fifth attempt still locks the session", result.Outcome, AccessLocked)
 	}
 
-	if !fixture.loggedContaining("locked access for ident dispatch locked") {
-		t.Errorf("logs = %v, want the legacy warning, including its wording", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAccess, "the access code for ident dispatch is locked after too many attempts") {
+		t.Errorf("logs = %v, want the ident that is locked and why it is locked", fixture.logs.Stored)
 	}
 
 	if len(fixture.hub.DeliveredConfigs["listener"]) != 0 {
@@ -297,8 +298,8 @@ func TestAuthenticateAccessReportsAnExpiredAccess(t *testing.T) {
 		t.Errorf("expiry notices = %v, want the session told its access had run out", fixture.hub.AccessExpiries)
 	}
 
-	if !fixture.loggedContaining("expired access for ident dispatch") {
-		t.Errorf("logs = %v, want the legacy warning", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAccess, "the access code for ident dispatch has expired") {
+		t.Errorf("logs = %v, want the ident whose access ran out", fixture.logs.Stored)
 	}
 
 	// The access stays attached, as in the legacy server, so the session is still known by
@@ -352,8 +353,8 @@ func TestAuthenticateAccessRefusesTheSecondSessionBeyondAnAccessLimit(t *testing
 		t.Errorf("limit notices = %v, want the second session told its identity had too many sessions open", fixture.hub.AccessLimits)
 	}
 
-	if !fixture.loggedContaining("too many concurrent connections for ident dispatch, limit is 1") {
-		t.Errorf("logs = %v, want the legacy warning naming the limit", fixture.logs.Stored)
+	if !fixture.loggedAs(domain.LogSourceAccess, "ident dispatch is already at its limit of 1 listeners, and the connection was refused") {
+		t.Errorf("logs = %v, want the ident that is full, the limit it is full at, and what was refused", fixture.logs.Stored)
 	}
 }
 

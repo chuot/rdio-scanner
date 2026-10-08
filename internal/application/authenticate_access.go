@@ -152,8 +152,10 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 
 	access, ok := accesses.ByCode(cmd.Code)
 	if !ok {
-		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("invalid access code %s for ip %s",
-			cmd.Code, handler.hub.RemoteAddrOf(cmd.ClientID)))
+		// The code the listener presented is not written down. It is a credential, and a wrong guess at a
+		// credential is not something to keep in a log an operator reads.
+		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a listener from %s presented an access code that is not valid",
+			handler.hub.RemoteAddrOf(cmd.ClientID)))
 
 		handler.hub.RequestAccessCode(cmd.ClientID)
 
@@ -166,7 +168,7 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 	handler.hub.GrantAccess(cmd.ClientID, access)
 
 	if attempt == domain.MaxAccessAuthAttempts {
-		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("locked access for ident %s locked", access.Ident))
+		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("the access code for ident %s is locked after too many attempts", access.Ident))
 
 		handler.hub.RequestAccessCode(cmd.ClientID)
 
@@ -174,7 +176,7 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 	}
 
 	if access.Expired(handler.clock.Now()) {
-		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("expired access for ident %s", access.Ident))
+		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("the access code for ident %s has expired", access.Ident))
 
 		handler.hub.ReportAccessExpired(cmd.ClientID)
 
@@ -182,7 +184,7 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 	}
 
 	if access.Limit > 0 && handler.hub.AccessSessionCount(access.ID) > access.Limit {
-		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("too many concurrent connections for ident %s, limit is %d",
+		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("ident %s is already at its limit of %d listeners, and the connection was refused",
 			access.Ident, access.Limit))
 
 		handler.hub.ReportAccessLimit(cmd.ClientID)
@@ -236,10 +238,13 @@ func (handler *AuthenticateAccessHandler) sendConfig(ctx context.Context, client
 	return nil
 }
 
+// log writes one entry to the server log, filed under the access subsystem: every line this use case
+// writes is about a listener presenting its access code, and the log view filters on that.
 func (handler *AuthenticateAccessHandler) log(ctx context.Context, level, message string) {
 	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: handler.clock.Now(),
 		Level:    level,
+		Source:   domain.LogSourceAccess,
 		Message:  message,
 	}); err != nil {
 		return

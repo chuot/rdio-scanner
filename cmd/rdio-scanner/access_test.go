@@ -78,7 +78,7 @@ func TestARestrictedServerAsksForAnAccessCodeBeforeAnythingElse(t *testing.T) {
 
 	assertFrame(t, conn, golden.scoped[5])
 
-	waitForLogMentioning(t, srv.db, "invalid access code not-an-access-code for ip 127.0.0.1")
+	waitForLogMentioning(t, srv.db, "a listener from 127.0.0.1 presented an access code that is not valid")
 
 	// A code the server does know brings that listener the configuration it is entitled to see, and
 	// nothing else: the systems, groups and tags in it are the ones that access names.
@@ -106,7 +106,7 @@ func TestAFifthAccessCodeRefusesEvenAValidOne(t *testing.T) {
 
 	assertFrame(t, conn, golden[len(golden)-1])
 
-	waitForLogMentioning(t, srv.db, "locked access for ident Capture open locked")
+	waitForLogMentioning(t, srv.db, "the access code for ident Capture open is locked after too many attempts")
 }
 
 // An access code whose date has passed is refused with the expiry rather than the prompt, so that a client
@@ -122,7 +122,7 @@ func TestAnExpiredAccessCodeIsAnsweredWithAnExpiry(t *testing.T) {
 
 	assertFrame(t, conn, golden.expired[0])
 
-	waitForLogMentioning(t, srv.db, "expired access for ident Capture expired")
+	waitForLogMentioning(t, srv.db, "the access code for ident Capture expired has expired")
 }
 
 // An access code carrying a limit counts the sessions already unlocked with it, and refuses one more than
@@ -143,7 +143,7 @@ func TestAnAccessCodeLimitsHowManySessionsMayUnlockWithIt(t *testing.T) {
 		assertFrame(t, conn, want[0])
 	}
 
-	waitForLogMentioning(t, srv.db, "too many concurrent connections for ident Capture limited, limit is 1")
+	waitForLogMentioning(t, srv.db, "ident Capture limited is already at its limit of 1 listeners, and the connection was refused")
 }
 
 // A configuration change on a restricted server does not push the configuration: it pushes the request to
