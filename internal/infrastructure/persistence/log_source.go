@@ -23,6 +23,9 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"sort"
+
+	"rdio-scanner/internal/domain"
 )
 
 // The log source column and the two indexes the log search runs against.
@@ -76,6 +79,14 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 
 		if _, err := s.exec(ctx, statement); err != nil {
 			return statementError("migration", "ensureLogSource", err, statement)
+		}
+
+		// The backfill belongs to the run that added the column and to no other run. A deployment's log is
+		// read and filtered for months, and re-deciding on every start what an old entry meant is not
+		// something an operator can rely on — least of all when the operator, or a legacy server sharing
+		// the database, has already re-filed a row by hand.
+		if err := backfillLogSources(ctx, s); err != nil {
+			return err
 		}
 	}
 
@@ -175,4 +186,133 @@ func hasColumn(columns []string, want string) bool {
 	}
 
 	return false
+}
+
+// logSourceBackfill is the mapping from the prefix an existing message carries to the part of the server
+// that wrote it. It is the inventory in docs/specs/FEAT-010-logging-subsystems/research.md, and it is only
+// ever applied to rows written before the column existed.
+//
+// Two of its rules are the ones that matter. Longer prefixes are applied before shorter ones that are a
+// prefix of them, so downstream.send: is a downstream line and not something else. And a message that maps
+// to nothing is filed under legacy rather than left blank: an operator filtering by subsystem on a database
+// that predates this feature has to be able to tell "this happened before the log knew" from "nothing
+// happened".
+var logSourceBackfill = []struct {
+	prefix string
+	source domain.LogSource
+}{
+	{"admin.confighandler.put:", domain.LogSourceConfig},
+	{"admin.sectionhandler.put:", domain.LogSourceConfig},
+	{"admin.passwordhandler.post:", domain.LogSourceAdmin},
+	{"admin.useraddhandler.post:", domain.LogSourceAdmin},
+	{"admin.userremovehandler.post:", domain.LogSourceAdmin},
+	{"controller.processmessage.commandlistcall:", domain.LogSourceLivefeed},
+	{"controller.processmessage.commandpin:", domain.LogSourceLivefeed},
+	{"controller.ingestcall:", domain.LogSourceIngest},
+	{"client.message.fromjson:", domain.LogSourceLivefeed},
+	{"client.message.tojson:", domain.LogSourceLivefeed},
+	{"client.processmessage:", domain.LogSourceLivefeed},
+	{"websocket.upgrade:", domain.LogSourceLivefeed},
+	{"listeners count is ", domain.LogSourceLivefeed},
+	{"new listener from ", domain.LogSourceLivefeed},
+	{"listener disconnected from ", domain.LogSourceLivefeed},
+	{"too many concurrent connections for ident ", domain.LogSourceAccess},
+	{"too many login attempts", domain.LogSourceLogin},
+	{"invalid login attempt", domain.LogSourceLogin},
+	{"invalid access code ", domain.LogSourceAccess},
+	{"locked access for ident ", domain.LogSourceAccess},
+	{"expired access for ident ", domain.LogSourceAccess},
+	{"tokens.issue:", domain.LogSourceLogin},
+	{"tokens.validate:", domain.LogSourceLogin},
+	{"passwords.hash:", domain.LogSourceAdmin},
+	{"accesses.read:", domain.LogSourceAccess},
+	{"accesses.write:", domain.LogSourceAccess},
+	{"apikeys.read:", domain.LogSourceConfig},
+	{"apikeys.write:", domain.LogSourceConfig},
+	{"api:", domain.LogSourceUpload},
+	{"calls.checkduplicate:", domain.LogSourceCalls},
+	{"calls.getcall:", domain.LogSourceCalls},
+	{"calls.prune:", domain.LogSourceCalls},
+	{"calls.search:", domain.LogSourceCalls},
+	{"calls.writecall:", domain.LogSourceCalls},
+	{"database.migrate:", domain.LogSourceDatabase},
+	{"database.open:", domain.LogSourceDatabase},
+	{"database.seed:", domain.LogSourceDatabase},
+	{"migration.damage:", domain.LogSourceDatabase},
+	{"migration.", domain.LogSourceDatabase},
+	{"migrating ", domain.LogSourceDatabase},
+	{"schema.apply:", domain.LogSourceDatabase},
+	{"delayer.delay:", domain.LogSourceDelayer},
+	{"delayer.pop:", domain.LogSourceDelayer},
+	{"delayer.push:", domain.LogSourceDelayer},
+	{"delayer.restore:", domain.LogSourceDelayer},
+	{"dirwatch.ingest:", domain.LogSourceDirwatch},
+	{"dirwatch.watcher:", domain.LogSourceDirwatch},
+	{"dirwatch.walkdir:", domain.LogSourceDirwatch},
+	{"dirwatches.read:", domain.LogSourceDirwatch},
+	{"dirwatches.start:", domain.LogSourceDirwatch},
+	{"dirwatches.write:", domain.LogSourceDirwatch},
+	{"downstream.send:", domain.LogSourceDownstream},
+	{"downstream:", domain.LogSourceDownstream},
+	{"groups.read:", domain.LogSourceConfig},
+	{"groups.write:", domain.LogSourceConfig},
+	{"logs.logevent:", domain.LogSourceLogs},
+	{"logs.prune:", domain.LogSourceLogs},
+	{"logs.search:", domain.LogSourceLogs},
+	{"newcall:", domain.LogSourceIngest},
+	{"options.read:", domain.LogSourceConfig},
+	{"options.write:", domain.LogSourceConfig},
+	{"systems.read:", domain.LogSourceConfig},
+	{"systems.write:", domain.LogSourceConfig},
+	{"tags.read:", domain.LogSourceConfig},
+	{"tags.write:", domain.LogSourceConfig},
+	{"talkgroups.read:", domain.LogSourceConfig},
+	{"talkgroups.writetx:", domain.LogSourceConfig},
+	{"units.read:", domain.LogSourceConfig},
+	{"units.writetx:", domain.LogSourceConfig},
+	{"sites.read:", domain.LogSourceConfig},
+	{"sites.writetx:", domain.LogSourceConfig},
+	{"configuration changed", domain.LogSourceConfig},
+	{"database pruning", domain.LogSourcePrune},
+	{"server started", domain.LogSourceServer},
+	{"admin password changed.", domain.LogSourceAdmin},
+	{"ffmpeg:", domain.LogSourceFFmpeg},
+	{"ffmpeg is not available", domain.LogSourceFFmpeg},
+}
+
+// backfillLogSources files every entry the log table already holds under the part of the server that wrote
+// it, reading the prefix its message carries.
+//
+// Each mapping is one statement, and the comparison is substr(message, 1, length(prefix)) = prefix rather
+// than LIKE: the same exact match, with nothing in a message that happens to hold a % or an _ needing to be
+// escaped first.
+func backfillLogSources(ctx context.Context, s store) error {
+	mapping := make([]struct {
+		prefix string
+		source domain.LogSource
+	}, len(logSourceBackfill))
+
+	copy(mapping, logSourceBackfill)
+
+	sort.SliceStable(mapping, func(i, j int) bool {
+		return len(mapping[i].prefix) > len(mapping[j].prefix)
+	})
+
+	query := `UPDATE "logs" SET "source" = ? WHERE "source" = '' AND substr("message", 1, length(?)) = ?`
+
+	for _, entry := range mapping {
+		if _, err := s.exec(ctx, query, string(entry.source), entry.prefix, entry.prefix); err != nil {
+			return statementError("migration", "backfillLogSources", err, query)
+		}
+	}
+
+	// Whatever is still unfiled is old, and its prefix meant nothing recognisable — or it was written by a
+	// server that wrote no prefix at all.
+	legacy := `UPDATE "logs" SET "source" = ? WHERE "source" = ''`
+
+	if _, err := s.exec(ctx, legacy, string(domain.LogSourceLegacy)); err != nil {
+		return statementError("migration", "backfillLogSources", err, legacy)
+	}
+
+	return nil
 }

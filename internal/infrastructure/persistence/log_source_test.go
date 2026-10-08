@@ -25,6 +25,8 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/domain"
 )
 
 // T005: the migration step that owns every change this feature makes to a database that already exists.
@@ -304,4 +306,194 @@ func isLogsTable(object string) bool {
 
 func isLogIndex(object string, name string) bool {
 	return strings.HasPrefix(object, "index "+name+" ")
+}
+
+// TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix is CA-004: a row written before the column
+// existed is given a source by reading the prefix its message carries, and a row whose prefix maps to
+// nothing is stored as legacy rather than left blank or guessed at.
+//
+// The messages are the ones the server actually wrote, taken from the inventory in
+// docs/specs/FEAT-010-logging-subsystems/research.md, including the persistence prefixes that reach the
+// log because a caller stored err.Error() with nothing added.
+func TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix(t *testing.T) {
+	cases := []struct {
+		message string
+		want    domain.LogSource
+	}{
+		{"server started", domain.LogSourceServer},
+		{"configuration changed", domain.LogSourceConfig},
+		{"admin.confighandler.put: systems.write: constraint failed", domain.LogSourceConfig},
+		{"admin.sectionhandler.put: dirwatches.write: no such table", domain.LogSourceConfig},
+		{"apikeys.write: UNIQUE constraint failed", domain.LogSourceConfig},
+		{"groups.read: no such column", domain.LogSourceConfig},
+		{"options.write: database is locked", domain.LogSourceConfig},
+		{"systems.read: no such table", domain.LogSourceConfig},
+		{"tags.write: FOREIGN KEY constraint failed", domain.LogSourceConfig},
+		{"accesses.read: no such table", domain.LogSourceAccess},
+		{"accesses.write: UNIQUE constraint failed", domain.LogSourceAccess},
+		{"api: the access code is not valid", domain.LogSourceUpload},
+		{"calls.getcall: sql: no rows in result set", domain.LogSourceCalls},
+		{"calls.writecall: FOREIGN KEY constraint failed", domain.LogSourceCalls},
+		{"calls.search: no such column", domain.LogSourceCalls},
+		{"client.message.fromjson: unexpected end of JSON input", domain.LogSourceLivefeed},
+		{"client.message.tojson: json: unsupported type", domain.LogSourceLivefeed},
+		{"client.processmessage: unknown message", domain.LogSourceLivefeed},
+		{"controller.processmessage.commandpin: no such call", domain.LogSourceLivefeed},
+		{"controller.processmessage.commandlistcall: no such system", domain.LogSourceLivefeed},
+		{"controller.ingestcall: the call is not complete", domain.LogSourceIngest},
+		{"newcall: system=10001 talkgroup=1514000 file=audio.wav success", domain.LogSourceIngest},
+		{"database.migrate: migration.migrateGroups: no such table", domain.LogSourceDatabase},
+		{"database.open: unable to open database file", domain.LogSourceDatabase},
+		{"database.seed: UNIQUE constraint failed", domain.LogSourceDatabase},
+		{"migration.damage: 1 unit, its system is gone", domain.LogSourceDatabase},
+		{"migrating groups...", domain.LogSourceDatabase},
+		{"schema.apply: no such module", domain.LogSourceDatabase},
+		{"delayer.pop: no such table: delayed", domain.LogSourceDelayer},
+		{"delayer.push: database is locked", domain.LogSourceDelayer},
+		{"delayer.delay: the hold could not be written", domain.LogSourceDelayer},
+		{"delayer.restore: no such row", domain.LogSourceDelayer},
+		{"dirwatch.watcher: no such file or directory", domain.LogSourceDirwatch},
+		{"dirwatch.walkdir: permission denied", domain.LogSourceDirwatch},
+		{"dirwatch.ingest: no such file, /data/incoming/audio.wav", domain.LogSourceDirwatch},
+		{"dirwatches.start: no such table", domain.LogSourceDirwatch},
+		{"dirwatches.read: no such table", domain.LogSourceDirwatch},
+		{"dirwatches.write: FOREIGN KEY constraint failed", domain.LogSourceDirwatch},
+		{"downstream: system=10001 talkgroup=1514000 file=audio.wav to http://other:5002 success", domain.LogSourceDownstream},
+		{"downstream.send: Post \"http://other:5002\": dial tcp", domain.LogSourceDownstream},
+		{"ffmpeg: Conversion failed!", domain.LogSourceFFmpeg},
+		{"logs.logevent: no such table", domain.LogSourceLogs},
+		{"logs.search: no such column", domain.LogSourceLogs},
+		{"logs.prune: database is locked", domain.LogSourceLogs},
+		{"passwords.hash: bcrypt cost too high", domain.LogSourceAdmin},
+		{"tokens.issue: no such table", domain.LogSourceLogin},
+		{"tokens.validate: token is not valid", domain.LogSourceLogin},
+		{"websocket.upgrade: connection upgrade failed", domain.LogSourceLivefeed},
+		{"too many login attempts for ip=\"10.0.0.7\"", domain.LogSourceLogin},
+		{"invalid login attempt for ip 10.0.0.7", domain.LogSourceLogin},
+		{"invalid access code 4321 for ip 10.0.0.7", domain.LogSourceAccess},
+		{"locked access for ident 1234 locked", domain.LogSourceAccess},
+		{"expired access for ident 1234", domain.LogSourceAccess},
+		{"too many concurrent connections for ident 1234, limit is 2", domain.LogSourceAccess},
+		{"database pruning", domain.LogSourcePrune},
+		{"new listener from ip 10.0.0.7 with ident 1234", domain.LogSourceLivefeed},
+		{"listener disconnected from ip 10.0.0.7", domain.LogSourceLivefeed},
+		{"listeners count is 3", domain.LogSourceLivefeed},
+		{"admin password changed.", domain.LogSourceAdmin},
+		{"admin.passwordhandler.post: unable to change admin password", domain.LogSourceAdmin},
+		{"admin.useraddhandler.post: no such table", domain.LogSourceAdmin},
+		{"admin.userremovehandler.post: no such row", domain.LogSourceAdmin},
+		{"a line that names nothing this server recognises", domain.LogSourceLegacy},
+		{"", domain.LogSourceLegacy},
+	}
+
+	db := openLegacyDatabaseWithout(t, "logs")
+
+	for _, c := range cases {
+		if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`, "info", c.message, int64(1760000000000)); err != nil {
+			t.Fatalf("storing %q: %v", c.message, err)
+		}
+	}
+
+	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("ensureLogSourceColumn: %v", err)
+	}
+
+	for _, c := range cases {
+		var got string
+
+		query := `SELECT "source" FROM "logs" WHERE "message" = ?`
+
+		if err := db.QueryRow(query, c.message).Scan(&got); err != nil {
+			t.Fatalf("reading back %q: %v", c.message, err)
+		}
+
+		if got != string(c.want) {
+			t.Errorf("%q was filed under %q, want %q", c.message, got, c.want)
+		}
+	}
+}
+
+// TestBackfillLogSourcesFilesTheLegacyFixtureOwnRows is the deployment that actually exists: the five
+// entries the legacy server wrote into the fixture.
+func TestBackfillLogSourcesFilesTheLegacyFixtureOwnRows(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	want := map[string]domain.LogSource{
+		"server started":        domain.LogSourceServer,
+		"configuration changed": domain.LogSourceConfig,
+		"ffmpeg is not available, no audio conversion will be performed": domain.LogSourceFFmpeg,
+	}
+
+	rows, err := db.Query(`SELECT "message", "source" FROM "logs" ORDER BY "logid"`)
+	if err != nil {
+		t.Fatalf("reading the log rows: %v", err)
+	}
+
+	defer rows.Close()
+
+	filed := 0
+
+	for rows.Next() {
+		var (
+			message string
+			source  string
+		)
+
+		if err := rows.Scan(&message, &source); err != nil {
+			t.Fatalf("reading the log rows: %v", err)
+		}
+
+		filed++
+
+		if expected, named := want[message]; named && source != string(expected) {
+			t.Errorf("%q was filed under %q, want %q", message, source, expected)
+		}
+
+		if !domain.IsKnownLogSource(domain.LogSource(source)) {
+			t.Errorf("%q was filed under %q, which is not a source this server knows", message, source)
+		}
+	}
+
+	if filed != 5 {
+		t.Errorf("the fixture's log table holds %d rows after the migration, want the 5 it was written with", filed)
+	}
+}
+
+// TestBackfillLogSourcesRunsOnce says why the backfill is tied to the run that added the column: a
+// deployment's log is read and filtered for months, and re-deciding what an old entry meant on every start
+// is not something an operator can rely on.
+func TestBackfillLogSourcesRunsOnce(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "logs")
+
+	if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`, "info", "dirwatch.walkdir: permission denied", int64(1760000000000)); err != nil {
+		t.Fatalf("storing the entry: %v", err)
+	}
+
+	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("ensureLogSourceColumn: %v", err)
+	}
+
+	// An operator, or another server sharing the database, re-files the entry. The next start must leave
+	// that decision alone.
+	if _, err := db.Exec(`UPDATE "logs" SET "source" = 'legacy'`); err != nil {
+		t.Fatalf("re-filing the entry: %v", err)
+	}
+
+	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("ensureLogSourceColumn a second time: %v", err)
+	}
+
+	var source string
+
+	if err := db.QueryRow(`SELECT "source" FROM "logs" WHERE "message" = 'dirwatch.walkdir: permission denied'`).Scan(&source); err != nil {
+		t.Fatalf("reading the entry back: %v", err)
+	}
+
+	if source != string(domain.LogSourceLegacy) {
+		t.Errorf("the second run re-filed the entry as %q, want the legacy it was filed under left alone", source)
+	}
 }
