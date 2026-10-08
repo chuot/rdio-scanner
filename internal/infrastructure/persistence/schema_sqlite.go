@@ -189,6 +189,7 @@ var sqliteSchema = []string{
 	`create table if not exists "logs" (
     "logid" integer not null PRIMARY KEY AUTOINCREMENT,
     "level" text not null,
+    "source" text not null default '',
     "message" text not null,
     "timestamp" integer not null
   );`,

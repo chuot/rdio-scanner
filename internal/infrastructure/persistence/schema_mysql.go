@@ -186,6 +186,7 @@ var mysqlSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "logs" (
     "logId" bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
     "level" text NOT NULL,
+    "source" varchar(255) NOT NULL DEFAULT '',
     "message" text NOT NULL,
     "timestamp" bigint NOT NULL
   );`,

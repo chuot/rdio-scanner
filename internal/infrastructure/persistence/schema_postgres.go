@@ -186,6 +186,7 @@ var postgresSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "logs" (
     "logId" bigserial NOT NULL PRIMARY KEY,
     "level" text NOT NULL,
+    "source" text NOT NULL DEFAULT '',
     "message" text NOT NULL,
     "timestamp" bigint NOT NULL
   );`,

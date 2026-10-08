@@ -264,3 +264,46 @@ func readTableNames(t *testing.T, db *sql.DB) []string {
 
 	return names
 }
+
+// TestEveryDialectSchemaDeclaresTheLogSourceColumn is the FEAT-010 half of the same guard the table
+// coverage gives: a log entry names the part of the server that wrote it, and a deployment on the backend
+// whose copy lost the column has a log view that cannot say where its entries came from.
+//
+// The two log indexes are deliberately not asserted here. ApplySchema's statements are the legacy
+// server's, and TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt requires that applying them
+// to a database the other server wrote changes nothing at all — indexes included. The indexes belong to
+// the migration step that brings an existing database up to this shape.
+func TestEveryDialectSchemaDeclaresTheLogSourceColumn(t *testing.T) {
+	for _, tc := range []struct {
+		dialect Dialect
+		schema  []string
+	}{
+		{DialectSqlite, sqliteSchema},
+		{DialectMariadb, mysqlSchema},
+		{DialectMysql, mysqlSchema},
+		{DialectPostgresql, postgresSchema},
+	} {
+		declared := ""
+
+		for _, statement := range tc.schema {
+			if regexp.MustCompile(`(?i)CREATE TABLE IF NOT EXISTS "logs"`).MatchString(statement) {
+				declared = statement
+
+				break
+			}
+		}
+
+		if declared == "" {
+			t.Fatalf("%s has no logs table to declare a source on", tc.dialect)
+		}
+
+		// MySQL refuses a default on a TEXT column, so the shared MySQL/MariaDB copy declares the
+		// source as a varchar. PostgreSQL and SQLite keep it as text, which is what the rest of their
+		// copies use. What every dialect has to have in common is the NOT NULL and the default: the
+		// default is what lets the legacy server keep inserting into this table without knowing the
+		// column exists.
+		if !regexp.MustCompile(`(?i)"source"\s+(text|varchar\(\d+\))\s+not\s+null\s+default\s+''`).MatchString(declared) {
+			t.Errorf("%s declares the logs table without a source column carrying a default:\n%s", tc.dialect, declared)
+		}
+	}
+}
