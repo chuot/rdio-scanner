@@ -1,5 +1,19 @@
 # Change log
 
+## Version 8.0
+
+**Make sure to backup your config and your database before updating to Version 8.0.**
+
+_Entry in progress: Version 8.0 is still being assembled, and this section names what has landed._
+
+- The server log now names the part of the server that wrote every entry, and the log view filters on it: directory watchers, downstreams, logins, live feed, retention, and the rest of them.
+- Log messages no longer begin with the name of the internal function that wrote them. They say what happened, and where something failed they say the failure's own reason after it. Entries written by the previous server were kept, and filed under the part of the server their old prefix names.
+- The administration log view gained a subsystem filter, a text search over the message, a count of how many entries each part of the server wrote — clickable, so the count is how you narrow the view — and an auto-refresh toggle.
+- Lines that only ever went to the console are written to the log as well: the base folder the server serves, a listener message the server could not read, a listener connection that was refused.
+- The console and the service log say the level and the subsystem in front of every line, so `journalctl -u rdio-scanner | grep ' dirwatch: '` finds what the directory watchers reported.
+- The hourly retention pass reports what it removed, and a pass that could not run says so and says why. It used to write a notice before it started, which made a retention that had been broken for a month look healthy.
+- See [docs/admin-logs.md](docs/admin-logs.md) for the subsystems, the filters, and where to look when something is wrong.
+
 ## Version 7.0
 
 **Make sure to backup your config and your database before updating to Version 7.0.**

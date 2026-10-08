@@ -49,6 +49,28 @@ func TestTheLogViewOffersEverySubsystemTheServerHas(t *testing.T) {
 	}
 }
 
+// TestTheLogDocumentationNamesEverySubsystemTheServerHas is the same pin on the other copy of the
+// vocabulary: the operator's page. The document is where an operator learns that `dirwatch` is the thing to
+// ask for when recordings stop arriving, so a subsystem the server writes and the document does not name is a
+// subsystem nobody can look for.
+func TestTheLogDocumentationNamesEverySubsystemTheServerHas(t *testing.T) {
+	const path = "../../docs/admin-logs.md"
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("%s is missing: %v\nthe page that tells an operator which subsystem to filter on", path, err)
+	}
+
+	document := string(b)
+
+	for _, source := range domain.KnownLogSources() {
+		if !strings.Contains(document, "`"+string(source)+"`") {
+			t.Errorf("%s is not named in %s\nan operator cannot filter on a subsystem the documentation never "+
+				"mentions, and the log view offers it", source, path)
+		}
+	}
+}
+
 // logSourceChoice is one entry of the log view's subsystem select.
 type logSourceChoice struct {
 	value string
