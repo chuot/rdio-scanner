@@ -15,6 +15,27 @@
       ],
       "whatChanged": "The log view's answer carries the part of the server that wrote each entry, and a count of how many entries each part wrote among everything the criteria match. The legacy server has no such thing to report, so this capture is the shape this server's contract declares over the captured scenario, and not the bytes the legacy tree wrote.",
       "unchanged": "count, dateStart, dateStop and the echoed options are the legacy server's shape and still match what it wrote; so are the three entries, their order, and the criteria the capture script submitted."
+    },
+    "dirwatch-autopopulate.json": {
+      "contract": "docs/specs/FEAT-010-logging-subsystems/spec.md",
+      "decidedBy": "docs/specs/FEAT-010-logging-subsystems/decision-normalize-log-messages.md",
+      "carries": [
+        "call from system 1 talkgroup 1514000 success, first.wav",
+        "call from system 4660 talkgroup 1514000 success, 120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3"
+      ],
+      "whatChanged": "REQ-005 rewrites all four log rows this run leaves behind. The legacy server wrote `newcall: system=1 talkgroup=1514000 file=first.wav success`; this server writes `call from system 1 talkgroup 1514000 success, first.wav` and files it under `ingest`. The capture is compared against a live run of this server, so it has to carry the sentences this server actually writes.",
+      "unchanged": "The calls, groups, tags, talkgroups, units and systems rows are the legacy tree's bytes. So are the four log rows' level and their order. The capture reports the two log columns the legacy capture reported — level and message — so the source column this server stores is not part of it."
+    },
+    "dirwatch-end-to-end.json": {
+      "contract": "docs/specs/FEAT-010-logging-subsystems/spec.md",
+      "decidedBy": "docs/specs/FEAT-010-logging-subsystems/decision-normalize-log-messages.md",
+      "carries": [
+        "a listener joined from 127.0.0.1",
+        "there is 1 listener",
+        "call from system 10001 talkgroup 1514000 success, call.wav"
+      ],
+      "whatChanged": "REQ-005 rewrites all five log rows this run leaves behind: `new listener from ip 127.0.0.1` and `listener disconnected from ip 127.0.0.1` became `a listener joined from 127.0.0.1` and `a listener left from 127.0.0.1`, `listeners count is 1` became `there is 1 listener`, and the two `newcall:` lines became the sentences the ingest path writes.",
+      "unchanged": "The captured frames are the legacy tree's bytes, frame for frame: the livefeed's wording changed in what the server records about a listener, not in what the listener is sent. The calls, groups, tags, talkgroups, units and systems rows, the log levels, and the order of the log rows are unchanged."
     }
   },
   "versionField": {
@@ -28,6 +49,6 @@
       "rest-config.json",
       "adminws-config.json"
     ],
-    "note": "What a server reports about itself is part of what a client is told, so the version is the one field in a pinned capture that a release moves, and it moves when the release declares a core in VERSION.txt. Every other byte of every capture is still the bytes the legacy tree wrote, except for the captures declared in shapeSuperseded, which a feature gave a new shape and which name the contract that did it."
+    "note": "What a server reports about itself is part of what a client is told, so the version is the one field in a pinned capture that a release moves, and it moves when the release declares a core in VERSION.txt. Every other byte of every capture is still the bytes the legacy tree wrote, except for the captures declared in shapeSuperseded, which a feature gave a new shape and which name the document that owns that shape and the decision that authorized it."
   }
 }
