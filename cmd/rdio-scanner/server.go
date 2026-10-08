@@ -173,8 +173,20 @@ func newServer(config *Config, out io.Writer, as *daemon) (*server, error) {
 	// The migration and the seed are the legacy server's NewDatabase: the schema first, then the groups
 	// and tags a deployment that has never been started is expected to have. Both do nothing on a
 	// database that already has them, which is what makes an upgrade in place the ordinary case.
-	if err := persistence.Migrate(ctx, db, dialect, func(message string) {
-		srv.console.println(message)
+	//
+	// What the pass says is printed as it happens — that is what an operator watching an upgrade sees —
+	// and kept, because it cannot be written to the log view yet: the pass is rebuilding that table, and
+	// an entry written now takes an id in the very range the deployment's own history is being moved into.
+	// wire writes them once there is a log repository to write them through.
+	migrationLines := []domain.LogEntry{}
+
+	if err := persistence.Migrate(ctx, db, dialect, func(level, message string) {
+		// Said out loud in the same shape every other line the server says has, so that the word an
+		// operator greps for finds this line too. It is not the echo of an entry — there is no entry yet —
+		// which is why the level and the subsystem are put on it here.
+		srv.console.println(renderLogEntry(level, domain.LogSourceDatabase, message))
+
+		migrationLines = append(migrationLines, domain.LogEntry{Level: level, Message: message})
 	}); err != nil {
 		return nil, err
 	}
@@ -183,7 +195,7 @@ func newServer(config *Config, out io.Writer, as *daemon) (*server, error) {
 		return nil, err
 	}
 
-	if err := srv.wire(); err != nil {
+	if err := srv.wire(migrationLines); err != nil {
 		return nil, err
 	}
 
@@ -196,7 +208,11 @@ func newServer(config *Config, out io.Writer, as *daemon) (*server, error) {
 // The order is the order the pieces need each other in: the repositories before the adapters that read
 // them, the hub before the use cases that report through it, and the use cases before the endpoints that
 // answer with them.
-func (s *server) wire() error {
+//
+// migrationLines are what the migration pass said while it was rebuilding the log table. They are filed
+// here, at the first moment there is a log repository to file them in, and before anything else the server
+// writes.
+func (s *server) wire(migrationLines []domain.LogEntry) error {
 	ctx := context.Background()
 
 	accesses := persistence.NewAccesses(s.db, s.dialect)
@@ -229,6 +245,19 @@ func (s *server) wire() error {
 
 	credentials := passwords.NewBcrypt()
 	s.hashes = credentials
+
+	// The migration said these things while the log table was still being rebuilt, which is why they were
+	// kept rather than written: an entry written during the pass takes an id in the log table, and the pass
+	// is busy moving the deployment's own history into that table with the ids that history arrived with.
+	// They are filed now, in the order they were said, through the plain repository and not the echoing one
+	// — the terminal already heard every one of them as it happened, and saying them again would be two
+	// lines for one event.
+	for _, entry := range migrationLines {
+		entry.DateTime = s.clock.Now()
+		entry.Source = domain.LogSourceDatabase
+
+		_ = logs.AppendLog(ctx, entry)
+	}
 
 	// Every log entry the server writes is also said out loud, which is what the legacy server's
 	// LogEvent does and what an operator running the server in a terminal expects. A server running as a

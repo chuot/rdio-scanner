@@ -28,7 +28,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"rdio-scanner/internal/domain"
 )
+
+// Progress is what the migration pass reports to while it runs: one line, and the level that line is
+// filed under. A table the pass found and carried is a notice; a row it could not carry, and a unit the
+// legacy server left damaged, are problems. The pass cannot write these as log entries itself — it is the
+// pass rebuilding the log table — so the level is decided here, where the pass knows which kind of line it
+// has, and not guessed afterwards from the shape of a sentence.
+type Progress func(level, message string)
 
 // Migrate applies the schema and then the v6 → v7 migration pass.
 //
@@ -45,12 +54,15 @@ import (
 // v6 table, and a table that is not there ends that migration with nothing said and nothing
 // done. See the note on `migrateGroups` for what the probe does, and does not, look at.
 //
-// `progress` receives every line the legacy server wrote with `log.Println` while migrating: the
-// `migrating groups...` announcement of each table it found, and each per-row failure it printed
-// and carried on from. The composition root (T042) routes them to the server log; a test can
-// collect them. A nil `progress` is accepted and simply discards them. After the last migration,
-// `progress` also receives the damage report of `reportMigrationDamage`, which the legacy server
-// never wrote: it is what this server says about a database the legacy server already migrated.
+// `progress` receives every line the pass says while it runs, with the level the line is filed under: the
+// `migrating groups...` announcement of each v6 table it found is a notice, and each row it could not carry
+// and each unit the legacy server left damaged is a problem. A nil `progress` is accepted and simply
+// discards them.
+//
+// The lines are said while the pass runs rather than collected by this package, because the pass is what
+// is rebuilding the log table: an entry written here is written into the table whose ids the deployment's
+// own history is being moved into. The composition root prints them as they arrive, keeps them, and writes
+// them once the pass has returned.
 //
 // A failure the legacy migration *returned* is returned here, wrapped the way `Database.migrate`
 // wrapped it (`database.migrate: migration.migrateGroups: …`). A failure it *printed* is not an
@@ -70,9 +82,9 @@ import (
 // repository. They are named so a reader can see which behavior is being mirrored, and they resolve
 // at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
 // docs/specs/FEAT-005-server-ng-cutover/spec.md.
-func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(message string)) error {
+func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress Progress) error {
 	if progress == nil {
-		progress = func(string) {}
+		progress = func(_, _ string) {}
 	}
 
 	if err := ApplySchema(ctx, db, dialect); err != nil {
@@ -92,7 +104,7 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(mes
 		return operationError("database", "migrate", err)
 	}
 
-	for _, migrate := range []func(context.Context, store, func(string)) error{
+	for _, migrate := range []func(context.Context, store, Progress) error{
 		migrateGroups,
 		migrateTags,
 		migrateSystems,
@@ -121,16 +133,21 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(mes
 	return nil
 }
 
-// reportFailure hands a per-row migration failure to `progress`, in the shape the legacy
-// `log.Println(formatError(err, query))` line had. The statement it names is the parameterized one,
-// as `statementError` documents.
+// reportFailure hands a failure the migration met while carrying one table across to `progress`, in the
+// shape every log entry this server writes has: a sentence saying which part of the upgrade could not be
+// finished, then the failure's own text, which names the statement that failed.
+//
+// The legacy shape was `log.Println(formatError(err, query))` — the failure's text alone. That is kept,
+// after the sentence, because it is the only part of the line that names the statement, and a migration
+// failure an operator cannot trace to a statement is a failure they cannot fix.
 //
 // It used to have a call site that handed it a nil error, because the legacy migration it mirrored did:
 // the legacy error formatter called `Error()` on that nil and took the server down, where this rendered it
 // as `%!s(<nil>)` and carried on. The repaired calls migration reports only failures it actually has, so
 // no call site hands it a nil error.
-func reportFailure(progress func(message string), section, operation string, err error, query string) {
-	progress(statementError(section, operation, err, query).Error())
+func reportFailure(progress Progress, part, section, operation string, err error, query string) {
+	progress(domain.LogLevelWarn, fmt.Sprintf("the migration of %s could not be finished: %s", part,
+		statementError(section, operation, err, query).Error()))
 }
 
 // migrateGroups mirrors `migrateGroups` in `server/migrations.go`.
@@ -145,14 +162,14 @@ func reportFailure(progress func(message string), section, operation string, err
 //
 // The rows are re-ordered by label and given a display order of 1..n, while keeping their v6
 // identifiers, so a group keeps the identity its talkgroups refer to.
-func migrateGroups(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateGroups"
+func migrateGroups(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateGroups", "groups"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerGroups"`); err != nil {
 		return nil
 	}
 
-	progress("migrating groups...")
+	progress(domain.LogLevelInfo, "migrating groups...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -207,13 +224,13 @@ func migrateGroups(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "groups" ("groupId", "label", "order") VALUES (?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, g.id, g.label, i+1); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerGroups"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -226,14 +243,14 @@ func migrateGroups(ctx context.Context, s store, progress func(string)) error {
 
 // migrateTags mirrors `migrateTags` in `server/migrations.go`:
 // the same probe, the same sort by label, the same 1..n display order, the same v6 identifiers.
-func migrateTags(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateTags"
+func migrateTags(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateTags", "tags"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerTags"`); err != nil {
 		return nil
 	}
 
-	progress("migrating tags...")
+	progress(domain.LogLevelInfo, "migrating tags...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -288,13 +305,13 @@ func migrateTags(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "tags" ("tagId", "label", "order") VALUES (?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, t.id, t.label, i+1); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerTags"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -312,14 +329,14 @@ func migrateTags(ctx context.Context, s store, progress func(string)) error {
 // migration resolves the v6 references against. The v6 blacklist is stored as a JSON array and
 // the legacy migration stores it with the brackets removed, which is the shape the v7 blacklist
 // is kept in.
-func migrateSystems(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateSystems"
+func migrateSystems(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateSystems", "systems"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerSystems"`); err != nil {
 		return nil
 	}
 
-	progress("migrating systems...")
+	progress(domain.LogLevelInfo, "migrating systems...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -389,13 +406,13 @@ func migrateSystems(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "label", "led", "order", "systemRef") VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, systemID.Int64, populate, blacklist, name, color, rank, ref); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerSystems"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -414,14 +431,14 @@ func migrateSystems(ctx context.Context, s store, progress func(string)) error {
 // dropped with the v6 table. A talkgroup whose group is 0 — which is what v6 stored for a
 // talkgroup in no group — reaches the `talkgroupGroups` insert with 0, fails the foreign key, and
 // is reported per row while the talkgroup itself stays.
-func migrateTalkgroups(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateTalkgroups"
+func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateTalkgroups", "talkgroups"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerTalkgroups"`); err != nil {
 		return nil
 	}
 
-	progress("migrating talkgroups...")
+	progress(domain.LogLevelInfo, "migrating talkgroups...")
 
 	systems := map[int64]int64{}
 
@@ -542,17 +559,17 @@ func migrateTalkgroups(ctx context.Context, s store, progress func(string)) erro
 			query = `INSERT INTO "talkgroupGroups" ("groupId", "talkgroupId") VALUES (?, ?)`
 
 			if _, err := tx.exec(ctx, query, groupIDs[0], talkgroupID.Int64); err != nil {
-				reportFailure(progress, section, operation, err, query)
+				reportFailure(progress, part, section, operation, err, query)
 			}
 
 		} else {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerTalkgroups"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -568,14 +585,14 @@ func migrateTalkgroups(ctx context.Context, s store, progress func(string)) erro
 // The v6 unit names its system by the v6 system's `id`, resolved the same way the talkgroups
 // migration resolves it, so a unit whose system is not in the `systems` table is skipped without
 // a word and dropped with the v6 table.
-func migrateUnits(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateUnits"
+func migrateUnits(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateUnits", "units"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerUnits"`); err != nil {
 		return nil
 	}
 
-	progress("migrating units...")
+	progress(domain.LogLevelInfo, "migrating units...")
 
 	systems := map[int32]int32{}
 
@@ -663,13 +680,13 @@ func migrateUnits(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, unitID.Int64, unit.label, unit.order, systems[systemID.Int32], unit.unitRef); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerUnits"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -690,14 +707,14 @@ func migrateUnits(ctx context.Context, s store, progress func(string)) error {
 //
 // The unpacked values are stored as the JSON text of the value, so a string option is stored
 // with its quotes — which is what the legacy options reader unmarshals.
-func migrateOptions(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateOptions"
+func migrateOptions(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateOptions", "options"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerConfigs"`); err != nil {
 		return nil
 	}
 
-	progress("migrating options...")
+	progress(domain.LogLevelInfo, "migrating options...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -792,7 +809,7 @@ func migrateOptions(ctx context.Context, s store, progress func(string)) error {
 			query = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
 
 			if _, err := tx.exec(ctx, query, key.String, value.String); err != nil {
-				reportFailure(progress, section, operation, err, query)
+				reportFailure(progress, part, section, operation, err, query)
 			}
 
 			continue
@@ -813,14 +830,14 @@ func migrateOptions(ctx context.Context, s store, progress func(string)) error {
 			query = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
 
 			if _, err := tx.exec(ctx, query, option.key, stored); err != nil {
-				reportFailure(progress, section, operation, err, query)
+				reportFailure(progress, part, section, operation, err, query)
 			}
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerConfigs"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -835,14 +852,14 @@ func migrateOptions(ctx context.Context, s store, progress func(string)) error {
 // the v6 migration bookkeeping table has no v7 counterpart, so it is dropped, and unlike every
 // other migration its failure is returned rather than printed — the legacy server stops there,
 // with the v6 tables the later migrations would have consumed still in place.
-func migrateMeta(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateMeta"
+func migrateMeta(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateMeta", "meta"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerMeta"`); err != nil {
 		return nil
 	}
 
-	progress("migrating meta...")
+	progress(domain.LogLevelInfo, "migrating meta...")
 
 	query := `DROP TABLE "rdioScannerMeta"`
 	if _, err := s.exec(ctx, query); err != nil {
@@ -857,14 +874,18 @@ func migrateMeta(ctx context.Context, s store, progress func(string)) error {
 // The v6 log timestamp is a datetime; the v7 one is Unix milliseconds, which is what every
 // timestamp in this schema is. A row with no timestamp, no level, or no message is skipped
 // silently, as the legacy migration skips it.
-func migrateLogs(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateLogs"
+//
+// The rows it carries are filed afterwards. They were written by a server that had no source column, and
+// the step that files the rows a database already has ran before this one inserted them, so without this
+// the same deployment has one log view if it was already on v7 and another if it upgraded here.
+func migrateLogs(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateLogs", "logs"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerLogs"`); err != nil {
 		return nil
 	}
 
-	progress("migrating logs...")
+	progress(domain.LogLevelInfo, "migrating logs...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -910,13 +931,13 @@ func migrateLogs(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "logs" ("logId", "level", "message", "timestamp") VALUES (?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, int64(logID.Int32), level.String, message.String, dateTime.Time.UnixMilli()); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerLogs"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -924,20 +945,25 @@ func migrateLogs(ctx context.Context, s store, progress func(string)) error {
 		return operationError(section, operation, err)
 	}
 
-	return nil
+	// The rows just carried across arrived with nothing in the source column: they were written by a
+	// server that had no such column, and the add-column step that files the rows a database already has
+	// ran before them. They are filed here, with the same reading of the prefix the legacy server wrote,
+	// so that a deployment upgrading through this server ends up with the same log view as one that was
+	// already on v7 — and an operator filtering it by login finds the failed logins of both.
+	return backfillLogSources(ctx, s)
 }
 
 // migrateDownstreams mirrors `migrateDownstreams` in `server/migrations.go`.
 // A downstream with no apikey, no scope, or no url is skipped silently, as the legacy migration
 // skips it: those three columns are the whole row's meaning.
-func migrateDownstreams(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateDownstreams"
+func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateDownstreams", "downstreams"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerDownstreams"`); err != nil {
 		return nil
 	}
 
-	progress("migrating downstreams...")
+	progress(domain.LogLevelInfo, "migrating downstreams...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -998,13 +1024,13 @@ func migrateDownstreams(ctx context.Context, s store, progress func(string)) err
 		query = `INSERT INTO "downstreams" ("downstreamId", "apikey", "disabled", "order", "systems", "url") VALUES (?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, downstreamID.Int64, apikey.String, isDisabled, rank, systems.String, url.String); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerDownstreams"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -1035,14 +1061,14 @@ func migrateDownstreams(ctx context.Context, s store, progress func(string)) err
 // deployment loses nothing; a backend that does not match them case-sensitively — MySQL on a
 // case-sensitive filesystem — fails the probe, and its v6 dirwatches are neither migrated nor
 // dropped, on that start or on any later one.
-func migrateDirwatches(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateDirwatches"
+func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerDirwatches"`); err != nil {
 		return nil
 	}
 
-	progress("migrating dirwatches...")
+	progress(domain.LogLevelInfo, "migrating dirwatches...")
 
 	var (
 		systems    = map[int32]int32{}
@@ -1178,13 +1204,13 @@ func migrateDirwatches(ctx context.Context, s store, progress func(string)) erro
 		query = `INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, dirwatchID.Int64, wait, drops, directory.String, isDisabled, suffix, freq, filter, rank, refSystem, refTalkgroup, parser); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "RdioScannerDirWatches"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -1207,14 +1233,14 @@ func migrateDirwatches(ctx context.Context, s store, progress func(string)) erro
 // is the empty array takes the list branch and stores no frequency at all, even when its single
 // `frequency` column names one; the `sources` column is checked for the empty array as well, so
 // an empty source list does fall through to the single `source` column.
-func migrateCalls(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateCalls"
+func migrateCalls(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateCalls", "calls"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerCalls"`); err != nil {
 		return nil
 	}
 
-	progress("migrating calls...")
+	progress(domain.LogLevelInfo, "migrating calls...")
 
 	var (
 		systems    = map[int32]int32{}
@@ -1318,7 +1344,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "calls" ("callId", "audio", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, ?, ?, ?, 0, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, int64(callID.Int32), []byte(audio.String), filename, mime, systems[systemRef.Int32], talkgroups[systemRef.Int32][talkgroupRef.Int32], dateTime.Time.UnixMilli()); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 
 			continue
 		}
@@ -1356,7 +1382,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 						query = `INSERT INTO "callFrequencies" ("callId", "errors", "frequency", "offset", "spikes") VALUES (?, ?, ?, ?, ?)`
 
 						if _, err := tx.exec(ctx, query, int64(callID.Int32), errors, freq, offset, spikes); err != nil {
-							reportFailure(progress, section, operation, err, query)
+							reportFailure(progress, part, section, operation, err, query)
 						}
 					}
 				}
@@ -1366,7 +1392,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 			query = `INSERT INTO "callFrequencies" ("callId", "errors", "frequency", "offset", "spikes") VALUES (?, 0, ?, 0, 0)`
 
 			if _, err := tx.exec(ctx, query, int64(callID.Int32), int64(frequency.Int32)); err != nil {
-				reportFailure(progress, section, operation, err, query)
+				reportFailure(progress, part, section, operation, err, query)
 			}
 		}
 
@@ -1389,7 +1415,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 						query = `INSERT INTO "callPatches" ("callId", "talkgroupId") VALUES (?, ?)`
 
 						if _, err := tx.exec(ctx, query, int64(callID.Int32), patched); err != nil {
-							reportFailure(progress, section, operation, err, query)
+							reportFailure(progress, part, section, operation, err, query)
 						}
 					}
 				}
@@ -1415,7 +1441,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 						query = `INSERT INTO "callUnits" ("callId", "offset", "unitRef") VALUES (?, ?, ?)`
 
 						if _, err := tx.exec(ctx, query, int64(callID.Int32), m["pos"], int64(src)); err != nil {
-							reportFailure(progress, section, operation, err, query)
+							reportFailure(progress, part, section, operation, err, query)
 						}
 					}
 				}
@@ -1436,7 +1462,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 			query = `SELECT COUNT(*) FROM "units" WHERE "systemId" = ? AND "unitRef" = ?`
 
 			if err := tx.queryRow(ctx, query, systems[systemRef.Int32], int64(source.Int32)).Scan(&count); err != nil {
-				reportFailure(progress, section, operation, err, query)
+				reportFailure(progress, part, section, operation, err, query)
 
 				continue
 			}
@@ -1447,7 +1473,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 				// The label is the number as text, which is what the legacy statement — a number
 				// interpolated straight into a text column — leaves in that column.
 				if _, err := tx.exec(ctx, query, strconv.FormatInt(int64(source.Int32), 10), systems[systemRef.Int32], int64(source.Int32)); err != nil {
-					reportFailure(progress, section, operation, err, query)
+					reportFailure(progress, part, section, operation, err, query)
 
 					continue
 				}
@@ -1456,7 +1482,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 			query = `INSERT INTO "callUnits" ("callId", "offset", "unitRef") VALUES (?, ?, ?)`
 
 			if _, err := tx.exec(ctx, query, int64(callID.Int32), 0, int64(source.Int32)); err != nil {
-				reportFailure(progress, section, operation, err, query)
+				reportFailure(progress, part, section, operation, err, query)
 			}
 		}
 	}
@@ -1465,7 +1491,7 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 
 	query = `DROP TABLE "rdioScannerCalls"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -1479,14 +1505,14 @@ func migrateCalls(ctx context.Context, s store, progress func(string)) error {
 // migrateApikeys mirrors `migrateApikeys` in `server/migrations.go`.
 // Only a missing identifier skips a row: an apikey with no identity or no key is still stored,
 // with the empty value the legacy migration stored.
-func migrateApikeys(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateApikeys"
+func migrateApikeys(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateApikeys", "apikeys"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerApiKeys"`); err != nil {
 		return nil
 	}
 
-	progress("migrating apikeys...")
+	progress(domain.LogLevelInfo, "migrating apikeys...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -1550,13 +1576,13 @@ func migrateApikeys(ctx context.Context, s store, progress func(string)) error {
 		query = `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, apikeyID.Int64, isDisabled, name, value, rank, scope); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerApiKeys"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -1572,14 +1598,14 @@ func migrateApikeys(ctx context.Context, s store, progress func(string)) error {
 // `accesses.expiration` is the one timestamp in this schema that is not Unix milliseconds: the
 // legacy server stores it in whole seconds, both here and in its own access writes, and the
 // migration converts the v6 datetime to seconds to match.
-func migrateAccesses(ctx context.Context, s store, progress func(string)) error {
-	const section, operation = "migration", "migrateAccesses"
+func migrateAccesses(ctx context.Context, s store, progress Progress) error {
+	const section, operation, part = "migration", "migrateAccesses", "accesses"
 
 	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerAccesses"`); err != nil {
 		return nil
 	}
 
-	progress("migrating accesses...")
+	progress(domain.LogLevelInfo, "migrating accesses...")
 
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -1648,13 +1674,13 @@ func migrateAccesses(ctx context.Context, s store, progress func(string)) error 
 		query = `INSERT INTO "accesses" ("accessId", "code", "expiration", "ident", "limit", "order", "systems") VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, accessID.Int64, code.String, expires, name, max, rank, scope); err != nil {
-			reportFailure(progress, section, operation, err, query)
+			reportFailure(progress, part, section, operation, err, query)
 		}
 	}
 
 	query = `DROP TABLE "rdioScannerAccesses"`
 	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, section, operation, err, query)
+		reportFailure(progress, part, section, operation, err, query)
 	}
 
 	if err := tx.commit(); err != nil {
@@ -1687,14 +1713,15 @@ func migrateAccesses(ctx context.Context, s store, progress func(string)) error 
 // The comparison that finds the second shape is done here rather than in the query, because `label` is
 // text and `unitRef` is a number, and the three dialects this package serves cast between them three
 // different ways.
-func reportMigrationDamage(ctx context.Context, s store, progress func(string)) {
+func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 	const section, operation = "migration", "damage"
 
 	query := `SELECT u."unitId", u."label", u."unitRef", s."label", s."systemRef" FROM "units" AS u LEFT JOIN "systems" AS s ON s."systemId" = u."systemId" ORDER BY u."unitId"`
 
 	rows, err := s.query(ctx, query)
 	if err != nil {
-		progress(statementError(section, operation, err, query).Error())
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not report what it left behind: %s",
+			statementError(section, operation, err, query).Error()))
 
 		return
 	}
@@ -1716,7 +1743,8 @@ func reportMigrationDamage(ctx context.Context, s store, progress func(string)) 
 			continue
 		}
 
-		line := fmt.Sprintf("migration.damage:   unit %d %q of %s", unitID.Int64, label.String, damagedSystem(systemLabel, systemRef))
+		line := fmt.Sprintf("the migration left unit %d %q of %s damaged", unitID.Int64, label.String,
+			damagedSystem(systemLabel, systemRef))
 
 		switch {
 		case unitRef.Int64 == 0:
@@ -1727,11 +1755,11 @@ func reportMigrationDamage(ctx context.Context, s store, progress func(string)) 
 		}
 	}
 
-	reportDamaged(progress, lost, "unit holds no radio reference", "units hold no radio reference",
+	reportDamaged(progress, lost, "it holds no radio reference", "they hold no radio reference",
 		"the numbers they were migrated from are not in this database")
 
-	reportDamaged(progress, made, "unit is labelled with its own number",
-		"units are labelled with their own numbers",
+	reportDamaged(progress, made, "it is labelled with its own number",
+		"they are labelled with their own numbers",
 		"the shape of a unit the migration created rather than a deployment named")
 }
 
@@ -1745,20 +1773,24 @@ func damagedSystem(label sql.NullString, ref sql.NullInt64) string {
 	return fmt.Sprintf("%s (%d)", label.String, ref.Int64)
 }
 
-// reportDamaged writes one summary line and then one line per unit, and says nothing at all when there
-// is nothing to say.
-func reportDamaged(progress func(string), found []string, singular, plural, cause string) {
+// reportDamaged writes one summary line and then one line per unit, and says nothing at all when there is
+// nothing to say.
+//
+// The summary names the count, what is wrong with the units, and why it matters; the per-unit lines name
+// each unit an operator can go and look at. The legacy shape put both behind one `migration.damage:`
+// prefix, which said nothing to anybody who had not read the source.
+func reportDamaged(progress Progress, found []string, one, many, cause string) {
 	if len(found) == 0 {
 		return
 	}
 
 	if len(found) == 1 {
-		progress(fmt.Sprintf("migration.damage: 1 %s, %s", singular, cause))
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left 1 unit damaged: %s, %s", one, cause))
 	} else {
-		progress(fmt.Sprintf("migration.damage: %d %s, %s", len(found), plural, cause))
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left %d units damaged: %s, %s", len(found), many, cause))
 	}
 
 	for _, line := range found {
-		progress(line)
+		progress(domain.LogLevelWarn, line)
 	}
 }

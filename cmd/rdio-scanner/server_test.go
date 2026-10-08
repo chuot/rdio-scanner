@@ -1030,10 +1030,10 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 	out := console.String()
 
 	for _, want := range []string{
-		"2 units hold no radio reference",
-		`unit 301 "Engine 12" of Grand Metro (10001)`,
-		`unit 302 "Car 4" of Grand Metro (10001)`,
-		`unit 303 "6789" of Grand Metro (10001)`,
+		"the migration left 2 units damaged: they hold no radio reference",
+		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
+		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
+		`the migration left unit 303 "6789" of Grand Metro (10001) damaged`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the startup console does not say %q:\n%s", want, out)
@@ -1045,6 +1045,162 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (301, 302) AND "unitRef" = 0`); rows != 2 {
 		t.Errorf("the startup report left %d of the two units it reported on without a reference, want both "+
 			"left exactly as they were", rows)
+	}
+
+	// And the report is in the log view as well as on the terminal. A deployment running as a service has
+	// no terminal, and this is the one thing an operator of a legacy deployment needs told about its units
+	// on every start — which is also why it is filed as a problem and not a notice.
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration left%'`); got != 5 {
+		t.Errorf("the log view holds %d entries from the damage report, want the five lines the startup said: "+
+			"two summaries and one per damaged unit", got)
+	}
+
+	// The damage report is the wording this feature changed the most: every one of these lines used to
+	// begin with `migration.damage:`.
+	assertEveryServerLogEntry(t, srv.db)
+}
+
+// TestTheMigrationPassFilesWhatItSaid is the migration half of CA-009: the lines an upgrade says while it
+// runs exist only on the terminal today, which is no trace at all for the deployment running as a service
+// and no trace the morning after for anybody else. They are in the log view as well, under the part of the
+// server that wrote them — and they are written *after* the pass has finished carrying the deployment's own
+// history across, so the ids this server's entries take are never the ids that history arrived with.
+func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
+	baseDir := t.TempDir()
+
+	fixture := filepath.Join("..", "..", "testdata", "legacyv6", "rdio-scanner.db")
+
+	b, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("%s is missing: %v\nregenerate it with testdata/legacyv6/generate.sh", fixture, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(baseDir, "rdio-scanner.db"), b, 0o600); err != nil {
+		t.Fatalf("placing the fixture where the server opens it: %v", err)
+	}
+
+	console := strings.Builder{}
+
+	srv, err := newServer(testConfigIn(baseDir), &console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	// Still said out loud: the pass announces each v6 table it found, and reports the row it could not
+	// carry, exactly as it did before this feature.
+	for _, want := range []string{
+		"migrating groups...",
+		"migrating logs...",
+		"migration.migrateTalkgroups:",
+	} {
+		if !strings.Contains(console.String(), want) {
+			t.Errorf("the terminal does not say %q:\n%s", want, console.String())
+		}
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database'`); got == 0 {
+		t.Fatalf("the log view holds no entry from the migration; the terminal holds:\n%s", console.String())
+	}
+
+	// The order is the safety of the whole arrangement: the v6 log rows are re-inserted with the ids they
+	// were written with, and an entry this server wrote during the pass could be sitting on one of them.
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "logid" <= 402`); got != 0 {
+		t.Errorf("%d migration entries took an id a row the deployment already had was using, want every entry "+
+			"the migration wrote to come after the rows it carried over", got)
+	}
+
+	for _, want := range []struct {
+		id      int
+		message string
+	}{
+		{401, "server started"},
+		{402, "unit O'Brien keyed"},
+	} {
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM "logs" WHERE "logid" = %d AND "message" = '%s'`,
+			want.id, strings.ReplaceAll(want.message, "'", "''"))
+
+		if got := countRows(t, srv.db, query); got != 1 {
+			t.Errorf("the log view holds %d rows at id %d saying %q, want the row the deployment arrived with, "+
+				"with the id it arrived with", got, want.id, want.message)
+		}
+	}
+
+	// And the failure the fixture is built to produce is filed as an entry too, in the shape every other
+	// entry has: a sentence first, then the failure's own text.
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration of talkgroups could not be finished: migration.migrateTalkgroups:%'`); got == 0 {
+		t.Errorf("the log view holds no entry for the row the migration could not carry")
+	}
+
+	// The migration is the one writer whose wording this feature had to change rather than merely label:
+	// its lines began with `migration.damage:` and `migration.migrateGroups:`. This is where the wording
+	// guard reaches them.
+	assertEveryServerLogEntry(t, srv.db)
+}
+
+// TestTheMigrationFilesTheLogRowsItCarriesAcross is REQ-004 for the deployment that upgrades through this
+// server instead of through the legacy one. Its history arrives through the migration pass, and a row that
+// arrives with nothing in the source column is a row the operator cannot filter for: the prefix the legacy
+// server wrote is the only thing that says what wrote it, and it has to be read here the same way the
+// add-column step reads it.
+func TestTheMigrationFilesTheLogRowsItCarriesAcross(t *testing.T) {
+	baseDir := t.TempDir()
+
+	path := filepath.Join(baseDir, "rdio-scanner.db")
+
+	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "legacyv6", "rdio-scanner.db"))
+	if err != nil {
+		t.Fatalf("%s is missing: %v\nregenerate it with testdata/legacyv6/generate.sh", filepath.Join("..", "..", "testdata", "legacyv6", "rdio-scanner.db"), err)
+	}
+
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatalf("placing the fixture where the server opens it: %v", err)
+	}
+
+	// Two rows the legacy server wrote: one with a prefix that names a part of the server, and one whose
+	// message meant nothing recognisable.
+	db, err := persistence.Open(persistence.Settings{Dialect: persistence.DialectSqlite, FilePath: path})
+	if err != nil {
+		t.Fatalf("opening the fixture to add to it: %v", err)
+	}
+
+	for _, row := range []struct {
+		id      int
+		level   string
+		message string
+	}{
+		{403, "warn", "invalid login attempt from 203.0.113.7"},
+		{404, "info", "a note from a server that wrote no prefix anybody recognises"},
+	} {
+		query := fmt.Sprintf(
+			`INSERT INTO "rdioScannerLogs" ("_id", "dateTime", "level", "message") VALUES (%d, '2025-06-15 12:10:00.000 +0000 UTC', '%s', '%s')`,
+			row.id, row.level, row.message)
+
+		if _, err := db.Exec(query); err != nil {
+			t.Fatalf("adding the v6 log row %d: %v", row.id, err)
+		}
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("closing the fixture: %v", err)
+	}
+
+	srv, err := newServer(testConfigIn(baseDir), io.Discard, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	if got := logSourceOfMessage(t, srv.db, "invalid login attempt from 203.0.113.7"); got != "login" {
+		t.Errorf("a log row the migration carried across is filed under %q, want %q: the prefix the legacy "+
+			"server wrote is the only thing that says what wrote it, and an operator filtering the log view "+
+			"by login is looking for exactly this row", got, "login")
+	}
+
+	if got := logSourceOfMessage(t, srv.db, "a note from a server that wrote no prefix anybody recognises"); got != "legacy" {
+		t.Errorf("a carried row whose prefix meant nothing is filed under %q, want %q", got, "legacy")
 	}
 }
 

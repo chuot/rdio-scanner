@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/domain"
 )
 
 // legacyV6Fixture is a database shaped like one a v6.6.3 deployment leaves behind: the v6 schema,
@@ -127,7 +129,7 @@ func damageReport(progress []string) []string {
 	found := []string{}
 
 	for _, line := range progress {
-		if strings.HasPrefix(line, "migration.damage:") {
+		if strings.HasPrefix(line, "the migration left") {
 			found = append(found, line)
 		}
 	}
@@ -157,7 +159,7 @@ func migrateDatabase(t *testing.T, db *sql.DB) []string {
 
 	progress := []string{}
 
-	if err := Migrate(context.Background(), db, DialectSqlite, func(message string) {
+	if err := Migrate(context.Background(), db, DialectSqlite, func(_, message string) {
 		progress = append(progress, message)
 	}); err != nil {
 		t.Fatalf("Migrate: %v", err)
@@ -288,6 +290,58 @@ func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 
 	if got := announcements(progress); !equalStrings(got, want) {
 		t.Errorf("the tables the migration announced:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems is the level half of the migration
+// report. The source already separates the migration's entries from everything else in the log view; the
+// level is what lets an operator narrow further, to the rows the pass could not carry and the damage it
+// could not repair, without reading thirteen lines about which tables it looked at.
+//
+// The damage report matters most here: on a deployment the legacy server left damaged it is written on
+// every start, and an entry buried at the same level as every ingested call is an entry nobody finds.
+func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	type said struct {
+		level   string
+		message string
+	}
+
+	lines := []said{}
+
+	if err := Migrate(context.Background(), db, DialectSqlite, func(level, message string) {
+		lines = append(lines, said{level: level, message: message})
+	}); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	for _, line := range lines {
+		switch {
+		case strings.HasSuffix(line.message, "..."):
+			if line.level != domain.LogLevelInfo {
+				t.Errorf("%q is filed under %q, want a notice: the pass found that table and carried it",
+					line.message, line.level)
+			}
+
+		case strings.Contains(line.message, "could not be finished"), strings.HasPrefix(line.message, "the migration left"):
+			if line.level != domain.LogLevelWarn {
+				t.Errorf("%q is filed under %q, want a problem: this is a row or a unit the upgrade could not carry",
+					line.message, line.level)
+			}
+		}
+	}
+
+	problems := 0
+
+	for _, line := range lines {
+		if strings.Contains(line.message, "could not be finished") || strings.HasPrefix(line.message, "the migration left") {
+			problems++
+		}
+	}
+
+	if problems == 0 {
+		t.Fatalf("the v6 fixture produced no migration failure, want the rows it is built to leave behind: %v", lines)
 	}
 }
 
@@ -635,7 +689,7 @@ func TestMigrateTalkgroupsReportAForeignKeyFailureForATalkgroupInNoGroup(t *test
 	found := 0
 
 	for _, line := range progress {
-		if strings.HasPrefix(line, "migration.migrateTalkgroups:") && strings.Contains(line, "talkgroupGroups") {
+		if strings.Contains(line, "migration.migrateTalkgroups:") && strings.Contains(line, "talkgroupGroups") {
 			found++
 		}
 	}
@@ -838,7 +892,7 @@ func TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated(t *testing.T)
 	found := 0
 
 	for _, line := range progress {
-		if strings.HasPrefix(line, "migration.migrateDirwatches:") {
+		if strings.Contains(line, "migration.migrateDirwatches:") {
 			found++
 		}
 	}
@@ -1238,11 +1292,11 @@ func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 
 	got := damageReport(migrateDatabase(t, db))
 	want := []string{
-		"migration.damage: 2 units hold no radio reference, the numbers they were migrated from are not in this database",
-		`migration.damage:   unit 301 "Engine 12" of Grand Metro (10001)`,
-		`migration.damage:   unit 302 "Car 4" of Grand Metro (10001)`,
-		"migration.damage: 1 unit is labelled with its own number, the shape of a unit the migration created rather than a deployment named",
-		`migration.damage:   unit 303 "6789" of Grand Metro (10001)`,
+		"the migration left 2 units damaged: they hold no radio reference, the numbers they were migrated from are not in this database",
+		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
+		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
+		"the migration left 1 unit damaged: it is labelled with its own number, the shape of a unit the migration created rather than a deployment named",
+		`the migration left unit 303 "6789" of Grand Metro (10001) damaged`,
 	}
 
 	if !equalStrings(got, want) {
