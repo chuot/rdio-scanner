@@ -1,0 +1,72 @@
+{
+  "ffmpeg": "9.0.2",
+  "source": {
+    "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+    "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+  },
+  "recipe": [
+    "--disable-everything",
+    "--disable-autodetect",
+    "--disable-doc",
+    "--disable-ffplay",
+    "--enable-ffmpeg",
+    "--enable-ffprobe",
+    "--disable-asm",
+    "--enable-static",
+    "--disable-shared",
+    "--enable-protocol=pipe",
+    "--enable-protocol=fd",
+    "--enable-protocol=file",
+    "--enable-demuxer=wav",
+    "--enable-demuxer=mp3",
+    "--enable-demuxer=mov",
+    "--enable-decoder=pcm_s16le",
+    "--enable-decoder=pcm_s16be",
+    "--enable-decoder=pcm_s24le",
+    "--enable-decoder=pcm_f32le",
+    "--enable-decoder=pcm_mulaw",
+    "--enable-decoder=pcm_alaw",
+    "--enable-decoder=mp3float",
+    "--enable-decoder=mp3",
+    "--enable-encoder=aac",
+    "--enable-muxer=ipod",
+    "--enable-muxer=json",
+    "--enable-filter=abuffer",
+    "--enable-filter=abuffersink",
+    "--enable-filter=aformat",
+    "--enable-filter=aresample",
+    "--enable-filter=apad",
+    "--enable-filter=loudnorm"
+  ],
+  "targets": {
+    "linux-amd64": {
+      "container": "docker.io/debian:stable",
+      "packages": ["build-essential"],
+      "ldflags": ["-static"]
+    },
+    "linux-arm64": {
+      "container": "docker.io/debian:stable",
+      "packages": ["build-essential", "gcc-aarch64-linux-gnu"],
+      "cross": ["--enable-cross-compile", "--target-os=linux", "--arch=aarch64", "--cross-prefix=aarch64-linux-gnu-"],
+      "ldflags": ["-static"]
+    },
+    "linux-arm": {
+      "container": "docker.io/debian:stable",
+      "packages": ["build-essential", "gcc-arm-linux-gnueabihf"],
+      "cross": ["--enable-cross-compile", "--target-os=linux", "--arch=arm", "--cross-prefix=arm-linux-gnueabihf-"],
+      "ldflags": ["-static"]
+    },
+    "linux-386": {
+      "container": "docker.io/debian:stable",
+      "packages": ["build-essential", "gcc-multilib", "libc6-dev-i386"],
+      "cflags": ["-m32"],
+      "ldflags": ["-static", "-m32"]
+    },
+    "windows-amd64": {
+      "container": "docker.io/alpine:latest",
+      "packages": ["build-base", "mingw-w64-gcc"],
+      "cross": ["--enable-cross-compile", "--target-os=win64", "--arch=x86_64", "--cross-prefix=x86_64-w64-mingw32-"],
+      "ldflags": ["-static", "-static-libgcc"]
+    }
+  }
+}
