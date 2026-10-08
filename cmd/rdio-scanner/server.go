@@ -395,6 +395,7 @@ func (s *server) start(ctx context.Context) error {
 	_ = s.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: s.clock.Now(),
 		Level:    domain.LogLevelWarn,
+		Source:   domain.LogSourceServer,
 		Message:  "server started",
 	})
 
@@ -409,6 +410,7 @@ func (s *server) start(ctx context.Context) error {
 		_ = s.logs.AppendLog(ctx, domain.LogEntry{
 			DateTime: s.clock.Now(),
 			Level:    domain.LogLevelWarn,
+			Source:   domain.LogSourceFFmpeg,
 			Message:  s.converterNotice,
 		})
 	}

@@ -25,6 +25,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -572,6 +573,34 @@ func TestServerRecordsThatItStartedInTheLogView(t *testing.T) {
 
 	if !hasLogMessage(t, srv.db, "server started") {
 		t.Errorf("the log view does not record that the server started")
+	}
+
+	if got := logSourceOfMessage(t, srv.db, "server started"); got != "server" {
+		t.Errorf("the startup notice is filed under %q, want %q: the log view filters by the part of the server that wrote an entry", got, "server")
+	}
+}
+
+// The notice about the ffmpeg this server converts with is the one an operator needs when a recording was
+// never converted, and it has to be findable under ffmpeg rather than by remembering which line it was.
+func TestTheFfmpegNoticeIsFiledUnderFfmpeg(t *testing.T) {
+	const notice = "the server cannot prepare /data/ffmpeg for its ffmpeg"
+
+	srv := testServer(t)
+
+	// What the wiring produces when the server carries an ffmpeg it could not write out — see
+	// TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts.
+	srv.converterNotice = notice
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	if !hasLogMessage(t, srv.db, notice) {
+		t.Fatalf("the log view does not record what the server has to say about its ffmpeg")
+	}
+
+	if got := logSourceOfMessage(t, srv.db, notice); got != "ffmpeg" {
+		t.Errorf("the ffmpeg notice is filed under %q, want %q", got, "ffmpeg")
 	}
 }
 
@@ -1290,6 +1319,26 @@ func hasLogMessage(t *testing.T, db *sql.DB, message string) bool {
 	}
 
 	return rows > 0
+}
+
+// logSourceOfMessage is the subsystem a stored entry is filed under, or an empty string when no entry
+// carries that message. A test that expects a source reads this, so a writer that names nothing fails as
+// a missing subsystem rather than as a missing message.
+func logSourceOfMessage(t *testing.T, db *sql.DB, message string) string {
+	t.Helper()
+
+	const query = `SELECT "source" FROM "logs" WHERE "message" = ? ORDER BY "logid" DESC LIMIT 1`
+
+	var source string
+	if err := db.QueryRow(query, message).Scan(&source); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ""
+		}
+
+		t.Fatalf("%s (%s): %v", query, message, err)
+	}
+
+	return source
 }
 
 func readOptionValue(t *testing.T, db *sql.DB, key string) string {
