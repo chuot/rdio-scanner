@@ -84,6 +84,14 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress func(mes
 
 	s := newStore(db, dialect)
 
+	// The log table is brought up to the shape this server writes before anything reads or moves a row:
+	// the column that names the part of the server that wrote each entry, and the indexes the log search
+	// is written against. It is a step of the migration pass rather than of the schema because the schema
+	// is the legacy server's and has to leave a database the other server wrote exactly as it found it.
+	if err := ensureLogSourceColumn(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
 	for _, migrate := range []func(context.Context, store, func(string)) error{
 		migrateGroups,
 		migrateTags,

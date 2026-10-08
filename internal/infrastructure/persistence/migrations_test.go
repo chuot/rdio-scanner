@@ -308,17 +308,69 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 
 // TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing covers the deployment that swaps one server
 // binary for the other on a database the legacy server already migrated.
+//
+// FEAT-010 narrowed what "nothing" means here, and deliberately: the v6 migration pass still moves no
+// row and says no word on a database that has no v6 tables, but the startup pass now brings the log table
+// up to the shape this server writes — the column that names the part of the server that wrote each entry,
+// and the two indexes the log search runs against. That is the one schema change this server makes to a
+// database the other server wrote, and the test says so exactly: those three objects and nothing else.
 func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	db := openLegacyDatabase(t)
 
 	before := readSchemaObjects(t, db)
+	beforeRows := readLogRows(t, db)
 
 	if progress := migrateDatabase(t, db); len(progress) != 0 {
 		t.Errorf("a v7 database was announced as migrating: %v", progress)
 	}
 
-	if after := readSchemaObjects(t, db); !equalStrings(before, after) {
-		t.Errorf("the schema of a v7 database changed")
+	after := readSchemaObjects(t, db)
+
+	if len(after) != len(before)+2 {
+		t.Fatalf("a v7 database gained %d schema objects, want the logs table's source column and the two log indexes", len(after)-len(before))
+	}
+
+	// The logs table is the one object allowed to read differently afterwards, and only because it
+	// gained a column. Every other table, index and trigger has to be byte-identical, and the only new
+	// objects are the two indexes the log search runs against.
+	for _, object := range before {
+		if isLogsTable(object) {
+			continue
+		}
+
+		if !hasString(after, object) {
+			t.Errorf("a v7 database lost or changed a schema object it already had: %s", object)
+		}
+	}
+
+	added := []string{}
+
+	for _, object := range after {
+		if hasString(before, object) || isLogsTable(object) {
+			continue
+		}
+
+		added = append(added, object)
+	}
+
+	if len(added) != 2 || !isLogIndex(added[0], "logs_source_idx") || !isLogIndex(added[1], "logs_time_idx") {
+		t.Errorf("the schema objects a v7 database gained: %v, want logs_source_idx and logs_time_idx", added)
+	}
+
+	if !hasString(after, `index logs_source_idx `+logIndexDefinition(t, db, "logs_source_idx")) {
+		t.Error("logs_source_idx is not the index the migration says it created")
+	}
+
+	afterRows := readLogRows(t, db)
+
+	if len(beforeRows) != len(afterRows) {
+		t.Fatalf("a v7 database had %d log rows before the migration and %d after it", len(beforeRows), len(afterRows))
+	}
+
+	for i := range beforeRows {
+		if beforeRows[i] != afterRows[i] {
+			t.Errorf("log row %d changed on a database that had nothing to migrate:\nbefore: %s\nafter:  %s", i, beforeRows[i], afterRows[i])
+		}
 	}
 }
 
