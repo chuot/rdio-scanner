@@ -89,6 +89,7 @@ type ListenerCountDebouncer struct {
 	logs      ports.LogRepository
 	options   ports.OptionsRepository
 	scheduler ports.Scheduler
+	clock     ports.Clock
 
 	// mutex guards pending, because the hub drives this from its own event loop while a
 	// configuration change or shutdown can reach it from elsewhere.
@@ -102,12 +103,14 @@ func NewListenerCountDebouncer(
 	logs ports.LogRepository,
 	options ports.OptionsRepository,
 	scheduler ports.Scheduler,
+	clock ports.Clock,
 ) *ListenerCountDebouncer {
 	return &ListenerCountDebouncer{
 		hub:       hub,
 		logs:      logs,
 		options:   options,
 		scheduler: scheduler,
+		clock:     clock,
 	}
 }
 
@@ -145,14 +148,20 @@ func (debouncer *ListenerCountDebouncer) Pending() bool {
 	return debouncer.pending != nil
 }
 
-// report writes the count to the server log and, when the option asks for it, sends it to
-// every listener. The order is the legacy order: the log first, then the listeners.
+// report writes the count to the server log and, when the option asks for it, sends it to every listener.
+// The order is the legacy order: the log first, then the listeners.
+//
+// The entry is stamped with the clock at the moment the report is written. The legacy
+// `server/listener.go` builds it with a level and a message and nothing else, so the zero time reaches the
+// timestamp column as -62135596800000 and the log view then drops the row from its results while still
+// counting it — which is what the year-one rows in a deployment's log are.
 func (debouncer *ListenerCountDebouncer) report(ctx context.Context) {
 	count := debouncer.hub.ListenerCount()
 
 	if err := debouncer.logs.AppendLog(ctx, domain.LogEntry{
-		Level:   domain.LogLevelInfo,
-		Message: fmt.Sprintf("listeners count is %v", count),
+		DateTime: debouncer.clock.Now(),
+		Level:    domain.LogLevelInfo,
+		Message:  fmt.Sprintf("listeners count is %v", count),
 	}); err != nil {
 		return
 	}

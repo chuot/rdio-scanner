@@ -916,3 +916,78 @@ func TestAppendLogReadsBackAnEntryWithNoSourceAsLegacy(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchLogsCannotReachAnEntryStoredWithNoInstant is the consequence of writing an entry without
+// asking the clock what time it is, which is what the legacy listener-count report does.
+//
+// The zero time reaches the column as -62135596800000, the instant Go calls year one. Two things then
+// happen to that entry in the log view, and both were observed while capturing the wire protocol: the
+// search drops it from the results, because the legacy read skips a row whose timestamp is not a real
+// instant, while the count it reports still includes it; and the span of the matching entries it does
+// show reaches back to year one, which is what makes a deployment's log view say the log begins in 1 AD.
+// Those are the rows an operator sees a count for and cannot find.
+func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	unstamped := time.Time{}
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: unstamped,
+		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceLivefeed,
+		Message:  "listeners count is 3",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	if err := logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: time.Date(2026, 3, 14, 9, 30, 15, 0, time.UTC),
+		Level:    domain.LogLevelInfo,
+		Source:   domain.LogSourceLivefeed,
+		Message:  "listener joined",
+	}); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	if got := unstamped.UnixMilli(); got != -62135596800000 {
+		t.Fatalf("an entry with no instant stores %d, want the year-one timestamp the deployments have", got)
+	}
+
+	// A search for the day the report was written cannot reach it at all: the window is a day, and the
+	// entry is not in any day.
+	at, _ := time.Parse(time.RFC3339, "2026-03-14T09:00:00Z")
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Date: at, Limit: domain.DefaultLogSearchLimit, Ascending: true,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 1 || len(page.Results) != 1 {
+		t.Fatalf("a search for 14 March matched %d entries and returned %d, want only the entry that names its own instant", page.Count, len(page.Results))
+	}
+
+	if page.Results[0].Message != "listener joined" {
+		t.Errorf("the search for 14 March returned %q, want the stamped entry and not the report", page.Results[0].Message)
+	}
+
+	// An undated search counts both entries and shows one. The report is in the log and not on the screen,
+	// and the span the log view reports begins in year one.
+	page, err = logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 {
+		t.Errorf("an undated search counts %d entries, want both rows the log table has", page.Count)
+	}
+
+	if len(page.Results) != 1 {
+		t.Fatalf("an undated search shows %d entries, want the one row with a real instant", len(page.Results))
+	}
+
+	if !page.DateStart.Equal(instantOf(-62135596800000)) {
+		t.Errorf("the span of everything the criteria match begins at %v, want year one: the log view reports a log that begins in 1 AD", page.DateStart)
+	}
+}

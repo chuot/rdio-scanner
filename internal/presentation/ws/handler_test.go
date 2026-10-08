@@ -538,7 +538,7 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 	w.calls.Stored[2] = wiredCall(2, 10002, 1515000)
 	w.calls.Stored[4] = wiredCall(4, 10001, 1514000)
 
-	debouncer := application.NewListenerCountDebouncer(f.hub, f.logs, w.options, w.scheduler)
+	debouncer := application.NewListenerCountDebouncer(f.hub, f.logs, w.options, w.scheduler, fakes.NewClock(time.Unix(1759752000, 0)))
 
 	f.changes.also = []ListenerChanges{debouncer}
 

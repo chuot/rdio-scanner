@@ -292,7 +292,7 @@ func (s *server) wire() error {
 
 	hub := ws.NewHub(s.settings, changes, s.logs, s.console)
 
-	debouncer := application.NewListenerCountDebouncer(hub, s.logs, options, s.scheduler)
+	debouncer := application.NewListenerCountDebouncer(hub, s.logs, options, s.scheduler, s.clock)
 
 	// The hub counts listeners and says when the count is no longer what it was; the debouncer decides
 	// when to report it, so that a client that connects and drops repeatedly costs one report and not

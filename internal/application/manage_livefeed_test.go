@@ -35,10 +35,11 @@ func newLivefeedFixture() *livefeedFixture {
 		logs:      &fakes.Logs{},
 		options:   &fakes.Options{Stored: domain.DefaultOptions()},
 		scheduler: fakes.NewScheduler(),
+		clock:     fakes.NewClock(time.Date(2026, 3, 14, 9, 30, 15, 500_000_000, time.UTC)),
 	}
 
 	fixture.livefeed = NewSetLivefeedHandler(fixture.hub)
-	fixture.debouncer = NewListenerCountDebouncer(fixture.hub, fixture.logs, fixture.options, fixture.scheduler)
+	fixture.debouncer = NewListenerCountDebouncer(fixture.hub, fixture.logs, fixture.options, fixture.scheduler, fixture.clock)
 
 	return fixture
 }
@@ -48,6 +49,7 @@ type livefeedFixture struct {
 	logs      *fakes.Logs
 	options   *fakes.Options
 	scheduler *fakes.Scheduler
+	clock     *fakes.Clock
 
 	livefeed  *SetLivefeedHandler
 	debouncer *ListenerCountDebouncer
@@ -251,6 +253,34 @@ func TestListenerCountDebouncerLogsTheCountEvenWhenTheOptionIsOff(t *testing.T) 
 
 	if len(fixture.hub.ListenerCounts) != 0 {
 		t.Errorf("listener-count reports = %v, want none while the option keeps the count hidden", fixture.hub.ListenerCounts)
+	}
+}
+
+// TestListenerCountReportIsStampedWithTheInstantItWasWritten is the regression for the one log entry this
+// server writes without ever asking the clock what time it is.
+//
+// The legacy `server/listener.go` builds the entry with only a level and a message, so the zero time goes
+// into the column as -62135596800000 — the instant Go calls year one. That is what the five rows in a real
+// deployment's log view that no date search can ever reach are. An entry with no instant is not merely
+// misfiled: the administrator's log view sorts by timestamp and windows by date, so the report disappears
+// from every search that names a day, and it sits at the bottom of an undated search forever.
+func TestListenerCountReportIsStampedWithTheInstantItWasWritten(t *testing.T) {
+	fixture := newLivefeedFixture()
+
+	fixture.hub.Open("one", "10.0.0.1")
+	fixture.debouncer.ListenerChanged()
+
+	fixture.scheduler.RunDue(ListenerCountReportDelay)
+
+	if len(fixture.logs.Stored) != 1 {
+		t.Fatalf("logs = %v, want the one report the burst produced", fixture.logs.Stored)
+	}
+
+	stored := fixture.logs.Stored[0]
+
+	if !stored.DateTime.Equal(fixture.clock.At) {
+		t.Errorf("the report is stored at %v, which is %d in the timestamp column, want the clock's %v",
+			stored.DateTime, stored.DateTime.UnixMilli(), fixture.clock.At)
 	}
 }
 
