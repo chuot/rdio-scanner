@@ -136,14 +136,12 @@ func TestReadSourceReadsThisRepositorysOwnState(t *testing.T) {
 		t.Errorf("tag = %q, want what git says names HEAD exactly: %q", src.tag, want)
 	}
 
-	status, err := git(repo, "status", "--porcelain")
-	if err != nil {
-		t.Fatalf("asking git about the working tree: %v", err)
-	}
-
-	if src.dirty != (status != "") {
-		t.Errorf("dirty = %v, want %v, which is what git says about the working tree", src.dirty, status != "")
-	}
+	// Whether this tree happens to be dirty at the moment a test runs is not a fact about the tool, and
+	// asking git twice — once inside the tool and once here — lets anything else that touches the tree
+	// in between decide the answer. A suite running alongside this one created a directory, the tool saw
+	// it, and it was gone by the time this test asked. Dirtiness is proven where it can be made and held
+	// still: TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion and the clean scratch
+	// repositories beside it.
 }
 
 func TestReadSourceReportsTheTagThatNamesTheCommit(t *testing.T) {
