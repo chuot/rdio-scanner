@@ -114,8 +114,12 @@ func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *t
 		t.Fatalf("the server's log view is empty after the pruning, want the entries the server wrote today")
 	}
 
-	if !hasLogMessage(t, srv.db, "database pruning") {
-		t.Errorf("the log view holds no notice of the pruning, want the one the legacy server writes before it prunes")
+	if !hasLogMessage(t, srv.db, "the retention pass removed 1 call and 3 log entries") {
+		t.Errorf("the log view holds no report of what the retention pass removed, want the counts it was given")
+	}
+
+	if got := logSourceOfMessage(t, srv.db, "the retention pass removed 1 call and 3 log entries"); got != "prune" {
+		t.Errorf("the retention report is filed under %q, want it filed with the retention pass", got)
 	}
 
 	if rows := countRows(t, srv.db, fmt.Sprintf(`SELECT COUNT(*) FROM "logs" WHERE "timestamp" < %d`, older.Add(time.Second).UnixMilli())); rows != 0 {
@@ -152,8 +156,8 @@ func TestTheServerKeepsItsHistoryWhenTheRetentionIsSwitchedOff(t *testing.T) {
 		t.Errorf("the log view holds %d entries after a pruning that was switched off, want the %d it held before", after, before)
 	}
 
-	if hasLogMessage(t, srv.db, "database pruning") {
-		t.Errorf("the log view holds a pruning notice for a server whose retention is switched off, want none")
+	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'prune'`); rows != 0 {
+		t.Errorf("the log view holds %d entries from the retention pass for a server whose retention is switched off, want none", rows)
 	}
 }
 

@@ -22,7 +22,6 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -182,8 +181,8 @@ func (debouncer *ListenerCountDebouncer) report(ctx context.Context) {
 // substitution mistake is the kind of thing this feature exists to remove.
 func listenersCountPhrase(count int) string {
 	if count == 1 {
-		return "there is 1 listener"
+		return "there is " + counted(count, "listener", "listeners")
 	}
 
-	return fmt.Sprintf("there are %v listeners", count)
+	return "there are " + counted(count, "listener", "listeners")
 }

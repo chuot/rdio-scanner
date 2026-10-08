@@ -120,8 +120,8 @@ func TestPruneOldCallsCommandRemovesCallsAndLogsPastTheRetention(t *testing.T) {
 		messages = append(messages, entry.Message)
 	}
 
-	if len(messages) != 2 || messages[0] != "recent event" || messages[1] != "database pruning" {
-		t.Errorf("server log = %v, want the entry inside the retention and the notice the pruning wrote", messages)
+	if len(messages) != 2 || messages[0] != "recent event" || messages[1] != "the retention pass removed 1 call and 1 log entry" {
+		t.Errorf("server log = %v, want the entry inside the retention and the pass reporting what it removed", messages)
 	}
 }
 
@@ -170,7 +170,11 @@ func TestPruneOldCallsCommandDoesNothingWhenTheRetentionIsZero(t *testing.T) {
 	}
 }
 
-func TestPruneOldCallsCommandRecordsThatItIsPruning(t *testing.T) {
+// The legacy server writes "database pruning" before it prunes, which tells an operator that a pass was
+// attempted and nothing about what it did. The counts DeleteCallsBefore and DeleteLogsBefore already return
+// are the part an operator reads: a retention that is not removing anything is the failure they need to see
+// before the disk fills.
+func TestPruneOldCallsCommandReportsWhatTheRetentionPassRemoved(t *testing.T) {
 	fixture := newPruneFixture()
 
 	fixture.storeLog(pruneTime.AddDate(0, 0, -8), "old event")
@@ -188,22 +192,56 @@ func TestPruneOldCallsCommandRecordsThatItIsPruning(t *testing.T) {
 	found := false
 
 	for _, entry := range fixture.logs.Stored {
-		if entry.Message == "database pruning" {
+		if entry.Source == domain.LogSourcePrune {
 			notice = entry
 			found = true
 		}
 	}
 
 	if !found {
-		t.Fatalf("server log = %v, want the pruning notice the legacy server writes before it prunes", fixture.logs.Stored)
+		t.Fatalf("server log = %v, want the retention pass to report what it removed, under the retention pass", fixture.logs.Stored)
 	}
 
 	if notice.Level != domain.LogLevelInfo {
-		t.Errorf("notice level = %q, want the pruning notice reported as information", notice.Level)
+		t.Errorf("report level = %q, want the retention pass reported as information", notice.Level)
+	}
+
+	if notice.Message != "the retention pass removed 0 calls and 1 log entry" {
+		t.Errorf("report = %q, want the counts the pass was given, in the words an operator reads", notice.Message)
 	}
 
 	if result.LogsPruned != 1 {
-		t.Errorf("pruned logs = %d, want the notice itself kept: it is written with the current timestamp", result.LogsPruned)
+		t.Errorf("pruned logs = %d, want the one entry older than the retention", result.LogsPruned)
+	}
+}
+
+// A pass that removes nothing is the ordinary case on a healthy server, and it is the case an operator
+// needs to be able to tell apart from a pass that did not run.
+func TestPruneOldCallsCommandSaysWhenTheRetentionPassRemovedNothing(t *testing.T) {
+	fixture := newPruneFixture()
+
+	fixture.storeCall(1, pruneTime.AddDate(0, 0, -1))
+	fixture.storeLog(pruneTime.AddDate(0, 0, -1), "recent event")
+
+	result, err := fixture.run()
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+
+	if result.Outcome != PruneOldCallsDone {
+		t.Fatalf("outcome = %q, want the retention applied", result.Outcome)
+	}
+
+	report := ""
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == domain.LogSourcePrune {
+			report = entry.Message
+		}
+	}
+
+	if report != "the retention pass removed 0 calls and 0 log entries" {
+		t.Errorf("report = %q, want the pass to say it removed nothing: %v", report, fixture.logs.Stored)
 	}
 }
 

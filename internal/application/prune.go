@@ -22,6 +22,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -92,13 +93,16 @@ func NewPruneOldCallsHandler(
 	}
 }
 
-// Handle discards everything older than the retention, and says beforehand that it is
-// doing so.
+// Handle discards everything older than the retention and then reports what it removed.
 //
-// The notice is written before the pruning rather than after, as the legacy server writes
-// it, because a pruning that then fails is still something the administrator needs to see
-// in the log view. It is written with the current timestamp, so the pruning does not remove
-// its own notice.
+// The legacy server writes "database pruning" before it starts, which tells an operator that a pass was
+// attempted and nothing about what it did. The counts the two deletes already return are the part an operator
+// reads: a retention that has stopped removing anything is the failure they need to see before the disk
+// fills, and a pass that removed nothing looks identical in the log view to a pass that never ran.
+//
+// The report is therefore written after the deletes, which is also what makes it possible: the counts do not
+// exist before them. A pass that fails is reported by its own entry, not by a notice written too early to
+// know it would fail.
 func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCallsCommand) (PruneOldCallsResult, error) {
 	options, err := handler.options.ReadOptions(ctx)
 	if err != nil {
@@ -108,8 +112,6 @@ func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCal
 	if options.PruneDays == 0 {
 		return PruneOldCallsResult{Outcome: PruneOldCallsSkipped}, nil
 	}
-
-	handler.log(ctx, domain.LogLevelInfo, "database pruning")
 
 	// One instant bounds both the call history and the log. The legacy server asks the
 	// clock twice, once for each, which differs by the time it takes to run the first
@@ -126,6 +128,8 @@ func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCal
 		return PruneOldCallsResult{Outcome: PruneOldCallsFailed, CallsPruned: callsPruned}, err
 	}
 
+	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelInfo, domain.LogSourcePrune, retentionReport(callsPruned, logsPruned))
+
 	return PruneOldCallsResult{
 		Outcome:     PruneOldCallsDone,
 		CallsPruned: callsPruned,
@@ -133,14 +137,10 @@ func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCal
 	}, nil
 }
 
-func (handler *PruneOldCallsHandler) log(ctx context.Context, level, message string) {
-	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
-		DateTime: handler.clock.Now(),
-		Level:    level,
-		Message:  message,
-	}); err != nil {
-		// A notice that cannot be recorded does not stop the retention from being applied;
-		// the administrator's data is what the pruning is for.
-		return
-	}
+// retentionReport is what the retention pass says about itself once it has finished.
+func retentionReport(callsPruned, logsPruned int) string {
+	return fmt.Sprintf("the retention pass removed %s and %s",
+		counted(callsPruned, "call", "calls"),
+		counted(logsPruned, "log entry", "log entries"),
+	)
 }

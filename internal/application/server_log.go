@@ -22,6 +22,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -43,4 +44,15 @@ func appendServerLog(ctx context.Context, logs ports.LogRepository, clock ports.
 	}); err != nil {
 		return
 	}
+}
+
+// counted is a count in the words an operator reads: "1 call", "3 calls", "0 log entries". A bare
+// substitution gives "1 calls" for the counts a running server reports most often, and a log line that reads
+// like a substitution mistake is the kind of thing this feature exists to remove.
+func counted(count int, singular, plural string) string {
+	if count == 1 {
+		return fmt.Sprintf("1 %s", singular)
+	}
+
+	return fmt.Sprintf("%d %s", count, plural)
 }
