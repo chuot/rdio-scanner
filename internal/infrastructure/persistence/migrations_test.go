@@ -416,6 +416,7 @@ func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *te
 
 			case strings.Contains(line.message, "could not be finished"),
 				strings.HasPrefix(line.message, "the migration could not carry"),
+				strings.HasPrefix(line.message, "the migration carried"),
 				strings.HasPrefix(line.message, "the migration left"):
 				if line.level != domain.LogLevelWarn {
 					t.Errorf("%q is filed under %q, want a problem: this is a row or a unit the upgrade could not carry",
@@ -980,31 +981,36 @@ func TestMigrateTalkgroupsResolveTheirSystemThroughTheSystemReference(t *testing
 	}
 }
 
-// TestMigrateTalkgroupsReportAForeignKeyFailureForATalkgroupInNoGroup is a legacy defect the
-// fixture pins: v6 stored 0 for a talkgroup in no group, the migration keeps the talkgroup, and
-// then hands that 0 to the group link, which the foreign key rejects — one line per row, and the
-// pass carries on.
-func TestMigrateTalkgroupsReportAForeignKeyFailureForATalkgroupInNoGroup(t *testing.T) {
+// TestMigrateTalkgroupsSayWhichTalkgroupLostItsGroupLink is the repaired half of a legacy defect the
+// fixture pins. v6 stored 0 for a talkgroup in no group, and the migration handed that 0 to the group
+// link, whose foreign key rejects it: the refusal came back worded differently on every backend, and
+// PostgreSQL treats a refused statement as the end of the transaction rather than of the row. The pass
+// now asks whether the group is in this database before it writes the link. The talkgroup is carried
+// either way, no link is written for a group that does not exist, and the group the row named is said.
+func TestMigrateTalkgroupsSayWhichTalkgroupLostItsGroupLink(t *testing.T) {
 	db, progress := migrateLegacyV6Fixture(t)
 
-	found := 0
+	if got := countRows(t, db, "talkgroups"); got != 3 {
+		t.Errorf("the talkgroup in no group was not carried: %d talkgroups, want 3", got)
+	}
+
+	want := [][]string{{"3", "201"}, {"7", "202"}}
+
+	if got := rowsOf(t, db, "talkgroupGroups", `"groupId", "talkgroupId"`); !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the group links:\n  got  %v\n  want %v, the talkgroup in no group having none", got, want)
+	}
+
+	line := `the migration carried talkgroup 203 "Un grouped" without its group: group 0 is not in this database`
+
+	if !hasString(progress, line) {
+		t.Errorf("the talkgroup that lost its group link was not named: want %q in %v", line, progress)
+	}
 
 	for _, line := range progress {
-		if strings.Contains(line, "migration.migrateTalkgroups:") && strings.Contains(line, "talkgroupGroups") {
-			found++
+		if strings.Contains(line, "talkgroupGroups") {
+			t.Errorf("a group link is reported as a statement the database refused instead of as a fact about "+
+				"the row: %q", line)
 		}
-	}
-
-	if found != 1 {
-		t.Errorf("the group link of the talkgroup in no group was reported %d times, want 1; progress: %v", found, progress)
-	}
-
-	if got := countRows(t, db, "talkgroups"); got != 3 {
-		t.Errorf("the talkgroup whose group link failed was not kept: %d talkgroups, want 3", got)
-	}
-
-	if got := rowsOf(t, db, "talkgroupGroups", `"groupId", "talkgroupId"`); len(got) != 2 {
-		t.Errorf("the group links:\n  got  %v\n  want the two links whose group exists, the talkgroup in no group having failed", got)
 	}
 }
 

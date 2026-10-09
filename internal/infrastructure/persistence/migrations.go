@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -189,6 +190,83 @@ func alreadyCarried(ctx context.Context, tx transaction, table, column string, i
 	return count > 0, nil
 }
 
+// readV6Table opens the v6 table a migration is carrying rows out of.
+//
+// It reads on the pool, and not on the transaction those rows are written through, because the row loop
+// reads one row and writes it before moving to the next: the cursor is still open on the connection while
+// the carry, the archive, and the `alreadyCarried` pre-check all run. PostgreSQL's driver refuses a second
+// statement on a transaction that has a result set open on it — the read ends at the first row the loop
+// carries — so a pass that reads and writes on one transaction is a pass that only works on the backends
+// tolerant enough to ignore it. The legacy server has the same shape for the same reason: it reads with
+// `db.Sql.Query`, collects what it read, and only then begins the transaction that writes
+// (v6.6.3:server/database.go:407).
+//
+// Reading outside the transaction costs nothing the pass relies on. A v6 table is never written to while it
+// is being read, the only thing that removes one is `dropV6Table`, and that runs after this cursor is
+// closed. A carry that fails halfway rolls back, and the next run reads the same rows again.
+func readV6Table(ctx context.Context, s store, query string) (*sql.Rows, error) {
+	rows, err := s.query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+// v6DateTime reads one v6 datetime column into the instant it names, in whatever shape the driver that
+// carried it hands back.
+//
+// MariaDB hands a `datetime` as bytes: its connection string has no `parseTime`, exactly as the legacy
+// server's has none, which is why the legacy server has a `ParseDateTime` at all
+// (v6.6.3:server/database.go:79). PostgreSQL hands back a Go time. sqlite hands back whatever the affinity
+// of the column ended up holding, which is the one case where a v6 database holds text in a column it
+// declared `datetime`. Scanning such a column straight into a time is a demand only two of the three can
+// meet, and the third is the one a deployment runs on.
+//
+// A value that fits none of those shapes is not a datetime a v6 deployment held. The caller treats it the
+// way it treats a row it could not read at all: the row's table stays where the pass found it.
+func v6DateTime(value any) (sql.NullTime, error) {
+	switch typed := value.(type) {
+	case nil:
+		return sql.NullTime{}, nil
+
+	case time.Time:
+		return sql.NullTime{Time: typed, Valid: true}, nil
+
+	case []byte:
+		value = string(typed)
+	}
+
+	when, err := parseV6DateTime(fmt.Sprintf("%v", value))
+	if err != nil {
+		return sql.NullTime{}, fmt.Errorf("%v is not a datetime in the shape a v6 database writes", value)
+	}
+
+	return sql.NullTime{Time: when, Valid: true}, nil
+}
+
+// v6DateTimeLayouts are the shapes a v6 datetime arrives in. The first is what MariaDB and MySQL write
+// and read back (v6.6.3:server/database.go:52), and Go's parser takes the fractional seconds a v6 sqlite
+// file holds after it without the layout naming them. The rest are the instants a Go server printed into
+// a sqlite column: the legacy server's own format, and the one with the zone spelled the way the time
+// package spells it.
+var v6DateTimeLayouts = []string{
+	"2006-01-02 15:04:05",
+	"2006-01-02 15:04:05 -07:00",
+	"2006-01-02 15:04:05 -0700 MST",
+}
+
+// parseV6DateTime reads one of those shapes back as the instant it names.
+func parseV6DateTime(text string) (time.Time, error) {
+	for _, layout := range v6DateTimeLayouts {
+		if when, err := time.Parse(layout, text); err == nil {
+			return when, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("%q is not a datetime in any of the shapes a v6 database writes", text)
+}
+
 // dropV6Table drops the v6 table a migration has just read, unless some row of it could not be read.
 //
 // The pass keeps a record of every row it read and could not carry, which is what lets it drop the v6
@@ -246,7 +324,7 @@ func migrateGroups(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -359,7 +437,7 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -477,7 +555,7 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -577,6 +655,8 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 		}
 	}
 
+	rows.Close()
+
 	arch.report()
 
 	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerSystems", unread || rows.Err() != nil)
@@ -595,9 +675,15 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 // the migration resolves that against the `systems` table the systems migration has already
 // filled. A talkgroup whose system is not in that table used to be skipped without a word and
 // dropped with the v6 table; since FEAT-011 it is archived with the reason and the reason is said
-// at warn level. A talkgroup whose group is 0 — which is what v6 stored for a talkgroup in no
-// group — reaches the `talkgroupGroups` insert with 0, fails the foreign key, and is reported per
-// row while the talkgroup itself stays.
+// at warn level.
+//
+// Its group is resolved the same way, because the group link is a foreign key in this server's
+// schema and was not one in v6's. v6 stored 0 for a talkgroup in no group, and the migration used to
+// hand that 0 — or any group number the v6 database made up — to the `talkgroupGroups` insert and
+// report whatever the backend called the refusal. The pass now asks the `groups` table first: the
+// talkgroup is carried either way, a link is written only for a group that is actually here, and the
+// group the row named is said in the pass's own words. That also matters on PostgreSQL, which ends
+// the whole transaction at the first statement it refuses rather than the row.
 func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateTalkgroups", "talkgroups"
 
@@ -633,6 +719,30 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 	rows.Close()
 
+	// The groups this server holds. The groups migration keeps the v6 identity, so a v6 groupId is the
+	// number that group is stored under here, and the only question about a talkgroup's group is whether a
+	// group with that number was carried.
+	groups := map[int64]bool{}
+
+	query = `SELECT "groupId" FROM "groups"`
+
+	rows, err = s.query(ctx, query)
+	if err != nil {
+		return statementError(section, operation, err, query)
+	}
+
+	for rows.Next() {
+		var groupID int64
+
+		if err := rows.Scan(&groupID); err != nil {
+			continue
+		}
+
+		groups[groupID] = true
+	}
+
+	rows.Close()
+
 	tx, err := s.begin(ctx)
 	if err != nil {
 		return operationError(section, operation, err)
@@ -644,7 +754,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = tx.query(ctx, query)
+	rows, err = readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -776,10 +886,20 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		query = `INSERT INTO "talkgroups" ("talkgroupId", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, talkgroupID.Int64, freq, text, color, named, rank, systems[systemID.Int64], tag, ref); err == nil {
-			query = `INSERT INTO "talkgroupGroups" ("groupId", "talkgroupId") VALUES (?, ?)`
+			// The link is written only for a group this database actually has. v6 wrote 0 for a talkgroup
+			// in no group, this server's group link is a foreign key, and the pass knows the reference
+			// does not resolve before it asks for it: the talkgroup is carried, the link is not written,
+			// and the group the row named is said.
+			if !groups[groupIDs[0]] {
+				progress(domain.LogLevelWarn, fmt.Sprintf("the migration carried %s without its group: group %d is not in this database",
+					namedRow("talkgroup", talkgroupID.Int64, name), groupIDs[0]))
 
-			if _, err := tx.exec(ctx, query, groupIDs[0], talkgroupID.Int64); err != nil {
-				reportFailure(progress, part, section, operation, err, query)
+			} else {
+				query = `INSERT INTO "talkgroupGroups" ("groupId", "talkgroupId") VALUES (?, ?)`
+
+				if _, err := tx.exec(ctx, query, groupIDs[0], talkgroupID.Int64); err != nil {
+					reportFailure(progress, part, section, operation, err, query)
+				}
 			}
 
 		} else {
@@ -796,6 +916,8 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 			}
 		}
 	}
+
+	rows.Close()
 
 	arch.report()
 
@@ -861,7 +983,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = tx.query(ctx, query)
+	rows, err = readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -961,6 +1083,8 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 			}
 		}
 	}
+
+	rows.Close()
 
 	arch.report()
 
@@ -1075,7 +1199,7 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1240,6 +1364,8 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 		}
 	}
 
+	rows.Close()
+
 	arch.report()
 
 	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerConfigs", unread || rows.Err() != nil)
@@ -1303,7 +1429,7 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1311,13 +1437,22 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 
 	for rows.Next() {
 		var (
-			logID    sql.NullInt32
-			dateTime sql.NullTime
-			level    sql.NullString
-			message  sql.NullString
+			logID       sql.NullInt32
+			rawDateTime any
+			level       sql.NullString
+			message     sql.NullString
 		)
 
-		if err := rows.Scan(&logID, &dateTime, &level, &message); err != nil {
+		if err := rows.Scan(&logID, &rawDateTime, &level, &message); err != nil {
+			unread = true
+
+			continue
+		}
+
+		// Read the way the legacy server reads it: MariaDB hands a datetime back as bytes, and a scan
+		// into a time is something it cannot answer.
+		dateTime, err := v6DateTime(rawDateTime)
+		if err != nil {
 			unread = true
 
 			continue
@@ -1393,6 +1528,8 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 		}
 	}
 
+	rows.Close()
+
 	arch.report()
 
 	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerLogs", unread || rows.Err() != nil)
@@ -1434,7 +1571,7 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1531,6 +1668,8 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 		}
 	}
 
+	rows.Close()
+
 	arch.report()
 
 	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerDownstreams", unread || rows.Err() != nil)
@@ -1552,10 +1691,14 @@ const v6DirwatchesTable = "rdioScannerDirWatches"
 //
 // Two legacy details are reproduced here rather than tidied away.
 //
-// The lookup query is a `LEFT JOIN` with no `ON` clause, which every backend this server supports
-// treats as a cross product of systems and talkgroups. It is what fills the two lookup maps, and
-// it only records a system when the row it came from had a talkgroup too: a system with no
+// The lookup query is a cross product of systems and talkgroups. It is what fills the two lookup maps,
+// and it only records a system when the row it came from had a talkgroup too: a system with no
 // talkgroups is not in the maps at all, and its dirwatches then resolve to nothing.
+//
+// It is spelled `CROSS JOIN`, which is what the same query looked like as a `LEFT JOIN` with no `ON`
+// clause until the live run in testdata/migration/run.sh asked MariaDB to parse it: MariaDB refuses a
+// `LEFT JOIN` with no `ON` as a syntax error, before it looks at any data, and the two maps came out
+// identical on the other three backends.
 //
 // The dirwatch rows are scanned into two of the four variables the lookup query used, so the
 // other two keep whatever the lookup query left in them. Whether a dirwatch's talkgroup is
@@ -1591,7 +1734,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 		talkgroupRef sql.NullInt32
 	)
 
-	query := `SELECT s."systemId", s."systemRef", t."talkgroupId", t."talkgroupRef" FROM "systems" AS s LEFT JOIN "talkgroups" AS t`
+	query := `SELECT s."systemId", s."systemRef", t."talkgroupId", t."talkgroupRef" FROM "systems" AS s CROSS JOIN "talkgroups" AS t`
 
 	rows, err := s.query(ctx, query)
 	if err != nil {
@@ -1626,7 +1769,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = tx.query(ctx, query)
+	rows, err = readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1771,6 +1914,8 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 		}
 	}
 
+	rows.Close()
+
 	arch.report()
 
 	dropV6Table(ctx, tx, progress, part, section, operation, v6DirwatchesTable, unread || rows.Err() != nil)
@@ -1810,7 +1955,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 		talkgroups = map[int32]map[int32]int32{}
 	)
 
-	query := `SELECT s."systemId", s."systemRef", t."talkgroupId", t."talkgroupRef" FROM "systems" AS s LEFT JOIN "talkgroups" AS t`
+	query := `SELECT s."systemId", s."systemRef", t."talkgroupId", t."talkgroupRef" FROM "systems" AS s CROSS JOIN "talkgroups" AS t`
 
 	rows, err := s.query(ctx, query)
 	if err != nil {
@@ -1852,7 +1997,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = tx.query(ctx, query)
+	rows, err = readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1864,7 +2009,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 			audio        sql.NullString
 			audioName    sql.NullString
 			audioType    sql.NullString
-			dateTime     sql.NullTime
+			rawDateTime  any
 			frequencies  sql.NullString
 			frequency    sql.NullInt32
 			patches      sql.NullString
@@ -1874,7 +2019,16 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 			talkgroupRef sql.NullInt32
 		)
 
-		if err := rows.Scan(&callID, &audio, &audioName, &audioType, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &systemRef, &talkgroupRef); err != nil {
+		if err := rows.Scan(&callID, &audio, &audioName, &audioType, &rawDateTime, &frequencies, &frequency, &patches, &source, &sources, &systemRef, &talkgroupRef); err != nil {
+			unread = true
+
+			continue
+		}
+
+		// Read the way the legacy server reads it: MariaDB hands a datetime back as bytes, and a scan
+		// into a time is something it cannot answer.
+		dateTime, err := v6DateTime(rawDateTime)
+		if err != nil {
 			unread = true
 
 			continue
@@ -2172,7 +2326,7 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -2263,6 +2417,8 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 		}
 	}
 
+	rows.Close()
+
 	arch.report()
 
 	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerApiKeys", unread || rows.Err() != nil)
@@ -2300,7 +2456,7 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := tx.query(ctx, query)
+	rows, err := readV6Table(ctx, s, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -2308,16 +2464,26 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 
 	for rows.Next() {
 		var (
-			accessID   sql.NullInt64
-			code       sql.NullString
-			expiration sql.NullTime
-			ident      sql.NullString
-			limit      sql.NullInt32
-			order      sql.NullInt32
-			systems    sql.NullString
+			accessID    sql.NullInt64
+			code        sql.NullString
+			rawDateTime any
+			ident       sql.NullString
+			limit       sql.NullInt32
+			order       sql.NullInt32
+			systems     sql.NullString
 		)
 
-		if err := rows.Scan(&accessID, &code, &expiration, &ident, &limit, &order, &systems); err != nil {
+		if err := rows.Scan(&accessID, &code, &rawDateTime, &ident, &limit, &order, &systems); err != nil {
+			unread = true
+
+			continue
+		}
+
+		// Read the way the legacy server reads it: MariaDB hands a datetime back as bytes, and a scan
+		// into a time is something it cannot answer. An access with no expiration is a nil here, and
+		// stays the row with no expiration that it was.
+		expiration, err := v6DateTime(rawDateTime)
+		if err != nil {
 			unread = true
 
 			continue
@@ -2403,6 +2569,8 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 			}
 		}
 	}
+
+	rows.Close()
 
 	arch.report()
 

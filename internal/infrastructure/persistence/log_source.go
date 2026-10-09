@@ -39,12 +39,20 @@ import (
 //
 // MySQL is the reason the column has two spellings: it refuses a default on a TEXT column, and the default
 // is the part that lets the legacy server keep inserting into this table without knowing the column exists.
+// It is the reason the index by source has two as well, for the opposite trouble with the same column.
 const (
 	logSourceColumnSqlite     = `ALTER TABLE "logs" ADD COLUMN "source" text NOT NULL DEFAULT ''`
 	logSourceColumnServer     = `ALTER TABLE "logs" ADD COLUMN "source" varchar(255) NOT NULL DEFAULT ''`
 	logSourceColumnPostgres   = `ALTER TABLE "logs" ADD COLUMN "source" text NOT NULL DEFAULT ''`
 	logSourceIndexBySource    = `CREATE INDEX "logs_source_idx" ON "logs" ("source", "level", "timestamp")`
 	logSourceIndexByTimestamp = `CREATE INDEX "logs_time_idx" ON "logs" ("timestamp")`
+
+	// logSourceIndexBySourceServer is the same index spelled for the backend that cannot build the other
+	// one. `level` is a TEXT column there, and MySQL only indexes a prefix of a TEXT column: asked for
+	// the whole thing it refuses the statement — "Specified key was too long; max key length is 3072
+	// bytes" — and a deployment on MariaDB ends its startup in this step. The prefix is the index the log
+	// search needs, because a level is one of a handful of short words and never the long part of a row.
+	logSourceIndexBySourceServer = `CREATE INDEX "logs_source_idx" ON "logs" ("source", "level"(255), "timestamp")`
 )
 
 // ensureLogSourceColumn gives the log table the column that says which part of the server wrote each
@@ -90,11 +98,17 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 		}
 	}
 
+	bySource := logSourceIndexBySource
+
+	if s.dialect == DialectMariadb || s.dialect == DialectMysql {
+		bySource = logSourceIndexBySourceServer
+	}
+
 	for _, index := range []struct {
 		name      string
 		statement string
 	}{
-		{"logs_source_idx", logSourceIndexBySource},
+		{"logs_source_idx", bySource},
 		{"logs_time_idx", logSourceIndexByTimestamp},
 	} {
 		created, err := hasLogIndex(ctx, s, index.name)

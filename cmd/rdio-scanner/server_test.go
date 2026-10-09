@@ -1341,12 +1341,12 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 
 	t.Cleanup(func() { srv.stop(context.Background()) })
 
-	// Still said out loud: the pass announces each v6 table it found, and reports the row it could not
-	// carry, exactly as it did before this feature — and, since FEAT-011, the rows it archived.
+	// Still said out loud: the pass announces each v6 table it found, and reports what it could not carry
+	// or could not link, exactly as it did before this feature — and, since FEAT-011, the rows it archived.
 	for _, want := range []string{
 		"migrating groups...",
 		"migrating logs...",
-		"migration.migrateTalkgroups:",
+		`the migration carried talkgroup 203 "Un grouped" without its group: group 0 is not in this database`,
 		"the migration could not carry call 705: its system 10003 is not in this database",
 	} {
 		if !strings.Contains(console.String(), want) {
@@ -1381,19 +1381,16 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 		}
 	}
 
-	// And the failure the fixture is built to produce is filed as an entry too, in the shape every other
-	// entry has: a sentence first, then the failure's own text.
-	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration of talkgroups could not be finished: migration.migrateTalkgroups:%'`); got == 0 {
-		t.Errorf("the log view holds no entry for the row the migration could not carry")
-	}
-
-	// FEAT-011: every row the pass archived is filed the same way, as a problem, in the order the pass
-	// says it — the count first, then one line per row. A deployment running as a service has no terminal,
-	// and these are the lines that tell its operator the upgrade left something behind and where to go and
-	// look at it.
+	// FEAT-011: every incoherence the pass finds in the deployment is filed the same way, as a problem, in
+	// the order the pass says it. A deployment running as a service has no terminal, and these are the
+	// lines that tell its operator the upgrade left something behind and where to go and look at it.
 	for _, want := range []struct {
 		level, message string
 	}{
+		// The talkgroup in no group is carried, and the group its v6 row named is not: the link is not
+		// written, and the group it named is said rather than left to whatever the backend called the
+		// refusal.
+		{"warn", `the migration carried talkgroup 203 "Un grouped" without its group: group 0 is not in this database`},
 		{"warn", "the migration could not carry 1 talkgroup: it is kept in the migrationArchive table"},
 		{"warn", `the migration could not carry talkgroup 207 "Orphaned": its system 10009 is not in this database`},
 		{"warn", "the migration could not carry 1 unit: it is kept in the migrationArchive table"},

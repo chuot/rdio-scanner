@@ -15,7 +15,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -37,7 +36,7 @@ var auditTables = []auditTable{
 	{v6: "rdioScannerSystems", v6Identity: "_id", v8: "systems", v8Identity: "systemId"},
 	{v6: "rdioScannerTalkgroups", v6Identity: "_id", v8: "talkgroups", v8Identity: "talkgroupId"},
 	{v6: "rdioScannerUnits", v6Identity: "_id", v8: "units", v8Identity: "unitId"},
-	{v6: "rdioScannerLogs", v6Identity: "_id", v8: "logs", v8Identity: "logid"},
+	{v6: "rdioScannerLogs", v6Identity: "_id", v8: "logs", v8Identity: "logId"},
 	{v6: "rdioScannerDownstreams", v6Identity: "_id", v8: "downstreams", v8Identity: "downstreamId"},
 	{v6: "rdioScannerDirWatches", v6Identity: "_id", v8: "dirwatches", v8Identity: "dirwatchId"},
 	{v6: "rdioScannerCalls", v6Identity: "id", v8: "calls", v8Identity: "callId"},
@@ -67,7 +66,32 @@ func auditIdentities(t *testing.T, db *sql.DB, table, column string) []string {
 }
 
 // auditIdentitiesWhere reads the identities one table holds under a condition, in identity order.
+//
+// Every one of them has to be a number. sqlite reads a quoted name that matches no column as the word
+// itself, so a column name this audit got wrong would come back as the same word on both sides of every
+// comparison and read as a pass. A value that is not an identity is that mistake, and it is fatal here
+// rather than a mismatch further down.
 func auditIdentitiesWhere(t *testing.T, db *sql.DB, table, column, where string) []string {
+	t.Helper()
+
+	identities := []string{}
+
+	for _, value := range auditColumnValues(t, db, table, column, where) {
+		if _, err := strconv.ParseInt(value, 10, 64); err != nil {
+			t.Fatalf("the audit read %s.%s and got %q, which is not an identity: sqlite reads a quoted name that "+
+				"matches no column as the word itself, so this is the audit naming a column the table does not have",
+				table, column, value)
+		}
+
+		identities = append(identities, value)
+	}
+
+	return identities
+}
+
+// auditColumnValues reads one column of one table, in column order. The options keys are compared by name
+// and not by number, so they are read here and not through the identity rule above.
+func auditColumnValues(t *testing.T, db *sql.DB, table, column, where string) []string {
 	t.Helper()
 
 	query := `SELECT "` + column + `" FROM "` + table + `"`
@@ -76,13 +100,13 @@ func auditIdentitiesWhere(t *testing.T, db *sql.DB, table, column, where string)
 		query += " WHERE " + where
 	}
 
-	identities := []string{}
+	values := []string{}
 
 	for _, row := range readRows(t, db, query+` ORDER BY "`+column+`"`) {
-		identities = append(identities, row[0])
+		values = append(values, row[0])
 	}
 
-	return identities
+	return values
 }
 
 // TestTheMigrationCarriesOrArchivesEveryRowOfTheLegacyDatabase is the conservation invariant: for every
@@ -166,7 +190,7 @@ func auditConfigConservation(t *testing.T, db *sql.DB) {
 		rowId, key := row[0], row[1]
 
 		if key != "options" {
-			if carried := auditIdentitiesWhere(t, db, "options", "key", `"key" = '`+key+`'`); !hasString(carried, key) {
+			if carried := auditColumnValues(t, db, "options", "key", `"key" = '`+key+`'`); !hasString(carried, key) {
 				if !hasString(archived, rowId) {
 					t.Errorf("rdioScannerConfigs row %s, key %q: the migration carried it into neither the options table nor the archive",
 						rowId, key)
@@ -183,7 +207,7 @@ func auditConfigConservation(t *testing.T, db *sql.DB) {
 			t.Fatalf("the fixture's options blob: %v", err)
 		}
 
-		carried := auditIdentities(t, db, "options", "key")
+		carried := auditColumnValues(t, db, "options", "key", "")
 
 		// The archived copy of the options row holds the blob as the v6 table held it, which is what makes
 		// a key the pass could not carry recoverable out of the archive.
@@ -241,6 +265,13 @@ func number(v6, v8 string) string {
 	return `COALESCE(v."` + v6 + `", 0), COALESCE(t."` + v8 + `", 0)`
 }
 
+// flag is a v6 flag column and its v8 counterpart. The fallback is `false` and not 0 because PostgreSQL
+// stores these as a boolean and COALESCE will not mix a boolean with an integer; MariaDB and sqlite read
+// the same word as the 0 and 1 their columns hold.
+func flag(v6, v8 string) string {
+	return `COALESCE(v."` + v6 + `", false), COALESCE(t."` + v8 + `", false)`
+}
+
 // assertCarriedValues compares each named column's v6 value with the v8 value it arrived in.
 //
 // The query has to read the row's identity first and then the pairs in the order `columns` names them,
@@ -290,14 +321,14 @@ func auditValues(t *testing.T, db *sql.DB) {
 		`SELECT v."_id", `+pair("label", "label")+` FROM "auditrdioScannerTags" v JOIN "tags" t ON t."tagId" = v."_id" ORDER BY v."_id"`,
 		"label")
 
-	assertOrderedByLabel(t, db, "auditrdioScannerGroups", "groups", "groupId", "label")
-	assertOrderedByLabel(t, db, "auditrdioScannerTags", "tags", "tagId", "label")
+	assertOrderedByLabel(t, db, "auditrdioScannerGroups", "_id", "groups", "groupId", "label")
+	assertOrderedByLabel(t, db, "auditrdioScannerTags", "_id", "tags", "tagId", "label")
 
 	// Systems keep their identity, their radio-system reference, and their settings; the blacklist JSON
 	// arrives stripped of the brackets v6 stored it in.
 	assertCarriedValues(t, db, "rdioScannerSystems",
 		`SELECT v."_id", `+number("id", "systemRef")+`, `+pair("label", "label")+`, `+pair("led", "led")+`, `+
-			number("order", "order")+`, `+number("autoPopulate", "autoPopulate")+
+			number("order", "order")+`, `+flag("autoPopulate", "autoPopulate")+
 			`, COALESCE(REPLACE(REPLACE(v."blacklists", '[', ''), ']', ''), ''), t."blacklists" `+
 			`FROM "auditrdioScannerSystems" v JOIN "systems" t ON t."systemId" = v."_id" ORDER BY v."_id"`,
 		"id", "label", "led", "order", "autoPopulate", "blacklists")
@@ -330,13 +361,13 @@ func auditValues(t *testing.T, db *sql.DB) {
 
 	// Downstreams, api keys, and accesses are copied, identity first.
 	assertCarriedValues(t, db, "rdioScannerDownstreams",
-		`SELECT v."_id", `+pair("apiKey", "apikey")+`, `+number("disabled", "disabled")+`, `+number("order", "order")+
+		`SELECT v."_id", `+pair("apiKey", "apikey")+`, `+flag("disabled", "disabled")+`, `+number("order", "order")+
 			`, `+pair("systems", "systems")+`, `+pair("url", "url")+` FROM "auditrdioScannerDownstreams" v `+
 			`JOIN "downstreams" t ON t."downstreamId" = v."_id" ORDER BY v."_id"`,
 		"apiKey", "disabled", "order", "systems", "url")
 
 	assertCarriedValues(t, db, "rdioScannerApiKeys",
-		`SELECT v."_id", `+number("disabled", "disabled")+`, `+pair("ident", "ident")+`, `+pair("key", "key")+`, `+
+		`SELECT v."_id", `+flag("disabled", "disabled")+`, `+pair("ident", "ident")+`, `+pair("key", "key")+`, `+
 			number("order", "order")+`, `+pair("systems", "systems")+` FROM "auditrdioScannerApiKeys" v `+
 			`JOIN "apikeys" t ON t."apikeyId" = v."_id" ORDER BY v."_id"`,
 		"disabled", "ident", "key", "order", "systems")
@@ -350,8 +381,8 @@ func auditValues(t *testing.T, db *sql.DB) {
 	// Dirwatches keep every column v8 has room for. Their references are the rule below, because a
 	// reference the legacy lookup had no row for arrives as nothing.
 	assertCarriedValues(t, db, "rdioScannerDirWatches",
-		`SELECT v."_id", `+number("delay", "delay")+`, `+number("deleteAfter", "deleteAfter")+`, `+
-			pair("directory", "directory")+`, `+number("disabled", "disabled")+`, `+pair("extension", "extension")+`, `+
+		`SELECT v."_id", `+number("delay", "delay")+`, `+flag("deleteAfter", "deleteAfter")+`, `+
+			pair("directory", "directory")+`, `+flag("disabled", "disabled")+`, `+pair("extension", "extension")+`, `+
 			number("frequency", "frequency")+`, `+pair("mask", "mask")+`, `+number("order", "order")+`, `+
 			pair("type", "type")+` FROM "auditrdioScannerDirWatches" v JOIN "dirwatches" t ON t."dirwatchId" = v."_id" `+
 			`ORDER BY v."_id"`,
@@ -372,7 +403,7 @@ func auditValues(t *testing.T, db *sql.DB) {
 	// The datetimes: v6 wrote them as text, v8 counts them, and no dialect converts one to the other the
 	// same way, so the audit converts them itself and names the unit it compared.
 	assertCarriedTimes(t, db, "rdioScannerLogs", "dateTime", "timestamp", "milliseconds", time.Millisecond,
-		`SELECT v."_id", v."dateTime", t."timestamp" FROM "auditrdioScannerLogs" v JOIN "logs" t ON t."logid" = v."_id" `+
+		`SELECT v."_id", v."dateTime", t."timestamp" FROM "auditrdioScannerLogs" v JOIN "logs" t ON t."logId" = v."_id" `+
 			`WHERE v."message" != '' ORDER BY v."_id"`)
 
 	assertCarriedTimes(t, db, "rdioScannerCalls", "dateTime", "timestamp", "milliseconds", time.Millisecond,
@@ -389,10 +420,10 @@ func auditValues(t *testing.T, db *sql.DB) {
 
 // assertOrderedByLabel is the groups and tags rule: the v8 `order` is 1..n in label order, which is what
 // the legacy migration computed and what the administrator's list shows.
-func assertOrderedByLabel(t *testing.T, db *sql.DB, v6Table, v8Table, identity, column string) {
+func assertOrderedByLabel(t *testing.T, db *sql.DB, v6Table, v6Identity, v8Table, v8Identity, column string) {
 	t.Helper()
 
-	rows := readRows(t, db, `SELECT "`+identity+`", "`+column+`", "order" FROM "`+v8Table+`" ORDER BY "order"`)
+	rows := readRows(t, db, `SELECT "`+v8Identity+`", "`+column+`", "order" FROM "`+v8Table+`" ORDER BY "order"`)
 
 	if len(rows) == 0 {
 		t.Fatalf("the %s table is empty, so the order rule proves nothing", v8Table)
@@ -412,7 +443,7 @@ func assertOrderedByLabel(t *testing.T, db *sql.DB, v6Table, v8Table, identity, 
 		last = row[1]
 	}
 
-	if got, want := len(rows), len(readRows(t, db, `SELECT "`+identity+`" FROM "`+v6Table+`"`)); got != want {
+	if got, want := len(rows), len(readRows(t, db, `SELECT "`+v6Identity+`" FROM "`+v6Table+`"`)); got != want {
 		t.Errorf("%s holds %d rows, want the %d the v6 table has", v8Table, got, want)
 	}
 }
@@ -443,31 +474,6 @@ func assertCarriedTimes(t *testing.T, db *sql.DB, table, v6Column, v8Column, uni
 				table, row[0], v6Column, row[1], row[2], want, unitName)
 		}
 	}
-}
-
-// parseV6DateTime reads the datetime of a v6 row back as the instant it names.
-//
-// The three shapes are the three the audit meets. A v6 database holds the text Go's time package prints,
-// which is what a sqlite file stores and what the sqlite driver hands back as an instant; a MariaDB
-// `datetime` column reads back as the same instant with no zone on it, because a MariaDB datetime has no
-// zone to have; and a PostgreSQL `timestamp with time zone` reads back as a Go time, which the audit's
-// reader prints the way the time package prints it. A value that fits none of them is not a datetime a v6
-// deployment held, and saying so is the failure this helper is for.
-func parseV6DateTime(text string) (time.Time, error) {
-	layouts := []string{
-		"2006-01-02 15:04:05.999 -0700 MST",
-		"2006-01-02 15:04:05.999999999 -0700 MST",
-		"2006-01-02 15:04:05",
-		"2006-01-02 15:04:05.999",
-	}
-
-	for _, layout := range layouts {
-		if when, err := time.Parse(layout, text); err == nil {
-			return when, nil
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("%q is not a datetime in any of the shapes a v6 database writes or a driver reads back", text)
 }
 
 // assertCarriedJSONLists is the calls rule the child tables hold: the frequencies, patches, and source
@@ -805,7 +811,7 @@ func auditDeclaredDrops(t *testing.T, db *sql.DB, dialect Dialect) {
 		t.Errorf("the archive holds %v for rdioScannerMeta, want nothing: its rows are not deployment data", rows)
 	}
 
-	if got := len(readRows(t, db, `SELECT "_id" FROM "auditrdioScannerMeta"`)); got == 0 {
+	if got := len(readRows(t, db, `SELECT "name" FROM "auditrdioScannerMeta"`)); got == 0 {
 		t.Fatal("the fixture has no rdioScannerMeta rows, so dropping it proves nothing")
 	}
 
