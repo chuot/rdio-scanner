@@ -9,6 +9,7 @@ when every item passed.
 cd testdata/conformance
 ./run.sh                    # the checklist
 ./run.sh --keep             # leave the databases, the browser profile, and the server logs behind
+./run.sh --seed ../legacyv6/rdio-scanner.db   # the drop-in: the checklist that reads what came across
 ```
 
 It needs the Go toolchain, node, `make`, and `google-chrome` on `PATH`. It builds both the web application and
@@ -24,6 +25,14 @@ dependency. Pages are opened with `Target.createTarget`, driven with `Runtime.ev
 The clicks are real mouse presses and releases, not `element.click()` run inside the page. That matters: the
 listener's audio engine only creates its playback context on a genuine user gesture, and a synthesized click is
 not one — a harness that synthesized clicks would never see a call play.
+
+Because they are real presses, the point being pressed has to be the control. `click()` scrolls the control into
+view, takes its middle, and only presses once `document.elementFromPoint` reports the control itself at that
+point and the point has not moved between two samples. A drawer that is still sliding in puts its contents at
+coordinates the browser would press as whatever is there — the panel, or nothing at all — and the press and the
+release land on two different elements, which fires no click on either. That is not a browser quirk to work
+around; it is the harness pressing the wrong thing, and it is why four items used to fail with "it never
+appeared".
 
 Alongside the browser, the same script holds a plain http client for the paths a *recording tool* uses — the
 two upload endpoints — so that a call can be put into the server and then seen on the page.
@@ -54,25 +63,43 @@ can debug a week later.
 | `a-token-that-is-no-good-returns-to-the-login` | a page holding a token the server refuses is put back at the login form and drops the token |
 | `the-administrator-logs-out` | the logout control ends the session and leaves no token behind |
 
-## The drop-in, and why it is not here any more
+## The drop-in: `--seed`
 
-This harness used to end with the claim that matters most for a rewrite: a database the **legacy** server wrote
-is served by the new server to the web application, and the application is asked whether its configuration and
-its stored calls are there and playable.
+The claim that matters most for a rewrite is the one this harness used to end with: a database the **legacy**
+server wrote is served by the new server to the web application, and the application is asked whether its
+configuration and its stored calls are there and playable.
 
-Producing that database required the legacy source. It built `server/`, started it, gave it the harness seed and
-one ingested call through its own administrator api, stopped it, and copied the database it wrote. `server/` is
-gone, so the harness cannot make one.
+Producing that database used to require the legacy source: build `server/`, start it, give it the harness seed and
+one ingested call through its own administrator api, stop it, copy the database it wrote. `server/` is gone, so
+the harness cannot make one. What it can do is start the new server on a database that is shaped like a v6.6.3
+deployment's — `testdata/legacyv6/rdio-scanner.db`, which `testdata/legacyv6/generate.sh` writes from the v6.6.3
+schema, the v6.6.3 defaults, and the shapes the legacy server's own code writes into its columns — and ask the
+application the same questions.
 
-The claim itself is not given up. It is answered two ways:
+```console
+./run.sh --seed ../legacyv6/rdio-scanner.db
+```
 
-- **`testdata/legacydb/`, `testdata/legacyv6/`, `testdata/legacydamaged/`** are databases the legacy server
-  actually wrote, kept in the repository. The migration and drop-in tests in
-  `internal/infrastructure/persistence/` start the new server on copies of them and assert what it finds.
-- **This harness** proves the other half: the embedded application works against a server that carries it.
+`run.sh` copies the named database where the server opens its own, starts the server, checks that the server said
+it was migrating what it was given (a seed that was ignored would otherwise drive a checklist against an empty
+database), and runs the `migrated` phase instead of the main one. Nothing in this phase configures the server:
+every value the items look for is one the fixture wrote and the migration carried.
 
-What is lost is the single end-to-end run that put a legacy-written database in front of a *browser*. The
-migration tests read the same databases without one.
+| Item | What it proves |
+| --- | --- |
+| `the-migrated-deployment-asks-its-listener-to-unlock` | the access codes the deployment issued are codes this server asks a listener for, so an upgraded deployment is still a restricted one |
+| `the-migrated-access-code-opens-the-deployment-that-issued-it` | the carried code unlocks the socket, and the systems its carried scope names appear in the search filters — a scope this server could not read would leave a listener that unlocked the door and sees nothing |
+| `the-migrated-branding-is-the-one-the-deployment-set` | the branding the deployment wrote is on the status line of a listener that never configured anything |
+| `the-migrated-call-history-is-searchable-in-the-browser` | the searched page holds the calls the migration carried, with the systems they resolved onto |
+| `a-migrated-call-saves-its-audio-to-the-browser` | the audio a v6 row held reaches the browser as a file of the same size |
+| `the-administrator-reads-the-configuration-that-came-across` | the groups section and the access section hold the rows that came across, and not the archived ones |
+| `the-logs-page-shows-what-the-migration-said` | the log page offers the migration as a part of the server, and narrowed to it its first page is the migration's own report |
+
+The two halves still answer different questions, and neither is redundant. The migration tests in
+`internal/infrastructure/persistence/` compare the values row by row and cannot see what a carried value *means*
+on this side of the boundary; these items ask the running server what it answers, which is the only way to find a
+row that was carried complete and is still dead. `docs/specs/FEAT-011-v663-migration-integrity/decision-fixture-scope-shape.md`
+is one of those, found this way.
 
 ## Things the harness arranges
 
@@ -91,6 +118,13 @@ migration tests read the same databases without one.
   storage and the gate is only worth checking against a listener that has not been let in yet.
 - **The seed applied through the administrator api**, the way an administrator applies a configuration, using
   `fixtures/seed.json` beside this harness.
+- **No seed at all in the `migrated` phase.** The deployment being driven already has a configuration, access
+  codes, watched directories, and calls in its database; the harness only reads what it finds there. The
+  administrator password it types is the one the server starts with, because the fixture holds no password row —
+  which is what an operator upgrading actually types on the first login.
+- **The log page narrowed by subsystem** in the `migrated` phase, by clicking the chip the page itself offers.
+  The migration writes its report under one subsystem, and the unnarrowed page shows the login and listener
+  entries on top of it.
 
 ## The tree the pinned fixtures point back to
 

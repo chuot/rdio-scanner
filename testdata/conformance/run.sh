@@ -22,13 +22,18 @@
 # run.sh runs the checklist in docs/specs/FEAT-003-server-ng-refactor/quickstart.md §6 against a running server,
 # in a real browser, with the real web application embedded in the binary.
 #
-#	usage: ./run.sh [--keep]
+#	usage: ./run.sh [--keep] [--seed <database>]
 #
 # It builds the server the way the release does — `go run ./cmd/build`, which compiles both web
 # applications and then the server that carries them — starts it on a database of its own, and drives
 # it.
 #
 # It exits 0 when every item passed.
+#
+# With --seed, the database named is copied where the server opens its own before the server is started, and the
+# checklist that runs is the drop-in one: the server migrates that database on its way up, and the items ask the
+# application whether what came across is there. `testdata/legacyv6/rdio-scanner.db` is the database to name
+# there, and testdata/legacyv6/generate.sh says how it was made.
 #
 # It used to do a second thing: start the legacy server, let it write a database, and start this server on a copy
 # of it. That needed the legacy source, and the legacy source is gone. A database the legacy server wrote is still
@@ -39,12 +44,23 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "${here}/../.." && pwd)
 
 keep=false
+seed=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--keep)
 		keep=true
 		shift
+		;;
+	--seed)
+		if [[ -z "${2:-}" ]]; then
+			echo "run.sh: --seed names a database to start the server on" >&2
+
+			exit 2
+		fi
+
+		seed=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+		shift 2
 		;;
 	*)
 		echo "run.sh: unknown argument $1" >&2
@@ -53,6 +69,12 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+if [[ -n "${seed}" && ! -f "${seed}" ]]; then
+	echo "run.sh: there is no database at ${seed}" >&2
+
+	exit 2
+fi
 
 work=$(mktemp -d)
 
@@ -156,20 +178,52 @@ fi
 
 # --- the application, against a server of its own --------------------------
 
-echo "run.sh: the web application against the server on 127.0.0.1:3170" >&2
+if [[ -n "${seed}" ]]; then
+	echo "run.sh: the web application against the server on 127.0.0.1:3170, on a copy of ${seed}" >&2
 
-start_server "${work}/rdio-scanner" "${work}/main/base" 3170 main-server
+	mkdir -p "${work}/migrated/base"
 
-mkdir -p "${work}/main/watched"
+	if ! cp "${seed}" "${work}/migrated/base/rdio-scanner.db"; then
+		echo "run.sh: ${seed} would not go where the server opens its own" >&2
 
-node "${here}/conformance.mjs" \
-	--base "http://127.0.0.1:3170" \
-	--cdpPort 9333 \
-	--watchDir "${work}/main/watched" \
-	--work "${work}"
+		exit 1
+	fi
 
-main_status=$?
+	start_server "${work}/rdio-scanner" "${work}/migrated/base" 3170 migrated-server
+
+	# The point of the seed is that the server migrates it. If it did not say so, the checklist below would be
+	# driving a server that made an empty database of its own.
+	if ! grep -q "migrating " "${work}/logs/migrated-server.log"; then
+		echo "run.sh: the server did not say it was migrating the database it was given" >&2
+		echo "run.sh: its own log:" >&2
+		cat "${work}/logs/migrated-server.log" >&2
+
+		exit 1
+	fi
+
+	node "${here}/conformance.mjs" \
+		--phase migrated \
+		--base "http://127.0.0.1:3170" \
+		--cdpPort 9333 \
+		--work "${work}"
+
+	status=$?
+else
+	echo "run.sh: the web application against the server on 127.0.0.1:3170" >&2
+
+	start_server "${work}/rdio-scanner" "${work}/main/base" 3170 main-server
+
+	mkdir -p "${work}/main/watched"
+
+	node "${here}/conformance.mjs" \
+		--base "http://127.0.0.1:3170" \
+		--cdpPort 9333 \
+		--watchDir "${work}/main/watched" \
+		--work "${work}"
+
+	status=$?
+fi
 
 stop_servers
 
-exit "${main_status}"
+exit "${status}"

@@ -29,12 +29,16 @@
 // The browser is driven over the DevTools protocol with nothing but node's own websocket and fetch, because
 // the repository adds no test dependency for it and the point of this harness is the application as shipped.
 //
-// It knows nothing about the legacy server. Parity with it is answered by the pinned goldens under
-// `testdata/golden` and the databases the legacy server wrote under `testdata/legacydb`; this harness answers a
-// different question: does the client work against the server it is now embedded in.
+// The main checklist knows nothing about the legacy server. Parity with it is answered by the pinned goldens
+// under `testdata/golden` and the databases the legacy server wrote under `testdata/legacydb`; that checklist
+// answers a different question: does the client work against the server it is now embedded in.
+//
+// The `migrated` phase answers the other one, and it is the reason `run.sh --seed` exists: a database shaped
+// like a v6.6.3 deployment's is put where the server opens its own, and the application is asked whether its
+// configuration, its access codes, and its stored calls are there.
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -328,7 +332,11 @@ class Page {
   // released over the element. That matters — the listener's audio engine only starts on a real gesture, and a
   // click synthesized inside the page is not one.
   async click(selector) {
-    const box = await this.evaluate(`
+    // The point to press is the middle of the element, and the element is only where its middle is once the
+    // page has finished moving it. A drawer that is still sliding in, a control scrolled off the viewport, or a
+    // control covered by an overlay would otherwise be pressed as whatever happens to sit at those
+    // coordinates, which is how a harness ends up clicking nothing at all.
+    const where = `
       (() => {
         const node = document.querySelector(${JSON.stringify(selector)});
 
@@ -338,12 +346,43 @@ class Page {
 
         const rect = node.getBoundingClientRect();
 
-        return {x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2)};
-      })()
-    `);
+        const x = Math.round(rect.x + rect.width / 2);
+        const y = Math.round(rect.y + rect.height / 2);
 
-    if (box === null) {
-      throw new Error(`there is no ${selector} on the page to click`);
+        const hit = document.elementFromPoint(x, y);
+
+        if (!hit || (hit !== node && !node.contains(hit) && !hit.contains(node))) return null;
+
+        return {x, y};
+      })()
+    `;
+
+    let box = null;
+    let settled = null;
+
+    const until = Date.now() + 15000;
+
+    while (Date.now() < until) {
+      box = await this.evaluate(where);
+
+      // The press and the release have to land on the same element. A control that is still moving between
+      // them — a drawer that is still sliding in — is pressed as one element and released as another, and the
+      // browser fires the click on neither. The place is only used once it has stopped changing.
+      if (box && settled && box.x === settled.x && box.y === settled.y) break;
+
+      settled = box;
+
+      await sleep(200);
+    }
+
+    if (!box) {
+      const there = await this.evaluate(`!!document.querySelector(${JSON.stringify(selector)})`);
+
+      throw new Error(
+        there
+          ? `${selector} is on the page but never got somewhere it could be pressed`
+          : `there is no ${selector} on the page to click`,
+      );
     }
 
     for (const type of ['mousePressed', 'mouseReleased']) {
@@ -1166,6 +1205,214 @@ async function editSomethingIn(page, section) {
 // The drop-in: a database the legacy server wrote, served to the web application
 // ---------------------------------------------------------------------------
 
+// What is checked here is not what this harness wrote. Every value below is one
+// `testdata/legacyv6/generate.sh` put into a database shaped like a v6.6.3 deployment's, and the server read it
+// out of that database on its way up. The harness only asks whether the application can see it.
+const migrated = {
+  branding: 'Rdio Legacy',
+  code: 'XYZ789',
+  groups: ['Air', 'EMS', 'Fire', 'Interop', 'Law', 'Unknown'],
+  idents: ['guest', 'ops'],
+  systems: ['Grand Metro', 'Harbour'],
+};
+
+async function migratedItems(app) {
+  const base = app.server.base;
+
+  let listener = null;
+
+  await app.item('the-migrated-deployment-asks-its-listener-to-unlock', async () => {
+    listener = await app.page(`${base}/`);
+
+    // A listener remembers the code it was given in local storage, and the codes being checked here are the
+    // ones the deployment issued, so the page is made to forget whatever it has.
+    await listener.evaluate(`localStorage.clear()`);
+
+    await listener.reload();
+
+    await listener.waitFor(`document.querySelector('rdio-display .auth')?.classList.contains('visible')`, {
+      timeout: 45000,
+      what: 'the unlock overlay',
+    });
+
+    return 'the access codes the v6 deployment issued are codes this server asks a listener for';
+  });
+
+  await app.item('the-migrated-access-code-opens-the-deployment-that-issued-it', async () => {
+    await listener.fill('#unlock-code', migrated.code);
+    await listener.submit('#unlock-code');
+
+    await listener.waitFor(`!document.querySelector('rdio-display .auth')?.classList.contains('visible')`, {
+      timeout: 30000,
+      what: 'the unlock overlay to close',
+    });
+
+    // The scope that code carries is a JSON document the legacy server wrote, and the systems it names are what
+    // the search filters are built from. A scope this server could not read would leave a listener that opened
+    // the door and sees nothing.
+    const wanted = migrated.systems.map((label) => JSON.stringify(label));
+
+    await listener.waitFor(
+      `[${wanted.join(', ')}].every((label) => Array.from(document.querySelectorAll('select[name="system"] option')).some((o) => o.textContent.includes(label)))`,
+      { timeout: 45000, what: 'the two systems the deployment had' },
+    );
+
+    const systems = await listener.evaluate(
+      `Array.from(document.querySelectorAll('select[name="system"] option')).map((o) => o.textContent).join(', ')`,
+    );
+
+    return `the code the deployment issued opens it, and the search filters offer ${systems}`;
+  });
+
+  await app.item('the-migrated-branding-is-the-one-the-deployment-set', async () => {
+    await listener.waitFor(`document.querySelector('rdio-status .branding')?.textContent === ${JSON.stringify(migrated.branding)}`, {
+      timeout: 30000,
+      what: 'the branding line the deployment wrote',
+    });
+
+    return `the status line reads ${JSON.stringify(await listener.text('rdio-status .branding'))}`;
+  });
+
+  await app.item('the-migrated-call-history-is-searchable-in-the-browser', async () => {
+    await listener.click('button[data-action="search"]');
+
+    await listener.waitFor(`document.querySelectorAll('rdio-search-panel tbody tr').length >= 5`, {
+      timeout: 30000,
+      what: 'the calls the migration carried',
+    });
+
+    // The cells are date, time, system, talkgroup, name. A page shorter than the client page is padded with
+    // empty rows, and those are not calls. The system cell holds a label only when the call's system reference
+    // resolved to a row the migration made.
+    const rows = await listener.evaluate(`
+      Array.from(document.querySelectorAll('rdio-search-panel tbody tr'))
+        .map((row) => Array.from(row.querySelectorAll('td span')).map((span) => span.textContent))
+        .filter((cells) => cells.length === 5)
+        .map((cells) => cells.join(' | '))
+    `);
+
+    const systems = new Set(rows.map((row) => row.split(' | ')[2]));
+
+    if (systems.size !== migrated.systems.length || migrated.systems.some((label) => !systems.has(label))) {
+      throw new Error(`the searched calls name ${[...systems].join(', ')}, want ${migrated.systems.join(', ')}`);
+    }
+
+    const page = await listener.text('rdio-paginator .rdio-paginator-label');
+
+    return `${rows.length} rows on ${page}: ${rows.slice(0, 3).join('  //  ')}`;
+  });
+
+  await app.item('a-migrated-call-saves-its-audio-to-the-browser', async () => {
+    rmSync(app.browser.downloadDir, { recursive: true, force: true });
+    mkdirSync(app.browser.downloadDir, { recursive: true });
+
+    await listener.click('rdio-search-panel .paginator rdio-toggle button');
+
+    await listener.waitFor(`!!document.querySelector('rdio-search-panel tbody tr button[data-download]')`, {
+      timeout: 30000,
+      what: 'the rows to offer a download',
+    });
+
+    await listener.click('rdio-search-panel tbody tr button[data-download]');
+
+    const until = Date.now() + 20000;
+
+    while (Date.now() < until) {
+      const files = readdirSync(app.browser.downloadDir).filter((name) => name.length > 0);
+
+      if (files.length > 0) {
+        const sizes = files.map((name) => statSync(join(app.browser.downloadDir, name)).size);
+
+        return `the browser saved ${files.join(', ')} of ${sizes.join(', ')} bytes, which is the audio a v6 row held`;
+      }
+
+      await sleep(250);
+    }
+
+    throw new Error('the browser saved nothing from a migrated call within 20000ms');
+  });
+
+  await app.item('the-administrator-reads-the-configuration-that-came-across', async () => {
+    app.admin = await app.page(`${base}/admin`);
+
+    const admin = app.admin;
+
+    await admin.waitFor(`!!document.querySelector('input[name="password"]')`, { what: 'the login form' });
+
+    // The deployment wrote no administrator password, so the one this server starts with is the one that opens
+    // it — which is what an operator upgrading actually types.
+    await admin.fill('input[name="password"]', adminPassword);
+    await admin.submit('input[name="password"]');
+
+    await admin.waitFor(`!!document.querySelector('nav[aria-label="Admin sections"] [data-section="groups"]')`, {
+      timeout: 30000,
+      what: 'the section navigation',
+    });
+
+    const read = async (section) => {
+      await admin.click(`nav[aria-label="Admin sections"] [data-section="${section}"]`);
+
+      await admin.waitFor(`!!document.querySelector('rdio-admin-${section} .rdio-admin-row .row-title')`, {
+        timeout: 30000,
+        what: `the ${section} section to load`,
+      });
+
+      return (await admin.evaluate(
+        `Array.from(document.querySelectorAll('rdio-admin-${section} .rdio-admin-row .row-title')).map((title) => title.textContent.trim())`,
+      )).sort();
+    };
+
+    const groups = await read('groups');
+    const accesses = await read('access');
+
+    if (groups.join(', ') !== migrated.groups.join(', ')) {
+      throw new Error(`the groups section holds ${groups.join(', ')}, want ${migrated.groups.join(', ')}`);
+    }
+
+    if (accesses.join(', ') !== migrated.idents.join(', ')) {
+      throw new Error(`the access section holds ${accesses.join(', ')}, want ${migrated.idents.join(', ')}: the third access the deployment had holds no code and is in the migrationArchive table`);
+    }
+
+    return `the groups section holds ${groups.join(', ')} and the access section holds ${accesses.join(', ')}`;
+  });
+
+  await app.item('the-logs-page-shows-what-the-migration-said', async () => {
+    const admin = app.admin;
+
+    await admin.click(`nav[aria-label="Admin sections"] [data-section="logs"]`);
+
+    await admin.waitFor(`!!document.querySelector('rdio-admin-logs .rdio-log-sources [data-source="database"]')`, {
+      timeout: 30000,
+      what: 'the log page to offer the migration as a part of the server',
+    });
+
+    // The narrowing an operator uses: the log page counts the entries of every part of the server, and the
+    // migration files its own report under one of them.
+    const counts = await admin.evaluate(
+      `Array.from(document.querySelectorAll('rdio-admin-logs .rdio-log-sources [data-source]')).map((chip) => chip.textContent.trim())`,
+    );
+
+    await admin.click(`rdio-admin-logs .rdio-log-sources [data-source="database"]`);
+
+    // The narrowing is debounced, so the rows that were already on the page are still there for a moment. What
+    // is waited for is the narrowed page itself, not a row count that the unnarrowed page already satisfies.
+    await admin.waitFor(
+      `Array.from(document.querySelectorAll('rdio-admin-logs tbody tr')).every((row) => row.textContent.includes('migrat'))`,
+      { timeout: 30000, what: 'the log page to narrow to the migration' },
+    );
+
+    const rows = await admin.evaluate(
+      `Array.from(document.querySelectorAll('rdio-admin-logs tbody tr')).map((row) => row.textContent.trim())`,
+    );
+
+    if (rows.length < 5) {
+      throw new Error(`the log page narrowed to the migration holds ${rows.length} rows, want the ${rows.length} it wrote and more`);
+    }
+
+    return `the log page offers ${counts.join(', ')}, and narrowed to the migration its first page holds ${rows.length} rows, for example: ${JSON.stringify(rows[0])}`;
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 function sleep(ms) {
@@ -1251,6 +1498,15 @@ try {
 
     console.log('  probe:', await page.evaluate(`JSON.stringify({ready: document.readyState, options: Array.from(document.querySelectorAll('select[name="system"] option')).map((o) => o.textContent)})`));
     console.log(frames.slice(0, 25).join('\n'));
+  } else if (args.phase === 'migrated') {
+    // The drop-in. run.sh placed a database shaped like a v6.6.3 deployment's where this server opens its own,
+    // the server migrated it on its way up, and this harness configures nothing: it asks the application
+    // whether what came across is there.
+    await browser.launch();
+
+    await server.login(adminPassword);
+
+    await migratedItems(app);
   } else {
     await browser.launch();
 
