@@ -39,6 +39,7 @@ import (
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/presentation/dto"
+	"rdio-scanner/internal/presentation/httpaddr"
 )
 
 // writeWait bounds how long the server is willing to spend writing to one administrator connection.
@@ -87,7 +88,9 @@ type administrator struct {
 	conn *websocket.Conn
 
 	// remoteAddr is the address the connection came from, which is what an operator reads when they are
-	// looking for one connection among the ones the server has held.
+	// looking for one connection among the ones the server has held. It is read the way every other entry
+	// in this log reads an address — the machine, with the forwarding header honoured — rather than taken
+	// off the socket, because the socket of a deployment behind a proxy belongs to the proxy.
 	remoteAddr string
 
 	// granted says this connection has presented a credential the server accepts, and so may be told what
@@ -142,7 +145,7 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go sessions.listen(sessions.join(conn, r.RemoteAddr))
+	go sessions.listen(sessions.join(conn, httpaddr.Address(r)))
 }
 
 // NotifyConfigurationChanged pushes the whole configuration to every administrator connection that has

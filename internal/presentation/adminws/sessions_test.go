@@ -377,8 +377,9 @@ func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T)
 	// ends, and the close is the last thing the server writes on the way out.
 	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator from ")
 
-	if !strings.HasPrefix(entry.Message, "an administrator from 127.0.0.1:") {
-		t.Errorf("the entry is %q, want it to name the address the credential came from", entry.Message)
+	if entry.Message != "an administrator from 127.0.0.1 presented a session token that is not one this server issued" {
+		t.Errorf("the entry is %q, want it to name the address the credential came from the way the join and "+
+			"the departure name it", entry.Message)
 	}
 
 	if !strings.Contains(entry.Message, "presented a session token that is not one this server issued") {
@@ -409,8 +410,9 @@ func TestAnAdministratorConnectionThatJoinedIsRecorded(t *testing.T) {
 
 	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator connected from ")
 
-	if !strings.HasPrefix(entry.Message, "an administrator connected from 127.0.0.1:") {
-		t.Errorf("the entry is %q, want it to name the address the administrator connected from", entry.Message)
+	if entry.Message != "an administrator connected from 127.0.0.1" {
+		t.Errorf("the entry is %q, want the address named the way every other entry in this log names it: "+
+			"the machine, not the socket it arrived on", entry.Message)
 	}
 
 	if entry.Level != domain.LogLevelInfo {
@@ -439,12 +441,32 @@ func TestAnAdministratorConnectionThatEndedIsRecorded(t *testing.T) {
 
 	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator disconnected from ")
 
-	if !strings.HasPrefix(entry.Message, "an administrator disconnected from 127.0.0.1:") {
-		t.Errorf("the entry is %q, want it to name the address the administrator disconnected from", entry.Message)
+	if entry.Message != "an administrator disconnected from 127.0.0.1" {
+		t.Errorf("the entry is %q, want the address named the way the connection was filed when it joined: "+
+			"an operator searching the log for one machine should get both ends of it", entry.Message)
 	}
 
 	if entry.Level != domain.LogLevelInfo {
 		t.Errorf("the entry level is %q, want %q", entry.Level, domain.LogLevelInfo)
+	}
+}
+
+// TestAnAdministratorConnectionBehindAProxyIsRecordedByTheAddressItCameFrom is why the address is read the
+// way the rest of the server reads it rather than taken off the socket. A deployment behind a reverse proxy
+// hands the socket over from the proxy's own address; the forwarding header is the only thing that says who
+// actually connected. Every other entry in this log names the client — a listener that joined, a login
+// attempt, a request the server could not read — and an administrator's connection named the proxy instead
+// would make a search for one machine answer with half the truth.
+func TestAnAdministratorConnectionBehindAProxyIsRecordedByTheAddressItCameFrom(t *testing.T) {
+	fixture := newFixture(t)
+
+	fixture.openAs(t, http.Header{"X-Forwarded-For": []string{"203.0.113.7:51234"}})
+
+	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator connected from ")
+
+	if entry.Message != "an administrator connected from 203.0.113.7" {
+		t.Errorf("the entry is %q, want the address the forwarding header names, without the port: the socket "+
+			"arrived from the proxy and the administrator did not", entry.Message)
 	}
 }
 

@@ -187,11 +187,18 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 	// criterion — the socket's own tests prove the sentences, this proves they reach the log an operator
 	// searches and are filed under the administrator's own part of the server.
 	for _, fact := range []string{
-		"an administrator connected from 127.0.0.1:",
-		"an administrator from 127.0.0.1:",
-		"an administrator disconnected from 127.0.0.1:",
+		"an administrator connected from 127.0.0.1",
+		"an administrator from 127.0.0.1 presented a session token that is not one this server issued",
+		"an administrator disconnected from 127.0.0.1",
 	} {
 		waitForLogMentioning(t, srv.db, fact)
+
+		// The exact sentence, not a sentence that merely contains it: the address is the part an operator
+		// searches for, and it has to read the same way here as it does in every other entry the server
+		// writes about a machine.
+		if !hasLogMessage(t, srv.db, fact) {
+			t.Errorf("the log holds no entry reading exactly %q", fact)
+		}
 
 		entry := storedLogMentioning(t, srv.db, fact)
 
