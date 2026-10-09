@@ -192,19 +192,38 @@ func alreadyCarried(ctx context.Context, tx transaction, table, column string, i
 
 // readV6Table opens the v6 table a migration is carrying rows out of.
 //
-// It reads on the pool, and not on the transaction those rows are written through, because the row loop
-// reads one row and writes it before moving to the next: the cursor is still open on the connection while
-// the carry, the archive, and the `alreadyCarried` pre-check all run. PostgreSQL's driver refuses a second
-// statement on a transaction that has a result set open on it — the read ends at the first row the loop
-// carries — so a pass that reads and writes on one transaction is a pass that only works on the backends
-// tolerant enough to ignore it. The legacy server has the same shape for the same reason: it reads with
-// `db.Sql.Query`, collects what it read, and only then begins the transaction that writes
-// (v6.6.3:server/database.go:407).
+// Where it opens that cursor depends on the backend, and the two answers are opposite.
 //
-// Reading outside the transaction costs nothing the pass relies on. A v6 table is never written to while it
-// is being read, the only thing that removes one is `dropV6Table`, and that runs after this cursor is
-// closed. A carry that fails halfway rolls back, and the next run reads the same rows again.
-func readV6Table(ctx context.Context, s store, query string) (*sql.Rows, error) {
+// On the two server backends it reads on the pool, not on the transaction those rows are written through,
+// because the row loop reads one row and writes it before moving to the next: the cursor is still open on
+// the connection while the carry, the archive, and the `alreadyCarried` pre-check all run. PostgreSQL's
+// driver refuses a second statement on a transaction that has a result set open on it — the read ends at
+// the first row the loop carries — so a pass that reads and writes on one transaction is a pass that only
+// works on the backends tolerant enough to ignore it. The legacy server has the same shape for the same
+// reason: it reads with `db.Sql.Query`, collects what it read, and only then begins the transaction that
+// writes (v6.6.3:server/database.go:407).
+//
+// On the file backend it has to read on that very transaction, because sqlite locks the file rather than
+// the table, and a second connection is a second holder of the read lock. A write transaction on another
+// connection carries on until its page cache fills with dirty pages and it has to flush them; the journal
+// sync that flush needs waits for every reader to leave the file, and the only reader is the loop waiting
+// for that write. The pass therefore stops partway through a table once the table is big enough to fill
+// the cache, and every statement it then attempts waits out the connection's busy timeout before failing.
+// The 100,000-call timing found exactly that: 2,000 calls holding 1 KiB of audio each was enough, the run
+// never finished, and the goroutine dump named the calls insert in this package and `_pager_wait_on_lock`
+// under it. Reading on the transaction is what this pass did before the server backends moved it off, and
+// it is what the legacy server does: one connection reading and writing its own file cannot deadlock
+// against itself.
+//
+// Reading outside the transaction on the server backends costs nothing the pass relies on. A v6 table is
+// never written to while it is being read, the only thing that removes one is `dropV6Table`, and that runs
+// after this cursor is closed. A carry that fails halfway rolls back, and the next run reads the same rows
+// again.
+func readV6Table(ctx context.Context, s store, tx transaction, query string) (*sql.Rows, error) {
+	if s.dialect == DialectSqlite {
+		return tx.query(ctx, query)
+	}
+
 	rows, err := s.query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -324,7 +343,7 @@ func migrateGroups(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -437,7 +456,7 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -555,7 +574,7 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -754,7 +773,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = readV6Table(ctx, s, query)
+	rows, err = readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -983,7 +1002,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = readV6Table(ctx, s, query)
+	rows, err = readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1199,7 +1218,7 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1429,7 +1448,7 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1571,7 +1590,7 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1769,7 +1788,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = readV6Table(ctx, s, query)
+	rows, err = readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -1997,7 +2016,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err = readV6Table(ctx, s, query)
+	rows, err = readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -2326,7 +2345,7 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)
@@ -2456,7 +2475,7 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 
 	unread := false
 
-	rows, err := readV6Table(ctx, s, query)
+	rows, err := readV6Table(ctx, s, tx, query)
 	if err != nil {
 		tx.rollback()
 		return statementError(section, operation, err, query)

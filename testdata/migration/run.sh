@@ -22,11 +22,17 @@
 # run.sh starts the two live backends the v6 -> v7 migration pass is proven against, and runs the
 # build-tagged tests that migrate them.
 #
-#	usage: ./run.sh [--keep] [--backend NAME]
+#	usage: ./run.sh [--keep] [--backend NAME] [--big CALLS]
 #
 # `--backend mariadb` or `--backend postgresql` runs one backend; repeat it for both, which is the
 # default. `--keep` leaves the containers up afterwards and prints how to run the tests against them a
 # second time and how to take them down.
+#
+# `--big <calls>` is the large-database timing (REQ-010): it writes a v6.6.3-shaped database holding that
+# many calls with `bigdb.py`, and runs the timing tests instead of the correctness ones, on the file
+# backend and on every backend `--backend` named. The generated database is a hundred megabytes and is
+# left in a scratch directory, not in the repository; `--keep` leaves it where it was written and prints
+# the path.
 #
 # The containers hold empty databases. The seeding is not this script's job: every live test resets its
 # backend to the same seeded v6.6.3 deployment before it runs, from v663-mariadb.sql /
@@ -43,6 +49,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "${here}/../.." && pwd)
 
 keep=false
+big_calls=""
 backends=()
 
 while [[ $# -gt 0 ]]; do
@@ -50,6 +57,17 @@ while [[ $# -gt 0 ]]; do
 	--keep)
 		keep=true
 		shift
+		;;
+	--big)
+		if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ ]]; then
+			echo "run.sh: --big needs a call count, as in --big 100000" >&2
+
+			exit 2
+		fi
+
+		big_calls=$2
+
+		shift 2
 		;;
 	--backend)
 		if [[ $# -lt 2 ]]; then
@@ -103,11 +121,22 @@ postgres_name=rdio-migration-postgres
 postgres_port=15432
 
 started=()
+big_dir=""
+big_env=""
+big_fixture=""
 
 stop() {
 	for name in "${started[@]}"; do
 		"${runtime}" rm -f "${name}" >/dev/null 2>&1 || true
 	done
+
+	# The large fixture is a scratch file the timing wrote for this run, and this cleanup only runs when
+	# the script is not keeping anything: `--keep` leaves the fixture where it was, because the printed
+	# command that re-runs the timing names it, and regenerating a hundred megabytes to run the timing a
+	# second time is not what `--keep` means.
+	if [[ -n "${big_dir}" ]]; then
+		rm -rf "${big_dir}"
+	fi
 }
 
 # `--keep` means the containers outlive the script, so the trap that takes them down is only set when
@@ -218,6 +247,44 @@ if [[ ${#backends[@]} -eq 1 ]]; then
 	esac
 fi
 
+# The timing run is a different set of tests, and it needs the database it times. bigdb.py writes it into
+# a scratch directory: a hundred thousand calls is a hundred megabytes, and no one should have to check
+# out a file like that to run a test.
+if [[ -n "${big_calls}" ]]; then
+	if ! command -v python3 >/dev/null; then
+		echo "run.sh: --big writes its fixture with bigdb.py, and python3 is not on PATH" >&2
+
+		exit 2
+	fi
+
+	big_dir=$(mktemp -d)
+	big_fixture="${big_dir}/rdio-scanner.db"
+
+	echo "writing a v6.6.3 deployment holding ${big_calls} calls"
+
+	python3 "${here}/bigdb.py" "${big_fixture}" "${big_calls}"
+
+	export RDIO_LIVE_BIG_FIXTURE=${big_fixture}
+	export RDIO_LIVE_BIG_CALLS=${big_calls}
+
+	big_env="RDIO_LIVE_BIG_FIXTURE=${big_fixture} RDIO_LIVE_BIG_CALLS=${big_calls} "
+
+	alternatives=OnFile
+
+	for backend in "${backends[@]}"; do
+		case "${backend}" in
+		mariadb)
+			alternatives+='|OnMariaDB'
+			;;
+		postgresql)
+			alternatives+='|OnPostgreSQL'
+			;;
+		esac
+	done
+
+	pattern="LargeDatabase(${alternatives})"
+fi
+
 go test -tags live -count=1 -v -run "${pattern}" ./internal/infrastructure/persistence/
 
 if ${keep}; then
@@ -233,9 +300,16 @@ kept up: ${started[*]}
 				postgresql) printf 'RDIO_LIVE_POSTGRESQL_HOST=127.0.0.1 RDIO_LIVE_POSTGRESQL_PORT=%s RDIO_LIVE_POSTGRESQL_USER=%s RDIO_LIVE_POSTGRESQL_PASSWORD=%s RDIO_LIVE_POSTGRESQL_NAME=%s ' "${postgres_port}" "${db_user}" "${db_password}" "${db_name}" ;;
 				esac
 			done
-		)go test -tags live -count=1 -v -run "${pattern}" ./internal/infrastructure/persistence/
+		)${big_env}go test -tags live -count=1 -v -run "${pattern}" ./internal/infrastructure/persistence/
 
 	take them down:
 		${runtime} rm -f ${started[*]}
 EOF
+
+	if [[ -n "${big_fixture}" ]]; then
+		cat <<EOF
+
+	the large fixture is still at: ${big_fixture}
+EOF
+	fi
 fi
