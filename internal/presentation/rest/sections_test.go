@@ -23,6 +23,7 @@ package rest
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"rdio-scanner/internal/domain"
@@ -311,6 +312,64 @@ func TestSectionSaveRejectsABodyItCannotReadAndStillRestartsTheWatchedDirectorie
 
 	if fixture.loggedContaining("admin.sectionhandler.put") {
 		t.Errorf("a body that could not be read is written in the log view as a failed save: %v", fixture.logs.Stored)
+	}
+}
+
+// A section save that could not read its body files the fact with the administrator's own part of the log,
+// naming the section's path — and it is not filed as a failed save, because the save never started.
+//
+// The settings are included because they are read a different way from a list: they are merged into the
+// settings in effect, so their read is a separate one, and an operator whose settings page stopped saving
+// should not have to guess which half of the section path was at fault.
+func TestSectionSavesFileARequestBodyTheyCouldNotRead(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	for _, section := range []struct {
+		path string
+		body string
+	}{
+		{"/api/admin/config/groups", `{"label":"not a list"}`},
+		{"/api/admin/config/options", `{"maxClients": `},
+	} {
+		before := len(filedUnder(fixture, domain.LogSourceAdmin))
+
+		rec := fixture.serve(adminRequest{
+			body:      section.body,
+			method:    http.MethodPut,
+			path:      section.path,
+			token:     captureToken,
+			Forwarded: captureAddress + ":8123",
+		})
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s answered %d for a body it could not read, want 400: %s", section.path, rec.Code,
+				rec.Body.String())
+		}
+
+		wrote := filedUnder(fixture, domain.LogSourceAdmin)[before:]
+
+		if len(wrote) != 1 {
+			t.Fatalf("%s wrote %v to the log view, want one entry naming the request it could not read: %v",
+				section.path, wrote, fixture.logs.Stored)
+		}
+
+		entry := wrote[0]
+
+		if !strings.HasPrefix(entry.Message, "the administrator's request to "+section.path+" from "+
+			captureAddress+" could not be read: ") {
+			t.Errorf("%s wrote %q, want it to name the path, the address, and the reason the body could not "+
+				"be read", section.path, entry.Message)
+		}
+
+		if entry.Level != domain.LogLevelWarn {
+			t.Errorf("%s filed the entry at %q, want a warning", section.path, entry.Level)
+		}
+
+		if got := entry.DateTime; !got.Equal(captureTime) {
+			t.Errorf("%s stamped the entry %v, want the instant the server's clock holds", section.path, got)
+		}
 	}
 }
 

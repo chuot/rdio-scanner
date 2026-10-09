@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -32,9 +33,18 @@ import (
 	"rdio-scanner/internal/presentation/dto"
 )
 
-// errUnreadableBody says that a save was asked for with a body this endpoint cannot read. It is not a
-// failure of the save: the save never started.
-var errUnreadableBody = errors.New("submitted body cannot be read")
+// unreadableBody says that a save was asked for with a body this endpoint cannot read, and keeps the reason
+// the read failed. It is not a failure of the save: the save never started, and the endpoint answers it with
+// 400 rather than the 422 a save that failed gets.
+//
+// The reason is kept because the two ways a body fails to read are different problems with different fixes —
+// a client that sent no JSON at all, and a client that sent an object where this section wants a list — and
+// the endpoint answers both with the same 400. The log is the only place they can be told apart.
+type unreadableBody struct{ reason error }
+
+func (body unreadableBody) Error() string {
+	return fmt.Sprintf("submitted body cannot be read: %v", body.reason)
+}
 
 // Section reads or saves one section of the configuration, which is what an administrator's page actually
 // does: it shows one list at a time, saves that list, and is answered with that list.
@@ -97,7 +107,10 @@ func (admin *Admin) saveSection(w http.ResponseWriter, r *http.Request, section 
 		Section: section,
 	})
 
-	if errors.Is(err, errUnreadableBody) {
+	var body unreadableBody
+	if errors.As(err, &body) {
+		admin.reportUnreadableRequest(r, body.reason)
+
 		w.WriteHeader(http.StatusBadRequest)
 
 		return
@@ -129,7 +142,7 @@ func (admin *Admin) submittedSection(ctx context.Context, section application.Co
 		var submitted map[string]any
 
 		if err := json.NewDecoder(r.Body).Decode(&submitted); err != nil {
-			return changes, errUnreadableBody
+			return changes, unreadableBody{reason: err}
 		}
 
 		current, err := admin.currentOptions(ctx)
@@ -147,7 +160,7 @@ func (admin *Admin) submittedSection(ctx context.Context, section application.Co
 	var submitted []any
 
 	if err := json.NewDecoder(r.Body).Decode(&submitted); err != nil {
-		return changes, errUnreadableBody
+		return changes, unreadableBody{reason: err}
 	}
 
 	switch section {

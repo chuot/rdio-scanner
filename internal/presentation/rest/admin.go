@@ -23,6 +23,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"rdio-scanner/internal/application"
@@ -33,16 +34,25 @@ import (
 	"rdio-scanner/internal/presentation/upgrade"
 )
 
-// Deps are the use cases the administrator endpoints answer with, and the two things these endpoints
-// report that no use case decided: which version is answering, and whether the server thinks it is
-// running in a container.
+// Deps are the use cases the administrator endpoints answer with, and the things these endpoints report
+// that no use case decided: which version is answering, whether the server thinks it is running in a
+// container, and what happened to a request that never reached a use case at all.
 type Deps struct {
 	AddUser  *application.AddAccessUserHandler
 	Config   *application.GetConfigHandler
 	Login    *application.AdminLoginHandler
 	Logout   *application.AdminLogoutHandler
-	Logs     *application.SearchLogsHandler
 	Password *application.ChangeAdminPasswordHandler
+
+	// SearchLogs reads the server's own log view, which is what the administrator's log page asks for.
+	SearchLogs *application.SearchLogsHandler
+
+	// Logs is where this surface files what it did. The administrator's endpoints are the only place a
+	// request from the administrator is seen at all, and until now a request they could not read left no
+	// trace: an operator could not tell a server that refused a change from a request that never made
+	// sense on its way in.
+	Logs  ports.LogRepository
+	Clock ports.Clock
 
 	// Configuration saves the whole configuration an administrator submits at once, which is the older
 	// of the two ways the administrator's page saves and the one command-line tooling uses.
@@ -84,12 +94,18 @@ type Admin struct {
 	configurationSection *application.UpdateConfigurationSectionHandler
 	docker               bool
 	logout               *application.AdminLogoutHandler
-	logs                 *application.SearchLogsHandler
+	searchLogs           *application.SearchLogsHandler
 	login                *application.AdminLoginHandler
 	password             *application.ChangeAdminPasswordHandler
 	removeUser           *application.RemoveAccessUserHandler
 	session              *application.CheckAdminSessionHandler
 	version              string
+
+	// logs and clock are how this surface reports what it did with a request. They are separate from
+	// searchLogs because reading the log view and writing to it are different jobs, and the administrator's
+	// page does both.
+	logs  ports.LogRepository
+	clock ports.Clock
 }
 
 // NewAdmin builds the administrator surface from the use cases it answers with.
@@ -102,12 +118,14 @@ func NewAdmin(deps Deps) *Admin {
 		configurationSection: deps.ConfigurationSection,
 		docker:               deps.Docker,
 		logout:               deps.Logout,
-		logs:                 deps.Logs,
+		searchLogs:           deps.SearchLogs,
 		login:                deps.Login,
 		password:             deps.Password,
 		removeUser:           deps.RemoveUser,
 		session:              deps.Session,
 		version:              deps.Version,
+		logs:                 deps.Logs,
+		clock:                deps.Clock,
 	}
 }
 
@@ -241,6 +259,8 @@ func (admin *Admin) Config(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		submitted, err := decodeObject(r)
 		if err != nil {
+			admin.reportUnreadableRequest(r, err)
+
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
@@ -307,6 +327,8 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		submitted, err := decodeObject(r)
 		if err != nil {
+			admin.reportUnreadableRequest(r, err)
+
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
@@ -324,7 +346,7 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		page, err := admin.logs.Handle(r.Context(), application.SearchLogsQuery{
+		page, err := admin.searchLogs.Handle(r.Context(), application.SearchLogsQuery{
 			Search: search,
 		})
 		if err != nil {
@@ -352,6 +374,8 @@ func (admin *Admin) Password(w http.ResponseWriter, r *http.Request) {
 
 		submitted, err := decodeObject(r)
 		if err != nil {
+			admin.reportUnreadableRequest(r, err)
+
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
@@ -407,6 +431,8 @@ func (admin *Admin) UserAdd(w http.ResponseWriter, r *http.Request) {
 
 		submitted, err := decodeObject(r)
 		if err != nil {
+			admin.reportUnreadableRequest(r, err)
+
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
@@ -450,6 +476,8 @@ func (admin *Admin) UserRemove(w http.ResponseWriter, r *http.Request) {
 
 		submitted, err := decodeObject(r)
 		if err != nil {
+			admin.reportUnreadableRequest(r, err)
+
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
@@ -624,6 +652,35 @@ func decodeObject(r *http.Request) (map[string]any, error) {
 	}
 
 	return submitted, nil
+}
+
+// reportUnreadableRequest files a request from an administrator that this server could not read.
+//
+// It is called only from endpoints that have already accepted the credential, which is what makes these
+// requests requests *from the administrator* — and what keeps the log safe to write: an entry per unreadable
+// body is only safe when only somebody holding a live session credential can cause one. The login endpoint
+// is the administrator path that reads a body before it has accepted anything, and it files nothing here;
+// its own failures are filed by the use case that looks at the credential, which counts attempts per
+// address.
+//
+// The reason is the decoder's own, because it is the thing an operator acts on: a body that was not JSON at
+// all, and a body that was the wrong shape for the endpoint, are different problems with different fixes,
+// and the endpoint answers both with the same 400.
+func (admin *Admin) reportUnreadableRequest(r *http.Request, reason error) {
+	if admin.logs == nil {
+		return
+	}
+
+	if err := admin.logs.AppendLog(r.Context(), domain.LogEntry{
+		DateTime: admin.clock.Now(),
+		Level:    domain.LogLevelWarn,
+		Source:   domain.LogSourceAdmin,
+		Message: fmt.Sprintf("the administrator's request to %s from %s could not be read: %v",
+			r.URL.Path, httpaddr.Address(r), reason),
+	}); err != nil {
+		// A request this server could not read is still a request it refused the same way.
+		return
+	}
 }
 
 // writeJSON answers with a payload, and with the failure status the frozen contract fixes when the payload

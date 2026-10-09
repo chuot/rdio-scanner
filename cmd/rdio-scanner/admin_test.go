@@ -21,6 +21,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -197,6 +198,54 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 		if got := logSourceOfMessage(t, srv.db, entry); got != "admin" {
 			t.Errorf("%q is filed under %q, want the administrator's own part of the server", entry, got)
 		}
+	}
+
+	assertEveryServerLogEntry(t, srv.db)
+}
+
+// TestAnAdministratorRequestTheServerCannotReadIsInTheLogView is the composition root's half of the rule:
+// the entry reaches the log view an operator actually searches, filed under the administrator's own part of
+// the server, and is said out loud at the same time. The address it names is the one the server names for a
+// request, which on a server behind a proxy is the machine that asked and not the proxy.
+func TestAnAdministratorRequestTheServerCannotReadIsInTheLogView(t *testing.T) {
+	base := t.TempDir()
+
+	console := &consoleCapture{}
+
+	srv, err := newServer(testConfigIn(base), console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	rec := authorizedRequest(t, srv, http.MethodPut, "/api/admin/config", administratorToken(t, srv),
+		`{"groups": [`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("a save with a body the server could not read was answered %d, want 400: %s", rec.Code,
+			rec.Body.String())
+	}
+
+	const sentence = "the administrator's request to /api/admin/config from "
+
+	waitForLogMentioning(t, srv.db, sentence)
+
+	entry := storedLogMentioning(t, srv.db, sentence)
+
+	if got := logSourceOfMessage(t, srv.db, entry); got != "admin" {
+		t.Errorf("%q is filed under %q, want the administrator's own part of the server", entry, got)
+	}
+
+	if !strings.Contains(entry, "could not be read: ") {
+		t.Errorf("%q does not name the reason the body could not be read, which is the difference between a "+
+			"client that sent no JSON and one that sent the wrong shape", entry)
+	}
+
+	if !strings.Contains(console.String(), "warn admin: "+sentence) {
+		t.Errorf("the terminal holds %q, want the refused request said out loud", console.String())
 	}
 
 	assertEveryServerLogEntry(t, srv.db)

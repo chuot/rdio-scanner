@@ -134,7 +134,9 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		ConfigSocket:         fixture.configSocket,
 		Docker:               fixture.Docker,
 		Logout:               application.NewAdminLogoutHandler(fixture.tokens, fixture.logs, fixture.clock),
-		Logs:                 application.NewSearchLogsHandler(fixture.logs, fixture.clock),
+		Logs:                 fixture.logs,
+		Clock:                fixture.clock,
+		SearchLogs:           application.NewSearchLogsHandler(fixture.logs, fixture.clock),
 		Login:                application.NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.password, fixture.clock),
 		Password:             application.NewChangeAdminPasswordHandler(fixture.options, fixture.password, fixture.hashes, fixture.logs, fixture.clock),
 		RemoveUser:           application.NewRemoveAccessUserHandler(application.AccessUserPorts{ConfigurationRepositories: fixture.repositories(), Logs: fixture.logs, Admin: fixture.sessions, Clock: fixture.clock}),
@@ -781,6 +783,126 @@ func TestConfigEndpointRejectsAWholeConfigurationItCannotReadWithoutTouchingTheW
 		t.Errorf("the groups the server runs with are %v, want the %d the capture left: a body that could not be "+
 			"read saves nothing", fixture.groups.Stored, before)
 	}
+}
+
+// TestEveryAdministratorSaveFilesARequestItCouldNotRead is the half of the log view an operator was missing:
+// a save that came back 400 told them the server refused what they sent, and the log held nothing about it,
+// so they could not tell a server that rejected their change from a request that never made sense on its way
+// in — through a proxy that replaced the body, or a client that sent an object where a list belongs.
+//
+// Every endpoint here has already accepted the credential before it reads the body, which is what makes these
+// requests requests *from the administrator*. That is also what keeps the log safe to write: an entry per
+// unreadable body is only safe when only somebody holding a live session credential can cause one.
+func TestEveryAdministratorSaveFilesARequestItCouldNotRead(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	for _, endpoint := range []struct {
+		what   string
+		method string
+		path   string
+		body   string
+	}{
+		{"the whole-configuration save", http.MethodPut, "/api/admin/config", `{"groups": [`},
+		{"the log view search", http.MethodPost, "/api/admin/logs", `{"from": `},
+		{"the credential change", http.MethodPost, "/api/admin/password", `{"currentPassword": `},
+		{"the access user added", http.MethodPost, "/api/admin/user-add", `{"ident": `},
+		{"the access user removed", http.MethodPost, "/api/admin/user-remove", `{"ident": `},
+	} {
+		before := len(filedUnder(fixture, domain.LogSourceAdmin))
+
+		rec := fixture.serve(adminRequest{
+			body:      endpoint.body,
+			method:    endpoint.method,
+			path:      endpoint.path,
+			token:     captureToken,
+			Forwarded: captureAddress + ":8123",
+		})
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s answered %d for a body it could not read, want 400: %s", endpoint.what, rec.Code,
+				rec.Body.String())
+		}
+
+		wrote := filedUnder(fixture, domain.LogSourceAdmin)[before:]
+
+		if len(wrote) != 1 {
+			t.Fatalf("%s wrote %v to the log view, want one entry naming the request it could not read: %v",
+				endpoint.what, wrote, fixture.logs.Stored)
+		}
+
+		entry := wrote[0]
+
+		const sentence = "the administrator's request to "
+
+		if !strings.HasPrefix(entry.Message, sentence) {
+			t.Errorf("%s wrote %q, want it to name the request this server could not read", endpoint.what,
+				entry.Message)
+		}
+
+		if !strings.Contains(entry.Message, endpoint.path) {
+			t.Errorf("%s wrote %q, want it to name %s: an operator reading the log has to be able to tell "+
+				"which save broke", endpoint.what, entry.Message, endpoint.path)
+		}
+
+		if !strings.Contains(entry.Message, captureAddress) {
+			t.Errorf("%s wrote %q, want it to name the address the request came from", endpoint.what, entry.Message)
+		}
+
+		// The reason the read failed, and not just the fact that it did: a client that sent no JSON at all
+		// and a client that sent the wrong shape are different problems with different fixes.
+		if !strings.Contains(entry.Message, "could not be read: ") || strings.HasSuffix(entry.Message, ": ") {
+			t.Errorf("%s wrote %q, want it to name the reason the body could not be read", endpoint.what,
+				entry.Message)
+		}
+
+		if entry.Level != domain.LogLevelWarn {
+			t.Errorf("%s filed the entry at %q, want a warning: the server was asked for something it could "+
+				"not act on", endpoint.what, entry.Level)
+		}
+
+		if got := entry.DateTime; !got.Equal(captureTime) {
+			t.Errorf("%s stamped the entry %v, want the instant the server's clock holds", endpoint.what, got)
+		}
+	}
+}
+
+// The login endpoint is the one administrator path that has not accepted a credential by the time it reads
+// the body, so a body it could not read is not a request from the administrator — it is what anybody sent.
+// An entry for it would let a stranger fill the log an operator reads, and the login's own failures are
+// already filed by the use case that looks at the credential, which counts attempts per address.
+func TestTheLoginEndpointFilesNothingAboutARequestItCouldNotRead(t *testing.T) {
+	fixture := newAdminFixture()
+
+	rec := fixture.serve(adminRequest{
+		body:      `{"password": `,
+		method:    http.MethodPost,
+		path:      "/api/admin/login",
+		Forwarded: captureAddress + ":8123",
+	})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("login status = %d, want 400 for a body it could not read: %s", rec.Code, rec.Body.String())
+	}
+
+	if wrote := filedUnder(fixture, domain.LogSourceAdmin); len(wrote) != 0 {
+		t.Errorf("the login endpoint wrote %v for a body it could not read, want nothing: it had not accepted "+
+			"a credential yet, so this is not a request from the administrator", wrote)
+	}
+}
+
+// filedUnder is what the fixture's log view holds under one part of the server.
+func filedUnder(fixture *adminFixture, source domain.LogSource) []domain.LogEntry {
+	found := []domain.LogEntry{}
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == source {
+			found = append(found, entry)
+		}
+	}
+
+	return found
 }
 
 func TestConfigEndpointRefusesMethodsItDoesNotAnswer(t *testing.T) {
