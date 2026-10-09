@@ -498,6 +498,40 @@ func TestBackfillLogSourcesRunsOnce(t *testing.T) {
 	}
 }
 
+// TestEverySourceTheBackfillReachesIsOneTheServerHas holds the mapping and the vocabulary together in both
+// directions. A prefix that files a row under a name the log view does not offer is a row an operator cannot
+// find; and a name the vocabulary records as one only the backfill reaches is a name the backfill has to be
+// able to produce, because the backfill is the only thing that can ever put it in a row. calls is that name,
+// and it is reachable because the legacy server's call repository stamped its lines calls.
+func TestEverySourceTheBackfillReachesIsOneTheServerHas(t *testing.T) {
+	reaches := map[domain.LogSource]bool{}
+
+	for _, mapping := range logSourceBackfill {
+		reaches[mapping.source] = true
+	}
+
+	// A message that maps to nothing is filed under legacy rather than left blank.
+	reaches[domain.LogSourceLegacy] = true
+
+	for source := range reaches {
+		if !domain.IsKnownLogSource(source) {
+			t.Errorf("the backfill files a row under %q, and the log view does not offer that name", source)
+		}
+	}
+
+	for _, source := range domain.KnownLogSources() {
+		if domain.LogSourceIsWritten(source) {
+			continue
+		}
+
+		if !reaches[source] {
+			t.Errorf("%q is offered by the log view and recorded as a name only the backfill reaches, and the "+
+				"backfill produces nothing under it: an operator filtering for it is always told nothing "+
+				"happened", source)
+		}
+	}
+}
+
 // openMigratedLegacyDatabase opens the database the legacy server wrote and brings it through the same
 // startup pass this server runs: the schema, the log source column and its indexes, and the v6 migrations,
 // which find nothing to migrate in this fixture.

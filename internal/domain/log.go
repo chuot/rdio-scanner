@@ -38,13 +38,17 @@ const (
 // The names are the operator's names for the parts of the server, not the names of the functions that
 // write them: an entry about a directory watcher that stopped is LogSourceDirwatch whether the failure
 // came from fsnotify, from the walk of the directory, or from the hand-off to the ingest path. A name is
-// in this list because a writer writes it — there is no LogSourceApikey, because an apikey is only ever
-// presented outbound to a downstream server and the apikeys.read: and apikeys.write: lines the log holds
-// are failed configuration section saves, which are LogSourceConfig.
+// in this list because a writer writes it, or because rows this server did not write carry it — there is
+// no LogSourceApikey, because an apikey is only ever presented outbound to a downstream server and the
+// apikeys.read: and apikeys.write: lines the log holds are failed configuration section saves, which are
+// LogSourceConfig.
 //
 // The list is closed on purpose. A search for a name that is not here is not a filter that matches
 // nothing, it is a caller asking for a subsystem this server does not have, and answering it with an
 // empty log view teaches an operator that nothing happened.
+//
+// Every name in it is classified below as a part of this server that writes entries, or as a name that
+// exists only so that rows written before the source column existed can still be found.
 type LogSource string
 
 const (
@@ -63,7 +67,10 @@ const (
 	LogSourceLogs       LogSource = "logs"
 	LogSourceDatabase   LogSource = "database"
 	LogSourceAdmin      LogSource = "admin"
-	LogSourceCalls      LogSource = "calls"
+
+	// LogSourceCalls names the call repository of the server this one replaced. No writer here files under
+	// it: see backfillOnlyLogSources.
+	LogSourceCalls LogSource = "calls"
 
 	// LogSourceLegacy is what an entry is filed under when it arrived before this field existed, or
 	// when it was written by a server that does not write it. It is a read-side name as much as a
@@ -71,14 +78,53 @@ const (
 	LogSourceLegacy LogSource = "legacy"
 )
 
-// KnownLogSources is the vocabulary, in the order the log view lists it.
+// writtenLogSources are the parts of this server that write entries into the log view. A name is here
+// because a writer files under it, and a test over the server's own source holds the two together: a name
+// recorded as written that nothing writes is a filter the log view offers and nothing can ever answer.
+var writtenLogSources = []LogSource{
+	LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
+	LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
+	LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+}
+
+// backfillOnlyLogSources are the names in the vocabulary that no writer of this server writes. They are in
+// the vocabulary because the log view has to answer an operator who filters for them: the rows they name are
+// already in databases this server runs against.
+//
+// calls is the one worth naming, because it is the one this feature found rather than designed. The
+// calls.checkduplicate:, calls.getcall:, calls.prune:, calls.search: and calls.writecall: lines an existing
+// database holds came from the legacy server's call repository. This server writes nothing about a call under
+// this name: what it writes about a recording that arrived is filed under ingest, and what it refuses at the
+// upload endpoint is filed under upload. The name stays so that an operator can search the history of a
+// database this server did not write.
+//
+// legacy is the other. No writer files under it either: it is what the backfill gives a message whose prefix
+// meant nothing, and what the log view reports for a row whose column is blank.
+var backfillOnlyLogSources = []LogSource{
+	LogSourceCalls, LogSourceLegacy,
+}
+
+// KnownLogSources is the vocabulary, in the order the log view lists it: the parts of the server that write
+// entries, then the names that exist for reading rows this server never wrote.
 func KnownLogSources() []LogSource {
-	return []LogSource{
-		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
-		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
-		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
-		LogSourceCalls, LogSourceLegacy,
+	known := make([]LogSource, 0, len(writtenLogSources)+len(backfillOnlyLogSources))
+
+	known = append(known, writtenLogSources...)
+
+	return append(known, backfillOnlyLogSources...)
+}
+
+// LogSourceIsWritten reports whether a writer of this server files entries under this name. The names it
+// answers false for are still in the vocabulary: they are the ones only the backfill reaches, and the log view
+// offers them because the rows are already there.
+func LogSourceIsWritten(source LogSource) bool {
+	for _, written := range writtenLogSources {
+		if written == source {
+			return true
+		}
 	}
+
+	return false
 }
 
 // IsKnownLogSource reports whether a name is one of the parts of this server.

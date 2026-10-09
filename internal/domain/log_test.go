@@ -213,6 +213,63 @@ func TestKnownLogSourcesAreTheDeclaredVocabulary(t *testing.T) {
 	}
 }
 
+// TestEveryLogSourceSaysWhetherAWriterWritesIt is the classification the vocabulary owes whoever reads it: a
+// name is either a part of this server that writes entries, or a name that exists only so that rows written
+// before the source column existed can still be found.
+//
+// A name in neither group is an oversight, and it is an oversight an operator pays for: the log view offers
+// the filter, nothing this server writes can ever match it, and an empty result reads as "nothing happened".
+func TestEveryLogSourceSaysWhetherAWriterWritesIt(t *testing.T) {
+	written := []LogSource{
+		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
+		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
+		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+	}
+
+	// calls is the name this feature found rather than the one it designed: the legacy server's call
+	// repository stamped its lines calls., and this server writes nothing about a call under that name.
+	// legacy is the other: no writer files under it, and it is what the backfill gives a message that maps
+	// to nothing.
+	backfilled := []LogSource{LogSourceCalls, LogSourceLegacy}
+
+	for _, source := range KnownLogSources() {
+		want := containsLogSource(written, source)
+
+		if !want && !containsLogSource(backfilled, source) {
+			t.Errorf("%q is in the vocabulary and classified as neither a name a writer writes nor a name only "+
+				"the backfill reaches: an unclassified name is a filter the log view offers and nothing can "+
+				"answer", source)
+
+			continue
+		}
+
+		if got := LogSourceIsWritten(source); got != want {
+			t.Errorf("LogSourceIsWritten(%q) = %v, want %v", source, got, want)
+		}
+	}
+
+	if got, want := len(written)+len(backfilled), len(KnownLogSources()); got != want {
+		t.Errorf("the vocabulary classifies %d names and holds %d: a name classified twice, or a name in one "+
+			"list and not the other", got, want)
+	}
+
+	// A name the server does not have is not one it writes either.
+	if LogSourceIsWritten(LogSource("nonsense")) {
+		t.Errorf("LogSourceIsWritten(nonsense) = true, want false: a name outside the vocabulary is not a part " +
+			"of this server")
+	}
+}
+
+func containsLogSource(sources []LogSource, want LogSource) bool {
+	for _, source := range sources {
+		if source == want {
+			return true
+		}
+	}
+
+	return false
+}
+
 func TestIsKnownLogSourceAcceptsEveryDeclaredName(t *testing.T) {
 	for _, source := range KnownLogSources() {
 		if !IsKnownLogSource(source) {
