@@ -319,7 +319,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 
 	changes := &listenerChanges{}
 
-	hub := ws.NewHub(s.settings, changes, s.logs)
+	hub := ws.NewHub(s.settings, changes, s.logs, s.clock)
 
 	debouncer := application.NewListenerCountDebouncer(hub, s.logs, options, s.scheduler, s.clock)
 
@@ -386,11 +386,13 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 		Ingest: application.NewUploadCallHandler(apikeys, ingest),
 		Logs:   s.logs,
 		Parser: reader,
+		Clock:  s.clock,
 	})
 
 	listener := ws.NewHandler(ws.Deps{
 		Access:   application.NewAuthenticateAccessHandler(accesses, systems, groups, tags, options, s.logs, hub, s.clock),
 		Call:     application.NewGetCallQueryHandler(calls),
+		Clock:    s.clock,
 		Config:   application.NewGetConfigHandler(s.repos),
 		Gate:     application.NewAccessGate(accesses, hub),
 		Hub:      hub,

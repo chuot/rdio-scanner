@@ -28,7 +28,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
-	"time"
 
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/ports"
@@ -49,14 +48,20 @@ type Upload struct {
 	ingest *application.UploadCallHandler
 	parser UploadParser
 	logs   ports.LogRepository
+
+	// clock is the server's one clock. This endpoint used to stamp its refusals with the wall clock, which
+	// is the wrong instant on the one machine where an operator is chasing a capture box that stopped
+	// uploading.
+	clock ports.Clock
 }
 
 // UploadDeps is what the upload endpoints need: the use case that decides whether an upload is taken, the
-// reading that says what each posted field means, and the server's log view.
+// reading that says what each posted field means, the server's log view, and the server's clock.
 type UploadDeps struct {
 	Ingest *application.UploadCallHandler
 	Parser UploadParser
 	Logs   ports.LogRepository
+	Clock  ports.Clock
 }
 
 // UploadParser is the part of the server that knows what an uploader's fields mean.
@@ -83,6 +88,7 @@ func NewUpload(deps UploadDeps) *Upload {
 		ingest: deps.Ingest,
 		parser: deps.Parser,
 		logs:   deps.Logs,
+		clock:  deps.Clock,
 	}
 }
 
@@ -304,7 +310,7 @@ func (upload *Upload) logRefusal(reason string) {
 	}
 
 	upload.logs.AppendLog(context.Background(), domain.LogEntry{
-		DateTime: time.Now(),
+		DateTime: upload.clock.Now(),
 		Level:    domain.LogLevelError,
 		Source:   domain.LogSourceUpload,
 		Message:  fmt.Sprintf("the upload was refused: %s", strings.TrimSpace(reason)),

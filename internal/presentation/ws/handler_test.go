@@ -448,6 +448,10 @@ func TestAConnectionTheServerWouldNotTakeOverIsFiled(t *testing.T) {
 		t.Fatalf("logs = %v, want the connection the server would not take over, filed as a problem under the "+
 			"part of the server it reached", f.logs.Recorded())
 	}
+
+	// Stamped with the server's clock, like every other entry: this is the endpoint's own writer, and it had
+	// no clock injected into it.
+	f.assertStamped(t, "a listener connection was refused", wiredClockTime)
 }
 
 // The address the server names for a listener is the address in the forwarding header, without its port,
@@ -529,6 +533,10 @@ func TestAListenerSessionOnAnOpenServerFollowsTheCapturedSession(t *testing.T) {
 	}
 }
 
+// wiredClockTime is the instant every clock a wired fixture injects holds, so that a test can tell an entry
+// the server stamped from one a writer stamped with the wall clock.
+var wiredClockTime = time.Unix(1759752000, 0)
+
 // wiring is the listener endpoint with the use cases it answers with, the stand-ins those use cases
 // read, and the connection a test is talking on.
 type wiring struct {
@@ -575,15 +583,16 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 	w.calls.Stored[2] = wiredCall(2, 10002, 1515000)
 	w.calls.Stored[4] = wiredCall(4, 10001, 1514000)
 
-	debouncer := application.NewListenerCountDebouncer(f.hub, f.logs, w.options, w.scheduler, fakes.NewClock(time.Unix(1759752000, 0)))
+	debouncer := application.NewListenerCountDebouncer(f.hub, f.logs, w.options, w.scheduler, fakes.NewClock(wiredClockTime))
 
 	f.changes.also = []ListenerChanges{debouncer}
 
 	handler := NewHandler(Deps{
 		Access: application.NewAuthenticateAccessHandler(
-			w.accesses, w.systems, w.groups, w.tags, w.options, f.logs, f.hub, fakes.NewClock(time.Unix(1759752000, 0)),
+			w.accesses, w.systems, w.groups, w.tags, w.options, f.logs, f.hub, fakes.NewClock(wiredClockTime),
 		),
-		Call: application.NewGetCallQueryHandler(w.calls),
+		Call:  application.NewGetCallQueryHandler(w.calls),
+		Clock: fakes.NewClock(wiredClockTime),
 		Config: application.NewGetConfigHandler(application.ConfigurationRepositories{
 			Accesses:    w.accesses,
 			Apikeys:     w.apikeys,

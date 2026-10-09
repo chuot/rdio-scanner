@@ -118,6 +118,7 @@ func newUploadFixture() *uploadFixture {
 		Ingest: application.NewUploadCallHandler(fixture.apikeys, ingest),
 		Parser: fixture.parser,
 		Logs:   fixture.logs,
+		Clock:  fixture.clock,
 	}).Register(mux)
 
 	fixture.routes = mux
@@ -400,6 +401,38 @@ func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(
 	// the upload endpoint. The answer the uploader receives is unchanged.
 	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: the apikey is not valid") {
 		t.Errorf("the refused credential is not filed with the upload endpoint: %v", fixture.logs.Stored)
+	}
+
+	// And stamped with the server's clock. A refused upload is the event an operator lines up against the
+	// capture box's own clock, and this writer used to stamp the wall clock instead.
+	fixture.assertStamped(t, "the upload was refused")
+}
+
+// assertStamped insists that every entry mentioning a fragment carries the instant the fixture's clock holds,
+// and not the wall clock of the machine the test runs on.
+//
+// The server has one clock, injected into every writer, so that the entries in the log view can be put in
+// order against each other. The upload endpoint was the writer that had not been given it.
+func (fixture *uploadFixture) assertStamped(t *testing.T, fragment string) {
+	t.Helper()
+
+	found := 0
+
+	for _, entry := range fixture.logs.Stored {
+		if !strings.Contains(entry.Message, fragment) {
+			continue
+		}
+
+		found++
+
+		if !entry.DateTime.Equal(uploadMoment) {
+			t.Errorf("the entry %q is stamped %v, want the instant the server's clock holds (%v)",
+				entry.Message, entry.DateTime, uploadMoment)
+		}
+	}
+
+	if found == 0 {
+		t.Fatalf("the server log = %v, want an entry mentioning %s", fixture.logs.Stored, fragment)
 	}
 }
 

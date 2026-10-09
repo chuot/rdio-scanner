@@ -108,6 +108,11 @@ type Hub struct {
 	changes  ListenerChanges
 	logs     ports.LogRepository
 
+	// clock is the server's one clock. The hub used to stamp its own entries with the wall clock of the
+	// machine it was running on, which is how a join and the ingest line about the same recording could
+	// disagree — and the log view is read most when the machine's clock is the thing that cannot be trusted.
+	clock ports.Clock
+
 	mutex    sync.Mutex
 	sessions map[string]*listener
 	listens  map[string]*listener
@@ -125,17 +130,18 @@ type Hub struct {
 
 var _ ports.Hub = (*Hub)(nil)
 
-// NewHub builds the hub from what it needs to know about the server, who it tells about listeners, and where
-// its log goes.
+// NewHub builds the hub from what it needs to know about the server, who it tells about listeners, where its
+// log goes, and the server's clock to stamp the entries it writes.
 //
 // The hub has no console of its own, and that is deliberate: every line it says about a connection is an entry
 // in the server log, and the composition root is what says those entries out loud. A listener that joined, a
 // frame that could not be encoded and a message that could not be read are then findable by filtering the log
 // view for the live feed, which is what an operator actually has, rather than by having been watching the
 // terminal at the moment they happened.
-func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository) *Hub {
+func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository, clock ports.Clock) *Hub {
 	return &Hub{
 		changes:       changes,
+		clock:         clock,
 		handshakeWait: pongWait,
 		listens:       map[string]*listener{},
 		logs:          logs,
@@ -598,7 +604,7 @@ func (hub *Hub) logf(level string, format string, args ...any) {
 	// A join or a departure is not the answer to anybody's request, so it belongs to no request's
 	// lifetime and is not cancelled when one ends.
 	hub.logs.AppendLog(context.Background(), domain.LogEntry{
-		DateTime: time.Now(),
+		DateTime: hub.clock.Now(),
 		Level:    level,
 		Source:   domain.LogSourceLivefeed,
 		Message:  fmt.Sprintf(format, args...),

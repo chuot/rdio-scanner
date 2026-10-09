@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -65,6 +64,9 @@ type Deps struct {
 	// is the composition root's doing, and not something this package writes by hand.
 	Logs ports.LogRepository
 
+	// Clock is the server's one clock, which is what every entry this endpoint writes is stamped with.
+	Clock ports.Clock
+
 	// Search reads one page of the call history.
 	Search *application.SearchCallsQueryHandler
 
@@ -85,6 +87,7 @@ type Deps struct {
 type Handler struct {
 	access   *application.AuthenticateAccessHandler
 	call     *application.GetCallQueryHandler
+	clock    ports.Clock
 	config   *application.GetConfigHandler
 	gate     *application.AccessGate
 	hub      *Hub
@@ -102,6 +105,7 @@ func NewHandler(deps Deps) *Handler {
 	return &Handler{
 		access:   deps.Access,
 		call:     deps.Call,
+		clock:    deps.Clock,
 		config:   deps.Config,
 		gate:     deps.Gate,
 		hub:      deps.Hub,
@@ -152,7 +156,7 @@ func (handler *Handler) logf(level string, format string, args ...any) {
 	// A connection that was refused belongs to no session and to no request that is still being answered,
 	// so the entry is not cancelled when the request that produced it ends.
 	handler.logs.AppendLog(context.Background(), domain.LogEntry{
-		DateTime: time.Now(),
+		DateTime: handler.clock.Now(),
 		Level:    level,
 		Source:   domain.LogSourceLivefeed,
 		Message:  fmt.Sprintf(format, args...),

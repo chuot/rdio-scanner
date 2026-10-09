@@ -46,6 +46,11 @@ var (
 	restrictedSettings = Settings{MaxClients: 200, Restricted: true}
 )
 
+// hubClockTime is the instant the fixture's clock holds, which is the instant every entry the hub writes has
+// to carry. The hub used to stamp its entries with the wall clock of the machine running it, which is how a
+// join and the ingest line about the same recording could disagree.
+var hubClockTime = time.Date(2026, 3, 19, 14, 22, 0, 0, time.UTC)
+
 // A listener becomes a listener when it is told what it is watching. Until the server has written a
 // configuration on its connection it is not counted, not sent a call, and not included in the count
 // reported to anybody else — which is why a restricted server, which writes no configuration until an
@@ -85,6 +90,26 @@ func TestAListenerThatUnlockedAnAccessIsNamedByIt(t *testing.T) {
 	if !f.loggedAs(domain.LogSourceLivefeed, "a listener joined from 203.0.113.7:41000 as Capture open") {
 		t.Errorf("the join notice = %q, want the identity it unlocked, under the livefeed", f.logText())
 	}
+}
+
+// TestWhatTheHubReportsIsStampedWithTheServersClock is the half of the rule the hub had wrong: it stamped its
+// own entries with the wall clock of the machine it was running on, while every other writer stamps the
+// server's clock. A join and the ingest line about the same recording could then disagree by however far the
+// two were apart, on the one machine where an operator is reading the log because the clocks cannot be
+// trusted.
+func TestWhatTheHubReportsIsStampedWithTheServersClock(t *testing.T) {
+	f := newFixture(t, openSettings)
+
+	f.register(t, f.id)
+
+	if err := f.client.Close(); err != nil {
+		t.Fatalf("closing the listener connection: %v", err)
+	}
+
+	f.waitFor(t, func() bool { return f.hub.ListenerCount() == 0 }, "the listener to be forgotten")
+
+	f.assertStamped(t, "a listener joined from", hubClockTime)
+	f.assertStamped(t, "a listener left from", hubClockTime)
 }
 
 // The limit on listeners is compared against the listeners the server is counting, and the comparison
@@ -695,7 +720,7 @@ func newBareFixture(t *testing.T, settings Settings) *fixture {
 		settings: current,
 	}
 
-	f.hub = NewHub(current, changes, logs)
+	f.hub = NewHub(current, changes, logs, fakes.NewClock(hubClockTime))
 
 	// The intervals a connection is held to are the protocol's own, and a test cannot wait a minute
 	// for one of them. They are shortened here rather than made choices a server can pass to the
@@ -921,6 +946,36 @@ func (f *fixture) logAt(t *testing.T, at int) string {
 	}
 
 	return recorded[at].Message
+}
+
+// assertStamped insists that every entry mentioning a fragment carries the instant the server's clock holds,
+// and not the wall clock of the machine the test is running on.
+//
+// The server has one clock, injected into every writer, so that the entries in the log view can be put in
+// order against each other. A writer that stamps `time.Now()` instead is a writer whose entries cannot be
+// lined up with the rest of the log on a machine whose clock is wrong — which is the situation an operator
+// is reading the log view because of.
+func (f *fixture) assertStamped(t *testing.T, fragment string, instant time.Time) {
+	t.Helper()
+
+	found := 0
+
+	for _, entry := range f.logs.Recorded() {
+		if !strings.Contains(entry.Message, fragment) {
+			continue
+		}
+
+		found++
+
+		if !entry.DateTime.Equal(instant) {
+			t.Errorf("the entry %q is stamped %v, want the instant the server's clock holds (%v)",
+				entry.Message, entry.DateTime, instant)
+		}
+	}
+
+	if found == 0 {
+		t.Fatalf("the server log = %q, want an entry mentioning %s", f.logText(), fragment)
+	}
 }
 
 // loggedAs reports whether the hub wrote a log line naming that part of the server and saying the
