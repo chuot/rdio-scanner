@@ -86,6 +86,10 @@
     },
     {
       "level": "info",
+      "message": "the recording 120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3 added the unit \"Car 4\" (unit 6789) to the system \"System 4660\""
+    },
+    {
+      "level": "info",
       "message": "call from system 4660 talkgroup 1514000 success, 120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3"
     },
     {

@@ -189,6 +189,41 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		return IngestCallResult{Outcome: IngestCallFailed}, err
 	}
 
+	// What this recording changed in the administrator's configuration, in the order the changes were
+	// made. Auto-populate creates a system, a talkgroup or a unit because the recording named it, and until
+	// now it wrote nothing about it: a system appearing in a configuration nobody edited is a support
+	// request this product gets, and the recording that named it is the thing an operator has to be able to
+	// find.
+	//
+	// The sentences are built where the change is decided and written where the change is put on record,
+	// together with the systems that hold them. A call that fails before that write reports nothing about
+	// the configuration, which is what its own failure entry is for.
+	created := []string{}
+
+	logCreated := func(what string) {
+		created = append(created, fmt.Sprintf("the recording %s %s", call.AudioFilename, what))
+	}
+
+	reportCreated := func() {
+		for _, what := range created {
+			handler.log(ctx, domain.LogLevelInfo, domain.LogSourceConfig, what)
+		}
+	}
+
+	// The units this recording added, as opposed to the ones the system already had: merging reports only
+	// that something changed, and the entry has to name what.
+	addedUnits := func(before, after domain.System) domain.Units {
+		added := domain.Units{}
+
+		for _, unit := range after.Units {
+			if _, already := before.Units.ByRef(unit.UnitRef); !already {
+				added = append(added, unit)
+			}
+		}
+
+		return added
+	}
+
 	populated := false
 
 	// Resolution: the database identifier the source claims, then the client-facing
@@ -233,6 +268,9 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 			systems = systems.Replace(call.System)
 
 			populated = true
+
+			logCreated(fmt.Sprintf("replaced the placeholder talkgroup %v with %q on the system %q",
+				repaired.TalkgroupRef, repaired.Label, call.System.Label))
 		}
 	}
 
@@ -257,6 +295,8 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 		call.System = system
 		systems = systems.Replace(system)
+
+		logCreated(fmt.Sprintf("created the system %q (system %v)", system.Label, system.SystemRef))
 	}
 
 	// A talkgroup may be invented by the server-wide option or by the owning system's own
@@ -280,6 +320,8 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 			if groups, err = handler.groups.AllGroups(ctx); err != nil {
 				return logError(err)
 			}
+
+			logCreated(fmt.Sprintf("created the group %q", groupLabel))
 		}
 
 		tagLabel := call.Meta.TagLabel()
@@ -294,6 +336,8 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 			if tags, err = handler.tags.AllTags(ctx); err != nil {
 				return logError(err)
 			}
+
+			logCreated(fmt.Sprintf("created the tag %q", tagLabel))
 		}
 
 		tagID := uint64(0)
@@ -310,6 +354,9 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		call.Talkgroup = talkgroup
 
 		systems = systems.Replace(call.System)
+
+		logCreated(fmt.Sprintf("created the talkgroup %q (talkgroup %v) on the system %q",
+			talkgroup.Label, talkgroup.TalkgroupRef, call.System.Label))
 	}
 
 	// Units are added to the system under the same auto-populate condition that invents
@@ -318,6 +365,11 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		merged, changed := call.System.MergeUnits(call.Meta.ClaimedUnits())
 		if changed {
 			populated = true
+
+			for _, unit := range addedUnits(call.System, merged) {
+				logCreated(fmt.Sprintf("added the unit %q (unit %v) to the system %q",
+					unit.Label, unit.UnitRef, merged.Label))
+			}
 
 			call.System = merged
 			systems = systems.Replace(call.System)
@@ -332,6 +384,10 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		if systems, err = handler.systems.AllSystems(ctx); err != nil {
 			return logError(err)
 		}
+
+		// The configuration this recording changed is on record now, which is the moment the log can say
+		// it changed.
+		reportCreated()
 
 		// The stored system and talkgroup are the ones the call is recorded against, so
 		// that the identifiers the call carries are the persisted ones. The lookup uses

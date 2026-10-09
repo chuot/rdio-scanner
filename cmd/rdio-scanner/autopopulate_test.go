@@ -24,6 +24,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -94,6 +95,49 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 
 	for _, name := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
 		compareCanonical(t, "the "+name+" the server created", golden[name], endToEndRows(t, srv.db, name))
+	}
+
+	assertEveryServerLogEntry(t, srv.db)
+
+	// The capture reports the two columns the legacy capture reported, so the filing is proven here. An
+	// operator looking for something that appeared in a configuration nobody edited filters to the
+	// configuration, so every change these recordings caused has to be filed there — and has to name the
+	// recording that caused it, which is the thing an operator traces.
+	const query = `SELECT "message" FROM "logs" WHERE "source" = 'config' ORDER BY "logid"`
+
+	rows, err := srv.db.Query(query)
+	if err != nil {
+		t.Fatalf("reading the configuration entries the run left behind: %v", err)
+	}
+
+	defer rows.Close()
+
+	created := []string{}
+
+	for rows.Next() {
+		var message string
+
+		if err := rows.Scan(&message); err != nil {
+			t.Fatalf("reading a configuration entry the run left behind: %v", err)
+		}
+
+		created = append(created, message)
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("reading the configuration entries the run left behind: %v", err)
+	}
+
+	// Three systems, three talkgroups, one group, one tag, one unit, and one placeholder label replaced.
+	if len(created) != 10 {
+		t.Fatalf("the log view files %d entries under the configuration, want the 10 things these recordings "+
+			"caused the server to create: %v", len(created), created)
+	}
+
+	for _, message := range created {
+		if !strings.HasPrefix(message, "the recording ") {
+			t.Errorf("the configuration entry %q does not name the recording that caused the change", message)
+		}
 	}
 }
 

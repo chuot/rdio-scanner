@@ -143,6 +143,21 @@ func (fixture *ingestFixture) logMessages() []string {
 	return out
 }
 
+// configEntries returns what the ingest wrote about the administrator's configuration: the things this
+// recording created that were not there before. A call that created nothing has nothing to say, so the
+// tests that expect silence read this.
+func (fixture *ingestFixture) configEntries() []string {
+	out := []string{}
+
+	for _, entry := range fixture.logs.Recorded() {
+		if entry.Source == domain.LogSourceConfig {
+			out = append(out, entry.Message)
+		}
+	}
+
+	return out
+}
+
 // reposted returns what the downstream fan-out re-posted.
 //
 // The fan-out runs on its own goroutine — that is what it is for — so the ingest returning
@@ -264,6 +279,16 @@ func TestIngestCallAddsOneLabeledUnit(t *testing.T) {
 	if unit.Label != "Gastonia PD Dispatch" {
 		t.Errorf("unit label = %q, want the label the ingest source claimed", unit.Label)
 	}
+
+	got := fixture.configEntries()
+
+	want := []string{
+		`the recording test.wav added the unit "Gastonia PD Dispatch" (unit 710618) to the system "Test System"`,
+	}
+
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("the configuration entries are %v, want %v", got, want)
+	}
 }
 
 func TestIngestCallAddsTwoLabeledUnits(t *testing.T) {
@@ -296,6 +321,23 @@ func TestIngestCallAddsTwoLabeledUnits(t *testing.T) {
 
 		if unit.Label != label {
 			t.Errorf("unit %d label = %q, want %q", ref, unit.Label, label)
+		}
+	}
+
+	entries := fixture.configEntries()
+
+	expected := []string{
+		`the recording test.wav added the unit "Engine 1" (unit 100) to the system "Test System"`,
+		`the recording test.wav added the unit "Engine 2" (unit 200) to the system "Test System"`,
+	}
+
+	if len(entries) != len(expected) {
+		t.Fatalf("the configuration entries are %v, want %v", entries, expected)
+	}
+
+	for i, message := range expected {
+		if entries[i] != message {
+			t.Errorf("configuration entry %d is %q, want %q", i+1, entries[i], message)
 		}
 	}
 }
@@ -400,6 +442,17 @@ func TestIngestCallRepairsGeneratedTalkgroupLabel(t *testing.T) {
 	if talkgroup.Label != "GASTON-FIRE" {
 		t.Errorf("talkgroup label = %q, want the claimed label to repair the generated placeholder", talkgroup.Label)
 	}
+
+	got := fixture.configEntries()
+
+	want := []string{
+		`the recording conventional.wav replaced the placeholder talkgroup 1514000 with "GASTON-FIRE" on the ` +
+			`system "Gaston County Conventional"`,
+	}
+
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("the configuration entries are %v, want %v", got, want)
+	}
 }
 
 func TestIngestCallNeverRepairsAConfiguredLabel(t *testing.T) {
@@ -423,6 +476,47 @@ func TestIngestCallNeverRepairsAConfiguredLabel(t *testing.T) {
 
 	if talkgroup, _ := stored.Talkgroups.ByRef(1514000); talkgroup.Label != "Dispatch 1" {
 		t.Errorf("talkgroup label = %q, want the configured label left alone", talkgroup.Label)
+	}
+
+	if got := fixture.configEntries(); len(got) != 0 {
+		t.Errorf("the configuration entries are %v, want nothing: a label the server was not allowed to "+
+			"change is not a change", got)
+	}
+}
+
+// TestACallThatCreatesNothingSaysNothingAboutTheConfiguration is the other half of the requirement. An
+// ordinary call against a configuration that already knows everything it names changes nothing, and an
+// entry for it would teach an operator to ignore the entries that mean something.
+func TestACallThatCreatesNothingSaysNothingAboutTheConfiguration(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.options.Stored.AutoPopulate = false
+
+	system := fixture.seedKnownSystem()
+	system.Units = domain.Units{{ID: 50, SystemID: 1, UnitRef: 100, Label: "Engine 1"}}
+	fixture.systems.Stored[0] = system
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+	call.Meta.UnitRefs = []uint{100}
+	call.Meta.UnitLabels = []string{"Engine 1"}
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallAccepted {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, IngestCallAccepted)
+	}
+
+	if got := fixture.configEntries(); len(got) != 0 {
+		t.Errorf("the configuration entries are %v, want nothing: the call named a system, a talkgroup and "+
+			"a unit the server already had", got)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceIngest, "success") {
+		t.Errorf("the call's own entry is missing from %v", fixture.logMessages())
 	}
 }
 
@@ -766,6 +860,30 @@ func TestIngestCallAutoPopulatesSystemTalkgroupGroupAndTag(t *testing.T) {
 
 	if len(fixture.hub.BroadcastConfigs) != 1 {
 		t.Error("auto-populate must broadcast the new configuration before the call is delivered")
+	}
+
+	// Auto-populate changed four things in the administrator's configuration, and each one is an entry
+	// naming the recording that caused it. A system appearing in the configuration that nobody created is
+	// a support request this product gets, and the recording that named it is the thing an operator has to
+	// be able to find.
+	want := []string{
+		`the recording test.wav created the system "Gaston County Conventional" (system 1)`,
+		`the recording test.wav created the group "Unknown"`,
+		`the recording test.wav created the tag "Fire"`,
+		`the recording test.wav created the talkgroup "GASTON-FIRE" (talkgroup 1514000) on the system ` +
+			`"Gaston County Conventional"`,
+	}
+
+	got := fixture.configEntries()
+
+	if len(got) != len(want) {
+		t.Fatalf("the configuration entries are %v, want %v", got, want)
+	}
+
+	for i, message := range want {
+		if got[i] != message {
+			t.Errorf("configuration entry %d is %q, want %q", i+1, got[i], message)
+		}
 	}
 }
 

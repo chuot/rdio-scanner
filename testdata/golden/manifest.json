@@ -22,10 +22,13 @@
       "carries": [
         "call from system 1 talkgroup 1514000 success, first.wav",
         "call from system 4660 talkgroup 1514000 success, 120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3",
-        "the server generated a new administrator signing secret, which ends every session that was open before it"
+        "the server generated a new administrator signing secret, which ends every session that was open before it",
+        "the recording first.wav created the system",
+        "the recording third.wav created the group",
+        "added the unit"
       ],
-      "whatChanged": "REQ-005 rewrites all four log rows this run leaves behind. The legacy server wrote `newcall: system=1 talkgroup=1514000 file=first.wav success`; this server writes `call from system 1 talkgroup 1514000 success, first.wav` and files it under `ingest`. REQ-018 adds a fifth row the legacy server only printed on a terminal: `the server generated a new administrator signing secret, which ends every session that was open before it`, at `warn` under `admin`. The capture is compared against a live run of this server, so it has to carry the sentences this server actually writes.",
-      "unchanged": "The calls, groups, tags, talkgroups, units and systems rows are the legacy tree's bytes. So are the four reworded log rows' level and their order, and the new row is first because the secret is made before anything is ingested. The capture reports the two log columns the legacy capture reported — level and message — so the source column this server stores is not part of it."
+      "whatChanged": "REQ-005 rewrites all four log rows this run leaves behind. The legacy server wrote `newcall: system=1 talkgroup=1514000 file=first.wav success`; this server writes `call from system 1 talkgroup 1514000 success, first.wav` and files it under `ingest`. REQ-018 adds a row the legacy server only printed on a terminal: `the server generated a new administrator signing secret, which ends every session that was open before it`, at `warn` under `admin`. REQ-019 adds ten more, at `info` under `config`, one per thing the recordings caused the server to create or repair — three systems, three talkgroups, a group, a tag, a unit, and a placeholder label replaced — each naming the recording that caused it. The capture is compared against a live run of this server, so it has to carry the sentences this server actually writes.",
+      "unchanged": "The calls, groups, tags, talkgroups, units and systems rows are the legacy tree's bytes: the server created the same configuration it always did, it now says so. So are the four reworded log rows' level and their order, and each new row sits before the call line of the recording that caused it. The capture reports the two log columns the legacy capture reported — level and message — so the source column this server stores is not part of it."
     },
     "dirwatch-end-to-end.json": {
       "contract": "docs/specs/FEAT-010-logging-subsystems/spec.md",
@@ -34,10 +37,11 @@
         "a listener joined from 127.0.0.1",
         "there is 1 listener",
         "call from system 10001 talkgroup 1514000 success, call.wav",
-        "the server generated a new administrator signing secret, which ends every session that was open before it"
+        "the server generated a new administrator signing secret, which ends every session that was open before it",
+        "1234-5_1514000[Dispatch]_6789[Car 4].mp3 added the unit"
       ],
-      "whatChanged": "REQ-005 rewrites all five log rows this run leaves behind: `new listener from ip 127.0.0.1` and `listener disconnected from ip 127.0.0.1` became `a listener joined from 127.0.0.1` and `a listener left from 127.0.0.1`, `listeners count is 1` became `there is 1 listener`, and the two `newcall:` lines became the sentences the ingest path writes. REQ-018 adds a sixth row the legacy server only printed on a terminal: `the server generated a new administrator signing secret, which ends every session that was open before it`, at `warn` under `admin`.",
-      "unchanged": "The captured frames are the legacy tree's bytes, frame for frame: the livefeed's wording changed in what the server records about a listener, not in what the listener is sent. The calls, groups, tags, talkgroups, units and systems rows, the log levels, and the order of the log rows are unchanged — the new row is first because the secret is made before the run begins."
+      "whatChanged": "REQ-005 rewrites all five log rows this run leaves behind: `new listener from ip 127.0.0.1` and `listener disconnected from ip 127.0.0.1` became `a listener joined from 127.0.0.1` and `a listener left from 127.0.0.1`, `listeners count is 1` became `there is 1 listener`, and the two `newcall:` lines became the sentences the ingest path writes. REQ-018 adds a row the legacy server only printed on a terminal: `the server generated a new administrator signing secret, which ends every session that was open before it`, at `warn` under `admin`. REQ-019 adds one more, at `info` under `config`: the dsd+ recording added a unit the seeded system did not have, and this server says so.",
+      "unchanged": "The captured frames are the legacy tree's bytes, frame for frame: the livefeed's wording changed in what the server records about a listener, not in what the listener is sent. The calls, groups, tags, talkgroups, units and systems rows are unchanged — the server created the same unit it always did, it now says so. The log levels are unchanged, and each new row sits where the change it reports happened."
     }
   },
   "versionField": {
