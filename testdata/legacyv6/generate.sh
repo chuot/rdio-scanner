@@ -20,6 +20,12 @@
 #     are not the options blob;
 #   - logs, one of them with an apostrophe in the message;
 #   - a downstream, an apikey pair, and an access pair where one has no expiration;
+#   - scopes written the way the legacy server writes them: the quoted word `"*"` its write puts in the
+#     column for an access that sees everything, a list of
+#     `{"id":<system reference>,"talkgroups":"*"}`, and the same with the talkgroups named one by one.
+#     Those are the shapes the legacy server reads its scope columns back with
+#     (v6.6.3:server/access.go:347 and :354), and they are the shapes this server's scope reads, so a scope
+#     carried across keeps meaning what it meant before the upgrade;
 #   - dirwatches on both systems, and one whose talkgroup reference resolves to nothing;
 #   - calls: one with everything, one whose frequency list is the empty array, one whose
 #     frequency list is an empty string, one that names a talkgroup belonging to the other
@@ -195,9 +201,10 @@ db.executemany(
 db.executemany(
     "insert into `rdioScannerDownstreams` (`_id`, `apiKey`, `disabled`, `order`, `systems`, `url`) values (?, ?, ?, ?, ?, ?)",
     [
-        (501, "relay-api-key", 1, 1, "[10001]", "http://127.0.0.1:8080/patch"),
-        # A downstream with no url to post to.
-        (503, "relay-api-key-2", 0, 2, "[10002]", ""),
+        (501, "relay-api-key", 1, 1, '[{"id":10001,"talkgroups":"*"}]', "http://127.0.0.1:8080/patch"),
+        # A downstream with no url to post to. Its scope names talkgroups one by one, which is the
+        # other shape the v6 administrator's system picker writes.
+        (503, "relay-api-key-2", 0, 2, '[{"id":10002,"talkgroups":[1514002]}]', ""),
     ],
 )
 
@@ -320,18 +327,22 @@ db.executemany(
 db.executemany(
     "insert into `rdioScannerApiKeys` (`_id`, `disabled`, `ident`, `key`, `order`, `systems`) values (?, ?, ?, ?, ?, ?)",
     [
-        (801, 0, "ops key", "ops-api-key", 1, "[10001]"),
-        (802, 1, "test key", "test-api-key", 2, "[10002]"),
+        (801, 0, "ops key", "ops-api-key", 1, '[{"id":10001,"talkgroups":"*"}]'),
+        # The wildcard a v6 access or apikey starts with. `NewAccess()` holds the bare word, and the
+        # legacy write turns it into the JSON the column holds: `case "*": systems = "\"*\""`
+        # (v6.6.3:server/access.go:347). The v8 scope reads that column with the same json.Unmarshal the
+        # legacy read uses, so the quoted form is the one that survives the upgrade.
+        (802, 1, "test key", "test-api-key", 2, '"*"'),
     ],
 )
 
 db.executemany(
     "insert into `rdioScannerAccesses` (`_id`, `code`, `expiration`, `ident`, `limit`, `order`, `systems`) values (?, ?, ?, ?, ?, ?, ?)",
     [
-        (901, "ABC123", stamp % (13, 0), "ops", 10, 1, "[10001]"),
-        (902, "XYZ789", None, "guest", 0, 2, "[10002]"),
+        (901, "ABC123", stamp % (13, 0), "ops", 10, 1, '[{"id":10001,"talkgroups":[1514000,1514001]}]'),
+        (902, "XYZ789", None, "guest", 0, 2, '"*"'),
         # An access code that is the empty string: a listener could reach the server with nothing.
-        (904, "", stamp % (13, 10), "no code", 0, 3, "[10001]"),
+        (904, "", stamp % (13, 10), "no code", 0, 3, '[{"id":10001,"talkgroups":"*"}]'),
     ],
 )
 

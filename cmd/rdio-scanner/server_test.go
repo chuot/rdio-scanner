@@ -33,6 +33,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -1485,6 +1486,435 @@ func TestTheMigrationFilesTheLogRowsItCarriesAcross(t *testing.T) {
 	if got := logSourceOfMessage(t, srv.db, "a note from a server that wrote no prefix anybody recognises"); got != "legacy" {
 		t.Errorf("a carried row whose prefix meant nothing is filed under %q, want %q", got, "legacy")
 	}
+}
+
+// TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners is the upgrade journey on the server a
+// deployment actually runs: it starts on a copy of the v6.6.3 database, says out loud what it did while it
+// upgraded, files the same lines for an operator who was not watching the terminal, answers its
+// administrator endpoints with the configuration the upgrade carried, and answers a listener of the old
+// deployment with the access codes that deployment issued and the calls it recorded.
+//
+// The last two are what no test at the persistence layer can show. A row carried with every column intact is
+// still useless if the JSON in its scope column is a shape this server cannot read, or if the references a
+// call names do not resolve to the rows the migration made for them: the history search is built on those
+// references, and an access that sees nothing answers a search with an empty page.
+func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testing.T) {
+	baseDir := t.TempDir()
+
+	fixture := filepath.Join("..", "..", "testdata", "legacyv6", "rdio-scanner.db")
+
+	b, err := os.ReadFile(fixture)
+	if err != nil {
+		t.Fatalf("%s is missing: %v\nregenerate it with testdata/legacyv6/generate.sh", fixture, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(baseDir, "rdio-scanner.db"), b, 0o600); err != nil {
+		t.Fatalf("placing the fixture where the server opens it: %v", err)
+	}
+
+	console := strings.Builder{}
+
+	srv, err := newServer(testConfigIn(baseDir), &console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	// Said out loud, while the server was starting.
+	for _, want := range []string{
+		"migrating talkgroups...",
+		`the migration carried talkgroup 203 "Un grouped" without its group: group 0 is not in this database`,
+		"the migration could not carry call 710: it holds no audio",
+	} {
+		if !strings.Contains(console.String(), want) {
+			t.Errorf("the terminal does not say %q:\n%s", want, console.String())
+		}
+	}
+
+	token := administratorToken(t, srv)
+
+	// Filed for the operator who was not watching the terminal, and reachable from the log view the
+	// administrator's page opens.
+	rec := authorizedRequest(t, srv, http.MethodPost, "/api/admin/logs", token, `{"source":"database","limit":200}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the log view answered %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var logs struct {
+		Count   uint64 `json:"count"`
+		Sources []struct {
+			Source string `json:"source"`
+			Count  uint64 `json:"count"`
+		} `json:"sources"`
+		Logs []struct {
+			Level   string `json:"level"`
+			Source  string `json:"source"`
+			Message string `json:"message"`
+		} `json:"logs"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &logs); err != nil {
+		t.Fatalf("the log view's answer is not a log view: %v\n%s", err, rec.Body.String())
+	}
+
+	levels := map[string]string{}
+
+	for _, entry := range logs.Logs {
+		if entry.Source != "database" {
+			t.Errorf("a log view narrowed to the migration holds an entry from %q: %q", entry.Source, entry.Message)
+		}
+
+		levels[entry.Message] = entry.Level
+	}
+
+	for _, want := range []struct {
+		level, message string
+	}{
+		{"info", "migrating talkgroups..."},
+		{"warn", `the migration carried talkgroup 203 "Un grouped" without its group: group 0 is not in this database`},
+		{"warn", `the migration could not carry talkgroup 207 "Orphaned": its system 10009 is not in this database`},
+		{"warn", "the migration could not carry call 710: it holds no audio"},
+	} {
+		if got := levels[want.message]; got != want.level {
+			t.Errorf("the log view holds %q under %q, want %q", want.message, got, want.level)
+		}
+	}
+
+	// The subsystem counts are what the log view offers before anything is narrowed. `database` has to be
+	// one of them: it is how an operator finds the upgrade afterwards.
+	migration := 0
+
+	for _, source := range logs.Sources {
+		if source.Source == "database" {
+			migration = int(source.Count)
+		}
+	}
+
+	if migration != int(logs.Count) {
+		t.Errorf("the log view counts %d entries under database and answers %d of them, want the same number",
+			migration, logs.Count)
+	}
+
+	// The administrator's configuration: the sections the upgrade carried, under the numbers the v6
+	// deployment used for them.
+	rec = authorizedRequest(t, srv, http.MethodGet, "/api/admin/config", token, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the configuration answered %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var answer struct {
+		Config struct {
+			Access []struct {
+				ID         uint64 `json:"id"`
+				Code       string `json:"code"`
+				Ident      string `json:"ident"`
+				Expiration string `json:"expiration"`
+			} `json:"access"`
+
+			Apikeys []struct {
+				ID  uint64 `json:"id"`
+				Key string `json:"key"`
+			} `json:"apikeys"`
+
+			Dirwatches []struct {
+				ID        uint64 `json:"id"`
+				Directory string `json:"directory"`
+			} `json:"dirwatch"`
+
+			Downstreams []struct {
+				ID  uint64 `json:"id"`
+				URL string `json:"url"`
+			} `json:"downstreams"`
+
+			Groups  []migratedLabel `json:"groups"`
+			Tags    []migratedLabel `json:"tags"`
+			Options struct {
+				Branding string `json:"branding"`
+				Email    string `json:"email"`
+			} `json:"options"`
+
+			Systems []migratedSystem `json:"systems"`
+		} `json:"config"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("the configuration answer is not a configuration: %v\n%s", err, rec.Body.String())
+	}
+
+	// Every section the deployment had, with the identities it had them under, and none of the rows the
+	// pass archived.
+	for _, want := range []struct {
+		section string
+		got     []migratedLabel
+		rows    map[uint64]string
+	}{
+		{"groups", answer.Config.Groups, map[uint64]string{
+			1: "Unknown", 2: "Fire", 3: "Law", 5: "EMS", 7: "Air", 9: "Interop",
+		}},
+		{"tags", answer.Config.Tags, map[uint64]string{
+			1: "Air Traffic Control", 2: "Interop", 4: "Fire Dispatch", 6: "Untagged", 8: "Marshal's Office",
+		}},
+	} {
+		if len(want.got) != len(want.rows) {
+			t.Errorf("the configuration answers %d %s, want the %d the deployment had", len(want.got), want.section, len(want.rows))
+		}
+
+		for _, row := range want.got {
+			if label := want.rows[row.ID]; label != row.Label {
+				t.Errorf("%s %d is %q, want %q", want.section, row.ID, row.Label, label)
+			}
+		}
+	}
+
+	// The systems, under the identity the migration gave them and the reference the deployment used for
+	// them.
+	for _, want := range []struct {
+		id    uint64
+		label string
+		ref   uint64
+	}{
+		{101, "Grand Metro", 10001},
+		{102, "Harbour", 10002},
+	} {
+		row := systemNamed(t, answer.Config.Systems, want.id)
+
+		if row.Label != want.label || row.SystemRef != want.ref {
+			t.Errorf("system %d is %q with reference %d, want %q with reference %d",
+				want.id, row.Label, row.SystemRef, want.label, want.ref)
+		}
+	}
+
+	// The talkgroups and units are answered under the system their reference resolved to, which is the
+	// work the migration had to do. Unit 55555 is the archived one: it names a system this server does not
+	// have.
+	if got, want := shown(systemNamed(t, answer.Config.Systems, 101).Talkgroups), "201 Dispatch 1, 202 Interop 9"; got != want {
+		t.Errorf("the talkgroups on Grand Metro are %s, want %s", got, want)
+	}
+
+	if got, want := shown(systemNamed(t, answer.Config.Systems, 102).Talkgroups), "203 Un grouped"; got != want {
+		t.Errorf("the talkgroups on Harbour are %s, want %s", got, want)
+	}
+
+	if got, want := shown(systemNamed(t, answer.Config.Systems, 101).Units), "12345 Engine 12, 6789 Car 4"; got != want {
+		t.Errorf("the units on Grand Metro are %s, want %s", got, want)
+	}
+
+	if got := shown(systemNamed(t, answer.Config.Systems, 102).Units); got != "" {
+		t.Errorf("Harbour holds units %s, want none: the deployment's third unit names a system that is not "+
+			"here, and it is in the migrationArchive table instead", got)
+	}
+
+	if got, want := len(answer.Config.Access), 2; got != want {
+		t.Errorf("the configuration answers %d access codes, want the %d this server can accept: the third holds "+
+			"no code and is in the migrationArchive table", got, want)
+	}
+
+	for _, want := range []struct {
+		code, ident, expiration string
+	}{
+		{"ABC123", "ops", "2025-06-15T13:00:00Z"},
+		{"XYZ789", "guest", ""},
+	} {
+		found := false
+
+		for _, access := range answer.Config.Access {
+			if access.Code != want.code {
+				continue
+			}
+
+			found = true
+
+			if access.Ident != want.ident || access.Expiration != want.expiration {
+				t.Errorf("access code %s is ident %q expiring %q, want ident %q expiring %q: the v6 datetime is "+
+					"the moment the code stops working here", want.code, access.Ident, access.Expiration, want.ident,
+					want.expiration)
+			}
+		}
+
+		if !found {
+			t.Errorf("the configuration answers no access code %q", want.code)
+		}
+	}
+
+	if got, want := len(answer.Config.Apikeys), 2; got != want {
+		t.Errorf("the configuration answers %d api keys, want %d", got, want)
+	}
+
+	if got, want := len(answer.Config.Dirwatches), 3; got != want {
+		t.Errorf("the configuration answers %d watched directories, want %d", got, want)
+	}
+
+	if got, want := len(answer.Config.Downstreams), 1; got != want {
+		t.Errorf("the configuration answers %d downstream servers, want %d: the second holds no url and is in the "+
+			"migrationArchive table", got, want)
+	}
+
+	if got, want := answer.Config.Options.Branding, "Rdio Legacy"; got != want {
+		t.Errorf("the deployment is branded %q, want %q", got, want)
+	}
+
+	// A listener of the old deployment. The code whose date the v6 deployment gave it is still refused, at
+	// the moment that moment arrived; the code that never expires still opens the server; and the calls the
+	// old server recorded are still searchable, with the systems and talkgroups the migration resolved them
+	// onto.
+	conn := srv.dial(t, "/")
+
+	sendFrame(t, conn, `["PIN","`+encodeAccessCode("ABC123")+`"]`)
+
+	if frame := readFrame(t, conn); len(frame) == 0 || frame[0] != "XPR" {
+		t.Errorf("the access code whose date has passed was answered %v, want the server to say it has run out", frame)
+	}
+
+	waitForLogMentioning(t, srv.db, "the access code for ident ops has expired")
+
+	sendFrame(t, conn, `["PIN","`+encodeAccessCode("XYZ789")+`"]`)
+
+	payload := framePayload(t, readFrame(t, conn), "CFG")
+
+	if got, want := systemsOf(payload), "10001 Grand Metro, 10002 Harbour"; got != want {
+		t.Errorf("the listener sees systems %s, want %s: its v6 scope is the quoted word `\"*\"` the legacy "+
+			"server writes for an access that sees everything, and this server reads that same JSON as "+
+			"everything", got, want)
+	}
+
+	sendFrame(t, conn, `["LCL",{"date":"2025-06-15T00:00:00Z","limit":200}]`)
+
+	page := framePayload(t, readFrame(t, conn), "LCL")
+
+	got := callsOf(page)
+	want := []string{
+		"701 10001 1514000 2025-06-15T12:00:00Z",
+		"702 10001 1514001 2025-06-15T12:10:00Z",
+		"703 10002 1514002 2025-06-15T12:20:00Z",
+		"704 10001 1514002 2025-06-15T12:30:00Z",
+		"706 10001 1514000 2025-06-15T12:50:00Z",
+	}
+
+	if strings.Join(got, ", ") != strings.Join(want, ", ") {
+		t.Errorf("the call history a listener of the old deployment gets:\n  got  %v\n  want %v, which is every "+
+			"call the migration carried and neither of the two it archived", got, want)
+	}
+
+	assertEveryServerLogEntry(t, srv.db)
+}
+
+// migratedLabel is one row of the configuration answer, in the shape this test reads it: the identity the
+// server hands out and the label the deployment gave it.
+type migratedLabel struct {
+	ID    uint64 `json:"id"`
+	Label string `json:"label"`
+}
+
+// migratedSystem is one system of the configuration answer, with the talkgroups and units stored under it.
+type migratedSystem struct {
+	ID         uint64          `json:"id"`
+	Label      string          `json:"label"`
+	SystemRef  uint64          `json:"systemRef"`
+	Talkgroups []migratedLabel `json:"talkgroups"`
+	Units      []migratedLabel `json:"units"`
+}
+
+// systemNamed picks one system out of the configuration answer by the identity the server hands out for it.
+// A deployment that answers no such system is not a deployment this test can go on reading, so it stops
+// there rather than reporting a field of a system that is not there.
+func systemNamed(t *testing.T, systems []migratedSystem, id uint64) migratedSystem {
+	t.Helper()
+
+	for _, system := range systems {
+		if system.ID == id {
+			return system
+		}
+	}
+
+	t.Fatalf("the configuration answers no system %d, want the one the deployment had: it answers %v",
+		id, systems)
+
+	return migratedSystem{}
+}
+
+// shown is a section of the configuration answer as one line a test failure can be read as.
+func shown(rows []migratedLabel) string {
+	out := []string{}
+
+	for _, row := range rows {
+		out = append(out, fmt.Sprintf("%d %s", row.ID, row.Label))
+	}
+
+	sort.Strings(out)
+
+	return strings.Join(out, ", ")
+}
+
+// framePayload is the payload of the frame a server answered a command with. A frame that is not the answer
+// to that command is reported to the test and answered with nothing, which is what lets the test say which
+// of its expectations the server missed.
+func framePayload(t *testing.T, frame []any, command string) map[string]any {
+	t.Helper()
+
+	if len(frame) < 2 || frame[0] != command {
+		t.Fatalf("the server answered %v, want the answer to %s", frame, command)
+
+		return nil
+	}
+
+	payload, ok := frame[1].(map[string]any)
+	if !ok {
+		t.Fatalf("the answer to %s carries %v, want the object that command is answered with", command, frame[1])
+
+		return nil
+	}
+
+	return payload
+}
+
+// systemsOf is the systems a listener's configuration answer holds, as system reference and label.
+func systemsOf(payload map[string]any) string {
+	rows, _ := payload["systems"].([]any)
+
+	out := []string{}
+
+	for _, row := range rows {
+		system, _ := row.(map[string]any)
+
+		out = append(out, fmt.Sprintf("%s %v", whole(system["id"]), system["label"]))
+	}
+
+	sort.Strings(out)
+
+	return strings.Join(out, ", ")
+}
+
+// callsOf is one page of call history as identifier, system reference, talkgroup reference, and moment, in
+// the order the server answered them.
+func callsOf(page map[string]any) []string {
+	rows, _ := page["results"].([]any)
+
+	out := []string{}
+
+	for _, row := range rows {
+		call, _ := row.(map[string]any)
+
+		out = append(out, fmt.Sprintf("%s %s %s %v", whole(call["id"]), whole(call["system"]),
+			whole(call["talkgroup"]), call["dateTime"]))
+	}
+
+	return out
+}
+
+// whole is a number the server answered with, written the way the deployment wrote it. Every JSON number is
+// a float64 in an answer read this way, and 1514000 read out of a float64 is 1.514e+06 unless it is asked
+// for as the whole number it is.
+func whole(value any) string {
+	if number, ok := value.(float64); ok {
+		return fmt.Sprintf("%.0f", number)
+	}
+
+	return fmt.Sprintf("%v", value)
 }
 
 // TestAPasswordChangeLeavesTheSessionsItWasStartedWith is the re-derivation the legacy server ran against

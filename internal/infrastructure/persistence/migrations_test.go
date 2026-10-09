@@ -1548,13 +1548,16 @@ func TestMigrateLogsStoreTheTimestampInMilliseconds(t *testing.T) {
 }
 
 // TestMigrateDownstreamsCopyTheV6Row: a downstream is copied across with its v6 identity, and only
-// a row missing its apikey, its scope, or its url is skipped.
+// a row missing its apikey, its scope, or its url is skipped. Its scope is the JSON the v6
+// administrator's system picker wrote, and it is carried word for word because that JSON is the shape
+// this server's scope reads (v6.6.3:server/downstream.go:86) — a scope that meant "every talkgroup on
+// system 10001" before the upgrade means the same thing after it.
 func TestMigrateDownstreamsCopyTheV6Row(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
 	got := rowsOf(t, db, "downstreams", `"downstreamId", "apikey", "disabled", "order", "systems", "url"`)
 	want := [][]string{
-		{"501", "relay-api-key", "1", "1", "[10001]", "http://127.0.0.1:8080/patch"},
+		{"501", "relay-api-key", "1", "1", `[{"id":10001,"talkgroups":"*"}]`, "http://127.0.0.1:8080/patch"},
 	}
 
 	if !equalStrings(flat(got), flat(want)) {
@@ -1633,7 +1636,7 @@ func TestMigrateAccessesArchivesAnAccessThatHoldsNoCode(t *testing.T) {
 		t.Fatal("the migration carried an access with no code")
 	}
 
-	assertArchivedRow(t, db, "rdioScannerAccesses", 904, "it holds no code", `{"_id":904,"code":"","expiration":"2025-06-15T13:10:00Z","ident":"no code","limit":0,"order":3,"systems":"[10001]"}`)
+	assertArchivedRow(t, db, "rdioScannerAccesses", 904, "it holds no code", `{"_id":904,"code":"","expiration":"2025-06-15T13:10:00Z","ident":"no code","limit":0,"order":3,"systems":"[{\"id\":10001,\"talkgroups\":\"*\"}]"}`)
 
 	if !hasString(progress, `the migration could not carry access 904: it holds no code`) {
 		t.Errorf("the migration said nothing about the access it could not carry: %v", progress)
@@ -2061,14 +2064,16 @@ func TestMigrateCallsCreateOneUnitPerUnitNumberTheyHaveNeverSeen(t *testing.T) {
 }
 
 // TestMigrateApikeysCopyTheV6Rows: only a missing identity skips an apikey. One with no ident, no
-// scope, or no key is still stored, with the empty value the legacy migration stored.
+// scope, or no key is still stored, with the empty value the legacy migration stored. The two scopes
+// here are the two shapes a v6 deployment holds — a list of systems with their talkgroups, and the
+// `*` the administrator's form starts a new access or apikey with — carried across unchanged.
 func TestMigrateApikeysCopyTheV6Rows(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
 	got := rowsOf(t, db, "apikeys", `"apikeyId", "disabled", "ident", "key", "order", "systems"`)
 	want := [][]string{
-		{"801", "0", "ops key", "ops-api-key", "1", "[10001]"},
-		{"802", "1", "test key", "test-api-key", "2", "[10002]"},
+		{"801", "0", "ops key", "ops-api-key", "1", `[{"id":10001,"talkgroups":"*"}]`},
+		{"802", "1", "test key", "test-api-key", "2", `"*"`},
 	}
 
 	if !equalStrings(flat(got), flat(want)) {
@@ -2077,14 +2082,15 @@ func TestMigrateApikeysCopyTheV6Rows(t *testing.T) {
 }
 
 // TestMigrateAccessesStoreTheExpirationInSeconds: an access expiration is the one timestamp in this
-// schema that is not Unix milliseconds, and an access with no expiration is stored as 0.
+// schema that is not Unix milliseconds, an access with no expiration is stored as 0, and the scope is
+// the v6 JSON, carried word for word.
 func TestMigrateAccessesStoreTheExpirationInSeconds(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
 	got := rowsOf(t, db, "accesses", `"accessId", "code", "expiration", "ident", "limit", "order", "systems"`)
 	want := [][]string{
-		{"901", "ABC123", "1749992400", "ops", "10", "1", "[10001]"},
-		{"902", "XYZ789", "0", "guest", "0", "2", "[10002]"},
+		{"901", "ABC123", "1749992400", "ops", "10", "1", `[{"id":10001,"talkgroups":[1514000,1514001]}]`},
+		{"902", "XYZ789", "0", "guest", "0", "2", `"*"`},
 	}
 
 	if !equalStrings(flat(got), flat(want)) {
