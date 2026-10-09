@@ -344,6 +344,8 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 	adminSessions := adminws.NewSessions(adminws.Deps{
 		Session: application.NewCheckAdminSessionHandler(tokensAdapter),
 		Version: Version,
+		Logs:    s.logs,
+		Clock:   s.clock,
 	})
 
 	configurationPorts := application.ConfigurationPorts{

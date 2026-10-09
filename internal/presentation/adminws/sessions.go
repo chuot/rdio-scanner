@@ -28,6 +28,7 @@ package adminws
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -67,6 +68,13 @@ type Sessions struct {
 	// shown.
 	version string
 
+	// logs and clock are how this socket reports what it did with a connection. The socket had no log at
+	// all: a listener connection says who joined, who left and whose credential it would not take, and the
+	// administrator's own connection — the one the web app holds open — said none of that, which is the
+	// difference between a page that was closed and a server that let go of it.
+	logs  ports.LogRepository
+	clock ports.Clock
+
 	// mutex guards the set of connections and what each one has been granted. It is never held while a
 	// connection is being written to.
 	mutex sync.Mutex
@@ -77,6 +85,10 @@ type Sessions struct {
 // decides which goroutine is allowed to be writing to it.
 type administrator struct {
 	conn *websocket.Conn
+
+	// remoteAddr is the address the connection came from, which is what an operator reads when they are
+	// looking for one connection among the ones the server has held.
+	remoteAddr string
 
 	// granted says this connection has presented a credential the server accepts, and so may be told what
 	// the configuration is.
@@ -93,10 +105,13 @@ type administrator struct {
 }
 
 // Deps is what the administrator connections need: the use case that answers whether a credential is one
-// this server issued, and the version to report alongside the configuration.
+// this server issued, the version to report alongside the configuration, and the server log this socket
+// reports its own connections to.
 type Deps struct {
 	Session *application.CheckAdminSessionHandler
 	Version string
+	Logs    ports.LogRepository
+	Clock   ports.Clock
 }
 
 // NewSessions builds the server's set of administrator connections.
@@ -104,6 +119,8 @@ func NewSessions(deps Deps) *Sessions {
 	return &Sessions{
 		session: deps.Session,
 		version: deps.Version,
+		logs:    deps.Logs,
+		clock:   deps.Clock,
 		conns:   map[*websocket.Conn]*administrator{},
 	}
 }
@@ -125,7 +142,7 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go sessions.listen(sessions.join(conn))
+	go sessions.listen(sessions.join(conn, r.RemoteAddr))
 }
 
 // NotifyConfigurationChanged pushes the whole configuration to every administrator connection that has
@@ -199,6 +216,12 @@ func (sessions *Sessions) listen(admin *administrator) {
 		// The credential check belongs to no request's lifetime: the connection outlives the request that
 		// created it, and a frame arriving a minute later is not part of that request either.
 		if !sessions.session.Handle(context.Background(), application.CheckAdminSessionQuery{Token: string(b)}) {
+			// Said without naming the credential: a token is something the server keeps secret, and an entry
+			// that repeats it puts a live session credential in a log an operator can read.
+			sessions.log(context.Background(), domain.LogLevelWarn,
+				fmt.Sprintf("an administrator from %s presented a session token that is not one this server issued",
+					admin.remoteAddr))
+
 			break
 		}
 
@@ -210,13 +233,17 @@ func (sessions *Sessions) listen(admin *administrator) {
 
 // join puts a connection in the set of open administrator connections and hands back the record of it. The
 // connection is open from the moment it is handed over; being open is not the same as being told anything.
-func (sessions *Sessions) join(conn *websocket.Conn) *administrator {
-	admin := &administrator{conn: conn}
+func (sessions *Sessions) join(conn *websocket.Conn, remoteAddr string) *administrator {
+	admin := &administrator{conn: conn, remoteAddr: remoteAddr}
 
 	sessions.mutex.Lock()
-	defer sessions.mutex.Unlock()
-
 	sessions.conns[conn] = admin
+	sessions.mutex.Unlock()
+
+	// Said outside the mutex: the same lock is what a configuration save takes to find the connections to
+	// tell, and a save must not wait on a log write.
+	sessions.log(context.Background(), domain.LogLevelInfo,
+		fmt.Sprintf("an administrator connected from %s", remoteAddr))
 
 	return admin
 }
@@ -256,6 +283,9 @@ func (sessions *Sessions) leave(admin *administrator) {
 	delete(sessions.conns, admin.conn)
 	sessions.mutex.Unlock()
 
+	sessions.log(context.Background(), domain.LogLevelInfo,
+		fmt.Sprintf("an administrator disconnected from %s", admin.remoteAddr))
+
 	admin.writing.Lock()
 	defer admin.writing.Unlock()
 
@@ -268,4 +298,21 @@ func (sessions *Sessions) leave(admin *administrator) {
 	_ = admin.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 
 	admin.conn.Close()
+}
+
+// log writes one entry to the server log, filed under the administrator's own subsystem: these are the
+// administrator's connections, and an operator tracing the web app filters the log to this.
+//
+// A connection outlives the request that upgraded it, so none of these entries belong to a request's
+// lifetime and none are written with one's context.
+func (sessions *Sessions) log(ctx context.Context, level, message string) {
+	if err := sessions.logs.AppendLog(ctx, domain.LogEntry{
+		DateTime: sessions.clock.Now(),
+		Level:    level,
+		Source:   domain.LogSourceAdmin,
+		Message:  message,
+	}); err != nil {
+		// A log entry that cannot be written does not change what the server decided about a connection.
+		return
+	}
 }

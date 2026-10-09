@@ -180,6 +180,25 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 		t.Errorf("the open administrator connection ended with %d after the logout, want it ended with a normal closure", code)
 	}
 
+	// The three things the listener socket has always said and this socket said nothing about, read out of
+	// the log view the server actually writes to: the administrator's configuration socket opened, the
+	// credential it stopped accepting, and the connection ended. This is the composition root's half of the
+	// criterion — the socket's own tests prove the sentences, this proves they reach the log an operator
+	// searches and are filed under the administrator's own part of the server.
+	for _, fact := range []string{
+		"an administrator connected from 127.0.0.1:",
+		"an administrator from 127.0.0.1:",
+		"an administrator disconnected from 127.0.0.1:",
+	} {
+		waitForLogMentioning(t, srv.db, fact)
+
+		entry := storedLogMentioning(t, srv.db, fact)
+
+		if got := logSourceOfMessage(t, srv.db, entry); got != "admin" {
+			t.Errorf("%q is filed under %q, want the administrator's own part of the server", entry, got)
+		}
+	}
+
 	assertEveryServerLogEntry(t, srv.db)
 }
 

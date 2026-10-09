@@ -67,17 +67,23 @@ var _ http.Handler = (*Sessions)(nil)
 
 type fixture struct {
 	tokens   *fakes.Tokens
+	logs     *fakes.Logs
 	sessions *Sessions
 	server   *httptest.Server
 
 	configuration domain.Configuration
 }
 
+// adminSocketTime is the instant the fixture's clock stamps every entry with, so a test can tell an entry this
+// socket wrote from one it merely hopes it wrote.
+var adminSocketTime = time.Date(2026, 4, 2, 6, 30, 0, 0, time.UTC)
+
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 
 	fixture := &fixture{
 		tokens: fakes.NewTokens(),
+		logs:   &fakes.Logs{},
 	}
 
 	fixture.tokens.Window = []string{captureToken}
@@ -85,6 +91,8 @@ func newFixture(t *testing.T) *fixture {
 	fixture.sessions = NewSessions(Deps{
 		Session: application.NewCheckAdminSessionHandler(fixture.tokens),
 		Version: captureVersion,
+		Logs:    fixture.logs,
+		Clock:   fakes.NewClock(adminSocketTime),
 	})
 
 	fixture.server = httptest.NewServer(fixture.sessions)
@@ -233,6 +241,32 @@ func (fixture *fixture) heldCount() int {
 	return len(fixture.sessions.conns)
 }
 
+// awaitEntry waits for the socket to have written an entry under a part of the server whose message begins
+// with a sentence, and hands the entry back.
+//
+// The socket writes on the goroutine that serves the connection, so a test that has just opened or closed one
+// has to let the server get there. It waits for the entry it depends on rather than for a fixed pause, and
+// says so when it never arrives.
+func (fixture *fixture) awaitEntry(t *testing.T, source domain.LogSource, sentence string) domain.LogEntry {
+	t.Helper()
+
+	var wrote domain.LogEntry
+
+	fixture.await(t, func() bool {
+		for _, entry := range fixture.logs.Recorded() {
+			if entry.Source == source && strings.HasPrefix(entry.Message, sentence) {
+				wrote = entry
+
+				return true
+			}
+		}
+
+		return false
+	}, "the configuration socket never wrote an entry saying "+sentence)
+
+	return wrote
+}
+
 // changed is what a configuration save does: it tells the server that the configuration is now this.
 func (fixture *fixture) changed(t *testing.T) {
 	t.Helper()
@@ -333,6 +367,84 @@ func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T)
 
 	if code != captured.Code || reason != captured.Reason {
 		t.Errorf("the close is %d %q, want the captured close %d %q", code, reason, captured.Code, captured.Reason)
+	}
+
+	// The close is what the peer sees. What the operator sees is an entry saying a connection presented a
+	// credential this server does not have — which is the difference between a web app holding an expired
+	// session and somebody trying to open the configuration socket from somewhere they should not.
+	//
+	// Waiting for the close is enough to know the entry is written: the refusal happens before the read loop
+	// ends, and the close is the last thing the server writes on the way out.
+	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator from ")
+
+	if !strings.HasPrefix(entry.Message, "an administrator from 127.0.0.1:") {
+		t.Errorf("the entry is %q, want it to name the address the credential came from", entry.Message)
+	}
+
+	if !strings.Contains(entry.Message, "presented a session token that is not one this server issued") {
+		t.Errorf("the entry is %q, want it to say what the connection presented and why it was refused",
+			entry.Message)
+	}
+
+	// The token is a credential. An entry that names it would put a live session credential in a log an
+	// operator can read, and the listener socket's version of this line does not name the access code either.
+	if strings.Contains(entry.Message, captureRefused) {
+		t.Errorf("the entry is %q, want it to refuse the credential without repeating it", entry.Message)
+	}
+
+	if entry.Level != domain.LogLevelWarn {
+		t.Errorf("the entry level is %q, want a warning: a credential this server does not have is not an "+
+			"ordinary connection", entry.Level)
+	}
+}
+
+// TestAnAdministratorConnectionThatJoinedIsRecorded is the first of the three facts the listener socket
+// already reports and this one said nothing about. When the administrator's own view of the server stops
+// working, "did it even connect, and when" is the first question, and a log that records everything else
+// about a deployment could not answer it.
+func TestAnAdministratorConnectionThatJoinedIsRecorded(t *testing.T) {
+	fixture := newFixture(t)
+
+	fixture.open(t)
+
+	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator connected from ")
+
+	if !strings.HasPrefix(entry.Message, "an administrator connected from 127.0.0.1:") {
+		t.Errorf("the entry is %q, want it to name the address the administrator connected from", entry.Message)
+	}
+
+	if entry.Level != domain.LogLevelInfo {
+		t.Errorf("the entry level is %q, want %q: a configuration socket opening is not a problem",
+			entry.Level, domain.LogLevelInfo)
+	}
+
+	if got := entry.DateTime; !got.Equal(adminSocketTime) {
+		t.Errorf("the entry is stamped %v, want the instant the server's clock holds", got)
+	}
+}
+
+// TestAnAdministratorConnectionThatEndedIsRecorded is the other end of the same fact. An administrator
+// connection that dropped in the middle of the night is the difference between a page that was closed and a
+// server that let go of it, and only the log can say which.
+func TestAnAdministratorConnectionThatEndedIsRecorded(t *testing.T) {
+	fixture := newFixture(t)
+
+	conn := fixture.open(t)
+
+	fixture.await(t, func() bool { return fixture.heldCount() == 1 }, "the server never took the connection")
+
+	conn.Close()
+
+	fixture.awaitGone(t, 0)
+
+	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator disconnected from ")
+
+	if !strings.HasPrefix(entry.Message, "an administrator disconnected from 127.0.0.1:") {
+		t.Errorf("the entry is %q, want it to name the address the administrator disconnected from", entry.Message)
+	}
+
+	if entry.Level != domain.LogLevelInfo {
+		t.Errorf("the entry level is %q, want %q", entry.Level, domain.LogLevelInfo)
 	}
 }
 
