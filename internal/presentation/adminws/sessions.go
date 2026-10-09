@@ -80,6 +80,12 @@ type Sessions struct {
 	// connection is being written to.
 	mutex sync.Mutex
 	conns map[*websocket.Conn]*administrator
+
+	// held counts the goroutines reading the administrator connections. A server that is stopping has to
+	// finish them before it closes the database the log lives in: the entry saying a connection ended is
+	// written by the goroutine that was reading it, and it is written after that goroutine has already taken
+	// the connection out of the set, so nothing else can tell that the entry is still on its way.
+	held sync.WaitGroup
 }
 
 // administrator is one open administrator connection, whether it has said who it is, and the lock that
@@ -145,7 +151,15 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go sessions.listen(sessions.join(conn, httpaddr.Address(r)))
+	admin := sessions.join(conn, httpaddr.Address(r))
+
+	sessions.held.Add(1)
+
+	go func() {
+		defer sessions.held.Done()
+
+		sessions.listen(admin)
+	}()
 }
 
 // NotifyConfigurationChanged pushes the whole configuration to every administrator connection that has
@@ -281,11 +295,61 @@ func (sessions *Sessions) write(admin *administrator, body []byte) error {
 // register-and-forget loop and then writes the close, which races the loop closing the socket; the capture
 // shows the close frame arriving, so this order is what the legacy server was observed to do and is the one
 // kept.
+// leave forgets one administrator connection and says it went, when this half is the one that found it.
 func (sessions *Sessions) leave(admin *administrator) {
 	sessions.mutex.Lock()
+
+	_, was := sessions.conns[admin.conn]
 	delete(sessions.conns, admin.conn)
+
 	sessions.mutex.Unlock()
 
+	if !was {
+		// The socket ended this connection already, which is what happens when the server stops while it is
+		// still holding it. The departure has been said; saying it again would tell an operator that two
+		// administrators left when one did.
+		return
+	}
+
+	sessions.depart(admin)
+}
+
+// CloseAll ends every administrator connection the server is holding and reports each one leaving.
+//
+// This is what a server that is stopping needs: shutting an address down does not wait for a connection the
+// server has handed over, so these connections are still open at the point where the stop closes the
+// database the log lives in, and a departure noticed after that is an entry the server can no longer write.
+//
+// The connections are taken out of the set first, so the read loop each one unblocks has nothing left to
+// report: a departure is said by the half that ended the connection, once.
+func (sessions *Sessions) CloseAll() {
+	sessions.mutex.Lock()
+
+	admins := make([]*administrator, 0, len(sessions.conns))
+
+	for _, admin := range sessions.conns {
+		admins = append(admins, admin)
+	}
+
+	sessions.conns = map[*websocket.Conn]*administrator{}
+
+	sessions.mutex.Unlock()
+
+	for _, admin := range admins {
+		sessions.depart(admin)
+	}
+
+	// And the close waits for the goroutines that were reading those connections. The entry saying a
+	// connection ended is written by the goroutine that was reading it, after that goroutine has already
+	// taken the connection out of the set, so a close that only ended the connections would report its own
+	// departures and return while someone else's was still on its way — into a log whose database is closed
+	// on the next line.
+	sessions.held.Wait()
+}
+
+// depart says that one administrator's connection ended and ends it, with the close code the web
+// application reads as a socket the server let go of.
+func (sessions *Sessions) depart(admin *administrator) {
 	sessions.log(context.Background(), domain.LogLevelInfo,
 		fmt.Sprintf("an administrator disconnected from %s", admin.remoteAddr))
 

@@ -350,3 +350,31 @@ func TestListenerCountDebouncerDoesNotReportBeforeTheDelayHasRun(t *testing.T) {
 		t.Error("the report must still be pending")
 	}
 }
+
+// TestListenerCountDebouncerStopsAPendingReportWhenAsked is what a server that is stopping needs. The
+// connections it is about to end are each reported by their own departure, so a count of listeners that no
+// longer exist is not information; and the report is written into the database the stop closes at its end,
+// so a report still pending at that moment is an entry that cannot be written at all.
+func TestListenerCountDebouncerStopsAPendingReportWhenAsked(t *testing.T) {
+	fixture := newLivefeedFixture()
+	fixture.options.Stored.ShowListenersCount = true
+
+	fixture.hub.Open("one", "10.0.0.1")
+	fixture.debouncer.ListenerChanged()
+
+	fixture.debouncer.Cancel()
+
+	if fixture.debouncer.Pending() {
+		t.Error("the report is still pending after the server asked for it to be dropped")
+	}
+
+	fixture.scheduler.RunDue(ListenerCountReportDelay)
+
+	if len(fixture.logs.Stored) != 0 {
+		t.Errorf("logs = %v, want the pending report dropped rather than written", fixture.logs.Stored)
+	}
+
+	if got := fixture.scheduler.PendingCount(); got != 0 {
+		t.Errorf("the scheduler still holds %d piece of work, want none", got)
+	}
+}

@@ -147,6 +147,26 @@ func (debouncer *ListenerCountDebouncer) Pending() bool {
 	return debouncer.pending != nil
 }
 
+// Cancel drops a report that is scheduled and not yet written.
+//
+// A server that is stopping does not owe a count of listeners: the connections it is about to end are each
+// reported by their own departure, and a count of listeners that no longer exist is not something an
+// operator can act on. And the report is written into the database the stop closes at its end, so a report
+// still pending at that moment is an entry that cannot be written at all — a write that gets half way
+// through is what leaves a database holding a rollback journal.
+func (debouncer *ListenerCountDebouncer) Cancel() {
+	debouncer.mutex.Lock()
+	defer debouncer.mutex.Unlock()
+
+	if debouncer.pending == nil {
+		return
+	}
+
+	debouncer.pending.Cancel()
+
+	debouncer.pending = nil
+}
+
 // report writes the count to the server log and, when the option asks for it, sends it to every listener.
 // The order is the legacy order: the log first, then the listeners.
 //

@@ -123,6 +123,14 @@ type server struct {
 	// serving holds the addresses this server is answering on, so that stopping the server stops them.
 	serving []*http.Server
 
+	// listeners, adminSessions, and listenerCounts are the connections the server has taken over and the
+	// report it owes about how many of the first kind there are. Shutting an address down does not wait for
+	// a connection the server has handed over, so stopping the server has to end these itself — and end them
+	// while the log their departures are written into can still be written to.
+	listeners      *ws.Hub
+	adminSessions  *adminws.Sessions
+	listenerCounts *application.ListenerCountDebouncer
+
 	routes http.Handler
 
 	// stopping guards the stop, so that the two goroutines that can ask for it — the one waiting for the
@@ -328,6 +336,13 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 	// one per connection.
 	changes.debouncer = debouncer
 
+	// The composition root keeps what it has to end: the hub's connections, the administrator's connections,
+	// and a listener-count report that is owed but not yet written. None of them are things shutting an
+	// address down reaches, and all of them are things the log stops holding once the stop closes the
+	// database it lives in.
+	s.listeners = hub
+	s.listenerCounts = debouncer
+
 	tokensAdapter := tokens.New(optionsSecrets{options: options})
 
 	ingest := application.NewIngestCallHandler(
@@ -347,6 +362,8 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 		Logs:    s.logs,
 		Clock:   s.clock,
 	})
+
+	s.adminSessions = adminSessions
 
 	configurationPorts := application.ConfigurationPorts{
 		ConfigurationRepositories: s.repos,
@@ -609,6 +626,30 @@ func (s *server) stop(ctx context.Context) {
 					Message:  fmt.Sprintf("the server could not stop answering %s: %v", serving.Addr, err),
 				})
 			}
+		}
+
+		// Shutting an address down does not wait for a connection the server took over from it: an upgraded
+		// connection is one the address no longer tracks. So the listener connections and the administrator's
+		// configuration sockets are still open here, and the entries their departures are belong to a log that
+		// lives in the database this method closes a few lines from now. Ending them here, and saying so here,
+		// is what keeps the last entries a running server writes from being entries it can no longer write:
+		// otherwise the log view holds a connection that began and never ended, which is the shape an operator
+		// spends an afternoon chasing.
+		if s.adminSessions != nil {
+			s.adminSessions.CloseAll()
+		}
+
+		if s.listeners != nil {
+			s.listeners.Close()
+		}
+
+		// The listener-count report is dropped last, because the departures above are themselves listener
+		// changes: each one asks for a count of listeners that no longer exist, scheduled to be written after
+		// this method has closed the database the log lives in. A server that is stopping does not owe a
+		// count — the connections it is ending are each reported by their own departure — and a write that
+		// reaches a database which has just been closed is a write that does not finish.
+		if s.listenerCounts != nil {
+			s.listenerCounts.Cancel()
 		}
 
 		// The stop is the last entry the server can write to its own log view: the log view lives in the

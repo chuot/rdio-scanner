@@ -106,7 +106,7 @@ func TestWhatTheHubReportsIsStampedWithTheServersClock(t *testing.T) {
 		t.Fatalf("closing the listener connection: %v", err)
 	}
 
-	f.waitFor(t, func() bool { return f.hub.ListenerCount() == 0 }, "the listener to be forgotten")
+	f.waitForDeparture(t, "a listener left from")
 
 	f.assertStamped(t, "a listener joined from", hubClockTime)
 	f.assertStamped(t, "a listener left from", hubClockTime)
@@ -421,7 +421,7 @@ func TestADisconnectedListenerIsReportedAndForgotten(t *testing.T) {
 		t.Fatalf("closing the listener connection: %v", err)
 	}
 
-	f.waitFor(t, func() bool { return f.hub.ListenerCount() == 0 }, "the listener to be forgotten")
+	f.waitForDeparture(t, "a listener left from 203.0.113.7:41000 as Capture open")
 
 	if got := f.changes.count(); got != 2 {
 		t.Errorf("the listener count was reported as changed %d times, want twice: once when it joined and once when it left", got)
@@ -439,6 +439,124 @@ func TestADisconnectedListenerIsReportedAndForgotten(t *testing.T) {
 
 	if got := f.hub.ListenerCount(); got != 0 {
 		t.Errorf("ListenerCount = %d after the listener disconnected, want 0", got)
+	}
+}
+
+// TestStoppingTheHubReportsEveryConnectionItIsHolding is the shutdown half of the departure report.
+//
+// Shutting an address down does not wait for a connection the server has taken over: the moment the
+// listener endpoint hands a connection to the hub, the address that upgraded it stops tracking it. So a
+// server that stops reaches the end of its stop with listener connections still open — and the end of its
+// stop is where the database the log lives in is closed. A departure left to the goroutine that was
+// reading one of those connections is an entry written to a log that has just been closed, which is an
+// entry nobody can read afterwards.
+func TestStoppingTheHubReportsEveryConnectionItIsHolding(t *testing.T) {
+	f := newFixture(t, restrictedSettings)
+
+	access, _ := domain.ParseAccessScope("*")
+
+	f.hub.GrantAccess(f.id, domain.Access{ID: 1, Code: "open", Ident: "Capture open", Scope: access})
+	f.register(t, f.id)
+
+	second, secondConn := f.dial(t)
+
+	f.hub.GrantAccess(second, domain.Access{ID: 1, Code: "open", Ident: "Capture open", Scope: access})
+	f.register(t, second)
+
+	f.hub.Close()
+
+	const left = "a listener left from 203.0.113.7:41000 as Capture open"
+
+	// Filed while the hub ends the connection, not afterwards: this is the moment the server can still
+	// write it down.
+	if got := f.countLogged(left); got != 2 {
+		t.Errorf("the server log holds %d departure entries when the hub closes, want one for each of the "+
+			"two listeners it is holding: %s", got, f.logText())
+	}
+
+	if got := f.hub.ListenerCount(); got != 0 {
+		t.Errorf("ListenerCount = %d after the hub closed, want no listener left", got)
+	}
+
+	// Both connections are ended, which is what lets a client reconnect to the next server instead of
+	// waiting out a read timeout.
+	for _, conn := range []*websocket.Conn{f.client, secondConn} {
+		if _, _, err := conn.ReadMessage(); err == nil {
+			t.Error("the server kept a listener connection open after closing the hub")
+		}
+	}
+
+	// And the read loops that are still unwinding have nothing left to report: a departure is filed by the
+	// hub that ends the connection, once.
+	if got := f.countLogged(left); got != 2 {
+		t.Errorf("the server log holds %d departure entries once both read loops have ended, want the same "+
+			"two: %s", got, f.logText())
+	}
+}
+
+// TestClosingTheHubWaitsForADepartureAlreadyOnItsWay is the half of the shutdown that ending the connections
+// does not cover. A connection that let go a moment earlier is already being reported by the goroutine that
+// was reading it — which had taken the session out of the hub before it wrote the entry, so the close finds
+// nothing to report and nothing to wait for. The server then says it stopped and closes the database the log
+// lives in, and the entry that was already on its way arrives at a log that has just been closed. That is the
+// shape of the flake this feature spent a suite chasing: a departure missing from the log view, and a
+// database left holding a rollback journal nobody can account for.
+func TestClosingTheHubWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
+	logs := &heldLogs{
+		Logs:    &fakes.Logs{},
+		begun:   make(chan domain.LogEntry, 4),
+		release: make(chan struct{}),
+	}
+
+	f := newFixtureLogging(t, restrictedSettings, logs)
+
+	access, _ := domain.ParseAccessScope("*")
+
+	f.hub.GrantAccess(f.id, domain.Access{ID: 1, Code: "open", Ident: "Capture open", Scope: access})
+	f.register(t, f.id)
+
+	// The connection lets go on its own, which is what a client does when a server is being restarted.
+	if err := f.client.Close(); err != nil {
+		t.Fatalf("closing the listener connection: %v", err)
+	}
+
+	// The departure is being written now, and is being held: this is the moment the server must not be
+	// allowed to finish stopping.
+	entry := <-logs.begun
+
+	if !strings.Contains(entry.Message, "a listener left") {
+		t.Fatalf("the write being held is %q, want the entry saying a listener left", entry.Message)
+	}
+
+	closed := make(chan struct{})
+
+	go func() {
+		f.hub.Close()
+
+		close(closed)
+	}()
+
+	select {
+	case <-closed:
+		close(logs.release)
+
+		t.Error("the hub finished closing while the entry saying a listener left was still being written: " +
+			"the server closes the database the log lives in the moment the close returns, and this entry " +
+			"could only have arrived afterwards")
+
+	case <-time.After(250 * time.Millisecond):
+		close(logs.release)
+
+		select {
+		case <-closed:
+		case <-time.After(10 * time.Second):
+			t.Error("the hub never finished closing once the entry it was waiting for had been written")
+		}
+	}
+
+	if !f.loggedAs(domain.LogSourceLivefeed, "a listener left from 203.0.113.7:41000 as Capture open") {
+		t.Errorf("the server log = %q, want the departure of the connection that let go before the hub closed",
+			f.logText())
 	}
 }
 
@@ -676,7 +794,7 @@ func (e errorString) Error() string { return string(e) }
 // have dialed into it.
 type fixture struct {
 	hub      *Hub
-	logs     *fakes.Logs
+	logs     recordedLogs
 	settings *mutableSettings
 	changes  *recordedChanges
 	dispatch *recordingDispatch
@@ -693,6 +811,16 @@ type fixture struct {
 	client *websocket.Conn
 }
 
+// recordedLogs is the log a test hands the hub and then reads back: the port the hub writes through, plus
+// the entries it was given, in the order it was given them. It is an interface rather than the fake so that
+// a test can hand the hub a log of its own — one that holds a write open, say — and still read what the hub
+// wrote.
+type recordedLogs interface {
+	ports.LogRepository
+
+	Recorded() []domain.LogEntry
+}
+
 func newFixture(t *testing.T, settings Settings) *fixture {
 	t.Helper()
 
@@ -703,11 +831,27 @@ func newFixture(t *testing.T, settings Settings) *fixture {
 	return f
 }
 
+// newFixtureLogging is the same fixture with a log of the test's own handed to the hub.
+func newFixtureLogging(t *testing.T, settings Settings, logs recordedLogs) *fixture {
+	t.Helper()
+
+	f := newBareFixtureLogging(t, settings, logs)
+
+	f.id, f.client = f.dial(t)
+
+	return f
+}
+
 func newBareFixture(t *testing.T, settings Settings) *fixture {
 	t.Helper()
 
+	return newBareFixtureLogging(t, settings, &fakes.Logs{})
+}
+
+func newBareFixtureLogging(t *testing.T, settings Settings, logs recordedLogs) *fixture {
+	t.Helper()
+
 	current := &mutableSettings{settings: settings}
-	logs := &fakes.Logs{}
 	changes := &recordedChanges{}
 	dispatch := &recordingDispatch{}
 
@@ -991,6 +1135,21 @@ func (f *fixture) loggedAs(source domain.LogSource, fragment string) bool {
 	return false
 }
 
+// countLogged counts the entries saying exactly that sentence. It is how a test says "once each": a
+// departure filed by the hub and then filed again by the read loop it ended would read as two listeners
+// leaving, and an operator counting listeners from the log would be told a number that never existed.
+func (f *fixture) countLogged(sentence string) int {
+	count := 0
+
+	for _, entry := range f.logs.Recorded() {
+		if entry.Message == sentence {
+			count++
+		}
+	}
+
+	return count
+}
+
 // loggedAt reports whether the hub filed the entry under the level an operator filters for. A join is a
 // notice and a frame the server could not act on is a problem, and the log view's level filter is how an
 // operator finds one without reading the other.
@@ -1020,6 +1179,18 @@ func (f *fixture) waitFor(t *testing.T, until func() bool, want string) {
 	}
 
 	t.Fatalf("timed out waiting for %s", want)
+}
+
+// waitForDeparture waits until the hub has let go of the session and has written the entry saying so. The
+// entry is written after the session has been taken out of the hub, so a test that waited only for the count
+// could read the log before the entry it goes on to assert on had been written at all — which is how a test
+// fails on a loaded machine over an entry that arrived a moment later.
+func (f *fixture) waitForDeparture(t *testing.T, fragment string) {
+	t.Helper()
+
+	f.waitFor(t, func() bool {
+		return f.hub.ListenerCount() == 0 && f.loggedAs(domain.LogSourceLivefeed, fragment)
+	}, "the departure to be on record: "+fragment)
 }
 
 // mutableSettings is the configuration in effect, which a test can change the way an administrator
@@ -1071,6 +1242,29 @@ func (c *recordedChanges) count() int {
 	defer c.mutex.Unlock()
 
 	return c.times
+}
+
+// heldLogs is a server log that holds a departure open until the test lets it finish, and announces the
+// moment that write begins. It is how a test says "this entry is still on its way" without waiting on a wall
+// clock: the entries it holds are the hub's departures, which are the entries a server that is stopping must
+// not still be writing when it closes the database the log lives in.
+type heldLogs struct {
+	*fakes.Logs
+
+	begun   chan domain.LogEntry
+	release chan struct{}
+}
+
+var _ recordedLogs = (*heldLogs)(nil)
+
+func (logs *heldLogs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
+	if strings.Contains(entry.Message, "left") {
+		logs.begun <- entry
+
+		<-logs.release
+	}
+
+	return logs.Logs.AppendLog(ctx, entry)
 }
 
 // recordingDispatch is the server behind the hub: it remembers the frames it was handed and can be

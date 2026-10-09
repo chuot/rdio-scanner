@@ -67,11 +67,43 @@ var _ http.Handler = (*Sessions)(nil)
 
 type fixture struct {
 	tokens   *fakes.Tokens
-	logs     *fakes.Logs
+	logs     recordedLogs
 	sessions *Sessions
 	server   *httptest.Server
 
 	configuration domain.Configuration
+}
+
+// recordedLogs is the log a test hands the socket and then reads back: the port the socket writes through,
+// plus the entries it was given, in the order it was given them. It is an interface rather than the fake so
+// that a test can hand the socket a log of its own — one that holds a write open, say — and still read what
+// the socket wrote.
+type recordedLogs interface {
+	ports.LogRepository
+
+	Recorded() []domain.LogEntry
+}
+
+// heldLogs is a server log that holds one departure open until the test lets it finish, and announces the
+// moment that write begins. It is how a test says "this entry is still on its way" without waiting on a wall
+// clock.
+type heldLogs struct {
+	*fakes.Logs
+
+	begun   chan domain.LogEntry
+	release chan struct{}
+}
+
+var _ recordedLogs = (*heldLogs)(nil)
+
+func (logs *heldLogs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
+	if strings.Contains(entry.Message, "disconnected") {
+		logs.begun <- entry
+
+		<-logs.release
+	}
+
+	return logs.Logs.AppendLog(ctx, entry)
 }
 
 // adminSocketTime is the instant the fixture's clock stamps every entry with, so a test can tell an entry this
@@ -81,9 +113,16 @@ var adminSocketTime = time.Date(2026, 4, 2, 6, 30, 0, 0, time.UTC)
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 
+	return newFixtureLogging(t, &fakes.Logs{})
+}
+
+// newFixtureLogging is the same socket with a log of the test's own handed to it.
+func newFixtureLogging(t *testing.T, logs recordedLogs) *fixture {
+	t.Helper()
+
 	fixture := &fixture{
 		tokens: fakes.NewTokens(),
-		logs:   &fakes.Logs{},
+		logs:   logs,
 	}
 
 	fixture.tokens.Window = []string{captureToken}
@@ -267,7 +306,21 @@ func (fixture *fixture) awaitEntry(t *testing.T, source domain.LogSource, senten
 	return wrote
 }
 
-// changed is what a configuration save does: it tells the server that the configuration is now this.
+// countEntries counts the entries saying exactly that sentence. It is how a test says "once each": a
+// departure filed by the socket and then filed again by the read loop it just ended would read as two
+// administrators leaving, and an operator counting sessions from the log would be told a number that never
+// existed.
+func (fixture *fixture) countEntries(sentence string) int {
+	count := 0
+
+	for _, entry := range fixture.logs.Recorded() {
+		if entry.Message == sentence {
+			count++
+		}
+	}
+
+	return count
+}
 func (fixture *fixture) changed(t *testing.T) {
 	t.Helper()
 
@@ -467,6 +520,110 @@ func TestAnAdministratorConnectionBehindAProxyIsRecordedByTheAddressItCameFrom(t
 	if entry.Message != "an administrator connected from 203.0.113.7" {
 		t.Errorf("the entry is %q, want the address the forwarding header names, without the port: the socket "+
 			"arrived from the proxy and the administrator did not", entry.Message)
+	}
+}
+
+// TestStoppingTheSessionsReportsEveryConnectionItIsHolding is the shutdown half of the two facts this socket
+// reports. Shutting an address down does not wait for a connection the server has taken over, and the end of
+// a stop is where the database the log lives in is closed. A departure noticed after that is an entry the
+// server can no longer write: the log view then holds an administrator connection that began and never
+// ended, which is exactly the shape that makes an operator hunt for a fault that is not there.
+func TestStoppingTheSessionsReportsEveryConnectionItIsHolding(t *testing.T) {
+	fixture := newFixture(t)
+
+	first := fixture.open(t)
+	second := fixture.open(t)
+
+	fixture.await(t, func() bool { return fixture.heldCount() == 2 }, "the server never took both connections")
+
+	fixture.sessions.CloseAll()
+
+	const left = "an administrator disconnected from 127.0.0.1"
+
+	// Filed while the socket ends the connections, not afterwards: this is the moment the server can still
+	// write it down.
+	if got := fixture.countEntries(left); got != 2 {
+		t.Fatalf("the server log holds %d departure entries when the socket is closed, want one for each of "+
+			"the two connections it is holding", got)
+	}
+
+	if got := fixture.heldCount(); got != 0 {
+		t.Errorf("the server still holds %d administrator connections after closing the socket, want none", got)
+	}
+
+	// Both connections are ended, so the web app asks for a new one instead of waiting out a read timeout.
+	for _, conn := range []*websocket.Conn{first, second} {
+		if _, _, err := conn.ReadMessage(); err == nil {
+			t.Error("the server kept an administrator connection open after closing the socket")
+		}
+	}
+
+	// And the read loops that are still unwinding have nothing left to report: a departure is filed by the
+	// socket that ends the connection, once.
+	if got := fixture.countEntries(left); got != 2 {
+		t.Errorf("the server log holds %d departure entries once both read loops have ended, want the same "+
+			"two", got)
+	}
+}
+
+// TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay is the half of the shutdown that ending the
+// connections does not cover, on the socket the web application holds open. A connection that let go a moment
+// earlier is already being reported by the goroutine that was reading it, which took the connection out of the
+// set before it wrote the entry — so the close finds nothing to report and nothing to wait for, says that the
+// server stopped, and closes the database the log lives in while that entry is still on its way.
+func TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
+	logs := &heldLogs{
+		Logs:    &fakes.Logs{},
+		begun:   make(chan domain.LogEntry, 4),
+		release: make(chan struct{}),
+	}
+
+	fixture := newFixtureLogging(t, logs)
+
+	conn := fixture.open(t)
+
+	fixture.await(t, func() bool { return fixture.heldCount() == 1 }, "the server never took the connection")
+
+	conn.Close()
+
+	// The departure is being written now, and is being held: this is the moment the server must not be
+	// allowed to finish stopping.
+	entry := <-logs.begun
+
+	if !strings.Contains(entry.Message, "an administrator disconnected") {
+		t.Fatalf("the write being held is %q, want the entry saying an administrator disconnected", entry.Message)
+	}
+
+	closed := make(chan struct{})
+
+	go func() {
+		fixture.sessions.CloseAll()
+
+		close(closed)
+	}()
+
+	select {
+	case <-closed:
+		close(logs.release)
+
+		t.Error("the configuration socket finished closing while the entry saying an administrator " +
+			"disconnected was still being written: the server closes the database the log lives in the moment " +
+			"the close returns, and this entry could only have arrived afterwards")
+
+	case <-time.After(250 * time.Millisecond):
+		close(logs.release)
+
+		select {
+		case <-closed:
+		case <-time.After(10 * time.Second):
+			t.Error("the configuration socket never finished closing once the entry it was waiting for had " +
+				"been written")
+		}
+	}
+
+	if got := fixture.countEntries("an administrator disconnected from 127.0.0.1"); got != 1 {
+		t.Errorf("the server log holds %d departure entries, want the one connection that let go before the "+
+			"socket closed", got)
 	}
 }
 

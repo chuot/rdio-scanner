@@ -118,6 +118,12 @@ type Hub struct {
 	listens  map[string]*listener
 	nextID   uint64
 
+	// held counts the goroutines that read the connections the hub has taken over. A server that is stopping
+	// has to finish them before it closes the database the log lives in: a departure is written by the
+	// goroutine that was reading the connection, and it is written after that goroutine has already taken the
+	// session out of the hub, so nothing else can tell that the entry is still on its way.
+	held sync.WaitGroup
+
 	// The intervals above are what every hub starts with. They are fields rather than constants used
 	// inline so that this package's own tests can hold a connection to a shorter version of them: a
 	// test that checks a dropped connection has to wait for one, and no server should be able to pick
@@ -186,8 +192,23 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	hub.mutex.Unlock()
 
-	go session.write()
-	go session.read(dispatch)
+	// Both goroutines a connection runs are counted, because both write to the server log: the one that
+	// reads reports the connection leaving, and the one that writes reports the connection joining and any
+	// frame it could not write. Closing the hub waits for them, so that not one of those entries is still on
+	// its way when the server goes on to close the database the log lives in.
+	hub.held.Add(2)
+
+	go func() {
+		defer hub.held.Done()
+
+		session.write()
+	}()
+
+	go func() {
+		defer hub.held.Done()
+
+		session.read(dispatch)
+	}()
 
 	return id, true
 }
@@ -382,6 +403,45 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 	if ok {
 		hub.deliver(session, delivery{code: code})
 	}
+}
+
+// Close ends every connection the server has taken over, and reports each one leaving.
+//
+// This is what a server that is stopping needs. Shutting an address down does not wait for a connection the
+// server has handed over: the moment the listener endpoint upgrades one, the address stops tracking it. So
+// the hub is still holding its connections at the point where the stop closes the database the log lives in,
+// and a departure left to the goroutine that was reading one of them is an entry written to a log that has
+// just been closed — an entry nobody can read afterwards, and a log view that holds a connection which began
+// and never ended.
+//
+// The departure is filed first, while the log can still be written to. The close frame is what ends the
+// connection, and the read loop it unblocks finds nothing left to report: disconnect reports only a session
+// the hub still holds.
+func (hub *Hub) Close() {
+	hub.mutex.Lock()
+
+	sessions := make([]*listener, 0, len(hub.sessions))
+
+	for _, session := range hub.sessions {
+		sessions = append(sessions, session)
+	}
+
+	hub.mutex.Unlock()
+
+	for _, session := range sessions {
+		hub.disconnect(session)
+
+		// The code is the protocol's answer to a server that is going away, which is the only reason this
+		// method is called: a listener that reads it knows the connection ended at the far end and can ask
+		// for the next server rather than waiting out a read timeout on one that has already gone.
+		hub.deliver(session, delivery{code: websocket.CloseGoingAway})
+	}
+
+	// And the close waits for the goroutines that were reading and writing those connections. A departure is
+	// written by the goroutine that was reading a connection, after it has already taken the session out of
+	// the hub, so a close that only ended the connections would report its own departures and return while
+	// someone else's was still on its way — into a log whose database is closed on the next line.
+	hub.held.Wait()
 }
 
 // GrantAccess attaches an access to a session, which is what makes that session authenticated. It is

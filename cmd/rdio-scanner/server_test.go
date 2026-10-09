@@ -831,6 +831,102 @@ func TestTheServerRecordsThatItStopped(t *testing.T) {
 	}
 }
 
+// TestStoppingTheServerRecordsTheConnectionsItEnds is the hole at the end of that timeline. Shutting an
+// address down does not wait for a connection the server has taken over: the moment the listener path or the
+// administrator's configuration path hands a connection to the server, the address that upgraded it stops
+// tracking it. A server that stops therefore reaches the point where it closes the database the log lives in
+// with connections still open, and the entries that those connections leaving are — the last things a running
+// server writes — arrive at a log that has just been closed. What an operator sees is a connection that began
+// and never ended, and what the database holds is a write that got half way through and left a rollback
+// journal behind.
+func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
+	base := t.TempDir()
+
+	console := &consoleCapture{}
+
+	srv, err := newServer(testConfigIn(base), console, nil)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	if err := srv.start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	// Both connections are opened and left open: nothing in this test closes them, because the server being
+	// asked to stop while it is still holding them is the situation.
+	conn := srv.dial(t, "/")
+
+	listenerClosed := closedWith(t, conn)
+
+	sendFrame(t, conn, `["CFG"]`)
+
+	waitForLogMentioning(t, srv.db, "a listener joined from 127.0.0.1")
+
+	admin := srv.dial(t, "/api/admin/config")
+
+	adminClosed := closedWith(t, admin)
+
+	waitForLogMentioning(t, srv.db, "an administrator connected from 127.0.0.1")
+
+	srv.stop(context.Background())
+
+	// The stop leaves nothing owed to its own scheduler. Each departure above is a listener change, and a
+	// change schedules a count of listeners to be written five seconds later — into the database the stop has
+	// just closed, which is a write that cannot finish.
+	if srv.listenerCounts.Pending() {
+		t.Error("the server stopped while it still owed a listener-count report, which is a report it would " +
+			"write into a database it has already closed")
+	}
+
+	// The connections are ended by the stop itself, which is what lets a client reach the next server
+	// instead of waiting out a read timeout on one that has already gone.
+	if code := listenerClosed(); code != websocket.CloseGoingAway {
+		t.Errorf("the listener connection was ended with close code %d, want %d: a server that is stopping is "+
+			"going away", code, websocket.CloseGoingAway)
+	}
+
+	if code := adminClosed(); code != websocket.CloseNormalClosure {
+		t.Errorf("the administrator connection was ended with close code %d, want the %d the web application "+
+			"already reads as an ended configuration socket", code, websocket.CloseNormalClosure)
+	}
+
+	const (
+		listenerLeft = "a listener left from 127.0.0.1"
+		adminLeft    = "an administrator disconnected from 127.0.0.1"
+	)
+
+	db := openTestDatabase(t, base)
+
+	for _, want := range []string{listenerLeft, adminLeft} {
+		if !hasLogMessage(t, db, want) {
+			t.Errorf("the log view does not record that %q: the server closed the database the log lives in "+
+				"while it was still holding the connection", want)
+		}
+	}
+
+	// And it recorded them before it said it stopped, which is the only ordering that makes the departure
+	// writable at all: the stop is where the database is closed.
+	said := console.String()
+
+	for _, want := range []string{listenerLeft, adminLeft} {
+		left := strings.Index(said, want)
+
+		if left < 0 {
+			t.Errorf("the terminal holds %q, want the departure of a connection the server ended", said)
+
+			continue
+		}
+
+		if stopped := strings.Index(said, "the server stopped"); stopped >= 0 && stopped < left {
+			t.Errorf("the terminal says it stopped before it recorded %q, so the departure could only have "+
+				"been written to a log that was already closed: %q", want, said)
+		}
+	}
+}
+
 // refusesToClose is a listener that reports a failure when it is asked to close. It is the thing a
 // graceful shutdown can genuinely fail at: the shutdown closes the listeners it was given, and a listener
 // that cannot be closed is a shutdown step that did not complete.
