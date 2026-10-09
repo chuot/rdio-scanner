@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,15 +44,33 @@ import (
 // the expectation comes from the legacy source instead, and the test that pins it says so.
 const legacyV6Fixture = "../../../testdata/legacyv6/rdio-scanner.db"
 
+// legacyV6PartialFixture is the same v6.6.3 database with two rows this server cannot read: text in
+// a column sqlite declared `datetime` or `integer` and does not enforce. See
+// testdata/legacyv6partial/generate.sh.
+const legacyV6PartialFixture = "../../../testdata/legacyv6partial/rdio-scanner.db"
+
 // copyLegacyV6Fixture puts the fixture in a temporary directory and returns its path, so that a
 // test which writes to it cannot damage the committed one.
 func copyLegacyV6Fixture(t *testing.T) string {
 	t.Helper()
 
-	b, err := os.ReadFile(legacyV6Fixture)
+	return copyFixtureFile(t, legacyV6Fixture)
+}
+
+// copyLegacyV6PartialFixture is the same for the fixture with the rows the pass cannot read.
+func copyLegacyV6PartialFixture(t *testing.T) string {
+	t.Helper()
+
+	return copyFixtureFile(t, legacyV6PartialFixture)
+}
+
+func copyFixtureFile(t *testing.T, fixture string) string {
+	t.Helper()
+
+	b, err := os.ReadFile(fixture)
 	if err != nil {
-		t.Fatalf("the v6-shaped fixture is missing: %v\n"+
-			"regenerate it with testdata/legacyv6/generate.sh", err)
+		t.Fatalf("the v6-shaped fixture %s is missing: %v\n"+
+			"regenerate it with the generate.sh beside it", fixture, err)
 	}
 
 	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
@@ -69,6 +88,20 @@ func openLegacyV6Database(t *testing.T) *sql.DB {
 	t.Helper()
 
 	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: copyLegacyV6Fixture(t)})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	t.Cleanup(func() { db.Close() })
+
+	return db
+}
+
+// openLegacyV6PartialDatabase opens the fixture with the rows the pass cannot read.
+func openLegacyV6PartialDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: copyLegacyV6PartialFixture(t)})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -157,15 +190,36 @@ func tableSnapshot(t *testing.T, db *sql.DB) string {
 func migrateDatabase(t *testing.T, db *sql.DB) []string {
 	t.Helper()
 
-	progress := []string{}
+	messages := []string{}
 
-	if err := Migrate(context.Background(), db, DialectSqlite, func(_, message string) {
-		progress = append(progress, message)
+	for _, line := range migrateLines(t, db) {
+		messages = append(messages, line.message)
+	}
+
+	return messages
+}
+
+// progressLine is one line the migration reported, with the level it was filed under. The level matters
+// on its own: the log view is filtered by it, so a problem filed as a notice is a problem an operator
+// never sees, and a notice filed as a problem is one they act on.
+type progressLine struct {
+	level   string
+	message string
+}
+
+// migrateLines runs the migration pass and keeps the level of every line it reported.
+func migrateLines(t *testing.T, db *sql.DB) []progressLine {
+	t.Helper()
+
+	lines := []progressLine{}
+
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, func(level, message string) {
+		lines = append(lines, progressLine{level: level, message: message})
 	}); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	return progress
+	return lines
 }
 
 // announcements keeps the "migrating …..." lines out of a progress report, for tests that care
@@ -256,12 +310,55 @@ func mustExec(t *testing.T, db *sql.DB, query string) {
 	}
 }
 
+// holdsIdentity reports whether a v8 table holds a row with that identity, which is how a test says
+// the pass did not carry the row.
+func holdsIdentity(t *testing.T, db *sql.DB, table, column string, identity int64) bool {
+	t.Helper()
+
+	var count int
+
+	query := `SELECT COUNT(*) FROM "` + table + `" WHERE "` + column + `" = ?`
+
+	if err := db.QueryRow(query, identity).Scan(&count); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	return count > 0
+}
+
+// hasV6Table reports whether a v6 table is still there. Since FEAT-011 that is not a success or a
+// failure on its own: it means the pass could not read every row of it and chose to leave it rather
+// than destroy it.
+func hasV6Table(t *testing.T, db *sql.DB, table string) bool {
+	t.Helper()
+
+	for _, name := range readTableNames(t, db) {
+		if name == table {
+			return true
+		}
+	}
+
+	return false
+}
+
 // TestMigrateMovesEveryV6TableIntoTheV7Schema is the shape of the whole pass: a v6 database comes
 // out holding exactly the v7 tables, with none of the v6 tables left behind.
+// archivedTables are the tables a database holds after this server's migration pass: the legacy
+// tables, plus the migration archive this server owns. FEAT-011 added the archive to the migration
+// pass, not to ApplySchema — the reason is in
+// docs/specs/FEAT-011-v663-migration-integrity/decision-archive-then-drop.md.
+var archivedTables = func() []string {
+	tables := append(append([]string{}, legacyTables...), "migrationArchive")
+
+	sort.Strings(tables)
+
+	return tables
+}()
+
 func TestMigrateMovesEveryV6TableIntoTheV7Schema(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
-	if got, want := readTableNames(t, db), legacyTables; !equalStrings(got, want) {
+	if got, want := readTableNames(t, db), archivedTables; !equalStrings(got, want) {
 		t.Errorf("the tables after migrating a v6 database:\n  got  %v\n  want %v", got, want)
 	}
 }
@@ -301,47 +398,89 @@ func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 // The damage report matters most here: on a deployment the legacy server left damaged it is written on
 // every start, and an entry buried at the same level as every ingested call is an entry nobody finds.
 func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *testing.T) {
-	db := openLegacyV6Database(t)
+	// The clean fixture and the one with the rows the pass cannot read: the second is where the lines
+	// FEAT-011 adds are said, and a line the pass says has to be classifiable as one of the two things
+	// the pass says.
+	for _, db := range []*sql.DB{openLegacyV6Database(t), openLegacyV6PartialDatabase(t)} {
+		lines := migrateLines(t, db)
 
-	type said struct {
-		level   string
-		message string
-	}
+		problems := 0
 
-	lines := []said{}
+		for _, line := range lines {
+			switch {
+			case strings.HasSuffix(line.message, "..."):
+				if line.level != domain.LogLevelInfo {
+					t.Errorf("%q is filed under %q, want a notice: the pass found that table and carried it",
+						line.message, line.level)
+				}
 
-	if err := Migrate(context.Background(), db, DialectSqlite, func(level, message string) {
-		lines = append(lines, said{level: level, message: message})
-	}); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+			case strings.Contains(line.message, "could not be finished"),
+				strings.HasPrefix(line.message, "the migration could not carry"),
+				strings.HasPrefix(line.message, "the migration left"):
+				if line.level != domain.LogLevelWarn {
+					t.Errorf("%q is filed under %q, want a problem: this is a row or a unit the upgrade could not carry",
+						line.message, line.level)
+				}
 
-	for _, line := range lines {
-		switch {
-		case strings.HasSuffix(line.message, "..."):
-			if line.level != domain.LogLevelInfo {
-				t.Errorf("%q is filed under %q, want a notice: the pass found that table and carried it",
-					line.message, line.level)
-			}
+				problems++
 
-		case strings.Contains(line.message, "could not be finished"), strings.HasPrefix(line.message, "the migration left"):
-			if line.level != domain.LogLevelWarn {
-				t.Errorf("%q is filed under %q, want a problem: this is a row or a unit the upgrade could not carry",
+			default:
+				t.Errorf("%q is filed under %q, which is neither an announcement nor a problem: the pass says nothing else, so a line it says has to read as one of those two",
 					line.message, line.level)
 			}
 		}
+
+		if problems == 0 {
+			t.Fatalf("the fixture produced no migration failure, want the rows it is built to leave behind: %v", lines)
+		}
 	}
+}
 
-	problems := 0
+// TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind is CA-003 at the level the pass reports
+// at: the wording of each line FEAT-011 adds, in the order the pass says it, and the level it is filed
+// under. The summary comes first because an operator reading the log needs the count before the list, the
+// same shape the startup damage report uses.
+func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
 
-	for _, line := range lines {
-		if strings.Contains(line.message, "could not be finished") || strings.HasPrefix(line.message, "the migration left") {
-			problems++
+	got := []progressLine{}
+
+	for _, line := range migrateLines(t, db) {
+		if strings.HasPrefix(line.message, "the migration could not carry") ||
+			strings.HasPrefix(line.message, "the migration left the") {
+			got = append(got, line)
 		}
 	}
 
-	if problems == 0 {
-		t.Fatalf("the v6 fixture produced no migration failure, want the rows it is built to leave behind: %v", lines)
+	want := []progressLine{
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 talkgroup: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry talkgroup 207 "Orphaned": its system 10009 is not in this database`},
+		{level: domain.LogLevelWarn, message: `the migration left the talkgroups table where it found it: a row of it could not be read`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 unit: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry unit 304 "Orphan Engine": its system 10009 is not in this database`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 config row: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry the config row "options": it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 log: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry log 405: it holds no message`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 downstream: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry downstream 503: it holds no url`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 2 calls: they are kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry call 705: its system 10003 is not in this database`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry call 710: it holds no audio`},
+		{level: domain.LogLevelWarn, message: `the migration left the calls table where it found it: a row of it could not be read`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 access: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry access 904: it holds no code`},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("the pass said %d of the lines FEAT-011 is for:\n  got  %v\n  want %v", len(got), got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d:\n  got  %q under %q\n  want %q under %q", i+1, got[i].message, got[i].level,
+				want[i].message, want[i].level)
+		}
 	}
 }
 
@@ -355,7 +494,7 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 		t.Errorf("a fresh database was announced as migrating: %v", progress)
 	}
 
-	if got, want := readTableNames(t, db), legacyTables; !equalStrings(got, want) {
+	if got, want := readTableNames(t, db), archivedTables; !equalStrings(got, want) {
 		t.Errorf("the tables of a fresh database:\n  got  %v\n  want %v", got, want)
 	}
 }
@@ -366,8 +505,10 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 // FEAT-010 narrowed what "nothing" means here, and deliberately: the v6 migration pass still moves no
 // row and says no word on a database that has no v6 tables, but the startup pass now brings the log table
 // up to the shape this server writes — the column that names the part of the server that wrote each entry,
-// and the two indexes the log search runs against. That is the one schema change this server makes to a
-// database the other server wrote, and the test says so exactly: those three objects and nothing else.
+// and the two indexes the log search runs against. FEAT-011 added one more object the pass owns: the
+// migration archive and its unique index, the table that holds every v6 row a pass could not carry so
+// that no upgrade destroys one quietly. That is the whole list of what this server changes on a database
+// the other server wrote, and the test says so exactly: those four objects and nothing else.
 func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -380,13 +521,13 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 
 	after := readSchemaObjects(t, db)
 
-	if len(after) != len(before)+2 {
-		t.Fatalf("a v7 database gained %d schema objects, want the logs table's source column and the two log indexes", len(after)-len(before))
+	if len(after) != len(before)+4 {
+		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes and the migration archive with its index", len(after)-len(before))
 	}
 
 	// The logs table is the one object allowed to read differently afterwards, and only because it
 	// gained a column. Every other table, index and trigger has to be byte-identical, and the only new
-	// objects are the two indexes the log search runs against.
+	// objects are the two indexes the log search runs against and the archive the migration writes into.
 	for _, object := range before {
 		if isLogsTable(object) {
 			continue
@@ -407,8 +548,12 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 		added = append(added, object)
 	}
 
-	if len(added) != 2 || !isLogIndex(added[0], "logs_source_idx") || !isLogIndex(added[1], "logs_time_idx") {
-		t.Errorf("the schema objects a v7 database gained: %v, want logs_source_idx and logs_time_idx", added)
+	if len(added) != 4 ||
+		!isLogIndex(added[0], "logs_source_idx") ||
+		!isLogIndex(added[1], "logs_time_idx") ||
+		!isMigrationArchiveIndex(added[2]) ||
+		!isMigrationArchiveTable(added[3]) {
+		t.Errorf("the schema objects a v7 database gained: %v, want logs_source_idx, logs_time_idx, the migrationArchive table, and its migration_archive_table_row index", added)
 	}
 
 	if !hasString(after, `index logs_source_idx `+logIndexDefinition(t, db, "logs_source_idx")) {
@@ -446,6 +591,90 @@ func TestMigrateTwiceIsTheSameAsOnce(t *testing.T) {
 
 	if after := countRows(t, db, "calls"); after != beforeCalls {
 		t.Errorf("the second pass changed the calls: %d rows, was %d", after, beforeCalls)
+	}
+}
+
+// TestMigrateTwiceOverAV6TableItLeftBehindCarriesNothingTwice is the case FEAT-011 creates, where
+// TestMigrateTwiceIsTheSameAsOnce above cannot reach it: a v6 table the pass could not read whole
+// survives to the next start, so the next start reads the rows it already carried a second time. They
+// must not be written twice, reported as constraint failures, or archived as if they had been lost.
+func TestMigrateTwiceOverAV6TableItLeftBehindCarriesNothingTwice(t *testing.T) {
+	once := openLegacyV6PartialDatabase(t)
+
+	migrateDatabase(t, once)
+
+	twice := openLegacyV6PartialDatabase(t)
+
+	migrateDatabase(t, twice)
+
+	progress := migrateDatabase(t, twice)
+
+	if before, after := readSchemaObjects(t, once), readSchemaObjects(t, twice); !equalStrings(before, after) {
+		t.Errorf("two passes left a different schema than one:\n  once  %v\n  twice %v", before, after)
+	}
+
+	tables := []string{
+		"groups", "tags", "systems", "talkgroups", "talkgroupGroups", "units", "options", "logs",
+		"downstreams", "dirwatches", "calls", "callFrequencies", "callUnits", "apikeys", "accesses",
+		"migrationArchive",
+	}
+
+	for _, table := range tables {
+		got, want := rowsOf(t, twice, table, "*"), rowsOf(t, once, table, "*")
+
+		if !equalStrings(flat(got), flat(want)) {
+			t.Errorf("the second pass changed %s:\n  once  %v\n  twice %v", table, want, got)
+		}
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "could not be finished") {
+			t.Errorf("the second pass reported a failure the first pass did not: %v", progress)
+		}
+	}
+
+	// The tables the first pass left behind are still there, and still left behind.
+	for _, table := range []string{"rdioScannerTalkgroups", "rdioScannerCalls"} {
+		if !hasV6Table(t, twice, table) {
+			t.Errorf("%s was dropped by a second pass that still could not read every row of it", table)
+		}
+	}
+}
+
+// TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing is the same guarantee over the database a
+// legacy server actually leaves when its calls migration rolls back: the v8 tables are already written,
+// the v6 calls table is still there, and this server's first pass carries the calls and drops it. The
+// start after that must find nothing to do.
+func TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing(t *testing.T) {
+	db := openDamagedFixture(t, damagedCrashedFixture)
+
+	migrateDatabase(t, db)
+
+	objects := readSchemaObjects(t, db)
+	contents := map[string]string{}
+
+	for _, table := range []string{"calls", "callFrequencies", "callUnits", "units", "migrationArchive"} {
+		contents[table] = strings.Join(flat(rowsOf(t, db, table, "*")), "\n")
+	}
+
+	progress := migrateDatabase(t, db)
+
+	// The startup damage report says its lines again, as it does at every start. What the second pass
+	// must not do is read the v6 tables a second time or report a failure for doing so.
+	for _, line := range progress {
+		if strings.HasPrefix(line, "migrating ") || strings.Contains(line, "could not be finished") {
+			t.Errorf("the second pass over a crashed legacy database migrated or failed: %v", progress)
+		}
+	}
+
+	if after := readSchemaObjects(t, db); !equalStrings(objects, after) {
+		t.Errorf("the second pass over a crashed legacy database changed the schema")
+	}
+
+	for table, want := range contents {
+		if got := strings.Join(flat(rowsOf(t, db, table, "*")), "\n"); got != want {
+			t.Errorf("the second pass over a crashed legacy database changed %s:\n  once  %s\n  twice %s", table, want, got)
+		}
 	}
 }
 
@@ -492,6 +721,78 @@ func TestMigrateSkipsAV6TableThatIsNotThereWithoutSayingSo(t *testing.T) {
 	}
 }
 
+// TestMigrateLeavesAV6TableItCouldNotReadWhole is REQ-002: the pass may not destroy what it never
+// read. sqlite lets a v6 deployment keep text in a column it declared `datetime` or `integer`, and
+// the pass reads a table row by row, so such a row is lost at the scan — before the pass has any
+// values to archive. The legacy server dropped the table at the end of the pass whatever happened,
+// which is how a deployment lost a row it could not even be told about. Here the table stays, with
+// its unread row in it, and the pass says why.
+func TestMigrateLeavesAV6TableItCouldNotReadWhole(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	progress := migrateDatabase(t, db)
+
+	for _, table := range []string{"rdioScannerTalkgroups", "rdioScannerCalls"} {
+		if !hasV6Table(t, db, table) {
+			t.Errorf("%s was dropped by a pass that could not read every row of it", table)
+		}
+	}
+
+	// The unread rows are still there, unchanged: the pass did not read them, so it has no right to
+	// rewrite or remove them.
+	got := readRows(t, db, `SELECT "_id", "frequency", "name" FROM "rdioScannerTalkgroups" WHERE "_id" = 206`)
+	want := [][]string{{"206", "not a frequency", "Unreadable"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the talkgroup the pass could not read:\n  got  %v\n  want %v", got, want)
+	}
+
+	got = readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 709`)
+	want = [][]string{{"709", "not a timestamp", "709.wav"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the call the pass could not read:\n  got  %v\n  want %v", got, want)
+	}
+
+	// The rows of those same tables the pass could read were carried or archived as they are over the
+	// clean fixture: keeping a table is not the same as not migrating it.
+	carried := rowsOf(t, db, "talkgroups", `"talkgroupId"`)
+
+	if !equalStrings(flat(carried), flat([][]string{{"201"}, {"202"}, {"203"}})) {
+		t.Errorf("the carried talkgroups: %v, want the three the pass could read", carried)
+	}
+
+	carried = rowsOf(t, db, "calls", `"callId"`)
+
+	if !equalStrings(flat(carried), flat([][]string{{"701"}, {"702"}, {"703"}, {"704"}, {"706"}})) {
+		t.Errorf("the carried calls: %v, want the five the pass could read", carried)
+	}
+
+	if archived := archivedRows(t, db, "rdioScannerCalls"); len(archived) != 2 || archived[0][1] != "705" || archived[1][1] != "710" {
+		t.Errorf("the archived calls: %v, want the two calls the pass read and could not carry", archived)
+	}
+
+	// The tables it read whole are dropped, and the migrations after them ran.
+	for _, table := range []string{"rdioScannerGroups", "rdioScannerUnits", "rdioScannerLogs", "rdioScannerMeta"} {
+		if hasV6Table(t, db, table) {
+			t.Errorf("%s survived a pass that read every row of it", table)
+		}
+	}
+
+	if count := countRows(t, db, "units"); count != 2 {
+		t.Errorf("the units after a pass that met an unread row elsewhere: %d, want the two the fixture holds", count)
+	}
+
+	for _, want := range []string{
+		"the migration left the talkgroups table where it found it: a row of it could not be read",
+		"the migration left the calls table where it found it: a row of it could not be read",
+	} {
+		if !hasString(progress, want) {
+			t.Errorf("the migration said nothing about the table it left behind: %v", progress)
+		}
+	}
+}
+
 // TestMigrateReturnsAFailureTheLegacyMigrationReturnedAndStopsThePass covers the failures the
 // legacy server returned rather than printed. The meta migration is the clearest one: it drops the
 // v6 bookkeeping table outside any transaction and returns when the drop fails, which ends the
@@ -505,7 +806,7 @@ func TestMigrateReturnsAFailureTheLegacyMigrationReturnedAndStopsThePass(t *test
 	mustExec(t, db, `DROP TABLE "rdioScannerMeta"`)
 	mustExec(t, db, `CREATE VIEW "rdioScannerMeta" AS SELECT 'x' AS name`)
 
-	err := Migrate(context.Background(), db, DialectSqlite, nil)
+	err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil)
 	if err == nil {
 		t.Fatalf("Migrate: expected the failure the legacy migration returned, got none")
 	}
@@ -737,6 +1038,136 @@ func TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld(t *testing.T) {
 	}
 }
 
+// TestMigrateTalkgroupsArchivesATalkgroupWhoseSystemIsNotInThisDatabase is REQ-001 on the shape the
+// legacy pass was worst at: a talkgroup in a radio system this deployment never had. The legacy
+// migration resolved its system, found nothing, said nothing, and the row went out of the database
+// with the v6 table. Here the row is kept and the reason is said.
+func TestMigrateTalkgroupsArchivesATalkgroupWhoseSystemIsNotInThisDatabase(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerTalkgroups" ("_id", "frequency", "groupId", "id", "label", "led", "name", "order", "systemId", "tagId") VALUES (204, 1514003000, 3, 1514003, 'Orphan', NULL, 'Orphan', 4, 10009, 6)`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "talkgroups", "talkgroupId", 204) {
+		t.Fatal("the migration carried a talkgroup whose system is not in this database: the row would name a system that does not exist")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerTalkgroups", 204, "its system 10009 is not in this database", `{"_id":204,"frequency":1514003000,"groupId":3,"id":1514003,"label":"Orphan","led":null,"name":"Orphan","order":4,"systemId":10009,"tagId":6}`)
+
+	if !hasString(progress, `the migration could not carry talkgroup 204 "Orphan": its system 10009 is not in this database`) {
+		t.Errorf("the migration said nothing about the talkgroup it could not carry: %v", progress)
+	}
+
+	if hasV6Table(t, db, "rdioScannerTalkgroups") {
+		t.Error("the v6 talkgroups table survived a pass that read every row of it: only a row the pass could not read keeps its table alive")
+	}
+}
+
+// TestMigrateTalkgroupsArchivesATalkgroupTheDatabaseRefused is the other way a row is lost: the
+// migration had a system for it, but the row names a tag this database does not have, so the insert
+// into the v8 table is refused. The failure line the pass already says is kept, and the row itself is
+// archived rather than dropped with the v6 table.
+func TestMigrateTalkgroupsArchivesATalkgroupTheDatabaseRefused(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerTalkgroups" ("_id", "frequency", "groupId", "id", "label", "led", "name", "order", "systemId", "tagId") VALUES (205, 1514004000, 3, 1514004, 'No tag', NULL, 'No tag', 5, 10001, 999)`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "talkgroups", "talkgroupId", 205) {
+		t.Fatal("the migration carried a talkgroup whose tag is not in this database, which the v8 table will not hold")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerTalkgroups", 205, "the database refused it", `{"_id":205,"frequency":1514004000,"groupId":3,"id":1514004,"label":"No tag","led":null,"name":"No tag","order":5,"systemId":10001,"tagId":999}`)
+
+	if !hasString(progress, `the migration could not carry talkgroup 205 "No tag": the database refused it`) {
+		t.Errorf("the migration said nothing about the talkgroup it could not carry: %v", progress)
+	}
+
+	failed := false
+
+	for _, line := range progress {
+		if strings.HasPrefix(line, "the migration of talkgroups could not be finished") {
+			failed = true
+
+			break
+		}
+	}
+
+	if !failed {
+		t.Errorf("the pass no longer says the insert failure it has always reported: %v", progress)
+	}
+
+	if hasV6Table(t, db, "rdioScannerTalkgroups") {
+		t.Error("the v6 talkgroups table survived a pass that read every row of it")
+	}
+}
+
+// TestMigrateUnitsArchivesAUnitWhoseSystemIsNotInThisDatabase is REQ-001 on the units table, which
+// resolves its system the same way and skips the same way. Unit 304 of the fixture is that unit: the v6
+// units table has a unique (systemId, id), so the fixture holds the one row of a system this database
+// does not have rather than every test adding its own.
+func TestMigrateUnitsArchivesAUnitWhoseSystemIsNotInThisDatabase(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "units", "unitId", 304) {
+		t.Fatal("the migration carried a unit whose system is not in this database")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerUnits", 304, "its system 10009 is not in this database", `{"_id":304,"id":55555,"label":"Orphan Engine","order":3,"systemId":10009}`)
+
+	if !hasString(progress, `the migration could not carry unit 304 "Orphan Engine": its system 10009 is not in this database`) {
+		t.Errorf("the migration said nothing about the unit it could not carry: %v", progress)
+	}
+
+	if hasV6Table(t, db, "rdioScannerUnits") {
+		t.Error("the v6 units table survived a pass that read every row of it")
+	}
+}
+
+// TestMigrateUnitsCarryNothingTwiceForAUnitTheV8TableAlreadyHolds is the state a v6 table that
+// survived a completed pass leaves behind: the next start reads the same rows again, into identities
+// the v8 table already holds. Those units are not lost — they are in the v8 table under the identity
+// they were written under — so they are not archived, nothing is said about them, and the pass does not
+// report a constraint failure for a row it has already carried.
+func TestMigrateUnitsCarryNothingTwiceForAUnitTheV8TableAlreadyHolds(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	migrateDatabase(t, db)
+
+	mustExec(t, db, `CREATE TABLE "rdioScannerUnits" ("_id" integer primary key autoincrement, "id" integer, "label" text, "order" integer, "systemId" integer)`)
+	mustExec(t, db, `INSERT INTO "rdioScannerUnits" ("_id", "id", "label", "order", "systemId") VALUES (301, 12345, 'Engine 12', 1, 10001), (302, 6789, 'Car 4', 2, 10001)`)
+
+	progress := migrateDatabase(t, db)
+
+	if got := archivedRow(t, db, "rdioScannerUnits", 301); got != nil {
+		t.Errorf("the archive holds %v, want nothing: a unit the v8 table already holds has not been lost", got)
+	}
+
+	if got := archivedRow(t, db, "rdioScannerUnits", 302); got != nil {
+		t.Errorf("the archive holds %v, want nothing: a unit the v8 table already holds has not been lost", got)
+	}
+
+	// The unit the first pass archived stays archived exactly once, rather than again.
+	assertArchivedRow(t, db, "rdioScannerUnits", 304, "its system 10009 is not in this database", `{"_id":304,"id":55555,"label":"Orphan Engine","order":3,"systemId":10009}`)
+
+	for _, line := range progress {
+		if strings.Contains(line, "unit 301") || strings.Contains(line, "unit 302") || strings.Contains(line, "the migration of units could not be finished") {
+			t.Errorf("the second pass said something about a unit it had already carried: %v", progress)
+		}
+	}
+
+	got := readRows(t, db, `SELECT "unitId", "label", "unitRef" FROM "units" WHERE "unitId" IN (301, 302) ORDER BY 1`)
+	want := [][]string{{"301", "Engine 12", "12345"}, {"302", "Car 4", "6789"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the units after a second pass:\n  got  %v\n  want %v", got, want)
+	}
+}
+
 // TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows: the v6 options blob is unpacked
 // into the fixed list of names the legacy migration names, in that order, each stored as the JSON
 // text of its value; every other row of the v6 configuration table is copied across as it stands.
@@ -768,15 +1199,311 @@ func TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows(t *testing.T
 	}
 }
 
-// TestMigrateOptionsDropsAKeyTheLegacyUnpackListDoesNotName: a key the blob holds and the fixed
-// list does not name is not migrated, and nothing is said about it.
-func TestMigrateOptionsDropsAKeyTheLegacyUnpackListDoesNotName(t *testing.T) {
-	db, _ := migrateLegacyV6Fixture(t)
+// openLegacyV6DatabaseWithV8Schema is the state a start that carried rows but could not drop the v6
+// tables they came from leaves behind: the v6 rows are still there, and so is the v8 table they were
+// already written into. It is the state in which the next start finds the database refusing an
+// identity it already holds.
+func openLegacyV6DatabaseWithV8Schema(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db := openLegacyV6Database(t)
+
+	if err := ApplySchema(context.Background(), db, DialectSqlite); err != nil {
+		t.Fatalf("ApplySchema: %v", err)
+	}
+
+	return db
+}
+
+// TestMigrateGroupsCarryNothingTwiceForAGroupTheV8TableAlreadyHolds is REQ-004 on the groups table,
+// in the state that produces it: the v8 table already holds the identity the v6 row would be written
+// under.
+func TestMigrateGroupsCarryNothingTwiceForAGroupTheV8TableAlreadyHolds(t *testing.T) {
+	db := openLegacyV6DatabaseWithV8Schema(t)
+
+	mustExec(t, db, `INSERT INTO "groups" ("groupId", "label", "order") VALUES (2, 'Already here', 1)`)
+
+	progress := migrateDatabase(t, db)
+
+	if got := archivedRows(t, db, "rdioScannerGroups"); len(got) != 0 {
+		t.Errorf("the archive holds %v, want nothing: a group the v8 table already holds has not been lost", got)
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "group 2 ") || strings.Contains(line, "the migration of groups could not be finished") {
+			t.Errorf("the pass said something about a group it had already carried: %v", progress)
+		}
+	}
+
+	got := readRows(t, db, `SELECT "groupId", "label" FROM "groups" WHERE "groupId" = 2`)
+	want := [][]string{{"2", "Already here"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the group the v8 table already held:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// TestMigrateTagsCarryNothingTwiceForATagTheV8TableAlreadyHolds is the tags half.
+func TestMigrateTagsCarryNothingTwiceForATagTheV8TableAlreadyHolds(t *testing.T) {
+	db := openLegacyV6DatabaseWithV8Schema(t)
+
+	mustExec(t, db, `INSERT INTO "tags" ("tagId", "label", "order") VALUES (4, 'Already here', 1)`)
+
+	progress := migrateDatabase(t, db)
+
+	if got := archivedRows(t, db, "rdioScannerTags"); len(got) != 0 {
+		t.Errorf("the archive holds %v, want nothing: a tag the v8 table already holds has not been lost", got)
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "tag 4") || strings.Contains(line, "the migration of tags could not be finished") {
+			t.Errorf("the pass said something about a tag it had already carried: %v", progress)
+		}
+	}
+
+	got := readRows(t, db, `SELECT "tagId", "label" FROM "tags" WHERE "tagId" = 4`)
+	want := [][]string{{"4", "Already here"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the tag the v8 table already held:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// TestMigrateSystemsCarryNothingTwiceForASystemTheV8TableAlreadyHolds is the systems half, and the
+// one whose loss would reach furthest: every talkgroup, unit, and call of that system resolves
+// through it.
+func TestMigrateSystemsCarryNothingTwiceForASystemTheV8TableAlreadyHolds(t *testing.T) {
+	db := openLegacyV6DatabaseWithV8Schema(t)
+
+	mustExec(t, db, `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "label", "led", "order", "systemRef") VALUES (101, 1, '40000, 40001', 'Already here', 'red', 1, 10001)`)
+
+	progress := migrateDatabase(t, db)
+
+	if got := archivedRows(t, db, "rdioScannerSystems"); len(got) != 0 {
+		t.Errorf("the archive holds %v, want nothing: a system the v8 table already holds has not been lost", got)
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "system 101") || strings.Contains(line, "the migration of systems could not be finished") {
+			t.Errorf("the pass said something about a system it had already carried: %v", progress)
+		}
+	}
+
+	got := readRows(t, db, `SELECT "systemId", "label" FROM "systems" WHERE "systemId" = 101`)
+	want := [][]string{{"101", "Already here"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the system the v8 table already held:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// TestMigrateApikeysCarryNothingTwiceForAnApikeyTheV8TableAlreadyHolds is the apikeys half.
+func TestMigrateApikeysCarryNothingTwiceForAnApikeyTheV8TableAlreadyHolds(t *testing.T) {
+	db := openLegacyV6DatabaseWithV8Schema(t)
+
+	mustExec(t, db, `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (801, 0, 'Already here', 'already-here', 1, '[10001]')`)
+
+	progress := migrateDatabase(t, db)
+
+	if got := archivedRows(t, db, "rdioScannerApiKeys"); len(got) != 0 {
+		t.Errorf("the archive holds %v, want nothing: an api key the v8 table already holds has not been lost", got)
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "apikey 801") || strings.Contains(line, "the migration of apikeys could not be finished") {
+			t.Errorf("the pass said something about an api key it had already carried: %v", progress)
+		}
+	}
+
+	got := readRows(t, db, `SELECT "apikeyId", "key" FROM "apikeys" WHERE "apikeyId" = 801`)
+	want := [][]string{{"801", "already-here"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the api key the v8 table already held:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// TestMigrateDirwatchesArchivesADirwatchThatHoldsNoDirectory is the dirwatch shape the v6 table can
+// actually hold: the directory is the whole point of a dirwatch, and an empty one watches nothing.
+func TestMigrateDirwatchesArchivesADirwatchThatHoldsNoDirectory(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerDirWatches" ("_id", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type", "usePolling") VALUES (604, 0, 0, '', 0, 'wav', 1514000000, '0644', 4, 10001, 1514000, 'dsdPlus', 0)`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "dirwatches", "dirwatchId", 604) {
+		t.Fatal("the migration carried a dirwatch with no directory")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerDirWatches", 604, "it holds no directory", `{"_id":604,"delay":0,"deleteAfter":false,"directory":"","disabled":false,"extension":"wav","frequency":1514000000,"mask":"0644","order":4,"systemId":10001,"talkgroupId":1514000,"type":"dsdPlus"}`)
+
+	if !hasString(progress, `the migration could not carry dirwatch 604: it holds no directory`) {
+		t.Errorf("the migration said nothing about the dirwatch it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated pins the one spelling the dirwatch migration's
+// probe, read, archive, and drop use.
+//
+// No sqlite run can show the three spellings this migration used to disagree on: sqlite matches a table
+// name whatever its case, which is exactly why the defect survived — on the backend every development test
+// runs on, it has no effect at all. What sqlite can show is the name a v6 database carries for that table,
+// the name the pass records in the archive, and the name of the table the pass leaves behind. They are one
+// string, and the statements are built from it. The backend where the disagreement was real — a probe that
+// fails, and a table neither migrated nor dropped, on that start and every later one — is proved live, in
+// the MariaDB run recorded in
+// docs/specs/FEAT-011-v663-migration-integrity/validation.md.
+func TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	// The name the v6 database carries for its own dirwatch table, read out of its schema: it is the name
+	// the statements have to use, because it is the name the deployment's database has.
+	got := readRows(t, db, `SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'rdioScannerDirWatches'`)
+
+	if len(got) != 1 {
+		t.Fatalf("the v6 fixture carries its dirwatch table as %v, want %q", got, v6DirwatchesTable)
+	}
+
+	// One dirwatch the pass can read and cannot carry, and one it cannot read at all: the table survives,
+	// and the row left in the archive names it.
+	mustExec(t, db, `UPDATE "rdioScannerDirWatches" SET "directory" = '' WHERE "_id" = 603`)
+	mustExec(t, db, `UPDATE "rdioScannerDirWatches" SET "delay" = 'not a delay' WHERE "_id" = 602`)
+
+	progress := migrateDatabase(t, db)
+
+	archived := archivedRows(t, db, v6DirwatchesTable)
+
+	if len(archived) != 1 || archived[0][1] != "603" {
+		t.Fatalf("the dirwatch archive: %v, want the one dirwatch the pass read and could not carry", archived)
+	}
+
+	if archived[0][0] != v6DirwatchesTable {
+		t.Errorf("the archive names the table %q, want %q: the archive and the read have to name one table",
+			archived[0][0], v6DirwatchesTable)
+	}
+
+	left := readRows(t, db, `SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' AND lower("name") = 'rdioscannerdirwatches'`)
+
+	if !equalStrings(flat(left), flat([][]string{{v6DirwatchesTable}})) {
+		t.Errorf("the dirwatch table the pass left behind is named %v, want %q", left, v6DirwatchesTable)
+	}
+
+	if !hasString(progress, "the migration left the dirwatches table where it found it: a row of it could not be read") {
+		t.Errorf("the migration said nothing about the dirwatch table it left behind: %v", progress)
+	}
+}
+
+// is not migrated, and since FEAT-011 the config row that held it is archived with the key named, so
+// the value is not simply gone.
+func TestMigrateOptionsArchivesAKeyV8HasNoOptionOf(t *testing.T) {
+	db, progress := migrateLegacyV6Fixture(t)
 
 	got := readRows(t, db, `SELECT "key", "value" FROM "options" WHERE "key" = 'unknownKey'`)
 
 	if len(got) != 0 {
 		t.Errorf("the v6 options blob carried %v into the v7 options, want nothing", got)
+	}
+
+	archived := archivedRows(t, db, "rdioScannerConfigs")
+
+	if len(archived) != 1 {
+		t.Fatalf("the archive holds %d config rows, want the one options row the pass could not carry whole: %v", len(archived), archived)
+	}
+
+	if archived[0][1] != "1" {
+		t.Errorf("the archived config row is %s, want the options row, identity 1", archived[0][1])
+	}
+
+	want := `it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`
+
+	if archived[0][2] != want {
+		t.Errorf("the archived config row says %q, want %q", archived[0][2], want)
+	}
+
+	// The whole blob is archived, not just the key: what the pass could not carry is recoverable from
+	// the row it came from.
+	if !strings.Contains(archived[0][3], `\"unknownKey\":\"dropped\"`) {
+		t.Errorf("the archived config row does not hold the blob it came from: %s", archived[0][3])
+	}
+
+	if !hasString(progress, `the migration could not carry the config row "options": `+want) {
+		t.Errorf("the migration said nothing about the option it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateOptionsArchivesAValueWithTheWrongShape is the other half of the blob: a name the unpack
+// list knows, holding a value of a type the legacy source does not accept. The other values of the same
+// blob are still carried.
+func TestMigrateOptionsArchivesAValueWithTheWrongShape(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `UPDATE "rdioScannerConfigs" SET "val" = '{"branding":"Rdio Legacy","pruneDays":"thirty days","unknownKey":"dropped"}' WHERE "key" = 'options'`)
+
+	progress := migrateDatabase(t, db)
+
+	carried := rowsOf(t, db, "options", `"key", "value"`)
+
+	for _, row := range carried {
+		if row[0] == "pruneDays" || row[0] == "unknownKey" {
+			t.Errorf("the options hold %v, want neither of the values the pass could not carry", row)
+		}
+	}
+
+	if !holdsColumn(carried, "branding") {
+		t.Errorf("the options lost the value it could carry: %v", carried)
+	}
+
+	archived := archivedRows(t, db, "rdioScannerConfigs")
+
+	if len(archived) != 1 {
+		t.Fatalf("the archive holds %d config rows, want one: %v", len(archived), archived)
+	}
+
+	want := `it holds values this server cannot carry: "pruneDays" (the value has the wrong shape), "unknownKey" (v8 has no option of that name)`
+
+	if archived[0][2] != want {
+		t.Errorf("the archived config row says %q, want %q", archived[0][2], want)
+	}
+
+	if !hasString(progress, `the migration could not carry the config row "options": `+want) {
+		t.Errorf("the migration said nothing about the options it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateOptionsArchivesABlobThatCouldNotBeRead is the whole row lost at once: the options blob is
+// not JSON this server can read, so nothing of it can be unpacked. The row is archived as the v6 table
+// holds it, and the pass says so.
+func TestMigrateOptionsArchivesABlobThatCouldNotBeRead(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `UPDATE "rdioScannerConfigs" SET "val" = 'branding = Rdio Legacy' WHERE "key" = 'options'`)
+
+	progress := migrateDatabase(t, db)
+
+	archived := archivedRows(t, db, "rdioScannerConfigs")
+
+	if len(archived) != 1 {
+		t.Fatalf("the archive holds %d config rows, want the options row the pass could not read: %v", len(archived), archived)
+	}
+
+	if archived[0][2] != "it could not be read" {
+		t.Errorf("the archived config row says %q, want it could not be read", archived[0][2])
+	}
+
+	if !strings.Contains(archived[0][3], `branding = Rdio Legacy`) {
+		t.Errorf("the archived config row does not hold the text it could not read: %s", archived[0][3])
+	}
+
+	if !hasString(progress, `the migration could not carry the config row "options": it could not be read`) {
+		t.Errorf("the migration said nothing about the options it could not read: %v", progress)
+	}
+
+	// The rows that do not name the options blob are still copied as they stand.
+	carried := rowsOf(t, db, "options", `"key", "value"`)
+
+	if !holdsColumn(carried, "secret") || !holdsColumn(carried, "extra") {
+		t.Errorf("the options lost the rows the pass could carry: %v", carried)
 	}
 }
 
@@ -826,6 +1553,84 @@ func TestMigrateDownstreamsCopyTheV6Row(t *testing.T) {
 
 	if !equalStrings(flat(got), flat(want)) {
 		t.Errorf("the migrated downstreams:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// TestMigrateLogsArchivesALogThatHoldsNoMessage is REQ-001 on the deployment's own history: a log row
+// with nothing in the message column is a row the log view cannot show, and the legacy pass dropped it
+// with the v6 table without a word.
+func TestMigrateLogsArchivesALogThatHoldsNoMessage(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerLogs" ("_id", "dateTime", "level", "message") VALUES (403, '2025-06-15 13:00:00.000 +0000 UTC', 'info', '')`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "logs", "logId", 403) {
+		t.Fatal("the migration carried a log entry with no message, which the log view has nothing to show for it")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerLogs", 403, "it holds no message", `{"_id":403,"dateTime":"2025-06-15T13:00:00Z","level":"info","message":""}`)
+
+	if !hasString(progress, `the migration could not carry log 403: it holds no message`) {
+		t.Errorf("the migration said nothing about the log entry it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateLogsArchivesALogThatHoldsNoLevel is the same row with its other required column missing:
+// the level is what the log view files the entry under, and an entry with none has no place in it.
+func TestMigrateLogsArchivesALogThatHoldsNoLevel(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerLogs" ("_id", "dateTime", "level", "message") VALUES (404, '2025-06-15 13:05:00.000 +0000 UTC', '', "unit keyed")`)
+
+	progress := migrateDatabase(t, db)
+
+	assertArchivedRow(t, db, "rdioScannerLogs", 404, "it holds no level", `{"_id":404,"dateTime":"2025-06-15T13:05:00Z","level":"","message":"unit keyed"}`)
+
+	if !hasString(progress, `the migration could not carry log 404: it holds no level`) {
+		t.Errorf("the migration said nothing about the log entry it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateDownstreamsArchivesADownstreamThatHoldsNoUrl is REQ-001 on the configuration sections:
+// the url is the whole point of a downstream, and a row without one used to leave the database with
+// the v6 table.
+func TestMigrateDownstreamsArchivesADownstreamThatHoldsNoUrl(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerDownstreams" ("_id", "apiKey", "disabled", "order", "systems", "url") VALUES (502, 'relay-api-key-2', 0, 2, '[10002]', '')`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "downstreams", "downstreamId", 502) {
+		t.Fatal("the migration carried a downstream with no url")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerDownstreams", 502, "it holds no url", `{"_id":502,"apiKey":"relay-api-key-2","disabled":false,"order":2,"systems":"[10002]","url":""}`)
+
+	if !hasString(progress, `the migration could not carry downstream 502: it holds no url`) {
+		t.Errorf("the migration said nothing about the downstream it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateAccessesArchivesAnAccessThatHoldsNoCode is the accesses half: the code is what an operator
+// types, and an access without one cannot be used or even named. Access 904 of the fixture is that
+// access — `code` is `not null unique`, so the fixture holds the one row with no code rather than every
+// test adding its own.
+func TestMigrateAccessesArchivesAnAccessThatHoldsNoCode(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "accesses", "accessId", 904) {
+		t.Fatal("the migration carried an access with no code")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerAccesses", 904, "it holds no code", `{"_id":904,"code":"","expiration":"2025-06-15T13:10:00Z","ident":"no code","limit":0,"order":3,"systems":"[10001]"}`)
+
+	if !hasString(progress, `the migration could not carry access 904: it holds no code`) {
+		t.Errorf("the migration said nothing about the access it could not carry: %v", progress)
 	}
 }
 
@@ -964,21 +1769,95 @@ func TestMigrateCallsKeepTheAudioBytesTheV6RowHeld(t *testing.T) {
 	}
 }
 
-// TestMigrateCallsSkipACallWhoseSystemDoesNotResolve: a call whose references do not resolve is
-// skipped without a word, and is dropped with the v6 table.
-func TestMigrateCallsSkipACallWhoseSystemDoesNotResolve(t *testing.T) {
+// TestMigrateCallsArchivesACallWhoseSystemDoesNotResolve: a call whose references do not resolve is
+// not carried, and since FEAT-011 it is not lost either — the row is archived with its audio, and the
+// reason is said.
+func TestMigrateCallsArchivesACallWhoseSystemDoesNotResolve(t *testing.T) {
 	db, progress := migrateLegacyV6Fixture(t)
 
-	for _, row := range rowsOf(t, db, "calls", `"callId"`) {
-		if row[0] == "705" {
-			t.Fatalf("the call naming a system nothing migrated was migrated")
-		}
+	if holdsIdentity(t, db, "calls", "callId", 705) {
+		t.Fatal("the call naming a system nothing migrated was migrated")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerCalls", 705, "its system 10003 is not in this database", `{"audio":"AAECYXVkaW8gZm9yIGNhbGwgNzA1","audioName":"705.wav","audioType":"audio/wav","dateTime":"2025-06-15T12:40:00Z","frequencies":"[]","frequency":1514003000,"id":705,"patches":"[]","source":0,"sources":"[]","system":10003,"talkgroup":1514003}`)
+
+	if !hasString(progress, "the migration could not carry call 705: its system 10003 is not in this database") {
+		t.Errorf("the migration said nothing about the call it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateCallsArchivesACallThatHoldsNoAudio is the shape the v6 table can actually hold: the audio
+// column is `not null`, but a zero-length upload leaves it empty, and a call without audio is a call
+// this server has nothing to play. Its frequencies, patches, and source units are archived with it,
+// which is what makes the row worth reading afterwards.
+func TestMigrateCallsArchivesACallThatHoldsNoAudio(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerCalls" ("id", "audio", "audioName", "audioType", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup") VALUES (707, x'', '707.wav', 'audio/wav', '2025-06-15 12:55:00.000 +0000 UTC', '[{"errorCount":0,"freq":1514000000,"pos":0,"spikeCount":0}]', 1514000000, '[1514001]', 12345, '[{"pos":1.5,"src":12345}]', 10001, 1514000)`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "calls", "callId", 707) {
+		t.Fatal("the migration carried a call with no audio, which the v8 table stores as a blob the player cannot play")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerCalls", 707, "it holds no audio", `{"audio":"","audioName":"707.wav","audioType":"audio/wav","dateTime":"2025-06-15T12:55:00Z","frequencies":"[{\"errorCount\":0,\"freq\":1514000000,\"pos\":0,\"spikeCount\":0}]","frequency":1514000000,"id":707,"patches":"[1514001]","source":12345,"sources":"[{\"pos\":1.5,\"src\":12345}]","system":10001,"talkgroup":1514000}`)
+
+	if !hasString(progress, "the migration could not carry call 707: it holds no audio") {
+		t.Errorf("the migration said nothing about the call it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateCallsArchivesACallWhoseTalkgroupIsNotInThisDatabase is the other reference: the call
+// names a talkgroup no migrated talkgroup holds, so the v8 row would name a talkgroup that does not
+// exist.
+func TestMigrateCallsArchivesACallWhoseTalkgroupIsNotInThisDatabase(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerCalls" ("id", "audio", "audioName", "audioType", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup") VALUES (708, x'000102617564696f20666f722063616c6c20373038', '708.wav', 'audio/wav', '2025-06-15 12:56:00.000 +0000 UTC', '[]', 1514999000, '[]', 0, '[]', 10001, 1514999)`)
+
+	progress := migrateDatabase(t, db)
+
+	if holdsIdentity(t, db, "calls", "callId", 708) {
+		t.Fatal("the migration carried a call whose talkgroup is not in this database")
+	}
+
+	assertArchivedRow(t, db, "rdioScannerCalls", 708, "its talkgroup 1514999 is not in this database", `{"audio":"AAECYXVkaW8gZm9yIGNhbGwgNzA4","audioName":"708.wav","audioType":"audio/wav","dateTime":"2025-06-15T12:56:00Z","frequencies":"[]","frequency":1514999000,"id":708,"patches":"[]","source":0,"sources":"[]","system":10001,"talkgroup":1514999}`)
+
+	if !hasString(progress, "the migration could not carry call 708: its talkgroup 1514999 is not in this database") {
+		t.Errorf("the migration said nothing about the call it could not carry: %v", progress)
+	}
+}
+
+// TestMigrateCallsCarryNothingTwiceForACallTheV8TableAlreadyHolds is the calls half of the same
+// state, and the one where writing a row twice would also have written its frequencies and its source
+// units twice.
+func TestMigrateCallsCarryNothingTwiceForACallTheV8TableAlreadyHolds(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	migrateDatabase(t, db)
+
+	mustExec(t, db, `CREATE TABLE "rdioScannerCalls" ("id" integer primary key autoincrement, "audio" longblob not null, "audioName" varchar(255), "audioType" varchar(255), "dateTime" datetime not null, "frequencies" text not null, "frequency" integer, "patches" text not null, "source" integer, "sources" text not null, "system" integer not null, "talkgroup" integer not null)`)
+	mustExec(t, db, `INSERT INTO "rdioScannerCalls" ("id", "audio", "audioName", "audioType", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup") VALUES (701, x'000102617564696f20666f722063616c6c20373031', '701.wav', 'audio/wav', '2025-06-15 12:00:00.000 +0000 UTC', '[{"errorCount":0,"freq":1514000000,"pos":0,"spikeCount":0}]', 1514000000, '[1514001]', 12345, '[{"pos":1.5,"src":12345}]', 10001, 1514000)`)
+
+	progress := migrateDatabase(t, db)
+
+	if got := archivedRow(t, db, "rdioScannerCalls", 701); got != nil {
+		t.Errorf("the archive holds %v, want nothing: a call the v8 table already holds has not been lost", got)
+	}
+
+	if got := archivedRows(t, db, "rdioScannerCalls"); len(got) != 2 {
+		t.Fatalf("the archive after a second pass over a call the v8 table already holds: %v, want the two calls the first pass archived, once each", got)
 	}
 
 	for _, line := range progress {
-		if strings.Contains(line, `INSERT INTO "calls"`) {
-			t.Errorf("the skipped call was reported: %q", line)
+		if strings.Contains(line, "call 701") || strings.Contains(line, "the migration of calls could not be finished") {
+			t.Errorf("the second pass said something about a call it had already carried: %v", progress)
 		}
+	}
+
+	if count := countRows(t, db, "callFrequencies"); count != 4 {
+		t.Errorf("the second pass wrote the call frequencies again: %d rows, want the four the first pass wrote", count)
 	}
 }
 
@@ -1231,7 +2110,7 @@ func TestMigrateKeepsGoingAfterAPerRowFailure(t *testing.T) {
 func TestMigrateAcceptsANilProgressCallback(t *testing.T) {
 	db := openLegacyV6Database(t)
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
@@ -1381,6 +2260,20 @@ func flat(rows [][]string) []string {
 	}
 
 	return out
+}
+
+// holdsColumn reports whether any of the rows names that value in any column, which is how a test
+// asks whether a table holds a key without pinning the whole table.
+func holdsColumn(rows [][]string, value string) bool {
+	for _, row := range rows {
+		for _, column := range row {
+			if column == value {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func equalStrings(got, want []string) bool {

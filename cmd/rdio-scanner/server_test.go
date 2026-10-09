@@ -1342,11 +1342,12 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 	t.Cleanup(func() { srv.stop(context.Background()) })
 
 	// Still said out loud: the pass announces each v6 table it found, and reports the row it could not
-	// carry, exactly as it did before this feature.
+	// carry, exactly as it did before this feature — and, since FEAT-011, the rows it archived.
 	for _, want := range []string{
 		"migrating groups...",
 		"migrating logs...",
 		"migration.migrateTalkgroups:",
+		"the migration could not carry call 705: its system 10003 is not in this database",
 	} {
 		if !strings.Contains(console.String(), want) {
 			t.Errorf("the terminal does not say %q:\n%s", want, console.String())
@@ -1384,6 +1385,38 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 	// entry has: a sentence first, then the failure's own text.
 	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration of talkgroups could not be finished: migration.migrateTalkgroups:%'`); got == 0 {
 		t.Errorf("the log view holds no entry for the row the migration could not carry")
+	}
+
+	// FEAT-011: every row the pass archived is filed the same way, as a problem, in the order the pass
+	// says it — the count first, then one line per row. A deployment running as a service has no terminal,
+	// and these are the lines that tell its operator the upgrade left something behind and where to go and
+	// look at it.
+	for _, want := range []struct {
+		level, message string
+	}{
+		{"warn", "the migration could not carry 1 talkgroup: it is kept in the migrationArchive table"},
+		{"warn", `the migration could not carry talkgroup 207 "Orphaned": its system 10009 is not in this database`},
+		{"warn", "the migration could not carry 1 unit: it is kept in the migrationArchive table"},
+		{"warn", `the migration could not carry unit 304 "Orphan Engine": its system 10009 is not in this database`},
+		{"warn", "the migration could not carry 1 config row: it is kept in the migrationArchive table"},
+		{"warn", `the migration could not carry the config row "options": it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
+		{"warn", "the migration could not carry 1 log: it is kept in the migrationArchive table"},
+		{"warn", "the migration could not carry log 405: it holds no message"},
+		{"warn", "the migration could not carry 1 downstream: it is kept in the migrationArchive table"},
+		{"warn", "the migration could not carry downstream 503: it holds no url"},
+		{"warn", "the migration could not carry 2 calls: they are kept in the migrationArchive table"},
+		{"warn", "the migration could not carry call 705: its system 10003 is not in this database"},
+		{"warn", "the migration could not carry call 710: it holds no audio"},
+		{"warn", "the migration could not carry 1 access: it is kept in the migrationArchive table"},
+		{"warn", "the migration could not carry access 904: it holds no code"},
+	} {
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "level" = '%s' AND "message" = '%s'`,
+			want.level, want.message)
+
+		if got := countRows(t, srv.db, query); got != 1 {
+			t.Errorf("the log view holds %d entries under database/%s saying %q, want exactly one",
+				got, want.level, want.message)
+		}
 	}
 
 	// The migration is the one writer whose wording this feature had to change rather than merely label:

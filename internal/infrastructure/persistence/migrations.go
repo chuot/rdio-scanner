@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 )
 
@@ -59,6 +60,10 @@ type Progress func(level, message string)
 // and each unit the legacy server left damaged is a problem. A nil `progress` is accepted and simply
 // discards them.
 //
+// `clock` is the server's clock, and it stamps every row the pass archives. A nil `clock` is accepted
+// for a caller that archives nothing; the pass falls back to the wall clock, which is why the server
+// itself always hands it its own.
+//
 // The lines are said while the pass runs rather than collected by this package, because the pass is what
 // is rebuilding the log table: an entry written here is written into the table whose ids the deployment's
 // own history is being moved into. The composition root prints them as they arrive, keeps them, and writes
@@ -82,9 +87,13 @@ type Progress func(level, message string)
 // repository. They are named so a reader can see which behavior is being mirrored, and they resolve
 // at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
 // docs/specs/FEAT-005-server-ng-cutover/spec.md.
-func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress Progress) error {
+func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock, progress Progress) error {
 	if progress == nil {
 		progress = func(_, _ string) {}
+	}
+
+	if clock == nil {
+		clock = wallClock{}
 	}
 
 	if err := ApplySchema(ctx, db, dialect); err != nil {
@@ -95,12 +104,21 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, progress Progress
 	}
 
 	s := newStore(db, dialect)
+	s.clock = clock
 
 	// The log table is brought up to the shape this server writes before anything reads or moves a row:
 	// the column that names the part of the server that wrote each entry, and the indexes the log search
 	// is written against. It is a step of the migration pass rather than of the schema because the schema
 	// is the legacy server's and has to leave a database the other server wrote exactly as it found it.
 	if err := ensureLogSourceColumn(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
+	// The archive the pass writes left-behind rows into is given the same treatment for the same
+	// reason: it is a table this server owns, and the schema step is not allowed to add tables to a
+	// database the other server wrote. See migration_archive.go and
+	// docs/specs/FEAT-011-v663-migration-integrity/decision-archive-then-drop.md.
+	if err := ensureMigrationArchive(ctx, s); err != nil {
 		return operationError("database", "migrate", err)
 	}
 
@@ -150,6 +168,52 @@ func reportFailure(progress Progress, part, section, operation string, err error
 		statementError(section, operation, err, query).Error()))
 }
 
+// alreadyCarried reports whether the v8 table already holds a row with the identity the v6 row was
+// read for.
+//
+// It is what makes a second pass over a v6 table the first pass left behind a no-op rather than a table
+// full of constraint failures. Such a table survives only because some row of it could not be read, so
+// the next start reads every row of it again — including the ones already written under the identity
+// this pass would write them under. Those rows are not lost: they are in the v8 table, under their own
+// identity. Writing them again would fail, reporting that failure would tell the operator about a damage
+// that is not there, and archiving them would say a carried row was left behind.
+func alreadyCarried(ctx context.Context, tx transaction, table, column string, identity any) (bool, error) {
+	query := `SELECT COUNT(*) FROM "` + table + `" WHERE "` + column + `" = ?`
+
+	var count int
+
+	if err := tx.queryRow(ctx, query, identity).Scan(&count); err != nil {
+		return false, statementError("migration", "alreadyCarried", err, query)
+	}
+
+	return count > 0, nil
+}
+
+// dropV6Table drops the v6 table a migration has just read, unless some row of it could not be read.
+//
+// The pass keeps a record of every row it read and could not carry, which is what lets it drop the v6
+// table at the end of the table's transaction at all. A row the driver could not scan — text in a
+// column sqlite declared `datetime` or `integer` and did not enforce — is a row the pass has no values
+// for: it can neither carry it nor archive it. The only way such a row survives is for its table to
+// survive, so the pass leaves the table where it found it and says so, and carries on with the rest of
+// the upgrade rather than refusing to start over one damaged row.
+//
+// `unread` is set by the row loop when a scan fails; the cursor error covers a read that stopped
+// before the end of the table. Both are the same case: a row the pass never saw.
+func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, section, operation, table string, unread bool) {
+	if unread {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
+
+		return
+	}
+
+	query := `DROP TABLE "` + table + `"`
+
+	if _, err := tx.exec(ctx, query); err != nil {
+		reportFailure(progress, part, section, operation, err, query)
+	}
+}
+
 // migrateGroups mirrors `migrateGroups` in `server/migrations.go`.
 //
 // The probe every legacy migration starts with is worth reading carefully, because it decides
@@ -176,7 +240,11 @@ func migrateGroups(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerGroups", "group", "groups")
+
 	query := `SELECT "_id", "label" FROM "rdioScannerGroups"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -198,10 +266,21 @@ func migrateGroups(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&id, &label); err != nil {
+			unread = true
+
 			continue
 		}
 
 		if !id.Valid {
+			if err := arch.skip(0, "a group row", "it holds no identity", map[string]any{
+				"_id":   v6Int32(id),
+				"label": v6Text(label),
+			}); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -221,17 +300,34 @@ func migrateGroups(ctx context.Context, s store, progress Progress) error {
 	})
 
 	for i, g := range groups {
+		if carried, err := alreadyCarried(ctx, tx, "groups", "groupId", g.id); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "groups" ("groupId", "label", "order") VALUES (?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, g.id, g.label, i+1); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(g.id,
+				namedRow("group", g.id, sql.NullString{String: g.label, Valid: true}), "the database refused it", map[string]any{
+					"_id":   g.id,
+					"label": g.label,
+				}); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerGroups"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerGroups", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -257,7 +353,11 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerTags", "tag", "tags")
+
 	query := `SELECT "_id", "label" FROM "rdioScannerTags"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -279,10 +379,21 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&id, &label); err != nil {
+			unread = true
+
 			continue
 		}
 
 		if !id.Valid {
+			if err := arch.skip(0, "a tag row", "it holds no identity", map[string]any{
+				"_id":   v6Int32(id),
+				"label": v6Text(label),
+			}); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -302,17 +413,34 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 	})
 
 	for i, t := range tags {
+		if carried, err := alreadyCarried(ctx, tx, "tags", "tagId", t.id); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "tags" ("tagId", "label", "order") VALUES (?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, t.id, t.label, i+1); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(t.id,
+				namedRow("tag", t.id, sql.NullString{String: t.label, Valid: true}), "the database refused it", map[string]any{
+					"_id":   t.id,
+					"label": t.label,
+				}); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerTags"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerTags", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -343,7 +471,11 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerSystems", "system", "systems")
+
 	query := `SELECT "_id", "autoPopulate", "blacklists", "id", "label", "led", "order" FROM "rdioScannerSystems"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -363,10 +495,30 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&systemID, &autoPopulate, &blacklists, &systemRef, &label, &led, &order); err != nil {
+			unread = true
+
 			continue
 		}
 
+		// The v6 system as the table holds it: the blacklist with its brackets, which is how the
+		// deployment wrote it, not as this server stores it.
+		original := map[string]any{
+			"_id":          v6Int(systemID),
+			"autoPopulate": v6Bool(autoPopulate),
+			"blacklists":   v6Text(blacklists),
+			"id":           v6Int32(systemRef),
+			"label":        v6Text(label),
+			"led":          v6Text(led),
+			"order":        v6Int32(order),
+		}
+
 		if !systemID.Valid {
+			if err := arch.skip(0, "a system row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -403,17 +555,31 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 			ref = int64(systemRef.Int32)
 		}
 
+		if carried, err := alreadyCarried(ctx, tx, "systems", "systemId", systemID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "label", "led", "order", "systemRef") VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, systemID.Int64, populate, blacklist, name, color, rank, ref); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(systemID.Int64,
+				namedRow("system", systemID.Int64, label), "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerSystems"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerSystems", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -427,10 +593,11 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 //
 // The v6 talkgroup names its system by the v6 system's `id` — its radio-system reference — and
 // the migration resolves that against the `systems` table the systems migration has already
-// filled, so a talkgroup whose system is not in that table is skipped without a word and is then
-// dropped with the v6 table. A talkgroup whose group is 0 — which is what v6 stored for a
-// talkgroup in no group — reaches the `talkgroupGroups` insert with 0, fails the foreign key, and
-// is reported per row while the talkgroup itself stays.
+// filled. A talkgroup whose system is not in that table used to be skipped without a word and
+// dropped with the v6 table; since FEAT-011 it is archived with the reason and the reason is said
+// at warn level. A talkgroup whose group is 0 — which is what v6 stored for a talkgroup in no
+// group — reaches the `talkgroupGroups` insert with 0, fails the foreign key, and is reported per
+// row while the talkgroup itself stays.
 func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateTalkgroups", "talkgroups"
 
@@ -471,7 +638,11 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerTalkgroups", "talkgroup", "talkgroups")
+
 	query = `SELECT "_id", "frequency", "groupId", "id", "label", "led", "name", "order", "systemId", "tagId" FROM "rdioScannerTalkgroups"`
+
+	unread := false
 
 	rows, err = tx.query(ctx, query)
 	if err != nil {
@@ -494,10 +665,38 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&talkgroupID, &frequency, &groupID, &talkgroupRef, &label, &led, &name, &order, &systemID, &tagID); err != nil {
+			unread = true
+
 			continue
 		}
 
+		// The v6 row as the pass read it, every column the v6 table has, including the identity column
+		// under the name the v6 table gives it. Every branch below that cannot carry it archives this,
+		// so that dropping the v6 table at the end of the pass never destroys a row quietly.
+		original := map[string]any{
+			"_id":       v6Int(talkgroupID),
+			"frequency": v6Int32(frequency),
+			"groupId":   v6Int(groupID),
+			"id":        v6Int32(talkgroupRef),
+			"label":     v6Text(label),
+			"led":       v6Text(led),
+			"name":      v6Text(name),
+			"order":     v6Int32(order),
+			"systemId":  v6Int(systemID),
+			"tagId":     v6Int(tagID),
+		}
+
+		// The v6 table declares `_id` its primary key, so a row with no identity is a damaged database
+		// rather than a shape the legacy server ever wrote. It is archived at identity 0 all the same:
+		// the pass may not drop a row it read without leaving a record of it, and the archive's unique
+		// index holds a second such row in the same table once.
 		if !talkgroupID.Valid {
+			if err := arch.skip(0, "a talkgroup row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -512,6 +711,19 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		}
 
 		if !systemID.Valid || systems[systemID.Int64] == 0 {
+			reason := "it names no system"
+
+			if systemID.Valid {
+				reason = fmt.Sprintf("its system %d is not in this database", systemID.Int64)
+			}
+
+			if err := arch.skip(talkgroupID.Int64,
+				namedRow("talkgroup", talkgroupID.Int64, name), reason, original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -553,6 +765,14 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 			ref = int64(talkgroupRef.Int32)
 		}
 
+		if carried, err := alreadyCarried(ctx, tx, "talkgroups", "talkgroupId", talkgroupID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "talkgroups" ("talkgroupId", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, talkgroupID.Int64, freq, text, color, named, rank, systems[systemID.Int64], tag, ref); err == nil {
@@ -564,13 +784,22 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 		} else {
 			reportFailure(progress, part, section, operation, err, query)
+
+			// The talkgroup itself never reaches the v8 table, and the v6 table is dropped at the end
+			// of this pass. The row is archived so that the operator who reads the failure line above
+			// still has the row the failure cost them.
+			if err := arch.skip(talkgroupID.Int64,
+				namedRow("talkgroup", talkgroupID.Int64, name), "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerTalkgroups"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerTalkgroups", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -583,8 +812,9 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 // migrateUnits mirrors `migrateUnits` in `server/migrations.go`.
 //
 // The v6 unit names its system by the v6 system's `id`, resolved the same way the talkgroups
-// migration resolves it, so a unit whose system is not in the `systems` table is skipped without
-// a word and dropped with the v6 table.
+// migration resolves it, so a unit whose system is not in the `systems` table used to be skipped
+// without a word and dropped with the v6 table; since FEAT-011 it is archived with the reason and
+// the reason is said at warn level.
 func migrateUnits(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateUnits", "units"
 
@@ -625,7 +855,11 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerUnits", "unit", "units")
+
 	query = `SELECT "_id", "id", "label", "order", "systemId" FROM "rdioScannerUnits"`
+
+	unread := false
 
 	rows, err = tx.query(ctx, query)
 	if err != nil {
@@ -643,14 +877,43 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&unitID, &unitRef, &label, &order, &systemID); err != nil {
+			unread = true
+
 			continue
 		}
 
+		original := map[string]any{
+			"_id":      v6Int(unitID),
+			"id":       v6Int32(unitRef),
+			"label":    v6Text(label),
+			"order":    v6Int32(order),
+			"systemId": v6Int32(systemID),
+		}
+
 		if !unitID.Valid {
+			if err := arch.skip(0, "a unit row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !systemID.Valid || systems[systemID.Int32] == 0 {
+			reason := "it names no system"
+
+			if systemID.Valid {
+				reason = fmt.Sprintf("its system %d is not in this database", systemID.Int32)
+			}
+
+			if err := arch.skip(unitID.Int64,
+				namedRow("unit", unitID.Int64, label), reason, original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -677,17 +940,31 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 		// `NewUnit()` never gave the unit — in this position instead, so every migrated unit landed with
 		// `unitRef` 0 and the number its row was read for was thrown away. Repaired rather than
 		// preserved; see docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+		if carried, err := alreadyCarried(ctx, tx, "units", "unitId", unitID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, unitID.Int64, unit.label, unit.order, systems[systemID.Int32], unit.unitRef); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(unitID.Int64,
+				namedRow("unit", unitID.Int64, label), "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerUnits"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerUnits", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -702,8 +979,9 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 // The v6 configuration table is a key/value table whose `options` row holds the whole options
 // section as one JSON blob. The migration unpacks a fixed list of names out of that blob, in the
 // order the legacy source lists them, and only when the value has the type the legacy source
-// expects; anything else the blob holds is dropped. Every other row of the v6 table is copied
-// across as it stands, which is how the persisted `secret` survives.
+// expects; anything else the blob holds is not carried, and since FEAT-011 the config row is archived
+// whole with every such value named. Every other row of the v6 table is copied across as it stands,
+// which is how the persisted `secret` survives.
 //
 // The unpacked values are stored as the JSON text of the value, so a string option is stored
 // with its quotes — which is what the legacy options reader unmarshals.
@@ -720,6 +998,8 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 	if err != nil {
 		return operationError(section, operation, err)
 	}
+
+	arch := archiving(ctx, tx, progress, "rdioScannerConfigs", "config row", "config rows")
 
 	boolean := func(m map[string]any, key string) (string, bool) {
 		v, ok := m[key].(bool)
@@ -783,7 +1063,17 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 		{"time12hFormat", boolean},
 	}
 
-	query := `SELECT "key", "val" FROM "rdioScannerConfigs"`
+	// The name the unpack list knows, and how each of them is read, so that a name the blob holds and
+	// the list does not is recognisable as what it is: a v6 option this server has no setting for.
+	extractOf := map[string]func(map[string]any, string) (string, bool){}
+
+	for _, option := range unpacked {
+		extractOf[option.key] = option.extract
+	}
+
+	query := `SELECT "_id", "key", "val" FROM "rdioScannerConfigs"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -793,23 +1083,71 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 
 	for rows.Next() {
 		var (
-			key   sql.NullString
-			value sql.NullString
+			configID sql.NullInt64
+			key      sql.NullString
+			value    sql.NullString
 		)
 
-		if err := rows.Scan(&key, &value); err != nil {
+		if err := rows.Scan(&configID, &key, &value); err != nil {
+			unread = true
+
 			continue
 		}
 
+		// The v6 configuration row as the table holds it. The options blob is one row that unpacks
+		// into many, so it is archived once, whole: two values the pass could not carry are still one
+		// row, and the archive holds each row once.
+		original := map[string]any{
+			"_id": v6Int(configID),
+			"key": v6Text(key),
+			"val": v6Text(value),
+		}
+
+		named, rowID := "a config row", int64(0)
+
+		if key.Valid {
+			named = fmt.Sprintf("the config row %q", key.String)
+		}
+
+		if configID.Valid {
+			rowID = configID.Int64
+		}
+
 		if !key.Valid || !value.Valid {
+			reason := "it holds no key"
+
+			if key.Valid {
+				reason = "it holds no value"
+			}
+
+			if err := arch.skip(rowID, named, reason, original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if key.String != "options" {
+			if carried, err := alreadyCarried(ctx, tx, "options", "key", key.String); err != nil {
+				tx.rollback()
+
+				return err
+			} else if carried {
+				continue
+			}
+
 			query = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
 
 			if _, err := tx.exec(ctx, query, key.String, value.String); err != nil {
 				reportFailure(progress, part, section, operation, err, query)
+
+				if err := arch.skip(rowID, named, "the database refused it", original); err != nil {
+					tx.rollback()
+
+					return err
+				}
 			}
 
 			continue
@@ -818,8 +1156,16 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 		var blob map[string]any
 
 		if err := json.Unmarshal([]byte(value.String), &blob); err != nil {
+			if err := arch.skip(rowID, named, "it could not be read", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
+
+		refused := false
 
 		for _, option := range unpacked {
 			stored, ok := option.extract(blob, option.key)
@@ -827,18 +1173,76 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 				continue
 			}
 
+			if carried, err := alreadyCarried(ctx, tx, "options", "key", option.key); err != nil {
+				tx.rollback()
+
+				return err
+			} else if carried {
+				continue
+			}
+
 			query = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
 
 			if _, err := tx.exec(ctx, query, option.key, stored); err != nil {
 				reportFailure(progress, part, section, operation, err, query)
+
+				refused = true
 			}
+		}
+
+		// Which values of the blob the pass could not carry, named in the order the blob's names
+		// sort, so that the same deployment says the same sentence at every start.
+		cannot := []string{}
+
+		names := make([]string, 0, len(blob))
+
+		for name := range blob {
+			names = append(names, name)
+		}
+
+		sort.Strings(names)
+
+		for _, name := range names {
+			extract, ok := extractOf[name]
+			if !ok {
+				cannot = append(cannot, fmt.Sprintf("%q (v8 has no option of that name)", name))
+
+				continue
+			}
+
+			if _, ok := extract(blob, name); !ok {
+				cannot = append(cannot, fmt.Sprintf("%q (the value has the wrong shape)", name))
+			}
+		}
+
+		reason := ""
+
+		if len(cannot) > 0 {
+			reason = "it holds values this server cannot carry: " + strings.Join(cannot, ", ")
+		}
+
+		if refused {
+			if reason != "" {
+				reason += ", and the database refused another value of it"
+			} else {
+				reason = "the database refused it"
+			}
+		}
+
+		if reason == "" {
+			continue
+		}
+
+		if err := arch.skip(rowID, named, reason, original); err != nil {
+			tx.rollback()
+
+			return err
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerConfigs"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerConfigs", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -872,8 +1276,9 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 // migrateLogs mirrors `migrateLogs` in `server/migrations.go`.
 //
 // The v6 log timestamp is a datetime; the v7 one is Unix milliseconds, which is what every
-// timestamp in this schema is. A row with no timestamp, no level, or no message is skipped
-// silently, as the legacy migration skips it.
+// timestamp in this schema is. A row with no timestamp, no level, or no message is not carried — and
+// since FEAT-011 it is archived with the reason and the reason is said, where the legacy migration
+// skipped it silently.
 //
 // The rows it carries are filed afterwards. They were written by a server that had no source column, and
 // the step that files the rows a database already has ran before this one inserted them, so without this
@@ -892,7 +1297,11 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerLogs", "log", "logs")
+
 	query := `SELECT "_id", "dateTime", "level", "message" FROM "rdioScannerLogs"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -909,22 +1318,65 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&logID, &dateTime, &level, &message); err != nil {
+			unread = true
+
 			continue
+		}
+
+		original := map[string]any{
+			"_id":      v6Int32(logID),
+			"dateTime": v6Time(dateTime),
+			"level":    v6Text(level),
+			"message":  v6Text(message),
 		}
 
 		if !logID.Valid {
+			if err := arch.skip(0, "a log row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
+		named := fmt.Sprintf("log %d", logID.Int32)
+
 		if !dateTime.Valid {
+			if err := arch.skip(int64(logID.Int32), named, "it holds no timestamp", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !level.Valid || len(level.String) == 0 {
+			if err := arch.skip(int64(logID.Int32), named, "it holds no level", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !message.Valid || len(message.String) == 0 {
+			if err := arch.skip(int64(logID.Int32), named, "it holds no message", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
+			continue
+		}
+
+		if carried, err := alreadyCarried(ctx, tx, "logs", "logId", int64(logID.Int32)); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
 			continue
 		}
 
@@ -932,13 +1384,18 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 
 		if _, err := tx.exec(ctx, query, int64(logID.Int32), level.String, message.String, dateTime.Time.UnixMilli()); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(int64(logID.Int32), named, "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerLogs"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerLogs", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -954,8 +1411,9 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 }
 
 // migrateDownstreams mirrors `migrateDownstreams` in `server/migrations.go`.
-// A downstream with no apikey, no scope, or no url is skipped silently, as the legacy migration
-// skips it: those three columns are the whole row's meaning.
+// A downstream with no apikey, no scope, or no url is not carried — and since FEAT-011 it is archived
+// with the reason and the reason is said, where the legacy migration skipped it silently: those three
+// columns are the whole row's meaning.
 func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDownstreams", "downstreams"
 
@@ -970,7 +1428,11 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerDownstreams", "downstream", "downstreams")
+
 	query := `SELECT "_id", "apiKey", "disabled", "order", "systems", "url" FROM "rdioScannerDownstreams"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -989,22 +1451,49 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&downstreamID, &apikey, &disabled, &order, &systems, &url); err != nil {
+			unread = true
+
 			continue
+		}
+
+		original := map[string]any{
+			"_id":      v6Int(downstreamID),
+			"apiKey":   v6Text(apikey),
+			"disabled": v6Bool(disabled),
+			"order":    v6Int32(order),
+			"systems":  v6Text(systems),
+			"url":      v6Text(url),
 		}
 
 		if !downstreamID.Valid {
+			if err := arch.skip(0, "a downstream row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
+
+		named := fmt.Sprintf("downstream %d", downstreamID.Int64)
+
+		reason := ""
 
 		if !apikey.Valid || len(apikey.String) == 0 {
-			continue
+			reason = "it holds no api key"
+		} else if !systems.Valid || len(systems.String) == 0 {
+			reason = "it holds no systems"
+		} else if !url.Valid || len(url.String) == 0 {
+			reason = "it holds no url"
 		}
 
-		if !systems.Valid || len(systems.String) == 0 {
-			continue
-		}
+		if reason != "" {
+			if err := arch.skip(downstreamID.Int64, named, reason, original); err != nil {
+				tx.rollback()
 
-		if !url.Valid || len(url.String) == 0 {
+				return err
+			}
+
 			continue
 		}
 
@@ -1021,17 +1510,30 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 			rank = int64(order.Int32)
 		}
 
+		if carried, err := alreadyCarried(ctx, tx, "downstreams", "downstreamId", downstreamID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "downstreams" ("downstreamId", "apikey", "disabled", "order", "systems", "url") VALUES (?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, downstreamID.Int64, apikey.String, isDisabled, rank, systems.String, url.String); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(downstreamID.Int64, named, "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerDownstreams"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerDownstreams", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -1040,6 +1542,11 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 
 	return nil
 }
+
+// v6DirwatchesTable is the name a v6 deployment's dirwatch table has in its own schema. The probe, the
+// read, the archive, and the drop all name this one string, because they used to name three different
+// spellings and only sqlite's case-insensitive table names hid that.
+const v6DirwatchesTable = "rdioScannerDirWatches"
 
 // migrateDirwatches mirrors `migrateDirwatches` in `server/migrations.go`.
 //
@@ -1055,16 +1562,20 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 // resolved at all depends on `talkgroupID`, which the dirwatch rows never scan into — see
 // `TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated`.
 //
-// The three statements that name the v6 table do not agree on its spelling. The probe and the read
-// ask for `rdioScannerDirwatches`, the drop names `RdioScannerDirWatches`, and the table v6 created
-// is `rdioScannerDirWatches`. sqlite matches table names whatever their case, so a v6 sqlite
-// deployment loses nothing; a backend that does not match them case-sensitively — MySQL on a
-// case-sensitive filesystem — fails the probe, and its v6 dirwatches are neither migrated nor
-// dropped, on that start or on any later one.
+// The three statements that name the v6 table now name it once, in the spelling v6 created it with.
+// They used not to agree: the probe and the read asked for `rdioScannerDirwatches`, the drop named
+// `RdioScannerDirWatches`, and the table a v6 deployment actually has is `rdioScannerDirWatches`. sqlite
+// matches table names whatever their case, so a v6 sqlite deployment lost nothing and the disagreement
+// stayed invisible. A backend that does not match them case-insensitively — MySQL and MariaDB on a
+// case-sensitive filesystem, which is the normal case — failed the probe, and its v6 dirwatches were
+// neither migrated nor dropped, on that start or on any later one: the one table the migration skipped
+// quietly, which is the shape FEAT-011 exists to make impossible. See
+// `TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated` and the live MariaDB proof of
+// [validation.md](../../../../docs/specs/FEAT-011-v663-migration-integrity/validation.md).
 func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerDirwatches"`); err != nil {
+	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "`+v6DirwatchesTable+`"`); err != nil {
 		return nil
 	}
 
@@ -1109,7 +1620,11 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
-	query = `SELECT "_id", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type" FROM "rdioScannerDirwatches"`
+	arch := archiving(ctx, tx, progress, v6DirwatchesTable, "dirwatch", "dirwatches")
+
+	query = `SELECT "_id", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type" FROM "` + v6DirwatchesTable + `"`
+
+	unread := false
 
 	rows, err = tx.query(ctx, query)
 	if err != nil {
@@ -1132,14 +1647,47 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&dirwatchID, &delay, &deleteAfter, &directory, &disabled, &extension, &frequency, &mask, &order, &systemRef, &talkgroupRef, &kind); err != nil {
+			unread = true
+
 			continue
 		}
 
+		// The v6 dirwatch as the pass reads it. The v6 polling column is not in the read at all — v8
+		// has no polling column, so the value has no destination here or anywhere else in this server,
+		// and an archived dirwatch is no different from a carried one in that respect.
+		original := map[string]any{
+			"_id":         v6Int(dirwatchID),
+			"delay":       v6Int32(delay),
+			"deleteAfter": v6Bool(deleteAfter),
+			"directory":   v6Text(directory),
+			"disabled":    v6Bool(disabled),
+			"extension":   v6Text(extension),
+			"frequency":   v6Int32(frequency),
+			"mask":        v6Text(mask),
+			"order":       v6Int32(order),
+			"systemId":    v6Int32(systemRef),
+			"talkgroupId": v6Int32(talkgroupRef),
+			"type":        v6Text(kind),
+		}
+
 		if !dirwatchID.Valid {
+			if err := arch.skip(0, "a dirwatch row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !directory.Valid || len(directory.String) == 0 {
+			if err := arch.skip(dirwatchID.Int64,
+				namedRow("dirwatch", dirwatchID.Int64, directory), "it holds no directory", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -1201,17 +1749,31 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 		// row was reported and lost. Parameterized, it is a NULL in a NOT NULL column, which the
 		// database rejects as a constraint failure. Same row lost, same line reported; only the
 		// database's complaint differs.
+		if carried, err := alreadyCarried(ctx, tx, "dirwatches", "dirwatchId", dirwatchID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, dirwatchID.Int64, wait, drops, directory.String, isDisabled, suffix, freq, filter, rank, refSystem, refTalkgroup, parser); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(dirwatchID.Int64,
+				namedRow("dirwatch", dirwatchID.Int64, directory), "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "RdioScannerDirWatches"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, v6DirwatchesTable, unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -1224,9 +1786,10 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 // migrateCalls mirrors `migrateCalls` in `server/migrations.go`.
 //
 // A call is migrated only when its audio, its timestamp, and both of its aggregate references
-// resolve against the tables the earlier migrations filled; anything that does not resolve is
-// skipped without a word and dropped with the v6 table. The v6 call has no site, so the migrated
-// call is stored with site reference 0, as the legacy migration stores it.
+// resolve against the tables the earlier migrations filled; anything that does not resolve used to be
+// skipped without a word and dropped with the v6 table, and since FEAT-011 is archived with its audio
+// and the reason is said. The v6 call has no site, so the migrated call is stored with site reference
+// 0, as the legacy migration stores it.
 //
 // The call's frequencies, patches, and source units are written from the JSON the v6 row holds.
 // The `frequencies` column is checked for a non-empty *string*, so a v6 call whose frequency list
@@ -1283,7 +1846,11 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerCalls", "call", "calls")
+
 	query = `SELECT "id", "audio", "audioName", "audioType", "dateTime", "frequencies", "frequency", "patches", "source", "sources", "system", "talkgroup" FROM "rdioScannerCalls"`
+
+	unread := false
 
 	rows, err = tx.query(ctx, query)
 	if err != nil {
@@ -1308,26 +1875,93 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&callID, &audio, &audioName, &audioType, &dateTime, &frequencies, &frequency, &patches, &source, &sources, &systemRef, &talkgroupRef); err != nil {
+			unread = true
+
 			continue
 		}
 
+		// The v6 call as the pass read it, audio included: the archive holds the audio base64-encoded,
+		// which is what makes a call this server could not carry recoverable afterwards.
+		original := map[string]any{
+			"audio":       v6Audio(audio),
+			"audioName":   v6Text(audioName),
+			"audioType":   v6Text(audioType),
+			"dateTime":    v6Time(dateTime),
+			"frequency":   v6Int32(frequency),
+			"frequencies": v6Text(frequencies),
+			"id":          v6Int32(callID),
+			"patches":     v6Text(patches),
+			"source":      v6Int32(source),
+			"sources":     v6Text(sources),
+			"system":      v6Int32(systemRef),
+			"talkgroup":   v6Int32(talkgroupRef),
+		}
+
+		named := ""
+
+		if callID.Valid {
+			named = fmt.Sprintf("call %d", callID.Int32)
+		}
+
 		if !callID.Valid {
+			if err := arch.skip(0, "a call row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !audio.Valid || len(audio.String) == 0 {
+			if err := arch.skip(int64(callID.Int32), named, "it holds no audio", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !dateTime.Valid {
+			if err := arch.skip(int64(callID.Int32), named, "it holds no timestamp", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !systemRef.Valid || systems[systemRef.Int32] == 0 {
+			reason := "it names no system"
+
+			if systemRef.Valid {
+				reason = fmt.Sprintf("its system %d is not in this database", systemRef.Int32)
+			}
+
+			if err := arch.skip(int64(callID.Int32), named, reason, original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
 		if !talkgroupRef.Valid || talkgroups[systemRef.Int32][talkgroupRef.Int32] == 0 {
+			reason := "it names no talkgroup"
+
+			if talkgroupRef.Valid {
+				reason = fmt.Sprintf("its talkgroup %d is not in this database", talkgroupRef.Int32)
+			}
+
+			if err := arch.skip(int64(callID.Int32), named, reason, original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -1341,10 +1975,24 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 			mime = audioType.String
 		}
 
+		if carried, err := alreadyCarried(ctx, tx, "calls", "callId", int64(callID.Int32)); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "calls" ("callId", "audio", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, ?, ?, ?, 0, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, int64(callID.Int32), []byte(audio.String), filename, mime, systems[systemRef.Int32], talkgroups[systemRef.Int32][talkgroupRef.Int32], dateTime.Time.UnixMilli()); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(int64(callID.Int32), named, "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 
 			continue
 		}
@@ -1489,10 +2137,9 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 
 	rows.Close()
 
-	query = `DROP TABLE "rdioScannerCalls"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerCalls", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -1519,7 +2166,11 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerApiKeys", "apikey", "apikeys")
+
 	query := `SELECT "_id", "disabled", "ident", "key", "order", "systems" FROM "rdioScannerApiKeys"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -1538,10 +2189,27 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&apikeyID, &disabled, &ident, &key, &order, &systems); err != nil {
+			unread = true
+
 			continue
 		}
 
+		original := map[string]any{
+			"_id":      v6Int(apikeyID),
+			"disabled": v6Bool(disabled),
+			"ident":    v6Text(ident),
+			"key":      v6Text(key),
+			"order":    v6Int32(order),
+			"systems":  v6Text(systems),
+		}
+
 		if !apikeyID.Valid {
+			if err := arch.skip(0, "an api key row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -1573,17 +2241,31 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 			scope = systems.String
 		}
 
+		if carried, err := alreadyCarried(ctx, tx, "apikeys", "apikeyId", apikeyID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, apikeyID.Int64, isDisabled, name, value, rank, scope); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(apikeyID.Int64,
+				namedRow("apikey", apikeyID.Int64, ident), "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerApiKeys"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerApiKeys", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
@@ -1612,7 +2294,11 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 		return operationError(section, operation, err)
 	}
 
+	arch := archiving(ctx, tx, progress, "rdioScannerAccesses", "access", "accesses")
+
 	query := `SELECT "_id", "code", "expiration", "ident", "limit", "order", "systems" FROM "rdioScannerAccesses"`
+
+	unread := false
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
@@ -1632,14 +2318,40 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&accessID, &code, &expiration, &ident, &limit, &order, &systems); err != nil {
+			unread = true
+
 			continue
+		}
+
+		original := map[string]any{
+			"_id":        v6Int(accessID),
+			"code":       v6Text(code),
+			"expiration": v6Time(expiration),
+			"ident":      v6Text(ident),
+			"limit":      v6Int32(limit),
+			"order":      v6Int32(order),
+			"systems":    v6Text(systems),
 		}
 
 		if !accessID.Valid {
+			if err := arch.skip(0, "an access row", "it holds no identity", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
+		named := fmt.Sprintf("access %d", accessID.Int64)
+
 		if !code.Valid || len(code.String) == 0 {
+			if err := arch.skip(accessID.Int64, named, "it holds no code", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
+
 			continue
 		}
 
@@ -1671,17 +2383,30 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 			scope = systems.String
 		}
 
+		if carried, err := alreadyCarried(ctx, tx, "accesses", "accessId", accessID.Int64); err != nil {
+			tx.rollback()
+
+			return err
+		} else if carried {
+			continue
+		}
+
 		query = `INSERT INTO "accesses" ("accessId", "code", "expiration", "ident", "limit", "order", "systems") VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 		if _, err := tx.exec(ctx, query, accessID.Int64, code.String, expires, name, max, rank, scope); err != nil {
 			reportFailure(progress, part, section, operation, err, query)
+
+			if err := arch.skip(accessID.Int64, named, "the database refused it", original); err != nil {
+				tx.rollback()
+
+				return err
+			}
 		}
 	}
 
-	query = `DROP TABLE "rdioScannerAccesses"`
-	if _, err := tx.exec(ctx, query); err != nil {
-		reportFailure(progress, part, section, operation, err, query)
-	}
+	arch.report()
+
+	dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerAccesses", unread || rows.Err() != nil)
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()

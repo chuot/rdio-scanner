@@ -110,7 +110,7 @@ func run(path string, rows, runs int) error {
 		return err
 	}
 
-	if err := persistence.Migrate(ctx, db, persistence.DialectSqlite, func(_, _ string) {}); err != nil {
+	if err := persistence.Migrate(ctx, db, persistence.DialectSqlite, nil, func(_, _ string) {}); err != nil {
 		return err
 	}
 

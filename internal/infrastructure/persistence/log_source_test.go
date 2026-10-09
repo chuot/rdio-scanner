@@ -44,7 +44,7 @@ func TestMigrateAddsTheLogSourceColumnToADatabaseThatAlreadyHasTheTable(t *testi
 
 	before := countRows(t, db, "logs")
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate over a database written by the legacy server: %v", err)
 	}
 
@@ -71,14 +71,14 @@ func TestMigrateAddsTheLogSourceColumnToADatabaseThatAlreadyHasTheTable(t *testi
 func TestMigrateAddingTheLogSourceColumnTwiceIsTheSameAsOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
 	once := readSchemaObjects(t, db)
 	onceRows := readLogRows(t, db)
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate a second time: %v", err)
 	}
 
@@ -152,7 +152,7 @@ func TestEnsureLogSourceColumnOnAnEmptyLogsTable(t *testing.T) {
 func TestEnsureLogSourceColumnEnsuresTheIndexesOnADatabaseThatAlreadyHasTheColumn(t *testing.T) {
 	db := openLegacyDatabase(t)
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
@@ -418,7 +418,7 @@ func TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix(t *testing.T) {
 func TestBackfillLogSourcesFilesTheLegacyFixtureOwnRows(t *testing.T) {
 	db := openLegacyDatabase(t)
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
@@ -544,7 +544,7 @@ func openMigratedLegacyDatabase(t *testing.T, tables ...string) *sql.DB {
 
 	db := openLegacyDatabaseWithout(t, tables...)
 
-	if err := Migrate(context.Background(), db, DialectSqlite, nil); err != nil {
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 

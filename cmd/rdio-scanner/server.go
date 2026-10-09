@@ -178,6 +178,10 @@ func newServer(config *Config, out io.Writer, as *daemon) (*server, error) {
 
 	srv.db = db
 
+	// The clock is created before the migration because the migration stamps the rows it archives with
+	// the server's clock, the way every writer this server owns stamps its entries.
+	srv.clock = clock.NewClock()
+
 	// The migration and the seed are the legacy server's NewDatabase: the schema first, then the groups
 	// and tags a deployment that has never been started is expected to have. Both do nothing on a
 	// database that already has them, which is what makes an upgrade in place the ordinary case.
@@ -188,7 +192,7 @@ func newServer(config *Config, out io.Writer, as *daemon) (*server, error) {
 	// wire writes them once there is a log repository to write them through.
 	migrationLines := []domain.LogEntry{}
 
-	if err := persistence.Migrate(ctx, db, dialect, func(level, message string) {
+	if err := persistence.Migrate(ctx, db, dialect, srv.clock, func(level, message string) {
 		// Said out loud in the same shape every other line the server says has, so that the word an
 		// operator greps for finds this line too. It is not the echo of an entry — there is no entry yet —
 		// which is why the level and the subsystem are put on it here.
@@ -248,7 +252,8 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 		Tags:        tags,
 	}
 
-	s.clock = clock.NewClock()
+	// s.clock was created in newServer, before the migration, because the migration stamps the rows it
+	// archives with the server's clock.
 	s.scheduler = clock.NewScheduler()
 
 	credentials := passwords.NewBcrypt()

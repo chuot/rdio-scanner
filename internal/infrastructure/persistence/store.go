@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 )
 
@@ -38,6 +39,11 @@ import (
 type store struct {
 	db      *sql.DB
 	dialect Dialect
+
+	// clock is the server's clock, set by the migration pass for the rows it archives. Every other
+	// adapter leaves it nil: they store the instants their callers hand them, and only the migration
+	// stamps anything itself.
+	clock ports.Clock
 }
 
 func newStore(db *sql.DB, dialect Dialect) store {

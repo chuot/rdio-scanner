@@ -27,6 +27,28 @@
 #     the migration had already migrated under a reference it threw away;
 #   - the rdioScannerMeta bookkeeping table the meta migration drops.
 #
+# Since FEAT-011 the rows also hold every shape the migration pass reads and cannot carry, so that
+# the integrity audit and the live-backend runs read them too. Each is named in the shape map of
+# docs/specs/FEAT-011-v663-migration-integrity/research.md:
+#
+#   - talkgroup 207 and unit 304 name system 10009, which this database does not have;
+#   - call 710 has no audio;
+#   - log 405 has no message;
+#   - downstream 503 has no url;
+#   - access 904 has no code.
+#
+# Three shapes in the map have no row here, because a v6 table cannot hold them:
+#
+#   - every v6 table declares `_id` (or `id`, for calls) its primary key, so no row can arrive with a
+#     null identity;
+#   - `rdioScannerCalls.dateTime` is `not null`, so no call can arrive without a timestamp — and text
+#     in that column is not a call without a timestamp, it is a call the pass cannot read at all, which
+#     is what testdata/legacyv6partial holds;
+#   - `rdioScannerConfigs.key` is `not null unique`, so a deployment has exactly one options row: an
+#     options blob that will not unmarshal, or one whose value has the wrong JSON shape, is not a row
+#     shape but the state of the deployment's only options row, and it is arranged in the tests that
+#     prove it rather than baked into a fixture every other test reads.
+#
 # The last of those calls is what the legacy server cannot survive: its source unit reaches the
 # branch of migrateCalls() that reports the unit insert from the branch that only runs when the
 # insert succeeded, with the error it just tested for being nil, and the legacy error formatter
@@ -135,12 +157,20 @@ db.executemany(
         (201, 1514000000, 3, 1514000, "Dispatch 1", None, "Dispatch 1", 1, 10001, 1),
         (202, 1514001000, 7, 1514001, "Interop 9", "blue", "Interop 9", 2, 10001, 4),
         (203, 1514002000, 0, 1514002, "Un grouped", None, "Un grouped", 3, 10002, 6),
+        # A talkgroup of a system this database does not have: the row the legacy migration dropped
+        # without a word.
+        (207, 1514007000, 3, 1514007, "Orphaned", None, "Orphaned", 4, 10009, 1),
     ],
 )
 
 db.executemany(
     'insert into `rdioScannerUnits` (`_id`, `id`, `label`, `order`, `systemId`) values (?, ?, ?, ?, ?)',
-    [(301, 12345, "Engine 12", 1, 10001), (302, 6789, "Car 4", 2, 10001)],
+    [
+        (301, 12345, "Engine 12", 1, 10001),
+        (302, 6789, "Car 4", 2, 10001),
+        # A unit of the same system that is not in this database.
+        (304, 55555, "Orphan Engine", 3, 10009),
+    ],
 )
 
 db.executemany(
@@ -157,12 +187,18 @@ db.executemany(
     [
         (401, stamp % (12, 0), "info", "server started"),
         (402, stamp % (12, 5), "warn", "unit O'Brien keyed"),
+        # A log row with no message: the v8 log table has nothing to show for it.
+        (405, stamp % (12, 15), "info", ""),
     ],
 )
 
-db.execute(
+db.executemany(
     "insert into `rdioScannerDownstreams` (`_id`, `apiKey`, `disabled`, `order`, `systems`, `url`) values (?, ?, ?, ?, ?, ?)",
-    (501, "relay-api-key", 1, 1, "[10001]", "http://127.0.0.1:8080/patch"),
+    [
+        (501, "relay-api-key", 1, 1, "[10001]", "http://127.0.0.1:8080/patch"),
+        # A downstream with no url to post to.
+        (503, "relay-api-key-2", 0, 2, "[10002]", ""),
+    ],
 )
 
 # `systemId` and `talkgroupId` are v6 references, and both columns are nullable.
@@ -262,6 +298,22 @@ db.executemany(
             10001,
             1514000,
         ),
+        (
+            # A call whose upload left no audio behind: the column is `not null`, and a v6 deployment
+            # keeps the row with nothing in it.
+            710,
+            b"",
+            "710.wav",
+            "audio/wav",
+            stamp % (12, 55),
+            '[{"errorCount":0,"freq":1514000000,"pos":0,"spikeCount":0}]',
+            1514000000,
+            "[1514001]",
+            12345,
+            '[{"pos":1.5,"src":12345}]',
+            10001,
+            1514000,
+        ),
     ],
 )
 
@@ -278,6 +330,8 @@ db.executemany(
     [
         (901, "ABC123", stamp % (13, 0), "ops", 10, 1, "[10001]"),
         (902, "XYZ789", None, "guest", 0, 2, "[10002]"),
+        # An access code that is the empty string: a listener could reach the server with nothing.
+        (904, "", stamp % (13, 10), "no code", 0, 3, "[10001]"),
     ],
 )
 
