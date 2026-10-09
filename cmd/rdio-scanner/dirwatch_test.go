@@ -158,7 +158,7 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	}
 
 	for _, name := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
-		compareCanonical(t, "the "+name+" the server left behind", golden[name], endToEndRows(t, srv.db, name))
+		compareCanonical(t, "the "+name+" the server left behind", golden[name], endToEndRows(t, srv, name))
 	}
 
 	assertEveryServerLogEntry(t, srv.db)
@@ -344,8 +344,14 @@ func withoutRecording(call map[string]any) map[string]any {
 }
 
 // endToEndRows reads back one of the tables the run is expected to have left behind.
-func endToEndRows(t *testing.T, db *sql.DB, table string) []map[string]any {
+//
+// The log view's entries name the directories the server is watching, and those live under the temporary
+// folder the test built the server in. They are rewritten to <base> here and in the capture, because the
+// capture is of what the run did and not of which folder this test happened to use.
+func endToEndRows(t *testing.T, srv *server, table string) []map[string]any {
 	t.Helper()
+
+	db := srv.db
 
 	queries := map[string]string{
 		"calls": `SELECT "callId", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp", length("audio") AS "audioBytes" FROM "calls" ORDER BY "callId"`,
@@ -398,6 +404,12 @@ func endToEndRows(t *testing.T, db *sql.DB, table string) []map[string]any {
 			}
 
 			row[column] = values[i]
+		}
+
+		if table == "logs" {
+			if message, ok := row["message"].(string); ok {
+				row["message"] = strings.ReplaceAll(message, srv.config.BaseDir, "<base>")
+			}
 		}
 
 		found = append(found, row)

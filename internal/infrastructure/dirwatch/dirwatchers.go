@@ -146,6 +146,16 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 			continue
 		}
 
+		// Said only for a directory that is there. A watch pointing at one that is not watches nothing, and
+		// the pass over it already says so in a line that names the directory; claiming the server is
+		// watching a directory it cannot read is a line an operator has to learn to distrust.
+		//
+		// It is said here, at the start, because this is the only place that knows the whole set the server
+		// decided to watch. A recording that never becomes a call starts here.
+		if isDirectory(dirwatch.Directory) {
+			watchers.log(ctx, domain.LogLevelInfo, fmt.Sprintf("the server is watching %s", dirwatch.Directory))
+		}
+
 		watchers.mutex.Lock()
 		watchers.running = append(watchers.running, w)
 		watchers.mutex.Unlock()

@@ -216,6 +216,26 @@ func (watched *watchedDirectory) logLines() []string {
 	return lines
 }
 
+// reportedAfterStarting is what the watching said once it was running.
+//
+// The entry naming the directory the server started watching is written by the start itself, and it is there
+// whether or not anything goes wrong. The tests that insist a particular problem cost exactly one line use
+// this, so that the line they are counting is the one they are talking about — and the start entry is pinned
+// by its own test rather than being quietly filtered out of the suite.
+func (watched *watchedDirectory) reportedAfterStarting() []string {
+	lines := []string{}
+
+	for _, entry := range watched.logs.Recorded() {
+		if strings.HasPrefix(entry.Message, "the server is watching ") {
+			continue
+		}
+
+		lines = append(lines, entry.Level+": "+entry.Message)
+	}
+
+	return lines
+}
+
 // loggedAs reports whether the watch wrote an entry naming that part of the server and saying the
 // fragment. The source is part of the assertion: a watcher that reports what went wrong and is filed
 // under nothing is the state this feature exists to remove.
@@ -343,7 +363,7 @@ func TestARecordingThatDisappearsBeforeItIsReadIsNotIngested(t *testing.T) {
 
 	watched.calls.nothingArrivesWithin(t, liveWait)
 
-	if lines := watched.logLines(); len(lines) != 0 {
+	if lines := watched.reportedAfterStarting(); len(lines) != 0 {
 		t.Errorf("the watch reported %v, want a recording that moved elsewhere to cost nothing", lines)
 	}
 }
@@ -515,7 +535,7 @@ func TestARecordingTheWatchCannotReadIsReportedToTheAdministratorLog(t *testing.
 
 	watched.calls.nothingArrivesWithin(t, settleWait)
 
-	lines := watched.logLines()
+	lines := watched.reportedAfterStarting()
 
 	if len(lines) != 1 {
 		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying what it could not read", lines)
@@ -555,7 +575,7 @@ func TestARecordingTheIngestPathRefusesStillCostsTheRecording(t *testing.T) {
 		t.Errorf("the recording a refused ingest path was handed is still there (%v), want it deleted as the legacy deletes it", err)
 	}
 
-	if lines := watched.logLines(); len(lines) != 0 {
+	if lines := watched.reportedAfterStarting(); len(lines) != 0 {
 		t.Errorf("the watch wrote %v to the administrator's log, want the ingest path's own report and no second copy of it", lines)
 	}
 }
@@ -641,6 +661,12 @@ func TestAWatchedDirectoryThatIsNotThereIsReportedAndWatchesNothing(t *testing.T
 	if !watched.loggedAs(domain.LogSourceDirwatch, "could not be read") {
 		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
 	}
+
+	// And not a line saying the server is watching it. A watch pointing at a directory that is not there
+	// watches nothing, and the one line that is written already says so.
+	if watched.loggedAs(domain.LogSourceDirwatch, "the server is watching") {
+		t.Errorf("the watch wrote %v, want no claim to be watching a directory that is not there", lines)
+	}
 }
 
 // TestADirectoryThatAppearsButCannotBeWatchedIsReportedAndTheWatchCarriesOn is the site where a
@@ -666,7 +692,7 @@ func TestADirectoryThatAppearsButCannotBeWatchedIsReportedAndTheWatchCarriesOn(t
 
 	time.Sleep(500 * time.Millisecond)
 
-	lines := watched.logLines()
+	lines := watched.reportedAfterStarting()
 
 	if len(lines) != 1 {
 		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the directory could not be watched", lines)
@@ -709,7 +735,7 @@ func TestAPanicInTheFirstPassOverAWatchedDirectoryIsReportedNamesTheDirectory(t 
 
 	watched.calls.nothingArrivesWithin(t, settleWait)
 
-	lines := watched.logLines()
+	lines := watched.reportedAfterStarting()
 
 	if len(lines) != 1 {
 		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the startup pass was not completed", lines)
@@ -744,6 +770,44 @@ func TestStoppingTheWatchersEndsTheWatching(t *testing.T) {
 
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("the recording a stopped watch left behind is gone (%v), want it untouched", err)
+	}
+}
+
+// TestAWatchThatStartedNamesTheDirectoryItIsWatching is the fact an operator otherwise has to guess: the
+// server took a directory watch, and which directory it is now reading is not written down anywhere they can
+// read. A recording that never becomes a call starts here.
+func TestAWatchThatStartedNamesTheDirectoryItIsWatching(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	watched := watchingOver(t, directory, nil)
+
+	lines := watched.logLines()
+
+	if len(lines) != 1 {
+		t.Fatalf("the watch wrote %v to the administrator's log, want one line naming the directory it is "+
+			"watching", lines)
+	}
+
+	const want = "info: the server is watching "
+
+	if !strings.HasPrefix(lines[0], want) {
+		t.Errorf("the watch wrote %q, want it to name the directory it started watching", lines[0])
+	}
+
+	if !strings.Contains(lines[0], directory) {
+		t.Errorf("the watch wrote %q, want the line to name %s", lines[0], directory)
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "the server is watching "+directory) {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
+	}
+
+	stamped := watched.logs.Recorded()[0]
+
+	if got := stamped.DateTime; !got.Equal(recordedAt) {
+		t.Errorf("the entry is stamped %v, want the instant the server's clock holds", got)
 	}
 }
 
@@ -808,9 +872,11 @@ func TestADisabledWatchOrAWatchWithNoDirectoryWatchesNothing(t *testing.T) {
 	nowhere := domain.NewDirwatch()
 	nowhere.Directory = ""
 
+	logs := &fakes.Logs{}
+
 	watchers := NewDirwatchers(
 		parsers.New(&fakes.Systems{Stored: recordedSystems()}, fakes.NewClock(recordedAt)),
-		&fakes.Logs{},
+		logs,
 		newIngestRecorder(),
 		fakes.NewClock(recordedAt),
 	)
@@ -819,6 +885,12 @@ func TestADisabledWatchOrAWatchWithNoDirectoryWatchesNothing(t *testing.T) {
 
 	if running := watchers.running; len(running) != 0 {
 		t.Errorf("%d watchers were started for a disabled watch and a watch with no directory, want none", len(running))
+	}
+
+	// Nothing was watched, so nothing is claimed. An entry naming a directory the server is not reading is
+	// the kind of line an operator has to learn to distrust.
+	if wrote := logs.Recorded(); len(wrote) != 0 {
+		t.Errorf("the watchers wrote %v to the log for two watches that watch nothing, want nothing", wrote)
 	}
 }
 

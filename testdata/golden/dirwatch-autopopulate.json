@@ -48,6 +48,14 @@
     },
     {
       "level": "info",
+      "message": "the server is watching <base>/watch/dsd"
+    },
+    {
+      "level": "info",
+      "message": "the server is watching <base>/watch/trunk"
+    },
+    {
+      "level": "info",
       "message": "the recording first.wav created the system \"Grand Metro\" (system 1)"
     },
     {

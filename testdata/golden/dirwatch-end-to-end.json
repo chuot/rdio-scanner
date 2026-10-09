@@ -78,6 +78,14 @@
     },
     {
       "level": "info",
+      "message": "the server is watching <base>/watch/dsd"
+    },
+    {
+      "level": "info",
+      "message": "the server is watching <base>/watch/trunk"
+    },
+    {
+      "level": "info",
       "message": "a listener joined from 127.0.0.1"
     },
     {

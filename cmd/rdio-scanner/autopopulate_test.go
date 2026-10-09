@@ -94,7 +94,7 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 	}
 
 	for _, name := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
-		compareCanonical(t, "the "+name+" the server created", golden[name], endToEndRows(t, srv.db, name))
+		compareCanonical(t, "the "+name+" the server created", golden[name], endToEndRows(t, srv, name))
 	}
 
 	assertEveryServerLogEntry(t, srv.db)
