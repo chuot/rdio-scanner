@@ -50,9 +50,9 @@ import (
 	"rdio-scanner/internal/infrastructure/tokens"
 	adminbackend "rdio-scanner/internal/presentation/admin/backend"
 	"rdio-scanner/internal/presentation/common/upload"
+	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
 	"rdio-scanner/internal/presentation/serving/admin"
 	"rdio-scanner/internal/presentation/serving/scanner"
-	"rdio-scanner/internal/presentation/ws"
 )
 
 // everyInterface is the address the server binds when the configuration names an address with nothing in
@@ -127,7 +127,7 @@ type server struct {
 	// report it owes about how many of the first kind there are. Shutting an address down does not wait for
 	// a connection the server has handed over, so stopping the server has to end these itself — and end them
 	// while the log their departures are written into can still be written to.
-	listeners      *ws.Hub
+	listeners      *scannerbackend.Hub
 	adminSessions  *adminbackend.Sessions
 	listenerCounts *application.ListenerCountDebouncer
 
@@ -332,7 +332,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 
 	changes := &listenerChanges{}
 
-	hub := ws.NewHub(s.settings, changes, s.logs, s.clock)
+	hub := scannerbackend.NewHub(s.settings, changes, s.logs, s.clock)
 
 	debouncer := application.NewListenerCountDebouncer(hub, s.logs, options, s.scheduler, s.clock)
 
@@ -411,7 +411,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 		Clock:  s.clock,
 	})
 
-	listener := ws.NewHandler(ws.Deps{
+	listener := scannerbackend.NewHandler(scannerbackend.Deps{
 		Access:   application.NewAuthenticateAccessHandler(accesses, systems, groups, tags, options, s.logs, hub, s.clock),
 		Call:     application.NewGetCallQueryHandler(calls),
 		Clock:    s.clock,

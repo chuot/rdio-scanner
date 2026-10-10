@@ -18,11 +18,15 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package ws implements the listener WebSocket interface: the catch-all upgrade on
-// the page URL, the JSON-array frame [command, payload?, flag?], the command
-// constants exchanged with the web and native clients, the client hub, and the
-// per-client livefeed matrix.
+// Package backend is the listener application's own surface: the WebSocket connection the web
+// app and the native Rdio Scanner applications hold open, the JSON-array frame they exchange,
+// the command constants of that protocol, and the hub that keeps the server's listener
+// connections.
 //
-// The wire format is frozen by docs/specs/FEAT-002-vanilla-client-ng/contract-server-protocol.md
-// and is consumed by the native Rdio Scanner applications; it must not change.
-package ws
+// The wire format is frozen: it is what the native applications speak, and it must not change.
+// The commands the protocol has are the ones the protocol-completeness guard in message_test.go
+// enumerates, and each one is compared against a capture taken from the legacy server.
+//
+// The administrator configuration socket is not here. It has no commands, no live feed, no
+// history, and no access codes; it lives in admin/backend.
+package backend

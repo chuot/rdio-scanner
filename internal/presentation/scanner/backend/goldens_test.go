@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package ws
+package backend
 
 import (
 	"bytes"
@@ -39,7 +39,7 @@ import (
 // docs/specs/FEAT-003-server-ng-refactor/decision-parity-verification.md is why they are the yardstick
 // rather than a reading of the legacy source.
 
-const goldenDir = "../../../testdata/golden"
+const goldenDir = "../../../../testdata/golden"
 
 // TestEveryGoldenCaptureIsThere is the completeness half: the files the payload tests read are
 // named here, so a capture that stopped early fails here rather than leaving a payload test with
@@ -267,7 +267,7 @@ func TestGoldenCapturesNameTheOnesWhoseShapeThisServerSuperseded(t *testing.T) {
 
 		// A capture citing a specification that is no longer there is a capture whose shape nobody owns.
 		for _, document := range []string{superseded.Contract, superseded.DecidedBy} {
-			if _, err := os.Stat(filepath.Join("..", "..", "..", document)); err != nil {
+			if _, err := os.Stat(filepath.Join("..", "..", "..", "..", document)); err != nil {
 				t.Errorf("%s says %s superseded it, and that file is not in the repository: %v", name, document, err)
 			}
 		}

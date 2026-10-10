@@ -35,7 +35,7 @@ import (
 	"rdio-scanner/internal/infrastructure/dirwatch"
 	"rdio-scanner/internal/infrastructure/tokens"
 	"rdio-scanner/internal/presentation/common/upgrade"
-	"rdio-scanner/internal/presentation/ws"
+	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
 )
 
 // pruneInterval is how often the server applies its retention, which is the legacy server's hourly
@@ -147,9 +147,9 @@ type listenerSettings struct {
 	options  ports.OptionsRepository
 }
 
-var _ ws.ServerSettings = (*listenerSettings)(nil)
+var _ scannerbackend.ServerSettings = (*listenerSettings)(nil)
 
-func (settings *listenerSettings) Settings() ws.Settings {
+func (settings *listenerSettings) Settings() scannerbackend.Settings {
 	ctx := context.Background()
 
 	options, err := settings.options.ReadOptions(ctx)
@@ -174,8 +174,8 @@ func (settings *listenerSettings) Settings() ws.Settings {
 	return settingsOf(options, accesses.Restricted())
 }
 
-func settingsOf(options domain.Options, restricted bool) ws.Settings {
-	return ws.Settings{
+func settingsOf(options domain.Options, restricted bool) scannerbackend.Settings {
+	return scannerbackend.Settings{
 		Branding:   options.Branding,
 		Email:      options.Email,
 		MaxClients: options.MaxClients,
@@ -234,7 +234,7 @@ type listenerChanges struct {
 	debouncer *application.ListenerCountDebouncer
 }
 
-var _ ws.ListenerChanges = (*listenerChanges)(nil)
+var _ scannerbackend.ListenerChanges = (*listenerChanges)(nil)
 
 func (changes *listenerChanges) ListenerChanged() {
 	if changes.debouncer == nil {
