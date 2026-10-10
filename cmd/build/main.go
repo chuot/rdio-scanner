@@ -119,6 +119,12 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 	}
 
+	// The release matrix builds the applications once, because the bundles are the same for every
+	// target, and then each target's ffmpeg before the server that embeds it.
+	if o.sub == subDist {
+		return t.runDist(o, version, stdout)
+	}
+
 	// The ffmpeg is produced before the server is compiled, because the server embeds it: a server built
 	// before the ffmpeg its target carries exists is a server that quietly ships without one.
 	if o.buildsFFmpeg() {
@@ -132,6 +138,48 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 		if err := t.execute(s); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	}
+
+	return 0
+}
+
+// runDist builds the release for the targets the run was asked for: the whole matrix, or the one the
+// operator named. Each target's ffmpeg is produced before the server that embeds it, for the same
+// reason a single run produces its ffmpeg first.
+//
+// A target whose ffmpeg fails ends the run and names the target it stopped at. A half matrix is not a
+// release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
+// to embed.
+func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
+	// The target the operator named is kept apart from the target each iteration is building for. A
+	// loop that wrote the target it is building into the target the run was asked for would skip every
+	// target after the first.
+	requested := o.target
+
+	for _, tr := range releaseTargets {
+		if requested != "" && requested != tr.targetWord() {
+			continue
+		}
+
+		o.target = tr.targetWord()
+
+		// The matrix writes one binary per target, so the default path is decided again for each one. A
+		// path the operator named is not overwritten.
+		if !o.outputNamed {
+			o.output = defaultOutputPath(o.target)
+		}
+
+		if err := t.ffmpeg(o, stdout); err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
+		}
+
+		s := serverStep(o, t.repo, version)
+
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", s.label, o.target, err))
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)

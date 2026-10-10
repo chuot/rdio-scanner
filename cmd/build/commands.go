@@ -59,10 +59,15 @@ type options struct {
 	// installClients is decided by the tool looking at the tree, not by the operator: a first run
 	// on a fresh clone has no esbuild to build with.
 	installClients bool
+
+	// outputNamed says the operator said where the server binary goes. A release run writes one binary
+	// per target, so the default path is decided again for each target, and a path the operator named
+	// is not overwritten by the matrix.
+	outputNamed bool
 }
 
 func (o options) buildsClients() bool {
-	return o.sub == "" || o.sub == subClient || o.sub == subScanner || o.sub == subAdmin
+	return o.sub == "" || o.sub == subClient || o.sub == subScanner || o.sub == subAdmin || o.sub == subDist
 }
 
 func (o options) buildsFFmpeg() bool {
@@ -93,7 +98,6 @@ func defaultOutputPath(target string) string {
 // target it is building for, and a target named after `-o` still decides it.
 func parseArgs(args []string) (options, error) {
 	o := options{}
-	namedOutput := false
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -120,7 +124,7 @@ func parseArgs(args []string) (options, error) {
 			i++
 
 			o.output = args[i]
-			namedOutput = true
+			o.outputNamed = true
 
 		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist:
 			if o.sub != "" {
@@ -153,7 +157,7 @@ func parseArgs(args []string) (options, error) {
 		}
 	}
 
-	if !namedOutput {
+	if !o.outputNamed {
 		o.output = defaultOutputPath(o.target)
 	}
 
@@ -229,7 +233,10 @@ func plan(o options, repo string, version buildinfo.Version, npmName string) []s
 		}
 
 		for _, app := range []string{subScanner, subAdmin} {
-			if o.sub != "" && o.sub != subClient && o.sub != app {
+			// A run that named one application builds that application. A run that named the whole
+			// pipeline, both applications, or the release matrix builds both: the bundles are the same
+			// for every target, so the matrix builds them once.
+			if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != app {
 				continue
 			}
 

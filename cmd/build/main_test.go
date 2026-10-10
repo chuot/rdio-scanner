@@ -219,3 +219,98 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 		}
 	}
 }
+
+// A release run builds the applications once, because the bundles are the same for every target, and
+// then each target's ffmpeg before the server that embeds it. The order is the same reason a single run
+// has it: a server built before the ffmpeg its target carries exists is a server that ships without one.
+func TestADistRunBuildsTheApplicationsOnceAndThenEachTarget(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"dist"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{"scanner " + appBundle[subScanner], "admin " + appBundle[subAdmin]}
+	for _, tr := range releaseTargets {
+		want = append(want, "ffmpeg "+tr.targetWord(), "server "+defaultOutputPath(tr.targetWord()))
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the release run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
+
+// A release run asked for one target builds that target and nothing else.
+func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"dist", "linux-arm64"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-arm64",
+		"server " + defaultOutputPath("linux-arm64"),
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the release run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
+
+// A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
+// after it are not built: a half matrix is not a release, and a run that carried on would leave an
+// archive directory with a server in it and no ffmpeg to embed.
+func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	tl.ffmpeg = func(o options, stdout io.Writer) error {
+		if o.target == "linux-arm" {
+			return errors.New("the ffmpeg for linux-arm said no")
+		}
+
+		*ran = append(*ran, step{label: subFFmpeg, result: o.target})
+
+		return nil
+	}
+
+	if code := tl.run([]string{"dist"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if !strings.Contains(out.String(), "linux-arm") {
+		t.Errorf("the run's output %q does not name the target it stopped at", out.String())
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg freebsd-amd64",
+		"server " + defaultOutputPath("freebsd-amd64"),
+		"ffmpeg linux-386",
+		"server " + defaultOutputPath("linux-386"),
+		"ffmpeg linux-amd64",
+		"server " + defaultOutputPath("linux-amd64"),
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
