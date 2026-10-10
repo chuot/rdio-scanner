@@ -40,10 +40,10 @@ const (
 	subVersion = "version"
 )
 
-// clientsDir is where the two applications live and where their dependencies are installed. Each
+// presentationDir is where the two applications live and where their dependencies are installed. Each
 // application writes into the bundle directory of the Go package that embeds it, so the build has
 // nowhere to send an output directory.
-const clientsDir = "internal/presentation/clients"
+const presentationDir = "internal/presentation"
 
 // options is what the command line asked for, once it is known to be a command line this tool
 // honours.
@@ -181,8 +181,8 @@ type step struct {
 // nowhere to send an output directory because the destination is a fact about where the application
 // lives.
 var appBundle = map[string]string{
-	subScanner: "internal/presentation/serving/scanner/bundle",
-	subAdmin:   "internal/presentation/serving/admin/bundle",
+	subScanner: "internal/presentation/scanner/frontend/bundle",
+	subAdmin:   "internal/presentation/admin/frontend/bundle",
 }
 
 // plan composes the commands the options asked for, in the order they have to happen: the scanner
@@ -191,14 +191,14 @@ var appBundle = map[string]string{
 func plan(o options, repo string, version buildinfo.Version, npmName string) []step {
 	steps := []step{}
 
-	clients := filepath.Join(repo, clientsDir)
+	presentation := filepath.Join(repo, presentationDir)
 
 	if o.buildsClients() {
 		if o.installClients {
 			steps = append(steps, step{
 				label:  "deps",
 				result: "installing the client dependencies",
-				dir:    clients,
+				dir:    presentation,
 				name:   npmName,
 				args:   []string{"ci", "--loglevel=error", "--no-progress"},
 			})
@@ -212,7 +212,7 @@ func plan(o options, repo string, version buildinfo.Version, npmName string) []s
 			steps = append(steps, step{
 				label:  app,
 				result: appBundle[app],
-				dir:    clients,
+				dir:    presentation,
 				name:   npmName,
 				args:   []string{"run", "build:" + app},
 				// The one way the version reaches a bundle. No source file is rewritten to carry it.

@@ -108,7 +108,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 			return fail(stdout, fmt.Errorf("building the applications needs npm: %w", err))
 		}
 
-		o.installClients = !t.installed(filepath.Join(t.repo, clientsDir, "node_modules"))
+		o.installClients = !t.installed(filepath.Join(t.repo, presentationDir, "node_modules"))
 	}
 
 	for _, s := range plan(o, t.repo, version, npmName) {

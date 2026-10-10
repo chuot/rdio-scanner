@@ -171,8 +171,8 @@ func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
 			t.Errorf("%s is built with %v, want npm run build:%s", app, step.args, app)
 		}
 
-		if step.dir != "/repo/internal/presentation/clients" {
-			t.Errorf("%s is built in %q, want the client directory", app, step.dir)
+		if step.dir != "/repo/internal/presentation" {
+			t.Errorf("%s is built in %q, want the presentation directory", app, step.dir)
 		}
 
 		if !contains(step.env, "RDIO_VERSION=8.0.0+gdb79311") {
