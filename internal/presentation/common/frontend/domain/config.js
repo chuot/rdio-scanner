@@ -1,23 +1,22 @@
 // Listener config normalization and admin config round-trip.
 // Mirrors the CFG handler and transformCall of legacy rdio-scanner.service.ts,
 // and the admin config read/save semantics of admin.service.ts.
+// The retired options (FEAT-016) — 12-hour time format, dimmer delay,
+// playback-goes-live — are not part of the listener state any more.
 
 export function normalizeListenerConfig(raw) {
   const config = raw ?? {};
   return {
     alerts: config.alerts,
     branding: typeof config.branding === 'string' ? config.branding : '',
-    dimmerDelay: typeof config.dimmerDelay === 'number' ? config.dimmerDelay : 5000,
     email: typeof config.email === 'string' ? config.email : '',
     groups: typeof config.groups !== null && typeof config.groups === 'object' ? config.groups : {},
     groupsData: Array.isArray(config.groupsData) ? config.groupsData : [],
     keypadBeeps: typeof config.keypadBeeps !== 'undefined' && config.keypadBeeps !== null && typeof config.keypadBeeps === 'object' ? config.keypadBeeps : {},
-    playbackGoesLive: typeof config.playbackGoesLive === 'boolean' ? config.playbackGoesLive : false,
     showListenersCount: typeof config.showListenersCount === 'boolean' ? config.showListenersCount : false,
     systems: Array.isArray(config.systems) ? config.systems.slice() : [],
     tags: typeof config.tags !== null && typeof config.tags === 'object' ? config.tags : {},
     tagsData: Array.isArray(config.tagsData) ? config.tagsData : [],
-    time12hFormat: typeof config.time12hFormat === 'boolean' ? config.time12hFormat : false,
   };
 }
 

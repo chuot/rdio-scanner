@@ -14,20 +14,17 @@ describe('domain/config — listener config normalization', () => {
         const config = normalizeListenerConfig({});
 
         assert.equal(config.branding, '');
-        assert.equal(config.dimmerDelay, 5000);
         assert.equal(config.email, '');
         assert.deepEqual(config.groups, {});
         assert.deepEqual(config.groupsData, []);
         assert.deepEqual(config.keypadBeeps, {});
-        assert.equal(config.playbackGoesLive, false);
         assert.equal(config.showListenersCount, false);
         assert.deepEqual(config.systems, []);
         assert.deepEqual(config.tags, {});
         assert.deepEqual(config.tagsData, []);
-        assert.equal(config.time12hFormat, false);
     });
 
-    it('keeps well-typed values from the CFG payload', () => {
+    it('keeps well-typed values and drops the retired keys from the CFG payload', () => {
         const raw = {
             branding: 'My Scanner',
             dimmerDelay: 3000,
@@ -41,16 +38,14 @@ describe('domain/config — listener config normalization', () => {
         const config = normalizeListenerConfig(raw);
 
         assert.equal(config.branding, 'My Scanner');
-        assert.equal(config.dimmerDelay, 3000);
         assert.equal(config.email, 'a@b.c');
-        assert.equal(config.playbackGoesLive, true);
         assert.equal(config.showListenersCount, true);
-        assert.equal(config.time12hFormat, true);
         assert.equal(config.systems.length, 1);
-    });
 
-    it('falls back to the default dimmer delay for a non-number value', () => {
-        assert.equal(normalizeListenerConfig({ dimmerDelay: false }).dimmerDelay, 5000);
+        // The retired options (FEAT-016) never reach the listener state.
+        assert.equal(config.dimmerDelay, undefined);
+        assert.equal(config.playbackGoesLive, undefined);
+        assert.equal(config.time12hFormat, undefined);
     });
 });
 
