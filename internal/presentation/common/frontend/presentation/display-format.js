@@ -18,13 +18,19 @@ export function isAfsSystem(call) {
   return call.systemData?.type === 'provoice' || call.talkgroupData?.type === 'provoice';
 }
 
-export function formatTime(date, format12h) {
+// The clock format is the browser locale's hour cycle (FEAT-016, CA-010): a
+// 12-hour locale gets the AM/PM suffix, a 24-hour locale gets 24-hour time. No
+// administrator option controls it any more. The locale argument exists for
+// tests with fixed locales; the browser default is used when it is absent.
+export function formatTime(date, locale) {
   if (!(date instanceof Date)) return '';
+
+  const hourCycle = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle;
 
   let hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, '0');
 
-  if (format12h) {
+  if (hourCycle === 'h12' || hourCycle === 'h11') {
     const suffix = hours >= 12 ? ' PM' : ' AM';
     hours = hours % 12 || 12;
 

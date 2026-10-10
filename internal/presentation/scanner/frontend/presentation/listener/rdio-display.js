@@ -257,9 +257,7 @@ class RdioDisplay extends HTMLElement {
     // why the display sits dimmed from the moment the page loads.
     if (call && call !== this.lastCall) this.updateDimmer();
 
-    const time12h = config?.time12hFormat ?? false;
-
-    this.el.clock.textContent = formatTime(this.clock, time12h);
+    this.el.clock.textContent = formatTime(this.clock);
     this.el.link.textContent = !linked ? 'NO LINK' : config?.showListenersCount ? `L: ${listeners}` : '';
     this.el.queue.textContent = `Q: ${queue}`;
 
@@ -268,7 +266,7 @@ class RdioDisplay extends HTMLElement {
       const progress = progressDate(call.dateTime, this.callTime);
 
       this.el.date.textContent = shouldShowDate(call.dateTime, progress) ? formatMonthDay(call.dateTime) : '';
-      this.el.progress.textContent = formatTime(progress, time12h);
+      this.el.progress.textContent = formatTime(progress);
 
       this.el.system.textContent = call.systemData?.label ?? `${call.system}`;
       this.el.type.textContent = (call.talkgroupData?.type ?? call.systemData?.type ?? '').toUpperCase();
@@ -338,7 +336,7 @@ class RdioDisplay extends HTMLElement {
         continue;
       }
 
-      const time = formatTime(new Date(previousCall.dateTime), getAppContext().store.getState().config?.time12hFormat);
+      const time = formatTime(new Date(previousCall.dateTime));
       const system = previousCall.systemData?.label ?? previousCall.system;
       const talkgroup = previousCall.talkgroupData?.label ?? previousCall.talkgroup;
       const name = previousCall.talkgroupData?.name ?? previousCall.frequency;

@@ -872,13 +872,11 @@ rdio-search-panel .rdio-list td:nth-child(2) {
   width: 55px;
 }
 
+/* The clock is the browser locale's hour cycle (FEAT-016): the column is wide
+   enough for the 12-hour form, which is the wider of the two. */
+
 rdio-search-panel .rdio-list th:nth-child(3),
 rdio-search-panel .rdio-list td:nth-child(3) {
-  width: 53px;
-}
-
-rdio-search-panel .rdio-list table.time12h th:nth-child(3),
-rdio-search-panel .rdio-list table.time12h td:nth-child(3) {
   width: 78px;
 }
 

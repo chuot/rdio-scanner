@@ -313,7 +313,7 @@ class RdioAdminLogs extends HTMLElement {
     dateCell.textContent = valid ? formatMonthDay(date) : '';
 
     const timeCell = document.createElement('td');
-    timeCell.textContent = valid ? formatTime(date, false) : '';
+    timeCell.textContent = valid ? formatTime(date) : '';
 
     const messageCell = document.createElement('td');
     messageCell.textContent = log.message ?? '';

@@ -195,12 +195,7 @@ class RdioSearchPanel extends HTMLElement {
     const to = from + CLIENT_PAGE - 1;
 
     const rows = clientSlice(list.results ?? [], from, to, SERVER_PAGE, CLIENT_PAGE);
-    const time12h = state.config?.time12hFormat ?? false;
     const downloadMode = this.downloadMode.checked;
-
-    // The legacy marks each time cell with the clock format; marking the table
-    // says the same thing to every cell at once.
-    this.table.classList.toggle('time12h', time12h);
 
     this.tbody.innerHTML = rows.map((row) => {
       if (!row) return '<tr><td colspan="6"></td></tr>';
@@ -219,7 +214,7 @@ class RdioSearchPanel extends HTMLElement {
 
       const date = new Date(row.dateTime);
 
-      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date, time12h)}</span></td><td><span>${row.systemData?.label ?? row.system}</span></td><td><span>${row.talkgroupData?.label ?? row.talkgroup}</span></td><td><span>${row.talkgroupData?.name ?? ''}</span></td></tr>`;
+      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${row.systemData?.label ?? row.system}</span></td><td><span>${row.talkgroupData?.label ?? row.talkgroup}</span></td><td><span>${row.talkgroupData?.name ?? ''}</span></td></tr>`;
     }).join('');
   }
 
