@@ -37,7 +37,7 @@ func TestAdminLoginReplyMatchesTheCapturedLogin(t *testing.T) {
 	// and this is what the capture shows the legacy server answering. The captured credential is a
 	// placeholder, because a session credential is different on every run of the capture.
 	got := marshal(t, AdminLoginReply{PasswordNeedChange: true, Token: "capture-token"})
-	want := replaceInOrder(t, readGolden(t, "rest-login.json"), "<token>", "capture-token")
+	want := replaceInOrder(t, capturedAnswer(t, "rest-login.json"), "<token>", "capture-token")
 
 	if got != want {
 		t.Errorf("admin login reply =\n  %s\nwant\n  %s", got, want)
@@ -48,7 +48,7 @@ func TestAdminLoginReplyMatchesTheCapturedLogin(t *testing.T) {
 // captured answer says the credential on record no longer needs changing, because the capture changed it.
 func TestAdminPasswordReplyMatchesTheCapturedPasswordChange(t *testing.T) {
 	got := marshal(t, AdminPasswordReply{PasswordNeedChange: false})
-	want := readGolden(t, "rest-password.json")
+	want := capturedAnswer(t, "rest-password.json")
 
 	if got != want {
 		t.Errorf("admin password reply =\n  %s\nwant\n  %s", got, want)
@@ -59,7 +59,7 @@ func TestAdminPasswordReplyMatchesTheCapturedPasswordChange(t *testing.T) {
 // alert reads the same nine, and the administrator's endpoint is where a client fetches them.
 func TestAlertsPayloadMatchesTheCapturedAlerts(t *testing.T) {
 	got := marshal(t, Alerts())
-	want := readGolden(t, "rest-alerts.json")
+	want := capturedAnswer(t, "rest-alerts.json")
 
 	if got != want {
 		t.Errorf("alerts payload =\n  %s\nwant\n  %s", got, want)
@@ -104,7 +104,7 @@ func TestAdminLogsPagePayloadMatchesTheCapturedLogView(t *testing.T) {
 		"sort":   float64(0),
 	}))
 
-	want := replaceInOrder(t, readGolden(t, "rest-logs.json"), "<datetime>",
+	want := replaceInOrder(t, capturedAnswer(t, "rest-logs.json"), "<datetime>",
 		"2026-05-11T09:00:00Z",
 		"2026-05-11T09:00:02Z",
 		"2026-05-11T09:00:00Z",

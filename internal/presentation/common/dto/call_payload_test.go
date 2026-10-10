@@ -23,8 +23,6 @@ package dto
 import (
 	"encoding/hex"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +46,7 @@ func capturedRecordingBytes() []byte {
 // the legacy server sent for the upload that names everything an upload can name.
 func TestCallPayloadMatchesTheCapturedCall(t *testing.T) {
 	got := marshal(t, CallPayload{Call: capturedCall()})
-	want := readGolden(t, "payload-cal-detailed.json")
+	want := capturedAnswer(t, "payload-cal-detailed.json")
 
 	if got != want {
 		t.Errorf("call payload =\n  %s\nwant\n  %s", got, want)
@@ -70,7 +68,7 @@ func TestCallPayloadMatchesTheCapturedCallWithNothingToSay(t *testing.T) {
 	call.Talkgroup = domain.Talkgroup{ID: 1, TalkgroupRef: 1514000, Label: "Ground", Name: "Dispatch 1"}
 
 	got := marshal(t, CallPayload{Call: call})
-	want := readGolden(t, "payload-cal-fetch.json")
+	want := capturedAnswer(t, "payload-cal-fetch.json")
 
 	if got != want {
 		t.Errorf("call payload =\n  %s\nwant\n  %s", got, want)
@@ -232,16 +230,7 @@ func marshal(t *testing.T, payload any) string {
 	return string(b)
 }
 
-func readGolden(t *testing.T, name string) string {
-	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("../../../../testdata/golden", name))
-	if err != nil {
-		t.Fatalf("reading the golden capture %s: %v", name, err)
-	}
-
-	return string(b)
-}
 
 // carriesKey reports whether the marshaled object carries key at its own top level. With a value it
 // must be exactly that value; with none it only has to be there. It looks at the bytes rather than

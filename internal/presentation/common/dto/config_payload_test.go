@@ -33,7 +33,7 @@ import (
 // configuration: what an unrestricted listener is told about a server, as the legacy server told it.
 func TestConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	got := marshal(t, ConfigPayload{Snapshot: captureSnapshot()})
-	want := readGolden(t, "payload-cfg.json")
+	want := capturedAnswer(t, "payload-cfg.json")
 
 	if got != want {
 		t.Errorf("config payload =\n  %s\nwant\n  %s", got, want)
@@ -56,7 +56,7 @@ func TestConfigPayloadMatchesTheCapturedScopedConfig(t *testing.T) {
 	}
 
 	got := marshal(t, ConfigPayload{Snapshot: snapshot, Scope: scope})
-	want := readGolden(t, "payload-cfg-scoped.json")
+	want := capturedAnswer(t, "payload-cfg-scoped.json")
 
 	if got != want {
 		t.Errorf("scoped config payload =\n  %s\nwant\n  %s", got, want)

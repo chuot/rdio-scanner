@@ -37,7 +37,7 @@ import (
 // test states it by rewriting the capture rather than by skipping the comparison.
 func TestAdminConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	got := marshal(t, AdminConfigReply{Config: captureConfiguration(), PasswordNeedChange: true})
-	want := readGolden(t, "rest-config.json")
+	want := capturedAnswer(t, "rest-config.json")
 
 	want = replaceExactly(t, want, `"systemId":0`, `"systemId":1`, 2)
 
@@ -66,7 +66,7 @@ func TestAdminSectionPayloadsMatchTheCapturedSections(t *testing.T) {
 		{name: "accesses", golden: "rest-section-access.json", payload: AccessListPayload(nil)},
 	} {
 		got := marshal(t, tc.payload)
-		want := readGolden(t, tc.golden)
+		want := capturedAnswer(t, tc.golden)
 
 		if tc.name == "systems" {
 			want = replaceExactly(t, want, `"systemId":0`, `"systemId":1`, 2)
@@ -98,7 +98,7 @@ func TestAdminAccessSectionMatchesTheCapturedAccesses(t *testing.T) {
 	// it through time.Unix. The capture was taken on a machine set to UTC and says the moment in Z; a
 	// server in another zone says the same moment in its own offset, and an administrator sees the same
 	// thing they see today.
-	want := replaceExactly(t, readGolden(t, "rest-section-access-restricted.json"),
+	want := replaceExactly(t, capturedAnswer(t, "rest-section-access-restricted.json"),
 		`"1970-01-01T00:00:01Z"`, `"`+time.Unix(1, 0).Format(time.RFC3339)+`"`, 1)
 
 	if got != want {

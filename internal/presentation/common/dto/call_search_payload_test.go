@@ -53,7 +53,7 @@ func TestCallSearchPageMatchesTheCapturedPage(t *testing.T) {
 	}
 
 	got := marshal(t, payload)
-	want := readGolden(t, "payload-lcl.json")
+	want := capturedAnswer(t, "payload-lcl.json")
 
 	if got != want {
 		t.Errorf("call search page =\n  %s\nwant\n  %s", got, want)
