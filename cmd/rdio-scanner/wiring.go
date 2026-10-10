@@ -34,7 +34,7 @@ import (
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/dirwatch"
 	"rdio-scanner/internal/infrastructure/tokens"
-	"rdio-scanner/internal/presentation/upgrade"
+	"rdio-scanner/internal/presentation/common/upgrade"
 	"rdio-scanner/internal/presentation/ws"
 )
 

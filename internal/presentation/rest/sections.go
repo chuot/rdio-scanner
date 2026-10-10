@@ -30,7 +30,7 @@ import (
 
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/domain"
-	"rdio-scanner/internal/presentation/dto"
+	"rdio-scanner/internal/presentation/common/dto"
 )
 
 // unreadableBody says that a save was asked for with a body this endpoint cannot read, and keeps the reason

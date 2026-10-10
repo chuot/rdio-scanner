@@ -24,7 +24,7 @@ import (
 	"embed"
 	"net/http"
 
-	"rdio-scanner/internal/presentation/serving/spa"
+	"rdio-scanner/internal/presentation/common/spa"
 )
 
 // bundle is the scanner application compiled into the binary.

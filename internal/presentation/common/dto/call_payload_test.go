@@ -235,7 +235,7 @@ func marshal(t *testing.T, payload any) string {
 func readGolden(t *testing.T, name string) string {
 	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("../../../testdata/golden", name))
+	b, err := os.ReadFile(filepath.Join("../../../../testdata/golden", name))
 	if err != nil {
 		t.Fatalf("reading the golden capture %s: %v", name, err)
 	}

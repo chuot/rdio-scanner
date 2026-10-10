@@ -24,7 +24,7 @@ import (
 	"embed"
 	"net/http"
 
-	"rdio-scanner/internal/presentation/serving/spa"
+	"rdio-scanner/internal/presentation/common/spa"
 )
 
 // bundle is the administration application compiled into the binary.

@@ -33,7 +33,7 @@ import (
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
-	"rdio-scanner/internal/presentation/dto"
+	"rdio-scanner/internal/presentation/common/dto"
 )
 
 // The intervals a listener connection is held to. They are the protocol's own and are not choices

@@ -38,8 +38,8 @@ import (
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
-	"rdio-scanner/internal/presentation/dto"
-	"rdio-scanner/internal/presentation/httpaddr"
+	"rdio-scanner/internal/presentation/common/dto"
+	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
 // writeWait bounds how long the server is willing to spend writing to one administrator connection.

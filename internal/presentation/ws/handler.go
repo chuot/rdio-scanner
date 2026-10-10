@@ -32,8 +32,8 @@ import (
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
-	"rdio-scanner/internal/presentation/dto"
-	"rdio-scanner/internal/presentation/httpaddr"
+	"rdio-scanner/internal/presentation/common/dto"
+	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
 // Deps are the use cases the listener endpoint answers each command with, and the things it needs in
