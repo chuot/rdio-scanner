@@ -35,16 +35,16 @@ import { fileURLToPath } from 'node:url';
 import esbuild from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const scannerDir = join(here, 'scanner');
-const adminDir = join(here, 'admin');
-const sharedDir = join(here, 'shared');
+const scannerDir = join(here, 'scanner', 'frontend');
+const adminDir = join(here, 'admin', 'frontend');
+const sharedDir = join(here, 'common', 'frontend');
 
 const args = process.argv.slice(2);
 const production = args.includes('--production');
 const watch = args.includes('--watch');
 
-/** The repository root, three directories above the client directory this file sits in. */
-const repoRoot = resolve(here, '..', '..', '..');
+/** The repository root, two directories above the presentation directory this file sits in. */
+const repoRoot = resolve(here, '..', '..');
 
 /** A semantic-versioning core and nothing else: the same rule `internal/buildinfo` applies to the file. */
 const corePattern = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
@@ -117,10 +117,10 @@ export function resolveOutDir(bundlePath, argv) {
 }
 
 /** The scanner bundle sits beside the Go package that embeds it. */
-const scannerBundle = resolveOutDir('../serving/scanner/bundle', args);
+const scannerBundle = resolveOutDir('scanner/frontend/bundle', args);
 
 /** The admin bundle sits beside the Go package that embeds it. */
-const adminBundle = resolveOutDir('../serving/admin/bundle', args);
+const adminBundle = resolveOutDir('admin/frontend/bundle', args);
 
 /**
  * The asset directories a bundle carries, named one by one instead of copying `assets` wholesale.

@@ -5,19 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 import { adminConfig, resolveOutDir, scannerConfig } from '../build.mjs';
 
-// The client directory the paths below are read from. What is being asserted is which directory each build
-// writes to, relative to the client, so the client directory is the one this test file lives in.
-const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-const presentationDir = resolve(clientDir, '..');
+// The presentation directory the paths below are read from. What is being asserted is which directory
+// each build writes to, relative to the npm root, so the presentation directory is the one above the
+// tests this file lives in.
+const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('build.mjs — the directory each application writes to', () => {
     it('writes the scanner bundle beside the Go package that embeds it', () => {
-        assert.equal(scannerConfig.outDir, resolve(clientDir, '..', 'serving', 'scanner', 'bundle'));
+        assert.equal(scannerConfig.outDir, resolve(presentationDir, 'scanner', 'frontend', 'bundle'));
     });
 
     it('writes the admin bundle beside the Go package that embeds it', () => {
-        assert.equal(adminConfig.outDir, resolve(clientDir, '..', 'serving', 'admin', 'bundle'));
+        assert.equal(adminConfig.outDir, resolve(presentationDir, 'admin', 'frontend', 'bundle'));
     });
 
     it('gives the two applications two directories, both inside the presentation layer', () => {
