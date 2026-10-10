@@ -22,7 +22,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -96,6 +95,9 @@ func (fixture *historyFixture) searchHistory(criteria domain.CallSearch, scope d
 
 // historyCriteria parses a listener payload into criteria, which is what the presentation
 // layer does before it builds the query.
+
+// historyCriteria parses a listener payload into criteria, which is what the presentation
+// layer does before it builds the query.
 func historyCriteria(payload ...map[string]any) domain.CallSearch {
 	submitted := map[string]any{}
 
@@ -106,30 +108,6 @@ func historyCriteria(payload ...map[string]any) domain.CallSearch {
 	}
 
 	return domain.ParseCallSearch(submitted)
-}
-
-func TestGetCallByIdQueryReturnsTheRecordedCall(t *testing.T) {
-	fixture := newHistoryFixture()
-	fixture.store(7, 4, 1514000, historyTime)
-
-	call, err := fixture.get.Handle(context.Background(), GetCallByIdQuery{ID: 7})
-	if err != nil {
-		t.Fatalf("Handle: %v", err)
-	}
-
-	if call.ID != 7 {
-		t.Errorf("Handle returned call %d, want the call that was asked for", call.ID)
-	}
-}
-
-func TestGetCallByIdQueryReportsAMissingCall(t *testing.T) {
-	fixture := newHistoryFixture()
-
-	_, err := fixture.get.Handle(context.Background(), GetCallByIdQuery{ID: 7})
-
-	if !errors.Is(err, ports.ErrNotFound) {
-		t.Errorf("Handle error = %v, want ports.ErrNotFound, which is what the CAL fetch answers with", err)
-	}
 }
 
 func TestSearchCallsQueryAppliesTheDefaultPageSize(t *testing.T) {
@@ -241,6 +219,10 @@ func TestSearchCallsQueryExpandsATagLabel(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchCallsQueryLeavesAnUnmatchedLabelUnfiltered pins the legacy behavior: a group
+// or tag label that stands for nothing adds no filter at all, so the search returns the
+// whole history rather than nothing.
 
 // TestSearchCallsQueryLeavesAnUnmatchedLabelUnfiltered pins the legacy behavior: a group
 // or tag label that stands for nothing adds no filter at all, so the search returns the

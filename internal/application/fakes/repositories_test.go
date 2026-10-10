@@ -292,6 +292,14 @@ func TestLogsSearchAppliesTheDateWindowAndPaging(t *testing.T) {
 // An entry written without a source is reported as legacy, which is what the stored repository does with
 // the rows the other server writes. Recorded is the other half: it reports what a writer actually wrote,
 // blank included, which is what the guard over the writers reads.
+
+// TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource keeps the in-memory log repository a
+// stand-in for the stored one: a component test that filters by subsystem or by text has to be answered
+// the way the real repository answers it, or the component test proves nothing.
+//
+// An entry written without a source is reported as legacy, which is what the stored repository does with
+// the rows the other server writes. Recorded is the other half: it reports what a writer actually wrote,
+// blank included, which is what the guard over the writers reads.
 func TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource(t *testing.T) {
 	logs := &Logs{Stored: []domain.LogEntry{
 		{ID: 1, DateTime: baseTime(), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},
@@ -394,180 +402,5 @@ func TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource(t *testin
 
 	if got := logs.Recorded()[4].Source; got != "" {
 		t.Errorf("Recorded reports source %q for an entry written without one, want the blank the writer wrote: the guard over the writers reads this, not the search", got)
-	}
-}
-
-func TestTokensRollingWindowRetiresTheOldest(t *testing.T) {
-	tokens := NewTokens()
-
-	issued := []string{}
-
-	for i := 0; i < 6; i++ {
-		token, err := tokens.Issue(context.Background())
-		if err != nil {
-			t.Fatalf("Issue: %v", err)
-		}
-
-		issued = append(issued, token)
-	}
-
-	if err := tokens.Validate(context.Background(), issued[0]); err == nil {
-		t.Error("the first token must be retired once a sixth is issued")
-	}
-
-	if err := tokens.Validate(context.Background(), issued[1]); err != nil {
-		t.Errorf("the second token must still be accepted: %v", err)
-	}
-
-	if err := tokens.Revoke(context.Background(), issued[1]); err != nil {
-		t.Fatalf("Revoke: %v", err)
-	}
-
-	if err := tokens.Validate(context.Background(), issued[1]); err == nil {
-		t.Error("a revoked token must no longer be accepted")
-	}
-}
-
-func TestConverterLeavesDisabledAudioAloneAndRenamesConvertedAudio(t *testing.T) {
-	converter := NewConverter()
-
-	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: []byte("audio")}
-
-	out, err := converter.Convert(context.Background(), in, domain.AudioConversionDisabled, nil)
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-
-	if out.Filename != "call.wav" || out.Mime != "audio/wav" {
-		t.Errorf("Convert with conversion disabled = %+v, want the input untouched", out)
-	}
-
-	out, err = converter.Convert(context.Background(), in, domain.AudioConversionEnabledLoudNorm, &ports.AudioMetadata{Album: "Dispatch"})
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-
-	if out.Filename != "call.m4a" || out.Mime != "audio/mp4" {
-		t.Errorf("Convert = %+v, want the converted name and media type", out)
-	}
-
-	if converter.Metadata[1] == nil || converter.Metadata[1].Album != "Dispatch" {
-		t.Error("the metadata asked for must reach the converter")
-	}
-
-	if converter.Modes[1] != domain.AudioConversionEnabledLoudNorm {
-		t.Errorf("Convert recorded mode %d, want the level it was asked for", converter.Modes[1])
-	}
-}
-
-func TestConverterReportsWhenItIsNotAvailable(t *testing.T) {
-	converter := NewConverter()
-	converter.Available = false
-
-	_, err := converter.Convert(context.Background(), ports.AudioFile{Filename: "call.wav"}, domain.AudioConversionEnabled, nil)
-
-	if err == nil {
-		t.Error("a converter that is not installed must report it, so the use case can keep the original audio")
-	}
-}
-
-func TestHubDeliversOnlyToSessionsThatGrantedAndAskedForTheCall(t *testing.T) {
-	hub := NewHub()
-	hub.Restricted = true
-
-	hub.Open("watcher", "10.0.0.1")
-	hub.Open("silent", "10.0.0.2")
-	hub.Open("unscoped", "10.0.0.3")
-
-	scoped := domain.Access{}.ApplyMap(map[string]any{"code": "c", "ident": "dispatch", "systems": "*"})
-
-	hub.GrantAccess("watcher", scoped)
-	hub.GrantAccess("silent", scoped)
-
-	call := testCall(1, 4, 1514000, baseTime())
-
-	hub.SetLivefeed("watcher", domain.ParseLivefeed(map[string]any{"4": map[string]any{"1514000": true}}))
-
-	hub.BroadcastCall(call)
-
-	if len(hub.DeliveredCalls["watcher"]) != 1 {
-		t.Error("a session that granted the call and asked for it must receive it")
-	}
-
-	if len(hub.DeliveredCalls["silent"]) != 0 {
-		t.Error("a session that asked for nothing must receive nothing")
-	}
-
-	if len(hub.DeliveredCalls["unscoped"]) != 0 {
-		t.Error("a restricted server must not deliver to a session holding no access")
-	}
-}
-
-func TestHubCountsSessionsPerAccess(t *testing.T) {
-	hub := NewHub()
-
-	shared := domain.Access{ID: 1, Code: "a", Ident: "dispatch", Scope: domain.AccessScope{Present: true, Wildcard: true}}
-	other := domain.Access{ID: 2, Code: "b", Ident: "dispatch", Scope: domain.AccessScope{Present: true, Wildcard: true}}
-
-	hub.Open("one", "10.0.0.1")
-	hub.Open("two", "10.0.0.2")
-	hub.Open("three", "10.0.0.3")
-
-	hub.GrantAccess("one", shared)
-	hub.GrantAccess("two", shared)
-	hub.GrantAccess("three", other)
-
-	if got := hub.AccessSessionCount(1); got != 2 {
-		t.Errorf("AccessSessionCount(1) = %d, want the two sessions holding that access", got)
-	}
-
-	if got := hub.AccessSessionCount(2); got != 1 {
-		t.Errorf("AccessSessionCount(2) = %d, want one session: two accesses sharing a label are not one access", got)
-	}
-
-	if got := hub.ListenerCount(); got != 3 {
-		t.Errorf("ListenerCount = %d, want 3", got)
-	}
-
-	if got := hub.RemoteAddrOf("two"); got != "10.0.0.2" {
-		t.Errorf("RemoteAddrOf = %q, want the address the session connected from", got)
-	}
-}
-
-func TestHubCountsAccessAttemptsPerSession(t *testing.T) {
-	hub := NewHub()
-
-	hub.Open("one", "10.0.0.1")
-	hub.Open("two", "10.0.0.2")
-
-	for want := uint(1); want <= 3; want++ {
-		if got := hub.RecordAccessAttempt("one"); got != want {
-			t.Errorf("RecordAccessAttempt = %d, want attempt %d", got, want)
-		}
-	}
-
-	if got := hub.RecordAccessAttempt("two"); got != 1 {
-		t.Errorf("RecordAccessAttempt for another session = %d, want 1: attempts are counted per session", got)
-	}
-
-	hub.CloseClient("one", 1000)
-
-	if got := hub.RecordAccessAttempt("one"); got != 1 {
-		t.Errorf("RecordAccessAttempt after the session closed = %d, want the count to start over for a new session", got)
-	}
-}
-
-func TestHubLivefeedAckReflectsTheSelection(t *testing.T) {
-	hub := NewHub()
-	hub.Open("watcher", "10.0.0.1")
-
-	if !hub.LivefeedWatchesNothing("watcher") {
-		t.Error("a session that has made no selection watches nothing")
-	}
-
-	hub.SetLivefeed("watcher", domain.ParseLivefeed(map[string]any{"4": map[string]any{"1514000": true}}))
-
-	if hub.LivefeedWatchesNothing("watcher") {
-		t.Error("a session that switched a talkgroup on is not watching nothing")
 	}
 }

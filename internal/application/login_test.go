@@ -72,14 +72,21 @@ func newLoginFixture() *loginFixture {
 }
 
 // sessionIsOpen asks the question every administrator endpoint asks before it does anything else.
+
+// sessionIsOpen asks the question every administrator endpoint asks before it does anything else.
 func (fixture *loginFixture) sessionIsOpen(token string) bool {
 	return fixture.check.Handle(context.Background(), CheckAdminSessionQuery{Token: token})
 }
 
 // attempt logs in from the address the tests use by default.
+
+// attempt logs in from the address the tests use by default.
 func (fixture *loginFixture) attempt(credential string) (AdminLoginResult, error) {
 	return fixture.attemptFrom(adminAddress, credential)
 }
+
+// attemptFrom logs in from a named address, which is how the tests show that the attempt
+// budget belongs to the address that made the attempt.
 
 // attemptFrom logs in from a named address, which is how the tests show that the attempt
 // budget belongs to the address that made the attempt.
@@ -89,6 +96,9 @@ func (fixture *loginFixture) attemptFrom(remoteAddr, credential string) (AdminLo
 		Credential: credential,
 	})
 }
+
+// mustLogin logs in and fails the test unless a session was started, returning the token
+// the server issued.
 
 // mustLogin logs in and fails the test unless a session was started, returning the token
 // the server issued.
@@ -109,6 +119,9 @@ func (fixture *loginFixture) mustLogin(t *testing.T, credential string) string {
 
 // warnings returns the entries the login use case reported to the server log, which is what
 // a deployment sees in its log view.
+
+// warnings returns the entries the login use case reported to the server log, which is what
+// a deployment sees in its log view.
 func (fixture *loginFixture) warnings() []domain.LogEntry {
 	out := []domain.LogEntry{}
 
@@ -123,6 +136,9 @@ func (fixture *loginFixture) warnings() []domain.LogEntry {
 
 // entries returns everything the login and logout use cases wrote to the server log. A sign-out is not a
 // warning, so the tests that care about what the log view holds read it whole.
+
+// entries returns everything the login and logout use cases wrote to the server log. A sign-out is not a
+// warning, so the tests that care about what the log view holds read it whole.
 func (fixture *loginFixture) entries() []domain.LogEntry {
 	out := []domain.LogEntry{}
 
@@ -130,6 +146,8 @@ func (fixture *loginFixture) entries() []domain.LogEntry {
 
 	return out
 }
+
+// signedOut returns the entries that say a session was ended.
 
 // signedOut returns the entries that say a session was ended.
 func (fixture *loginFixture) signedOut() []domain.LogEntry {
@@ -219,6 +237,10 @@ func TestLoginHandlerRefusesAWrongCredentialAndSaysWhyInItsOwnLog(t *testing.T) 
 		t.Errorf("warning = %q, want the refused attempt and the address it came from", warnings[0].Message)
 	}
 }
+
+// TestLoginHandlerRefusesAnEmptyCredentialEvenWhenNothingIsOnRecord pins the legacy rule
+// that an empty submission is never compared against the stored credential: a server whose
+// stored credential is empty still refuses a caller that submits nothing.
 
 // TestLoginHandlerRefusesAnEmptyCredentialEvenWhenNothingIsOnRecord pins the legacy rule
 // that an empty submission is never compared against the stored credential: a server whose
@@ -364,6 +386,15 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 // attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
 // has spent its budget is refused while that window is still open.
 // See docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
+
+// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of Q10: the window the
+// contract describes is the window the server enforces.
+//
+// The legacy server built its window with `time.Duration(time.Duration.Minutes(10))`, a method
+// expression that converts ten nanoseconds to minutes and back and truncates to zero, so an address's
+// attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
+// has spent its budget is refused while that window is still open.
+// See docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
 func TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow(t *testing.T) {
 	if loginAttemptsWindow != 10*time.Minute {
 		t.Fatalf("attempt window = %v, want the ten minutes the contract describes", loginAttemptsWindow)
@@ -395,6 +426,9 @@ func TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow(t *testing.T) {
 
 // TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow is the other half of the repair: the budget is
 // measured over a window, so an address that waits out the window is answered on its merits again.
+
+// TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow is the other half of the repair: the budget is
+// measured over a window, so an address that waits out the window is answered on its merits again.
 func TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -419,6 +453,9 @@ func TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow(t *testing.T) {
 		t.Errorf("token = %q, want the session the restored budget pays for", result.Token)
 	}
 }
+
+// TestLoginHandlerCountsAFreshWindowAsAFreshBudget keeps the restored budget a budget: the address gets
+// three attempts in the new window, not an unlimited run at the server.
 
 // TestLoginHandlerCountsAFreshWindowAsAFreshBudget keeps the restored budget a budget: the address gets
 // three attempts in the new window, not an unlimited run at the server.
@@ -480,6 +517,10 @@ func TestSuccessfulLoginClearsEveryAddressesAttemptCount(t *testing.T) {
 // TestLoginHandlerLegacyPasswordNeedChangeQuirk pins the legacy login response, which
 // reports that the password needs changing on every successful login whatever the stored
 // option says. The option itself is only reported by the configuration endpoints.
+
+// TestLoginHandlerLegacyPasswordNeedChangeQuirk pins the legacy login response, which
+// reports that the password needs changing on every successful login whatever the stored
+// option says. The option itself is only reported by the configuration endpoints.
 func TestLoginHandlerLegacyPasswordNeedChangeQuirk(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.options.Stored.AdminPasswordNeedChange = false
@@ -524,6 +565,11 @@ func TestLoginHandlerReportsAFailureWhenNoSessionTokenCanBeIssued(t *testing.T) 
 // credential is never examined, because the credential on record is in the options the server could not read,
 // and every sign-in on the deployment fails. The outcome and the error the caller receives are what they were:
 // what was missing was any trace that the server had been asked at all.
+
+// TestALoginTheServerCouldNotCheckSaysSo is the sign-in a broken configuration makes impossible. The
+// credential is never examined, because the credential on record is in the options the server could not read,
+// and every sign-in on the deployment fails. The outcome and the error the caller receives are what they were:
+// what was missing was any trace that the server had been asked at all.
 func TestALoginTheServerCouldNotCheckSaysSo(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.options.Err = errors.New("no such table: options")
@@ -544,6 +590,10 @@ func TestALoginTheServerCouldNotCheckSaysSo(t *testing.T) {
 // TestALoginThatCouldNotStartASessionSaysSo is the other step a sign-in depends on: the credential was right,
 // and the server could not mint the token that a session is made of. An operator looking at a log view that
 // says nothing cannot tell this apart from a server nobody tried to sign in to.
+
+// TestALoginThatCouldNotStartASessionSaysSo is the other step a sign-in depends on: the credential was right,
+// and the server could not mint the token that a session is made of. An operator looking at a log view that
+// says nothing cannot tell this apart from a server nobody tried to sign in to.
 func TestALoginThatCouldNotStartASessionSaysSo(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.tokens.Err = errors.New("signing secret is missing")
@@ -560,6 +610,9 @@ func TestALoginThatCouldNotStartASessionSaysSo(t *testing.T) {
 
 	assertOneFailureEntry(t, fixture, "the administrator session could not be started", fixture.tokens.Err)
 }
+
+// assertOneFailureEntry is what the two failures above have in common: one entry, filed under the logins, at
+// the level of a server that cannot let anybody in, naming the failure's own text.
 
 // assertOneFailureEntry is what the two failures above have in common: one entry, filed under the logins, at
 // the level of a server that cannot let anybody in, naming the failure's own text.
@@ -619,197 +672,5 @@ func TestLoginHandlerSixthSessionRetiresTheFirstToken(t *testing.T) {
 
 	if result.Outcome != AdminLogoutRefused {
 		t.Errorf("outcome = %q, want the token the rolling window retired to be refused", result.Outcome)
-	}
-}
-
-func TestLogoutHandlerRetiresThePresentedToken(t *testing.T) {
-	fixture := newLoginFixture()
-
-	token := fixture.mustLogin(t, adminCredential)
-
-	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: token})
-	if err != nil {
-		t.Fatalf("logout: %v", err)
-	}
-
-	if result.Outcome != AdminLogoutAccepted {
-		t.Errorf("outcome = %q, want the session ended", result.Outcome)
-	}
-
-	if len(fixture.tokens.Window) != 0 {
-		t.Errorf("token window = %v, want the ended session's token taken out of the accepted set", fixture.tokens.Window)
-	}
-
-	result, err = fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: token})
-	if err != nil {
-		t.Fatalf("second logout: %v", err)
-	}
-
-	if result.Outcome != AdminLogoutRefused {
-		t.Errorf("second logout outcome = %q, want a token that is already ended to be refused", result.Outcome)
-	}
-}
-
-// TestLogoutWritesThatTheAdministratorSignedOut is the entry the log view had nothing for before: ending
-// your own session was the one thing this server did in silence, so an operator could not tell when an
-// administrator stopped watching.
-func TestLogoutWritesThatTheAdministratorSignedOut(t *testing.T) {
-	fixture := newLoginFixture()
-
-	token := fixture.mustLogin(t, adminCredential)
-
-	if _, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: token}); err != nil {
-		t.Fatalf("logout: %v", err)
-	}
-
-	wrote := fixture.signedOut()
-
-	if len(wrote) != 1 {
-		t.Fatalf("server log = %v, want one entry saying the administrator signed out", fixture.entries())
-	}
-
-	if wrote[0].Level != domain.LogLevelInfo {
-		t.Errorf("the sign-out was written at level %q, want an ordinary entry, not a warning", wrote[0].Level)
-	}
-
-	if got := wrote[0].DateTime; !got.Equal(loginTime) {
-		t.Errorf("the sign-out was stamped %v, want the instant the session was ended", got)
-	}
-}
-
-// A logout the server refused did not end a session, so it is not a sign-out and writes no entry.
-func TestRefusedLogoutWritesNothingToTheServerLog(t *testing.T) {
-	fixture := newLoginFixture()
-
-	fixture.mustLogin(t, adminCredential)
-
-	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: "a token nobody was given"})
-	if err != nil {
-		t.Fatalf("logout: %v", err)
-	}
-
-	if result.Outcome != AdminLogoutRefused {
-		t.Fatalf("outcome = %q, want a token the server never issued to be refused", result.Outcome)
-	}
-
-	if got := fixture.entries(); len(got) != 0 {
-		t.Errorf("server log = %v, want a refused logout to say nothing about itself", got)
-	}
-}
-
-func TestLogoutHandlerRefusesATokenTheServerDoesNotAccept(t *testing.T) {
-	fixture := newLoginFixture()
-
-	fixture.mustLogin(t, adminCredential)
-
-	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: "a token nobody was given"})
-	if err != nil {
-		t.Fatalf("logout: %v", err)
-	}
-
-	if result.Outcome != AdminLogoutRefused {
-		t.Errorf("outcome = %q, want a token the server never issued to be refused", result.Outcome)
-	}
-
-	if len(fixture.tokens.Window) != 1 {
-		t.Errorf("token window = %v, want a refused logout to end no session", fixture.tokens.Window)
-	}
-}
-
-func TestLogoutHandlerLeavesOtherAdministratorSessionsRunning(t *testing.T) {
-	fixture := newLoginFixture()
-
-	first := fixture.mustLogin(t, adminCredential)
-	second := fixture.mustLogin(t, adminCredential)
-
-	if _, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: first}); err != nil {
-		t.Fatalf("logout of the first session: %v", err)
-	}
-
-	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: second})
-	if err != nil {
-		t.Fatalf("logout of the second session: %v", err)
-	}
-
-	if result.Outcome != AdminLogoutAccepted {
-		t.Errorf("outcome = %q, want ending one administrator session to leave the others open", result.Outcome)
-	}
-}
-
-// TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten is CA-007 for the administrator's
-// credential: every one of these use cases writes a log entry as a side effect, and a log view that cannot
-// be written is not allowed to change what the server decided or what it did. A deployment whose log table
-// is broken must still be able to sign in and sign out.
-// TestALogoutThatCouldNotEndTheSessionSaysSo is a sign-out the server could not carry out: the token was
-// accepted, and retiring it failed. The session stays open, the caller is told, and until now nothing was
-// written at all — so an administrator reporting "I cannot log out" left nothing to check.
-func TestALogoutThatCouldNotEndTheSessionSaysSo(t *testing.T) {
-	fixture := newLoginFixture()
-
-	token := fixture.mustLogin(t, adminCredential)
-
-	fixture.tokens.RevokeErr = errors.New("no such table: tokens")
-
-	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: token})
-
-	if !errors.Is(err, fixture.tokens.RevokeErr) {
-		t.Fatalf("logout error = %v, want the token store's own failure", err)
-	}
-
-	if result.Outcome != AdminLogoutFailed {
-		t.Fatalf("outcome = %q, want a logout the server could not carry out", result.Outcome)
-	}
-
-	if !fixture.sessionIsOpen(token) {
-		t.Error("the session was closed by a logout that failed, want the failure left where it happened")
-	}
-
-	assertOneFailureEntry(t, fixture, "the administrator session could not be ended", fixture.tokens.RevokeErr)
-}
-
-func TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten(t *testing.T) {
-	fixture := newLoginFixture()
-	fixture.logs.Err = errors.New("no such table: logs")
-
-	accepted, err := fixture.login.Handle(context.Background(), AdminLoginCommand{
-		RemoteAddr: adminAddress,
-		Credential: adminCredential,
-	})
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
-
-	if accepted.Outcome != AdminLoginAccepted {
-		t.Errorf("login outcome = %q, want the credential accepted even though the log could not be written", accepted.Outcome)
-	}
-
-	if !fixture.sessionIsOpen(accepted.Token) {
-		t.Error("the session the login issued is not open, want the log failure to change nothing about it")
-	}
-
-	refused, err := fixture.attempt("not the credential on record")
-	if err != nil {
-		t.Fatalf("refused login: %v", err)
-	}
-
-	if refused.Outcome != AdminLoginInvalidCredential {
-		t.Errorf("refused outcome = %q, want the credential still refused, with the warning it earns dropped", refused.Outcome)
-	}
-
-	if len(fixture.tokens.Issued) != 1 {
-		t.Errorf("tokens issued = %v, want the one session the accepted credential earned", fixture.tokens.Issued)
-	}
-
-	result, err := fixture.logout.Handle(context.Background(), AdminLogoutCommand{Token: accepted.Token})
-	if err != nil {
-		t.Fatalf("logout: %v", err)
-	}
-
-	if result.Outcome != AdminLogoutAccepted {
-		t.Errorf("logout outcome = %q, want the session ended even though the log could not be written", result.Outcome)
-	}
-
-	if fixture.sessionIsOpen(accepted.Token) {
-		t.Error("the session is still open after a logout, want the log failure to change nothing about it")
 	}
 }

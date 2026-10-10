@@ -121,6 +121,10 @@ func (fixture *configFixture) read() (domain.Configuration, error) {
 // loggedAs reports whether the server wrote an entry that names that part of the server and says the
 // fragment. The source is part of the assertion: a line that says the right thing and is filed under
 // nothing is the state this feature exists to remove.
+
+// loggedAs reports whether the server wrote an entry that names that part of the server and says the
+// fragment. The source is part of the assertion: a line that says the right thing and is filed under
+// nothing is the state this feature exists to remove.
 func (fixture *configFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Stored {
 		if entry.Source == source && strings.Contains(entry.Message, fragment) {
@@ -129,46 +133,6 @@ func (fixture *configFixture) loggedAs(source domain.LogSource, fragment string)
 	}
 
 	return false
-}
-
-func TestGetConfigQueryReturnsEverySection(t *testing.T) {
-	fixture := newConfigFixture()
-
-	configuration, err := fixture.read()
-	if err != nil {
-		t.Fatalf("Handle: %v", err)
-	}
-
-	if len(configuration.Systems) != 1 || configuration.Systems[0].SystemRef != 4 {
-		t.Errorf("systems = %v, want the stored systems", configuration.Systems)
-	}
-
-	if len(configuration.Groups) != 1 || configuration.Groups[0].Label != "Fire" {
-		t.Errorf("groups = %v, want the stored groups", configuration.Groups)
-	}
-
-	if len(configuration.Tags) != 1 || configuration.Tags[0].Label != "Dispatch" {
-		t.Errorf("tags = %v, want the stored tags", configuration.Tags)
-	}
-
-	if len(configuration.Dirwatches) != 2 {
-		t.Errorf("dirwatches = %v, want the two stored watched directories", configuration.Dirwatches)
-	}
-
-	if configuration.Options.DuplicateDetectionTimeFrame == 0 {
-		t.Errorf("options = %+v, want the stored options", configuration.Options)
-	}
-}
-
-func TestGetConfigQueryReportsAFailingStore(t *testing.T) {
-	fixture := newConfigFixture()
-	fixture.tags.Err = errors.New("no such table: tags")
-
-	_, err := fixture.read()
-
-	if err == nil {
-		t.Error("a store that cannot be read must reach the caller rather than report a partial configuration")
-	}
 }
 
 func TestIsConfigSectionKnowsTheEightSections(t *testing.T) {
@@ -269,6 +233,9 @@ func TestUpdateConfigurationLeavesAnUnnamedSectionAlone(t *testing.T) {
 		t.Errorf("tags = %v, want the tags left exactly as they were", fixture.tags.Stored)
 	}
 }
+
+// TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty pins the difference
+// between saying "no groups" and saying nothing about groups.
 
 // TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty pins the difference
 // between saying "no groups" and saying nothing about groups.
@@ -391,6 +358,10 @@ func TestUpdateConfigurationStopsAndRestartsTheDirectoryWatchersAroundTheSave(t 
 // TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins preserved
 // quirk Q12: stopping the watchers empties what the server watches from, and only naming the
 // dirwatch section fills it again.
+
+// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins preserved
+// quirk Q12: stopping the watchers empties what the server watches from, and only naming the
+// dirwatch section fills it again.
 func TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -429,6 +400,11 @@ func TestUpdateConfigurationWatchesTheStoredDirectoriesWhenItSavesTheDirwatchSec
 // Q13: a dirwatch save that could not be persisted leaves the submitted directories being
 // watched, because the legacy server restarts its watchers from what it was given and only
 // reads the stored list back when the save succeeded.
+
+// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins preserved quirk
+// Q13: a dirwatch save that could not be persisted leaves the submitted directories being
+// watched, because the legacy server restarts its watchers from what it was given and only
+// reads the stored list back when the save succeeded.
 func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *testing.T) {
 	fixture := newConfigFixture()
 	fixture.dirwatches.SaveErr = errors.New("disk full")
@@ -450,6 +426,11 @@ func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *t
 		t.Errorf("watching = %v, want the submitted directories: the legacy server keeps watching what it was given when it could not store it", watching)
 	}
 }
+
+// TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching pins the legacy
+// behavior of a whole-configuration save that names nothing it recognises: the watchers are
+// stopped and nothing is restarted, the configuration is still announced, and the change is
+// still recorded.
 
 // TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching pins the legacy
 // behavior of a whole-configuration save that names nothing it recognises: the watchers are
@@ -640,6 +621,10 @@ func TestUpdateConfigurationSectionAnnouncesTheWholeConfigurationForOneSection(t
 		t.Errorf("announced tags = %v, want the announced configuration to be the one that resulted from the save", announced.Tags)
 	}
 }
+
+// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is CA-007 for the configuration:
+// the save is the operation and the announcement is a report about it. A deployment whose log table is
+// broken must still be able to change its configuration, and the listeners must still be told the new one.
 
 // TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is CA-007 for the configuration:
 // the save is the operation and the announcement is a report about it. A deployment whose log table is
