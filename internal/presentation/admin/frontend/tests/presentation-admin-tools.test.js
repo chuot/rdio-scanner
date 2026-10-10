@@ -1,6 +1,7 @@
-// Tools panel layout and icons (FEAT-018, CA-003, CA-004): every panel icon is a
-// valid Material Icons ligature, and every panel body follows the standard row
-// pattern: caption, row.top with its controls, row.bottom with its action button.
+// Tools panel layout and icons (FEAT-018 CA-003/CA-004, FEAT-024 CA-006): every
+// panel icon is a valid Material Icons ligature, every panel body follows the
+// standard row pattern, and the config panels are split: Export config first,
+// Import config second, then the csv imports and the password panel.
 
 import './dom-shim.js';
 
@@ -13,7 +14,7 @@ import '../presentation/admin/rdio-admin-tools.js';
 
 import { findAll, texts } from './dom-shim.js';
 
-const VALID_ICONS = ['sync_alt', 'group_work', 'directions_car', 'lock', 'upload_file', 'delete'];
+const VALID_ICONS = ['file_download', 'file_upload', 'group_work', 'directions_car', 'lock', 'upload_file', 'delete'];
 
 function toolsSection() {
   const { store } = getAdminContext();
@@ -64,22 +65,46 @@ test('every Tools panel icon is a valid Material Icons ligature', () => {
   }
 });
 
-test('the config panel follows the row pattern', () => {
-  const panel = panelByTitle(toolsSection(), 'Import/export config');
+test('the panels run Export config, Import config, the csv imports, then the password panel', () => {
+  const el = toolsSection();
 
-  assert.ok(panel, 'Tools has no Import/export config panel');
+  const titles = findAll(el, (node) => node.tag === 'details').map(
+    (panel) => texts(findAll(panel, (node) => node.className === 'row-title'))[0],
+  );
 
-  assert.equal(findAll(panel, (node) => node.className === 'caption').length, 1, 'the config panel has no caption');
+  assert.deepEqual(titles, ['Export config', 'Import config', 'Import talkgroups', 'Import units', 'Change password']);
+});
+
+test('the export panel carries the export button in its row', () => {
+  const panel = panelByTitle(toolsSection(), 'Export config');
+
+  assert.ok(panel, 'Tools has no Export config panel');
+
+  assert.equal(findAll(panel, (node) => node.className === 'caption').length, 1, 'the export panel has no caption');
 
   const top = rows(panel, 'row top');
 
-  assert.equal(top.length, 1, 'the config panel has no row.top');
+  assert.equal(top.length, 1, 'the export panel has no row.top');
+  assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 1, 'the export row.top has no export button');
+  assert.equal(findAll(panel, isFileInput).length, 0, 'the export panel has no file picker');
+});
 
-  // Export button and the styled Choose file button sit in the row; the native
-  // picker is hidden and opens from the button.
-  assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 2, 'the config row.top has no export and choose-file buttons');
-  assert.equal(findAll(top[0], (node) => node.className === 'file-name').length, 1, 'the config row.top has no chosen-file caption');
-  assert.equal(findAll(panel, isFileInput).length, 1, 'the config panel has no file input');
+test('the import panel carries the styled file picker and the hidden native input', () => {
+  const panel = panelByTitle(toolsSection(), 'Import config');
+
+  assert.ok(panel, 'Tools has no Import config panel');
+
+  assert.equal(findAll(panel, (node) => node.className === 'caption').length, 1, 'the import panel has no caption');
+
+  const top = rows(panel, 'row top');
+
+  assert.equal(top.length, 1, 'the import panel has no row.top');
+
+  // The styled Choose file button and the chosen-file caption sit in the row; the
+  // native picker is hidden and opens from the button.
+  assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 1, 'the import row.top has no choose-file button');
+  assert.equal(findAll(top[0], (node) => node.className === 'file-name').length, 1, 'the import row.top has no chosen-file caption');
+  assert.equal(findAll(panel, isFileInput).length, 1, 'the import panel has no file input');
   assert.equal(findAll(panel, isFileInput)[0].hidden, true, 'the native file picker must stay hidden');
 });
 

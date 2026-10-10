@@ -38,7 +38,8 @@ class RdioAdminTools extends HTMLElement {
     const root = document.createElement('div');
     root.className = 'rdio-admin-card tools';
 
-    root.append(this.configPanel());
+    root.append(this.exportPanel());
+    root.append(this.importPanel());
     root.append(this.csvPanel('talkgroups', 'Import talkgroups', 'Upload a talkgroups CSV file (id, frequency, label, group, name, tag, description columns). Missing groups and tags are created automatically.'));
     root.append(this.csvPanel('units', 'Import units', 'Upload a units CSV file (id, label columns).'));
     root.append(passwordPanel());
@@ -99,10 +100,14 @@ class RdioAdminTools extends HTMLElement {
     return { button, name, input };
   }
 
-  // --- import/export config ---------------------------------------------------
+  // --- export config and import config -------------------------------------------
+  //
+  // Two panels, export first: downloading the saved config and loading a file into
+  // the working copies are separate operations, and one panel that mixes a button
+  // with a file picker reads as a single flow that does not exist.
 
-  configPanel() {
-    const details = this.panel('Import/export config', 'sync_alt');
+  exportPanel() {
+    const details = this.panel('Export config', 'file_download');
 
     const exportButton = document.createElement('button');
     exportButton.type = 'button';
@@ -121,6 +126,22 @@ class RdioAdminTools extends HTMLElement {
         showSnackbar('Unable to export config');
       }
     });
+
+    const captionEl = document.createElement('p');
+    captionEl.className = 'caption';
+    captionEl.textContent = 'Export downloads the saved config as JSON.';
+
+    const row = document.createElement('div');
+    row.className = 'row top';
+    row.append(exportButton);
+
+    details.append(captionEl, row);
+
+    return details;
+  }
+
+  importPanel() {
+    const details = this.panel('Import config', 'file_upload');
 
     const picker = this.filePicker('.json,application/json', async (file) => {
       try {
@@ -144,11 +165,11 @@ class RdioAdminTools extends HTMLElement {
 
     const captionEl = document.createElement('p');
     captionEl.className = 'caption';
-    captionEl.textContent = 'Export downloads the saved config as JSON. Choose a config JSON file to load it into the section working copies, then save each section to apply.';
+    captionEl.textContent = 'Choose a config JSON file to load it into the section working copies, then save each section to apply.';
 
     const row = document.createElement('div');
     row.className = 'row top';
-    row.append(exportButton, picker.button, picker.name);
+    row.append(picker.button, picker.name);
 
     details.append(captionEl, row, picker.input);
 
