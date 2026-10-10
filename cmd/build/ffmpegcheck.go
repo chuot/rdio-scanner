@@ -36,14 +36,14 @@ import (
 )
 
 // command runs one program with its arguments, hands it a recording on its input, and hands back what
-// it wrote. It is how the conformance check reaches a binary it cannot run itself: the compiled ffmpeg
+// it wrote. It is how the ffmpeg check reaches a binary it cannot run itself: the compiled ffmpeg
 // lives inside the build container, and the check reaches it through podman.
 type command func(argv []string, stdin []byte) ([]byte, error)
 
-// conformancePrograms are the two compiled programs the check runs, each as the arguments that start
+// checkPrograms are the two compiled programs the check runs, each as the arguments that start
 // it: the container, the interpreter when that container cannot run the architecture on its own, and
 // the program.
-type conformancePrograms struct {
+type checkPrograms struct {
 	FFmpeg  []string
 	FFProbe []string
 
@@ -92,8 +92,8 @@ var theConversionLevels = []conversionLevel{
 // the filters are allowed to produce.
 const thePaddedLength = 3.0
 
-// conformanceInput is one recording the check feeds ffmpeg.
-type conformanceInput struct {
+// checkInput is one recording the check feeds ffmpeg.
+type checkInput struct {
 	Name string
 	Mime string
 	Body []byte
@@ -102,35 +102,35 @@ type conformanceInput struct {
 //go:embed assets/tone.mp3
 var toneMP3 []byte
 
-// conformanceInputs are the recordings the dirwatch hands the converter: the same one-second tone, as
+// checkInputs are the recordings the dirwatch hands the converter: the same one-second tone, as
 // a WAV and as an MP3, because the trimmed build has to demux and decode both.
-func conformanceInputs() []conformanceInput {
-	return []conformanceInput{
+func checkInputs() []checkInput {
+	return []checkInput{
 		{Name: "wav", Mime: "audio/wav", Body: aToneWAV()},
 		{Name: "mp3", Mime: "audio/mpeg", Body: toneMP3},
 	}
 }
 
-// conformanceReport is what the check saw, which the build says to the operator.
-type conformanceReport struct {
+// checkReport is what the check saw, which the build says to the operator.
+type checkReport struct {
 	Conversions int
 	Shortest    float64
 	Longest     float64
 }
 
-// conformanceCheck runs a compiled ffmpeg through the argument list the converter actually uses, and
+// ffmpegCheck runs a compiled ffmpeg through the argument list the converter actually uses, and
 // reads what comes back the way the server's audio endpoints read it: an m4a, of the length the
 // filters ask for, carrying the tags the server writes.
 //
 // It is the proof that a trimmed build left nothing the converter needs out. Every way it fails stops
 // the build, because a bundle that cannot do the job is worse than no bundle: it is a deployment that
 // quietly stores the wrong audio.
-func conformanceCheck(execute command, programs conformancePrograms, dir string) (conformanceReport, error) {
+func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkReport, error) {
 	metadata := &theRecordingMetadata
 
-	report := conformanceReport{Shortest: math.MaxFloat64}
+	report := checkReport{Shortest: math.MaxFloat64}
 
-	for _, in := range conformanceInputs() {
+	for _, in := range checkInputs() {
 		for _, level := range theConversionLevels {
 			converted, err := execute(starts(programs.FFmpeg, ffmpeg.Arguments(level.Mode, metadata, true)...), in.Body)
 			if err != nil {
@@ -177,7 +177,7 @@ func conformanceCheck(execute command, programs conformancePrograms, dir string)
 
 // theCheckConfirms the converted recording is the recording the server would have stored: the tags are
 // all there, and the length is the one this level of conversion produces.
-func theCheckConfirms(format probedFormat, level conversionLevel, in conformanceInput, name string) (float64, error) {
+func theCheckConfirms(format probedFormat, level conversionLevel, in checkInput, name string) (float64, error) {
 	duration, err := strconv.ParseFloat(format.Duration, 64)
 	if err != nil || duration <= 0 {
 		return 0, fmt.Errorf("the compiled ffmpeg produced %s, whose length the bundled ffprobe cannot read", name)
@@ -218,7 +218,7 @@ type probedFormat struct {
 // probe asks the bundled ffprobe what it knows about one converted recording. It is given a file and
 // not the pipe: ffprobe cannot get a duration from a stream it cannot seek, which is the thing the
 // recording-duration feature has to know.
-func probe(execute command, programs conformancePrograms, path string) (probedFormat, error) {
+func probe(execute command, programs checkPrograms, path string) (probedFormat, error) {
 	argv := starts(programs.FFProbe,
 		"-v", "error",
 		"-show_entries", "format=duration:format_tags=title,artist,album,date,genre",

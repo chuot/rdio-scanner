@@ -29,7 +29,7 @@ import (
 	"testing"
 )
 
-// These are component tests of the conformance check: the compiled ffmpeg is run through the argument
+// These are component tests of the ffmpeg check: the compiled ffmpeg is run through the argument
 // list the converter actually uses, and what comes back is read the way the server's audio endpoints
 // read it. The commands are answered by a stand-in so that the check itself is what is being tested;
 // the real compiled binaries are run by the build, and recorded in validation.md.
@@ -39,7 +39,7 @@ func anM4A() []byte {
 	return []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'M', '4', 'A', ' ', 0, 0, 0, 0}
 }
 
-// aStandIn answers the conformance check's commands the way a working ffmpeg answers them, and keeps
+// aStandIn answers the ffmpeg check's commands the way a working ffmpeg answers them, and keeps
 // what it was asked to run. A duration or a set of tags it does not override is the one a working
 // build reports.
 type aStandIn struct {
@@ -131,10 +131,10 @@ func aCheckThatWrites(body []byte) command {
 	}
 }
 
-func aConformanceCheck(t *testing.T, execute command) (conformanceReport, error) {
+func anFFMPEGCheck(t *testing.T, execute command) (checkReport, error) {
 	t.Helper()
 
-	return conformanceCheck(execute, conformancePrograms{
+	return ffmpegCheck(execute, checkPrograms{
 		FFmpeg:  []string{"podman", "run", "--rm", "-i", "rdio-ffmpeg", "/work/ffmpeg-9.0.2/ffmpeg"},
 		FFProbe: []string{"podman", "run", "--rm", "rdio-ffmpeg", "/work/ffmpeg-9.0.2/ffprobe"},
 	}, t.TempDir())
@@ -142,11 +142,11 @@ func aConformanceCheck(t *testing.T, execute command) (conformanceReport, error)
 
 // The check is only worth having if it runs the argument list the server actually runs, so that list
 // comes from the converter itself and the two cannot drift apart.
-func TestTheConformanceCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(t *testing.T) {
+func TestTheFFMPEGCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(t *testing.T) {
 	stand := &aStandIn{}
 
-	if _, err := aConformanceCheck(t, stand.run); err != nil {
-		t.Fatalf("the conformance check refused a working ffmpeg: %v", err)
+	if _, err := anFFMPEGCheck(t, stand.run); err != nil {
+		t.Fatalf("the ffmpeg check refused a working ffmpeg: %v", err)
 	}
 
 	ran := stand.asked("/ffmpeg-9.0.2/ffmpeg")
@@ -178,62 +178,62 @@ func TestTheConformanceCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgument
 
 // A trimmed build that left out something the converter needs is exactly what this check exists to
 // catch, and it has to stop the build rather than warn about it.
-func TestTheConformanceCheckRefusesACompiledFfmpegThatCannotConvert(t *testing.T) {
-	_, err := aConformanceCheck(t, aCheckThatRefuses("Error opening output files: Invalid argument"))
+func TestTheFFMPEGCheckRefusesACompiledFfmpegThatCannotConvert(t *testing.T) {
+	_, err := anFFMPEGCheck(t, aCheckThatRefuses("Error opening output files: Invalid argument"))
 	if err == nil {
-		t.Fatal("the conformance check accepted an ffmpeg that refused to convert")
+		t.Fatal("the ffmpeg check accepted an ffmpeg that refused to convert")
 	}
 }
 
-func TestTheConformanceCheckRefusesACompiledFfmpegThatWritesNothing(t *testing.T) {
-	if _, err := aConformanceCheck(t, aCheckThatWrites([]byte{})); err == nil {
-		t.Fatal("the conformance check accepted an ffmpeg that wrote an empty recording")
+func TestTheFFMPEGCheckRefusesACompiledFfmpegThatWritesNothing(t *testing.T) {
+	if _, err := anFFMPEGCheck(t, aCheckThatWrites([]byte{})); err == nil {
+		t.Fatal("the ffmpeg check accepted an ffmpeg that wrote an empty recording")
 	}
 }
 
-func TestTheConformanceCheckRefusesAnOutputThatIsNotTheRecordingTheServerStores(t *testing.T) {
-	if _, err := aConformanceCheck(t, aCheckThatWrites([]byte("RIFF....WAVEfmt "))); err == nil {
-		t.Fatal("the conformance check accepted output that is not an m4a")
+func TestTheFFMPEGCheckRefusesAnOutputThatIsNotTheRecordingTheServerStores(t *testing.T) {
+	if _, err := anFFMPEGCheck(t, aCheckThatWrites([]byte("RIFF....WAVEfmt "))); err == nil {
+		t.Fatal("the ffmpeg check accepted output that is not an m4a")
 	}
 }
 
 // The filters pad the recording to three seconds. A build whose normalised output is not that long is
 // not the build the converter was written for.
-func TestTheConformanceCheckConfirmsThePaddedRecordingIsTheLengthTheFiltersAskFor(t *testing.T) {
+func TestTheFFMPEGCheckConfirmsThePaddedRecordingIsTheLengthTheFiltersAskFor(t *testing.T) {
 	stand := &aStandIn{duration: map[string]string{
 		"wav-norm.m4a": "1.500000",
 	}}
 
-	if _, err := aConformanceCheck(t, stand.run); err == nil {
-		t.Error("the conformance check accepted a normalised recording that was not padded to three seconds")
+	if _, err := anFFMPEGCheck(t, stand.run); err == nil {
+		t.Error("the ffmpeg check accepted a normalised recording that was not padded to three seconds")
 	}
 }
 
 // The plain level does not pad, and a plain recording that came back three seconds long is a build
 // that applied filters nobody asked for.
-func TestTheConformanceCheckConfirmsThePlainRecordingIsNotPadded(t *testing.T) {
+func TestTheFFMPEGCheckConfirmsThePlainRecordingIsNotPadded(t *testing.T) {
 	stand := &aStandIn{duration: map[string]string{
 		"wav-enabled.m4a": "3.010667",
 	}}
 
-	if _, err := aConformanceCheck(t, stand.run); err == nil {
-		t.Error("the conformance check accepted a plain recording that was padded when nothing asked for it")
+	if _, err := anFFMPEGCheck(t, stand.run); err == nil {
+		t.Error("the ffmpeg check accepted a plain recording that was padded when nothing asked for it")
 	}
 }
 
-func TestTheConformanceCheckConfirmsTheTagsReachTheConvertedRecording(t *testing.T) {
+func TestTheFFMPEGCheckConfirmsTheTagsReachTheConvertedRecording(t *testing.T) {
 	lost := map[string]string{"title": "Call", "artist": "Scanner"}
 
 	stand := &aStandIn{tags: map[string]map[string]string{"wav-loudnorm.m4a": lost}}
 
-	if _, err := aConformanceCheck(t, stand.run); err == nil {
-		t.Error("the conformance check accepted a converted recording that lost the tags the server writes")
+	if _, err := anFFMPEGCheck(t, stand.run); err == nil {
+		t.Error("the ffmpeg check accepted a converted recording that lost the tags the server writes")
 	}
 }
 
 // The duration and the tags are read out of the converted recording with the bundled ffprobe, given a
 // file rather than a pipe: ffprobe cannot get a duration from a stream it cannot seek.
-func TestTheConformanceCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
+func TestTheFFMPEGCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 	probed := []string{}
 
 	execute := func(argv []string, stdin []byte) ([]byte, error) {
@@ -256,8 +256,8 @@ func TestTheConformanceCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 		return anM4A(), nil
 	}
 
-	if _, err := aConformanceCheck(t, execute); err != nil {
-		t.Fatalf("the conformance check refused a working ffmpeg: %v", err)
+	if _, err := anFFMPEGCheck(t, execute); err != nil {
+		t.Fatalf("the ffmpeg check refused a working ffmpeg: %v", err)
 	}
 
 	if len(probed) != 6 {
@@ -276,8 +276,8 @@ func TestTheConformanceCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 
 // The recordings the check feeds ffmpeg are the ones the dirwatch hands the converter: the same tone,
 // as a WAV and as an MP3.
-func TestTheConformanceCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
-	inputs := conformanceInputs()
+func TestTheFFMPEGCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
+	inputs := checkInputs()
 
 	if len(inputs) != 2 {
 		t.Fatalf("the check feeds ffmpeg %d recordings, want a WAV and an MP3", len(inputs))

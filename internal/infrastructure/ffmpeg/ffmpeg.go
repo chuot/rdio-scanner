@@ -125,7 +125,7 @@ func hasLoudnorm(line string) bool {
 // arrives on the pipe and leaves on it, the tags are the ones the talkgroup has, and the filters are
 // the ones this release of ffmpeg and this conversion level ask for.
 //
-// It is the converter's own argument list, and the build's conformance run uses it to check the
+// It is the converter's own argument list, and the build's ffmpeg check uses it to check the
 // ffmpeg it compiles, so that the arguments the server runs and the arguments the compiled ffmpeg was
 // checked against cannot drift apart.
 func Arguments(mode uint, metadata *ports.AudioMetadata, loudnorm bool) []string {

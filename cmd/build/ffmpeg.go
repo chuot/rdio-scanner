@@ -158,7 +158,7 @@ func sha256Of(body []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// podmanRun is how every step and every conformance command enters a container.
+// podmanRun is how every step and every check command enters a container.
 //
 // --userns=host is what makes the artifacts the container writes belong to the operator who ran the
 // build. Without it, rootless podman maps the container's root to a subuid: the tree it compiled in
@@ -494,7 +494,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 		}
 
-		report, err := t.runConformance(podman, plan, manifest, record, target)
+		report, err := t.runFFMPEGCheck(podman, plan, manifest, record, target)
 		if err != nil {
 			return err
 		}
@@ -534,9 +534,9 @@ func prepareFFmpeg(paths ffmpegPaths) error {
 	return nil
 }
 
-// runConformance runs the compiled programs through the converter's own argument list, inside the
+// runFFMPEGCheck runs the compiled programs through the converter's own argument list, inside the
 // container that can run them.
-func (t tool) runConformance(podman string, plan ffmpegPlan, manifest bundle.Manifest, record bundle.Target, target string) (conformanceReport, error) {
+func (t tool) runFFMPEGCheck(podman string, plan ffmpegPlan, manifest bundle.Manifest, record bundle.Target, target string) (checkReport, error) {
 	image := plan.Image
 	if record.Conformance.Container != "" {
 		image = plan.Runner
@@ -549,9 +549,9 @@ func (t tool) runConformance(podman string, plan ffmpegPlan, manifest bundle.Man
 
 	// The recordings the check writes out land in the scratch directory itself, which the container
 	// sees at /work, and not in the source tree the compiled programs live in.
-	return conformanceCheck(
+	return ffmpegCheck(
 		inContainer(podman, image, plan.Paths.scratch),
-		conformancePrograms{FFmpeg: ffmpeg, FFProbe: ffprobe, Work: "/work"},
+		checkPrograms{FFmpeg: ffmpeg, FFProbe: ffprobe, Work: "/work"},
 		plan.Paths.scratch,
 	)
 }

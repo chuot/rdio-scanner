@@ -342,10 +342,10 @@ func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
 	}
 }
 
-// The conformance check reaches the compiled ffmpeg through the container it was built in, and the
+// The ffmpeg check reaches the compiled ffmpeg through the container it was built in, and the
 // container has to be named before the program: without it podman reads the program as the image to
 // run, and says "invalid reference format".
-func TestTheConformanceCheckNamesTheContainerItRunsTheCompiledFfmpegIn(t *testing.T) {
+func TestTheFFMPEGCheckNamesTheContainerItRunsTheCompiledFfmpegIn(t *testing.T) {
 	argv := containerRun(
 		"podman",
 		"rdio-ffmpeg:linux-arm64-0123456789ab",
