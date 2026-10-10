@@ -56,6 +56,7 @@ rdio-admin > .rdio-admin-header .rdio-admin-brand {
 }
 
 rdio-admin > .rdio-admin-header .rdio-admin-logo {
+  border-radius: 6px;
   height: 32px;
   width: 32px;
 }
@@ -88,7 +89,7 @@ rdio-admin > .rdio-admin-layout {
 /* --- sidebar nav ------------------------------------------------------------- */
 
 rdio-admin .rdio-admin-nav {
-  background: rgb(36, 36, 36);
+  background: var(--rdio-background);
   border-right: 1px solid rgb(60, 60, 60);
   display: flex;
   flex-direction: column;
@@ -153,7 +154,7 @@ rdio-admin > rdio-admin-login {
 }
 
 rdio-admin .rdio-admin-login {
-  background: rgb(38, 38, 38);
+  background: var(--rdio-primary-dark);
   border: 1px solid rgb(60, 60, 60);
   border-radius: 6px;
   max-width: 360px;
@@ -175,7 +176,7 @@ rdio-admin .rdio-admin-login .rdio-button {
 /* --- section cards ------------------------------------------------------------- */
 
 rdio-admin .rdio-admin-card {
-  background: rgb(38, 38, 38);
+  background: var(--rdio-primary-dark);
   border: 1px solid rgb(60, 60, 60);
   border-radius: 6px;
   margin: 0 auto;
@@ -195,6 +196,15 @@ rdio-admin .rdio-admin-card > .row.top {
 rdio-admin .rdio-admin-card > .row.top p {
   flex: 1 1 300px;
   margin: 0;
+}
+
+/* The per-level sections pick their system from the dropdown in the top row. */
+
+rdio-admin .rdio-admin-card.sites > .row.top rdio-select,
+rdio-admin .rdio-admin-card.talkgroups > .row.top rdio-select,
+rdio-admin .rdio-admin-card.units > .row.top rdio-select {
+  flex: 0 1 260px;
+  min-width: 200px;
 }
 
 rdio-admin .rdio-admin-empty {
@@ -340,39 +350,6 @@ rdio-admin details.rdio-admin-row > p {
   margin: 8px 12px 0;
 }
 
-/* --- sub lists (sites / talkgroups / units) -------------------------------------- */
-
-rdio-admin .rdio-admin-sublist {
-  border: 1px solid rgb(70, 70, 70);
-  border-radius: 4px;
-  margin: 8px 12px;
-}
-
-rdio-admin .rdio-admin-sublist > summary {
-  cursor: pointer;
-  font-weight: 500;
-  list-style: none;
-  padding: 8px 12px;
-  user-select: none;
-}
-
-rdio-admin .rdio-admin-sublist > summary::-webkit-details-marker {
-  display: none;
-}
-
-rdio-admin .rdio-admin-sublist > .row.top {
-  align-items: flex-start;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: space-between;
-  padding: 0 12px 8px;
-}
-
-rdio-admin .rdio-admin-sublist > .rdio-admin-rows {
-  padding: 0 12px 12px;
-}
-
 /* --- checkbox lists -------------------------------------------------------------- */
 
 rdio-admin .rdio-checkbox-list {
@@ -451,52 +428,57 @@ rdio-admin .rdio-admin-conflict {
 }
 
 rdio-admin .rdio-admin-section-bar .rdio-button.save:not(:disabled),
-rdio-admin .rdio-admin-card.password .rdio-button.save:not(:disabled) {
+rdio-admin .rdio-admin-card.tools .rdio-button.save:not(:disabled) {
   background: var(--rdio-accent);
 }
 
 rdio-admin .rdio-admin-section-bar .rdio-button.save:hover:not(:disabled),
-rdio-admin .rdio-admin-card.password .rdio-button.save:hover:not(:disabled) {
+rdio-admin .rdio-admin-card.tools .rdio-button.save:hover:not(:disabled) {
   background: var(--rdio-accent-dark);
 }
 
-/* --- todos -------------------------------------------------------------------------- */
+/* --- todos banner ------------------------------------------------------------------ */
 
-rdio-admin .rdio-admin-card.todos h2 {
-  font-size: 18px;
-  font-weight: 500;
-  margin: 0 0 12px;
+/* The banner is the persistent strip under the header: every open todo, one row
+   each. It renders nothing when the list is empty, so the strip only exists when
+   there is something the administrator has to act on. */
+
+rdio-admin > .rdio-admin-todos-banner {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px;
 }
 
-rdio-admin .rdio-admin-card.todos ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-rdio-admin .rdio-admin-card.todos .todo {
+rdio-admin > .rdio-admin-todos-banner .todo {
   align-items: center;
   border-radius: 4px;
   display: flex;
   gap: 10px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px;
 }
 
-rdio-admin .rdio-admin-card.todos .todo.warn {
+rdio-admin > .rdio-admin-todos-banner .todo.warn {
   background: rgba(244, 67, 54, 0.15);
+  border: 1px solid var(--rdio-warn);
 }
 
-rdio-admin .rdio-admin-card.todos .todo.warn .material-icons {
+rdio-admin > .rdio-admin-todos-banner .todo.warn .material-icons {
   color: var(--rdio-warn);
 }
 
-rdio-admin .rdio-admin-card.todos .todo.info {
+rdio-admin > .rdio-admin-todos-banner .todo.info {
   background: rgba(76, 175, 80, 0.12);
+  border: 1px solid var(--rdio-accent);
 }
 
-rdio-admin .rdio-admin-card.todos .todo.info .material-icons {
+rdio-admin > .rdio-admin-todos-banner .todo.info .material-icons {
   color: var(--rdio-accent);
+}
+
+rdio-admin > .rdio-admin-todos-banner .todo .material-icons {
+  font-size: 20px;
 }
 
 /* --- logs table ---------------------------------------------------------------------- */
@@ -662,15 +644,68 @@ rdio-admin .rdio-admin-card.tools details.rdio-admin-row > .rdio-button-mini {
   margin: 8px 12px 12px;
 }
 
-/* --- password ------------------------------------------------------------------------- */
+/* --- password panel (inside Tools) -------------------------------------------------- */
 
-rdio-admin .rdio-admin-card.password .row.bottom {
-  border-top: 1px solid rgb(60, 60, 60);
+rdio-admin .rdio-admin-card.tools details.rdio-admin-row form {
+  padding: 8px 12px 12px;
+}
+
+rdio-admin .rdio-admin-card.tools .row.bottom {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 12px;
-  padding-top: 12px;
+}
+
+/* --- openapi help box --------------------------------------------------------------- */
+
+/* The small box every section card ends with: the endpoints the section saves
+   through, and one curl example. It is read, never clicked. */
+
+rdio-admin .rdio-admin-openapi-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgb(60, 60, 60);
+  border-radius: 4px;
+  margin: 16px 0 0;
+  padding: 10px 12px;
+}
+
+rdio-admin .rdio-admin-openapi-box .box-title {
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+rdio-admin .rdio-admin-openapi-box p.caption {
+  margin: 0 0 6px;
+}
+
+rdio-admin .rdio-admin-openapi-box ul {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+rdio-admin .rdio-admin-openapi-box li {
+  margin: 2px 0;
+}
+
+rdio-admin .rdio-admin-openapi-box code {
+  background: var(--rdio-primary-dark);
+  border-radius: 3px;
+  font-family: "Roboto Mono", monospace;
+  font-size: 13px;
+  padding: 2px 6px;
+}
+
+rdio-admin .rdio-admin-openapi-box pre {
+  background: var(--rdio-primary-dark);
+  border-radius: 4px;
+  font-family: "Roboto Mono", monospace;
+  font-size: 12px;
+  margin: 0;
+  overflow-x: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
 }
 
 /* --- systems-selection dialog tree ----------------------------------------------------- */
