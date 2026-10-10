@@ -13,7 +13,7 @@ export function computeTodos(config, { passwordNeedChange } = {}) {
   if (!config?.systems?.length) {
     todos.push({
       level: 'info',
-      message: 'No systems defined. You can define one from the systems menu, or let the auto populate feature create it for you if the global option is turned on.',
+      message: 'No systems defined. You can define one from the systems menu, or turn on Auto Populate in the Options menu to have them created for you.',
     });
   }
 

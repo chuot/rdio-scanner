@@ -21,7 +21,7 @@ describe('domain/todos — exact legacy messages', () => {
         const todos = computeTodos({ systems: [], apikeys: [{ id: 1 }], dirwatch: [] }, {});
 
         assert.deepEqual(todos.map((t) => t.level), ['info']);
-        assert.equal(todos[0].message, 'No systems defined. You can define one from the systems menu, or let the auto populate feature create it for you if the global option is turned on.');
+        assert.equal(todos[0].message, 'No systems defined. You can define one from the systems menu, or turn on Auto Populate in the Options menu to have them created for you.');
     });
 
     it('reports missing ingest sources when both apikeys and dirwatch are empty', () => {
