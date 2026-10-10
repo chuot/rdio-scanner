@@ -27,8 +27,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -353,7 +351,7 @@ func TestCallUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := readGolden(t, "rest-upload.txt")
+	want := capturedAnswer(t, "rest-upload.txt")
 
 	if got != want {
 		t.Errorf("upload answer =\n  %q\nwant\n  %q", got, want)
@@ -391,7 +389,7 @@ func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(
 	}
 
 	got := rec.Body.String()
-	want := readGolden(t, "rest-upload-denied.txt")
+	want := capturedAnswer(t, "rest-upload-denied.txt")
 
 	if got != want {
 		t.Errorf("upload answer =\n  %q\nwant\n  %q", got, want)
@@ -454,7 +452,7 @@ func TestCallUploadEndpointAcceptsAKeyScopedToTheSystemTheUploadNames(t *testing
 		t.Fatalf("upload status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	if rec.Body.String() != readGolden(t, "rest-upload.txt") {
+	if rec.Body.String() != capturedAnswer(t, "rest-upload.txt") {
 		t.Errorf("upload answer = %q, want the captured success line", rec.Body.String())
 	}
 }
@@ -662,7 +660,7 @@ func TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace(t *testing.T
 		t.Fatalf("upload status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	if rec.Body.String() != readGolden(t, "rest-upload.txt") {
+	if rec.Body.String() != capturedAnswer(t, "rest-upload.txt") {
 		t.Errorf("upload answer = %q, want the captured success line", rec.Body.String())
 	}
 
@@ -700,7 +698,7 @@ func TestTrunkRecorderUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := readGolden(t, "rest-trunk-recorder-upload.txt")
+	want := capturedAnswer(t, "rest-trunk-recorder-upload.txt")
 
 	if got != want {
 		t.Errorf("trunk-recorder upload answer =\n  %q\nwant\n  %q", got, want)
@@ -862,15 +860,4 @@ func (err *bodyCutShortError) Error() string {
 	return "the connection was closed while the body was being read"
 }
 
-// readGolden reads the capture an upload endpoint is answered with. The upload endpoints answer with plain
-// text, so the capture is compared as bytes and not decoded.
-func readGolden(t *testing.T, name string) string {
-	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("../../../../testdata/golden", name))
-	if err != nil {
-		t.Fatalf("reading the golden capture %s: %v", name, err)
-	}
-
-	return string(b)
-}
