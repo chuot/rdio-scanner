@@ -142,7 +142,7 @@ export const scannerConfig = {
     srcDir: scannerDir,
     entryPoints: [join(scannerDir, 'main.js')],
     indexHtml: join(scannerDir, 'index.html'),
-    serviceWorker: { source: join(scannerDir, 'sw.js'), register: 'sw.js', scope: '/' },
+    serviceWorker: { source: join(scannerDir, 'infrastructure', 'service-worker.js'), register: 'sw.js', scope: '/' },
     staticFiles: [join(sharedDir, 'favicon.ico'), join(scannerDir, 'manifest.webmanifest')],
     staticDirs: copiedAssets,
     outDir: scannerBundle,
@@ -230,8 +230,10 @@ if ('serviceWorker' in navigator) {
 }
 
 /**
- * Emit sw.js with the generated precache manifest injected as a constant
- * (decision-pwa-custom-sw.md §4). Stable, unhashed filename.
+ * Emit the service worker with the generated precache manifest injected as a
+ * constant (decision-pwa-custom-sw.md §4). The source lives with the other
+ * infrastructure modules; the name it is written under is the one the built
+ * page registers, and it stays unhashed.
  */
 function processServiceWorker(config, names) {
     if (!config.serviceWorker) {
