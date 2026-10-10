@@ -36,11 +36,11 @@ rdio-admin {
 rdio-admin > .rdio-admin-header {
   align-items: center;
   background: var(--rdio-primary-dark);
-  border-bottom: 1px solid rgb(60, 60, 60);
+  border-bottom: 1px solid var(--rdio-border);
   display: flex;
   flex: 0 0 auto;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 10px var(--rdio-space-4);
 }
 
 rdio-admin > .rdio-admin-header h1 {
@@ -56,7 +56,7 @@ rdio-admin > .rdio-admin-header .rdio-admin-brand {
 }
 
 rdio-admin > .rdio-admin-header .rdio-admin-logo {
-  border-radius: 6px;
+  border-radius: var(--rdio-radius-card);
   height: 32px;
   width: 32px;
 }
@@ -83,12 +83,12 @@ rdio-admin > .rdio-admin-layout {
 
 rdio-admin .rdio-admin-nav {
   background: var(--rdio-background);
-  border-right: 1px solid rgb(60, 60, 60);
+  border-right: 1px solid var(--rdio-border);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--rdio-space-1);
   overflow-y: auto;
-  padding: 12px 8px;
+  padding: var(--rdio-space-3) var(--rdio-space-2);
 }
 
 rdio-admin .rdio-admin-nav button {
@@ -96,14 +96,14 @@ rdio-admin .rdio-admin-nav button {
   background: none;
   border: none;
   border-left: 3px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--rdio-radius-row);
   color: inherit;
   cursor: pointer;
   display: flex;
   font-family: inherit;
   font-size: 14px;
   gap: 10px;
-  padding: 8px 12px;
+  padding: var(--rdio-space-2) var(--rdio-space-3);
   text-align: left;
   width: 100%;
 }
@@ -133,7 +133,7 @@ rdio-admin .rdio-admin-placeholder {
 rdio-admin > .rdio-admin-layout > .rdio-admin-content {
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--rdio-space-4);
 }
 
 /* --- login ------------------------------------------------------------------- */
@@ -148,8 +148,8 @@ rdio-admin > rdio-admin-login {
 
 rdio-admin .rdio-admin-login {
   background: var(--rdio-primary-dark);
-  border: 1px solid rgb(60, 60, 60);
-  border-radius: 6px;
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-card);
   max-width: 360px;
   padding: 24px;
   width: 100%;
@@ -162,7 +162,7 @@ rdio-admin .rdio-admin-login h1 {
 }
 
 rdio-admin .rdio-admin-login .rdio-button {
-  margin-top: 12px;
+  margin-top: var(--rdio-space-3);
   width: 100%;
 }
 
@@ -170,20 +170,20 @@ rdio-admin .rdio-admin-login .rdio-button {
 
 rdio-admin .rdio-admin-card {
   background: var(--rdio-primary-dark);
-  border: 1px solid rgb(60, 60, 60);
-  border-radius: 6px;
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-card);
   margin: 0 auto;
-  max-width: 900px;
-  padding: 16px;
+  max-width: var(--rdio-content-width);
+  padding: var(--rdio-card-padding);
 }
 
 rdio-admin .rdio-admin-card > .row.top {
   align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--rdio-space-3);
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-card > .row.top p {
@@ -209,36 +209,36 @@ rdio-admin .rdio-admin-empty {
 rdio-admin .rdio-admin-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--rdio-space-2);
 }
 
 /* --- rows (bordered cards) ---------------------------------------------------- */
 
 rdio-admin .rdio-admin-row {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgb(60, 60, 60);
-  border-radius: 4px;
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-row);
 }
 
 rdio-admin .rdio-admin-row .row {
   align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: var(--rdio-space-3) var(--rdio-space-4);
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: var(--rdio-space-2) var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-row > .row.top {
   align-items: center;
-  border-bottom: 1px solid rgb(60, 60, 60);
-  gap: 8px;
+  border-bottom: 1px solid var(--rdio-border);
+  gap: var(--rdio-space-2);
 }
 
 rdio-admin .rdio-admin-row > .row.bottom {
-  border-top: 1px solid rgb(60, 60, 60);
+  border-top: 1px solid var(--rdio-border);
   justify-content: flex-end;
-  margin-top: 4px;
+  margin-top: var(--rdio-space-1);
 }
 
 rdio-admin .rdio-admin-row p {
@@ -260,7 +260,7 @@ rdio-admin .rdio-admin-row .row > rdio-select {
 
 rdio-admin .rdio-admin-row > rdio-form-field {
   max-width: 480px;
-  padding: 4px 12px;
+  padding: var(--rdio-space-1) var(--rdio-space-3);
 }
 
 rdio-admin .row-title {
@@ -312,9 +312,9 @@ rdio-admin details.rdio-admin-row > summary {
   align-items: center;
   cursor: pointer;
   display: flex;
-  gap: 8px;
+  gap: var(--rdio-space-2);
   list-style: none;
-  padding: 10px 12px;
+  padding: 10px var(--rdio-space-3);
   user-select: none;
 }
 
@@ -332,7 +332,7 @@ rdio-admin details.rdio-admin-row > summary::after {
 }
 
 rdio-admin details.rdio-admin-row[open] > summary {
-  border-bottom: 1px solid rgb(60, 60, 60);
+  border-bottom: 1px solid var(--rdio-border);
 }
 
 rdio-admin details.rdio-admin-row[open] > summary::after {
@@ -340,7 +340,7 @@ rdio-admin details.rdio-admin-row[open] > summary::after {
 }
 
 rdio-admin details.rdio-admin-row > p {
-  margin: 8px 12px 0;
+  margin: var(--rdio-space-2) var(--rdio-space-3) 0;
 }
 
 /* --- checkbox lists -------------------------------------------------------------- */
@@ -362,10 +362,10 @@ rdio-admin .rdio-checkbox-list label {
 
 rdio-admin .rdio-admin-card.options > .row {
   align-items: flex-start;
-  border-bottom: 1px solid rgb(55, 55, 55);
+  border-bottom: 1px solid var(--rdio-border);
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: var(--rdio-space-3) var(--rdio-space-4);
   justify-content: space-between;
   padding: 10px 0;
 }
@@ -391,20 +391,20 @@ rdio-admin .rdio-admin-card.options > .row > rdio-toggle {
 
 rdio-admin rdio-admin-section-bar {
   display: block;
-  margin: 16px -16px -16px;
+  margin: var(--rdio-card-padding) calc(-1 * var(--rdio-card-padding)) calc(-1 * var(--rdio-card-padding));
 }
 
 rdio-admin .rdio-admin-section-bar {
   align-items: center;
   background: var(--rdio-primary-dark);
-  border-top: 1px solid rgb(60, 60, 60);
+  border-top: 1px solid var(--rdio-border);
   bottom: 0;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 var(--rdio-radius-card) var(--rdio-radius-card);
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--rdio-space-2);
   justify-content: flex-end;
-  padding: 12px 16px;
+  padding: var(--rdio-space-3) var(--rdio-space-4);
   position: sticky;
 }
 
@@ -412,12 +412,12 @@ rdio-admin .rdio-admin-conflict {
   align-items: center;
   background: rgba(244, 67, 54, 0.15);
   border: 1px solid var(--rdio-warn);
-  border-radius: 4px;
+  border-radius: var(--rdio-radius-row);
   display: flex;
   flex: 1 1 100%;
-  gap: 12px;
+  gap: var(--rdio-space-3);
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: var(--rdio-space-2) var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-section-bar .rdio-button.save:not(:disabled),
@@ -442,19 +442,19 @@ rdio-admin > .rdio-admin-todos-banner {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--rdio-space-1);
   margin: 0 auto;
-  max-width: 900px;
-  padding: 8px 16px;
+  max-width: var(--rdio-content-width);
+  padding: var(--rdio-space-2) var(--rdio-space-4);
   width: 100%;
 }
 
 rdio-admin > .rdio-admin-todos-banner .todo {
   align-items: center;
-  border-radius: 4px;
+  border-radius: var(--rdio-radius-row);
   display: flex;
   gap: 10px;
-  padding: 8px 12px;
+  padding: var(--rdio-space-2) var(--rdio-space-3);
 }
 
 rdio-admin > .rdio-admin-todos-banner .todo.warn {
@@ -492,9 +492,9 @@ rdio-admin .rdio-admin-card.logs table {
 
 rdio-admin .rdio-admin-card.logs th,
 rdio-admin .rdio-admin-card.logs td {
-  border-bottom: 1px solid rgb(60, 60, 60);
+  border-bottom: 1px solid var(--rdio-border);
   font-size: 14px;
-  padding: 8px 12px;
+  padding: var(--rdio-space-2) var(--rdio-space-3);
   text-align: left;
 }
 
@@ -522,7 +522,7 @@ rdio-admin .rdio-admin-card.logs .material-icons.info {
 }
 
 rdio-admin .rdio-admin-card.logs .material-icons.warn {
-  color: orange;
+  color: var(--rdio-warn);
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-progress {
@@ -557,8 +557,8 @@ rdio-admin .rdio-admin-card.logs .rdio-progress[hidden] {
 rdio-admin .rdio-admin-card.logs .rdio-log-sources {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--rdio-space-2);
+  margin-bottom: var(--rdio-space-2);
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-log-sources[hidden] {
@@ -567,13 +567,13 @@ rdio-admin .rdio-admin-card.logs .rdio-log-sources[hidden] {
 
 rdio-admin .rdio-admin-card.logs .rdio-log-source {
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgb(60, 60, 60);
+  border: 1px solid var(--rdio-border);
   border-radius: 12px;
   color: inherit;
   cursor: pointer;
   font-family: inherit;
   font-size: 13px;
-  padding: 4px 10px;
+  padding: var(--rdio-space-1) 10px;
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-log-source:hover {
@@ -583,15 +583,15 @@ rdio-admin .rdio-admin-card.logs .rdio-log-source:hover {
 rdio-admin .rdio-admin-card.logs .rdio-log-source[aria-pressed="true"] {
   background: var(--rdio-accent);
   border-color: var(--rdio-accent-dark);
-  color: rgb(20, 20, 20);
+  color: var(--rdio-background);
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-filters form {
   align-items: flex-end;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
+  gap: var(--rdio-space-3);
+  margin-top: var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-filters rdio-form-field {
@@ -602,7 +602,7 @@ rdio-admin .rdio-admin-card.logs .rdio-filters rdio-form-field {
 rdio-admin .rdio-admin-card.logs .rdio-filters .actions {
   display: flex;
   flex: 1;
-  gap: 8px;
+  gap: var(--rdio-space-2);
   justify-content: flex-end;
 }
 
@@ -624,13 +624,13 @@ rdio-admin .rdio-admin-card.tools .row.top > input[type="file"] {
 
 rdio-admin .rdio-admin-csv-preview {
   border-collapse: collapse;
-  margin: 8px 12px;
-  width: calc(100% - 24px);
+  margin: var(--rdio-space-2) var(--rdio-space-3);
+  width: calc(100% - 2 * var(--rdio-space-3));
 }
 
 rdio-admin .rdio-admin-csv-preview th,
 rdio-admin .rdio-admin-csv-preview td {
-  border-bottom: 1px solid rgb(60, 60, 60);
+  border-bottom: 1px solid var(--rdio-border);
   font-size: 13px;
   padding: 6px 10px;
   text-align: left;
@@ -653,14 +653,14 @@ rdio-admin .rdio-admin-card.tools details.rdio-admin-row > .rdio-button-mini {
 /* --- password panel (inside Tools) -------------------------------------------------- */
 
 rdio-admin .rdio-admin-card.tools details.rdio-admin-row form {
-  padding: 8px 12px 12px;
+  padding: var(--rdio-space-2) var(--rdio-space-3) var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-card.tools .row.bottom {
   display: flex;
-  gap: 8px;
+  gap: var(--rdio-space-2);
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: var(--rdio-space-3);
 }
 
 /* --- openapi help box --------------------------------------------------------------- */
@@ -670,10 +670,10 @@ rdio-admin .rdio-admin-card.tools .row.bottom {
 
 rdio-admin .rdio-admin-openapi-box {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgb(60, 60, 60);
-  border-radius: 4px;
-  margin: 16px 0 0;
-  padding: 10px 12px;
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-row);
+  margin: var(--rdio-space-4) 0 0;
+  padding: 10px var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-openapi-box .box-title {
@@ -698,19 +698,19 @@ rdio-admin .rdio-admin-openapi-box li {
 rdio-admin .rdio-admin-openapi-box code {
   background: var(--rdio-primary-dark);
   border-radius: 3px;
-  font-family: "Roboto Mono", monospace;
+  font-family: var(--rdio-mono);
   font-size: 13px;
   padding: 2px 6px;
 }
 
 rdio-admin .rdio-admin-openapi-box pre {
   background: var(--rdio-primary-dark);
-  border-radius: 4px;
-  font-family: "Roboto Mono", monospace;
+  border-radius: var(--rdio-radius-row);
+  font-family: var(--rdio-mono);
   font-size: 12px;
   margin: 0;
   overflow-x: auto;
-  padding: 8px 10px;
+  padding: var(--rdio-space-2) 10px;
   white-space: pre-wrap;
 }
 
@@ -722,10 +722,10 @@ rdio-systems-selection .rdio-systems-selection {
 }
 
 rdio-systems-selection fieldset {
-  border: 1px solid rgb(70, 70, 70);
-  border-radius: 4px;
-  margin: 8px 0;
-  padding: 8px 12px;
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-row);
+  margin: var(--rdio-space-2) 0;
+  padding: var(--rdio-space-2) var(--rdio-space-3);
 }
 
 rdio-systems-selection legend {
@@ -741,7 +741,7 @@ rdio-systems-selection .rdio-tree-item {
 }
 
 rdio-systems-selection .rdio-tree-item.everything {
-  border-bottom: 1px solid rgb(70, 70, 70);
+  border-bottom: 1px solid var(--rdio-border);
   font-weight: 500;
   margin-bottom: 8px;
   padding-bottom: 8px;
@@ -765,11 +765,11 @@ rdio-systems-selection .indent {
 
   rdio-admin .rdio-admin-nav {
     border-right: none;
-    border-bottom: 1px solid rgb(60, 60, 60);
+    border-bottom: 1px solid var(--rdio-border);
     flex-direction: row;
     flex-wrap: wrap;
     overflow-y: visible;
-    padding: 8px;
+    padding: var(--rdio-space-2);
   }
 
   rdio-admin .rdio-admin-nav button {
@@ -778,10 +778,16 @@ rdio-systems-selection .indent {
   }
 
   rdio-admin .rdio-admin-content {
-    padding: 12px;
+    padding: var(--rdio-space-3);
+  }
+
+  /* The card padding token is what the save bar's negative margin is built from,
+     so the narrow card cannot desynchronize the bar. */
+  rdio-admin {
+    --rdio-card-padding: 12px;
   }
 
   rdio-admin .rdio-admin-card {
-    padding: 12px;
+    padding: var(--rdio-card-padding);
   }
 }

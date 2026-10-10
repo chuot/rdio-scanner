@@ -88,6 +88,46 @@
   src: url(assets/fonts/material-icons-v129.woff2) format("woff2");
 }
 
+/* Roboto Mono is a variable font: one woff2 per subset carries both weights. */
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(assets/fonts/roboto-mono-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url(assets/fonts/roboto-mono-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/roboto-mono-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(assets/fonts/roboto-mono-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 .material-icons {
   direction: ltr;
   display: inline-block;
@@ -114,6 +154,20 @@
   --rdio-accent-dark: rgb(56, 142, 64);
   --rdio-warn: rgb(244, 67, 54);
   --rdio-font-family: Roboto, "Helvetica Neue", sans-serif;
+  --rdio-mono: "Roboto Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  /* One border grey, one radius scale, one spacing scale, one content width: the
+     admin cards, rows, bars, and boxes all draw from these, so a screen cannot
+     drift into its own greys. */
+  --rdio-border: rgb(60, 60, 60);
+  --rdio-radius-card: 6px;
+  --rdio-radius-row: 4px;
+  --rdio-content-width: 900px;
+  --rdio-card-padding: 16px;
+  --rdio-space-1: 4px;
+  --rdio-space-2: 8px;
+  --rdio-space-3: 12px;
+  --rdio-space-4: 16px;
 }
 
 html,
@@ -184,9 +238,9 @@ rdio-dialog {
 
 .rdio-dialog-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--rdio-space-2);
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: var(--rdio-space-4);
 }
 
 .rdio-button,
@@ -237,7 +291,7 @@ rdio-dialog {
 
 rdio-form-field {
   display: block;
-  margin: 4px 0;
+  margin: var(--rdio-space-1) 0;
 }
 
 rdio-form-field label {
