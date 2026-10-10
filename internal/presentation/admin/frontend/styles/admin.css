@@ -432,24 +432,26 @@ rdio-admin .rdio-admin-card.tools .rdio-button.save:hover:not(:disabled) {
 
 /* --- todos banner ------------------------------------------------------------------ */
 
-/* The banner is the persistent strip under the header: every open todo, one row
-   each. It renders nothing when the list is empty, so the strip only exists when
-   there is something the administrator has to act on. It fits the content frame:
-   the same width cap and centering as a section card. */
+/* The banner is the card the administrator sees first: it sits in the content column,
+   above the section card, with the same width cap and card chrome, so its edges line
+   up with the section below. It renders nothing when the list is empty, so the strip
+   only exists when there is something the administrator has to act on. */
 
-rdio-admin > .rdio-admin-todos-banner {
+rdio-admin .rdio-admin-content > .rdio-admin-todos-banner {
+  background: var(--rdio-primary-dark);
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-card);
   box-sizing: border-box;
   display: flex;
-  flex: 0 0 auto;
   flex-direction: column;
-  gap: var(--rdio-space-1);
-  margin: 0 auto;
+  gap: var(--rdio-space-2);
+  margin: 0 auto var(--rdio-space-3);
   max-width: var(--rdio-content-width);
-  padding: var(--rdio-space-2) var(--rdio-space-4);
+  padding: var(--rdio-space-3);
   width: 100%;
 }
 
-rdio-admin > .rdio-admin-todos-banner .todo {
+rdio-admin .rdio-admin-todos-banner .todo {
   align-items: center;
   border-radius: var(--rdio-radius-row);
   display: flex;
@@ -457,25 +459,25 @@ rdio-admin > .rdio-admin-todos-banner .todo {
   padding: var(--rdio-space-2) var(--rdio-space-3);
 }
 
-rdio-admin > .rdio-admin-todos-banner .todo.warn {
+rdio-admin .rdio-admin-todos-banner .todo.warn {
   background: rgba(244, 67, 54, 0.15);
   border: 1px solid var(--rdio-warn);
 }
 
-rdio-admin > .rdio-admin-todos-banner .todo.warn .material-icons {
+rdio-admin .rdio-admin-todos-banner .todo.warn .material-icons {
   color: var(--rdio-warn);
 }
 
-rdio-admin > .rdio-admin-todos-banner .todo.info {
+rdio-admin .rdio-admin-todos-banner .todo.info {
   background: rgba(76, 175, 80, 0.12);
   border: 1px solid var(--rdio-accent);
 }
 
-rdio-admin > .rdio-admin-todos-banner .todo.info .material-icons {
+rdio-admin .rdio-admin-todos-banner .todo.info .material-icons {
   color: var(--rdio-accent);
 }
 
-rdio-admin > .rdio-admin-todos-banner .todo .material-icons {
+rdio-admin .rdio-admin-todos-banner .todo .material-icons {
   font-size: 20px;
 }
 

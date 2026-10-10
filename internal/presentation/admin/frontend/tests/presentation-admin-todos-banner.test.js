@@ -24,7 +24,7 @@ function shell() {
   return { store, el };
 }
 
-test('the banner shows the open todos under the header', () => {
+test('the banner shows the open todos in the content column, above the section card', () => {
   const { store, el } = shell();
 
   store.setState({
@@ -49,10 +49,11 @@ test('the banner shows the open todos under the header', () => {
     'a talkgroup has no group',
   ]);
 
-  assert.equal(el.children[0].className, 'rdio-admin-header',
-    'the banner must sit under the header');
-  assert.ok(el.children[1].className.includes('todos-banner'),
-    'the banner must sit under the header');
+  const contents = findAll(el, (node) => node.className.includes('rdio-admin-content'));
+
+  assert.equal(contents.length, 1, 'the shell has one content column');
+  assert.equal(contents[0].children[0], banners[0],
+    'the banner must sit in the content column, above the section card');
 });
 
 test('the banner renders nothing when there is nothing to say', () => {
@@ -62,9 +63,8 @@ test('the banner renders nothing when there is nothing to say', () => {
 
   const banners = findAll(el, (node) => node.className.includes('todos-banner'));
 
-  assert.equal(banners.length, 1);
-  assert.equal(banners[0].children.length, 0,
-    'an empty todo list must leave the banner empty');
+  assert.equal(banners.length, 0,
+    'an empty todo list must leave no banner in the content column');
 });
 
 test('todos is not a section in the navigation', () => {

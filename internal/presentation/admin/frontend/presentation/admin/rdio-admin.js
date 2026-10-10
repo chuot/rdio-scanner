@@ -115,17 +115,24 @@ class RdioAdmin extends HTMLElement {
 
     const content = document.createElement('section');
     content.className = 'rdio-admin-content';
+
+    if (banner) content.append(banner);
+
     content.append(this.sectionElement(this.current));
 
     layout.append(nav, content);
 
-    this.replaceChildren(header, banner, layout);
+    this.replaceChildren(header, layout);
   }
 
-  // todosBanner is the persistent banner under the header: every open todo, one row
-  // each. It renders nothing when the list is empty, and it is never dismissible —
-  // a todo disappears when the administrator fixes what caused it.
+  // todosBanner is the card the administrator sees first: it sits in the content
+  // column above the section card, with the same width cap and card chrome, so its
+  // edges line up with the section below. It renders nothing when the list is
+  // empty, and it is never dismissible — a todo disappears when the administrator
+  // fixes what caused it.
   todosBanner(todos) {
+    if (todos.length === 0) return null;
+
     const banner = document.createElement('div');
     banner.className = 'rdio-admin-todos-banner';
 
