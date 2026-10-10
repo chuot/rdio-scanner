@@ -138,8 +138,7 @@ func newCommand(config *Config, exePath string, getenv func(string) string, stdo
 		// The session token is kept inside the deployment's base directory, named after the executable.
 		// The legacy server joined the base directory and the executable name with nothing between them,
 		// so with the base directory an installed server actually has — one with no trailing slash — the
-		// file landed beside the data directory instead of inside it. Repaired rather than preserved; see
-		// docs/specs/FEAT-004-legacy-defect-repairs/decision-command-token-file.md.
+		// file landed beside the data directory instead of inside it. Repaired rather than preserved.
 		tokenFile: filepath.Join(config.BaseDir, app+".token"),
 
 		password: password,

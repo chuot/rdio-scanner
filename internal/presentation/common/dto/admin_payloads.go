@@ -66,8 +66,7 @@ func Alerts() AlertsPayload {
 //
 // The per-subsystem counts are answered on every search and not only on one that asks for them: they are
 // what the view offers the operator before they narrow to anything, and they describe everything the
-// criteria match except the subsystem filter itself — see
-// [decision-per-source-counts-and-the-total.md](../../../docs/specs/FEAT-010-logging-subsystems/decision-per-source-counts-and-the-total.md).
+// criteria match except the subsystem filter itself.
 type AdminLogsPagePayload struct {
 	Count     uint64            `json:"count"`
 	DateStart time.Time         `json:"dateStart"`

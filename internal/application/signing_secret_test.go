@@ -58,8 +58,7 @@ func newSigningSecretFixture(stored string) *signingSecretFixture {
 
 // TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone is the repaired half of Q66: a server
 // whose stored configuration holds no secret makes one and puts it on record, so the key it signs with
-// is the key the database holds and the next start finds it. See
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+// is the key the database holds and the next start finds it.
 func TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone(t *testing.T) {
 	fixture := newSigningSecretFixture("")
 	options := fixture.options

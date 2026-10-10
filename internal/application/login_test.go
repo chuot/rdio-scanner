@@ -385,7 +385,6 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 // expression that converts ten nanoseconds to minutes and back and truncates to zero, so an address's
 // attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
 // has spent its budget is refused while that window is still open.
-// See docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
 
 // TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of Q10: the window the
 // contract describes is the window the server enforces.
@@ -394,7 +393,6 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 // expression that converts ten nanoseconds to minutes and back and truncates to zero, so an address's
 // attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
 // has spent its budget is refused while that window is still open.
-// See docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
 func TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow(t *testing.T) {
 	if loginAttemptsWindow != 10*time.Minute {
 		t.Fatalf("attempt window = %v, want the ten minutes the contract describes", loginAttemptsWindow)

@@ -36,9 +36,7 @@ import (
 // holds; `WriteOptions` replaces what the server runs with and then stores it; and
 // `ReloadOptions` is the legacy server's `Options.Read` — the re-derivation the administrator
 // password change runs, which resets the options to their defaults and applies the stored rows
-// on top. See
-// [decision-internal-ports.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9 and §11.
+// on top.
 type Options struct {
 	store store
 
@@ -317,7 +315,7 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 		// unusable and never wrote it down, so a deployment that had never saved its configuration
 		// signed with an empty key and a legacy database holding an unusable secret got a different
 		// key on every start. Making a secret and putting it on record is now the startup use case's
-		// job; see docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+		// job.
 		if v, ok := row.value.(string); ok {
 			options = options.AcceptSecret(v)
 		}
@@ -442,8 +440,7 @@ func setOptionRow(ctx context.Context, tx transaction, operation, key string, va
 // them, so the audio-conversion mode the administrator chose was never on record: every re-derivation —
 // a restart, or the re-derivation a password change runs — answered the default mode. It is stored here
 // as the JSON number the reader already reads it as, in the alphabetical slot the legacy list's own
-// ordering gives it. Repaired rather than preserved by the owner's decision; see
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-audio-conversion-stored.md.
+// ordering gives it. Repaired rather than preserved by the owner's decision.
 func optionRows(options domain.Options) []optionRow {
 	return []optionRow{
 		{"adminPassword", options.AdminPasswordHash},

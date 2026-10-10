@@ -62,7 +62,7 @@ type EnsureAdminSigningSecretCommand struct{}
 // and never wrote it down: a deployment that had never saved its configuration signed with an empty
 // key, and a legacy database holding a short secret got a different key on every start, killing every
 // token issued before it. The read no longer makes secrets; this step does, once, and stores what it
-// makes. See docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+// makes.
 //
 // Making one is reported, because it is the fact behind every session that stopped working at that
 // moment: the tokens issued under the secret it replaces no longer verify.

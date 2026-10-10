@@ -116,8 +116,7 @@ func (scope AccessScope) Grants(call Call) bool {
 // checked before that, when all the server has are the references the upload itself names.
 // The legacy server compares against the resolved pair in both places, and at the upload
 // boundary they are not resolved yet, which is what makes a scoped upload apikey dereference
-// a nil aggregate — Q20 in
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md. Checking the submitted
+// a nil aggregate. Checking the submitted
 // references is what that comparison was written to do.
 func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 	if scope.Wildcard {

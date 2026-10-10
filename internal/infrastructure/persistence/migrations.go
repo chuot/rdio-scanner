@@ -81,13 +81,11 @@ type Progress func(level, message string)
 // deployment keeps: the legacy migration escaped some of the text it wrote into its statements and
 // not the system blacklist, the system and talkgroup color, the log level, the dirwatch type, or the
 // call audio type, so a single quote in one of those columns made its `INSERT` a syntax error and
-// the row was lost. Those rows migrate here. See Q32 of
-// [decision-preserved-quirks.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md).
+// the row was lost. Those rows migrate here.
 //
 // The `server/…` names in this file are the legacy server's own files, which are not in this
 // repository. They are named so a reader can see which behavior is being mirrored, and they resolve
-// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
-// docs/specs/FEAT-005-server-ng-cutover/spec.md.
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542.
 func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock, progress Progress) error {
 	if progress == nil {
 		progress = func(_, _ string) {}
@@ -117,8 +115,7 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 
 	// The archive the pass writes left-behind rows into is given the same treatment for the same
 	// reason: it is a table this server owns, and the schema step is not allowed to add tables to a
-	// database the other server wrote. See migration_archive.go and
-	// docs/specs/FEAT-011-v663-migration-integrity/decision-archive-then-drop.md.
+	// database the other server wrote. See migration_archive.go.
 	if err := ensureMigrationArchive(ctx, s); err != nil {
 		return operationError("database", "migrate", err)
 	}
@@ -1080,7 +1077,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 		// migration's unit lookup go looking for. The legacy insert named `unit.Id` — the identity
 		// `NewUnit()` never gave the unit — in this position instead, so every migrated unit landed with
 		// `unitRef` 0 and the number its row was read for was thrown away. Repaired rather than
-		// preserved; see docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+		// preserved.
 		if carried, err := alreadyCarried(ctx, tx, "units", "unitId", unitID.Int64); err != nil {
 			tx.rollback()
 
@@ -1731,9 +1728,8 @@ const v6DirwatchesTable = "rdioScannerDirWatches"
 // stayed invisible. A backend that does not match them case-insensitively — MySQL and MariaDB on a
 // case-sensitive filesystem, which is the normal case — failed the probe, and its v6 dirwatches were
 // neither migrated nor dropped, on that start or on any later one: the one table the migration skipped
-// quietly, which is the shape FEAT-011 exists to make impossible. See
-// `TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated` and the live MariaDB proof of
-// [validation.md](../../../../docs/specs/FEAT-011-v663-migration-integrity/validation.md).
+// quietly, which is the shape FEAT-011 exists to make impossible. It is proved by
+// `TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated` and by the live MariaDB run.
 func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
 
@@ -2277,7 +2273,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 			// The legacy migration wrote the row only on the branch where the unit insert had failed, and
 			// reported the insert from the branch where it had succeeded — with a nil error its formatter
 			// then dereferenced, which is what took the legacy upgrade down. Repaired rather than
-			// preserved; see docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+			// preserved.
 			var count int
 
 			query = `SELECT COUNT(*) FROM "units" WHERE "systemId" = ? AND "unitRef" = ?`
@@ -2615,8 +2611,7 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 // unit labelled with its own number is a unit the migration made for a number it could not find rather
 // than a unit a deployment named.
 //
-// Neither is repaired here, because neither can be. See
-// [decision-migrated-database-repair.md](../../../../docs/specs/FEAT-004-legacy-defect-repairs/decision-migrated-database-repair.md).
+// Neither is repaired here, because neither can be.
 //
 // The report is console-only: it writes no row and no log entry. A startup notice is not something the
 // two servers are asked to agree about, and a log entry would put a difference in the `logs` table the

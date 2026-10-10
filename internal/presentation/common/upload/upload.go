@@ -116,8 +116,7 @@ const (
 //
 // Every field is optional and each one is read in the order it arrived, so a field that arrives later wins
 // over one that arrived earlier. That ordering is the legacy server's own for this endpoint, and it is what
-// the trunk-recorder endpoint does not have (Q57) — see
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
+// the trunk-recorder endpoint does not have.
 func (upload *Endpoints) CallUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		upload.refuseMethod(w)

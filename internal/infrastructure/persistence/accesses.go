@@ -37,14 +37,12 @@ import (
 // the server runs with before it stores it — so a list that could not be stored is still the
 // list the server enforces for the rest of the run. That is the legacy server's behavior
 // (`server/access.go` `Read` / `Write`, driven by
-// `server/admin.go` `ConfigHandler`), and it is what
-// [decision-internal-ports.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9 requires of every configuration repository here.
+// `server/admin.go` `ConfigHandler`), and it is what every configuration repository here is
+// held to.
 //
 // The `server/…` names in this file are the legacy server's own files, which are not in this
 // repository. They are named so a reader can see which behavior is being mirrored, and they resolve
-// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
-// docs/specs/FEAT-005-server-ng-cutover/spec.md.
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542.
 type Accesses struct {
 	store store
 
@@ -98,8 +96,7 @@ func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, err
 //
 // The submitted list takes effect first. If the store cannot be reached, the submitted list is
 // still what the server enforces and the error is returned — the legacy server's order of
-// operations, recorded as Q13 in
-// [decision-preserved-quirks.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md).
+// operations.
 // After a write that succeeded, the stored rows are read back and cached, which is the `Read`
 // the legacy `ConfigHandler` runs after a successful `Write`.
 func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses) error {

@@ -33,8 +33,7 @@ import (
 
 // largeBudget is REQ-010's "a time an operator can wait through" written as a number, so that a
 // regression fails a test instead of being noticed by someone watching a server start. It is deliberately
-// far above what the pass actually takes on this machine: the point is the cliff, not the record. The
-// observed numbers are in docs/specs/FEAT-011-v663-migration-integrity/validation.md.
+// far above what the pass actually takes on this machine: the point is the cliff, not the record.
 const largeBudget = 10 * time.Minute
 
 // largeSeedRows is how many rows one seeding statement carries. seedLive's one row per statement is the

@@ -480,8 +480,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// every time the stored one was unusable and never wrote it down, so a deployment that had never saved
 	// its configuration signed sessions with nothing, and a legacy database holding a short secret changed
 	// keys at every start and killed every session issued before it. This step makes a key once and puts it
-	// on record, after the configuration has been read and before anything is answered from it. See
-	// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+	// on record, after the configuration has been read and before anything is answered from it.
 	// The secret is the server's own, and the step reports to the server log what it decided about it:
 	// the composition root says that entry out loud the way it says every other one.
 	if _, err := s.signing.Handle(ctx, application.EnsureAdminSigningSecretCommand{}); err != nil {

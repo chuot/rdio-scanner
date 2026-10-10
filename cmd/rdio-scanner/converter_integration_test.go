@@ -26,8 +26,7 @@
 //
 //	go test -tags integration ./cmd/rdio-scanner/
 //
-// It fails when the bundle is absent instead of skipping, which is why it is a tier and not a test —
-// see docs/specs/FEAT-009-embedded-ffmpeg/decision-test-tiers.md.
+// It fails when the bundle is absent instead of skipping, which is why it is a tier and not a test.
 
 package main
 

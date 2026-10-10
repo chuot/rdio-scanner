@@ -261,9 +261,9 @@ func hasV6Table(t *testing.T, db *sql.DB, table string) bool {
 // TestMigrateMovesEveryV6TableIntoTheV7Schema is the shape of the whole pass: a v6 database comes
 // out holding exactly the v7 tables, with none of the v6 tables left behind.
 // archivedTables are the tables a database holds after this server's migration pass: the legacy
-// tables, plus the migration archive this server owns. FEAT-011 added the archive to the migration
-// pass, not to ApplySchema — the reason is in
-// docs/specs/FEAT-011-v663-migration-integrity/decision-archive-then-drop.md.
+// tables, plus the migration archive this server owns. The archive belongs to the migration pass
+// and not to ApplySchema: the schema step is not allowed to add a table to a database the other
+// server wrote, and the archive is a table this server owns.
 var archivedTables = func() []string {
 	tables := append(append([]string{}, legacyTables...), "migrationArchive")
 
@@ -937,8 +937,7 @@ func TestMigrateTalkgroupsSayWhichTalkgroupLostItsGroupLink(t *testing.T) {
 // unit reference belongs in, so every migrated unit landed with `unitRef` 0 and the v6 reference its row
 // was read for was thrown away. The v6 `id` column is the radio's own number, and it is what
 // `callUnits.unitRef` and the call migration's unit lookup go looking for, so losing it is what made a
-// migrated unit unfindable at the very next step of the same migration. See
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+// migrated unit unfindable at the very next step of the same migration.
 func TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1274,9 +1273,8 @@ func TestMigrateDirwatchesArchivesADirwatchThatHoldsNoDirectory(t *testing.T) {
 // runs on, it has no effect at all. What sqlite can show is the name a v6 database carries for that table,
 // the name the pass records in the archive, and the name of the table the pass leaves behind. They are one
 // string, and the statements are built from it. The backend where the disagreement was real — a probe that
-// fails, and a table neither migrated nor dropped, on that start and every later one — is proved live, in
-// the MariaDB run recorded in
-// docs/specs/FEAT-011-v663-migration-integrity/validation.md.
+// fails, and a table neither migrated nor dropped, on that start and every later one — is proved live
+// by the MariaDB run.
 func TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1865,8 +1863,7 @@ func TestMigrateCallsStoreTheSingleFrequencyWhenTheListIsAnEmptyString(t *testin
 // the call names and the system the call belongs to. With the unit reference kept, the unit the unit
 // migration wrote is found, no second unit is created for it, and the call gets its `callUnits` row —
 // which the legacy migration wrote only on the branch where the unit insert had failed, leaving every
-// call whose unit had to be created without its source. See
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-migration-unit-references.md.
+// call whose unit had to be created without its source.
 func TestMigrateCallsUseTheUnitTheUnitMigrationAlreadyWrote(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -2775,8 +2772,7 @@ func sourceUnits(t *testing.T, raw string) []string {
 // reference at all.
 //
 // That last branch is what the legacy pass wrote and what FEAT-003 pinned: the v6 number it replaced is
-// not kept anywhere, which is recorded as a residual risk in
-// docs/specs/FEAT-011-v663-migration-integrity/spec.md. The audit proves the branch only ever happens for
+// not kept anywhere, which is recorded as a residual risk. The audit proves the branch only ever happens for
 // a reference the deployment really had no row for.
 func assertDirwatchReferences(t *testing.T, db *sql.DB) {
 	t.Helper()

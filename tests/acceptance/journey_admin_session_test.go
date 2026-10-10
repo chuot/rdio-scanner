@@ -105,8 +105,7 @@ func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 // A login hands out a session, and only the five most recent ones are sessions. The sixth ends the first.
 //
 // Repeated logins from one address are not stopped by the attempt count, because a login that succeeds
-// clears the counts of every address — the half of Q10 the repair keeps, for the reason recorded in
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
+// clears the counts of every address — the half of Q10 the repair keeps.
 func TestASixthAdministratorSessionEndsTheFirstOne(t *testing.T) {
 	srv := startedJourneyServer(t)
 

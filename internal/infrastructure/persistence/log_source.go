@@ -203,7 +203,7 @@ func hasColumn(columns []string, want string) bool {
 }
 
 // logSourceBackfill is the mapping from the prefix an existing message carries to the part of the server
-// that wrote it. It is the inventory in docs/specs/FEAT-010-logging-subsystems/research.md, and it is only
+// that wrote it. It is the inventory of every prefix the server has ever written, and it is only
 // ever applied to rows written before the column existed.
 //
 // Two of its rules are the ones that matter. Longer prefixes are applied before shorter ones that are a

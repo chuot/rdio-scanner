@@ -39,8 +39,7 @@ type fixedClock struct{ at time.Time }
 func (c fixedClock) Now() time.Time { return c.at }
 
 // The migration archive is the table that holds every v6 row the migration pass read and could not
-// carry, so that dropping the v6 table never destroys a row. See
-// docs/specs/FEAT-011-v663-migration-integrity/data-model.md.
+// carry, so that dropping the v6 table never destroys a row.
 //
 // It lives in the migration pass and not in the dialect schemas for the reason FEAT-010 recorded for
 // the log indexes (decision-where-the-schema-change-lives.md): ApplySchema's statements are the legacy

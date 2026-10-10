@@ -32,11 +32,10 @@ import (
 )
 
 // The migration archive is the table that holds every v6 row the migration pass read and could not
-// carry, so that dropping a v6 table never destroys a row quietly. Its shape, the reason vocabulary,
-// and the rules it is held to are in docs/specs/FEAT-011-v663-migration-integrity/data-model.md.
+// carry, so that dropping a v6 table never destroys a row quietly.
 //
-// It lives in the migration pass and not in the dialect schemas for the reason FEAT-010 recorded for
-// the log indexes (docs/specs/FEAT-010-logging-subsystems/decision-where-the-schema-change-lives.md):
+// It lives in the migration pass and not in the dialect schemas for the reason recorded for
+// the log indexes:
 // ApplySchema's statements are the legacy server's, and a database the other server wrote has to come
 // out of them exactly as it went in — a new table included. The step that owns the archive runs after
 // the schema and before any v6 table is read, so every database this server starts on gains it, fresh

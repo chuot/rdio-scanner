@@ -41,14 +41,11 @@ import (
 // loaded once, `SaveSystems` replaces it with what was submitted before it stores anything, and a
 // save that stored successfully is followed by reading the stored rows back — which is how the
 // legacy server hands the identifiers its tables assigned to the next save and to the
-// configuration broadcast. See
-// [decision-internal-ports.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9.
+// configuration broadcast.
 //
 // The `server/…` names in this file are the legacy server's own files, which are not in this
 // repository. They are named so a reader can see which behavior is being mirrored, and they resolve
-// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
-// docs/specs/FEAT-005-server-ng-cutover/spec.md.
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542.
 type Systems struct {
 	store store
 
@@ -92,8 +89,7 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 // as what the server runs with.
 //
 // The submitted catalog becomes the live one before anything is stored, so a save that could not
-// be persisted is still in effect for the rest of the run — quirk Q13 in
-// [decision-preserved-quirks.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md).
+// be persisted is still in effect for the rest of the run, the legacy server's order of operations.
 // After a save that did persist, the stored rows are read back and cached: that re-read is what
 // assigns the identities the next save and the configuration broadcast use.
 func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {

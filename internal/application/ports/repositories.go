@@ -158,8 +158,8 @@ type ApikeyRepository interface {
 //
 // It is the configuration in effect, not a database view: `ReadOptions` reports what the server
 // is currently running with, and `WriteOptions` replaces what it runs with and then persists it.
-// See [decision-internal-ports.md](../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9 for why the difference matters.
+// A reader that re-queried the table would answer the administrator with what is stored, not
+// with what the server is running with, which is the configuration a save has already committed to.
 type OptionsRepository interface {
 	ReadOptions(ctx context.Context) (domain.Options, error)
 	WriteOptions(ctx context.Context, options domain.Options) error
@@ -206,8 +206,7 @@ type LogSearchPage struct {
 	// while already filtered to one source answers one row, which is true and useless. So the search
 	// reports two totals — `Count`, the narrowed match the page is paged through, and the total of the
 	// wider match these counts describe — and they are the same number whenever no source filter is
-	// submitted. See
-	// [decision-per-source-counts-and-the-total.md](../../../docs/specs/FEAT-010-logging-subsystems/decision-per-source-counts-and-the-total.md).
+	// submitted.
 	SourceCounts []LogSourceCount
 
 	Results []domain.LogEntry

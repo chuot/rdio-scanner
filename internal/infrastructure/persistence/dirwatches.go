@@ -36,9 +36,7 @@ import (
 // It is the configuration the server is running with, not a view of the table: the watches are
 // read from the database once, kept in memory, and replaced by what a save submits — exactly as
 // the legacy server holds its `Dirwatches.List` in process memory and treats the database as its
-// persistence. See
-// [decision-internal-ports.md](../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9 for why re-querying on every read would answer the administrator with the stored
+// persistence. Re-querying on every read would answer the administrator with the stored
 // configuration instead of the live one.
 type Dirwatches struct {
 	store store

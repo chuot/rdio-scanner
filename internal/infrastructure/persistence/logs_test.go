@@ -1021,8 +1021,7 @@ func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
 // the source criterion does not restrict them: asking "how many of each" while already filtered to one
 // source answers one row, which is true and useless. So the search reports two totals — the narrowed match
 // the page is paged through, and the wider match the counts describe — and they are the same number
-// whenever no subsystem filter is submitted. See
-// docs/specs/FEAT-010-logging-subsystems/decision-per-source-counts-and-the-total.md.
+// whenever no subsystem filter is submitted.
 func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 

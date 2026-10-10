@@ -188,8 +188,7 @@ func (parsers *Parsers) extractDSDPlus(watch domain.Dirwatch, filePath string) (
 
 	// The watch's own system and talkgroup are claimed for every recording in the directory,
 	// as they are for a default watch. Its site is not: the legacy writes it into a metadata
-	// field nothing ever reads, so a dsd+ watch's site setting has never had an effect. See
-	// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md (quirk Q38).
+	// field nothing ever reads, so a dsd+ watch's site setting has never had an effect.
 	if watch.SystemID > 0 {
 		call.Meta.SystemID = watch.SystemID
 	}
@@ -636,8 +635,7 @@ func (parsers *Parsers) applyTrunkRecorder(call *domain.Call, sidecar []byte) er
 // the call-upload endpoint instead of from a watched directory.
 //
 // It is the same reading, and it keeps the same quirk: a sidecar that names a start time and no timestamp is
-// recorded at the moment the server read it, which is quirk Q39 in
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
+// recorded at the moment the server read it, and that is the quirk it keeps.
 func (parsers *Parsers) ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error {
 	return parsers.applyTrunkRecorder(call, sidecar)
 }

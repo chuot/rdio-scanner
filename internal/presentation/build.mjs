@@ -20,8 +20,6 @@
 /*
  * Client build script (esbuild, single dev dependency).
  *
- * Contract: docs/specs/FEAT-002-vanilla-client-ng/contract-client-ng.md §1-§2, §6.
- *
  * One `buildApp(config)` and one config per application. A config names its source
  * directory, its entry points, its HTML shell, its service worker (or none), its
  * static copies, and its output directory. The output directory is always a relative

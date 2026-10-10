@@ -47,8 +47,7 @@ const (
 	// consequence was that an address's count never aged out, so an address that had spent its
 	// budget stayed refused until a successful login or a restart.
 	//
-	// The window is the one the contract describes, per the owner's decision: see
-	// docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md. `countAttempt`
+	// The window is the one the contract describes, per the owner's decision. `countAttempt`
 	// ages a history out over it, which is what makes "three attempts per window" mean what it
 	// says.
 	loginAttemptsWindow = 10 * time.Minute
@@ -258,8 +257,7 @@ func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt 
 // against its zero window on the success path only, so any successful login clears the count for
 // every address, including one that was locked out. Repairing the window without repairing this
 // would leave the documented limit true for an address nobody else signs in for; repairing this one
-// too is a separate decision, recorded as a residual risk in
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-login-attempt-window.md.
+// too is a separate decision, recorded as a residual risk.
 //
 // It runs only after a session has been started: a login that failed on the way out leaves
 // the counts where they were.

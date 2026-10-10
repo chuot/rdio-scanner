@@ -60,8 +60,7 @@ func TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow(t *testi
 	// The session is kept inside the deployment's base directory, named after the executable. The legacy
 	// server concatenated the base directory and the executable name with no separator between them, so
 	// with the base directory an installed server actually has — one with no trailing slash — the file
-	// landed beside the data directory rather than inside it. Repaired rather than preserved; see
-	// docs/specs/FEAT-004-legacy-defect-repairs/decision-command-token-file.md.
+	// landed beside the data directory rather than inside it. Repaired rather than preserved.
 	if filepath.Dir(tokenFile) != baseDir {
 		t.Errorf("the session is kept at %s, want it inside the base directory %s", tokenFile, baseDir)
 	}
@@ -375,7 +374,7 @@ func TestACommandThatNeedsASessionSaysItIsNotLoggedIn(t *testing.T) {
 // reported a request it could not make for two of the seven commands and said nothing at all for the other
 // five — no message, and the exit code of a command that worked — so a script that ran a command while the
 // server was down was told the command had happened. Every action now names the failure and ends as a
-// failure. See docs/specs/FEAT-004-legacy-defect-repairs/decision-command-failure-reporting.md.
+// failure.
 func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	url := commandTestServer(t)
 

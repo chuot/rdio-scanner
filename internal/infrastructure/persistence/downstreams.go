@@ -34,9 +34,6 @@ import (
 //
 // Like the directory watches, it is the configuration the server is running with rather than a
 // view of the table: the list is read once, kept in memory, and replaced by what a save submits.
-// See
-// [decision-internal-ports.md](../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9.
 type Downstreams struct {
 	store store
 

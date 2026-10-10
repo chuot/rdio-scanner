@@ -162,8 +162,7 @@ func TestReloadOptionsRestoresTheDefaultDuplicateDetectionWindow(t *testing.T) {
 // TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable is the repaired half of Q66: the reader no
 // longer invents a secret. A stored secret the server cannot sign with leaves the options without one,
 // and the stored row stays where it was — putting a usable secret on record is the startup use case's
-// job, not the reader's. See
-// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+// job, not the reader's.
 func TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -359,7 +358,7 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 // `audioConversion` row among them, so the conversion mode the administrator chose applied until the
 // next thing that re-read the options — a restart, or the re-derivation a password change runs — and
 // then reverted to the default. Storing the mode is what makes the reader's lookup find something.
-// See docs/specs/FEAT-004-legacy-defect-repairs/decision-audio-conversion-stored.md.
+// Storing the mode is what makes the reader's lookup find something.
 func TestWriteOptionsStoresTheAudioConversionMode(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)

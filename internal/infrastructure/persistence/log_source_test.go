@@ -312,9 +312,8 @@ func isLogIndex(object string, name string) bool {
 // existed is given a source by reading the prefix its message carries, and a row whose prefix maps to
 // nothing is stored as legacy rather than left blank or guessed at.
 //
-// The messages are the ones the server actually wrote, taken from the inventory in
-// docs/specs/FEAT-010-logging-subsystems/research.md, including the persistence prefixes that reach the
-// log because a caller stored err.Error() with nothing added.
+// The messages are the ones the server actually wrote, including the persistence prefixes that reach
+// the log because a caller stored err.Error() with nothing added.
 func TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix(t *testing.T) {
 	cases := []struct {
 		message string

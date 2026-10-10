@@ -45,8 +45,7 @@ import (
 //
 // The `server/…` names in this file are the legacy server's own files, which are not in this
 // repository. They are named so a reader can see which behavior is being mirrored, and they resolve
-// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542, recorded in
-// docs/specs/FEAT-005-server-ng-cutover/spec.md.
+// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542.
 func Seed(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	s := newStore(db, dialect)
 

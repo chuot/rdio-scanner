@@ -25,8 +25,7 @@ import (
 )
 
 // The commands are wire values, not internal names. They are what the native applications send and
-// what they switch on, so they are frozen by the protocol contract
-// (docs/specs/FEAT-002-vanilla-client-ng/contract-server-protocol.md §2) and are not free to become
+// what they switch on, so they are frozen by the protocol contract and are not free to become
 // something more descriptive.
 const (
 	// CommandCall fetches one recorded call, and pushes one that has just been recorded.

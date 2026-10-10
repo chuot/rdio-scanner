@@ -44,8 +44,7 @@ type Talkgroup struct {
 // ApplyMap reads a talkgroup out of an administrator configuration payload. The
 // display order is read from the "order" key only, exactly as the legacy server does,
 // even though the legacy server emits it under the "talkgroup" key; clients are
-// expected to normalize that drift. See
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md (quirk Q4).
+// expected to normalize that drift.
 func (talkgroup Talkgroup) ApplyMap(m map[string]any) Talkgroup {
 	if v, ok := m["id"].(float64); ok {
 		talkgroup.ID = uint64(v)

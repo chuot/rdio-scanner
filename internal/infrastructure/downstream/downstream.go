@@ -269,8 +269,7 @@ func (forwarder *Forwarder) groupLabels(ctx context.Context, call domain.Call) (
 // frequenciesOf is the frequency list as the legacy marshals it: the Go field names of its
 // own struct, not the wire names the upload endpoint reads.
 //
-// That is a defect, and it is reproduced rather than repaired — see Q36 in
-// docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md. A call forwarded to
+// That is a defect, and it is reproduced rather than repaired. A call forwarded to
 // another Rdio Scanner server arrives with its frequencies and units named in a vocabulary
 // the receiving parser does not look for, so the quality measurements and the units heard
 // during the call are dropped on arrival. Repairing it changes what a receiving server

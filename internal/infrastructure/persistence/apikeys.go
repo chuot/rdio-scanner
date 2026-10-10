@@ -32,9 +32,6 @@ import (
 
 // Apikeys is the server's upload credential list, held the same way the access list is held:
 // loaded once, replaced by a save before it is stored, and read back after a save that worked.
-// See
-// [decision-internal-ports.md](../../../../docs/specs/FEAT-003-server-ng-refactor/decision-internal-ports.md)
-// §9.
 type Apikeys struct {
 	store store
 

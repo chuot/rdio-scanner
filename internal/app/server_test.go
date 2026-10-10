@@ -1022,8 +1022,7 @@ func TestServerReadsItsConfigurationBeforeItStartsAnswering(t *testing.T) {
 	// A deployment that has never saved its configuration has no signing secret on record. The legacy
 	// server signed with nothing in that case, and with a different random key on every start when a
 	// stored secret was unusable. The startup step makes a secret once and puts it on record, so the key
-	// in use is the key on record. See
-	// docs/specs/FEAT-004-legacy-defect-repairs/decision-signing-secret-persisted.md.
+	// in use is the key on record.
 	if len(options.Secret) != domain.SecretLength {
 		t.Errorf("the server is running with a %d-character signing secret, want one it can sign sessions with",
 			len(options.Secret))
@@ -1162,7 +1161,7 @@ func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
 // TestServerReportsTheDamageALegacyMigrationLeftBehind is the operator's half of the startup repair:
 // the report the migration pass writes reaches the console the operator is reading, the damaged rows
 // are left exactly as they were, and the server starts anyway — a report is not a reason to refuse to
-// run. See docs/specs/FEAT-004-legacy-defect-repairs/decision-migrated-database-repair.md.
+// run.
 func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 	baseDir := t.TempDir()
 

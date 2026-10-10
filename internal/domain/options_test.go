@@ -140,7 +140,6 @@ func TestApplyMapFallsBackToDefaultsForAbsentOrWronglyTypedValues(t *testing.T) 
 // assigns the audio-conversion default to MaxClients — but its own later maxClients
 // branch then overwrites that with the maxClients default, so the defect is only
 // observable when a maxClients value is actually submitted.
-// See docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
 func TestApplyMapLegacyAudioConversionDefaultQuirk(t *testing.T) {
 	o := DefaultOptions().ApplyMap(map[string]any{"maxClients": float64(25)})
 

@@ -779,7 +779,7 @@ func TestConfigurationChangeReachesEveryCredentialPresentingConnection(t *testin
 // The legacy server writes to every connection it holds and unregisters the ones that fail. Here the read
 // loop notices a closed peer on its own, which is the same thing the legacy server's read loop does; the
 // branch that forgets a connection a push could not reach is defensive, and is recorded rather than
-// contrived — see docs/specs/FEAT-003-server-ng-refactor/validation.md.
+// contrived.
 func TestConfigSocketStopsPushingToAConnectionThatWentAway(t *testing.T) {
 	fixture := newFixture(t)
 
