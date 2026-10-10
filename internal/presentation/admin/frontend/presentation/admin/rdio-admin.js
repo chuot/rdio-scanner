@@ -13,7 +13,6 @@ import './rdio-admin-downstreams.js';
 import './rdio-admin-groups.js';
 import './rdio-admin-options.js';
 import './rdio-admin-logs.js';
-import './rdio-admin-password.js';
 import './rdio-admin-sites.js';
 import './rdio-admin-systems.js';
 import './rdio-admin-talkgroups.js';
@@ -35,7 +34,6 @@ const SECTIONS = [
   { name: 'options', label: 'Options', icon: 'tune' },
   { name: 'logs', label: 'Logs', icon: 'article' },
   { name: 'tools', label: 'Tools', icon: 'build' },
-  { name: 'password', label: 'Password', icon: 'password' },
 ];
 
 class RdioAdmin extends HTMLElement {
