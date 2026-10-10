@@ -66,13 +66,6 @@ rdio-admin > .rdio-admin-header .rdio-admin-role {
   opacity: 0.7;
 }
 
-rdio-admin-login .rdio-admin-logo {
-  display: block;
-  height: 96px;
-  margin: 0 auto 12px;
-  width: 96px;
-}
-
 rdio-admin .rdio-button.logout {
   align-items: center;
   display: inline-flex;

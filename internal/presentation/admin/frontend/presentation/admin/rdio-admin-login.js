@@ -11,7 +11,6 @@ class RdioAdminLogin extends HTMLElement {
 
     this.innerHTML = `
       <form class="rdio-admin-login" autocomplete="off">
-        <img class="rdio-admin-logo" src="assets/icons/icon-192x192.png" alt="Rdio Scanner" />
         <h1>Rdio Scanner Admin</h1>
         <rdio-form-field>
           <label>Password</label>

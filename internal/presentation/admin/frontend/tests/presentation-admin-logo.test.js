@@ -1,5 +1,6 @@
-// The Rdio Scanner logo in the top bar and on the login card (T014, CA-003): the
-// bundled PWA icon plus the wordmark, on both surfaces the administrator sees.
+// The Rdio Scanner logo in the top bar (FEAT-018): the bundled PWA icon plus the
+// wordmark, on the surface the administrator sees after login. The login card
+// carries the wordmark title only: no logo.
 
 import './dom-shim.js';
 
@@ -57,8 +58,15 @@ test('the top bar shows the logo and the wordmark', () => {
   assertLogo(el.children[0], 'top bar');
 });
 
-test('the login card shows the logo and the wordmark', () => {
+test('the login card shows the wordmark and no logo', () => {
   const el = loginCard();
 
-  assertLogo(el, 'login card');
+  const imgs = findAll(el, (node) => node.tag === 'img');
+
+  assert.equal(imgs.length, 0, 'the login card shows a logo');
+
+  const titles = findAll(el, (node) => node.tag === 'h1');
+
+  assert.ok(titles.length > 0, 'the login card has no title');
+  assert.ok(titles[0].textContent.includes('Rdio Scanner'), 'the login card title is not the wordmark');
 });
