@@ -384,6 +384,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		ConfigSocket:         adminSessions,
 		Configuration:        application.NewUpdateConfigurationHandler(configurationPorts),
 		ConfigurationSection: application.NewUpdateConfigurationSectionHandler(configurationPorts),
+		SystemSubSection:     application.NewUpdateSystemSubSectionHandler(configurationPorts),
 		Docker:               os.Getenv("DOCKER") != "",
 		Logout:               application.NewAdminLogoutHandler(tokensAdapter, s.logs, s.clock),
 		Logs:                 s.logs,
