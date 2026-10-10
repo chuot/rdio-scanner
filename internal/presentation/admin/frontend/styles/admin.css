@@ -601,23 +601,25 @@ rdio-admin .rdio-admin-card.logs .rdio-log-source[aria-pressed="true"] {
   color: var(--rdio-background);
 }
 
+/* The filter fields sit on a two-column grid; the action row spans both columns
+   and keeps its buttons right-aligned, so Reload and Reset never end up mid-row. */
+
 rdio-admin .rdio-admin-card.logs .rdio-filters form {
-  align-items: flex-end;
-  display: flex;
-  flex-wrap: wrap;
+  align-items: end;
+  display: grid;
   gap: var(--rdio-space-3);
+  grid-template-columns: repeat(2, minmax(0, 260px));
   margin-top: var(--rdio-space-3);
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-filters rdio-form-field {
-  flex: 1 1 200px;
-  max-width: 260px;
+  width: 100%;
 }
 
 rdio-admin .rdio-admin-card.logs .rdio-filters .actions {
   display: flex;
-  flex: 1;
   gap: var(--rdio-space-2);
+  grid-column: 1 / -1;
   justify-content: flex-end;
 }
 
