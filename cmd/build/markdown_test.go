@@ -38,7 +38,7 @@ func TestTheHeadings(t *testing.T) {
 		{"# What is it ?", "<h1>What is it ?</h1>"},
 		{"## Version 8.0", "<h2>Version 8.0</h2>"},
 	} {
-		if got := renderMarkdown(c.in); got != c.want {
+		if got := renderMarkdown(c.in, spans{}); got != c.want {
 			t.Errorf("%q renders %q, want %q", c.in, got, c.want)
 		}
 	}
@@ -48,7 +48,7 @@ func TestAParagraph(t *testing.T) {
 	in := "Rdio Scanner ingests audio files."
 	want := "<p>Rdio Scanner ingests audio files.</p>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -59,7 +59,7 @@ func TestATrailingBackslashIsABreakNotAParagraph(t *testing.T) {
 	in := "first line\\\nsecond line"
 	want := "<p>first line<br>second line</p>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -76,7 +76,7 @@ func TestTheInlineSpans(t *testing.T) {
 		{"![web app main screen](./images/webapp-main.png?raw=true)",
 			`<p><img src="./images/webapp-main.png?raw=true" alt="web app main screen"></p>`},
 	} {
-		if got := renderMarkdown(c.in); got != c.want {
+		if got := renderMarkdown(c.in, spans{}); got != c.want {
 			t.Errorf("%q renders %q, want %q", c.in, got, c.want)
 		}
 	}
@@ -87,7 +87,7 @@ func TestASpanInsideASpan(t *testing.T) {
 	in := `[![Available on the App Store](../images/app-store-badge.png?raw=true)](https://apps.apple.com/us/app/rdio-scanner/id1563065667)`
 	want := `<p><a href="https://apps.apple.com/us/app/rdio-scanner/id1563065667"><img src="../images/app-store-badge.png?raw=true" alt="Available on the App Store"></a></p>`
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -98,7 +98,7 @@ func TestTextThatIsMarkupInHtmlIsEscaped(t *testing.T) {
 	in := "a < b && c > d & e"
 	want := "<p>a &lt; b &amp;&amp; c &gt; d &amp; e</p>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -112,7 +112,7 @@ func TestATable(t *testing.T) {
 		"<tr><td>ProScan</td><td></td></tr></tbody>" +
 		"</table>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -125,7 +125,7 @@ func TestATableCellHoldsSpans(t *testing.T) {
 		"<tbody><tr><td>a</td><td>b</td></tr></tbody>" +
 		"</table>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -135,7 +135,7 @@ func TestTheLists(t *testing.T) {
 		{"- one\n- two", "<ul><li>one</li><li>two</li></ul>"},
 		{"1. one\n2. two", "<ol><li>one</li><li>two</li></ol>"},
 	} {
-		if got := renderMarkdown(c.in); got != c.want {
+		if got := renderMarkdown(c.in, spans{}); got != c.want {
 			t.Errorf("%q renders %q, want %q", c.in, got, c.want)
 		}
 	}
@@ -146,7 +146,7 @@ func TestANestedList(t *testing.T) {
 	in := "- one\n  - a\n  - b\n- two"
 	want := "<ul><li>one<ul><li>a</li><li>b</li></ul></li><li>two</li></ul>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -156,7 +156,7 @@ func TestAListItemHoldsSpans(t *testing.T) {
 	in := "- the **log** names the part"
 	want := "<ul><li>the <strong>log</strong> names the part</li></ul>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -165,7 +165,7 @@ func TestABlockquote(t *testing.T) {
 	in := "> _Note that the default password is **rdio-scanner**_"
 	want := "<blockquote><p><em>Note that the default password is <strong>rdio-scanner</strong></em></p></blockquote>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -176,7 +176,7 @@ func TestAnIndentedCodeBlock(t *testing.T) {
 	in := "    [rdio@pc-linux ~]$ mkdir rdio-scanner\n    [rdio@pc-linux ~]$ cd rdio-scanner"
 	want := "<pre><code>[rdio@pc-linux ~]$ mkdir rdio-scanner\n[rdio@pc-linux ~]$ cd rdio-scanner</code></pre>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -187,7 +187,7 @@ func TestACodeBlockKeepsWhatItIsGiven(t *testing.T) {
 	in := "    **not bold** and `not code`"
 	want := "<pre><code>**not bold** and `not code`</code></pre>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -198,7 +198,7 @@ func TestAPageBreakBecomesAPrintingHint(t *testing.T) {
 	in := "before\n\n\\pagebreak{}\n\nafter"
 	want := "<p>before</p><div class=\"page-break\"></div><p>after</p>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -208,7 +208,7 @@ func TestTheBlocksKeepTheirOrder(t *testing.T) {
 	in := "# Title\n\na paragraph\n\n- one\n- two\n\n> a quote"
 	want := "<h1>Title</h1><p>a paragraph</p><ul><li>one</li><li>two</li></ul><blockquote><p>a quote</p></blockquote>"
 
-	if got := renderMarkdown(in); got != want {
+	if got := renderMarkdown(in, spans{}); got != want {
 		t.Errorf("render = %q, want %q", got, want)
 	}
 }
@@ -216,7 +216,7 @@ func TestTheBlocksKeepTheirOrder(t *testing.T) {
 // A document that is empty renders to nothing, so an empty source is not a document that says
 // something.
 func TestAnEmptySourceRendersNothing(t *testing.T) {
-	if got := renderMarkdown("   \n\n  "); got != "" {
+	if got := renderMarkdown("   \n\n  ", spans{}); got != "" {
 		t.Errorf("an empty source renders %q, want nothing", got)
 	}
 }
@@ -255,7 +255,7 @@ func TestTheRealDocumentationRendersEveryConstructItUses(t *testing.T) {
 	counts := map[string]int{}
 
 	for _, name := range sources {
-		html := renderMarkdown(readDoc(t, name))
+		html := renderMarkdown(readDoc(t, name), spans{})
 
 		counts["h1"] += strings.Count(html, "<h1>")
 		counts["h2"] += strings.Count(html, "<h2>")

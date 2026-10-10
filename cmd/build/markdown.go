@@ -26,6 +26,16 @@ import (
 	"strings"
 )
 
+// spans is how the renderer reaches the outside world: what an image path becomes, and what a link
+// address becomes. A renderer that returns the paths it was given produces a document that needs files
+// beside it, and the release document is one file that opens with nothing else.
+//
+// A nil function leaves the path as the document wrote it, which is what a test of the parser wants.
+type spans struct {
+	image func(src string) string
+	link  func(url string) string
+}
+
 // renderMarkdown turns the markdown the documentation is written in into HTML.
 //
 // The constructs it knows are the ones the documentation uses, measured in
@@ -38,7 +48,7 @@ import (
 // The renderer is not a markdown implementation. It is the subset this repository's documentation is
 // written in, and a document written outside it renders with the markup left in it, which is what the
 // test that renders the real sources checks for.
-func renderMarkdown(source string) string {
+func renderMarkdown(source string, sp spans) string {
 	var out strings.Builder
 
 	lines := strings.Split(source, "\n")
@@ -53,7 +63,7 @@ func renderMarkdown(source string) string {
 
 		case isHeading(line):
 			level := strings.IndexByte(line, ' ')
-			out.WriteString(fmt.Sprintf("<h%d>%s</h%d>", level, renderInline(strings.TrimSpace(line[level+1:])), level))
+			out.WriteString(fmt.Sprintf("<h%d>%s</h%d>", level, renderInline(strings.TrimSpace(line[level+1:]), sp), level))
 			i++
 
 		case isPageBreak(line):
@@ -61,19 +71,19 @@ func renderMarkdown(source string) string {
 			i++
 
 		case isTableStart(lines, i):
-			i += renderTable(lines, i, &out)
+			i += renderTable(lines, i, sp, &out)
 
 		case isQuote(line):
-			i += renderQuote(lines, i, &out)
+			i += renderQuote(lines, i, sp, &out)
 
 		case isCode(lines[i]):
 			i += renderCode(lines, i, &out)
 
 		case isListItem(line):
-			i += renderList(lines, i, &out)
+			i += renderList(lines, i, sp, &out)
 
 		default:
-			i += renderParagraph(lines, i, &out)
+			i += renderParagraph(lines, i, sp, &out)
 		}
 	}
 
@@ -82,7 +92,7 @@ func renderMarkdown(source string) string {
 
 // renderInline turns the spans inside one block into HTML. The spans nest: the documentation puts an
 // image inside a link, and bold inside emphasis, so the content of a span is rendered the same way.
-func renderInline(s string) string {
+func renderInline(s string, sp spans) string {
 	var out strings.Builder
 
 	i := 0
@@ -100,7 +110,12 @@ func renderInline(s string) string {
 
 		if c == '!' && i+1 < len(s) && s[i+1] == '[' {
 			if alt, url, next, ok := linkSpan(s, i+1); ok {
-				out.WriteString(`<img src="` + html.EscapeString(url) + `" alt="` + html.EscapeString(alt) + `">`)
+				src := url
+				if sp.image != nil {
+					src = sp.image(url)
+				}
+
+				out.WriteString(`<img src="` + html.EscapeString(src) + `" alt="` + html.EscapeString(alt) + `">`)
 				i = next
 
 				continue
@@ -109,7 +124,12 @@ func renderInline(s string) string {
 
 		if c == '[' {
 			if text, url, next, ok := linkSpan(s, i); ok {
-				out.WriteString(`<a href="` + html.EscapeString(url) + `">` + renderInline(text) + `</a>`)
+				href := url
+				if sp.link != nil {
+					href = sp.link(url)
+				}
+
+				out.WriteString(`<a href="` + html.EscapeString(href) + `">` + renderInline(text, sp) + `</a>`)
 				i = next
 
 				continue
@@ -118,7 +138,7 @@ func renderInline(s string) string {
 
 		if c == '*' && i+1 < len(s) && s[i+1] == '*' {
 			if j := strings.Index(s[i+2:], "**"); j >= 0 {
-				out.WriteString("<strong>" + renderInline(s[i+2:i+2+j]) + "</strong>")
+				out.WriteString("<strong>" + renderInline(s[i+2:i+2+j], sp) + "</strong>")
 				i = i + 2 + j + 2
 
 				continue
@@ -127,7 +147,7 @@ func renderInline(s string) string {
 
 		if c == '*' {
 			if j := strings.IndexByte(s[i+1:], '*'); j >= 0 {
-				out.WriteString("<em>" + renderInline(s[i+1:i+1+j]) + "</em>")
+				out.WriteString("<em>" + renderInline(s[i+1:i+1+j], sp) + "</em>")
 				i = i + 1 + j + 1
 
 				continue
@@ -136,7 +156,7 @@ func renderInline(s string) string {
 
 		if c == '_' {
 			if j := strings.IndexByte(s[i+1:], '_'); j >= 0 {
-				out.WriteString("<em>" + renderInline(s[i+1:i+1+j]) + "</em>")
+				out.WriteString("<em>" + renderInline(s[i+1:i+1+j], sp) + "</em>")
 				i = i + 1 + j + 1
 
 				continue
@@ -255,7 +275,7 @@ func isListItem(line string) bool {
 	return digits > 0 && digits+1 < len(trimmed) && trimmed[digits] == '.' && trimmed[digits+1] == ' '
 }
 
-func renderParagraph(lines []string, i int, out *strings.Builder) int {
+func renderParagraph(lines []string, i int, sp spans, out *strings.Builder) int {
 	var body strings.Builder
 	n := 0
 	broke := false
@@ -281,7 +301,7 @@ func renderParagraph(lines []string, i int, out *strings.Builder) int {
 			body.WriteString(" ")
 		}
 
-		body.WriteString(renderInline(line))
+		body.WriteString(renderInline(line, sp))
 
 		if hard {
 			body.WriteString("<br>")
@@ -296,7 +316,7 @@ func renderParagraph(lines []string, i int, out *strings.Builder) int {
 	return n
 }
 
-func renderTable(lines []string, i int, out *strings.Builder) int {
+func renderTable(lines []string, i int, sp spans, out *strings.Builder) int {
 	n := 0
 
 	for i+n < len(lines) && isTableRow(lines[i+n]) {
@@ -306,7 +326,7 @@ func renderTable(lines []string, i int, out *strings.Builder) int {
 	out.WriteString("<table><thead><tr>")
 
 	for _, cell := range splitRow(lines[i]) {
-		out.WriteString("<th>" + renderInline(cell) + "</th>")
+		out.WriteString("<th>" + renderInline(cell, sp) + "</th>")
 	}
 
 	out.WriteString("</tr></thead><tbody>")
@@ -315,7 +335,7 @@ func renderTable(lines []string, i int, out *strings.Builder) int {
 		out.WriteString("<tr>")
 
 		for _, cell := range splitRow(row) {
-			out.WriteString("<td>" + renderInline(cell) + "</td>")
+			out.WriteString("<td>" + renderInline(cell, sp) + "</td>")
 		}
 
 		out.WriteString("</tr>")
@@ -336,7 +356,7 @@ func splitRow(row string) []string {
 	return cells
 }
 
-func renderQuote(lines []string, i int, out *strings.Builder) int {
+func renderQuote(lines []string, i int, sp spans, out *strings.Builder) int {
 	n := 0
 	var parts []string
 
@@ -345,7 +365,7 @@ func renderQuote(lines []string, i int, out *strings.Builder) int {
 		n++
 	}
 
-	out.WriteString("<blockquote><p>" + renderInline(strings.Join(parts, " ")) + "</p></blockquote>")
+	out.WriteString("<blockquote><p>" + renderInline(strings.Join(parts, " "), sp) + "</p></blockquote>")
 
 	return n
 }
@@ -366,7 +386,7 @@ func renderCode(lines []string, i int, out *strings.Builder) int {
 	return n
 }
 
-func renderList(lines []string, i int, out *strings.Builder) int {
+func renderList(lines []string, i int, sp spans, out *strings.Builder) int {
 	n := 0
 	var block []string
 
@@ -381,7 +401,7 @@ func renderList(lines []string, i int, out *strings.Builder) int {
 		n++
 	}
 
-	out.WriteString(renderListItems(parseListItems(block)))
+	out.WriteString(renderListItems(parseListItems(block), sp))
 
 	return n
 }
@@ -429,7 +449,7 @@ func parseListItems(lines []string) []*listitem {
 	return roots
 }
 
-func renderListItems(items []*listitem) string {
+func renderListItems(items []*listitem, sp spans) string {
 	tag := "ul"
 
 	if len(items) > 0 && items[0].ordered {
@@ -441,10 +461,10 @@ func renderListItems(items []*listitem) string {
 	out.WriteString("<" + tag + ">")
 
 	for _, item := range items {
-		out.WriteString("<li>" + renderInline(item.text))
+		out.WriteString("<li>" + renderInline(item.text, sp))
 
 		if len(item.children) > 0 {
-			out.WriteString(renderListItems(item.children))
+			out.WriteString(renderListItems(item.children, sp))
 		}
 
 		out.WriteString("</li>")
