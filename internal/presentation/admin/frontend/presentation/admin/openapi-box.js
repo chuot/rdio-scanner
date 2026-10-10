@@ -1,6 +1,6 @@
 // The OpenAPI entrypoint groups (FEAT-018, CA-005): the API section renders one
 // box per group, naming the endpoints that achieve the group's result with one
-// curl example. The endpoints named must match docs/openapi-admin.json (the
+// curl example. The endpoints named must match docs/openapi.json (the
 // contract test asserts this). The box is informational: it never issues requests.
 
 const API_GROUPS = {

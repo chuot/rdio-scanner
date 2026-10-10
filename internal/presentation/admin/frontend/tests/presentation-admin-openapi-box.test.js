@@ -1,6 +1,6 @@
 // The API entrypoint submenu (FEAT-018, CA-005): one API section card lists every
 // OpenAPI entry point in seven groups, each group with one curl example, and every
-// endpoint it names exists in docs/openapi-admin.json. No other section card
+// endpoint it names exists in docs/openapi.json. No other section card
 // carries an OpenAPI box. The boxes are informational: the test reads what they
 // render, never what they request.
 
@@ -31,7 +31,7 @@ import '../presentation/admin/rdio-admin-units.js';
 
 import { findAll, texts } from './dom-shim.js';
 
-const openapi = JSON.parse(readFileSync(new URL('../../../../../docs/openapi-admin.json', import.meta.url), 'utf8'));
+const openapi = JSON.parse(readFileSync(new URL('../../../../../docs/openapi.json', import.meta.url), 'utf8'));
 
 const DOC_PATHS = Object.keys(openapi.paths);
 
@@ -107,7 +107,7 @@ test('the API card lists every entry point in seven groups, all known to the Ope
     assert.ok(endpoints.length >= 1, 'a group names no endpoint');
 
     for (const endpoint of endpoints) {
-      assert.ok(endpointKnown(endpoint), `a group names ${endpoint}, absent from docs/openapi-admin.json`);
+      assert.ok(endpointKnown(endpoint), `a group names ${endpoint}, absent from docs/openapi.json`);
     }
 
     const examples = findAll(box, (node) => node.tag === 'pre');
