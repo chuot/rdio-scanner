@@ -1,6 +1,6 @@
-// T034: the OpenAPI document for the admin REST surface must parse with
-// Node's built-in JSON support and cover every endpoint declared in
-// contract-server-protocol.md §3, including the 8 per-section pairs.
+// The OpenAPI document for the admin REST surface is the contract the administrator front end is
+// written against. It must parse with Node's built-in JSON support and cover every endpoint the
+// server answers, including the eight per-section pairs.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,13 +8,13 @@ import { readFileSync } from 'node:fs';
 
 import { fileURLToPath } from 'node:url';
 
-const DOC_PATH = fileURLToPath(new URL('../../../../../docs/specs/FEAT-002-vanilla-client-ng/openapi-admin.json', import.meta.url));
+const DOC_PATH = fileURLToPath(new URL('../../../../../docs/openapi-admin.json', import.meta.url));
 
 const doc = JSON.parse(readFileSync(DOC_PATH, 'utf8'));
 
 const SECTIONS = ['access', 'apikeys', 'dirwatch', 'downstreams', 'groups', 'options', 'systems', 'tags'];
 
-test('openapi-admin.json declares OpenAPI 3.1 with a title', () => {
+test('the admin OpenAPI document declares OpenAPI 3.1 with a title', () => {
   assert.equal(doc.openapi, '3.1.0');
   assert.ok(doc.info?.title);
 });

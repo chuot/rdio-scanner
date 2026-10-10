@@ -1,0 +1,431 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Rdio Scanner Admin API",
+    "version": "7.0.0",
+    "description": "Admin REST surface of the Rdio Scanner server: authentication, whole-config access (legacy, unchanged), per-section config endpoints (REQ-019, decision-admin-section-api.md), alerts, logs, and password change. Auth: raw JWT in the Authorization header, no Bearer prefix. HTTP 401 on invalid/expired token. The admin config WebSocket (ws://host/api/admin/config, JWT as first message) is out of scope for this document."
+  },
+  "servers": [{ "url": "/", "description": "Same origin as the webapp" }],
+  "security": [{ "adminJwt": [] }],
+  "paths": {
+    "/api/admin/login": {
+      "post": {
+        "summary": "Log in and obtain a JWT",
+        "security": [],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } } },
+          "400": { "description": "Undecodable body" },
+          "401": { "description": "Wrong password or rate limit exceeded (3 attempts per IP, counter cleared on success)" }
+        }
+      }
+    },
+    "/api/admin/logout": {
+      "post": {
+        "summary": "Invalidate the current token", "security": [{ "adminJwt": [] }],
+        "responses": {
+          "200": { "description": "Empty body" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/config": {
+      "get": {
+        "summary": "Read the whole config (legacy endpoint, kept unchanged)", "security": [{ "adminJwt": [] }],
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WholeConfigResponse" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "put": {
+        "summary": "Replace config sections via a whole-config body (legacy endpoint, kept unchanged). Only the top-level keys present in the body are applied.", "security": [{ "adminJwt": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Config" } } } },
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WholeConfigResponse" } } } },
+          "400": { "description": "Undecodable body" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "417": { "description": "Persistence failure" }
+        }
+      }
+    },
+    "/api/admin/config/{section}": {
+      "parameters": [
+        {
+          "name": "section",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "enum": ["access", "apikeys", "dirwatch", "downstreams", "groups", "options", "systems", "tags"] }
+        }
+      ],
+      "get": {
+        "summary": "Read a single config section", "security": [{ "adminJwt": [] }],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Access" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Apikey" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Dirwatch" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Downstream" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Group" } },
+                    { "$ref": "#/components/schemas/Options" },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/System" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Tag" } }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Unknown section" }
+        }
+      },
+      "put": {
+        "summary": "Replace a single config section. Persists only that section, then broadcasts the full config to admin WebSocket clients.", "security": [{ "adminJwt": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/components/schemas/Access" } },
+                  { "type": "array", "items": { "$ref": "#/components/schemas/Apikey" } },
+                  { "type": "array", "items": { "$ref": "#/components/schemas/Dirwatch" } },
+                  { "type": "array", "items": { "$ref": "#/components/schemas/Downstream" } },
+                  { "type": "array", "items": { "$ref": "#/components/schemas/Group" } },
+                  { "$ref": "#/components/schemas/Options" },
+                  { "type": "array", "items": { "$ref": "#/components/schemas/System" } },
+                  { "type": "array", "items": { "$ref": "#/components/schemas/Tag" } }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated section as re-read from the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Access" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Apikey" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Dirwatch" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Downstream" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Group" } },
+                    { "$ref": "#/components/schemas/Options" },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/System" } },
+                    { "type": "array", "items": { "$ref": "#/components/schemas/Tag" } }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "description": "Undecodable body (array expected for list sections, object for options)" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Unknown section" },
+          "405": { "description": "Unsupported method or WebSocket upgrade on a section path" },
+          "417": { "description": "Persistence failure" }
+        }
+      }
+    },
+    "/api/admin/alerts": {
+      "get": {
+        "summary": "Named alert oscillator sequences", "security": [{ "adminJwt": [] }],
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "type": "object", "additionalProperties": { "type": "array", "items": { "$ref": "#/components/schemas/OscillatorData" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/logs": {
+      "post": {
+        "summary": "Search log entries", "security": [{ "adminJwt": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogsQueryRequest" } } } },
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogsQueryResponse" } } } },
+          "400": { "description": "Undecodable body" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "417": { "description": "Search failure" }
+        }
+      }
+    },
+    "/api/admin/password": {
+      "post": {
+        "summary": "Change the admin password", "security": [{ "adminJwt": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PasswordRequest" } } } },
+        "responses": {
+          "200": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PasswordResponse" } } } },
+          "400": { "description": "Missing newPassword" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "417": { "description": "Current password invalid or persistence failure" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "adminJwt": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Raw JWT from POST /api/admin/login, no Bearer prefix. HS256, no expiry; the server keeps the last 5 issued tokens."
+      }
+    },
+    "responses": {
+      "Unauthorized": { "description": "Missing, invalid, or expired token — the client must clear its session" }
+    },
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["password"],
+        "properties": { "password": { "type": "string" } }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "passwordNeedChange": { "type": "boolean" }
+        }
+      },
+      "WholeConfigResponse": {
+        "type": "object",
+        "properties": {
+          "config": { "$ref": "#/components/schemas/Config" },
+          "docker": { "type": "boolean" },
+          "passwordNeedChange": { "type": "boolean" }
+        }
+      },
+      "Config": {
+        "type": "object",
+        "properties": {
+          "access": { "type": "array", "items": { "$ref": "#/components/schemas/Access" } },
+          "apikeys": { "type": "array", "items": { "$ref": "#/components/schemas/Apikey" } },
+          "dirwatch": { "type": "array", "items": { "$ref": "#/components/schemas/Dirwatch" } },
+          "downstreams": { "type": "array", "items": { "$ref": "#/components/schemas/Downstream" } },
+          "groups": { "type": "array", "items": { "$ref": "#/components/schemas/Group" } },
+          "options": { "$ref": "#/components/schemas/Options" },
+          "systems": { "type": "array", "items": { "$ref": "#/components/schemas/System" } },
+          "tags": { "type": "array", "items": { "$ref": "#/components/schemas/Tag" } },
+          "version": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "SystemsScope": {
+        "description": "'*' means everything; otherwise a list of system ids or {id, talkgroups} objects",
+        "oneOf": [
+          { "type": "string", "const": "*" },
+          { "type": "array", "items": { "oneOf": [{ "type": "integer" }, { "type": "object", "properties": { "id": { "type": "integer" }, "talkgroups": { "oneOf": [{ "type": "string", "const": "*" }, { "type": "array", "items": { "type": "integer" } }] } }, "additionalProperties": true }] } }
+        ]
+      },
+      "Access": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "code": { "type": "string" },
+          "expiration": { "type": "string", "format": "date-time" },
+          "ident": { "type": "string" },
+          "limit": { "type": "integer" },
+          "order": { "type": "integer" },
+          "systems": { "$ref": "#/components/schemas/SystemsScope" }
+        },
+        "additionalProperties": true
+      },
+      "Apikey": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "ident": { "type": "string" },
+          "key": { "type": "string" },
+          "disabled": { "type": "boolean" },
+          "order": { "type": "integer" },
+          "systems": { "$ref": "#/components/schemas/SystemsScope" }
+        },
+        "additionalProperties": true
+      },
+      "Dirwatch": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "directory": { "type": "string" },
+          "mask": { "type": "string" },
+          "type": { "type": "string", "enum": ["default", "dsdplus", "sdr-trunk", "trunk-recorder"] },
+          "extension": { "type": "string" },
+          "frequency": { "type": "number" },
+          "delay": { "type": "integer", "minimum": 2000 },
+          "deleteAfter": { "type": "boolean" },
+          "disabled": { "type": "boolean" },
+          "systemId": { "type": "integer" },
+          "siteId": { "type": "integer" },
+          "talkgroupId": { "type": "integer" }
+        },
+        "additionalProperties": true
+      },
+      "Downstream": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "apikey": { "type": "string" },
+          "disabled": { "type": "boolean" },
+          "systems": { "$ref": "#/components/schemas/SystemsScope" }
+        },
+        "additionalProperties": true
+      },
+      "Group": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "label": { "type": "string" },
+          "alert": { "type": "string" },
+          "led": { "$ref": "#/components/schemas/LedColor" },
+          "order": { "type": "integer" }
+        },
+        "additionalProperties": true
+      },
+      "Tag": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "label": { "type": "string" },
+          "alert": { "type": "string" },
+          "led": { "$ref": "#/components/schemas/LedColor" },
+          "order": { "type": "integer" }
+        },
+        "additionalProperties": true
+      },
+      "LedColor": { "type": "string", "enum": ["blue", "cyan", "green", "magenta", "orange", "red", "white", "yellow"] },
+      "Options": {
+        "type": "object",
+        "properties": {
+          "audioConversion": { "type": "integer", "enum": [0, 1, 2, 3] },
+          "autoPopulate": { "type": "boolean" },
+          "branding": { "type": "string" },
+          "dimmerDelay": { "type": "integer" },
+          "disableDuplicateDetection": { "type": "boolean" },
+          "duplicateDetectionTimeFrame": { "type": "integer" },
+          "email": { "type": "string" },
+          "keypadBeeps": { "type": "string" },
+          "maxClients": { "type": "integer" },
+          "playbackGoesLive": { "type": "boolean" },
+          "pruneDays": { "type": "integer" },
+          "showListenersCount": { "type": "boolean" },
+          "sortTalkgroups": { "type": "boolean" },
+          "time12hFormat": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      },
+      "System": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "systemRef": { "type": "integer" },
+          "label": { "type": "string" },
+          "alert": { "type": "string" },
+          "led": { "$ref": "#/components/schemas/LedColor" },
+          "type": { "type": "string" },
+          "autoPopulate": { "type": "boolean" },
+          "blacklists": { "type": "string" },
+          "delay": { "type": "integer" },
+          "order": { "type": "integer" },
+          "sites": { "type": "array", "items": { "$ref": "#/components/schemas/Site" } },
+          "talkgroups": { "type": "array", "items": { "$ref": "#/components/schemas/Talkgroup" } },
+          "units": { "type": "array", "items": { "$ref": "#/components/schemas/Unit" } }
+        },
+        "additionalProperties": true
+      },
+      "Site": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "siteRef": { "type": "integer" },
+          "label": { "type": "string" },
+          "order": { "type": "integer" }
+        },
+        "additionalProperties": true
+      },
+      "Talkgroup": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "talkgroupRef": { "type": "integer" },
+          "label": { "type": "string" },
+          "name": { "type": "string" },
+          "groupIds": { "type": "array", "items": { "type": "integer" } },
+          "tagId": { "type": "integer" },
+          "frequency": { "type": "number" },
+          "delay": { "type": "integer" },
+          "alert": { "type": "string" },
+          "led": { "$ref": "#/components/schemas/LedColor" },
+          "type": { "type": "string" },
+          "order": { "type": "integer" }
+        },
+        "additionalProperties": true
+      },
+      "Unit": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "unitRef": { "type": "integer" },
+          "unitFrom": { "type": "integer" },
+          "unitTo": { "type": "integer" },
+          "label": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "OscillatorData": {
+        "type": "object",
+        "properties": {
+          "begin": { "type": "number" },
+          "end": { "type": "number" },
+          "frequency": { "type": "number" },
+          "type": { "type": "string", "enum": ["sine", "square", "sawtooth", "triangle", "custom"] }
+        }
+      },
+      "LogsQueryRequest": {
+        "type": "object",
+        "required": ["limit", "offset", "sort"],
+        "properties": {
+          "date": { "type": "string", "format": "date-time" },
+          "level": { "type": "string", "enum": ["error", "info", "warn"] },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" },
+          "sort": { "type": "integer" }
+        }
+      },
+      "Log": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "dateTime": { "type": "string", "format": "date-time" },
+          "level": { "type": "integer" },
+          "message": { "type": "string" }
+        }
+      },
+      "LogsQueryResponse": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "dateStart": { "type": "string", "format": "date-time" },
+          "dateStop": { "type": "string", "format": "date-time" },
+          "options": { "$ref": "#/components/schemas/LogsQueryRequest" },
+          "logs": { "type": "array", "items": { "$ref": "#/components/schemas/Log" } }
+        }
+      },
+      "PasswordRequest": {
+        "type": "object",
+        "required": ["newPassword"],
+        "properties": {
+          "currentPassword": { "type": "string" },
+          "newPassword": { "type": "string", "minLength": 8 }
+        }
+      },
+      "PasswordResponse": {
+        "type": "object",
+        "properties": { "passwordNeedChange": { "type": "boolean" } }
+      }
+    }
+  }
+}
