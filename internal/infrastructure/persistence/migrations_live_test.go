@@ -9,7 +9,8 @@ package persistence
 // because its backend was not there is worse than no live test at all: the record would say the backend
 // was proven.
 //
-//	tools/migration/run.sh starts both backends and runs them.
+// The live tests run against backends the developer starts: a MariaDB and a PostgreSQL, published on
+// the host and port the RDIO_LIVE_* variables name.
 //
 // Each test reseeds its backend from the same v6.6.3 deployment before it runs — the schema from
 // the recorded v6.6.3 schema, the rows out of the recorded v6.6.3 statements, which are the
@@ -96,7 +97,7 @@ func liveEnv(t *testing.T, prefix, name string) string {
 	value := os.Getenv(prefix + "_" + name)
 
 	if value == "" {
-		t.Fatalf("%s_%s is not set: the live tests run against a backend, and tools/migration/run.sh starts one", prefix, name)
+		t.Fatalf("%s_%s is not set: the live tests run against a backend the developer starts, and that backend is named by %s_%s", prefix, name, prefix, name)
 	}
 
 	return value
@@ -162,7 +163,7 @@ func livePing(t *testing.T, db *sql.DB, settings Settings) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		t.Fatalf("%s at %s:%d is not reachable: %v\n\nstart it with tools/migration/run.sh",
+		t.Fatalf("%s at %s:%d is not reachable: %v\n\nstart a backend of that dialect on that host and port",
 			settings.Dialect, settings.Host, settings.Port, err)
 	}
 }
@@ -672,7 +673,7 @@ func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err == nil {
-		t.Fatalf("a MariaDB answered on port %d, which is not the port tools/migration/run.sh publishes", settings.Port)
+		t.Fatalf("a MariaDB answered on port %d, which is not the port the live tests expect for MariaDB", settings.Port)
 	}
 
 	t.Logf("%s at %s:%d refused the connection, which is what a live test is supposed to report",

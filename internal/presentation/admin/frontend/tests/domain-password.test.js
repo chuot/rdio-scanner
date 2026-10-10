@@ -1,6 +1,6 @@
 // T045: admin password change validation (domain/password.js).
 // Red first: these tests define the validator contract mirrored from the
-// legacy tools/password Angular validators (required, minLength 8, match).
+// legacy Angular password validators (required, minLength 8, match).
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

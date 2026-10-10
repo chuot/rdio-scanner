@@ -1712,7 +1712,7 @@ const v6DirwatchesTable = "rdioScannerDirWatches"
 // talkgroups is not in the maps at all, and its dirwatches then resolve to nothing.
 //
 // It is spelled `CROSS JOIN`, which is what the same query looked like as a `LEFT JOIN` with no `ON`
-// clause until the live run in tools/migration/run.sh asked MariaDB to parse it: MariaDB refuses a
+// clause until a live run asked MariaDB to parse it: MariaDB refuses a
 // `LEFT JOIN` with no `ON` as a syntax error, before it looks at any data, and the two maps came out
 // identical on the other three backends.
 //

@@ -36,8 +36,9 @@ import (
 //
 // The expectations the migration tests state against them were read off the legacy server's own
 // output; where the legacy server cannot finish, the expectation comes from the legacy source, and the
-// test that pins it says so. tools/legacy-fixture/generate.sh says how the databases they were taken
-// from are rebuilt, and the tree it must be built from is pinned there.
+// test that pins it says so. The recorded schema and statements are themselves the rebuild: applying
+// them to an empty database writes the databases the fixtures were taken from, and the statements are
+// the pinned record.
 
 var legacyV6Schema = []string{
 	"CREATE TABLE `rdioScannerAccesses` (`_id` integer primary key autoincrement, `code` varchar(255) not null unique, `expiration` datetime, `ident` varchar(255), `limit` integer, `order` integer, `systems` text not null);",

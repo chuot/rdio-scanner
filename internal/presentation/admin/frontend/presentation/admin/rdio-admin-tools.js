@@ -1,5 +1,5 @@
-// rdio-admin-tools (T044): admin tools (legacy tools/import-export-config,
-// tools/import-talkgroups, tools/import-units). Not a config section: no
+// rdio-admin-tools (T044): admin tools (legacy import-export-config,
+// import-talkgroups, import-units screens). Not a config section: no
 // section bar. Imports mutate the per-section working copies (each affected
 // section becomes dirty and is saved individually — per-section model per
 // decision-admin-section-api.md, replacing the legacy whole-form swap).

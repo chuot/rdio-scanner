@@ -35,8 +35,8 @@ import (
 // in the package that consumes them, which is what REQ-007 asks for: no fixture directory, no binary
 // database file, and nothing outside the test that proves it.
 //
-// tools/legacy-fixture/generate.sh says how the database they were taken from is rebuilt, and the tree
-// it must be built from is pinned there.
+// The recorded schema and statements are themselves the rebuild: applying them to an empty database
+// writes the database the fixtures were taken from, and the statements are the pinned record.
 //
 // Applying the schema and then the rows to an empty database gives the persistence tests the thing
 // REQ-007 actually claims — that this code reads a database the other server wrote — instead of
