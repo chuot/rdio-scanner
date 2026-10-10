@@ -32,8 +32,8 @@ import (
 // configuration taken away: the server is given two watches and nothing else, and the recordings it reads
 // name systems, talkgroups, groups, tags and radios it has never heard of. What the test compares is the
 // configuration the server ended up creating, row by row and column by column, against what the legacy
-// server created from the same recordings in the same order —
-// testdata/golden/dirwatch-autopopulate.json.
+// server created from the same recordings in the same order, which capturedRun hands back under the
+// name dirwatch-autopopulate.json.
 //
 // The recordings are dropped one at a time, and the next is not dropped until the previous one has become a
 // call, because the order is what each recording is testing: the first creates a talkgroup whose label is
@@ -41,7 +41,7 @@ import (
 // placeholder. Dropping them together would test whatever order two directory watchers happened to notice
 // them in.
 func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
-	golden := readGoldenRun(t, "dirwatch-autopopulate.json")
+	captured := capturedRun(t, "dirwatch-autopopulate.json")
 
 	srv := testServer(t)
 
@@ -94,7 +94,7 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 	}
 
 	for _, name := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
-		compareCanonical(t, "the "+name+" the server created", golden[name], endToEndRows(t, srv, name))
+		compareCanonical(t, "the "+name+" the server created", captured[name], endToEndRows(t, srv, name))
 	}
 
 	assertEveryServerLogEntry(t, srv.db)
@@ -142,7 +142,7 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 }
 
 // The four recordings, and the sidecars that say what they are. They are the recordings the capture wrote,
-// byte for byte, which is why the golden can pin how long they are.
+// byte for byte, which is why the recorded run can pin how long they are.
 const (
 	firstRecordingSidecar = `{
   "short_name": "Grand Metro",

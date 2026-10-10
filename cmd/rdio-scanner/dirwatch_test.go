@@ -34,8 +34,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// The golden this test reads was captured from the legacy server with its time zone set to UTC, which is
-// the time zone testdata/golden/manifest.json declares for every capture. It matters here because a
+// The run this test reads was captured from the legacy server with its time zone set to UTC, which is
+// the time zone every capture in this repository was taken in. It matters here because a
 // watched recording is dated by a clock read in the server's own time zone: the six digits at the front of
 // a dsd+ recording name a local time, and the server's time zone is what turns it into a moment.
 func init() {
@@ -47,7 +47,8 @@ func init() {
 // listener that asked for that talkgroup is told about it while it is still live.
 //
 // The expectation is what the legacy server did in the same run, frame for frame and column for column:
-// testdata/golden/dirwatch-end-to-end.json. Both servers were given the same configuration, which this
+// capturedRun under the name dirwatch-end-to-end.json. Both servers were given the same configuration,
+// which this
 // test seeds into a database the server itself created, because the run is about a recording becoming a
 // call and not about what a server creates when it has never seen a system before — that run is the
 // auto-populate test.
@@ -55,9 +56,9 @@ func init() {
 // The two recordings are dropped one at a time, the second only after the first has been broadcast, so
 // that the frames arrive in an order both servers can be expected to produce.
 func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
-	golden := readGoldenRun(t, "dirwatch-end-to-end.json")
+	captured := capturedRun(t, "dirwatch-end-to-end.json")
 
-	if _, ok := golden["frames"]; !ok {
+	if _, ok := captured["frames"]; !ok {
 		t.Fatalf("the captured run has no frames to compare against")
 	}
 
@@ -145,7 +146,7 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 
 	waitForLogMessage(t, srv.db, "a listener left from 127.0.0.1")
 
-	compareCanonical(t, "the frames the listener saw", golden["frames"], observed)
+	compareCanonical(t, "the frames the listener saw", captured["frames"], observed)
 
 	// The watched recordings are gone from the directories: both watches delete after ingesting, which is
 	// what keeps a recording tool's output directory from filling up.
@@ -158,7 +159,7 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	}
 
 	for _, name := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
-		compareCanonical(t, "the "+name+" the server left behind", golden[name], endToEndRows(t, srv, name))
+		compareCanonical(t, "the "+name+" the server left behind", captured[name], endToEndRows(t, srv, name))
 	}
 
 	assertEveryServerLogEntry(t, srv.db)
@@ -174,7 +175,7 @@ type seedStatement struct {
 // seedEndToEndConfiguration is the configuration the end-to-end run is given. The systems and talkgroups
 // are there before the recordings arrive, so that a call reaching a listener does not depend on the server
 // inventing them on the way; the audio conversion is turned off, so that the recording a watch hands over
-// is the recording the test wrote, byte for byte, and the golden pins the server passing it along rather
+// is the recording the test wrote, byte for byte, and the recorded run pins the server passing it along rather
 // than pinning what one version of ffmpeg makes of it. Conversion is compared where ffmpeg is the subject.
 func seedEndToEndConfiguration(t *testing.T, db *sql.DB, dsd, trunk string) {
 	t.Helper()
@@ -262,7 +263,7 @@ func dropRecording(t *testing.T, directory, name string, content []byte) {
 
 // recording is audio for a watched file. Nothing in this run looks inside the recording — a watch reads a
 // recording's name and its sidecar, and the ingest path only asks whether there is more audio than a
-// container header — so what matters is that it is as long as the recording the golden was captured from.
+// container header — so what matters is that it is as long as the recording the recorded run was captured from.
 func recording(bytes int) []byte {
 	audio := make([]byte, bytes)
 
@@ -297,7 +298,7 @@ func readFramesUntilCall(t *testing.T, conn *websocket.Conn, calls int) []map[st
 	}
 }
 
-// observedFrame reads one frame and puts it in the shape the golden holds it in.
+// observedFrame reads one frame and puts it in the shape the recorded run holds it in.
 func observedFrame(t *testing.T, conn *websocket.Conn) map[string]any {
 	t.Helper()
 
@@ -308,7 +309,7 @@ func observedFrame(t *testing.T, conn *websocket.Conn) map[string]any {
 	observed := map[string]any{"command": command}
 
 	// The configuration a listener is sent is the whole configuration, and it is pinned by the
-	// configuration goldens rather than being repeated here.
+	// recorded configurations rather than being repeated here.
 	if command == "CFG" || len(frame) < 2 {
 		return observed
 	}
@@ -327,7 +328,7 @@ func observedFrame(t *testing.T, conn *websocket.Conn) map[string]any {
 }
 
 // withoutRecording replaces the recording inside a call frame with how many bytes it was. The recording is
-// the file the test put in the watched directory itself, so what the golden has to pin is that the server
+// the file the test put in the watched directory itself, so what the recorded run has to pin is that the server
 // passed it along whole, and not the bytes a second time.
 func withoutRecording(call map[string]any) map[string]any {
 	audio, ok := call["audio"].(map[string]any)
@@ -396,7 +397,7 @@ func endToEndRows(t *testing.T, srv *server, table string) []map[string]any {
 		row := map[string]any{}
 
 		for i, column := range columns {
-			// A driver that hands back text as bytes is the same text as far as the golden is concerned.
+			// A driver that hands back text as bytes is the same text as far as the recorded run is concerned.
 			if text, ok := values[i].([]byte); ok {
 				row[column] = string(text)
 
@@ -503,31 +504,6 @@ func findFiles(t *testing.T, directory string) []string {
 	}
 
 	return left
-}
-
-// readGoldenRun reads a captured run, keeping each table as it was written so that it can be compared in
-// the same canonical shape the server's own rows are put in.
-func readGoldenRun(t *testing.T, name string) map[string]json.RawMessage {
-	t.Helper()
-
-	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "golden", name))
-	if err != nil {
-		t.Fatalf("reading the captured run: %v", err)
-	}
-
-	golden := map[string]json.RawMessage{}
-
-	if err := json.Unmarshal(b, &golden); err != nil {
-		t.Fatalf("the captured run is not the run a capture writes: %v", err)
-	}
-
-	for _, table := range []string{"calls", "logs", "groups", "tags", "talkgroups", "units", "systems"} {
-		if _, ok := golden[table]; !ok {
-			t.Fatalf("the captured run has no %s to compare against", table)
-		}
-	}
-
-	return golden
 }
 
 // compareCanonical compares two things by putting both in the shape JSON writes them in, with the keys of
