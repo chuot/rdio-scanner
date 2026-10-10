@@ -230,8 +230,6 @@ func marshal(t *testing.T, payload any) string {
 	return string(b)
 }
 
-
-
 // carriesKey reports whether the marshaled object carries key at its own top level. With a value it
 // must be exactly that value; with none it only has to be there. It looks at the bytes rather than
 // parsing, because nothing here should re-render what it is checking.

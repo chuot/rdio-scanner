@@ -43,8 +43,8 @@ import (
 
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/fakes"
-	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/ffmpeg"
 	"rdio-scanner/internal/infrastructure/persistence"
 )

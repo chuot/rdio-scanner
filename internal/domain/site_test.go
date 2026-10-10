@@ -1,0 +1,55 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package domain
+
+import "testing"
+
+func TestSiteApplyMap(t *testing.T) {
+	site := Site{}.ApplyMap(map[string]any{
+		"id":       float64(3),
+		"label":    "North",
+		"order":    float64(1),
+		"siteRef":  float64(7),
+		"systemId": float64(5),
+	})
+
+	want := Site{ID: 3, Label: "North", Order: 1, SiteRef: 7, SystemID: 5}
+
+	if site != want {
+		t.Errorf("ApplyMap = %+v, want %+v", site, want)
+	}
+}
+
+func TestSitesByIDAndRef(t *testing.T) {
+	sites := Sites{{ID: 1, SiteRef: 10, Label: "North"}, {ID: 2, SiteRef: 20, Label: "South"}}
+
+	if site, ok := sites.ByID(2); !ok || site.SiteRef != 20 {
+		t.Errorf("ByID(2) = %+v, %v, want the South site", site, ok)
+	}
+
+	if site, ok := sites.ByRef(10); !ok || site.Label != "North" {
+		t.Errorf("ByRef(10) = %+v, %v, want the North site", site, ok)
+	}
+
+	if _, ok := sites.ByRef(99); ok {
+		t.Error("ByRef(99) reported a site, want none")
+	}
+}

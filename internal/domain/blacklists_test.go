@@ -1,0 +1,44 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package domain
+
+import "testing"
+
+func TestBlacklistsMatchExactlyAsWritten(t *testing.T) {
+	blacklists := Blacklists("100,200,300")
+
+	if !blacklists.IsBlacklisted(200) {
+		t.Error("200 is listed, want it blacklisted")
+	}
+
+	if blacklists.IsBlacklisted(250) {
+		t.Error("250 is not listed, want it accepted")
+	}
+
+	// A padded entry does not match, matching the legacy comparison.
+	if !Blacklists("100, 200").IsBlacklisted(100) || Blacklists("100, 200").IsBlacklisted(200) {
+		t.Error("padded entries must not match; the legacy server compares entries verbatim")
+	}
+
+	if Blacklists("").IsBlacklisted(100) {
+		t.Error("an empty blacklist must accept everything")
+	}
+}

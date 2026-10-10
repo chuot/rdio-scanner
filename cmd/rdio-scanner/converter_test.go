@@ -21,10 +21,10 @@
 package main
 
 import (
-	"rdio-scanner/internal/app"
 	"context"
 	"os"
 	"path/filepath"
+	"rdio-scanner/internal/app"
 	"testing"
 
 	"rdio-scanner/internal/application/ports"

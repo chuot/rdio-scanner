@@ -611,5 +611,3 @@ func truncate(body string) string {
 
 	return body
 }
-
-

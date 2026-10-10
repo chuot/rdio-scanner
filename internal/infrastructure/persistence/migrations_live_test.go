@@ -36,7 +36,6 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-
 // liveSeedOrder is the order the rows arrive in: the tables the migration pass looks a reference up in
 // before it carries the rows that name them. The v6 tables have no foreign keys, so the schema does not
 // require this order; what it buys is that a seeding failure names the row that is wrong instead of

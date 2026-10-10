@@ -29,9 +29,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,9 +42,9 @@ import (
 
 	"rdio-scanner/internal/app"
 	"rdio-scanner/internal/application"
-	"rdio-scanner/internal/infrastructure/clock"
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/clock"
 	"rdio-scanner/internal/infrastructure/ffmpeg"
 	"rdio-scanner/internal/infrastructure/persistence"
 )
@@ -466,7 +466,6 @@ func (s *journeyServer) uploadRecording(t *testing.T, upload uploadedRecording) 
 
 	return rec
 }
-
 
 // encodeAccessCode encodes an access code the way a client does, because the wire carries it that way.
 func encodeAccessCode(code string) string {

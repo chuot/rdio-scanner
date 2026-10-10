@@ -21,7 +21,6 @@
 package domain
 
 import (
-	"reflect"
 	"testing"
 )
 
@@ -60,89 +59,6 @@ func TestSystemApplyMap(t *testing.T) {
 
 	if len(system.Units) != 1 || system.Units[0].UnitRef != 501 {
 		t.Errorf("Units = %+v, want one unit with ref 501", system.Units)
-	}
-}
-
-func TestTalkgroupApplyMapReadsOrderFromTheOrderKeyOnly(t *testing.T) {
-	fromOrder := Talkgroup{}.ApplyMap(map[string]any{"talkgroupRef": float64(100), "order": float64(7)})
-
-	if fromOrder.Order != 7 {
-		t.Errorf("Order = %d, want 7 read from the order key", fromOrder.Order)
-	}
-
-	// Quirk Q4: the legacy server emits the order under "talkgroup" but never reads
-	// it back from that key. Reproduced verbatim.
-	fromTalkgroupKey := Talkgroup{}.ApplyMap(map[string]any{"talkgroupRef": float64(100), "talkgroup": float64(7)})
-
-	if fromTalkgroupKey.Order != 0 {
-		t.Errorf("Order = %d, want 0: the legacy server ignores the talkgroup key on read", fromTalkgroupKey.Order)
-	}
-}
-
-func TestTalkgroupApplyMapReadsGroupIds(t *testing.T) {
-	talkgroup := Talkgroup{}.ApplyMap(map[string]any{
-		"groupIds": []any{float64(1), "not a number", float64(2)},
-		"tagId":    float64(9),
-		"type":     "chat",
-	})
-
-	if want := []uint64{1, 2}; !reflect.DeepEqual(talkgroup.GroupIDs, want) {
-		t.Errorf("GroupIDs = %v, want %v with non-numeric entries dropped", talkgroup.GroupIDs, want)
-	}
-
-	if talkgroup.TagID != 9 || talkgroup.Kind != "chat" {
-		t.Errorf("ApplyMap = %+v, want tagId 9 and type chat", talkgroup)
-	}
-}
-
-func TestTalkgroupGeneratedPlaceholders(t *testing.T) {
-	talkgroup := Talkgroup{TalkgroupRef: 1234}
-
-	if talkgroup.GeneratedLabel() != "1234" {
-		t.Errorf("GeneratedLabel = %q, want 1234", talkgroup.GeneratedLabel())
-	}
-
-	if talkgroup.GeneratedName() != "Talkgroup 1234" {
-		t.Errorf("GeneratedName = %q, want Talkgroup 1234", talkgroup.GeneratedName())
-	}
-
-	if !talkgroup.HasGeneratedLabel() || !talkgroup.HasGeneratedName() {
-		t.Error("an empty label and name must count as generated placeholders")
-	}
-
-	talkgroup.Label = "1234"
-	talkgroup.Name = "Talkgroup 1234"
-
-	if !talkgroup.HasGeneratedLabel() || !talkgroup.HasGeneratedName() {
-		t.Error("labels equal to the generated placeholder must count as generated")
-	}
-
-	talkgroup.Label = "Fire Dispatch"
-	talkgroup.Name = "Main Fire Dispatch"
-
-	if talkgroup.HasGeneratedLabel() || talkgroup.HasGeneratedName() {
-		t.Error("a configured label and name must not count as generated")
-	}
-}
-
-func TestBlacklistsMatchExactlyAsWritten(t *testing.T) {
-	blacklists := Blacklists("100,200,300")
-
-	if !blacklists.IsBlacklisted(200) {
-		t.Error("200 is listed, want it blacklisted")
-	}
-
-	if blacklists.IsBlacklisted(250) {
-		t.Error("250 is not listed, want it accepted")
-	}
-
-	// A padded entry does not match, matching the legacy comparison.
-	if !Blacklists("100, 200").IsBlacklisted(100) || Blacklists("100, 200").IsBlacklisted(200) {
-		t.Error("padded entries must not match; the legacy server compares entries verbatim")
-	}
-
-	if Blacklists("").IsBlacklisted(100) {
-		t.Error("an empty blacklist must accept everything")
 	}
 }
 

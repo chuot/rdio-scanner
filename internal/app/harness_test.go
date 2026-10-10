@@ -22,14 +22,14 @@ package app
 
 import (
 	"database/sql"
-	"os"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
-	"time"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 

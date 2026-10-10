@@ -343,4 +343,3 @@ func readHeldCall(t *testing.T, conn *websocket.Conn) map[string]any {
 		return payload
 	}
 }
-

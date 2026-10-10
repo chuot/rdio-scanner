@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-
 )
 
 // These tests hold a started server to the administrator paths: the credential it accepts, the sessions

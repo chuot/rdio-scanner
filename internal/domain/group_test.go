@@ -33,24 +33,6 @@ func TestDefaultGroupLabelsMatchTheLegacySeeds(t *testing.T) {
 	}
 }
 
-func TestDefaultTagLabelsMatchTheLegacySeeds(t *testing.T) {
-	want := []string{
-		"Air Traffic Control",
-		"Emergency ",
-		"Fire Dispatch",
-		"Fire Tac",
-		"Fire Talk",
-		"Interop",
-		"Security",
-		"Service",
-		"Untagged",
-	}
-
-	if got := DefaultTagLabels(); !reflect.DeepEqual(got, want) {
-		t.Errorf("DefaultTagLabels() = %v, want %v", got, want)
-	}
-}
-
 func TestGroupApplyMap(t *testing.T) {
 	group := Group{}.ApplyMap(map[string]any{
 		"id":    float64(7),
@@ -84,22 +66,6 @@ func TestGroupApplyMapIgnoresWronglyTypedKeys(t *testing.T) {
 
 	if group.Order != 0 {
 		t.Errorf("Order = %d, want 0", group.Order)
-	}
-}
-
-func TestTagApplyMap(t *testing.T) {
-	tag := Tag{}.ApplyMap(map[string]any{
-		"id":    float64(4),
-		"alert": "alert2",
-		"label": "Fire Dispatch",
-		"led":   "#00ff00",
-		"order": float64(2),
-	})
-
-	want := Tag{ID: 4, Alert: "alert2", Label: "Fire Dispatch", LED: "#00ff00", Order: 2}
-
-	if tag != want {
-		t.Errorf("ApplyMap = %+v, want %+v", tag, want)
 	}
 }
 

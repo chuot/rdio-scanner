@@ -1,6 +1,5 @@
 //go:build live
 
-
 package persistence
 
 // liveMariadbSchema is the v6.6.3 MariaDB schema a deployment leaves behind, as the statements a v6.6.3

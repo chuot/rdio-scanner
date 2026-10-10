@@ -65,35 +65,3 @@ func TestUnitsByIDAndOrder(t *testing.T) {
 		t.Errorf("Ordered() = %v, want A then B", got)
 	}
 }
-
-func TestSiteApplyMap(t *testing.T) {
-	site := Site{}.ApplyMap(map[string]any{
-		"id":       float64(3),
-		"label":    "North",
-		"order":    float64(1),
-		"siteRef":  float64(7),
-		"systemId": float64(5),
-	})
-
-	want := Site{ID: 3, Label: "North", Order: 1, SiteRef: 7, SystemID: 5}
-
-	if site != want {
-		t.Errorf("ApplyMap = %+v, want %+v", site, want)
-	}
-}
-
-func TestSitesByIDAndRef(t *testing.T) {
-	sites := Sites{{ID: 1, SiteRef: 10, Label: "North"}, {ID: 2, SiteRef: 20, Label: "South"}}
-
-	if site, ok := sites.ByID(2); !ok || site.SiteRef != 20 {
-		t.Errorf("ByID(2) = %+v, %v, want the South site", site, ok)
-	}
-
-	if site, ok := sites.ByRef(10); !ok || site.Label != "North" {
-		t.Errorf("ByRef(10) = %+v, %v, want the North site", site, ok)
-	}
-
-	if _, ok := sites.ByRef(99); ok {
-		t.Error("ByRef(99) reported a site, want none")
-	}
-}

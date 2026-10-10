@@ -859,5 +859,3 @@ type bodyCutShortError struct{}
 func (err *bodyCutShortError) Error() string {
 	return "the connection was closed while the body was being read"
 }
-
-
