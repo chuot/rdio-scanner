@@ -20,15 +20,246 @@
 
 package main
 
+// build.go is the orchestrator: the tool, the run that calls the phases in order — the web
+// applications, then the ffmpeg, then the server that carries both — and the shared primitives
+// every phase asks the tree. The web applications are in webapps.go, the ffmpeg is in ffmpeg.go.
+
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"rdio-scanner/internal/buildinfo"
 )
+
+// tool is the build tool: where the repository is, how it asks that repository what it says about
+// its own version, and how it runs one step. Everything it decides is decided before anything runs.
+type tool struct {
+	repo      string
+	read      func(string) (source, error)
+	resolve   func(string) (string, error)
+	installed func(string) bool
+	execute   func(step) error
+
+	// archive writes the release archive. It is not an external command.
+	archive func(path string, files []archiveFile) error
+
+	// clean removes what a clean run removes. It is not an external command.
+	clean func(repo string) ([]string, error)
+
+	// state is what the tree says about what has already been built. It reads the tree, so the stand-in
+	// answers it: what the checks do is tested in build_test.go.
+	state func(repo string, o options) (planState, error)
+
+	// releaseFiles reads what the archive carries. It reads the tree, so the stand-in answers it: what it
+	// does is tested in archive_test.go.
+	releaseFiles func(repo string, tr releaseTarget) ([]archiveFile, error)
+
+	// ffmpeg produces the ffmpeg a server binary built here is going to carry. It is not one external
+	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
+	// through the converter's own argument list, and puts it where the server embeds it.
+	ffmpeg func(options, io.Writer) error
+}
+
+// run resolves the version, says what it resolved and why, and then runs the steps that build it.
+func (t tool) run(args []string, stdout io.Writer) int {
+	o, err := parseArgs(args)
+	if err != nil {
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
+		return 2
+	}
+
+	src, err := t.read(t.repo)
+	if err != nil {
+		return fail(stdout, err)
+	}
+
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, o.pre)
+	if err != nil {
+		return fail(stdout, err)
+	}
+
+	// The version subcommand answers one question and answers nothing else.
+	if o.sub == subVersion {
+		fmt.Fprintln(stdout, version)
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "version %s (%s)\n", version, explain(src, o.pre))
+
+	if src.dirty {
+		fmt.Fprintln(stdout, "note   working tree is dirty; the version does not say so")
+	}
+
+	// A clean run removes what a release and a client build leave behind, and builds nothing. It needs
+	// no npm, no ffmpeg, and no compiler, so it ends the run where it started.
+	if o.sub == subClean {
+		removed, err := t.clean(t.repo)
+		if err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", subClean, err))
+		}
+
+		for _, path := range removed {
+			fmt.Fprintf(stdout, "%-7s %s\n", subClean, path)
+		}
+
+		return 0
+	}
+
+	state, err := t.state(t.repo, o)
+	if err != nil {
+		return fail(stdout, err)
+	}
+
+	npmName := ""
+
+	if needsNpm(o, state) {
+		npmName, err = t.resolve("npm")
+		if err != nil {
+			return fail(stdout, fmt.Errorf("building the applications needs npm: %w", err))
+		}
+
+		o.installClients = !t.installed(filepath.Join(t.repo, presentationDir, "node_modules"))
+	}
+
+	for _, s := range plan(o, t.repo, version, npmName, state) {
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	}
+
+	// The release matrix builds the applications once, because the bundles are the same for every
+	// target, and then each target's ffmpeg before the server that embeds it.
+	if o.sub == subDist {
+		return t.runDist(o, version, stdout)
+	}
+
+	// The ffmpeg is produced before the server is compiled, because the server embeds it: a server built
+	// before the ffmpeg its target carries exists is a server that quietly ships without one.
+	if o.buildsFFmpeg() {
+		if err := t.ffmpeg(o, stdout); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", subFFmpeg, err))
+		}
+	}
+
+	// The container image compiles its own server, so the run that prepares it ends with podman: the
+	// applications and the ffmpeg the image's architecture embeds are what the Containerfile needs on
+	// disk, and a server binary built here is one the image throws away.
+	if o.sub == subContainer {
+		s := containerStep(o, t.repo, version)
+
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+
+		return 0
+	}
+
+	// The server embeds both bundles, so a bundle built in this run makes the binary that embeds it out
+	// of date. The check is made again after the client steps: the bundles the run just built are newer
+	// than the binary built before them, and a run that rebuilt a bundle and left the binary standing
+	// ships the bundles the binary was built before.
+	if o.buildsServer() {
+		if state, err = t.state(t.repo, o); err != nil {
+			return fail(stdout, err)
+		}
+	}
+
+	if o.buildsServer() && !state.serverCurrent {
+		s := serverStep(o, t.repo, version)
+
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	}
+
+	return 0
+}
+
+// runDist builds the release for the targets the run was asked for: the whole matrix, or the one the
+// operator named. Each target's ffmpeg is produced before the server that embeds it, for the same
+// reason a single run produces its ffmpeg first.
+//
+// A target whose ffmpeg fails ends the run and names the target it stopped at. A half matrix is not a
+// release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
+// to embed.
+func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
+	// The target the operator named is kept apart from the target each iteration is building for. A
+	// loop that wrote the target it is building into the target the run was asked for would skip every
+	// target after the first.
+	requested := o.target
+
+	for _, tr := range releaseTargets {
+		if requested != "" && requested != tr.targetWord() {
+			continue
+		}
+
+		o.target = tr.targetWord()
+
+		// The matrix writes one binary per target, so the default path is decided again for each one. A
+		// path the operator named is not overwritten.
+		if !o.outputNamed {
+			o.output = defaultOutputPath(o.target)
+		}
+
+		if err := t.ffmpeg(o, stdout); err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
+		}
+
+		// The binary for this target is current when it is newer than every file it is built from, and
+		// the bundles the client steps built are among them. The check is made for each target, because
+		// each target's binary is a different file.
+		targetState, err := t.state(t.repo, o)
+		if err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", subServer, o.target, err))
+		}
+
+		if !targetState.serverCurrent {
+			s := serverStep(o, t.repo, version)
+
+			if err := t.execute(s); err != nil {
+				return fail(stdout, fmt.Errorf("%s for %s: %w", s.label, o.target, err))
+			}
+
+			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+		}
+
+		// The archive carries the binary, the documentation as the files it is written in, the pictures
+		// those files point at, and the ffmpeg licence when the target carries an ffmpeg.
+		files, err := t.releaseFiles(t.repo, tr)
+		if err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", subArchive, o.target, err))
+		}
+
+		path := archivePath(o.target, version.String())
+
+		if err := t.archive(path, files); err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", subArchive, o.target, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", subArchive, path)
+	}
+
+	return 0
+}
+
+// fail says what stopped the build and returns the exit code that says a step did not do its job.
+func fail(stdout io.Writer, err error) int {
+	fmt.Fprintf(stdout, "error  %v\n", err)
+
+	return 1
+}
 
 // repositoryRoot is the directory the tool builds. git knows it, and a tree without git is built
 // where the operator stood, which is where go run stood too.

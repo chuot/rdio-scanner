@@ -86,3 +86,27 @@ func git(repo string, args ...string) (string, error) {
 
 	return strings.TrimSpace(string(out)), nil
 }
+
+// explain says where the resolved version came from, because a version nobody can explain is the
+// drift this tool replaced with a file.
+func explain(src source, pre string) string {
+	parts := []string{}
+
+	if src.declared {
+		parts = append(parts, "VERSION.txt "+src.core)
+	} else {
+		parts = append(parts, "VERSION.txt is missing, assuming "+src.core)
+	}
+
+	if src.tag != "" {
+		parts = append(parts, "HEAD tagged "+src.tag)
+	} else {
+		parts = append(parts, "HEAD "+src.commit+" is not tagged")
+	}
+
+	if pre != "" {
+		parts = append(parts, "prerelease requested by --pre")
+	}
+
+	return strings.Join(parts, ", ")
+}
