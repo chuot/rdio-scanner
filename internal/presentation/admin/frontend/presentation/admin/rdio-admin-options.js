@@ -1,8 +1,11 @@
 // rdio-admin-options (T041): options section (legacy config/options). Single
-// object form (no rows): the 14 editable options in legacy order with the
-// legacy control types. Edits clone the working object and set only the
-// edited key, so server-only keys (adminPassword, secret) are preserved;
-// per-section Save lives in the shared bar.
+// object form (no rows): the editable options in legacy order with the legacy
+// control types. The 12-hour time format, dimmer delay, duplicate detection
+// time frame and playback-goes-live options are retired: the browser locale
+// decides the time format, the dimmer delay and the duplicate window are
+// domain constants, and playback always goes live. Edits clone the working
+// object and set only the edited key, so server-only keys (adminPassword,
+// secret) are preserved; per-section Save lives in the shared bar.
 
 import {
   bindSectionSlice,
@@ -15,19 +18,11 @@ import {
 const NAME = 'options';
 
 const NUMBER_FIELDS = [
-  ['dimmerDelay', 'Dimmer delay', 0],
-  ['duplicateDetectionTimeFrame', 'Duplicate call time frame', 0],
   ['maxClients', 'Max clients', 1],
   ['pruneDays', 'Prune days', 0],
 ];
 
 const CONTROLS = [
-  {
-    key: 'time12hFormat',
-    type: 'toggle',
-    title: '12-Hour Time Format',
-    description: 'Display time stamp in 12-hour format.',
-  },
   {
     key: 'audioConversion',
     type: 'select',
@@ -54,24 +49,10 @@ const CONTROLS = [
     description: 'A simple line of text displayed above the main screen to help identify the Rdio Scanner instance.',
   },
   {
-    key: 'dimmerDelay',
-    type: 'number',
-    title: 'Dimmer Delay',
-    description: 'Delay in milliseconds before turning off the screen backlight when inactive.',
-    min: 0,
-  },
-  {
     key: 'disableDuplicateDetection',
     type: 'toggle',
     title: 'Disable Duplicate Call Detection',
     description: 'Disable duplicate audio file detection.',
-  },
-  {
-    key: 'duplicateDetectionTimeFrame',
-    type: 'number',
-    title: 'Duplicate Call Detection Time Frame',
-    description: 'New incoming calls will be rejected if a call already exists in the database with a start time of +/- this delay in milliseconds.',
-    min: 0,
   },
   {
     key: 'email',
@@ -95,12 +76,6 @@ const CONTROLS = [
     title: 'Max Clients',
     description: 'Max number of simultaneous clients.',
     min: 1,
-  },
-  {
-    key: 'playbackGoesLive',
-    type: 'toggle',
-    title: 'Playback Mode Goes Live',
-    description: 'Playback mode changes to live stream mode when the search list is exhausted.',
   },
   {
     key: 'pruneDays',
