@@ -23,7 +23,7 @@ export function passwordPanel() {
   const icon = document.createElement('i');
   icon.className = 'material-icons';
   icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = 'password';
+  icon.textContent = 'lock';
 
   const title = document.createElement('span');
   title.className = 'row-title';

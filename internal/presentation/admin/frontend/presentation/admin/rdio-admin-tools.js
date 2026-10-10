@@ -67,6 +67,38 @@ class RdioAdminTools extends HTMLElement {
     return details;
   }
 
+  // filePicker is the theme-styled file picker: a mini button that opens a hidden
+  // native input, and a caption that shows the chosen file name. The native picker
+  // button is browser-styled and localized, so it never sits in a row itself.
+  filePicker(accept, onChange) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.hidden = true;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'rdio-button-mini';
+    button.innerHTML = `<i class="material-icons" aria-hidden="true">upload_file</i><span>Choose file</span>`;
+    button.addEventListener('click', () => input.click());
+
+    const name = document.createElement('span');
+    name.className = 'file-name';
+
+    input.addEventListener('change', () => {
+      const file = input.files?.item(0);
+
+      name.textContent = file ? file.name : '';
+
+      // Reset so picking the same file again fires the change event.
+      input.value = '';
+
+      if (file) onChange(file);
+    });
+
+    return { button, name, input };
+  }
+
   // --- import/export config ---------------------------------------------------
 
   configPanel() {
@@ -90,16 +122,7 @@ class RdioAdminTools extends HTMLElement {
       }
     });
 
-    const importInput = document.createElement('input');
-    importInput.type = 'file';
-    importInput.accept = '.json,application/json';
-    importInput.addEventListener('change', async () => {
-      const file = importInput.files?.item(0);
-
-      importInput.value = '';
-
-      if (!file) return;
-
+    const picker = this.filePicker('.json,application/json', async (file) => {
       try {
         const config = migrateLegacyConfig(JSON.parse(await file.text()));
 
@@ -121,13 +144,13 @@ class RdioAdminTools extends HTMLElement {
 
     const captionEl = document.createElement('p');
     captionEl.className = 'caption';
-    captionEl.textContent = 'Export downloads the saved config as JSON. Upload a config JSON file to load it into the section working copies, then save each section to apply.';
+    captionEl.textContent = 'Export downloads the saved config as JSON. Choose a config JSON file to load it into the section working copies, then save each section to apply.';
 
     const row = document.createElement('div');
     row.className = 'row top';
-    row.append(exportButton, importInput);
+    row.append(exportButton, picker.button, picker.name);
 
-    details.append(captionEl, row);
+    details.append(captionEl, row, picker.input);
 
     return details;
   }
@@ -211,16 +234,7 @@ class RdioAdminTools extends HTMLElement {
       importButton.disabled = rows.length === 0;
     };
 
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.csv,text/csv';
-    fileInput.addEventListener('change', async () => {
-      const file = fileInput.files?.item(0);
-
-      fileInput.value = '';
-
-      if (!file) return;
-
+    const picker = this.filePicker('.csv,text/csv', async (file) => {
       rows = parseCsv(await file.text());
 
       renderTable();
@@ -251,13 +265,13 @@ class RdioAdminTools extends HTMLElement {
 
     const top = document.createElement('div');
     top.className = 'row top';
-    top.append(systemSelect, fileInput);
+    top.append(systemSelect, picker.button, picker.name);
 
     const bottom = document.createElement('div');
     bottom.className = 'row bottom';
     bottom.append(importButton);
 
-    details.append(captionEl, top, table, bottom);
+    details.append(captionEl, top, picker.input, table, bottom);
 
     return details;
   }

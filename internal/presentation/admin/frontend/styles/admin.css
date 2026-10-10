@@ -610,18 +610,14 @@ rdio-admin .rdio-admin-card.logs .rdio-filters .actions {
 
 /* --- tools ---------------------------------------------------------------------------- */
 
-rdio-admin .rdio-admin-card.tools input[type="file"] {
-  color: inherit;
-  font-family: inherit;
-  max-width: 100%;
-}
+/* The file picker is a theme-styled button that opens a hidden native input, so the
+   browser-styled localized picker button never sits in a row; the chosen file name is
+   the caption beside the button. */
 
-/* File inputs sit in row.top beside the system select, aligned like the options
-   rows: same flex basis, so select and file input share the control column. */
-
-rdio-admin .rdio-admin-card.tools .row.top > input[type="file"] {
-  flex: 0 1 320px;
-  min-width: 200px;
+rdio-admin .rdio-admin-card.tools .row.top > .file-name {
+  color: rgba(255, 255, 255, 0.65);
+  flex: 1 1 auto;
+  font-size: 13px;
 }
 
 rdio-admin .rdio-admin-csv-preview {
@@ -648,21 +644,10 @@ rdio-admin .rdio-admin-csv-preview tr:nth-child(even) {
   background: rgba(255, 255, 255, 0.04);
 }
 
-rdio-admin .rdio-admin-card.tools details.rdio-admin-row > .rdio-button-mini {
-  margin: 8px 12px 12px;
-}
-
 /* --- password panel (inside Tools) -------------------------------------------------- */
 
 rdio-admin .rdio-admin-card.tools details.rdio-admin-row form {
   padding: var(--rdio-space-2) var(--rdio-space-3) var(--rdio-space-3);
-}
-
-rdio-admin .rdio-admin-card.tools .row.bottom {
-  display: flex;
-  gap: var(--rdio-space-2);
-  justify-content: flex-end;
-  margin-top: var(--rdio-space-3);
 }
 
 /* --- openapi help box --------------------------------------------------------------- */

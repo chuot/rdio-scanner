@@ -13,7 +13,7 @@ import '../presentation/admin/rdio-admin-tools.js';
 
 import { findAll, texts } from './dom-shim.js';
 
-const VALID_ICONS = ['sync_alt', 'group_work', 'directions_car', 'password', 'delete'];
+const VALID_ICONS = ['sync_alt', 'group_work', 'directions_car', 'lock', 'upload_file', 'delete'];
 
 function toolsSection() {
   const { store } = getAdminContext();
@@ -74,8 +74,13 @@ test('the config panel follows the row pattern', () => {
   const top = rows(panel, 'row top');
 
   assert.equal(top.length, 1, 'the config panel has no row.top');
-  assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 1, 'the config row.top has no export button');
-  assert.equal(findAll(top[0], isFileInput).length, 1, 'the config row.top has no file input');
+
+  // Export button and the styled Choose file button sit in the row; the native
+  // picker is hidden and opens from the button.
+  assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 2, 'the config row.top has no export and choose-file buttons');
+  assert.equal(findAll(top[0], (node) => node.className === 'file-name').length, 1, 'the config row.top has no chosen-file caption');
+  assert.equal(findAll(panel, isFileInput).length, 1, 'the config panel has no file input');
+  assert.equal(findAll(panel, isFileInput)[0].hidden, true, 'the native file picker must stay hidden');
 });
 
 test('the csv panels follow the row pattern with an action row', () => {
@@ -92,7 +97,10 @@ test('the csv panels follow the row pattern with an action row', () => {
 
     assert.equal(top.length, 1, `${title} has no row.top`);
     assert.equal(findAll(top[0], (node) => node.tag === 'rdio-select').length, 1, `${title} row.top has no system select`);
-    assert.equal(findAll(top[0], isFileInput).length, 1, `${title} row.top has no file input`);
+    assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 1, `${title} row.top has no choose-file button`);
+    assert.equal(findAll(top[0], (node) => node.className === 'file-name').length, 1, `${title} row.top has no chosen-file caption`);
+    assert.equal(findAll(panel, isFileInput).length, 1, `${title} panel has no file input`);
+    assert.equal(findAll(panel, isFileInput)[0].hidden, true, `${title} native file picker must stay hidden`);
 
     const bottom = rows(panel, 'row bottom');
 
