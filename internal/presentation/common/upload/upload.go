@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package rest
+package upload
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Upload is the surface an outside program posts recordings to: a radio bridge, a capture application,
+// Endpoints is the surface an outside program posts recordings to: a radio bridge, a capture application,
 // and another rdio-scanner server reposting what it received downstream.
 //
 // These endpoints are not behind an administrator session and not behind a listener's access code. What
@@ -44,9 +44,9 @@ import (
 //
 // They answer with plain text and not with JSON, because that is what every program posting to them has
 // been reading since these endpoints existed.
-type Upload struct {
+type Endpoints struct {
 	ingest *application.UploadCallHandler
-	parser UploadParser
+	parser Parser
 	logs   ports.LogRepository
 
 	// clock is the server's one clock. This endpoint used to stamp its refusals with the wall clock, which
@@ -55,16 +55,16 @@ type Upload struct {
 	clock ports.Clock
 }
 
-// UploadDeps is what the upload endpoints need: the use case that decides whether an upload is taken, the
+// Deps is what the upload endpoints need: the use case that decides whether an upload is taken, the
 // reading that says what each posted field means, the server's log view, and the server's clock.
-type UploadDeps struct {
+type Deps struct {
 	Ingest *application.UploadCallHandler
-	Parser UploadParser
+	Parser Parser
 	Logs   ports.LogRepository
 	Clock  ports.Clock
 }
 
-// UploadParser is the part of the server that knows what an uploader's fields mean.
+// Parser is the part of the server that knows what an uploader's fields mean.
 //
 // It is declared by the endpoints that ask for it, rather than being a port of the application layer,
 // because what is being read is the wire format of these endpoints and not a fact about calls: the
@@ -73,7 +73,7 @@ type UploadDeps struct {
 // server's ingest parser here, which is the same parser the directory watchers use for the files they read
 // — the trunk-recorder sidecar in particular is read the same way from a watched directory and from an
 // upload.
-type UploadParser interface {
+type Parser interface {
 	// ApplyMultipart reads one posted field into the call being built, and hands back the call. A field
 	// the parser does not know leaves the call as it was.
 	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call
@@ -82,9 +82,9 @@ type UploadParser interface {
 	ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error
 }
 
-// NewUpload builds the upload endpoints.
-func NewUpload(deps UploadDeps) *Upload {
-	return &Upload{
+// New builds the upload endpoints.
+func New(deps Deps) *Endpoints {
+	return &Endpoints{
 		ingest: deps.Ingest,
 		parser: deps.Parser,
 		logs:   deps.Logs,
@@ -93,7 +93,7 @@ func NewUpload(deps UploadDeps) *Upload {
 }
 
 // Register puts the two upload endpoints on the server's routes.
-func (upload *Upload) Register(mux *http.ServeMux) {
+func (upload *Endpoints) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/call-upload", upload.CallUpload)
 	mux.HandleFunc("/api/trunk-recorder-call-upload", upload.TrunkRecorderCallUpload)
 }
@@ -118,7 +118,7 @@ const (
 // over one that arrived earlier. That ordering is the legacy server's own for this endpoint, and it is what
 // the trunk-recorder endpoint does not have (Q57) — see
 // docs/specs/FEAT-003-server-ng-refactor/decision-preserved-quirks.md.
-func (upload *Upload) CallUpload(w http.ResponseWriter, r *http.Request) {
+func (upload *Endpoints) CallUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		upload.refuseMethod(w)
 
@@ -137,7 +137,7 @@ func (upload *Upload) CallUpload(w http.ResponseWriter, r *http.Request) {
 //
 // The sidecar is read as a document and not as a form field, and everything else the upload carries is read
 // as an ordinary field, which is what lets a trunk-recorder upload name things the sidecar itself does not.
-func (upload *Upload) TrunkRecorderCallUpload(w http.ResponseWriter, r *http.Request) {
+func (upload *Endpoints) TrunkRecorderCallUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		upload.refuseMethod(w)
 
@@ -162,7 +162,7 @@ func (upload *Upload) TrunkRecorderCallUpload(w http.ResponseWriter, r *http.Req
 // endpoints wrap the multipart reader's failure differently — this endpoint's message already ends with a
 // line break and the trunk-recorder endpoint's does not — which is why the wrapping is written out per
 // endpoint rather than shared.
-func (upload *Upload) readCall(w http.ResponseWriter, r *http.Request, trunkRecorder bool) (domain.Call, string, bool) {
+func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkRecorder bool) (domain.Call, string, bool) {
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
 		upload.fail(w, http.StatusBadRequest, "Invalid content-type")
@@ -230,7 +230,7 @@ func (upload *Upload) readCall(w http.ResponseWriter, r *http.Request, trunkReco
 
 // readFailure wraps the failure of one step of reading the posted body, the way each endpoint has always
 // wrapped it.
-func (upload *Upload) readFailure(trunkRecorder bool, step string, err error) string {
+func (upload *Endpoints) readFailure(trunkRecorder bool, step string, err error) string {
 	if trunkRecorder {
 		return fmt.Sprintf("%s: %s", step, err.Error())
 	}
@@ -244,7 +244,7 @@ func (upload *Upload) readFailure(trunkRecorder bool, step string, err error) st
 // the legacy server hands the call to its ingest queue and answers success whatever the queue makes of it,
 // and an uploader that was told its call was imported and then cannot find it has nothing to act on. What
 // the server made of the call is written in the server's own log view.
-func (upload *Upload) answer(w http.ResponseWriter, r *http.Request, key string, call domain.Call) {
+func (upload *Endpoints) answer(w http.ResponseWriter, r *http.Request, key string, call domain.Call) {
 	result, err := upload.ingest.Handle(r.Context(), application.UploadCallCommand{Call: call, Key: key})
 
 	switch result.Outcome {
@@ -279,7 +279,7 @@ func (upload *Upload) answer(w http.ResponseWriter, r *http.Request, key string,
 // It is also filed with the upload endpoint. A client posting with the wrong method is a standing
 // misconfiguration, and the log view is the only place an operator can find out that the server was reached
 // at all.
-func (upload *Upload) refuseMethod(w http.ResponseWriter) {
+func (upload *Endpoints) refuseMethod(w http.ResponseWriter) {
 	upload.logRefusal("the server does not answer this method")
 
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -288,7 +288,7 @@ func (upload *Upload) refuseMethod(w http.ResponseWriter) {
 
 // fail writes a failure the way the legacy server's error helper does: the reason is filed with the upload
 // endpoint at error level, and then given to the uploader with a line break of its own.
-func (upload *Upload) fail(w http.ResponseWriter, status int, message string) {
+func (upload *Endpoints) fail(w http.ResponseWriter, status int, message string) {
 	upload.logRefusal(message)
 
 	w.WriteHeader(status)
@@ -304,7 +304,7 @@ func (upload *Upload) fail(w http.ResponseWriter, status int, message string) {
 //
 // An upload endpoint with no log repository is the one this server builds when it is run to do something
 // else; a refusal that cannot be filed is still a refusal the uploader is told about.
-func (upload *Upload) logRefusal(reason string) {
+func (upload *Endpoints) logRefusal(reason string) {
 	if upload.logs == nil {
 		return
 	}

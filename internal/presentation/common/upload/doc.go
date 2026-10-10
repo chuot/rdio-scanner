@@ -18,6 +18,15 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package rest holds the thin HTTP controllers: decode the request into a command or
-// query, invoke its handler, encode the response. No business logic lives here.
-package rest
+// Package upload is the inbound recording ingestion boundary: the endpoints a radio bridge, a
+// capture application, and another rdio-scanner server posting what it received downstream use to
+// hand a recording to this server.
+//
+// It belongs to neither web application. The calls an upload creates are what the listener app
+// plays, but the uploader is a recorder and not the listener app, and what lets an upload through
+// is the apikey the upload carries and that key's scope — not an administrator session and not a
+// listener's access code.
+//
+// The endpoints answer with plain text and not with JSON, because that is what every program
+// posting to them has been reading since they existed.
+package upload

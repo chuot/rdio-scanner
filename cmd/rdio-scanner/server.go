@@ -49,7 +49,7 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 	"rdio-scanner/internal/infrastructure/tokens"
 	adminbackend "rdio-scanner/internal/presentation/admin/backend"
-	"rdio-scanner/internal/presentation/rest"
+	"rdio-scanner/internal/presentation/common/upload"
 	"rdio-scanner/internal/presentation/serving/admin"
 	"rdio-scanner/internal/presentation/serving/scanner"
 	"rdio-scanner/internal/presentation/ws"
@@ -404,7 +404,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 		Version:              Version,
 	})
 
-	upload := rest.NewUpload(rest.UploadDeps{
+	uploads := upload.New(upload.Deps{
 		Ingest: application.NewUploadCallHandler(apikeys, ingest),
 		Logs:   s.logs,
 		Parser: reader,
@@ -428,7 +428,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 	mux := http.NewServeMux()
 
 	adminAPI.Register(mux)
-	upload.Register(mux)
+	uploads.Register(mux)
 
 	serveApplications(mux, listener, scanner.Embedded(), admin.Embedded())
 

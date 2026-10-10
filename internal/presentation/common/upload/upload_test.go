@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package rest
+package upload
 
 import (
 	"bytes"
@@ -116,7 +116,7 @@ func newUploadFixture() *uploadFixture {
 
 	mux := http.NewServeMux()
 
-	NewUpload(UploadDeps{
+	New(Deps{
 		Ingest: application.NewUploadCallHandler(fixture.apikeys, ingest),
 		Parser: fixture.parser,
 		Logs:   fixture.logs,
@@ -867,7 +867,7 @@ func (err *bodyCutShortError) Error() string {
 func readGolden(t *testing.T, name string) string {
 	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("../../../testdata/golden", name))
+	b, err := os.ReadFile(filepath.Join("../../../../testdata/golden", name))
 	if err != nil {
 		t.Fatalf("reading the golden capture %s: %v", name, err)
 	}
