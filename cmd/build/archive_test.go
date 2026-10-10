@@ -376,7 +376,7 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 // sources themselves, so the test asks the question a reader asks after extracting the archive: does
 // every image in the documents I opened resolve to a file I have.
 func TestTheArchiveCarriesEveryImageTheRealDocumentationReferences(t *testing.T) {
-	repo, err := repositoryRoot()
+	real, err := repositoryRoot()
 	if err != nil {
 		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
 	}
@@ -396,7 +396,7 @@ func TestTheArchiveCarriesEveryImageTheRealDocumentationReferences(t *testing.T)
 	referenced := map[string]bool{}
 
 	for _, name := range sources {
-		text, err := os.ReadFile(filepath.Join(repo, name))
+		text, err := os.ReadFile(filepath.Join(real, name))
 		if err != nil {
 			t.Fatalf("the release has no %s: %v", name, err)
 		}
@@ -405,6 +405,29 @@ func TestTheArchiveCarriesEveryImageTheRealDocumentationReferences(t *testing.T)
 			referenced[filepath.Clean(filepath.Join(filepath.Dir(name), ref))] = true
 		}
 	}
+
+	// The test builds the repository it asserts against, as every other test in this file does: the
+	// documentation as it is written, the pictures that documentation points at, and a binary. The
+	// subject here is the documentation, so the binary is bytes and no build has to have run. Copying
+	// each picture is the check that the documentation points at a file the repository has; a reference
+	// to a file that is not in the repository fails here.
+	repo := t.TempDir()
+
+	for _, name := range sources {
+		copyArchiveSource(t, real, repo, name)
+	}
+
+	for path := range referenced {
+		copyArchiveSource(t, real, repo, path)
+	}
+
+	// The target carries an ffmpeg, so the archive carries the licence the ffmpeg phase wrote from the
+	// manifest. The licence is a build artifact, not a file the repository keeps, so the test writes it
+	// as it writes the binary: the test is about the documentation, and the licence is bytes the archive
+	// carries.
+	writeRepoFile(t, repo, filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), "LICENCE.md"), "the ffmpeg licence")
+
+	writeArchiveSource(t, repo, tr.targetWord(), "rdio-scanner", "the binary")
 
 	files, err := archiveFiles(repo, tr)
 	if err != nil {
@@ -526,6 +549,21 @@ func writeArchiveSource(t *testing.T, repo string, target string, name string, c
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0o644); err != nil {
 		t.Fatalf("writing %s: %v", name, err)
 	}
+}
+
+// copyArchiveSource copies one file the real repository has into the tree the test asserts against, at
+// the name the repository writes it at. A file the documentation points at that the repository does not
+// have fails here, which is the reader's question: does every image in the documents resolve to a file
+// in the archive.
+func copyArchiveSource(t *testing.T, real string, repo string, path string) {
+	t.Helper()
+
+	body, err := os.ReadFile(filepath.Join(real, path))
+	if err != nil {
+		t.Fatalf("the real repository has no %s, which the documentation points at: %v", path, err)
+	}
+
+	writeRepoFile(t, repo, path, string(body))
 }
 
 // writeRepoFile puts a documentation file into a tree at the name the repository writes it at.
