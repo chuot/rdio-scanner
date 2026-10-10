@@ -13,17 +13,39 @@ const API_GROUPS = {
   config: {
     title: 'Config',
     icon: 'tune',
-    endpoints: [
-      'GET /api/admin/config',
-      'PUT /api/admin/config',
-      'GET /api/admin/config/{section}',
-      'PUT /api/admin/config/{section}',
-      'GET /api/admin/config/systems/{systemId}/sites',
-      'PUT /api/admin/config/systems/{systemId}/sites',
-      'GET /api/admin/config/systems/{systemId}/talkgroups',
-      'PUT /api/admin/config/systems/{systemId}/talkgroups',
-      'GET /api/admin/config/systems/{systemId}/units',
-      'PUT /api/admin/config/systems/{systemId}/units',
+    // The config endpoints read as one block of ten; grouping them by the resource
+    // they save makes the list scannable.
+    groups: [
+      {
+        label: 'config',
+        endpoints: [
+          'GET /api/admin/config',
+          'PUT /api/admin/config',
+          'GET /api/admin/config/{section}',
+          'PUT /api/admin/config/{section}',
+        ],
+      },
+      {
+        label: 'sites',
+        endpoints: [
+          'GET /api/admin/config/systems/{systemId}/sites',
+          'PUT /api/admin/config/systems/{systemId}/sites',
+        ],
+      },
+      {
+        label: 'talkgroups',
+        endpoints: [
+          'GET /api/admin/config/systems/{systemId}/talkgroups',
+          'PUT /api/admin/config/systems/{systemId}/talkgroups',
+        ],
+      },
+      {
+        label: 'units',
+        endpoints: [
+          'GET /api/admin/config/systems/{systemId}/units',
+          'PUT /api/admin/config/systems/{systemId}/units',
+        ],
+      },
     ],
     example: 'curl -X PUT -H "Authorization: $TOKEN" -d \'{"maxClients":60}\' https://host/api/admin/config/options',
   },
@@ -41,7 +63,7 @@ const API_GROUPS = {
   },
   password: {
     title: 'Password',
-    icon: 'password',
+    icon: 'lock',
     endpoints: ['POST /api/admin/password'],
     example: 'curl -X POST -H "Authorization: $TOKEN" -d \'{"currentPassword":"old","newPassword":"new-secret"}\' https://host/api/admin/password',
   },
@@ -75,28 +97,44 @@ class RdioAdminOpenApiBox extends HTMLElement {
 
     const title = document.createElement('p');
     title.className = 'box-title';
-    title.innerHTML = `<i class="material-icons" aria-hidden="true">${content.icon}</i>${content.title}`;
+    title.innerHTML = `<i class="material-icons" aria-hidden="true">${content.icon}</i><span>${content.title}</span>`;
 
-    const intro = document.createElement('p');
-    intro.className = 'caption';
-    intro.textContent = "Admin endpoints take the raw JWT in the Authorization header, no Bearer prefix; the capture endpoints authenticate with the key form field.";
+    box.append(title);
 
-    const list = document.createElement('ul');
+    // The auth sentence is stated once for the whole page, in the API card intro;
+    // repeating it in every box is noise.
+    const renderList = (endpoints) => {
+      const list = document.createElement('ul');
 
-    for (const endpoint of content.endpoints) {
-      const item = document.createElement('li');
+      for (const endpoint of endpoints) {
+        const item = document.createElement('li');
 
-      const code = document.createElement('code');
-      code.textContent = endpoint;
+        const code = document.createElement('code');
+        code.textContent = endpoint;
 
-      item.append(code);
-      list.append(item);
+        item.append(code);
+        list.append(item);
+      }
+
+      return list;
+    };
+
+    if (content.groups) {
+      for (const group of content.groups) {
+        const label = document.createElement('p');
+        label.className = 'group-label';
+        label.textContent = group.label;
+
+        box.append(label, renderList(group.endpoints));
+      }
+    } else {
+      box.append(renderList(content.endpoints));
     }
 
     const example = document.createElement('pre');
     example.textContent = content.example;
 
-    box.append(title, intro, list, example);
+    box.append(example);
 
     this.replaceChildren(box);
   }

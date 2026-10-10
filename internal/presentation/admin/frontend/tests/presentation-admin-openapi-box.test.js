@@ -74,7 +74,7 @@ function seed() {
 
 const GROUPS = ['authentication', 'config', 'alerts', 'logs', 'password', 'users', 'ingestion'];
 
-function apiBoxes() {
+function apiCard() {
   seed();
 
   const el = new (customElements.get('rdio-admin-api'))();
@@ -87,7 +87,11 @@ function apiBoxes() {
 
   for (const box of boxes) box.connectedCallback();
 
-  return boxes;
+  return { el, boxes };
+}
+
+function apiBoxes() {
+  return apiCard().boxes;
 }
 
 function endpointsOf(box) {
@@ -128,6 +132,31 @@ test('the Authentication group names login and logout, the Ingestion group names
 
   assert.ok(byGroup.ingestion.includes('POST /api/call-upload'), 'the Ingestion group does not name the capture endpoint');
   assert.ok(byGroup.ingestion.includes('POST /api/trunk-recorder-call-upload'), 'the Ingestion group does not name the trunk-recorder endpoint');
+});
+
+test('the auth sentence is stated once on the page and no box repeats it', () => {
+  const { el, boxes } = apiCard();
+
+  const sentence = 'Admin endpoints take the raw JWT in the Authorization header, no Bearer prefix; the capture endpoints authenticate with the key form field.';
+
+  const captions = texts(findAll(el, (node) => node.className === 'caption'));
+
+  assert.equal(captions.length, 1, 'the API card intro is not a single caption');
+  assert.ok(captions[0].includes(sentence), 'the API card intro does not state the auth sentence');
+
+  for (const box of boxes) {
+    assert.equal(findAll(box, (node) => node.className === 'caption').length, 0, 'an entrypoint box carries a caption');
+  }
+});
+
+test('the Config box groups its endpoints by resource', () => {
+  const boxes = apiBoxes();
+
+  const config = boxes.find((box) => box.dataset.group === 'config');
+
+  const labels = texts(findAll(config, (node) => node.className === 'group-label'));
+
+  assert.deepEqual(labels, ['config', 'sites', 'talkgroups', 'units'], 'the Config box does not group by resource');
 });
 
 const SECTIONS = [

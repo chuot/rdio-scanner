@@ -664,12 +664,22 @@ rdio-admin .rdio-admin-openapi-box {
 }
 
 rdio-admin .rdio-admin-openapi-box .box-title {
+  align-items: center;
+  display: flex;
   font-weight: 500;
-  margin: 0 0 4px;
+  gap: var(--rdio-space-2);
+  margin: 0 0 var(--rdio-space-1);
 }
 
-rdio-admin .rdio-admin-openapi-box p.caption {
-  margin: 0 0 6px;
+rdio-admin .rdio-admin-openapi-box .box-title .material-icons {
+  font-size: 20px;
+}
+
+rdio-admin .rdio-admin-openapi-box .group-label {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  font-weight: 500;
+  margin: var(--rdio-space-2) 0 2px;
 }
 
 rdio-admin .rdio-admin-openapi-box ul {

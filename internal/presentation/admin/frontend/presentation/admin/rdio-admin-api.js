@@ -15,7 +15,7 @@ class RdioAdminApi extends HTMLElement {
 
     const intro = document.createElement('p');
     intro.className = 'caption';
-    intro.textContent = 'Every entry point the server answers, grouped. The admin webapp uses these; the same calls work from any HTTP client.';
+    intro.textContent = 'Every entry point the server answers, grouped. The admin webapp uses these; the same calls work from any HTTP client. Admin endpoints take the raw JWT in the Authorization header, no Bearer prefix; the capture endpoints authenticate with the key form field.';
 
     root.append(intro);
 
