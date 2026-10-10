@@ -411,7 +411,7 @@ func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T)
 		Reason string `json:"reason"`
 	}
 
-	if err := json.Unmarshal([]byte(readGolden(t, "adminws-bad-token.json")), &captured); err != nil {
+	if err := json.Unmarshal([]byte(capturedAnswer(t, "adminws-bad-token.json")), &captured); err != nil {
 		t.Fatalf("the captured close is not a close: %v", err)
 	}
 
@@ -847,7 +847,7 @@ func configurationChangedAfter(configuration domain.Configuration) domain.Config
 func capturedConfiguration(t *testing.T) domain.Configuration {
 	t.Helper()
 
-	captured, ok := decodeGolden(t, "adminws-config.json").(map[string]any)
+	captured, ok := decodeCaptured(t, "adminws-config.json").(map[string]any)
 	if !ok {
 		t.Fatalf("the captured configuration socket payload is not a configuration")
 	}
@@ -897,7 +897,7 @@ func capturedConfiguration(t *testing.T) domain.Configuration {
 func capturedConfigGolden(t *testing.T) string {
 	t.Helper()
 
-	golden := replaceExactly(t, readGolden(t, "adminws-config.json"), `"systemId":0`, `"systemId":1`, 2)
+	golden := replaceExactly(t, capturedAnswer(t, "adminws-config.json"), `"systemId":0`, `"systemId":1`, 2)
 
 	for _, invented := range []struct {
 		text  string

@@ -466,7 +466,7 @@ func TestSectionEndpointAnswersTheCapturedSections(t *testing.T) {
 
 		got := rec.Body.String()
 
-		want := readGolden(t, capture.golden)
+		want := capturedAnswer(t, capture.golden)
 
 		// The capture records every site as belonging to no system, because the legacy server's query for
 		// sites never asks for that column. This server reports the system the site is stored under, which

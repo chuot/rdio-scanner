@@ -24,8 +24,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -331,14 +329,14 @@ func (fixture *adminFixture) countLogged(fragment string) int {
 func seedCaptures(t *testing.T, fixture *adminFixture) {
 	t.Helper()
 
-	fixture.accesses.Stored = domain.ParseAccesses(decodeGolden(t, "rest-section-access.json"))
-	fixture.apikeys.Stored = domain.ParseApikeys(decodeGolden(t, "rest-section-apikeys.json"))
-	fixture.dirwatches.Stored = domain.ParseDirwatches(decodeGolden(t, "rest-section-dirwatch.json"))
-	fixture.downstreams.Stored = domain.ParseDownstreams(decodeGolden(t, "rest-section-downstreams.json"))
-	fixture.groups.Stored = domain.ParseGroups(decodeGolden(t, "rest-section-groups.json"))
-	fixture.tags.Stored = domain.ParseTags(decodeGolden(t, "rest-section-tags.json"))
+	fixture.accesses.Stored = domain.ParseAccesses(decodeCaptured(t, "rest-section-access.json"))
+	fixture.apikeys.Stored = domain.ParseApikeys(decodeCaptured(t, "rest-section-apikeys.json"))
+	fixture.dirwatches.Stored = domain.ParseDirwatches(decodeCaptured(t, "rest-section-dirwatch.json"))
+	fixture.downstreams.Stored = domain.ParseDownstreams(decodeCaptured(t, "rest-section-downstreams.json"))
+	fixture.groups.Stored = domain.ParseGroups(decodeCaptured(t, "rest-section-groups.json"))
+	fixture.tags.Stored = domain.ParseTags(decodeCaptured(t, "rest-section-tags.json"))
 
-	submitted, ok := decodeGolden(t, "rest-section-options.json").(map[string]any)
+	submitted, ok := decodeCaptured(t, "rest-section-options.json").(map[string]any)
 	if !ok {
 		t.Fatalf("the captured options section is not a set of settings")
 	}
@@ -348,7 +346,7 @@ func seedCaptures(t *testing.T, fixture *adminFixture) {
 
 	fixture.options.Stored = options
 
-	systems := domain.ParseSystems(decodeGolden(t, "rest-section-systems.json"))
+	systems := domain.ParseSystems(decodeCaptured(t, "rest-section-systems.json"))
 
 	// The capture records every site as belonging to no system at all, because the legacy server's query
 	// for sites never asks for the system a site is on. This server reports the system it is stored under,
@@ -364,27 +362,16 @@ func seedCaptures(t *testing.T, fixture *adminFixture) {
 	fixture.systems.Stored = systems
 }
 
-func decodeGolden(t *testing.T, name string) any {
+func decodeCaptured(t *testing.T, name string) any {
 	t.Helper()
 
 	var value any
 
-	if err := json.Unmarshal([]byte(readGolden(t, name)), &value); err != nil {
-		t.Fatalf("the capture %s is not JSON: %v", name, err)
+	if err := json.Unmarshal([]byte(capturedAnswer(t, name)), &value); err != nil {
+		t.Fatalf("the captured answer %s is not JSON: %v", name, err)
 	}
 
 	return value
-}
-
-func readGolden(t *testing.T, name string) string {
-	t.Helper()
-
-	b, err := os.ReadFile(filepath.Join("../../../../testdata/golden", name))
-	if err != nil {
-		t.Fatalf("reading the golden capture %s: %v", name, err)
-	}
-
-	return string(b)
 }
 
 // replaceExactly rewrites a captured payload to state a divergence, and insists that the divergence is
@@ -422,7 +409,7 @@ func TestLoginEndpointAnswersTheCapturedLogin(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := replaceExactly(t, readGolden(t, "rest-login.json"), "<token>", "token-1", 1)
+	want := replaceExactly(t, capturedAnswer(t, "rest-login.json"), "<token>", "token-1", 1)
 
 	if got != want {
 		t.Errorf("login answer =\n  %s\nwant\n  %s", got, want)
@@ -534,7 +521,7 @@ func TestLogoutEndpointRefusesATokenTheServerDoesNotAcceptWithTheCapturedStatus(
 
 	rec := fixture.serve(adminRequest{method: http.MethodPost, path: "/api/admin/logout", token: "not-a-token-the-server-issued"})
 
-	want := strings.TrimSpace(readGolden(t, "rest-logout-status.txt"))
+	want := strings.TrimSpace(capturedAnswer(t, "rest-logout-status.txt"))
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("logout status = %d, want the captured %s", rec.Code, want)
@@ -578,7 +565,7 @@ func TestConfigEndpointAnswersTheCapturedConfiguration(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := replaceExactly(t, readGolden(t, "rest-config.json"), `"systemId":0`, `"systemId":1`, 2)
+	want := replaceExactly(t, capturedAnswer(t, "rest-config.json"), `"systemId":0`, `"systemId":1`, 2)
 
 	if got != want {
 		t.Errorf("configuration answer =\n  %s\nwant\n  %s", got, want)
@@ -595,7 +582,7 @@ func TestConfigEndpointRefusesARequestWithoutACredentialWithTheCapturedStatus(t 
 	rec := fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/config"})
 
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("config status = %d, want the captured %s", rec.Code, strings.TrimSpace(readGolden(t, "rest-config-unauthorized-status.txt")))
+		t.Fatalf("config status = %d, want the captured %s", rec.Code, strings.TrimSpace(capturedAnswer(t, "rest-config-unauthorized-status.txt")))
 	}
 
 	if rec.Body.Len() != 0 {
@@ -933,7 +920,7 @@ func TestAlertsEndpointAnswersTheCapturedAlerts(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := readGolden(t, "rest-alerts.json")
+	want := capturedAnswer(t, "rest-alerts.json")
 
 	if got != want {
 		t.Errorf("alerts answer =\n  %s\nwant\n  %s", got, want)
@@ -984,7 +971,7 @@ func TestLogsEndpointAnswersTheCapturedLogView(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := replaceExactly(t, readGolden(t, "rest-logs.json"), "<datetime>", "2026-05-11T09:00:00Z", 5)
+	want := replaceExactly(t, capturedAnswer(t, "rest-logs.json"), "<datetime>", "2026-05-11T09:00:00Z", 5)
 
 	if got != want {
 		t.Errorf("log view answer =\n  %s\nwant\n  %s", got, want)
@@ -1194,7 +1181,7 @@ func TestPasswordEndpointAnswersTheCapturedPasswordChange(t *testing.T) {
 	}
 
 	got := rec.Body.String()
-	want := readGolden(t, "rest-password.json")
+	want := capturedAnswer(t, "rest-password.json")
 
 	if got != want {
 		t.Errorf("password answer =\n  %s\nwant\n  %s", got, want)
