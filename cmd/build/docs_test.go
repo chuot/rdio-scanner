@@ -289,6 +289,36 @@ func TestTheStampDoesNotTouchAnInlinedImage(t *testing.T) {
 	}
 }
 
+// The change log is the record of the versions that were released. The `Makefile`'s sed never touched
+// CHANGELOG.md, and stamping it turns 75 released versions into the one being built.
+func TestTheStampAppliesToThePlatformDocumentAndNotToTheChangeLog(t *testing.T) {
+	html, err := renderDocument(theRepo(t), releaseTargets[4], "8.0.0+g19042cd", "2026-10-10")
+	if err != nil {
+		t.Fatalf("renderDocument: %v", err)
+	}
+
+	seen := map[string]bool{}
+
+	for _, m := range versionPattern.FindAllString(html, -1) {
+		seen[m] = true
+	}
+
+	// The change log's 75 versions, and the one the release stamped into the platform document.
+	if len(seen) != 76 {
+		t.Errorf("the document carries %d distinct versions, want the change log's 75 and the one stamped", len(seen))
+	}
+
+	for _, want := range []string{"v4.7.1", "v6.6.1", "v6.6.2", "v6.6.3"} {
+		if !seen[want] {
+			t.Errorf("the document does not keep the change log's %s", want)
+		}
+	}
+
+	if !strings.Contains(html, "v8.0.0+g19042cd") {
+		t.Errorf("the document does not carry the version the release resolved")
+	}
+}
+
 // Rendering the document leaves the tree as it found it.
 func TestRenderingTheDocumentLeavesTheTreeAsItFoundIt(t *testing.T) {
 	repo := theRepo(t)

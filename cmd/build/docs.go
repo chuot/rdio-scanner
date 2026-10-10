@@ -49,9 +49,17 @@ func renderDocument(repo string, tr releaseTarget, version string, date string) 
 			return "", fmt.Errorf("the document cannot read %s: %w", name, err)
 		}
 
+		// The version and the date reach the target's own document, which is the file the Makefile's sed
+		// rewrote. The web app guide, the FAQ, and the change log are rendered as they are written: the
+		// change log is the record of the versions that were released, and stamping it turns 75 released
+		// versions into the one being built.
+		if name == tr.doc {
+			text = []byte(stamp(string(text), version, date))
+		}
+
 		// An image is resolved against the directory of the document it is written in: the platform
 		// documents say ../images and the web app guide says ./images, and both reach the same folder.
-		body.WriteString(renderMarkdown(stamp(string(text), version, date), spans{
+		body.WriteString(renderMarkdown(string(text), spans{
 			image: inlineImage(repo, filepath.Dir(name)),
 			link:  reachableLink,
 		}))
