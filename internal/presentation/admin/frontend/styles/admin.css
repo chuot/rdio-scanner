@@ -451,7 +451,9 @@ rdio-admin .rdio-admin-content > .rdio-admin-todos-banner {
   display: flex;
   flex-direction: column;
   gap: var(--rdio-space-2);
-  margin: 0 auto var(--rdio-space-3);
+  // The section card below keeps visible room: the banner's bottom margin steps
+  // past the card gap.
+  margin: 0 auto var(--rdio-space-4);
   max-width: var(--rdio-content-width);
   padding: var(--rdio-space-3);
   width: 100%;
