@@ -49,6 +49,29 @@ rdio-admin > .rdio-admin-header h1 {
   margin: 0;
 }
 
+rdio-admin > .rdio-admin-header .rdio-admin-brand {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+rdio-admin > .rdio-admin-header .rdio-admin-logo {
+  height: 32px;
+  width: 32px;
+}
+
+rdio-admin > .rdio-admin-header .rdio-admin-role {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+rdio-admin-login .rdio-admin-logo {
+  display: block;
+  height: 96px;
+  margin: 0 auto 12px;
+  width: 96px;
+}
+
 rdio-admin .rdio-button.logout {
   align-items: center;
   display: inline-flex;
