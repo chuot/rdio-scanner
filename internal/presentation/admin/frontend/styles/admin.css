@@ -434,14 +434,19 @@ rdio-admin .rdio-admin-card.tools .rdio-button.save:hover:not(:disabled) {
 
 /* The banner is the persistent strip under the header: every open todo, one row
    each. It renders nothing when the list is empty, so the strip only exists when
-   there is something the administrator has to act on. */
+   there is something the administrator has to act on. It fits the content frame:
+   the same width cap and centering as a section card. */
 
 rdio-admin > .rdio-admin-todos-banner {
+  box-sizing: border-box;
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   gap: 4px;
+  margin: 0 auto;
+  max-width: 900px;
   padding: 8px 16px;
+  width: 100%;
 }
 
 rdio-admin > .rdio-admin-todos-banner .todo {
