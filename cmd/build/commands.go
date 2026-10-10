@@ -49,13 +49,9 @@ const (
 	containerImage  = "rdio-scanner:latest"
 )
 
-// The two things a release writes that are not external commands: the document the archive carries, and
-// the archive itself. They are named so the log says what a release run did, the same way it says what
-// it compiled.
-const (
-	subDocument = "document"
-	subArchive  = "archive"
-)
+// The one thing a release writes that is not an external command: the archive. It is named so the log
+// says what a release run did, the same way it says what it compiled.
+const subArchive = "archive"
 
 // presentationDir is where the two applications live and where their dependencies are installed. Each
 // application writes into the bundle directory of the Go package that embeds it, so the build has

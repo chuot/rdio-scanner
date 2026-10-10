@@ -31,7 +31,6 @@ type releaseTarget struct {
 	name   string
 	goos   string
 	goarch string
-	doc    string
 }
 
 // targetWord is the name the ffmpeg phase knows this target by, which is the name the manifest records
@@ -40,22 +39,21 @@ func (t releaseTarget) targetWord() string {
 	return t.name + "-" + t.goarch
 }
 
-// releaseTargets is the matrix: the platforms a release archive is built for, and the document each
-// archive carries.
+// releaseTargets is the matrix: the platforms a release archive is built for.
 //
 // Which of them carry an ffmpeg is not in this list. The manifest answers that, and the three this
 // project ships with the ffmpeg their host installs have no record to answer from. The matrix is a
 // product decision about what gets released; the manifest is a build decision about what gets
 // compiled, and they are not the same list.
 var releaseTargets = []releaseTarget{
-	{name: "freebsd", goos: "freebsd", goarch: "amd64", doc: "docs/platforms/freebsd.md"},
-	{name: "linux", goos: "linux", goarch: "386", doc: "docs/platforms/linux.md"},
-	{name: "linux", goos: "linux", goarch: "amd64", doc: "docs/platforms/linux.md"},
-	{name: "linux", goos: "linux", goarch: "arm", doc: "docs/platforms/linux.md"},
-	{name: "linux", goos: "linux", goarch: "arm64", doc: "docs/platforms/linux.md"},
-	{name: "macos", goos: "darwin", goarch: "amd64", doc: "docs/platforms/macos.md"},
-	{name: "macos", goos: "darwin", goarch: "arm64", doc: "docs/platforms/macos.md"},
-	{name: "windows", goos: "windows", goarch: "amd64", doc: "docs/platforms/windows.md"},
+	{name: "freebsd", goos: "freebsd", goarch: "amd64"},
+	{name: "linux", goos: "linux", goarch: "386"},
+	{name: "linux", goos: "linux", goarch: "amd64"},
+	{name: "linux", goos: "linux", goarch: "arm"},
+	{name: "linux", goos: "linux", goarch: "arm64"},
+	{name: "macos", goos: "darwin", goarch: "amd64"},
+	{name: "macos", goos: "darwin", goarch: "arm64"},
+	{name: "windows", goos: "windows", goarch: "amd64"},
 }
 
 // targetFor resolves the word the operator named to the release target it names. A word outside the

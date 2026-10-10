@@ -21,6 +21,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -56,9 +58,20 @@ func TestTheReleaseMatrixIsTheEightPlatformsThisProjectShips(t *testing.T) {
 		t.Errorf("the release matrix is %v, want %v", got, want)
 	}
 
+	// The platform page a target's archive carries is named by the target's own name, so the one platform
+	// whose release name is not a go operating system still gets the page its readers are told to
+	// download. A matrix that named a page the repository does not have ships an archive with no
+	// instructions in it.
+	repo, err := repositoryRoot()
+	if err != nil {
+		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
+	}
+
 	for _, tr := range releaseTargets {
-		if tr.doc == "" {
-			t.Errorf("%s has no document, and every archive carries one", tr.targetWord())
+		page := "docs/platforms/" + tr.name + ".md"
+
+		if _, err := os.Stat(filepath.Join(repo, page)); err != nil {
+			t.Errorf("%s carries %s, which the repository does not have", tr.targetWord(), page)
 		}
 	}
 

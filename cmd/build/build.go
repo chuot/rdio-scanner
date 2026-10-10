@@ -65,23 +65,6 @@ func directoryExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// writeFile puts a file the release produces into the tree, making the directory it goes in. The
-// document is written into the same directory as the binary it travels with, which a run for a target
-// that has never been built before has to make.
-func writeFile(path string, body []byte) error {
-	dir := filepath.Dir(path)
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("the release cannot prepare %s: %w", dir, err)
-	}
-
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		return fmt.Errorf("the release cannot write %s: %w", path, err)
-	}
-
-	return nil
-}
-
 // cleanTree removes what a clean run removes: the release output, the client dependencies, and the
 // contents of both bundles. The `.gitkeep` file in each bundle is left standing, because it is the
 // placeholder that keeps a plain go build compiling: the bundle directory has to exist for the Go

@@ -48,11 +48,9 @@ func main() {
 		resolve:      resolveExecutable,
 		installed:    directoryExists,
 		execute:      runStep,
-		write:        writeFile,
 		archive:      writeArchive,
 		clean:        cleanTree,
 		state:        buildState,
-		document:     renderDocument,
 		releaseFiles: archiveFiles,
 	}
 
@@ -70,9 +68,7 @@ type tool struct {
 	installed func(string) bool
 	execute   func(step) error
 
-	// write puts a file the release produces into the tree, and archive writes the release archive.
-	// Neither is an external command.
-	write   func(path string, body []byte) error
+	// archive writes the release archive. It is not an external command.
 	archive func(path string, files []archiveFile) error
 
 	// clean removes what a clean run removes. It is not an external command.
@@ -82,10 +78,8 @@ type tool struct {
 	// answers it: what the checks do is tested in build_test.go.
 	state func(repo string, o options) (planState, error)
 
-	// document renders the archive document for a target, and releaseFiles reads what the archive
-	// carries. Both read the tree, so the stand-in answers them: what they do is tested in docs_test.go
-	// and archive_test.go.
-	document     func(repo string, tr releaseTarget, version string, date string) (string, error)
+	// releaseFiles reads what the archive carries. It reads the tree, so the stand-in answers it: what it
+	// does is tested in archive_test.go.
 	releaseFiles func(repo string, tr releaseTarget) ([]archiveFile, error)
 
 	// ffmpeg produces the ffmpeg a server binary built here is going to carry. It is not one external
@@ -166,7 +160,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	// The release matrix builds the applications once, because the bundles are the same for every
 	// target, and then each target's ffmpeg before the server that embeds it.
 	if o.sub == subDist {
-		return t.runDist(o, version, src.date, stdout)
+		return t.runDist(o, version, stdout)
 	}
 
 	// The ffmpeg is produced before the server is compiled, because the server embeds it: a server built
@@ -222,7 +216,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 // A target whose ffmpeg fails ends the run and names the target it stopped at. A half matrix is not a
 // release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
 // to embed.
-func (t tool) runDist(o options, version buildinfo.Version, date string, stdout io.Writer) int {
+func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
 	// The target the operator named is kept apart from the target each iteration is building for. A
 	// loop that wrote the target it is building into the target the run was asked for would skip every
 	// target after the first.
@@ -263,21 +257,8 @@ func (t tool) runDist(o options, version buildinfo.Version, date string, stdout 
 			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 		}
 
-		// The document is rendered from the target's own sources, with the version the release resolved
-		// and the date of the commit being built.
-		html, err := t.document(t.repo, tr, version.String(), date)
-		if err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", subDocument, o.target, err))
-		}
-
-		if err := t.write(documentPath(o.target), []byte(html)); err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", subDocument, o.target, err))
-		}
-
-		fmt.Fprintf(stdout, "%-7s %s\n", subDocument, documentPath(o.target))
-
-		// The archive carries the binary, the document, and the ffmpeg licence when the target carries
-		// an ffmpeg.
+		// The archive carries the binary, the documentation as the files it is written in, the pictures
+		// those files point at, and the ffmpeg licence when the target carries an ffmpeg.
 		files, err := t.releaseFiles(t.repo, tr)
 		if err != nil {
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subArchive, o.target, err))
