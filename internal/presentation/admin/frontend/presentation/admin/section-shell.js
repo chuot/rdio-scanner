@@ -74,16 +74,6 @@ export function setSubInvalid(level, systemId, invalid) {
   getAdminContext().useCases.setSubSectionInvalid(level, systemId, invalid);
 }
 
-// The OpenAPI help box every section card ends with (FEAT-016): informational,
-// naming the endpoints the section saves through. The element is registered by
-// openapi-box.js.
-export function openApiBox(section) {
-  const box = document.createElement('rdio-admin-openapi-box');
-  box.dataset.section = section;
-
-  return box;
-}
-
 class RdioAdminSectionBar extends HTMLElement {
   connectedCallback() {
     if (this.dataset.bound) return;

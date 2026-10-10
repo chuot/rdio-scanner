@@ -7,7 +7,6 @@ import { getAdminContext } from '../../application/admin-context.js';
 import { playAlert } from './play-alert.js';
 import {
   attachDragSort,
-  openApiBox,
   reorderAfterDrag,
   sectionSlice,
   sectionWorking,
@@ -103,7 +102,7 @@ class RdioAdminGroups extends HTMLElement {
 
     const bar = document.createElement('rdio-admin-section-bar');
     bar.dataset.section = NAME;
-    root.append(bar, openApiBox(NAME));
+    root.append(bar);
 
     this.replaceChildren(root);
 

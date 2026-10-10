@@ -5,7 +5,7 @@
 // sections. The help box at the bottom names the capture endpoint from
 // docs/api.md.
 
-import { openApiBox } from './section-shell.js';
+
 
 const METHODS = [
   [
@@ -68,7 +68,7 @@ class RdioAdminIngestion extends HTMLElement {
       root.append(details);
     }
 
-    root.append(openApiBox('ingestion'));
+
 
     this.replaceChildren(root);
   }

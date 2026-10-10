@@ -1,7 +1,6 @@
-// The Ingestion section (T020, CA-018): an informational section explaining the
-// three ways calls reach the server, each naming its OpenAPI entry point, with
-// the help box at the bottom and a nav item in the shell. It has no save bar
-// and no store slice: nothing here is edited.
+// The Ingestion section (FEAT-018): an informational section explaining the three
+// ways calls reach the server. The entrypoint list lives in the API section; this
+// card has no OpenAPI box, no save bar, and no store slice: nothing here is edited.
 
 import './dom-shim.js';
 
@@ -46,26 +45,9 @@ test('the Ingestion section explains the three ingestion ways', () => {
   assert.ok(text.includes('Downstreams'), 'the section does not explain downstream ingestion');
 });
 
-test('the Ingestion section ends with the OpenAPI box naming the capture endpoint', () => {
-  const el = ingestionSection();
-
-  const boxes = findAll(el, (node) => node.tag === 'rdio-admin-openapi-box');
-
-  assert.equal(boxes.length, 1, 'the section card does not end with the OpenAPI box');
-
-  boxes[0].connectedCallback();
-
-  const endpoints = texts(findAll(boxes[0], (node) => node.tag === 'code'));
-
-  assert.ok(endpoints.includes('POST /api/call-upload'), 'the box does not name the capture endpoint');
-
-  const example = findAll(boxes[0], (node) => node.tag === 'pre')[0];
-
-  assert.ok(example.textContent.includes('curl -F'), 'the box example is not the multipart capture call');
-});
-
-test('the Ingestion section has no save bar', () => {
+test('the Ingestion section has no save bar and no OpenAPI box', () => {
   const el = ingestionSection();
 
   assert.equal(findAll(el, (node) => node.tag === 'rdio-admin-section-bar').length, 0, 'an informational section must not offer a save bar');
+  assert.equal(findAll(el, (node) => node.tag === 'rdio-admin-openapi-box').length, 0, 'the entrypoint list belongs to the API section');
 });

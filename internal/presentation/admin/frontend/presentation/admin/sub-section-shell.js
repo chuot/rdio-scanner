@@ -6,7 +6,6 @@
 
 import {
   attachDragSort,
-  openApiBox,
   reorderAfterDrag,
   sectionWorking,
   setSubInvalid,
@@ -93,7 +92,7 @@ export function renderSubSection(component, { level, caption, addLabel, buildRow
 
   const bar = document.createElement('rdio-admin-section-bar');
   bar.dataset.subsection = `${level}:${component.systemId}`;
-  root.append(bar, openApiBox(level));
+  root.append(bar);
 
   component.replaceChildren(root);
 

@@ -6,7 +6,6 @@ import { openSystemsSelectionDialog } from './rdio-systems-selection.js';
 import {
   attachDragSort,
   bindSectionSlice,
-  openApiBox,
   reorderAfterDrag,
   sectionSlice,
   sectionWorking,
@@ -91,7 +90,7 @@ class RdioAdminApikeys extends HTMLElement {
 
     const bar = document.createElement('rdio-admin-section-bar');
     bar.dataset.section = NAME;
-    root.append(bar, openApiBox(NAME));
+    root.append(bar);
 
     this.replaceChildren(root);
 

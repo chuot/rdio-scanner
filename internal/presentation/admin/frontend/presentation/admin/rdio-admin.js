@@ -6,6 +6,7 @@
 
 import { getAdminContext } from '../../application/admin-context.js';
 import './openapi-box.js';
+import './rdio-admin-api.js';
 import './rdio-admin-login.js';
 import './rdio-admin-access.js';
 import './rdio-admin-apikeys.js';
@@ -34,6 +35,7 @@ const SECTIONS = [
   { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
   { name: 'units', label: 'Units', icon: 'directions_car' },
   { name: 'ingestion', label: 'Ingestion', icon: 'cloud_upload' },
+  { name: 'api', label: 'API', icon: 'api' },
   { name: 'options', label: 'Options', icon: 'tune' },
   { name: 'logs', label: 'Logs', icon: 'article' },
   { name: 'tools', label: 'Tools', icon: 'build' },

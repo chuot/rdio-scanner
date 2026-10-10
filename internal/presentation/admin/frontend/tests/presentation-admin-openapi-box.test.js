@@ -1,6 +1,8 @@
-// The OpenAPI help box (T019, CA-017): every section card ends with the box,
-// and the endpoints it names exist in docs/openapi-admin.json. The box is
-// informational: the test reads what it renders, never what it requests.
+// The API entrypoint submenu (FEAT-018, CA-005): one API section card lists every
+// OpenAPI entry point in seven groups, each group with one curl example, and every
+// endpoint it names exists in docs/openapi-admin.json. No other section card
+// carries an OpenAPI box. The boxes are informational: the test reads what they
+// render, never what they request.
 
 import './dom-shim.js';
 
@@ -11,11 +13,13 @@ import { readFileSync } from 'node:fs';
 import { getAdminContext } from '../application/admin-context.js';
 
 import '../presentation/admin/openapi-box.js';
+import '../presentation/admin/rdio-admin-api.js';
 import '../presentation/admin/rdio-admin-access.js';
 import '../presentation/admin/rdio-admin-apikeys.js';
 import '../presentation/admin/rdio-admin-dirwatch.js';
 import '../presentation/admin/rdio-admin-downstreams.js';
 import '../presentation/admin/rdio-admin-groups.js';
+import '../presentation/admin/rdio-admin-ingestion.js';
 import '../presentation/admin/rdio-admin-logs.js';
 import '../presentation/admin/rdio-admin-options.js';
 import '../presentation/admin/rdio-admin-sites.js';
@@ -29,9 +33,7 @@ import { findAll, texts } from './dom-shim.js';
 
 const openapi = JSON.parse(readFileSync(new URL('../../../../../docs/openapi-admin.json', import.meta.url), 'utf8'));
 
-const DOC_PATHS = Object.keys(openapi.paths)
-  .filter((p) => !p.includes('{') || openapi.paths[p].get || openapi.paths[p].put)
-  .filter((p) => openapi.paths[p].get || openapi.paths[p].put || openapi.paths[p].post);
+const DOC_PATHS = Object.keys(openapi.paths);
 
 function endpointKnown(endpoint) {
   const [method, path] = endpoint.split(' ');
@@ -70,29 +72,63 @@ function seed() {
   store.setState(state);
 }
 
-function boxFor(section) {
-  const box = document.createElement('rdio-admin-openapi-box');
+const GROUPS = ['authentication', 'config', 'alerts', 'logs', 'password', 'users', 'ingestion'];
 
-  box.dataset.section = section;
+function apiBoxes() {
+  seed();
 
-  box.connectedCallback();
-
-  return box;
-}
-
-function sectionBox(tag, section) {
-  const el = new (customElements.get(tag))();
+  const el = new (customElements.get('rdio-admin-api'))();
 
   el.connectedCallback();
 
   const boxes = findAll(el, (node) => node.tag === 'rdio-admin-openapi-box');
 
-  assert.equal(boxes.length, 1, `the ${section} section card does not end with the OpenAPI box`);
+  assert.equal(boxes.length, GROUPS.length, 'the API card does not carry the seven entrypoint groups');
 
-  boxes[0].connectedCallback();
+  for (const box of boxes) box.connectedCallback();
 
-  return boxes[0];
+  return boxes;
 }
+
+function endpointsOf(box) {
+  return texts(findAll(box, (node) => node.tag === 'code'));
+}
+
+test('the API card lists every entry point in seven groups, all known to the OpenAPI document', () => {
+  const boxes = apiBoxes();
+
+  for (const box of boxes) {
+    const endpoints = endpointsOf(box);
+
+    assert.ok(endpoints.length >= 1, 'a group names no endpoint');
+
+    for (const endpoint of endpoints) {
+      assert.ok(endpointKnown(endpoint), `a group names ${endpoint}, absent from docs/openapi-admin.json`);
+    }
+
+    const examples = findAll(box, (node) => node.tag === 'pre');
+
+    assert.equal(examples.length, 1, 'a group has no curl example');
+    assert.ok(examples[0].textContent.startsWith('curl'), 'a group example is not a curl call');
+  }
+});
+
+test('the Authentication group names login and logout, the Ingestion group names both capture endpoints', () => {
+  const byGroup = Object.fromEntries(apiBoxes().map((box) => [box.dataset.group, endpointsOf(box)]));
+
+  assert.deepEqual(Object.keys(byGroup).sort(), [...GROUPS].sort(), 'the API card does not carry the named groups');
+
+  assert.ok(byGroup.authentication.includes('POST /api/admin/login'), 'the Authentication group does not name login');
+  assert.ok(byGroup.authentication.includes('POST /api/admin/logout'), 'the Authentication group does not name logout');
+
+  for (const level of ['sites', 'talkgroups', 'units']) {
+    assert.ok(byGroup.config.includes(`GET /api/admin/config/systems/{systemId}/${level}`), `the Config group does not name GET the ${level} level`);
+    assert.ok(byGroup.config.includes(`PUT /api/admin/config/systems/{systemId}/${level}`), `the Config group does not name PUT the ${level} level`);
+  }
+
+  assert.ok(byGroup.ingestion.includes('POST /api/call-upload'), 'the Ingestion group does not name the capture endpoint');
+  assert.ok(byGroup.ingestion.includes('POST /api/trunk-recorder-call-upload'), 'the Ingestion group does not name the trunk-recorder endpoint');
+});
 
 const SECTIONS = [
   ['rdio-admin-access', 'access'],
@@ -107,55 +143,36 @@ const SECTIONS = [
   ['rdio-admin-units', 'units'],
   ['rdio-admin-options', 'options'],
   ['rdio-admin-tools', 'tools'],
+  ['rdio-admin-ingestion', 'ingestion'],
 ];
 
-test('every section card ends with the OpenAPI box naming endpoints that exist in the OpenAPI document', () => {
+test('no other section card carries an OpenAPI box', () => {
   seed();
 
-  const boxes = SECTIONS.map(([tag, section]) => sectionBox(tag, section));
+  for (const [tag, section] of SECTIONS) {
+    const el = new (customElements.get(tag))();
 
-  // The logs card is an innerHTML template: its box is the element tag the
-  // template carries, and its content comes from the same shared map. The
-  // template is assigned first in connectedCallback; the shim cannot build the
-  // real rdio-select internals the rest of the callback wires, so the template
-  // is read after the callback reaches that shim limit.
+    try {
+      el.connectedCallback();
+    } catch {
+      // The shim stops at the first primitive it cannot build; the card is already in place.
+    }
+
+    assert.equal(findAll(el, (node) => node.tag === 'rdio-admin-openapi-box').length, 0, `the ${section} section card still carries an OpenAPI box`);
+    assert.ok(!el.innerHTML.includes('rdio-admin-openapi-box'), `the ${section} card template still carries an OpenAPI box`);
+  }
+});
+
+test('the logs card template carries no OpenAPI box', () => {
+  seed();
+
   const logs = new (customElements.get('rdio-admin-logs'))();
 
   try {
     logs.connectedCallback();
   } catch {
-    // The shim stops at the first primitive it cannot build; the template is
-    // already in place.
+    // The shim stops at the first primitive it cannot build; the template is already in place.
   }
 
-  assert.ok(logs.innerHTML.includes('<rdio-admin-openapi-box data-section="logs">'), 'the logs card does not carry the OpenAPI box');
-
-  boxes.push(boxFor('logs'));
-
-  for (const box of boxes) {
-    const endpoints = texts(findAll(box, (node) => node.tag === 'code'));
-
-    assert.ok(endpoints.length >= 1, 'a section box names no endpoint');
-
-    for (const endpoint of endpoints) {
-      assert.ok(endpointKnown(endpoint), `a box names ${endpoint}, absent from docs/openapi-admin.json`);
-    }
-
-    const examples = findAll(box, (node) => node.tag === 'pre');
-
-    assert.equal(examples.length, 1, 'a section box has no curl example');
-    assert.ok(examples[0].textContent.startsWith('curl'), 'a section box example is not a curl call');
-  }
-});
-
-test('the per-level boxes name the per-level endpoints', () => {
-  seed();
-
-  for (const [tag, level] of [['rdio-admin-sites', 'sites'], ['rdio-admin-talkgroups', 'talkgroups'], ['rdio-admin-units', 'units']]) {
-    const endpoints = texts(findAll(sectionBox(tag, level), (node) => node.tag === 'code'));
-
-    for (const endpoint of endpoints) {
-      assert.ok(endpoint.includes(`/systems/{systemId}/${level}`), `the ${level} box does not name the per-level endpoint`);
-    }
-  }
+  assert.ok(!logs.innerHTML.includes('rdio-admin-openapi-box'), 'the logs card still carries the OpenAPI box');
 });
