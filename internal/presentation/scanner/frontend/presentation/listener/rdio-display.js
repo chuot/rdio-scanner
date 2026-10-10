@@ -4,6 +4,7 @@
 import { getAppContext } from '../../application/context.js';
 import { version } from '../../../../common/frontend/infrastructure/version.js';
 import { readPin, savePin } from '../../domain/pin.js';
+import { createDimmer } from './dimmer.js';
 import { recordHistory, advanceReplayOffset, HISTORY_SIZE } from '../../domain/replay-history.js';
 import {
   activeFrequency,
@@ -92,10 +93,14 @@ class RdioDisplay extends HTMLElement {
     this.callHistory = new Array(HISTORY_SIZE).fill(null);
     this.callTime = 0;
     this.replayOffset = 0;
-    // The legacy display starts dimmed: the dimmer lights it only when a call
-    // arrives or the listener presses a control, and dims it again dimmerDelay
-    // after that. The configuration arriving is not one of those occasions.
-    this.dimmer = false;
+    // The display starts dimmed: the dimmer lights it only when a call
+    // arrives or the listener presses a control, and dims it again
+    // DIMMER_DELAY_MS after that. The configuration arriving is not one of
+    // those occasions.
+    this.dimmer = createDimmer({
+      setDimmed: (dimmed) => this.classList.toggle('idle', dimmed),
+    });
+
     this.classList.add('idle');
     this.lastCall = null;
     this.clock = new Date();
@@ -132,7 +137,7 @@ class RdioDisplay extends HTMLElement {
     this.unsubscribe?.();
     clearInterval(this.clockTimer);
     clearInterval(this.progressTimer);
-    clearTimeout(this.dimmerTimer);
+    this.dimmer.stop();
     clearTimeout(this.replayTimer);
   }
 
@@ -187,18 +192,7 @@ class RdioDisplay extends HTMLElement {
   }
 
   updateDimmer() {
-    const { config } = getAppContext().store.getState();
-
-    if (typeof config?.dimmerDelay === 'number') {
-      this.dimmer = true;
-      this.classList.remove('idle');
-
-      clearTimeout(this.dimmerTimer);
-      this.dimmerTimer = setTimeout(() => {
-        this.dimmer = false;
-        this.classList.add('idle');
-      }, config.dimmerDelay);
-    }
+    this.dimmer.arm();
   }
 
   refreshDimmer() {
