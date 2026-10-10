@@ -9,12 +9,8 @@ The official version of [Rdio Scanner](https://github.com/chuot/rdio-scanner) is
 Your os distribution may have all of the following prerequisites available in its own package repository. Make sure, however, that they are at the latest version. This is especially not the case with Ubuntu and its Node.js.
 
 - latest version of git ([here](https://git-scm.com/downloads))
-- latest version of gnu make ([here](https://www.gnu.org/software/make/))
 - latest long-term support version of Node.js ([here](https://nodejs.org/en/))
 - latest version of Go ([here](https://go.dev/dl/))
-- latest version of Pandoc with pandoc-pdf ([here](https://pandoc.org/installing.html))
-- latest version of TeX Live ([here](https://www.tug.org/texlive/))
-- latest version of Info-Zip ([here](http://infozip.sourceforge.net/))
 - latest version of podman ([here](https://podman.io/)), for building the container image and for compiling the ffmpeg each target carries
 
 ## Compile the app
@@ -27,13 +23,16 @@ Clone the official repository on your computer and start the build process.
 
 The tool compiles the two web applications before it compiles the server, because each bundle is written beside the Go package that embeds it and a server built before both existed would carry a stale one.
 
-The listener application and the administration console are two applications, in `internal/presentation/clients/scanner` and `internal/presentation/clients/admin`, and the modules they both use are in `internal/presentation/clients/shared`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/serving/scanner/bundle` and `internal/presentation/serving/admin/bundle` are build output and hold nothing else.
+The listener application and the administration console are two applications, in `internal/presentation/scanner/frontend` and `internal/presentation/admin/frontend`, and the modules they both use are in `internal/presentation/common/frontend`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/scanner/frontend/bundle` and `internal/presentation/admin/frontend/bundle` are build output and hold nothing but the `.gitkeep` that keeps a plain `go build` compiling.
 
         go run ./cmd/build client     # both applications
         go run ./cmd/build scanner    # the listener application only
         go run ./cmd/build admin      # the administration console only
         go run ./cmd/build ffmpeg     # the ffmpeg this machine's target carries
         go run ./cmd/build server     # the server binary only, against the bundles on disk
+        go run ./cmd/build dist       # the release matrix, and the archives it writes
+        go run ./cmd/build container  # the container image, built locally
+        go run ./cmd/build clean      # the release output, the client dependencies, and both bundle contents
         go run ./cmd/build version    # the version this build carries
 
 The server binary carries both bundles. One executable serves the listener application at `/` and the administration console at `/admin/`.
@@ -66,10 +65,16 @@ A repository with no `VERSION.txt` builds as `0.0.0`, which is a version no rele
 
 A server built with plain `go build`, without the tool, reports `dev` — in its banner as well as in `-version` — so nobody mistakes it for a release.
 
-The release matrix is still the `Makefile`'s, and it reads the same file:
+The release matrix is the tool's, and it reads the same file:
 
-        make dist          # the precompiled versions for every platform, and their archives
-        make container     # the container image
+        go run ./cmd/build dist              # the precompiled versions for every platform, and their archives
+        go run ./cmd/build dist linux-arm64  # one target, which is how the matrix is built one at a time
+        go run ./cmd/build container         # the container image, built locally and never pushed
+        go run ./cmd/build clean             # the release output, the client dependencies, and both bundle contents
+
+A phase that has nothing to do does not run. A bundle is rebuilt when a file it is built from is newer
+than the bundle, and a server binary is rebuilt when a Go file or an embedded bundle file is newer than
+it. A second run over unchanged sources compiles nothing.
 
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 
@@ -81,5 +86,10 @@ When finished, you will find the precompiled versions for various platforms in t
         rdio-scanner-macos-amd64-v8.0.0.zip
         rdio-scanner-macos-arm64-v8.0.0.zip
         rdio-scanner-windows-amd64-v8.0.0.zip
+
+Each archive holds the server binary for its platform, the `rdio-scanner.html` document that carries the
+platform page, the web app guide, the FAQ, and the change log, and — for the five targets this project
+compiles an ffmpeg for — the `FFMPEG.md` licence text. The document is one self-contained file: every
+image is inside it, so it opens in a browser with no network access.
 
 **Happy Rdio scanning !**
