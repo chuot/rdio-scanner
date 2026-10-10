@@ -23,7 +23,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -191,47 +190,6 @@ func writeTreeFile(t *testing.T, repo string, path string, contents string) {
 	}
 }
 
-// A built bundle is current when it is newer than every file it is built from. The built bundle is not
-// one of its own sources: a rule that watched its own output would rebuild on every run.
-func TestABundleIsCurrentWhenItIsNewerThanEverySourceItIsBuiltFrom(t *testing.T) {
-	repo := t.TempDir()
-
-	sources := []string{
-		filepath.Join(presentationDir, "package.json"),
-		filepath.Join(presentationDir, "build.mjs"),
-		filepath.Join(presentationDir, "scanner", "frontend", "main.js"),
-		filepath.Join(presentationDir, "common", "frontend", "application", "app.js"),
-		filepath.Join(presentationDir, "admin", "frontend", "main.js"),
-	}
-
-	for _, path := range sources {
-		writeTreeFile(t, repo, path, "the source")
-		setMTime(t, repo, path, date(2026, 1, 1))
-	}
-
-	// A bundle that is not there is not current.
-	if current, err := bundleIsCurrent(repo, subScanner); err != nil || current {
-		t.Errorf("a bundle that is not there is reported as current: current %v, err %v", current, err)
-	}
-
-	// The bundle is built from the sources, so it is newer than all of them.
-	bundle := filepath.Join(presentationDir, "scanner", "frontend", "bundle", "index.html")
-
-	writeTreeFile(t, repo, bundle, "the bundle")
-	setMTime(t, repo, bundle, date(2026, 1, 2))
-
-	if current, err := bundleIsCurrent(repo, subScanner); err != nil || !current {
-		t.Errorf("a bundle newer than every source it is built from is not reported as current: current %v, err %v", current, err)
-	}
-
-	// A source touched after the bundle was built makes it not current.
-	setMTime(t, repo, sources[3], date(2026, 1, 3))
-
-	if current, err := bundleIsCurrent(repo, subScanner); err != nil || current {
-		t.Errorf("a source newer than the bundle is not noticed: current %v, err %v", current, err)
-	}
-}
-
 // The server binary is current when it is newer than every Go file the server is built from. The
 // ffmpeg the server embeds is not a Go file, and the ffmpeg phase has its own cache check.
 func TestTheServerBinaryIsCurrentWhenItIsNewerThanEveryGoFileItIsBuiltFrom(t *testing.T) {
@@ -310,48 +268,5 @@ func TestAReleaseRunAsksWhetherTheServerBinaryIsCurrent(t *testing.T) {
 
 	if !state.serverCurrent {
 		t.Errorf("a release run does not ask whether the binary it is building is current: %v", state)
-	}
-}
-
-// The built bundle is the output of the client build, not a source. Its nested contents are part of the
-// output: a bundle that watched them would rebuild on every run, because the bundle built last is newer
-// than the bundle built first, and the first is then never current.
-func TestTheBuiltBundleIsNotASourceOfEitherBundle(t *testing.T) {
-	repo := t.TempDir()
-
-	sources := []string{
-		filepath.Join(presentationDir, "build.mjs"),
-		filepath.Join(presentationDir, "package.json"),
-		filepath.Join(presentationDir, "scanner", "frontend", "main.js"),
-		filepath.Join(presentationDir, "admin", "frontend", "main.js"),
-		filepath.Join(presentationDir, "common", "frontend", "application", "app.js"),
-	}
-
-	for _, path := range sources {
-		writeTreeFile(t, repo, path, "the source")
-	}
-
-	// The built bundles, with the nested contents a build writes.
-	for _, app := range []string{subScanner, subAdmin} {
-		writeTreeFile(t, repo, filepath.Join(presentationDir, app, "frontend", "bundle", "index.html"), "the bundle")
-		writeTreeFile(t, repo, filepath.Join(presentationDir, app, "frontend", "bundle", "assets", "fonts", "roboto.woff2"), "the bundle")
-		writeTreeFile(t, repo, filepath.Join(presentationDir, app, "frontend", "bundle", ".gitkeep"), "")
-	}
-
-	files, err := clientSources(repo)
-	if err != nil {
-		t.Fatalf("clientSources: %v", err)
-	}
-
-	bundle := string(filepath.Separator) + "bundle" + string(filepath.Separator)
-
-	for _, path := range files {
-		if strings.Contains(path, bundle) {
-			t.Errorf("the built bundle's %s is counted as a source", path)
-		}
-	}
-
-	if len(files) != len(sources) {
-		t.Errorf("the client build has %d sources, want the %d files it is built from", len(files), len(sources))
 	}
 }

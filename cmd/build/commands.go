@@ -53,11 +53,6 @@ const (
 // says what a release run did, the same way it says what it compiled.
 const subArchive = "archive"
 
-// presentationDir is where the two applications live and where their dependencies are installed. Each
-// application writes into the bundle directory of the Go package that embeds it, so the build has
-// nowhere to send an output directory.
-const presentationDir = "internal/presentation"
-
 // options is what the command line asked for, once it is known to be a command line this tool
 // honours.
 type options struct {
@@ -107,39 +102,6 @@ type planState struct {
 	serverCurrent  bool
 }
 
-// clientSteps is the pair of applications a run builds: the ones the command line named, and the ones
-// whose bundle is not already newer than every file it is built from.
-func clientSteps(o options, state planState) []string {
-	var apps []string
-
-	for _, app := range []string{subScanner, subAdmin} {
-		// A run that named one application builds that application. A run that named the whole
-		// pipeline, both applications, the release matrix, or the container image builds both: the
-		// bundles are the same for every target, so the matrix builds them once.
-		if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != subContainer && o.sub != app {
-			continue
-		}
-
-		if app == subScanner && state.scannerCurrent {
-			continue
-		}
-
-		if app == subAdmin && state.adminCurrent {
-			continue
-		}
-
-		apps = append(apps, app)
-	}
-
-	return apps
-}
-
-// needsNpm is decided by the plan: the dependencies are looked for only when a client step is going to
-// run. A run that builds no bundle has no use for npm, and installing esbuild into a tree that will not
-// build is work nobody asked for.
-func needsNpm(o options, state planState) bool {
-	return len(clientSteps(o, state)) > 0
-}
 func defaultOutputPath(target string) string {
 	if target == "" {
 		target = runtimeTarget()
@@ -282,47 +244,6 @@ type step struct {
 	name string
 	args []string
 	env  []string
-}
-
-// appBundle is the bundle directory of the Go package that embeds each application. A build has
-// nowhere to send an output directory because the destination is a fact about where the application
-// lives.
-var appBundle = map[string]string{
-	subScanner: "internal/presentation/scanner/frontend/bundle",
-	subAdmin:   "internal/presentation/admin/frontend/bundle",
-}
-
-// plan composes the commands the options asked for, in the order they have to happen: the scanner
-// application, then the administration application. The ffmpeg and the server that carries both come
-// after, because the server embeds the bundles and the ffmpeg the build produced.
-func plan(o options, repo string, version buildinfo.Version, npmName string, state planState) []step {
-	steps := []step{}
-
-	presentation := filepath.Join(repo, presentationDir)
-
-	if o.installClients {
-		steps = append(steps, step{
-			label:  "deps",
-			result: "installing the client dependencies",
-			dir:    presentation,
-			name:   npmName,
-			args:   []string{"ci", "--loglevel=error", "--no-progress"},
-		})
-	}
-
-	for _, app := range clientSteps(o, state) {
-		steps = append(steps, step{
-			label:  app,
-			result: appBundle[app],
-			dir:    presentation,
-			name:   npmName,
-			args:   []string{"run", "build:" + app},
-			// The one way the version reaches a bundle. No source file is rewritten to carry it.
-			env: []string{"RDIO_VERSION=" + version.String()},
-		})
-	}
-
-	return steps
 }
 
 // serverStep is the server binary for the target the run is building for, composed last because it

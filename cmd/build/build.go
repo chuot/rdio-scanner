@@ -113,67 +113,6 @@ func cleanTree(repo string) ([]string, error) {
 	return removed, nil
 }
 
-// bundleOutput is the file a built bundle is judged by. The build writes it into the bundle directory of
-// the Go package that embeds it.
-func bundleOutput(repo string, app string) string {
-	return filepath.Join(repo, presentationDir, app, "frontend", "bundle", "index.html")
-}
-
-// clientSources is every file a bundle is built from: the build script and its lock file, which build
-// both bundles, and the frontend sources of the application the bundle belongs to and the sources the two
-// applications share. The built bundle is not one of its own sources: a rule that watched its own output
-// would rebuild on every run.
-func clientSources(repo string) ([]string, error) {
-	var files []string
-
-	root := filepath.Join(repo, presentationDir)
-
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, fmt.Errorf("the build cannot read %s: %w", root, err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-
-		if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".mjs") {
-			files = append(files, filepath.Join(root, name))
-		}
-	}
-
-	for _, app := range []string{subScanner, subAdmin, "common"} {
-		if err := walkFiles(filepath.Join(root, app, "frontend"), func(path string) {
-			if isBundleContent(path) {
-				return
-			}
-
-			files = append(files, path)
-		}); err != nil {
-			return nil, err
-		}
-	}
-
-	return files, nil
-}
-
-// isBundleContent reports whether a file is inside a built bundle. The bundle and everything a build
-// writes under it are the client build's output, not its sources: a rule that watched its own output
-// would rebuild on every run, and a bundle that watched only the files sitting directly in the bundle
-// directory would watch the bundle built last as a source of the bundle built first.
-func isBundleContent(path string) bool {
-	for _, part := range strings.Split(path, string(filepath.Separator)) {
-		if part == "bundle" {
-			return true
-		}
-	}
-
-	return false
-}
-
 // serverSources is every file the server binary is built from: the Go files, and the contents of both
 // bundles, which the server embeds. A binary that is newer than every Go file and older than the bundle
 // it embeds is a binary that ships the bundle it was built before.
@@ -225,12 +164,6 @@ func walkFiles(root string, visit func(path string)) error {
 	})
 
 	return err
-}
-
-// bundleIsCurrent reports whether a built bundle is newer than every file it is built from. A bundle
-// that is not there is not current.
-func bundleIsCurrent(repo string, app string) (bool, error) {
-	return newerThan(repo, bundleOutput(repo, app), clientSources)
 }
 
 // serverIsCurrent reports whether the server binary is newer than every file it is built from. A binary

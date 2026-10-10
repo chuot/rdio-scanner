@@ -29,10 +29,11 @@ import (
 	"rdio-scanner/internal/buildinfo"
 )
 
-// The command line and the plan are the two halves of the tool that can be read without running
-// anything: what the operator asked for, and the commands that asking composes. These tests read the
-// plan the tool composes — what npm and go are told to do, in what order, with what in the
-// environment — and refuse the command lines the tool cannot honour. Nothing here runs a build.
+// The command line and the server and container steps are the two halves of the tool that can be
+// read without running anything: what the operator asked for, and the commands that asking composes.
+// The plan the tool composes for the applications is tested in webapps_test.go. These tests refuse
+// the command lines the tool cannot honour and read the server binary and the container image the
+// run composes. Nothing here runs a build.
 
 // theVersion is the version a plan is composed for: an untagged build of the declared core, which is
 // the shape a development build has.
@@ -57,73 +58,6 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
-// The whole pipeline is the two applications, then the ffmpeg, then the server. The order is the
-// point: the server embeds both bundles and the ffmpeg, so a server built first ships without them.
-func TestTheWholePipelineIsTheApplicationsThenTheFFmpegThenTheServer(t *testing.T) {
-	o, err := parseArgs(nil)
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
-
-	if len(steps) != 2 {
-		t.Fatalf("the whole pipeline plans %d steps, want the two applications", len(steps))
-	}
-
-	if steps[0].label != subScanner || steps[1].label != subAdmin {
-		t.Errorf("the applications are planned in the order %s, %s, want the scanner then the administration", steps[0].label, steps[1].label)
-	}
-
-	// The ffmpeg and the server are not plan steps: the tool runs the ffmpeg itself and composes the
-	// server last. Both say they belong to a whole-pipeline run, which is what puts them in the run.
-	if !o.buildsFFmpeg() || !o.buildsServer() {
-		t.Errorf("a whole-pipeline run reports it builds the ffmpeg %v and the server %v, want both", o.buildsFFmpeg(), o.buildsServer())
-	}
-
-	if serverStep(o, "/repo", theVersion(t)).label != subServer {
-		t.Errorf("the server step is labelled %q, want %s", serverStep(o, "/repo", theVersion(t)).label, subServer)
-	}
-}
-
-// Each subcommand plans only the steps it names. The version subcommand plans nothing, because it
-// answers one question and builds nothing.
-func TestEachSubcommandPlansOnlyTheStepsItNames(t *testing.T) {
-	for _, c := range []struct {
-		args []string
-		want []string
-	}{
-		{args: []string{"client"}, want: []string{"scanner", "admin"}},
-		{args: []string{"scanner"}, want: []string{"scanner"}},
-		{args: []string{"admin"}, want: []string{"admin"}},
-		{args: []string{"ffmpeg"}, want: []string{}},
-		{args: []string{"server"}, want: []string{}},
-		{args: []string{"version"}, want: []string{}},
-	} {
-		o, err := parseArgs(c.args)
-		if err != nil {
-			t.Fatalf("%v: parseArgs: %v", c.args, err)
-		}
-
-		got := []string{}
-		for _, s := range plan(o, "/repo", theVersion(t), "npm", planState{}) {
-			got = append(got, s.label)
-		}
-
-		if strings.Join(got, " ") != strings.Join(c.want, " ") {
-			t.Errorf("%v plans %v, want %v", c.args, got, c.want)
-		}
-
-		if o.buildsFFmpeg() != (len(c.args) > 0 && c.args[0] == "ffmpeg") {
-			t.Errorf("%v builds the ffmpeg %v, want %v", c.args, o.buildsFFmpeg(), c.args[0] == "ffmpeg")
-		}
-
-		if o.buildsServer() != (len(c.args) > 0 && c.args[0] == "server") {
-			t.Errorf("%v builds the server %v, want %v", c.args, o.buildsServer(), c.args[0] == "server")
-		}
-	}
-}
-
 // The version reaches the server through the linker. It reaches the bundles through the environment.
 // Neither is rewritten in a source file, which is the mechanism that produced the drift this tool
 // exists to remove.
@@ -143,74 +77,6 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 
 	if s.dir != "/repo" {
 		t.Errorf("the server is built in %q, want the repository root", s.dir)
-	}
-}
-
-func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
-	o, err := parseArgs([]string{"client"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
-
-	for _, app := range []string{subScanner, subAdmin} {
-		s := steps[0]
-		if app == subAdmin {
-			s = steps[1]
-		}
-
-		if s.name != "npm" {
-			t.Errorf("%s is built with %q, want npm", app, s.name)
-		}
-
-		if strings.Join(s.args, " ") != "run build:"+app {
-			t.Errorf("%s is built with %v, want npm run build:%s", app, s.args, app)
-		}
-
-		if s.dir != filepath.Join("/repo", presentationDir) {
-			t.Errorf("%s is built in %q, want the presentation directory", app, s.dir)
-		}
-
-		if !contains(s.env, "RDIO_VERSION=8.0.0+gdb79311") {
-			t.Errorf("%s is built with env %v, which does not carry the resolved version", app, s.env)
-		}
-
-		// Each application writes into the bundle directory of the Go package that embeds it, and the
-		// step says that destination as the result it leaves behind.
-		if s.result != appBundle[app] {
-			t.Errorf("%s leaves behind %q, want the bundle of the package that embeds it", app, s.result)
-		}
-	}
-}
-
-// Client dependencies are installed once, and only when the tool finds they are not already there.
-func TestClientDependenciesAreInstalledOnlyWhenTheyAreNotAlreadyThere(t *testing.T) {
-	o, err := parseArgs([]string{"client"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	o.installClients = true
-
-	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
-
-	if len(steps) != 3 {
-		t.Fatalf("%d steps are planned with the dependencies missing, want the install and the two applications", len(steps))
-	}
-
-	if strings.Join(steps[0].args, " ") != "ci --loglevel=error --no-progress" {
-		t.Errorf("the install step is %v, want npm ci --loglevel=error --no-progress", steps[0].args)
-	}
-
-	if steps[0].dir != filepath.Join("/repo", presentationDir) {
-		t.Errorf("the install runs in %q, want the presentation directory", steps[0].dir)
-	}
-
-	o.installClients = false
-
-	if len(plan(o, "/repo", theVersion(t), "npm", planState{})) != 2 {
-		t.Errorf("%d steps are planned with the dependencies already installed, want the two applications", len(plan(o, "/repo", theVersion(t), "npm", planState{})))
 	}
 }
 
@@ -351,54 +217,5 @@ func TestTheFFmpegTargetIsTheWordRightAfterIt(t *testing.T) {
 		if isTarget(word) {
 			t.Errorf("%q is accepted as a platform, want it refused", word)
 		}
-	}
-}
-
-// A bundle that is newer than every file it is built from is not rebuilt: a phase with nothing to do
-// does not run. The plan runs the one application whose bundle is not current.
-func TestAPlanSkipsABundleThatIsAlreadyBuilt(t *testing.T) {
-	o, err := parseArgs([]string{"client"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	steps := plan(o, "/repo", theVersion(t), "npm", planState{scannerCurrent: true})
-
-	if len(steps) != 1 {
-		t.Fatalf("the plan runs %d steps, want the one application whose bundle is not current", len(steps))
-	}
-
-	if steps[0].label != subAdmin {
-		t.Errorf("the plan runs %s, want the application whose bundle is not current", steps[0].label)
-	}
-}
-
-// A release run whose bundles are current runs no client step. The bundles are the same for every
-// target, so a second matrix run over the same sources compiles nothing.
-func TestAPlanRunsNoClientStepWhenBothBundlesAreCurrent(t *testing.T) {
-	o, err := parseArgs([]string{"dist"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	if steps := plan(o, "/repo", theVersion(t), "npm", planState{scannerCurrent: true, adminCurrent: true}); len(steps) != 0 {
-		t.Errorf("the plan runs %d steps, want none", len(steps))
-	}
-}
-
-// The dependencies are looked for only when a client step is going to run. A run that builds no bundle
-// has no use for npm, and installing esbuild into a tree that will not build is work nobody asked for.
-func TestARunThatBuildsNoBundleNeedsNoNpm(t *testing.T) {
-	o, err := parseArgs([]string{"client"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	if needsNpm(o, planState{scannerCurrent: true, adminCurrent: true}) {
-		t.Error("a run that builds no bundle asks for npm")
-	}
-
-	if !needsNpm(o, planState{}) {
-		t.Error("a run that builds both bundles does not ask for npm")
 	}
 }
