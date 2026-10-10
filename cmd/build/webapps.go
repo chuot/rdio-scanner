@@ -26,6 +26,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,6 +146,35 @@ func clientSteps(o options, state planState) []string {
 // build is work nobody asked for.
 func needsNpm(o options, state planState) bool {
 	return len(clientSteps(o, state)) > 0
+}
+
+// runWebapps runs the webapps phase: it looks for npm when a bundle is going to be built,
+// decides whether the dependencies have to be installed, and runs the steps that build the
+// bundles. The steps are composed by plan, and the version reaches each bundle through the
+// environment.
+func (t tool) runWebapps(o options, version buildinfo.Version, stdout io.Writer, state planState) error {
+	npmName := ""
+
+	if needsNpm(o, state) {
+		npm, err := t.resolve("npm")
+		if err != nil {
+			return fmt.Errorf("building the applications needs npm: %w", err)
+		}
+
+		npmName = npm
+
+		o.installClients = !t.installed(filepath.Join(t.repo, presentationDir, "node_modules"))
+	}
+
+	for _, s := range plan(o, t.repo, version, npmName, state) {
+		if err := t.execute(s); err != nil {
+			return fmt.Errorf("%s: %w", s.label, err)
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	}
+
+	return nil
 }
 
 // plan composes the commands the options asked for, in the order they have to happen: the scanner

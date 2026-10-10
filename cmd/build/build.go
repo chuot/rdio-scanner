@@ -116,23 +116,10 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return fail(stdout, err)
 	}
 
-	npmName := ""
-
-	if needsNpm(o, state) {
-		npmName, err = t.resolve("npm")
-		if err != nil {
-			return fail(stdout, fmt.Errorf("building the applications needs npm: %w", err))
-		}
-
-		o.installClients = !t.installed(filepath.Join(t.repo, presentationDir, "node_modules"))
-	}
-
-	for _, s := range plan(o, t.repo, version, npmName, state) {
-		if err := t.execute(s); err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
-		}
-
-		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	// The web applications come first: the server embeds both bundles, so a bundle built in this
+	// run has to be on disk before the binary that embeds it is compiled.
+	if err := t.runWebapps(o, version, stdout, state); err != nil {
+		return fail(stdout, err)
 	}
 
 	// The release matrix builds the applications once, because the bundles are the same for every
@@ -164,27 +151,39 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return 0
 	}
 
-	// The server embeds both bundles, so a bundle built in this run makes the binary that embeds it out
-	// of date. The check is made again after the client steps: the bundles the run just built are newer
-	// than the binary built before them, and a run that rebuilt a bundle and left the binary standing
-	// ships the bundles the binary was built before.
 	if o.buildsServer() {
-		if state, err = t.state(t.repo, o); err != nil {
-			return fail(stdout, err)
+		if err := t.runServer(o, version, stdout); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", subServer, err))
 		}
-	}
-
-	if o.buildsServer() && !state.serverCurrent {
-		s := serverStep(o, t.repo, version)
-
-		if err := t.execute(s); err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
-		}
-
-		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 	}
 
 	return 0
+}
+
+// runServer compiles the server binary for the target the run is building for. The server embeds
+// both bundles and the ffmpeg, so the state is asked again after the phases that write them: the
+// bundles built in this run are newer than the binary built before them, and a run that rebuilt a
+// bundle and left the binary standing ships the bundles the binary was built before. A binary that
+// is current is not compiled again.
+func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) error {
+	state, err := t.state(t.repo, o)
+	if err != nil {
+		return err
+	}
+
+	if state.serverCurrent {
+		return nil
+	}
+
+	s := serverStep(o, t.repo, version)
+
+	if err := t.execute(s); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+
+	return nil
 }
 
 // runDist builds the release for the targets the run was asked for: the whole matrix, or the one the
@@ -220,19 +219,8 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		// The binary for this target is current when it is newer than every file it is built from, and
 		// the bundles the client steps built are among them. The check is made for each target, because
 		// each target's binary is a different file.
-		targetState, err := t.state(t.repo, o)
-		if err != nil {
+		if err := t.runServer(o, version, stdout); err != nil {
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subServer, o.target, err))
-		}
-
-		if !targetState.serverCurrent {
-			s := serverStep(o, t.repo, version)
-
-			if err := t.execute(s); err != nil {
-				return fail(stdout, fmt.Errorf("%s for %s: %w", s.label, o.target, err))
-			}
-
-			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 		}
 
 		// The archive carries the binary, the documentation as the files it is written in, the pictures
