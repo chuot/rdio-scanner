@@ -24,7 +24,7 @@ import (
 // A server that gains a subsystem and does not also give the administrator's log view the way to ask for it
 // fails here, and not in front of an operator who could not find the filter.
 func TestTheLogViewOffersEverySubsystemTheServerHas(t *testing.T) {
-	const path = "../../internal/presentation/clients/admin/domain/log-search.js"
+	const path = "../../internal/presentation/admin/frontend/domain/log-search.js"
 
 	b, err := os.ReadFile(path)
 	if err != nil {

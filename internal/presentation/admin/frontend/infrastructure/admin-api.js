@@ -1,0 +1,87 @@
+// Admin REST adapter (legacy admin.service.ts HttpClient calls).
+// Auth: raw JWT in Authorization, no Bearer prefix. 401 → clear token, end session.
+
+import { ADMIN_CONFIG_SECTIONS } from '../../../common/frontend/domain/config.js';
+
+export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauthorized = () => {} }) {
+  async function request(method, path, body) {
+    const res = await fetchImpl(`/api/admin${path}`, {
+      method,
+      headers: { Authorization: storage.getAdminToken() },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+
+    if (res.status === 401) {
+      storage.clearAdminToken();
+      onUnauthorized();
+
+      throw new Error('Unauthorized');
+    }
+
+    if (!res.ok) {
+      throw new Error(`Admin API ${method} ${path}: ${res.status}`);
+    }
+
+    // POST /logout answers 200 with an empty body.
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    async login(password) {
+      const res = await request('POST', '/login', { password });
+
+      storage.setAdminToken(res.token);
+
+      return { token: res.token, passwordNeedChange: res.passwordNeedChange };
+    },
+
+    async logout() {
+      await request('POST', '/logout', null);
+
+      storage.clearAdminToken();
+    },
+
+    getConfig() {
+      return request('GET', '/config');
+    },
+
+    saveConfig(config) {
+      return request('PUT', '/config', config);
+    },
+
+    // Per-section endpoints (REQ-019): GET/PUT /api/admin/config/<section>.
+    async getSection(section) {
+      assertSection(section);
+
+      return request('GET', `/config/${section}`);
+    },
+
+    async saveSection(section, value) {
+      assertSection(section);
+
+      return request('PUT', `/config/${section}`, value);
+    },
+
+    getAlerts() {
+      return request('GET', '/alerts');
+    },
+
+    searchLogs(options) {
+      return request('POST', '/logs', options);
+    },
+
+    changePassword(currentPassword, newPassword) {
+      return request('POST', '/password', { currentPassword, newPassword });
+    },
+  };
+
+  function assertSection(section) {
+    if (!ADMIN_CONFIG_SECTIONS.includes(section)) {
+      throw new Error(`Unknown admin config section: ${section}`);
+    }
+  }
+}
