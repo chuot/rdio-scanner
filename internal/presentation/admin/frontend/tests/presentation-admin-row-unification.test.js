@@ -103,3 +103,18 @@ test('Dirwatch renders its help through the standard caption block', () => {
 
   assert.equal(legacy.length, 0, 'the dirwatch rows still carry the retired caption variant');
 });
+
+test('the dirwatch Directory caption renders its emphasized tokens as text', () => {
+  seed({ dirwatch: [{ type: 'default', directory: '/var/spool', extension: 'wav', disabled: false }] });
+
+  const el = section('rdio-admin-dirwatch');
+
+  // The Directory caption is a list of nodes (text plus bold token names); assigning
+  // an array to textContent rendered "[object Text]" literals in the browser.
+  const captions = findAll(el, (node) => node.tag === 'span' && node.className === 'caption');
+
+  const directory = captions.find((node) => node.textContent.includes('Path of the'));
+
+  assert.ok(directory, 'the Directory caption is missing');
+  assert.ok(!directory.textContent.includes('[object'), 'the caption renders node objects as literal text');
+});

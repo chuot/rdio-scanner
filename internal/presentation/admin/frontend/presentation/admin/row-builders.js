@@ -50,7 +50,12 @@ export function captionBlock(title, caption, typeList) {
   if (caption) {
     const captionEl = document.createElement('span');
     captionEl.className = 'caption';
-    captionEl.textContent = caption;
+
+    // A caption is plain text, or a list of nodes with inline emphasis (the dirwatch
+    // mask tokens); assigning an array to textContent renders "[object Text]" literals.
+    if (typeof caption === 'string') captionEl.textContent = caption;
+    else captionEl.append(...caption);
+
     help.append(captionEl);
   }
 
