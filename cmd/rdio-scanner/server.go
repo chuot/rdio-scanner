@@ -48,7 +48,7 @@ import (
 	"rdio-scanner/internal/infrastructure/passwords"
 	"rdio-scanner/internal/infrastructure/persistence"
 	"rdio-scanner/internal/infrastructure/tokens"
-	"rdio-scanner/internal/presentation/adminws"
+	adminbackend "rdio-scanner/internal/presentation/admin/backend"
 	"rdio-scanner/internal/presentation/rest"
 	"rdio-scanner/internal/presentation/serving/admin"
 	"rdio-scanner/internal/presentation/serving/scanner"
@@ -128,7 +128,7 @@ type server struct {
 	// a connection the server has handed over, so stopping the server has to end these itself — and end them
 	// while the log their departures are written into can still be written to.
 	listeners      *ws.Hub
-	adminSessions  *adminws.Sessions
+	adminSessions  *adminbackend.Sessions
 	listenerCounts *application.ListenerCountDebouncer
 
 	routes http.Handler
@@ -361,7 +361,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 
 	s.prune = application.NewPruneOldCallsHandler(calls, s.logs, options, s.clock)
 
-	adminSessions := adminws.NewSessions(adminws.Deps{
+	adminSessions := adminbackend.NewSessions(adminbackend.SessionDeps{
 		Session: application.NewCheckAdminSessionHandler(tokensAdapter),
 		Version: Version,
 		Logs:    s.logs,
@@ -386,7 +386,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 		Logs:                      s.logs,
 	}
 
-	adminAPI := rest.NewAdmin(rest.Deps{
+	adminAPI := adminbackend.NewAdmin(adminbackend.AdminDeps{
 		AddUser:              application.NewAddAccessUserHandler(accessUserPorts),
 		Config:               application.NewGetConfigHandler(s.repos),
 		ConfigSocket:         adminSessions,

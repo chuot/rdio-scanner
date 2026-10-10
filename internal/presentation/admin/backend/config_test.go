@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package rest
+package backend
 
 import (
 	"encoding/json"
@@ -121,7 +121,7 @@ func newAdminFixture() *adminFixture {
 func (fixture *adminFixture) buildRoutes() http.Handler {
 	mux := http.NewServeMux()
 
-	NewAdmin(Deps{
+	NewAdmin(AdminDeps{
 		AddUser: application.NewAddAccessUserHandler(application.AccessUserPorts{
 			ConfigurationRepositories: fixture.repositories(),
 			Logs:                      fixture.logs,
@@ -379,7 +379,7 @@ func decodeGolden(t *testing.T, name string) any {
 func readGolden(t *testing.T, name string) string {
 	t.Helper()
 
-	b, err := os.ReadFile(filepath.Join("../../../testdata/golden", name))
+	b, err := os.ReadFile(filepath.Join("../../../../testdata/golden", name))
 	if err != nil {
 		t.Fatalf("reading the golden capture %s: %v", name, err)
 	}

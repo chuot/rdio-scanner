@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package adminws
+package backend
 
 import (
 	"context"
@@ -26,8 +26,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -50,9 +48,8 @@ import (
 // says anything.
 
 const (
-	captureToken   = "capture-administrator-token"
+	socketToken    = "capture-administrator-token"
 	captureRefused = "not-a-token"
-	captureVersion = "8.0.0"
 
 	// changedTagLabel names a tag that only the second of two pushes has, which is how a test tells them
 	// apart.
@@ -125,9 +122,9 @@ func newFixtureLogging(t *testing.T, logs recordedLogs) *fixture {
 		logs:   logs,
 	}
 
-	fixture.tokens.Window = []string{captureToken}
+	fixture.tokens.Window = []string{socketToken}
 
-	fixture.sessions = NewSessions(Deps{
+	fixture.sessions = NewSessions(SessionDeps{
 		Session: application.NewCheckAdminSessionHandler(fixture.tokens),
 		Version: captureVersion,
 		Logs:    fixture.logs,
@@ -383,7 +380,7 @@ func TestConfigSocketPushesTheCapturedConfigurationAfterAChange(t *testing.T) {
 
 	conn := fixture.open(t)
 
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 	fixture.awaitCredential(t, 1)
 	fixture.changed(t)
 
@@ -647,7 +644,7 @@ func TestConfigSocketSendsNothingToAConnectionThatHasNotPresentedACredential(t *
 	// not the first one. Which of the two arrives first is the answer to the question: a connection that was
 	// handed the configuration while it had said nothing is given the first one, and a connection kept out of
 	// it is given the second.
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 	fixture.awaitCredential(t, 1)
 
 	fixture.changedTo(t, configurationChangedAfter(fixture.configuration))
@@ -670,7 +667,7 @@ func TestConfigSocketSendsNothingWhenAConnectionOpens(t *testing.T) {
 
 	conn := fixture.open(t)
 
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 
 	if !fixture.nothingArrivedYet(t, conn) {
 		t.Fatalf("the server pushed a configuration the administrator did not ask for")
@@ -686,7 +683,7 @@ func TestConfigSocketChecksEveryFrameTheConnectionSends(t *testing.T) {
 
 	closed := fixture.closedOnTheServer(t, conn)
 
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 	fixture.present(t, conn, captureRefused)
 
 	code, _ := closed()
@@ -704,7 +701,7 @@ func TestConfigSocketKeepsAConnectionThatSaysNothing(t *testing.T) {
 
 	conn := fixture.open(t)
 
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 	fixture.awaitCredential(t, 1)
 
 	// A listener connection that stops answering is ended within a minute. This one is not held to any
@@ -757,8 +754,8 @@ func TestConfigurationChangeReachesEveryCredentialPresentingConnection(t *testin
 	first := fixture.open(t)
 	second := fixture.open(t)
 
-	fixture.present(t, first, captureToken)
-	fixture.present(t, second, captureToken)
+	fixture.present(t, first, socketToken)
+	fixture.present(t, second, socketToken)
 
 	fixture.awaitCredential(t, 1)
 	fixture.awaitCredential(t, 2)
@@ -789,8 +786,8 @@ func TestConfigSocketStopsPushingToAConnectionThatWentAway(t *testing.T) {
 	gone := fixture.open(t)
 	alive := fixture.open(t)
 
-	fixture.present(t, gone, captureToken)
-	fixture.present(t, alive, captureToken)
+	fixture.present(t, gone, socketToken)
+	fixture.present(t, alive, socketToken)
 
 	fixture.awaitCredential(t, 2)
 	fixture.awaitCredential(t, 2)
@@ -813,7 +810,7 @@ func TestConfigSocketEndsAConnectionWhoseCredentialHasBeenRetired(t *testing.T) 
 
 	conn := fixture.open(t)
 
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 	fixture.awaitCredential(t, 1)
 
 	fixture.changed(t)
@@ -828,7 +825,7 @@ func TestConfigSocketEndsAConnectionWhoseCredentialHasBeenRetired(t *testing.T) 
 
 	closed := fixture.closedOnTheServer(t, conn)
 
-	fixture.present(t, conn, captureToken)
+	fixture.present(t, conn, socketToken)
 
 	if code, _ := closed(); code != 1000 {
 		t.Errorf("a connection whose credential had been retired was closed with %d, want 1000", code)
@@ -885,29 +882,6 @@ func capturedConfiguration(t *testing.T) domain.Configuration {
 	return configuration
 }
 
-func decodeGolden(t *testing.T, name string) any {
-	t.Helper()
-
-	var value any
-
-	if err := json.Unmarshal([]byte(readGolden(t, name)), &value); err != nil {
-		t.Fatalf("the capture %s is not JSON: %v", name, err)
-	}
-
-	return value
-}
-
-func readGolden(t *testing.T, name string) string {
-	t.Helper()
-
-	b, err := os.ReadFile(filepath.Join("../../../testdata/golden", name))
-	if err != nil {
-		t.Fatalf("reading the golden capture %s: %v", name, err)
-	}
-
-	return string(b)
-}
-
 // capturedConfigGolden is the captured socket push with the two approved divergences stated on it.
 //
 // The first is Q58: the capture records every site as belonging to no system at all, because the legacy
@@ -937,18 +911,4 @@ func capturedConfigGolden(t *testing.T) string {
 	}
 
 	return golden
-}
-
-// replaceExactly rewrites a captured payload to state a divergence, and insists that the divergence is
-// still the one the capture recorded: a capture that no longer says what this server disagrees with is a
-// capture that has changed, and the test would rather stop than quietly agree with something new.
-func replaceExactly(t *testing.T, body, from, to string, times int) string {
-	t.Helper()
-
-	if n := strings.Count(body, from); n != times {
-		t.Fatalf("the captured payload says %q %d times, want %d: the divergence this test states is no "+
-			"longer the one the capture recorded", from, n, times)
-	}
-
-	return strings.ReplaceAll(body, from, to)
 }

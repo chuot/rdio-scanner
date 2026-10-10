@@ -23,7 +23,7 @@
 //
 // It is not a listener connection and shares nothing with one. It has no commands, no live feed, no history,
 // and no access codes; it sends its credential, and after that it only ever reads.
-package adminws
+package backend
 
 import (
 	"context"
@@ -113,10 +113,10 @@ type administrator struct {
 	writing sync.Mutex
 }
 
-// Deps is what the administrator connections need: the use case that answers whether a credential is one
+// SessionDeps is what the administrator connections need: the use case that answers whether a credential is one
 // this server issued, the version to report alongside the configuration, and the server log this socket
 // reports its own connections to.
-type Deps struct {
+type SessionDeps struct {
 	Session *application.CheckAdminSessionHandler
 	Version string
 	Logs    ports.LogRepository
@@ -124,7 +124,7 @@ type Deps struct {
 }
 
 // NewSessions builds the server's set of administrator connections.
-func NewSessions(deps Deps) *Sessions {
+func NewSessions(deps SessionDeps) *Sessions {
 	return &Sessions{
 		session: deps.Session,
 		version: deps.Version,

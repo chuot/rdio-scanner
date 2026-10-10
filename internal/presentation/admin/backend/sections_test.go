@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package rest
+package backend
 
 import (
 	"net/http"

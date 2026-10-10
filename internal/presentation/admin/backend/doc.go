@@ -18,6 +18,16 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package adminws implements the administrator configuration socket: the raw-JWT
-// first-frame handshake and the full-configuration broadcast on every change.
-package adminws
+// Package backend is the administration console's own surface: the endpoints an administrator's
+// page and the command-line tooling talk to, the configuration sections that page saves one at a
+// time, and the configuration socket the page holds open to learn about a change as it happens.
+//
+// Nothing here decides anything. Each endpoint reads a credential, hands what was submitted to the
+// use case that owns the decision, and turns the outcome into the status code and body the frozen
+// contract fixes. The socket sends the configuration and reads its credential, and pushes the
+// configuration to every connection that presented one.
+//
+// The inbound recording upload endpoints are not here. They are authenticated by an apikey scoped
+// to systems, not by an administrator session, and neither web application posts to them; they live
+// in common/upload.
+package backend

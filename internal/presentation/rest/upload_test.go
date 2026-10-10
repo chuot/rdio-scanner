@@ -27,6 +27,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -858,4 +860,17 @@ type bodyCutShortError struct{}
 
 func (err *bodyCutShortError) Error() string {
 	return "the connection was closed while the body was being read"
+}
+
+// readGolden reads the capture an upload endpoint is answered with. The upload endpoints answer with plain
+// text, so the capture is compared as bytes and not decoded.
+func readGolden(t *testing.T, name string) string {
+	t.Helper()
+
+	b, err := os.ReadFile(filepath.Join("../../../testdata/golden", name))
+	if err != nil {
+		t.Fatalf("reading the golden capture %s: %v", name, err)
+	}
+
+	return string(b)
 }

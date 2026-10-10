@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package rest
+package backend
 
 import (
 	"context"
@@ -34,10 +34,10 @@ import (
 	"rdio-scanner/internal/presentation/common/upgrade"
 )
 
-// Deps are the use cases the administrator endpoints answer with, and the things these endpoints report
+// AdminDeps are the use cases the administrator endpoints answer with, and the things these endpoints report
 // that no use case decided: which version is answering, whether the server thinks it is running in a
 // container, and what happened to a request that never reached a use case at all.
-type Deps struct {
+type AdminDeps struct {
 	AddUser  *application.AddAccessUserHandler
 	Config   *application.GetConfigHandler
 	Login    *application.AdminLoginHandler
@@ -109,7 +109,7 @@ type Admin struct {
 }
 
 // NewAdmin builds the administrator surface from the use cases it answers with.
-func NewAdmin(deps Deps) *Admin {
+func NewAdmin(deps AdminDeps) *Admin {
 	return &Admin{
 		addUser:              deps.AddUser,
 		config:               deps.Config,

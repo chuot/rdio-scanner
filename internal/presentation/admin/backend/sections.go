@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package rest
+package backend
 
 import (
 	"context"
@@ -31,6 +31,7 @@ import (
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/presentation/common/dto"
+	"rdio-scanner/internal/presentation/common/upgrade"
 )
 
 // unreadableBody says that a save was asked for with a body this endpoint cannot read, and keeps the reason
@@ -59,7 +60,7 @@ func (body unreadableBody) Error() string {
 //     not exist is told which of its assumptions is wrong.
 //   - A credential the server does not accept is refused before the method is looked at.
 func (admin *Admin) Section(w http.ResponseWriter, r *http.Request) {
-	if strings.EqualFold(r.Header.Get("upgrade"), "websocket") {
+	if upgrade.Wanted(r) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 
 		return
