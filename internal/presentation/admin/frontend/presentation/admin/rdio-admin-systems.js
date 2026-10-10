@@ -10,6 +10,7 @@ import { getAdminContext } from '../../application/admin-context.js';
 import {
   attachDragSort,
   bindSectionSlice,
+  openApiBox,
   reorderAfterDrag,
   sectionSlice,
   sectionWorking,
@@ -136,7 +137,7 @@ class RdioAdminSystems extends HTMLElement {
 
     const bar = document.createElement('rdio-admin-section-bar');
     bar.dataset.section = NAME;
-    root.append(bar);
+    root.append(bar, openApiBox(NAME));
 
     this.replaceChildren(root);
 

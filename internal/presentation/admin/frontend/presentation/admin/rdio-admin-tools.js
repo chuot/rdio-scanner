@@ -9,7 +9,7 @@ import { ADMIN_CONFIG_SECTIONS } from '../../../../common/frontend/domain/config
 import { migrateLegacyConfig } from '../../domain/config-legacy-keys.js';
 import { importTalkgroups, importUnits, parseCsv } from '../../domain/csv-import.js';
 import { version } from '../../../../common/frontend/infrastructure/version.js';
-import { sectionWorking, setSectionWorking } from './section-shell.js';
+import { openApiBox, sectionWorking, setSectionWorking } from './section-shell.js';
 import { passwordPanel } from './password-panel.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -42,6 +42,7 @@ class RdioAdminTools extends HTMLElement {
     root.append(this.csvPanel('talkgroups', 'Import talkgroups', 'Upload a talkgroups CSV file (id, frequency, label, group, name, tag, description columns). Missing groups and tags are created automatically.'));
     root.append(this.csvPanel('units', 'Import units', 'Upload a units CSV file (id, label columns).'));
     root.append(passwordPanel());
+    root.append(openApiBox('tools'));
 
     this.replaceChildren(root);
   }

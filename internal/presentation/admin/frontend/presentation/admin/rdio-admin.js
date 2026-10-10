@@ -5,6 +5,7 @@
 // registers the element.
 
 import { getAdminContext } from '../../application/admin-context.js';
+import './openapi-box.js';
 import './rdio-admin-login.js';
 import './rdio-admin-access.js';
 import './rdio-admin-apikeys.js';

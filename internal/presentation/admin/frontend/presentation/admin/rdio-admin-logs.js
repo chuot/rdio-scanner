@@ -80,6 +80,7 @@ class RdioAdminLogs extends HTMLElement {
             </div>
           </form>
         </div>
+        <rdio-admin-openapi-box data-section="logs"></rdio-admin-openapi-box>
       </div>
     `;
 

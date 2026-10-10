@@ -92,7 +92,17 @@ class ShimNode {
 globalThis.HTMLElement = ShimNode;
 
 globalThis.document = {
-  createElement: (tag) => new ShimNode(tag),
+  createElement: (tag) => {
+    const ctor = globalThis.customElements.registry.get(tag);
+
+    const node = ctor ? new ctor() : new ShimNode(tag);
+
+    // A custom element instance is built through the class, whose super() has
+    // no tag; the element name is the tag the component asked for.
+    node.tag = tag;
+
+    return node;
+  },
 
   createTextNode: (text) => {
     const node = new ShimNode('#text');

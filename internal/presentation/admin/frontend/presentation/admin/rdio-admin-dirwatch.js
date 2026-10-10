@@ -8,6 +8,7 @@
 import {
   attachDragSort,
   bindSectionSlice,
+  openApiBox,
   reorderAfterDrag,
   sectionSlice,
   sectionWorking,
@@ -135,7 +136,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
     const bar = document.createElement('rdio-admin-section-bar');
     bar.dataset.section = NAME;
-    root.append(bar);
+    root.append(bar, openApiBox(NAME));
 
     this.systemsRef = systemsSlice?.working;
 
