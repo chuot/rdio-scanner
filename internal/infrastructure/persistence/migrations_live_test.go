@@ -9,10 +9,10 @@ package persistence
 // because its backend was not there is worse than no live test at all: the record would say the backend
 // was proven.
 //
-//	testdata/migration/run.sh starts both backends and runs them.
+//	tools/migration/run.sh starts both backends and runs them.
 //
 // Each test reseeds its backend from the same v6.6.3 deployment before it runs — the schema from
-// v663-mariadb.sql or v663-postgres.sql, the rows out of testdata/legacyv6/rdio-scanner.db, which is the
+// the recorded v6.6.3 schema, the rows out of the recorded v6.6.3 statements, which are the
 // fixture every other migration test reads. A harness that seeded once for the whole suite would make
 // every test depend on the one before it, and a migration test that depends on the previous test proves
 // nothing about the migration.
@@ -36,11 +36,6 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// liveStatements are the v6.6.3 schemas the two backends are seeded with, one statement per line.
-const (
-	liveMariadbStatements    = "../../../testdata/migration/v663-mariadb.sql"
-	livePostgresqlStatements = "../../../testdata/migration/v663-postgres.sql"
-)
 
 // liveSeedOrder is the order the rows arrive in: the tables the migration pass looks a reference up in
 // before it carries the rows that name them. The v6 tables have no foreign keys, so the schema does not
@@ -102,7 +97,7 @@ func liveEnv(t *testing.T, prefix, name string) string {
 	value := os.Getenv(prefix + "_" + name)
 
 	if value == "" {
-		t.Fatalf("%s_%s is not set: the live tests run against a backend, and testdata/migration/run.sh starts one", prefix, name)
+		t.Fatalf("%s_%s is not set: the live tests run against a backend, and tools/migration/run.sh starts one", prefix, name)
 	}
 
 	return value
@@ -168,42 +163,31 @@ func livePing(t *testing.T, db *sql.DB, settings Settings) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		t.Fatalf("%s at %s:%d is not reachable: %v\n\nstart it with testdata/migration/run.sh",
+		t.Fatalf("%s at %s:%d is not reachable: %v\n\nstart it with tools/migration/run.sh",
 			settings.Dialect, settings.Host, settings.Port, err)
 	}
 }
 
-// applyStatements runs a seed file, one statement per line. The files are this harness's own, and every
-// statement in them is one line ending in a semicolon, with the review notes on `--` lines: a general SQL
-// splitter is not what a pinned seed file needs.
-func applyStatements(t *testing.T, db *sql.DB, path string) {
+// applyStatements runs a recorded seed, one statement per line. Every statement in the recorded schema is
+// one line ending in a semicolon, which is the shape the legacy server ran them in: a general SQL splitter
+// is not what a pinned seed needs.
+func applyStatements(t *testing.T, db *sql.DB, statements []string) {
 	t.Helper()
 
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
-
-	for _, line := range strings.Split(string(contents), "\n") {
-		line = strings.TrimSpace(line)
-
-		if line == "" || strings.HasPrefix(line, "--") {
-			continue
-		}
-
-		mustExec(t, db, line)
+	for _, statement := range statements {
+		mustExec(t, db, statement)
 	}
 }
 
-func liveStatements(dialect Dialect) string {
+func liveStatements(dialect Dialect) []string {
 	switch dialect {
 	case DialectMariadb, DialectMysql:
-		return liveMariadbStatements
+		return liveMariadbSchema
 	case DialectPostgresql:
-		return livePostgresqlStatements
+		return livePostgresqlSchema
 	}
 
-	panic(fmt.Sprintf("liveStatements: %s has no v6.6.3 seed file", dialect))
+	panic(fmt.Sprintf("liveStatements: %s has no recorded v6.6.3 schema", dialect))
 }
 
 // seedLive copies the rows of the v6.6.3 sqlite fixture into the backend, through the same store the
@@ -217,10 +201,9 @@ func liveStatements(dialect Dialect) string {
 func seedLive(t *testing.T, db *sql.DB, dialect Dialect) {
 	t.Helper()
 
-	fixture, err := Open(Settings{Dialect: DialectSqlite, FilePath: legacyV6Fixture})
-	if err != nil {
-		t.Fatalf("opening the v6.6.3 fixture: %v", err)
-	}
+	// The v6.6.3 fixture is the recorded statements, applied to a database of this dialect's own
+	// schema, so that a live run seeds the same rows the sqlite tests seed.
+	fixture := buildRecordedDatabase(t, append(append([]string{}, legacyV6Schema...), legacyV6Rows...))
 
 	defer fixture.Close()
 
@@ -340,7 +323,7 @@ func liveFixtureColumns(t *testing.T, fixture *sql.DB, table string) (names []st
 	}
 
 	if len(names) == 0 {
-		t.Fatalf("the v6.6.3 fixture has no table %s: regenerate it with testdata/legacyv6/generate.sh", table)
+		t.Fatalf("the recorded v6.6.3 statements leave no table %s", table)
 	}
 
 	return names, declared
@@ -690,7 +673,7 @@ func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err == nil {
-		t.Fatalf("a MariaDB answered on port %d, which is not the port testdata/migration/run.sh publishes", settings.Port)
+		t.Fatalf("a MariaDB answered on port %d, which is not the port tools/migration/run.sh publishes", settings.Port)
 	}
 
 	t.Logf("%s at %s:%d refused the connection, which is what a live test is supposed to report",

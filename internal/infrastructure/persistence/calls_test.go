@@ -36,7 +36,7 @@ import (
 )
 
 // The database written by the legacy server carries two calls, both recorded by its own upload
-// endpoint (see testdata/legacydb/generate.sh):
+// endpoint, recorded as the statements it ran in fixture_test.go):
 //
 //   - call 1, on system reference 10001 / talkgroup reference 1514000, with one frequency, one
 //     source unit, one patch to talkgroup reference 1514001, and site reference 77;

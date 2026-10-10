@@ -24,7 +24,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -664,22 +663,11 @@ func sentCommandOf(t *testing.T, frame Message) string {
 func capturedSessionCommands(t *testing.T) []string {
 	t.Helper()
 
-	b, err := os.ReadFile(goldenDir + "/ws-frames-open.json")
-	if err != nil {
-		t.Fatalf("reading the captured session: %v", err)
-	}
-
-	var captured struct {
-		Listener []string `json:"listener"`
-	}
-
-	if err := json.Unmarshal(b, &captured); err != nil {
-		t.Fatalf("reading the captured session: %v", err)
-	}
+	frames := capturedFrames("ws-frames-open.json", "listener")
 
 	commands := []string{}
 
-	for _, frame := range captured.Listener {
+	for _, frame := range frames {
 		parts := []any{}
 
 		if err := json.Unmarshal([]byte(frame), &parts); err != nil {

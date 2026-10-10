@@ -22,6 +22,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/app"
 )
 
 // The -cmd mode is a client of a server that is already running. Every test here runs the program the way an
@@ -609,9 +612,18 @@ func anAddressNothingAnswersOn(t *testing.T) string {
 func commandTestServer(t *testing.T) string {
 	t.Helper()
 
-	srv := startedTestServer(t)
+	srv, err := app.New(commandTestConfig(t))
+	if err != nil {
+		t.Fatalf("app.New: %v", err)
+	}
 
-	httpServer := httptest.NewServer(srv.routes)
+	t.Cleanup(func() { srv.Close() })
+
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	httpServer := httptest.NewServer(srv)
 
 	t.Cleanup(httpServer.Close)
 

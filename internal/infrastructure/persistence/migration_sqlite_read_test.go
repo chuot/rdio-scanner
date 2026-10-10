@@ -5,7 +5,7 @@ package persistence
 // rather than the table, and a write transaction that has filled its page cache with dirty pages has to
 // flush them, which waits for every reader to leave the file. The only reader is the row loop waiting for
 // that flush. A calls table big enough to fill the cache is therefore a table the pass either carries or
-// stops on, and it was the 100,000-call timing (testdata/migration/run.sh --big) that found the pass
+// stops on, and it was the 100,000-call timing (tools/migration/run.sh --big) that found the pass
 // stopping on one: 2,000 calls of 1 KiB each, never finishing, with the calls insert in this package and
 // `_pager_wait_on_lock` under it in the goroutine dump.
 //

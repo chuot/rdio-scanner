@@ -1,1 +1,0 @@
-[{"code":"capture-open","id":1,"ident":"Capture open","systems":"*"},{"code":"capture-scoped","id":2,"ident":"Capture scoped","systems":[{"id":10001,"talkgroups":"*"}]},{"code":"capture-expired","expiration":"1970-01-01T00:00:01Z","id":3,"ident":"Capture expired","systems":"*"},{"code":"capture-limited","id":4,"ident":"Capture limited","limit":1,"systems":"*"}]

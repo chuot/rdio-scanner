@@ -58,13 +58,10 @@ func migrateLegacyV6Fixture(t *testing.T) (*sql.DB, []string) {
 }
 
 // The damaged fixtures are databases a legacy server has already migrated, in the two states the
-// legacy migration pass actually leaves behind: migrated.db, where the pass finished and left the
-// damage in the units and the missing source links, and crashed.db, where the calls migration was
-// rolled back and the v6 calls table is still there. See testdata/legacydamaged/generate.sh.
-const (
-	damagedMigratedFixture = "../../../testdata/legacydamaged/migrated.db"
-	damagedCrashedFixture  = "../../../testdata/legacydamaged/crashed.db"
-)
+// legacy migration pass actually leaves behind: migrated, where the pass finished and left the
+// damage in the units and the missing source links, and crashed, where the calls migration was
+// rolled back and the v6 calls table is still there. Their statements are recorded in
+// migrations_fixtures_test.go.
 
 // openDamagedFixture builds one of the damaged fixtures by name, so that a test which writes to it
 // cannot damage the recorded statements.

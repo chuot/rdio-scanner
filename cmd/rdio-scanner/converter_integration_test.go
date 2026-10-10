@@ -48,7 +48,7 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// theToneLength is how long the two fixtures in testdata are, and the length the padded conversion is
+// theToneLength is how long the two fixtures in assets are, and the length the padded conversion is
 // expected to bring up to.
 const theToneLength = 1.0
 
@@ -144,7 +144,7 @@ func TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven(t *testing.
 func aRecordingFrom(t *testing.T, dir string, name string) string {
 	t.Helper()
 
-	body, err := os.ReadFile(filepath.Join("testdata", name))
+	body, err := os.ReadFile(filepath.Join("assets", name))
 	if err != nil {
 		t.Fatalf("the tier has no %s to read: %v", name, err)
 	}

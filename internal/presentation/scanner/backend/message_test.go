@@ -22,8 +22,6 @@ package backend
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -243,6 +241,187 @@ func TestTheCommandConstantsAreTheWireValues(t *testing.T) {
 	}
 }
 
+// protocolCaptures is the completeness guard for the listener protocol: every command constant this
+// package freezes is named here with the capture its frame appears in and the test that compares this
+// server's framing against that capture. A command with no capture in this package says so, with the
+// reason: the two access-code answers the server sends before it closes are frozen by the access-code
+// journey in tests/acceptance, and the three native-application commands are never sent to a web client
+// at all, so the gap is a recorded one and not an accident of which sessions this capture happened to
+// open. A command that quietly lost its capture fails this guard rather than leaving the framing test
+// with nothing to compare.
+var protocolCaptures = map[string]struct {
+	// capture is the recorded run the frame appears in, and label the session of that run.
+	capture string
+	label   string
+
+	// test is the test that compares this server's framing against the capture.
+	test string
+
+	// outside names the proof a command has outside this package, and never the reason it has none.
+	outside string
+}{
+	CommandCall: {
+		capture: "ws-frames-open.json",
+		label:   "listener",
+		test:    "TestFramingReproducesTheCapturedFrames",
+	},
+	CommandConfig: {
+		capture: "ws-frames-open.json",
+		label:   "listener",
+		test:    "TestFramingReproducesTheCapturedFrames",
+	},
+	CommandCallList: {
+		capture: "ws-frames-open.json",
+		label:   "listener",
+		test:    "TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder",
+	},
+	CommandListenersCount: {
+		capture: "ws-frames-open.json",
+		label:   "listener",
+		test:    "TestFramingReproducesTheCapturedFrames",
+	},
+	CommandLivefeedMap: {
+		capture: "ws-frames-open.json",
+		label:   "listener",
+		test:    "TestFramingReproducesTheCapturedFrames",
+	},
+	CommandAccessCode: {
+		capture: "ws-frames-restricted.json",
+		label:   "scoped",
+		test:    "TestFramingReproducesTheCapturedFrames",
+	},
+	CommandVersion: {
+		capture: "ws-frames-open.json",
+		label:   "listener",
+		test:    "TestFramingReproducesTheCapturedFrames",
+	},
+
+	// The server sends these two and closes the connection, which is why they are not in a session this
+	// package captured. The access-code journey drives them against a running server.
+	CommandAccessExpired: {
+		outside: "TestAnExpiredAccessCodeIsAnsweredWithAnExpiry, in tests/acceptance",
+	},
+	CommandAccessLimit: {
+		outside: "TestAnAccessCodeLimitsHowManySessionsMayUnlockWithIt, in tests/acceptance",
+	},
+
+	// The protocol lists these three as native-application only, never handled by the web client, so no
+	// capture of a web session contains them and the guard asserts that they are absent.
+	CommandIOS:    {outside: "the iOS applications only: a web session never receives it, and no capture carries it"},
+	CommandPushID: {outside: "the mobile applications only: a web session never receives it, and no capture carries it"},
+	CommandServer: {outside: "the native applications only: a web session never receives it, and no capture carries it"},
+}
+
+// TestEveryProtocolCommandIsCapturedOrSaysWhyNot is the completeness half: the command constants the
+// server freezes and the captures that freeze their wire shapes have to agree. A constant missing from
+// the table, a capture named by a constant that holds no frame of that command, a capture with no test
+// that reads it, and a command with neither a capture nor a reason are each a failure.
+func TestEveryProtocolCommandIsCapturedOrSaysWhyNot(t *testing.T) {
+	constants := []string{
+		CommandCall,
+		CommandConfig,
+		CommandAccessExpired,
+		CommandIOS,
+		CommandCallList,
+		CommandListenersCount,
+		CommandLivefeedMap,
+		CommandAccessLimit,
+		CommandAccessCode,
+		CommandPushID,
+		CommandServer,
+		CommandVersion,
+	}
+
+	if len(protocolCaptures) != len(constants) {
+		t.Errorf("protocolCaptures declares %d commands, the server freezes %d", len(protocolCaptures), len(constants))
+	}
+
+	for _, command := range constants {
+		entry, ok := protocolCaptures[command]
+
+		if !ok {
+			t.Errorf("command %s is frozen by this package and is not in protocolCaptures, so nothing compares its wire shape", command)
+
+			continue
+		}
+
+		if entry.capture == "" {
+			if entry.outside == "" {
+				t.Errorf("command %s has no capture and no reason it has none", command)
+			}
+
+			continue
+		}
+
+		if entry.label == "" {
+			t.Errorf("command %s names the capture %s and does not say which session of it", command, entry.capture)
+
+			continue
+		}
+
+		if entry.test == "" {
+			t.Errorf("command %s has a capture and no test that compares it", command)
+		}
+
+		found := false
+
+		for _, frame := range capturedFrames(entry.capture, entry.label) {
+			if commandOf(frame) == command {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			t.Errorf("command %s is declared in the capture %s/%s, which holds no frame with that command", command, entry.capture, entry.label)
+		}
+	}
+}
+
+// TestNoWebCaptureCarriesANativeAppCommand keeps the three native-application commands out of the
+// captured web sessions: the protocol lists them as never sent to a web client, and a capture that
+// gained one would mean this server says something a web client is not written to parse.
+func TestNoWebCaptureCarriesANativeAppCommand(t *testing.T) {
+	for _, command := range []string{CommandIOS, CommandPushID, CommandServer} {
+		for _, session := range []struct {
+			capture string
+			label   string
+		}{
+			{capture: "ws-frames-open.json", label: "listener"},
+			{capture: "ws-frames-restricted.json", label: "scoped"},
+		} {
+			for _, frame := range capturedFrames(session.capture, session.label) {
+				if commandOf(frame) == command {
+					t.Errorf("the captured session %s/%s carries %s, which the protocol lists as native-application only", session.capture, session.label, command)
+				}
+			}
+		}
+	}
+}
+
+// commandOf reads the command out of a frame exactly as the frame was written: a JSON array whose
+// first element is the command.
+func commandOf(frame string) string {
+	const open = `["`
+
+	if len(frame) < len(open)+1 || frame[:len(open)] != open {
+		return ""
+	}
+
+	end := len(open)
+
+	for end < len(frame) && frame[end] != '"' {
+		end++
+	}
+
+	if end == len(open) || end == len(frame) {
+		return ""
+	}
+
+	return frame[len(open):end]
+}
+
 // TestFramingReproducesTheCapturedFrames is the golden half: a frame taken out of a capture is put
 // back together and has to come out as the bytes the legacy server sent.
 //
@@ -433,17 +612,4 @@ func truncate(body string) string {
 	return body
 }
 
-func capturedFrames(name string, label string) []string {
-	b, err := os.ReadFile(filepath.Join(goldenDir, name))
-	if err != nil {
-		panic(err)
-	}
 
-	var captured map[string]any
-
-	if err := json.Unmarshal(b, &captured); err != nil {
-		panic(err)
-	}
-
-	return framesUnder(label, captured[label])
-}

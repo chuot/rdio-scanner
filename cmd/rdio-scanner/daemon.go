@@ -25,8 +25,6 @@ import (
 	"runtime"
 
 	"github.com/kardianos/service"
-
-	"rdio-scanner/internal/domain"
 )
 
 // The -service mode is the server running under the operating system's service manager: systemd on a Linux
@@ -146,28 +144,4 @@ func (iface *daemonInterface) Stop(s service.Service) error {
 	}
 
 	return nil
-}
-
-// serviceLog is the copy of the server's log entries a service manager keeps: the manager's own log, at the
-// level the entry is filed under. A server running as a service has no terminal in front of it, and the
-// manager's log is what an operator reads.
-type serviceLog struct {
-	logger service.Logger
-}
-
-var _ logEcho = serviceLog{}
-
-func (log serviceLog) echo(level string, source domain.LogSource, message string) {
-	line := renderLogEntry(level, source, message)
-
-	switch level {
-	case domain.LogLevelError:
-		log.logger.Error(line)
-
-	case domain.LogLevelWarn:
-		log.logger.Warning(line)
-
-	case domain.LogLevelInfo:
-		log.logger.Info(line)
-	}
 }

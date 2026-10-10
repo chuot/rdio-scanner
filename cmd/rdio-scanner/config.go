@@ -25,21 +25,23 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 
 	"gopkg.in/ini.v1"
+
+	"rdio-scanner/internal/app"
 )
 
-// Supported database backends. The values are part of the configuration contract:
-// they appear in rdio-scanner.ini and on the command line of deployed instances.
+// Supported database backends. The values are part of the configuration contract: they appear in
+// rdio-scanner.ini and on the command line of deployed instances, and the composition root names the same
+// values for the database it opens.
 const (
-	DbTypeMariadb    string = "mariadb"
-	DbTypeMysql      string = "mysql"
-	DbTypePostgresql string = "postgresql"
-	DbTypeSqlite     string = "sqlite"
+	DbTypeMariadb    = app.DbTypeMariadb
+	DbTypeMysql      = app.DbTypeMysql
+	DbTypePostgresql = app.DbTypePostgresql
+	DbTypeSqlite     = app.DbTypeSqlite
 )
 
 const (
@@ -67,24 +69,12 @@ const (
 )
 
 // Config is the effective server configuration: command-line flags overlaid with
-// the rdio-scanner.ini file found in the base directory.
+// the rdio-scanner.ini file found in the base directory. The part of it the composition root builds a
+// server from is the composition root's own configuration, so the flags fill that in directly.
 type Config struct {
-	BaseDir    string
+	app.Config
+
 	ConfigFile string
-
-	DbType     string
-	DbFile     string
-	DbHost     string
-	DbPort     uint
-	DbName     string
-	DbUsername string
-	DbPassword string
-
-	Listen      string
-	SslAutoCert string
-	SslCertFile string
-	SslKeyFile  string
-	SslListen   string
 
 	// Special-mode inputs, dispatched by the composition root.
 	Command string
@@ -260,40 +250,6 @@ func isDbTypeSupported(dbType string) bool {
 // GetConfigFilePath returns the absolute path of the ini file.
 func (config *Config) GetConfigFilePath() string {
 	return config.GetPath(config.ConfigFile)
-}
-
-// GetDbFilePath returns the absolute path of the sqlite database file.
-func (config *Config) GetDbFilePath() string {
-	return config.GetPath(config.DbFile)
-}
-
-// GetPath resolves a possibly relative path against the base directory.
-func (config *Config) GetPath(p string) string {
-	if path.IsAbs(p) {
-		return p
-	}
-	return filepath.Join(config.BaseDir, p)
-}
-
-// GetSslCertFilePath returns the absolute path of the TLS certificate.
-func (config *Config) GetSslCertFilePath() string {
-	return config.GetPath(config.SslCertFile)
-}
-
-// GetSslKeyFilePath returns the absolute path of the TLS private key.
-func (config *Config) GetSslKeyFilePath() string {
-	return config.GetPath(config.SslKeyFile)
-}
-
-// GetAutocertCachePath returns the directory the Let's Encrypt cache is kept in.
-func (config *Config) GetAutocertCachePath() string {
-	return config.GetPath("autocert")
-}
-
-// GetFFmpegDirPath returns the directory the server writes the ffmpeg it carries inside its own binary
-// into, so that it has a program it can actually run.
-func (config *Config) GetFFmpegDirPath() string {
-	return config.GetPath("ffmpeg")
 }
 
 func (config *Config) isBaseDirWritable() bool {

@@ -295,7 +295,7 @@ func TestTheConformanceCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join("testdata", "tone.mp3")); err != nil {
+	if _, err := os.Stat(filepath.Join("assets", "tone.mp3")); err != nil {
 		t.Error("the check has no MP3 recording to feed ffmpeg")
 	}
 }

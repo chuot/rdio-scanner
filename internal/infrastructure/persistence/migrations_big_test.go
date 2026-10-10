@@ -105,7 +105,7 @@ func largeDatabaseOnBackend(t *testing.T, dialect Dialect) {
 	reportLargeTiming(t, dialect, elapsed, calls, db, fixture, lines)
 }
 
-// largeFixture is the database testdata/migration/bigdb.py wrote, named by the harness that wrote it. The
+// largeFixture is the database tools/migration/bigdb.py wrote, named by the harness that wrote it. The
 // row count is checked against the fixture rather than trusted from the environment, because a stale
 // fixture would otherwise time a smaller database and still report the number the operator asked for.
 func largeFixture(t *testing.T) (path string, calls int) {
@@ -114,7 +114,7 @@ func largeFixture(t *testing.T) (path string, calls int) {
 	path = os.Getenv("RDIO_LIVE_BIG_FIXTURE")
 
 	if path == "" {
-		t.Fatalf("RDIO_LIVE_BIG_FIXTURE is not set: the large-database timing runs through testdata/migration/run.sh --big <calls>")
+		t.Fatalf("RDIO_LIVE_BIG_FIXTURE is not set: the large-database timing runs through tools/migration/run.sh --big <calls>")
 	}
 
 	if _, err := os.Stat(path); err != nil {
@@ -140,7 +140,7 @@ func largeFixture(t *testing.T) (path string, calls int) {
 	}
 
 	if held != wanted {
-		t.Fatalf("%s holds %d calls and RDIO_LIVE_BIG_CALLS says %d: regenerate it with testdata/migration/bigdb.py", path, held, wanted)
+		t.Fatalf("%s holds %d calls and RDIO_LIVE_BIG_CALLS says %d: regenerate it with tools/migration/bigdb.py", path, held, wanted)
 	}
 
 	return path, wanted

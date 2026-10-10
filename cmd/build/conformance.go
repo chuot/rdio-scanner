@@ -99,7 +99,7 @@ type conformanceInput struct {
 	Body []byte
 }
 
-//go:embed testdata/tone.mp3
+//go:embed assets/tone.mp3
 var toneMP3 []byte
 
 // conformanceInputs are the recordings the dirwatch hands the converter: the same one-second tone, as

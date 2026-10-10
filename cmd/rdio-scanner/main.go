@@ -28,7 +28,8 @@ import (
 	"log"
 	"os"
 
-	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/app"
+	"rdio-scanner/internal/application/ports"
 )
 
 func main() {
@@ -94,7 +95,7 @@ func serve(config *Config, stdout io.Writer) int {
 	// A server the service manager started is the manager's service first and the server second, which is
 	// the order the legacy server has them in: the manager's own loop is handed a goroutine before the
 	// database is opened, so a server that cannot start is a service the manager can see failing.
-	var as *daemon
+	var echo app.LogEcho
 
 	if config.ServiceAction == serviceActionRun {
 		d, err := newDaemon()
@@ -104,25 +105,23 @@ func serve(config *Config, stdout io.Writer) int {
 
 		d.run()
 
-		as = d
+		echo = app.NewServiceLog(d.logger)
 	}
 
-	srv, err := newServer(config, os.Stderr, as)
+	srv, err := app.New(serverConfig(config, os.Stderr, echo))
 	if err != nil {
 		return exitWithError(err)
 	}
 
-	if err := srv.start(context.Background()); err != nil {
-		srv.stop(context.Background())
+	if err := srv.Start(context.Background()); err != nil {
+		srv.Close()
 
 		return exitWithError(err)
 	}
 
-	srv.waitForInterrupt()
+	err = srv.Serve(context.Background())
 
-	err = srv.listen()
-
-	srv.stop(context.Background())
+	srv.Close()
 
 	if err != nil {
 		return exitWithError(err)
@@ -131,53 +130,53 @@ func serve(config *Config, stdout io.Writer) int {
 	return 0
 }
 
+// serverConfig is the configuration the composition root builds a server from: the effective configuration
+// the command line and the ini file produced, with the three things this program decides on its own way of
+// running — where the server says what it says out loud, whose copy of the log entries an operator reads,
+// and which ffmpeg the server converts with.
+func serverConfig(config *Config, out io.Writer, echo app.LogEcho) app.Config {
+	return app.Config{
+		BaseDir:     config.BaseDir,
+		DbType:      config.DbType,
+		DbFile:      config.DbFile,
+		DbHost:      config.DbHost,
+		DbPort:      config.DbPort,
+		DbName:      config.DbName,
+		DbUsername:  config.DbUsername,
+		DbPassword:  config.DbPassword,
+		Listen:      config.Listen,
+		SslAutoCert: config.SslAutoCert,
+		SslCertFile: config.SslCertFile,
+		SslKeyFile:  config.SslKeyFile,
+		SslListen:   config.SslListen,
+		Version:     Version,
+		Out:         out,
+		Echo:        echo,
+		Converter: func(dir string) (ports.AudioConverter, string) {
+			choice := theConverter(bundledFFmpeg(dir))
+
+			return choice.converter(), choice.Notice
+		},
+	}
+}
+
 // changeAdminPassword is the -admin_password mode: store the credential the administrator chose, say so in
 // the log view, and stop without starting a server.
-//
-// It is the legacy server's startup branch rather than a use case, because it is a way of running the
-// program and not a thing the server does while it is running. It writes the whole configuration, as the
-// legacy server does, which is also what stores the signing secret the options read generated — the one
-// thing this mode does that a startup does not.
 func changeAdminPassword(config *Config) int {
 	ctx := context.Background()
 
-	srv, err := newServer(config, os.Stderr, nil)
+	srv, err := app.New(serverConfig(config, os.Stderr, nil))
 	if err != nil {
 		return exitWithError(err)
 	}
 
-	defer func() {
-		if err := srv.db.Close(); err != nil {
-			exitWithError(err)
-		}
-	}()
+	if err := srv.ChangeAdminPassword(ctx, config.NewAdminPassword); err != nil {
+		srv.Close()
 
-	hash, err := srv.hashes.Hash(ctx, config.NewAdminPassword)
-	if err != nil {
 		return exitWithError(err)
 	}
 
-	options, err := srv.options.ReadOptions(ctx)
-	if err != nil {
-		return exitWithError(err)
-	}
-
-	options.AdminPasswordHash = hash
-
-	// A credential that is still the one the server ships with is one the administrator has to replace,
-	// which is what the web application insists on until they do.
-	options.AdminPasswordNeedChange = config.NewAdminPassword == domain.DefaultAdminPassword
-
-	if err := srv.options.WriteOptions(ctx, options); err != nil {
-		return exitWithError(err)
-	}
-
-	if err := srv.logs.AppendLog(ctx, domain.LogEntry{
-		DateTime: srv.clock.Now(),
-		Level:    domain.LogLevelInfo,
-		Source:   domain.LogSourceAdmin,
-		Message:  "the administrator password was changed",
-	}); err != nil {
+	if err := srv.Close(); err != nil {
 		return exitWithError(err)
 	}
 

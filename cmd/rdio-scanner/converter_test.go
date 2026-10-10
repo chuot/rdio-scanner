@@ -21,6 +21,7 @@
 package main
 
 import (
+	"rdio-scanner/internal/app"
 	"context"
 	"os"
 	"path/filepath"
@@ -117,7 +118,7 @@ func TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts(t *tes
 // The data directory is where the server puts the ffmpeg it carries, in the same way it puts the
 // autocert cache and the database.
 func TestTheServerWritesTheFfmpegItCarriesIntoItsOwnFolder(t *testing.T) {
-	config := &Config{BaseDir: t.TempDir()}
+	config := &Config{Config: app.Config{BaseDir: t.TempDir()}}
 
 	if got := config.GetFFmpegDirPath(); got != filepath.Join(config.BaseDir, "ffmpeg") {
 		t.Errorf("the server's ffmpeg folder is %s, want %s", got, filepath.Join(config.BaseDir, "ffmpeg"))

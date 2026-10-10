@@ -64,18 +64,18 @@ func theConverter(bundled string, failure string) converterChoice {
 	return converterChoice{Program: theHostFFmpeg, Notice: failure}
 }
 
-// bundledFFmpeg writes the ffmpeg this binary carries into the server's own folder and returns the
-// path to run it from, or reports why the server will have to do without.
+// bundledFFmpeg writes the ffmpeg this binary carries into the folder the server was given for it and
+// returns the path to run it from, or reports why the server will have to do without.
 //
 // A server whose target carries no ffmpeg is not a failure and reports no reason: it is the ordinary
 // case for the targets this project does not compile an ffmpeg for.
-func bundledFFmpeg(config *Config) (string, string) {
+func bundledFFmpeg(dir string) (string, string) {
 	bundled, ok := bundle.Lookup()
 	if !ok {
 		return "", ""
 	}
 
-	path, _, err := bundled.Materialize(config.GetFFmpegDirPath())
+	path, _, err := bundled.Materialize(dir)
 	if err != nil {
 		return "", err.Error()
 	}

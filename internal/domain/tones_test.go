@@ -21,10 +21,7 @@
 package domain
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -33,14 +30,12 @@ import (
 // in this repository, so both tests skipped — every day, since the legacy trees were deleted — and
 // a test that always skips asserts nothing.
 //
-// The authority is now a pinned capture: testdata/legacy-alert-tones.json and
-// testdata/legacy-keypad-tones.json hold the oscillator tables as the legacy server wrote them,
-// taken from git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542 and spelled with the same decimal
-// literals the legacy source spells, so the float32 values compared here are the float32 values the
-// legacy server built.
+// The authority is the recorded tables in tones_fixtures_test.go, taken from git tree
+// 02ae33d4651fee4c46a93bdcf574d0aead89e542 and spelled with the same decimal literals the legacy
+// source spells, so the float32 values compared here are the float32 values the legacy server built.
 
 func TestAlertTablesMatchTheLegacyServerVerbatim(t *testing.T) {
-	legacy := pinnedOscillators(t, "legacy-alert-tones.json")
+	legacy := alertTables
 
 	alerts := Alerts()
 
@@ -58,7 +53,7 @@ func TestAlertTablesMatchTheLegacyServerVerbatim(t *testing.T) {
 }
 
 func TestKeypadBeepTablesMatchTheLegacyServerVerbatim(t *testing.T) {
-	legacy := pinnedOscillators(t, "legacy-keypad-tones.json")
+	legacy := keypadBeepTables
 
 	uniden := KeypadBeepsFor(Options{KeypadBeeps: KeypadBeepsUniden})
 	whistler := KeypadBeepsFor(Options{KeypadBeeps: KeypadBeepsWhistler})
@@ -85,51 +80,6 @@ func TestUnknownKeypadBeepSelectionYieldsEmptySequences(t *testing.T) {
 	if len(beeps.Activate)+len(beeps.Deactivate)+len(beeps.Denied) != 0 {
 		t.Errorf("KeypadBeepsFor(motorbot) = %+v, want three empty sequences", beeps)
 	}
-}
-
-// pinnedOscillators reads a pinned capture of the legacy server's tone tables.
-func pinnedOscillators(t *testing.T, name string) []Oscillator {
-	t.Helper()
-
-	path := filepath.Join("testdata", name)
-
-	src, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("%s is missing: %v\n"+
-			"it is a pinned capture of the legacy tone tables, taken from git tree 02ae33d4…; nothing regenerates it", path, err)
-	}
-
-	var capture struct {
-		LegacyServerTree string `json:"legacyServerTree"`
-		LegacySourceFile string `json:"legacySourceFile"`
-		Oscillators      []struct {
-			Begin     float32 `json:"begin"`
-			End       float32 `json:"end"`
-			Frequency uint    `json:"frequency"`
-			Kind      string  `json:"kind"`
-		} `json:"oscillators"`
-	}
-
-	if err := json.Unmarshal(src, &capture); err != nil {
-		t.Fatalf("%s does not parse: %v", path, err)
-	}
-
-	if capture.LegacyServerTree != "02ae33d4651fee4c46a93bdcf574d0aead89e542" {
-		t.Fatalf("%s is pinned to tree %s, not the tree the goldens and legacy fixtures are pinned to",
-			path, capture.LegacyServerTree)
-	}
-
-	var out []Oscillator
-
-	for _, o := range capture.Oscillators {
-		out = append(out, Oscillator{Begin: o.Begin, End: o.End, Frequency: o.Frequency, Kind: o.Kind})
-	}
-
-	if len(out) == 0 {
-		t.Fatalf("%s holds no oscillators", path)
-	}
-
-	return out
 }
 
 func assertOscillatorsEqual(t *testing.T, want, got []Oscillator, what string) {
