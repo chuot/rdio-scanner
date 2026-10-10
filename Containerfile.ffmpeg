@@ -3,8 +3,8 @@
 #
 # One file serves every target because the only things that differ between them are the base image and
 # the packages, and both are recorded in the manifest. Debian's cross toolchains compile every Linux
-# target from one amd64 container, which is what the measurements in
-# docs/specs/FEAT-009-embedded-ffmpeg/research.md chose over emulating each target's own compiler. The
+# target from one amd64 container, which is the choice FEAT-009 measured for and took over emulating
+# each target's own compiler. The
 # Windows target is a mingw cross compile. The check container is a second argument because a
 # cross-compiled binary needs an interpreter to run, and a Windows program needs an operating system.
 #
