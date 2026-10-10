@@ -89,6 +89,24 @@ test('the six per-level system GET/PUT pairs are documented', () => {
   }
 });
 
+// FEAT-018: the API entrypoint submenu names the user management and the capture
+// endpoints, so the document must carry them. The capture endpoints authenticate
+// with the apikey form field, not the admin token.
+const EXTRA_PATHS = {
+  '/api/admin/user-add': ['post'],
+  '/api/admin/user-remove': ['post'],
+  '/api/call-upload': ['post'],
+  '/api/trunk-recorder-call-upload': ['post'],
+};
+
+test('the user management and capture endpoints are documented', () => {
+  for (const [path, methods] of Object.entries(EXTRA_PATHS)) {
+    for (const method of methods) {
+      assert.ok(doc.paths?.[path]?.[method], `missing ${method.toUpperCase()} ${path}`);
+    }
+  }
+});
+
 test('raw-JWT bearer-less security scheme is declared and applied', () => {
   const scheme = doc.components?.securitySchemes?.adminJwt;
 
@@ -96,9 +114,12 @@ test('raw-JWT bearer-less security scheme is declared and applied', () => {
   assert.equal(scheme?.in, 'header');
   assert.equal(scheme?.name, 'Authorization');
 
+  // login works without a token; the capture endpoints take the apikey form field.
+  const NO_TOKEN = ['/api/admin/login', '/api/call-upload', '/api/trunk-recorder-call-upload'];
+
   for (const [path, item] of Object.entries(doc.paths ?? {})) {
-    if (path === '/api/admin/login') {
-      continue; // login is the only endpoint that works without a token
+    if (NO_TOKEN.includes(path)) {
+      continue;
     }
 
     for (const [method, operation] of Object.entries(item)) {

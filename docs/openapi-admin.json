@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Rdio Scanner Admin API",
-    "version": "7.0.0",
-    "description": "Admin REST surface of the Rdio Scanner server: authentication, whole-config access (legacy, unchanged), per-section config endpoints (REQ-019, decision-admin-section-api.md), alerts, logs, and password change. Auth: raw JWT in the Authorization header, no Bearer prefix. HTTP 401 on invalid/expired token. The admin config WebSocket (ws://host/api/admin/config, JWT as first message) is out of scope for this document."
+    "version": "7.1.0",
+    "description": "Admin REST surface of the Rdio Scanner server: authentication, whole-config access (legacy, unchanged), per-section config endpoints (REQ-019, decision-admin-section-api.md), alerts, logs, password change, access user management, and the two call capture endpoints. Auth: raw JWT in the Authorization header, no Bearer prefix. HTTP 401 on invalid/expired token. The capture endpoints authenticate with the key form field. The admin config WebSocket (ws://host/api/admin/config, JWT as first message) is out of scope for this document."
   },
   "servers": [
     {
@@ -751,6 +751,209 @@
           },
           "417": {
             "description": "Current password invalid or persistence failure"
+          }
+        }
+      }
+    },
+    "/api/admin/user-add": {
+      "post": {
+        "summary": "Add an access user",
+        "security": [
+          {
+            "adminJwt": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Access"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User saved"
+          },
+          "400": {
+            "description": "Undecodable body"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "417": {
+            "description": "Validation or persistence failure"
+          }
+        }
+      }
+    },
+    "/api/admin/user-remove": {
+      "post": {
+        "summary": "Remove every access code sharing the given user name",
+        "security": [
+          {
+            "adminJwt": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ident"
+                ],
+                "properties": {
+                  "ident": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User removed, or no access code matched the name"
+          },
+          "400": {
+            "description": "Undecodable body"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "417": {
+            "description": "Persistence failure"
+          }
+        }
+      }
+    },
+    "/api/call-upload": {
+      "post": {
+        "summary": "Upload a call as a set of multipart form fields; the apikey credential is the key form field",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "audio"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "audio": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "audioFilename": {
+                    "type": "string"
+                  },
+                  "audioMime": {
+                    "type": "string"
+                  },
+                  "system": {
+                    "type": "string"
+                  },
+                  "talkgroup": {
+                    "type": "string"
+                  },
+                  "talkgroupLabel": {
+                    "type": "string"
+                  },
+                  "talkgroupName": {
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "type": "string"
+                  },
+                  "site": {
+                    "type": "string"
+                  },
+                  "frequencies": {
+                    "type": "string"
+                  },
+                  "patches": {
+                    "type": "string"
+                  },
+                  "sources": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Call imported successfully."
+          },
+          "400": {
+            "description": "Not a multipart content, or a body the reader cannot parse"
+          },
+          "403": {
+            "description": "Invalid API key for the call"
+          },
+          "417": {
+            "description": "Upload failure"
+          }
+        }
+      }
+    },
+    "/api/trunk-recorder-call-upload": {
+      "post": {
+        "summary": "Upload a trunk-recorder call: the JSON sidecar in the meta field and the recording in the audio field",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "meta",
+                  "audio"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "meta": {
+                    "type": "string",
+                    "description": "The trunk-recorder sidecar JSON document"
+                  },
+                  "audio": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Call imported successfully."
+          },
+          "400": {
+            "description": "Not a multipart content, or a body the reader cannot parse"
+          },
+          "403": {
+            "description": "Invalid API key for the call"
+          },
+          "417": {
+            "description": "Upload failure"
           }
         }
       }
