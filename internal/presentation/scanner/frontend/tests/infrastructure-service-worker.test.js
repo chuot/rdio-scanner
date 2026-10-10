@@ -55,7 +55,7 @@ function loadWorker() {
         },
     };
 
-    vm.runInNewContext(readFileSync(join(here, '..', 'sw.js'), 'utf8'), context);
+    vm.runInNewContext(readFileSync(join(here, '..', 'infrastructure', 'service-worker.js'), 'utf8'), context);
 
     return { listeners, calls };
 }
