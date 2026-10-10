@@ -15,6 +15,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
+import { captionBlock } from './row-builders.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
 const NAME = 'dirwatch';
@@ -294,19 +295,9 @@ class RdioAdminDirwatch extends HTMLElement {
     const r = document.createElement('div');
     r.className = 'row';
 
-    const info = this.help('Type', 'Dirwatch type defines how the metadata are obtained.');
-
-    const list = document.createElement('ul');
-
-    for (const [name, text] of TYPE_HELP) {
-      const item = document.createElement('li');
-      const bold = document.createElement('b');
-      bold.textContent = name;
-      item.append(bold, ` - ${text}`);
-      list.append(item);
-    }
-
-    info.append(list);
+    // The standard caption block carries the type list, the same builder the
+    // systems section uses for its Type caption.
+    const info = captionBlock('Type', 'Dirwatch type defines how the metadata are obtained.', TYPE_HELP);
 
     const field = this.selectField('Type', TYPE_OPTIONS, row.type ?? 'default', (value) => {
       this.updateRow(index, { type: value });
@@ -321,7 +312,7 @@ class RdioAdminDirwatch extends HTMLElement {
     const r = document.createElement('div');
     r.className = 'row';
 
-    r.append(this.help(title, caption), control);
+    r.append(captionBlock(title, caption), control);
 
     return r;
   }
@@ -334,27 +325,9 @@ class RdioAdminDirwatch extends HTMLElement {
     toggle.checked = checked;
     toggle.addEventListener('change', (ev) => onChange(ev.detail));
 
-    r.append(this.help(title, caption), toggle);
+    r.append(captionBlock(title, caption), toggle);
 
     return r;
-  }
-
-  help(title, caption) {
-    const info = document.createElement('p');
-
-    const body = document.createElement('span');
-    body.className = 'row-title';
-    body.textContent = title;
-
-    const captionEl = document.createElement('span');
-    captionEl.className = 'row-caption';
-
-    if (typeof caption === 'string') captionEl.textContent = caption;
-    else captionEl.append(...caption);
-
-    info.append(body, document.createElement('br'), captionEl);
-
-    return info;
   }
 
   directoryCaption(type) {

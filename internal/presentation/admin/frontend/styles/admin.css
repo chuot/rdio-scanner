@@ -263,6 +263,19 @@ rdio-admin .rdio-admin-row > rdio-form-field {
   padding: var(--rdio-space-1) var(--rdio-space-3);
 }
 
+/* An icon button that belongs to a field sits inline right of the input, on the
+   same row as the input, not on a row of its own. */
+
+rdio-admin rdio-form-field .field-inline {
+  align-items: center;
+  display: flex;
+  gap: var(--rdio-space-1);
+}
+
+rdio-admin rdio-form-field .field-inline input {
+  flex: 1;
+}
+
 rdio-admin .row-title {
   font-weight: 500;
 }

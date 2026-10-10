@@ -145,6 +145,13 @@ class RdioAdminOptions extends HTMLElement {
     const root = document.createElement('div');
     root.className = 'rdio-admin-card options';
 
+    // Every other section opens with an intro caption; Options names what it controls.
+    const intro = document.createElement('p');
+    intro.className = 'caption';
+    intro.textContent = 'Server-wide options. Each control changes how the server behaves for every listener and caller.';
+
+    root.append(intro);
+
     for (const control of CONTROLS) root.append(this.controlRow(control, options, errors, errorFields));
 
     const bar = document.createElement('rdio-admin-section-bar');

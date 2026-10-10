@@ -124,13 +124,8 @@ class RdioAdminAccess extends HTMLElement {
 
     panel.append(header);
 
-    // code — hidden by default with a visibility toggle (legacy hideCode).
-    const codeField = this.field('Code');
-    const codeInput = codeField.querySelector('input');
-    codeInput.type = 'password';
-    codeInput.value = row.code ?? '';
-    codeInput.required = true;
-
+    // code — hidden by default with a visibility toggle (legacy hideCode). The
+    // toggle sits inline right of the input, not on a row of its own.
     const reveal = document.createElement('button');
     reveal.type = 'button';
     reveal.className = 'rdio-icon-button';
@@ -141,7 +136,12 @@ class RdioAdminAccess extends HTMLElement {
       codeInput.type = hidden ? 'text' : 'password';
       reveal.innerHTML = `<i class="material-icons" aria-hidden="true">${hidden ? 'visibility_off' : 'visibility'}</i>`;
     });
-    codeField.append(reveal);
+
+    const codeField = this.field('Code', reveal);
+    const codeInput = codeField.querySelector('input');
+    codeInput.type = 'password';
+    codeInput.value = row.code ?? '';
+    codeInput.required = true;
 
     this.bindText(codeInput, codeField, index, 'code', errors.code);
 
@@ -208,7 +208,7 @@ class RdioAdminAccess extends HTMLElement {
     return panel;
   }
 
-  field(label) {
+  field(label, trailing) {
     const field = document.createElement('rdio-form-field');
 
     const labelEl = document.createElement('label');
@@ -217,7 +217,15 @@ class RdioAdminAccess extends HTMLElement {
     const input = document.createElement('input');
     input.type = 'text';
 
-    field.append(labelEl, input);
+    if (trailing) {
+      const inline = document.createElement('div');
+      inline.className = 'field-inline';
+      inline.append(input, trailing);
+
+      field.append(labelEl, inline);
+    } else {
+      field.append(labelEl, input);
+    }
 
     return field;
   }

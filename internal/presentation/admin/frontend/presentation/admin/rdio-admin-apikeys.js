@@ -138,22 +138,23 @@ class RdioAdminApikeys extends HTMLElement {
 
     disabledRow.append(disabledLabel, disabledToggle);
 
-    const keyField = this.field('Key');
-    const keyInput = keyField.querySelector('input');
-    keyInput.value = row.key ?? '';
-    keyInput.required = true;
-
+    // The copy button sits inline right of the key input, not on a row of its own.
     const copy = document.createElement('button');
     copy.type = 'button';
     copy.className = 'rdio-icon-button';
     copy.setAttribute('aria-label', 'Copy key to clipboard');
     copy.innerHTML = '<i class="material-icons" aria-hidden="true">content_copy</i>';
+
+    const keyField = this.field('Key', copy);
+    const keyInput = keyField.querySelector('input');
+    keyInput.value = row.key ?? '';
+    keyInput.required = true;
+
     copy.addEventListener('click', async () => {
       await navigator.clipboard.writeText(keyInput.value);
 
       showSnackbar('Key copied to clipboard');
     });
-    keyField.append(copy);
 
     if (errors.key) this.errorTargets.push({ field: keyField, error: errors.key });
 
@@ -211,7 +212,7 @@ class RdioAdminApikeys extends HTMLElement {
     return panel;
   }
 
-  field(label) {
+  field(label, trailing) {
     const field = document.createElement('rdio-form-field');
 
     const labelEl = document.createElement('label');
@@ -220,7 +221,15 @@ class RdioAdminApikeys extends HTMLElement {
     const input = document.createElement('input');
     input.type = 'text';
 
-    field.append(labelEl, input);
+    if (trailing) {
+      const inline = document.createElement('div');
+      inline.className = 'field-inline';
+      inline.append(input, trailing);
+
+      field.append(labelEl, inline);
+    } else {
+      field.append(labelEl, input);
+    }
 
     return field;
   }
