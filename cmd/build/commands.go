@@ -40,6 +40,14 @@ const (
 	subDist    = "dist"
 )
 
+// The two things a release writes that are not external commands: the document the archive carries, and
+// the archive itself. They are named so the log says what a release run did, the same way it says what
+// it compiled.
+const (
+	subDocument = "document"
+	subArchive  = "archive"
+)
+
 // presentationDir is where the two applications live and where their dependencies are installed. Each
 // application writes into the bundle directory of the Go package that embeds it, so the build has
 // nowhere to send an output directory.

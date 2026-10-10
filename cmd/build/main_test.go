@@ -69,6 +69,30 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 
 			return nil
 		},
+
+		// The document and the archive are not external commands either. The stand-in records that they
+		// were written, and what they do is tested in docs_test.go and archive_test.go.
+		// The document is rendered from the tree, and the archive reads what the release wrote into the
+		// tree. Both are seams the stand-in answers, so the run's order is what is under test here.
+		document: func(repo string, tr releaseTarget, version string, date string) (string, error) {
+			return "<html>" + tr.targetWord() + "</html>", nil
+		},
+
+		releaseFiles: func(repo string, tr releaseTarget) ([]archiveFile, error) {
+			return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
+		},
+
+		write: func(path string, body []byte) error {
+			ran = append(ran, step{label: subDocument, result: path})
+
+			return nil
+		},
+
+		archive: func(path string, files []archiveFile) error {
+			ran = append(ran, step{label: subArchive, result: path})
+
+			return nil
+		},
 	}
 
 	return t, out, &ran
@@ -237,7 +261,12 @@ func TestADistRunBuildsTheApplicationsOnceAndThenEachTarget(t *testing.T) {
 
 	want := []string{"scanner " + appBundle[subScanner], "admin " + appBundle[subAdmin]}
 	for _, tr := range releaseTargets {
-		want = append(want, "ffmpeg "+tr.targetWord(), "server "+defaultOutputPath(tr.targetWord()))
+		want = append(want,
+			"ffmpeg "+tr.targetWord(),
+			"server "+defaultOutputPath(tr.targetWord()),
+			"document "+documentPath(tr.targetWord()),
+			"archive "+archivePath(tr.targetWord(), "8.0.0"),
+		)
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -263,6 +292,8 @@ func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
 		"admin " + appBundle[subAdmin],
 		"ffmpeg linux-arm64",
 		"server " + defaultOutputPath("linux-arm64"),
+		"document " + documentPath("linux-arm64"),
+		"archive " + archivePath("linux-arm64", "8.0.0"),
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -304,10 +335,16 @@ func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 		"admin " + appBundle[subAdmin],
 		"ffmpeg freebsd-amd64",
 		"server " + defaultOutputPath("freebsd-amd64"),
+		"document " + documentPath("freebsd-amd64"),
+		"archive " + archivePath("freebsd-amd64", "8.0.0"),
 		"ffmpeg linux-386",
 		"server " + defaultOutputPath("linux-386"),
+		"document " + documentPath("linux-386"),
+		"archive " + archivePath("linux-386", "8.0.0"),
 		"ffmpeg linux-amd64",
 		"server " + defaultOutputPath("linux-amd64"),
+		"document " + documentPath("linux-amd64"),
+		"archive " + archivePath("linux-amd64", "8.0.0"),
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {

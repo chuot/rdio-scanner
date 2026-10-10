@@ -21,8 +21,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -60,6 +62,23 @@ func directoryExists(path string) bool {
 	info, err := os.Stat(path)
 
 	return err == nil && info.IsDir()
+}
+
+// writeFile puts a file the release produces into the tree, making the directory it goes in. The
+// document is written into the same directory as the binary it travels with, which a run for a target
+// that has never been built before has to make.
+func writeFile(path string, body []byte) error {
+	dir := filepath.Dir(path)
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("the release cannot prepare %s: %w", dir, err)
+	}
+
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		return fmt.Errorf("the release cannot write %s: %w", path, err)
+	}
+
+	return nil
 }
 
 // runStep runs one step, with its own directory and its extra environment, and lets whatever the
