@@ -23,7 +23,6 @@ package main
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"rdio-scanner/internal/buildinfo"
@@ -73,17 +72,27 @@ func (o options) buildsServer() bool {
 	return o.sub == "" || o.sub == subServer
 }
 
-// defaultOutputPath is where the server binary lands when the operator did not say: the same
-// per-platform directory the release matrix writes to.
-func defaultOutputPath() string {
-	return filepath.Join("dist", runtime.GOOS+"-"+runtime.GOARCH, "rdio-scanner")
+// defaultOutputPath is where the server binary lands when the operator did not say: the per-platform
+// directory the release matrix writes to. A run that named no target is a run for the machine it is
+// running on, and a windows target's binary carries the suffix its operating system puts on a program.
+func defaultOutputPath(target string) string {
+	if target == "" {
+		target = runtimeTarget()
+	}
+
+	return filepath.Join("dist", target, "rdio-scanner"+programSuffix(target))
 }
 
 // parseArgs reads the command line and refuses the ones this tool cannot honour. A prerelease name
 // that does not fit the version grammar is refused here rather than halfway through a build, because
 // it is an instruction the operator gave and not a fact the tree got wrong.
+//
+// The default output path is decided after the whole command line is read, because the target that
+// decides it can be named before or after the flag: the path a run writes to is a fact about the
+// target it is building for, and a target named after `-o` still decides it.
 func parseArgs(args []string) (options, error) {
-	o := options{output: defaultOutputPath()}
+	o := options{}
+	namedOutput := false
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -110,6 +119,7 @@ func parseArgs(args []string) (options, error) {
 			i++
 
 			o.output = args[i]
+			namedOutput = true
 
 		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion:
 			if o.sub != "" {
@@ -131,6 +141,10 @@ func parseArgs(args []string) (options, error) {
 		default:
 			return options{}, fmt.Errorf("%s is not something this tool builds or a flag it knows", arg)
 		}
+	}
+
+	if !namedOutput {
+		o.output = defaultOutputPath(o.target)
 	}
 
 	return o, nil
@@ -224,10 +238,20 @@ func plan(o options, repo string, version buildinfo.Version, npmName string) []s
 	return steps
 }
 
-// serverStep is the server binary, built last because it embeds both applications and the ffmpeg this
-// machine compiled for it. The version reaches it through the linker, which is the mechanism that
-// replaced the source file an operator had to edit by hand.
+// serverStep is the server binary for the target the run is building for, composed last because it
+// embeds both applications and the ffmpeg compiled for that target. The version reaches it through the
+// linker, which is the mechanism that replaced the source file an operator had to edit by hand. The
+// target reaches it through the environment, which is how go is told to cross-compile: a server built
+// for the machine the tool runs on while its ffmpeg was built for another target is a release that
+// ships neither.
 func serverStep(o options, repo string, version buildinfo.Version) step {
+	target := o.target
+	if target == "" {
+		target = runtimeTarget()
+	}
+
+	goos, goarch, _ := strings.Cut(target, "-")
+
 	return step{
 		label:  subServer,
 		result: o.output,
@@ -239,5 +263,6 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 			"-o", o.output,
 			"./cmd/rdio-scanner",
 		},
+		env: []string{"GOOS=" + goos, "GOARCH=" + goarch},
 	}
 }

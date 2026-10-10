@@ -135,7 +135,7 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 
 	s := serverStep(o, "/repo", theVersion(t))
 
-	want := "go build -ldflags -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath() + " ./cmd/rdio-scanner"
+	want := "go build -ldflags -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner"
 	got := strings.Join(append([]string{s.name}, s.args...), " ")
 	if got != want {
 		t.Errorf("the server is built with\n  %s\nwant\n  %s", got, want)
@@ -275,6 +275,47 @@ func TestACommandTheToolDoesNotKnowIsRejected(t *testing.T) {
 		if err == nil {
 			t.Errorf("%v was accepted, want a refusal", args)
 		}
+	}
+}
+
+// A server built for a target is built for that target, not for the machine the tool happens to be
+// running on. The ffmpeg phase already cross-builds for a named target, and the server embeds it: a
+// linux-arm64 ffmpeg inside an amd64 binary is a bundle nothing loads, and a server built for the host
+// while its ffmpeg was built for arm64 is a release that ships neither.
+func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
+	o := options{target: "linux-arm64", output: defaultOutputPath("linux-arm64")}
+
+	s := serverStep(o, "/repo", theVersion(t))
+
+	if !contains(s.env, "GOOS=linux") {
+		t.Errorf("the server is built with env %v, which does not name the target's operating system", s.env)
+	}
+
+	if !contains(s.env, "GOARCH=arm64") {
+		t.Errorf("the server is built with env %v, which does not name the target's architecture", s.env)
+	}
+
+	want := filepath.Join("dist", "linux-arm64", "rdio-scanner")
+	if s.result != want {
+		t.Errorf("the server for linux-arm64 is written to %q, want %q", s.result, want)
+	}
+
+	// A windows target's program has the suffix its operating system puts on a program it runs, which
+	// is the same rule the ffmpeg phase already follows.
+	o = options{target: "windows-amd64", output: defaultOutputPath("windows-amd64")}
+
+	want = filepath.Join("dist", "windows-amd64", "rdio-scanner.exe")
+	if serverStep(o, "/repo", theVersion(t)).result != want {
+		t.Errorf("the server for windows-amd64 is written to %q, want %q", serverStep(o, "/repo", theVersion(t)).result, want)
+	}
+
+	// A run that named no target builds for the machine it is running on, which is what it did before
+	// the release matrix existed.
+	o = options{output: defaultOutputPath("")}
+
+	want = filepath.Join("dist", runtime.GOOS+"-"+runtime.GOARCH, "rdio-scanner")
+	if serverStep(o, "/repo", theVersion(t)).result != want {
+		t.Errorf("a run that named no target writes to %q, want %q", serverStep(o, "/repo", theVersion(t)).result, want)
 	}
 }
 
