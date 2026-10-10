@@ -36,6 +36,7 @@ type source struct {
 	declared bool
 	tag      string
 	commit   string
+	date     string
 	dirty    bool
 }
 
@@ -58,6 +59,14 @@ func readSource(repo string) (source, error) {
 	// cannot answer at all has already been returned as an error.
 	tag, _ := git(repo, "describe", "--tags", "--exact-match")
 
+	// The date the documentation carries is the date of the commit being built, not the date the tool
+	// ran: a document stamped with a date nobody committed is a document that says something the
+	// repository cannot confirm.
+	date, err := git(repo, "log", "-1", "--date=format:%Y-%m-%d", "--format=%cd")
+	if err != nil {
+		return source{}, err
+	}
+
 	status, err := git(repo, "status", "--porcelain")
 	if err != nil {
 		return source{}, err
@@ -70,6 +79,7 @@ func readSource(repo string) (source, error) {
 		declared: statErr == nil,
 		tag:      tag,
 		commit:   commit,
+		date:     date,
 		dirty:    status != "",
 	}, nil
 }

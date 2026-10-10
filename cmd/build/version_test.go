@@ -136,6 +136,13 @@ func TestReadSourceReadsThisRepositorysOwnState(t *testing.T) {
 		t.Errorf("tag = %q, want what git says names HEAD exactly: %q", src.tag, want)
 	}
 
+	// The date the documentation carries is the date of the commit being built. Asking git the same
+	// question the tool asks is the only assertion that does not depend on today's date.
+	want, _ = git(repo, "log", "-1", "--date=format:%Y-%m-%d", "--format=%cd")
+	if src.date != want {
+		t.Errorf("date = %q, want the date git gives HEAD: %q", src.date, want)
+	}
+
 	// Whether this tree happens to be dirty at the moment a test runs is not a fact about the tool, and
 	// asking git twice — once inside the tool and once here — lets anything else that touches the tree
 	// in between decide the answer. A suite running alongside this one created a directory, the tool saw
@@ -299,5 +306,27 @@ func TestReadSourceRefusesAVersionFileItCannotReadBeforeAskingGit(t *testing.T) 
 
 	if !strings.Contains(err.Error(), "VERSION.txt") {
 		t.Errorf("the refusal %q does not name the file at fault", err)
+	}
+}
+
+// The date the documentation carries comes from the commit, not from the clock, so building the same
+// commit twice says the same thing. A scratch repository's commit is made by the test, so the assertion
+// is that the date is the one git gives that commit, not a date named in the test.
+func TestReadSourceReportsTheDateOfTheCommitItIsBuilding(t *testing.T) {
+	dir := scratchRepository(t, "v8.0.0")
+	writeScratchVersionFile(t, dir, "8.0.0")
+
+	src, err := readSource(dir)
+	if err != nil {
+		t.Fatalf("readSource: %v", err)
+	}
+
+	if !regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`).MatchString(src.date) {
+		t.Errorf("date = %q, which is not a date a document can carry", src.date)
+	}
+
+	want, _ := git(dir, "log", "-1", "--date=format:%Y-%m-%d", "--format=%cd")
+	if src.date != want {
+		t.Errorf("date = %q, want the date git gives the commit: %q", src.date, want)
 	}
 }

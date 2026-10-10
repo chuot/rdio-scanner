@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -50,7 +51,7 @@ func renderDocument(repo string, tr releaseTarget, version string, date string) 
 
 		// An image is resolved against the directory of the document it is written in: the platform
 		// documents say ../images and the web app guide says ./images, and both reach the same folder.
-		body.WriteString(renderMarkdown(string(text), spans{
+		body.WriteString(renderMarkdown(stamp(string(text), version, date), spans{
 			image: inlineImage(repo, filepath.Dir(name)),
 			link:  reachableLink,
 		}))
@@ -58,6 +59,28 @@ func renderDocument(repo string, tr releaseTarget, version string, date string) 
 
 	return document(tr, version, body.String()), nil
 }
+
+// stamp puts the resolved version and the commit date into the text the document is built from. The
+// patterns are the Makefile's own, and they run on the text in memory and never on the file: make sed
+// rewrote the files it rendered from, so a release build left the tree it was building from dirty with a
+// version nobody had asked for.
+//
+// The stamp runs before any image is inlined. Base64 carries digits and slashes, and a date pattern
+// applied to an inlined image can rewrite part of a picture.
+func stamp(text string, version string, date string) string {
+	text = versionPattern.ReplaceAllString(text, "v"+version)
+
+	// The documentation writes dates two ways: the log transcripts use dashes, the docker guide uses
+	// slashes. The separator the source chose is kept, because a document that has its dates restyled
+	// is a document that changed its own writing.
+	return datePattern.ReplaceAllStringFunc(text, func(match string) string {
+		return strings.ReplaceAll(date, "-", match[4:5])
+	})
+}
+
+var versionPattern = regexp.MustCompile(`v[0-9]+\.[0-9]+\.[0-9]+`)
+
+var datePattern = regexp.MustCompile(`[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}`)
 
 // document wraps the rendered body in the HTML file the archive carries.
 func document(tr releaseTarget, version string, body string) string {

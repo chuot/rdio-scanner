@@ -21,6 +21,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,4 +218,99 @@ func TestTheDocumentIsWrittenToTheTargetDirectory(t *testing.T) {
 	if got := documentPath("linux-arm64"); got != filepath.Join("dist", "linux-arm64", "rdio-scanner.html") {
 		t.Errorf("the document is written to %q, want dist/linux-arm64/rdio-scanner.html", got)
 	}
+}
+
+// The version and the date reach the document in the output. `make sed` rewrote the files it rendered
+// from, so a release build left the tree dirty with a version nobody had asked for.
+func TestTheVersionAndTheDateAreStampedIntoTheDocument(t *testing.T) {
+	stamped := stamp("Rdio Scanner v8.0.0\n\nUpdated 2022-12-19\n", "8.0.0+g19042cd", "2026-10-10")
+
+	if !strings.Contains(stamped, "Rdio Scanner v8.0.0+g19042cd") {
+		t.Errorf("the stamped text %q does not carry the version the tool resolved", stamped)
+	}
+
+	if !strings.Contains(stamped, "Updated 2026-10-10") {
+		t.Errorf("the stamped text %q does not carry the date the commit is dated", stamped)
+	}
+
+	if strings.Contains(stamped, "2022-12-19") {
+		t.Errorf("the stamped text %q keeps the date the source was written with", stamped)
+	}
+
+	// The documentation writes dates two ways: the log transcripts use dashes, the docker guide uses
+	// slashes. The stamp keeps the separator the document wrote, because a document that says
+	// 2026-10-10 in a sentence about a date is a document that changed its own style.
+	stamped = stamp("built on 2022/12/19", "8.0.0+g19042cd", "2026-10-10")
+
+	if !strings.Contains(stamped, "built on 2026/10/10") {
+		t.Errorf("the stamped text %q did not keep the separator the source wrote", stamped)
+	}
+}
+
+// The archive name in the platform document's transcript is the name the archive is written with, so a
+// reader following the transcript gets the file the release produced.
+func TestTheRealDocumentCarriesTheVersionTheToolResolved(t *testing.T) {
+	html, err := renderDocument(theRepo(t), releaseTargets[4], "8.0.0+g19042cd", "2026-10-10")
+	if err != nil {
+		t.Fatalf("renderDocument: %v", err)
+	}
+
+	for _, want := range []string{
+		"Rdio Scanner v8.0.0+g19042cd",
+		"rdio-scanner-linux-amd64-v8.0.0+g19042cd.zip",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("the document does not say %s", want)
+		}
+	}
+
+	if strings.Contains(html, "Rdio Scanner v8.0.0<") {
+		t.Errorf("the document carries the version the source was written with, not the one resolved")
+	}
+}
+
+// The stamp runs on the text the document is built from, before any image is inlined. Base64 carries
+// digits and slashes, and a date pattern applied to an inlined image can rewrite part of a picture.
+func TestTheStampDoesNotTouchAnInlinedImage(t *testing.T) {
+	repo := theRepo(t)
+
+	body, err := os.ReadFile(filepath.Join(repo, "docs", "images", "rdio-scanner.png"))
+	if err != nil {
+		t.Fatalf("the document's own image cannot be read: %v", err)
+	}
+
+	html, err := renderDocument(repo, releaseTargets[4], "8.0.0+g19042cd", "2026-10-10")
+	if err != nil {
+		t.Fatalf("renderDocument: %v", err)
+	}
+
+	if !strings.Contains(html, base64.StdEncoding.EncodeToString(body)) {
+		t.Errorf("the inlined image is not the bytes of the file it came from")
+	}
+}
+
+// Rendering the document leaves the tree as it found it.
+func TestRenderingTheDocumentLeavesTheTreeAsItFoundIt(t *testing.T) {
+	repo := theRepo(t)
+
+	before := theGitStatus(t, repo)
+
+	if _, err := renderDocument(repo, releaseTargets[4], "8.0.0+g19042cd", "2026-10-10"); err != nil {
+		t.Fatalf("renderDocument: %v", err)
+	}
+
+	if after := theGitStatus(t, repo); after != before {
+		t.Errorf("rendering the document changed the tree:\n  before %q\n  after %q", before, after)
+	}
+}
+
+func theGitStatus(t *testing.T, repo string) string {
+	t.Helper()
+
+	out, err := git(repo, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("git status: %v", err)
+	}
+
+	return out
 }
