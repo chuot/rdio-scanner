@@ -105,6 +105,33 @@ export function createSectionWorkingCopy(section, baseline) {
   return structuredClone(baseline ?? null);
 }
 
+// The three levels of one system the administrator saves on its own
+// (FEAT-016): sites, talkgroups, units.
+export const SYSTEM_SUB_LEVELS = ['sites', 'talkgroups', 'units'];
+
+// Per-level working copy: the talkgroups level carries the same order-key
+// normalization as the systems section; the other levels are plain clones.
+export function createSubSectionWorkingCopy(level, baseline) {
+  if (level === 'talkgroups') {
+    if (baseline === null || baseline === undefined) return null;
+
+    return createAdminWorkingCopy({ systems: [{ talkgroups: baseline }] }).systems[0].talkgroups;
+  }
+
+  return structuredClone(baseline ?? null);
+}
+
+// Per-level save payload: the serialization-side normalization, same rule.
+export function serializeSubSection(level, working) {
+  if (level === 'talkgroups') {
+    if (working === null || working === undefined) return null;
+
+    return serializeAdminConfig({ systems: [{ talkgroups: working }] }).systems[0].talkgroups;
+  }
+
+  return structuredClone(working);
+}
+
 // Per-section save payload: deep clone with the serialization-side
 // normalization (systems section only).
 export function serializeSection(section, working) {

@@ -149,3 +149,24 @@ export function systemsSectionInvalid(systems, groups, tags) {
 
   return false;
 }
+
+// Per-level invalid flag (FEAT-016): the rows of one level of one system,
+// validated the same way the systems tree validated them, against the current
+// groups/tags working copies for the talkgroup foreign keys.
+export function subSectionInvalid(level, rows, groups, tags) {
+  const knownGroupIds = (groups ?? []).map((group) => group.id);
+  const knownTagIds = (tags ?? []).map((tag) => tag.id);
+
+  for (const row of rows ?? []) {
+    const errors =
+      level === 'sites'
+        ? siteErrors(row, rows)
+        : level === 'talkgroups'
+          ? talkgroupErrors(row, rows, { groupIds: knownGroupIds, tagIds: knownTagIds })
+          : unitErrors(row, rows);
+
+    if (Object.keys(errors).length) return true;
+  }
+
+  return false;
+}

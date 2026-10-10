@@ -1,7 +1,7 @@
 // Admin REST adapter (legacy admin.service.ts HttpClient calls).
 // Auth: raw JWT in Authorization, no Bearer prefix. 401 → clear token, end session.
 
-import { ADMIN_CONFIG_SECTIONS } from '../../../common/frontend/domain/config.js';
+import { ADMIN_CONFIG_SECTIONS, SYSTEM_SUB_LEVELS } from '../../../common/frontend/domain/config.js';
 
 export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauthorized = () => {} }) {
   async function request(method, path, body) {
@@ -66,6 +66,19 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('PUT', `/config/${section}`, value);
     },
 
+    // Per-level endpoints (FEAT-016): GET/PUT /api/admin/config/systems/<id>/<level>.
+    async getSubSection(systemId, level) {
+      assertSubLevel(level);
+
+      return request('GET', `/config/systems/${systemId}/${level}`);
+    },
+
+    async saveSubSection(systemId, level, value) {
+      assertSubLevel(level);
+
+      return request('PUT', `/config/systems/${systemId}/${level}`, value);
+    },
+
     getAlerts() {
       return request('GET', '/alerts');
     },
@@ -82,6 +95,12 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
   function assertSection(section) {
     if (!ADMIN_CONFIG_SECTIONS.includes(section)) {
       throw new Error(`Unknown admin config section: ${section}`);
+    }
+  }
+
+  function assertSubLevel(level) {
+    if (!SYSTEM_SUB_LEVELS.includes(level)) {
+      throw new Error(`Unknown system sub-section: ${level}`);
     }
   }
 }

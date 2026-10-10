@@ -52,12 +52,45 @@ export function setSectionInvalid(name, invalid) {
   getAdminContext().useCases.setSectionInvalid(name, invalid);
 }
 
+// Per-level slices (FEAT-016): `subsection:<level>:<systemId>` carries the same
+// baseline/working/dirty/invalid/conflict state a section slice does.
+export function subSlice(level, systemId) {
+  return getAdminContext().store.getState()[`subsection:${level}:${systemId}`];
+}
+
+export function bindSubSlice(level, systemId, callback) {
+  return getAdminContext().store.subscribe([`subsection:${level}:${systemId}`], () => callback(subSlice(level, systemId)));
+}
+
+export function subWorking(level, systemId) {
+  return subSlice(level, systemId)?.working;
+}
+
+export function setSubWorking(level, systemId, value) {
+  getAdminContext().useCases.setSubSectionWorking(level, systemId, value);
+}
+
+export function setSubInvalid(level, systemId, invalid) {
+  getAdminContext().useCases.setSubSectionInvalid(level, systemId, invalid);
+}
+
 class RdioAdminSectionBar extends HTMLElement {
   connectedCallback() {
     if (this.dataset.bound) return;
     this.dataset.bound = '1';
 
-    this.unsubscribe = bindSectionSlice(this.dataset.section, () => this.render());
+    // A bar bound to one level of one system carries `data-subsection`
+    // ("<level>:<systemId>") instead of `data-section`.
+    if (this.dataset.subsection) {
+      const [level, systemId] = this.dataset.subsection.split(':');
+
+      this.level = level;
+      this.systemId = Number(systemId);
+
+      this.unsubscribe = bindSubSlice(level, this.systemId, () => this.render());
+    } else {
+      this.unsubscribe = bindSectionSlice(this.dataset.section, () => this.render());
+    }
 
     this.render();
   }
@@ -68,9 +101,12 @@ class RdioAdminSectionBar extends HTMLElement {
 
   render() {
     const name = this.dataset.section;
-    const slice = sectionSlice(name);
+
+    const slice = this.level ? subSlice(this.level, this.systemId) : sectionSlice(name);
 
     if (!slice) return;
+
+    const label = this.level ? `the ${this.level} of system ${this.systemId}` : sectionLabel(name);
 
     const bar = document.createElement('div');
     bar.className = 'rdio-admin-section-bar';
@@ -87,7 +123,8 @@ class RdioAdminSectionBar extends HTMLElement {
       reload.type = 'button';
       reload.className = 'rdio-button-mini';
       reload.textContent = 'Reload from server';
-      reload.addEventListener('click', () => getAdminContext().useCases.reloadSection(name));
+      reload.addEventListener('click', () =>
+        this.level ? getAdminContext().useCases.reloadSubSection(this.level, this.systemId) : getAdminContext().useCases.reloadSection(name));
 
       banner.append(message, reload);
       bar.append(banner);
@@ -99,9 +136,11 @@ class RdioAdminSectionBar extends HTMLElement {
     save.textContent = 'Save';
     save.disabled = !slice.dirty || slice.invalid;
     save.addEventListener('click', async () => {
-      const ok = await getAdminContext().useCases.saveSection(name);
+      const ok = this.level
+        ? await getAdminContext().useCases.saveSubSection(this.level, this.systemId)
+        : await getAdminContext().useCases.saveSection(name);
 
-      if (!ok) showSnackbar(`Unable to save ${sectionLabel(name)}`);
+      if (!ok) showSnackbar(`Unable to save ${label}`);
     });
 
     const discard = document.createElement('button');
@@ -109,7 +148,8 @@ class RdioAdminSectionBar extends HTMLElement {
     discard.className = 'rdio-button-mini discard';
     discard.textContent = 'Discard';
     discard.disabled = !slice.dirty && !slice.conflict;
-    discard.addEventListener('click', () => getAdminContext().useCases.discardSection(name));
+    discard.addEventListener('click', () =>
+      this.level ? getAdminContext().useCases.discardSubSection(this.level, this.systemId) : getAdminContext().useCases.discardSection(name));
 
     bar.append(save, discard);
 

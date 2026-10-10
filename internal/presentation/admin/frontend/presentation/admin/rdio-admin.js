@@ -14,9 +14,12 @@ import './rdio-admin-groups.js';
 import './rdio-admin-options.js';
 import './rdio-admin-logs.js';
 import './rdio-admin-password.js';
+import './rdio-admin-sites.js';
 import './rdio-admin-systems.js';
+import './rdio-admin-talkgroups.js';
 import './rdio-admin-tags.js';
 import './rdio-admin-tools.js';
+import './rdio-admin-units.js';
 
 const SECTIONS = [
   { name: 'access', label: 'Access', icon: 'vpn_key' },
@@ -26,6 +29,9 @@ const SECTIONS = [
   { name: 'groups', label: 'Groups', icon: 'group' },
   { name: 'tags', label: 'Tags', icon: 'label' },
   { name: 'systems', label: 'Systems', icon: 'settings' },
+  { name: 'sites', label: 'Sites', icon: 'place' },
+  { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
+  { name: 'units', label: 'Units', icon: 'directions_car' },
   { name: 'options', label: 'Options', icon: 'tune' },
   { name: 'logs', label: 'Logs', icon: 'article' },
   { name: 'tools', label: 'Tools', icon: 'build' },

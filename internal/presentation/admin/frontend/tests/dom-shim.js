@@ -78,6 +78,12 @@ class ShimNode {
     (this.listeners[type] ??= []).push(fn);
   }
 
+  // rdio-form-field.setError is the admin form primitive: the shim records the
+  // message so a test can assert the field was flagged.
+  setError(error) {
+    this.error = error;
+  }
+
   click() {
     for (const fn of this.listeners.click ?? []) fn();
   }
@@ -87,6 +93,13 @@ globalThis.HTMLElement = ShimNode;
 
 globalThis.document = {
   createElement: (tag) => new ShimNode(tag),
+
+  createTextNode: (text) => {
+    const node = new ShimNode('#text');
+    node._text = String(text);
+
+    return node;
+  },
 };
 
 globalThis.customElements = {

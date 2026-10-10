@@ -4,15 +4,34 @@
 // { baseline, working, dirty, invalid, conflict }.
 
 import { computeTodos } from '../domain/todos.js';
-import { ADMIN_CONFIG_SECTIONS, createSectionWorkingCopy, serializeSection } from '../../../common/frontend/domain/config.js';
+import {
+  ADMIN_CONFIG_SECTIONS,
+  SYSTEM_SUB_LEVELS,
+  createSectionWorkingCopy,
+  createSubSectionWorkingCopy,
+  serializeSection,
+  serializeSubSection,
+} from '../../../common/frontend/domain/config.js';
 import { deepEqual } from '../../../common/frontend/application/store.js';
 
 const sliceKey = (name) => `section:${name}`;
+
+const subSliceKey = (level, systemId) => `subsection:${level}:${systemId}`;
 
 function freshSectionState(name, baseline) {
   return {
     baseline,
     working: createSectionWorkingCopy(name, baseline),
+    dirty: false,
+    invalid: false,
+    conflict: false,
+  };
+}
+
+function freshSubState(level, systemId, baseline) {
+  return {
+    baseline,
+    working: createSubSectionWorkingCopy(level, baseline),
     dirty: false,
     invalid: false,
     conflict: false,
@@ -69,6 +88,24 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
         patch[key] = { ...current, baseline, dirty, conflict: dirty };
       } else {
         patch[key] = freshSectionState(name, baseline);
+      }
+    }
+
+    // Every level of every system gets its own slice, with the same
+    // dirty/conflict preservation the sections use.
+    for (const system of config?.systems ?? []) {
+      for (const level of SYSTEM_SUB_LEVELS) {
+        const key = subSliceKey(level, system.id);
+        const current = store.getState()[key];
+        const baseline = system[level] ?? null;
+
+        if (current && (current.dirty || current.conflict)) {
+          const dirty = !deepEqual(current.working, baseline);
+
+          patch[key] = { ...current, baseline, dirty, conflict: dirty };
+        } else {
+          patch[key] = freshSubState(level, system.id, baseline);
+        }
       }
     }
 
@@ -229,6 +266,81 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     });
   }
 
+  function updateSubSectionAndConfig(level, systemId, baseline) {
+    const patch = { [subSliceKey(level, systemId)]: freshSubState(level, systemId, baseline) };
+
+    const config = store.getState().config;
+
+    if (config) {
+      patch.config = {
+        ...config,
+        systems: (config.systems ?? []).map((system) => (system.id === systemId ? { ...system, [level]: baseline } : system)),
+      };
+    }
+
+    store.setState(patch);
+  }
+
+  function setSubSectionWorking(level, systemId, value) {
+    const current = store.getState()[subSliceKey(level, systemId)];
+    if (!current) return;
+
+    const dirty = !deepEqual(value, current.baseline);
+
+    store.setState({ [subSliceKey(level, systemId)]: { ...current, working: value, dirty } });
+  }
+
+  function setSubSectionInvalid(level, systemId, invalid) {
+    const current = store.getState()[subSliceKey(level, systemId)];
+    if (!current) return;
+
+    store.setState({ [subSliceKey(level, systemId)]: { ...current, invalid } });
+  }
+
+  async function saveSubSection(level, systemId) {
+    const current = store.getState()[subSliceKey(level, systemId)];
+
+    if (!current || current.invalid) return false;
+
+    try {
+      const saved = await api.saveSubSection(systemId, level, serializeSubSection(level, current.working));
+
+      updateSubSectionAndConfig(level, systemId, saved);
+
+      return true;
+    } catch {
+      // 401 already ended the session; 400/404/417 keep the dirty working copy.
+      return false;
+    }
+  }
+
+  async function reloadSubSection(level, systemId) {
+    try {
+      const value = await api.getSubSection(systemId, level);
+
+      updateSubSectionAndConfig(level, systemId, value);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function discardSubSection(level, systemId) {
+    const current = store.getState()[subSliceKey(level, systemId)];
+    if (!current) return;
+
+    store.setState({
+      [subSliceKey(level, systemId)]: {
+        ...current,
+        working: createSubSectionWorkingCopy(level, current.baseline),
+        dirty: false,
+        invalid: false,
+        conflict: false,
+      },
+    });
+  }
+
   async function changePassword(currentPassword, newPassword) {
     try {
       const res = await api.changePassword(currentPassword, newPassword);
@@ -253,5 +365,10 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     saveSection,
     reloadSection,
     discardSection,
+    setSubSectionWorking,
+    setSubSectionInvalid,
+    saveSubSection,
+    reloadSubSection,
+    discardSubSection,
   };
 }
