@@ -24,8 +24,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,81 +32,19 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// legacyV6Fixture is a database shaped like one a v6.6.3 deployment leaves behind: the v6 schema,
-// and rows that cover every table the v6 → v7 migration pass reads. See
-// testdata/legacyv6/generate.sh.
-//
-// The expectations below were read off the legacy server's own output: the binary built from
-// server/ was run over this fixture and the resulting tables were read back. Where the legacy
-// server cannot finish — it panics inside the calls migration on the last call of this fixture —
-// the expectation comes from the legacy source instead, and the test that pins it says so.
-const legacyV6Fixture = "../../../testdata/legacyv6/rdio-scanner.db"
-
-// legacyV6PartialFixture is the same v6.6.3 database with two rows this server cannot read: text in
-// a column sqlite declared `datetime` or `integer` and does not enforce. See
-// testdata/legacyv6partial/generate.sh.
-const legacyV6PartialFixture = "../../../testdata/legacyv6partial/rdio-scanner.db"
-
-// copyLegacyV6Fixture puts the fixture in a temporary directory and returns its path, so that a
-// test which writes to it cannot damage the committed one.
-func copyLegacyV6Fixture(t *testing.T) string {
-	t.Helper()
-
-	return copyFixtureFile(t, legacyV6Fixture)
-}
-
-// copyLegacyV6PartialFixture is the same for the fixture with the rows the pass cannot read.
-func copyLegacyV6PartialFixture(t *testing.T) string {
-	t.Helper()
-
-	return copyFixtureFile(t, legacyV6PartialFixture)
-}
-
-func copyFixtureFile(t *testing.T, fixture string) string {
-	t.Helper()
-
-	b, err := os.ReadFile(fixture)
-	if err != nil {
-		t.Fatalf("the v6-shaped fixture %s is missing: %v\n"+
-			"regenerate it with the generate.sh beside it", fixture, err)
-	}
-
-	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
-
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		t.Fatalf("copying the fixture: %v", err)
-	}
-
-	return path
-}
-
-// openLegacyV6Database opens a private copy of the fixture the way the server opens its own
-// database, foreign keys enforced.
+// openLegacyV6Database builds the v6.6.3-shaped database the way the server opens its own database,
+// foreign keys enforced.
 func openLegacyV6Database(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: copyLegacyV6Fixture(t)})
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	t.Cleanup(func() { db.Close() })
-
-	return db
+	return buildRecordedDatabase(t, append(append([]string{}, legacyV6Schema...), legacyV6Rows...))
 }
 
-// openLegacyV6PartialDatabase opens the fixture with the rows the pass cannot read.
+// openLegacyV6PartialDatabase builds the v6.6.3 database with the rows the pass cannot read.
 func openLegacyV6PartialDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: copyLegacyV6PartialFixture(t)})
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	t.Cleanup(func() { db.Close() })
-
-	return db
+	return buildRecordedDatabase(t, append(append([]string{}, legacyV6Schema...), legacyV6PartialRows...))
 }
 
 // migrateLegacyV6Fixture migrates a private copy of the fixture and returns the database with
@@ -130,31 +66,12 @@ const (
 	damagedCrashedFixture  = "../../../testdata/legacydamaged/crashed.db"
 )
 
-// openDamagedFixture opens a private copy of one of the damaged fixtures, so that a test which
-// writes to it cannot damage the committed one.
-func openDamagedFixture(t *testing.T, fixture string) *sql.DB {
+// openDamagedFixture builds one of the damaged fixtures by name, so that a test which writes to it
+// cannot damage the recorded statements.
+func openDamagedFixture(t *testing.T, name string) *sql.DB {
 	t.Helper()
 
-	b, err := os.ReadFile(fixture)
-	if err != nil {
-		t.Fatalf("the damaged fixture %s is missing: %v\n"+
-			"regenerate it with testdata/legacydamaged/generate.sh", fixture, err)
-	}
-
-	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
-
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		t.Fatalf("copying %s: %v", fixture, err)
-	}
-
-	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: path})
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	t.Cleanup(func() { db.Close() })
-
-	return db
+	return buildRecordedDatabase(t, recordedDamagedStatements(t, name))
 }
 
 // damageReport keeps the lines the startup damage report wrote out of a progress report.
@@ -647,7 +564,7 @@ func TestMigrateTwiceOverAV6TableItLeftBehindCarriesNothingTwice(t *testing.T) {
 // the v6 calls table is still there, and this server's first pass carries the calls and drops it. The
 // start after that must find nothing to do.
 func TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing(t *testing.T) {
-	db := openDamagedFixture(t, damagedCrashedFixture)
+	db := openDamagedFixture(t, "crashed")
 
 	migrateDatabase(t, db)
 
@@ -2137,7 +2054,7 @@ func TestMigrateAcceptsANilProgressCallback(t *testing.T) {
 // the legacy server could not — the calls come back with their unit links, and the v6 table is
 // dropped the way the legacy pass drops it.
 func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
-	db := openDamagedFixture(t, damagedCrashedFixture)
+	db := openDamagedFixture(t, "crashed")
 
 	progress := migrateDatabase(t, db)
 
@@ -2177,7 +2094,7 @@ func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 // legacy server finished migrating holds units whose radio reference was thrown away, and the numbers
 // they were migrated from are nowhere in it. The startup report names each one, and invents nothing.
 func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
-	db := openDamagedFixture(t, damagedMigratedFixture)
+	db := openDamagedFixture(t, "migrated")
 
 	before := tableSnapshot(t, db)
 
@@ -2214,7 +2131,7 @@ func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 // pass that leaves the database in a state the next start reads differently, so a second start on the
 // same damaged database says the same thing about the same rows.
 func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
-	db := openDamagedFixture(t, damagedMigratedFixture)
+	db := openDamagedFixture(t, "migrated")
 
 	first := damageReport(migrateDatabase(t, db))
 	before := tableSnapshot(t, db)
@@ -2234,7 +2151,7 @@ func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
 // removes nothing. The v6 tables it drops are the ones whose rows it has just migrated, which is what
 // the legacy pass does too.
 func TestMigrateDeletesNoRowItIsAskedToRepair(t *testing.T) {
-	for _, fixture := range []string{damagedMigratedFixture, damagedCrashedFixture} {
+	for _, fixture := range []string{"migrated", "crashed"} {
 		db := openDamagedFixture(t, fixture)
 
 		before := map[string]int{}
