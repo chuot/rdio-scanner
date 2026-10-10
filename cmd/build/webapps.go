@@ -31,7 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // presentationDir is where the two applications live and where their dependencies are installed. Each

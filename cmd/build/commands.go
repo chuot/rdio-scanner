@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // The subcommands the tool knows. An empty one is the whole pipeline: both applications, then the

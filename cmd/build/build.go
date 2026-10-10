@@ -34,7 +34,7 @@ import (
 	"runtime"
 	"strings"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // tool is the build tool: where the repository is, how it asks that repository what it says about

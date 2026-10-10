@@ -44,7 +44,7 @@ const watch = args.includes('--watch');
 /** The repository root, two directories above the presentation directory this file sits in. */
 const repoRoot = resolve(here, '..', '..');
 
-/** A semantic-versioning core and nothing else: the same rule `internal/buildinfo` applies to the file. */
+/** A semantic-versioning core and nothing else: the same rule `cmd/build/buildinfo` applies to the file. */
 const corePattern = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 
 /**

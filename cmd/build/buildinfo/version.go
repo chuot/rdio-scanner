@@ -18,9 +18,9 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package buildinfo resolves the version a build carries: the core a repository declares in
+// Package buildinfo is the build tool's own version rule: the core a repository declares in
 // VERSION.txt, and the pre-release state of the commit being built. It knows nothing about
-// processes, and nothing in the application layers imports it — cmd/build asks it what version to
+// processes, and nothing in the application layers imports it — the tool asks it what version to
 // inject, and the tests that hold the wire contract ask it what version that would have been.
 package buildinfo
 

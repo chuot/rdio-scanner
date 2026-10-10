@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // The command line and the server and container steps are the two halves of the tool that can be

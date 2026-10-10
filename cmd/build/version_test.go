@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // readSource is the only part of the tool that talks to git, so these tests ask it the questions in

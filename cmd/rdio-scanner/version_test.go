@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // captureVersion is the version the server that produced the recorded captures reported.

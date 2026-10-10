@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"rdio-scanner/internal/buildinfo"
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // source is what the repository says about the build being asked for: the core it declared in
