@@ -22,6 +22,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,6 +128,196 @@ func cleanTree(repo string) ([]string, error) {
 	}
 
 	return removed, nil
+}
+
+// bundleOutput is the file a built bundle is judged by. The build writes it into the bundle directory of
+// the Go package that embeds it.
+func bundleOutput(repo string, app string) string {
+	return filepath.Join(repo, presentationDir, app, "frontend", "bundle", "index.html")
+}
+
+// clientSources is every file a bundle is built from: the build script and its lock file, which build
+// both bundles, and the frontend sources of the application the bundle belongs to and the sources the two
+// applications share. The built bundle is not one of its own sources: a rule that watched its own output
+// would rebuild on every run.
+func clientSources(repo string) ([]string, error) {
+	var files []string
+
+	root := filepath.Join(repo, presentationDir)
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, fmt.Errorf("the build cannot read %s: %w", root, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+
+		if strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".mjs") {
+			files = append(files, filepath.Join(root, name))
+		}
+	}
+
+	for _, app := range []string{subScanner, subAdmin, "common"} {
+		if err := walkFiles(filepath.Join(root, app, "frontend"), func(path string) {
+			if isBundleContent(path) {
+				return
+			}
+
+			files = append(files, path)
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return files, nil
+}
+
+// isBundleContent reports whether a file is inside a built bundle. The bundle and everything a build
+// writes under it are the client build's output, not its sources: a rule that watched its own output
+// would rebuild on every run, and a bundle that watched only the files sitting directly in the bundle
+// directory would watch the bundle built last as a source of the bundle built first.
+func isBundleContent(path string) bool {
+	for _, part := range strings.Split(path, string(filepath.Separator)) {
+		if part == "bundle" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// serverSources is every file the server binary is built from: the Go files, and the contents of both
+// bundles, which the server embeds. A binary that is newer than every Go file and older than the bundle
+// it embeds is a binary that ships the bundle it was built before.
+func serverSources(repo string) ([]string, error) {
+	var files []string
+
+	for _, root := range []string{"cmd", "internal"} {
+		if err := walkFiles(filepath.Join(repo, root), func(path string) {
+			if strings.HasSuffix(path, ".go") {
+				files = append(files, path)
+			}
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, app := range []string{subScanner, subAdmin} {
+		bundle := filepath.Join(repo, appBundle[app])
+
+		if err := walkFiles(bundle, func(path string) {
+			if filepath.Base(path) != ".gitkeep" {
+				files = append(files, path)
+			}
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return files, nil
+}
+
+// walkFiles calls visit for every file under a directory. A directory that is not there has no files,
+// which is what a tree that has never been built is.
+func walkFiles(root string, visit func(path string)) error {
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+
+			return fmt.Errorf("the build cannot read %s: %w", path, err)
+		}
+
+		if !entry.IsDir() {
+			visit(path)
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+// bundleIsCurrent reports whether a built bundle is newer than every file it is built from. A bundle
+// that is not there is not current.
+func bundleIsCurrent(repo string, app string) (bool, error) {
+	return newerThan(repo, bundleOutput(repo, app), clientSources)
+}
+
+// serverIsCurrent reports whether the server binary is newer than every file it is built from. A binary
+// that is not there is not current.
+func serverIsCurrent(repo string, output string) (bool, error) {
+	return newerThan(repo, filepath.Join(repo, output), serverSources)
+}
+
+// newerThan is the one question both checks ask: is the thing that was built newer than every file it
+// was built from.
+func newerThan(repo string, built string, sources func(string) ([]string, error)) (bool, error) {
+	builtInfo, err := os.Stat(built)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("the build cannot read %s: %w", built, err)
+	}
+
+	paths, err := sources(repo)
+	if err != nil {
+		return false, err
+	}
+
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return false, fmt.Errorf("the build cannot read %s: %w", path, err)
+		}
+
+		if info.ModTime().After(builtInfo.ModTime()) {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// buildState is what the tree says about what has already been built. The checks are made only for the
+// phases the run is going to run: a run asked to build one application is not asked what it thinks about
+// the server binary.
+func buildState(repo string, o options) (planState, error) {
+	state := planState{}
+
+	if o.buildsClients() {
+		current, err := bundleIsCurrent(repo, subScanner)
+		if err != nil {
+			return state, err
+		}
+
+		state.scannerCurrent = current
+
+		if current, err := bundleIsCurrent(repo, subAdmin); err != nil {
+			return state, err
+		} else {
+			state.adminCurrent = current
+		}
+	}
+
+	if o.buildsServerBinary() {
+		current, err := serverIsCurrent(repo, o.output)
+		if err != nil {
+			return state, err
+		}
+
+		state.serverCurrent = current
+	}
+
+	return state, nil
 }
 
 // runStep runs one step, with its own directory and its extra environment, and lets whatever the

@@ -101,6 +101,12 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 
 			return []string{"removed"}, nil
 		},
+
+		// The state is what the tree says about what has already been built. The stand-in says nothing is
+		// built, which is the first run on a fresh clone; what the checks do is tested in build_test.go.
+		state: func(repo string, o options) (planState, error) {
+			return planState{}, nil
+		},
 	}
 
 	return t, out, &ran
@@ -474,5 +480,109 @@ func TestACleanRunIsACommandTheToolHonours(t *testing.T) {
 
 	if o.target != "" {
 		t.Errorf("a clean run builds for %q, and a clean run builds nothing", o.target)
+	}
+}
+
+// A second release run over the same sources compiles nothing: the bundles are current, the server
+// binary is current, and the phases that have nothing to do do not run. The ffmpeg, the document, and
+// the archive are what the run still does, because the archive is the thing a release run is for.
+func TestASecondRunForTheSameTargetRunsNoClientStepAndNoServerStep(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	tl.state = func(repo string, o options) (planState, error) {
+		return planState{scannerCurrent: true, adminCurrent: true, serverCurrent: true}, nil
+	}
+
+	if code := tl.run([]string{"dist", "linux-arm64"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label)
+	}
+
+	want := []string{"ffmpeg", "document", "archive"}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the second run ran %v, want %v", got, want)
+	}
+}
+
+// A run asked to build a server whose binary is newer than every Go file it is built from compiles
+// nothing.
+func TestARunSkipsTheServerStepWhenTheBinaryIsAlreadyBuilt(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	tl.state = func(repo string, o options) (planState, error) {
+		return planState{scannerCurrent: true, adminCurrent: true, serverCurrent: true}, nil
+	}
+
+	if code := tl.run([]string{"server"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	if len(*ran) != 0 {
+		t.Errorf("the run ran %d steps, want none", len(*ran))
+	}
+}
+
+// The server embeds both bundles, so a bundle built in this run makes the binary that embeds it out of
+// date. The tree says the binary is newer than every Go file it is built from, and the bundles are not
+// built: a run that rebuilt a bundle and left the binary standing ships the bundles the binary was built
+// before.
+func TestARunThatRebuildsABundleRebuildsTheServer(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	tl.state = func(repo string, o options) (planState, error) {
+		// Before the run builds them, the bundles are not there and the binary is newer than every Go
+		// file. After the run builds them, the bundles are newer than the binary, which is what the tree
+		// says when a bundle is rebuilt.
+		for _, s := range *ran {
+			if s.label == subScanner || s.label == subAdmin {
+				return planState{scannerCurrent: true, adminCurrent: true}, nil
+			}
+		}
+
+		return planState{serverCurrent: true}, nil
+	}
+
+	if code := tl.run(nil, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label)
+	}
+
+	want := []string{"scanner", "admin", "ffmpeg", "server"}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the run ran %v, want %v", got, want)
+	}
+}
+
+// A first run, where nothing is built, runs everything: both applications, the ffmpeg, and the server.
+func TestAFirstRunBuildsTheApplicationsTheFfmpegAndTheServer(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	tl.state = func(repo string, o options) (planState, error) {
+		return planState{}, nil
+	}
+
+	if code := tl.run(nil, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label)
+	}
+
+	want := []string{"scanner", "admin", "ffmpeg", "server"}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the run ran %v, want %v", got, want)
 	}
 }

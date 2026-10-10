@@ -51,6 +51,7 @@ func main() {
 		write:        writeFile,
 		archive:      writeArchive,
 		clean:        cleanTree,
+		state:        buildState,
 		document:     renderDocument,
 		releaseFiles: archiveFiles,
 	}
@@ -76,6 +77,10 @@ type tool struct {
 
 	// clean removes what a clean run removes. It is not an external command.
 	clean func(repo string) ([]string, error)
+
+	// state is what the tree says about what has already been built. It reads the tree, so the stand-in
+	// answers it: what the checks do is tested in build_test.go.
+	state func(repo string, o options) (planState, error)
 
 	// document renders the archive document for a target, and releaseFiles reads what the archive
 	// carries. Both read the tree, so the stand-in answers them: what they do is tested in docs_test.go
@@ -134,9 +139,14 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return 0
 	}
 
+	state, err := t.state(t.repo, o)
+	if err != nil {
+		return fail(stdout, err)
+	}
+
 	npmName := ""
 
-	if o.buildsClients() {
+	if needsNpm(o, state) {
 		npmName, err = t.resolve("npm")
 		if err != nil {
 			return fail(stdout, fmt.Errorf("building the applications needs npm: %w", err))
@@ -145,7 +155,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		o.installClients = !t.installed(filepath.Join(t.repo, presentationDir, "node_modules"))
 	}
 
-	for _, s := range plan(o, t.repo, version, npmName) {
+	for _, s := range plan(o, t.repo, version, npmName, state) {
 		if err := t.execute(s); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
 		}
@@ -182,7 +192,17 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return 0
 	}
 
+	// The server embeds both bundles, so a bundle built in this run makes the binary that embeds it out
+	// of date. The check is made again after the client steps: the bundles the run just built are newer
+	// than the binary built before them, and a run that rebuilt a bundle and left the binary standing
+	// ships the bundles the binary was built before.
 	if o.buildsServer() {
+		if state, err = t.state(t.repo, o); err != nil {
+			return fail(stdout, err)
+		}
+	}
+
+	if o.buildsServer() && !state.serverCurrent {
 		s := serverStep(o, t.repo, version)
 
 		if err := t.execute(s); err != nil {
@@ -225,13 +245,23 @@ func (t tool) runDist(o options, version buildinfo.Version, date string, stdout 
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
 		}
 
-		s := serverStep(o, t.repo, version)
-
-		if err := t.execute(s); err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", s.label, o.target, err))
+		// The binary for this target is current when it is newer than every file it is built from, and
+		// the bundles the client steps built are among them. The check is made for each target, because
+		// each target's binary is a different file.
+		targetState, err := t.state(t.repo, o)
+		if err != nil {
+			return fail(stdout, fmt.Errorf("%s for %s: %w", subServer, o.target, err))
 		}
 
-		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+		if !targetState.serverCurrent {
+			s := serverStep(o, t.repo, version)
+
+			if err := t.execute(s); err != nil {
+				return fail(stdout, fmt.Errorf("%s for %s: %w", s.label, o.target, err))
+			}
+
+			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+		}
 
 		// The document is rendered from the target's own sources, with the version the release resolved
 		// and the date of the commit being built.

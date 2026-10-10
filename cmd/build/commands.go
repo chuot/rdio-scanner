@@ -95,9 +95,55 @@ func (o options) buildsServer() bool {
 	return o.sub == "" || o.sub == subServer
 }
 
-// defaultOutputPath is where the server binary lands when the operator did not say: the per-platform
-// directory the release matrix writes to. A run that named no target is a run for the machine it is
-// running on, and a windows target's binary carries the suffix its operating system puts on a program.
+// buildsServerBinary is the run that compiles a server binary: the whole pipeline, the server
+// subcommand, and the release matrix, which compiles one binary per target. The matrix asks the same
+// question a server run asks, and a matrix that never asks it compiles every target on every run.
+func (o options) buildsServerBinary() bool {
+	return o.buildsServer() || o.sub == subDist
+}
+
+// planState is what the tree says about what has already been built. A phase that has nothing to do does
+// not run, which is the rule the ffmpeg cache follows: the compiled pair is reused and nothing is
+// compiled.
+type planState struct {
+	scannerCurrent bool
+	adminCurrent   bool
+	serverCurrent  bool
+}
+
+// clientSteps is the pair of applications a run builds: the ones the command line named, and the ones
+// whose bundle is not already newer than every file it is built from.
+func clientSteps(o options, state planState) []string {
+	var apps []string
+
+	for _, app := range []string{subScanner, subAdmin} {
+		// A run that named one application builds that application. A run that named the whole
+		// pipeline, both applications, the release matrix, or the container image builds both: the
+		// bundles are the same for every target, so the matrix builds them once.
+		if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != subContainer && o.sub != app {
+			continue
+		}
+
+		if app == subScanner && state.scannerCurrent {
+			continue
+		}
+
+		if app == subAdmin && state.adminCurrent {
+			continue
+		}
+
+		apps = append(apps, app)
+	}
+
+	return apps
+}
+
+// needsNpm is decided by the plan: the dependencies are looked for only when a client step is going to
+// run. A run that builds no bundle has no use for npm, and installing esbuild into a tree that will not
+// build is work nobody asked for.
+func needsNpm(o options, state planState) bool {
+	return len(clientSteps(o, state)) > 0
+}
 func defaultOutputPath(target string) string {
 	if target == "" {
 		target = runtimeTarget()
@@ -253,40 +299,31 @@ var appBundle = map[string]string{
 // plan composes the commands the options asked for, in the order they have to happen: the scanner
 // application, then the administration application. The ffmpeg and the server that carries both come
 // after, because the server embeds the bundles and the ffmpeg the build produced.
-func plan(o options, repo string, version buildinfo.Version, npmName string) []step {
+func plan(o options, repo string, version buildinfo.Version, npmName string, state planState) []step {
 	steps := []step{}
 
 	presentation := filepath.Join(repo, presentationDir)
 
-	if o.buildsClients() {
-		if o.installClients {
-			steps = append(steps, step{
-				label:  "deps",
-				result: "installing the client dependencies",
-				dir:    presentation,
-				name:   npmName,
-				args:   []string{"ci", "--loglevel=error", "--no-progress"},
-			})
-		}
+	if o.installClients {
+		steps = append(steps, step{
+			label:  "deps",
+			result: "installing the client dependencies",
+			dir:    presentation,
+			name:   npmName,
+			args:   []string{"ci", "--loglevel=error", "--no-progress"},
+		})
+	}
 
-		for _, app := range []string{subScanner, subAdmin} {
-			// A run that named one application builds that application. A run that named the whole
-			// pipeline, both applications, the release matrix, or the container image builds both: the
-			// bundles are the same for every target, so the matrix builds them once.
-			if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != subContainer && o.sub != app {
-				continue
-			}
-
-			steps = append(steps, step{
-				label:  app,
-				result: appBundle[app],
-				dir:    presentation,
-				name:   npmName,
-				args:   []string{"run", "build:" + app},
-				// The one way the version reaches a bundle. No source file is rewritten to carry it.
-				env: []string{"RDIO_VERSION=" + version.String()},
-			})
-		}
+	for _, app := range clientSteps(o, state) {
+		steps = append(steps, step{
+			label:  app,
+			result: appBundle[app],
+			dir:    presentation,
+			name:   npmName,
+			args:   []string{"run", "build:" + app},
+			// The one way the version reaches a bundle. No source file is rewritten to carry it.
+			env: []string{"RDIO_VERSION=" + version.String()},
+		})
 	}
 
 	return steps

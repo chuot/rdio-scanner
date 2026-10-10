@@ -65,7 +65,7 @@ func TestTheWholePipelineIsTheApplicationsThenTheFFmpegThenTheServer(t *testing.
 		t.Fatalf("parseArgs: %v", err)
 	}
 
-	steps := plan(o, "/repo", theVersion(t), "npm")
+	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
 
 	if len(steps) != 2 {
 		t.Fatalf("the whole pipeline plans %d steps, want the two applications", len(steps))
@@ -106,7 +106,7 @@ func TestEachSubcommandPlansOnlyTheStepsItNames(t *testing.T) {
 		}
 
 		got := []string{}
-		for _, s := range plan(o, "/repo", theVersion(t), "npm") {
+		for _, s := range plan(o, "/repo", theVersion(t), "npm", planState{}) {
 			got = append(got, s.label)
 		}
 
@@ -152,7 +152,7 @@ func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
 		t.Fatalf("parseArgs: %v", err)
 	}
 
-	steps := plan(o, "/repo", theVersion(t), "npm")
+	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
 
 	for _, app := range []string{subScanner, subAdmin} {
 		s := steps[0]
@@ -193,7 +193,7 @@ func TestClientDependenciesAreInstalledOnlyWhenTheyAreNotAlreadyThere(t *testing
 
 	o.installClients = true
 
-	steps := plan(o, "/repo", theVersion(t), "npm")
+	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
 
 	if len(steps) != 3 {
 		t.Fatalf("%d steps are planned with the dependencies missing, want the install and the two applications", len(steps))
@@ -209,8 +209,8 @@ func TestClientDependenciesAreInstalledOnlyWhenTheyAreNotAlreadyThere(t *testing
 
 	o.installClients = false
 
-	if len(plan(o, "/repo", theVersion(t), "npm")) != 2 {
-		t.Errorf("%d steps are planned with the dependencies already installed, want the two applications", len(plan(o, "/repo", theVersion(t), "npm")))
+	if len(plan(o, "/repo", theVersion(t), "npm", planState{})) != 2 {
+		t.Errorf("%d steps are planned with the dependencies already installed, want the two applications", len(plan(o, "/repo", theVersion(t), "npm", planState{})))
 	}
 }
 
@@ -351,5 +351,54 @@ func TestTheFFmpegTargetIsTheWordRightAfterIt(t *testing.T) {
 		if isTarget(word) {
 			t.Errorf("%q is accepted as a platform, want it refused", word)
 		}
+	}
+}
+
+// A bundle that is newer than every file it is built from is not rebuilt: a phase with nothing to do
+// does not run. The plan runs the one application whose bundle is not current.
+func TestAPlanSkipsABundleThatIsAlreadyBuilt(t *testing.T) {
+	o, err := parseArgs([]string{"client"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	steps := plan(o, "/repo", theVersion(t), "npm", planState{scannerCurrent: true})
+
+	if len(steps) != 1 {
+		t.Fatalf("the plan runs %d steps, want the one application whose bundle is not current", len(steps))
+	}
+
+	if steps[0].label != subAdmin {
+		t.Errorf("the plan runs %s, want the application whose bundle is not current", steps[0].label)
+	}
+}
+
+// A release run whose bundles are current runs no client step. The bundles are the same for every
+// target, so a second matrix run over the same sources compiles nothing.
+func TestAPlanRunsNoClientStepWhenBothBundlesAreCurrent(t *testing.T) {
+	o, err := parseArgs([]string{"dist"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	if steps := plan(o, "/repo", theVersion(t), "npm", planState{scannerCurrent: true, adminCurrent: true}); len(steps) != 0 {
+		t.Errorf("the plan runs %d steps, want none", len(steps))
+	}
+}
+
+// The dependencies are looked for only when a client step is going to run. A run that builds no bundle
+// has no use for npm, and installing esbuild into a tree that will not build is work nobody asked for.
+func TestARunThatBuildsNoBundleNeedsNoNpm(t *testing.T) {
+	o, err := parseArgs([]string{"client"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	if needsNpm(o, planState{scannerCurrent: true, adminCurrent: true}) {
+		t.Error("a run that builds no bundle asks for npm")
+	}
+
+	if !needsNpm(o, planState{}) {
+		t.Error("a run that builds both bundles does not ask for npm")
 	}
 }
