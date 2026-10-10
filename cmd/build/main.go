@@ -74,7 +74,7 @@ type tool struct {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|version] [--pre <name>] [-o <path>]\n", err)
 		return 2
 	}
 

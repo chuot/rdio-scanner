@@ -37,6 +37,7 @@ const (
 	subFFmpeg  = "ffmpeg"
 	subServer  = "server"
 	subVersion = "version"
+	subDist    = "dist"
 )
 
 // presentationDir is where the two applications live and where their dependencies are installed. Each
@@ -121,21 +122,30 @@ func parseArgs(args []string) (options, error) {
 			o.output = args[i]
 			namedOutput = true
 
-		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion:
+		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
 			}
 
 			o.sub = arg
 
-			// The ffmpeg phase is the one thing this tool builds for a platform the operator names,
-			// because that is how the release matrix cross-builds from one machine. The platform has to
-			// be the word right after it, so that a target left lying at the end of a command line is
-			// refused instead of quietly building something else.
-			if arg == subFFmpeg && i+1 < len(args) && isTarget(args[i+1]) {
+			// The ffmpeg phase and the release matrix are the two things this tool builds for a platform
+			// the operator names, because that is how the release matrix cross-builds from one machine.
+			// The platform has to be the word right after it, so that a target left lying at the end of a
+			// command line is refused instead of quietly building something else.
+			if (arg == subFFmpeg || arg == subDist) && i+1 < len(args) && isTarget(args[i+1]) {
 				i++
 
 				o.target = args[i]
+
+				// The ffmpeg phase compiles for any platform the manifest can answer for, and says so
+				// when it has no record. The matrix is a product decision: a target outside it is a
+				// platform this project does not release, and building one is not what was asked for.
+				if arg == subDist {
+					if _, found := targetFor(o.target); !found {
+						return options{}, fmt.Errorf("%s is not a platform this project releases, so no archive is built for it", o.target)
+					}
+				}
 			}
 
 		default:
@@ -250,7 +260,7 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 		target = runtimeTarget()
 	}
 
-	goos, goarch, _ := strings.Cut(target, "-")
+	_, goarch, _ := strings.Cut(target, "-")
 
 	return step{
 		label:  subServer,
@@ -263,6 +273,6 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 			"-o", o.output,
 			"./cmd/rdio-scanner",
 		},
-		env: []string{"GOOS=" + goos, "GOARCH=" + goarch},
+		env: []string{"GOOS=" + serverGoos(target), "GOARCH=" + goarch},
 	}
 }
