@@ -104,7 +104,6 @@ This section presents the list of archived audio files stored in the database. D
 | ![LIVE FEED ON](./images/webapp-control-livefeed-on.png?raw=true)           | while **LIVE FEED** is active, press the **PLAY** button to play this audio file. If another audio file is playing, it will be stopped and the one you just selected will be played instead. After playback finishes, the listening queue will resume as normal.                                                           |
 | ![LIVE FEED PARTIAL](./images/webapp-control-livefeed-partial.png?raw=true) | This is the **playback mode** which can be activated only if **LIVE FEED** is inactive. Press the **PLAY** button to play this audio file. After playback is finishes, the next audio file from in list is played. While the audio is playing, pressing the **STOP** button will cancel the playback mode.                 |
 
-\pagebreak{}
 At the bottom left of this section is the toggle switch which allows you to toggle between play buttons and download buttons. The later ones allows you to download locally the audio file.
 
 At the bottom right of this section is the _paginator_ to browse the whole database. This _paginator_ is disabled while in playback mode.
@@ -120,5 +119,3 @@ This is the section where you filter the archived audio to a specific date, syst
 There is also a small slider that changes the **PLAY** buttons to **DOWNLOAD** buttons. This allows you to download audio files individually regardless of the playback mode you use.
 
 > Note that if you change any filter while in playback mode, it will deactivate it.
-
-\pagebreak{}

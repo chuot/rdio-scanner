@@ -87,9 +87,8 @@ When finished, you will find the precompiled versions for various platforms in t
         rdio-scanner-macos-arm64-v8.0.0.zip
         rdio-scanner-windows-amd64-v8.0.0.zip
 
-Each archive holds the server binary for its platform, the `rdio-scanner.html` document that carries the
-platform page, the web app guide, the FAQ, and the change log, and — for the five targets this project
-compiles an ffmpeg for — the `FFMPEG.md` licence text. The document is one self-contained file: every
-image is inside it, so it opens in a browser with no network access.
+Each archive holds the server binary for its platform and the documentation as the files it is written in: the change log, the platform page for that target, the web app guide, the FAQ, and the pictures those four files point at. The archive's layout is the repository's own layout, so the relative picture paths the documents wrote resolve inside the archive. For the five targets this project compiles an ffmpeg for, the archive also carries the `FFMPEG.md` licence text.
+
+The tool stamps nothing. The version reaches the binary through the linker flag and the bundles through the environment. The version literals the documentation carries — in `COMPILING.md`, `README.md`, `docs/docker/README.md`, and the platform pages — are edited by hand at release.
 
 **Happy Rdio scanning !**

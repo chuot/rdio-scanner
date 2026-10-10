@@ -13,14 +13,14 @@ You need to download the latest Rdio Scanner release from the [releases tab](htt
 - Copy your old version 5 `database.sqlite` to a new folder where version 6 will be installed.
 - Rename the database copy to `rdio-scanner.db`, the new default name.
 - Run the new version 6 executable to update the database.
-- Keep reading the PDF document that comes with the version 6 to make your instance as a service.
+- Keep reading the platform page that comes with the version 6 to make your instance as a service.
 
 ## Update steps for mysql/mariadb database
 
 - Stop your version 5 instance.
 - Make a backup of your MySQL/MariaDB database.
 - Start the new version 6 executable with the proper -db_* arguments, see the `-h` output for more details.
-- Keep reading the PDF document that comes with the version 6 to make your instance as a service.
+- Keep reading the platform page that comes with the version 6 to make your instance as a service.
 
 ## What if it is too late
 
