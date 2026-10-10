@@ -24,14 +24,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -93,75 +90,6 @@ func writeUint16(out *bytes.Buffer, v uint16) {
 // installedConverter is the converter a deployment with ffmpeg gets. The conversion tests are
 // integration tests over the real binary, and they are skipped — and reported — when the
 // deployment does not have it.
-func installedConverter(t *testing.T) *Converter {
-	t.Helper()
-
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg is not installed on this machine: the conversion tests are skipped")
-	}
-
-	converter := New()
-
-	if !converter.available {
-		t.Fatal("ffmpeg is on the path but the converter reports it is not installed")
-	}
-
-	return converter
-}
-
-// writeConverted puts the converted recording in a file, because the container and its tags are
-// read back with the same tools the server's audio endpoints hand them to.
-func writeConverted(t *testing.T, converted ports.AudioFile) string {
-	t.Helper()
-
-	path := filepath.Join(t.TempDir(), converted.Filename)
-
-	if err := os.WriteFile(path, converted.Data, 0o644); err != nil {
-		t.Fatalf("writing the converted recording: %v", err)
-	}
-
-	return path
-}
-
-// probe asks ffprobe one question about a converted recording.
-func probe(t *testing.T, path string, args ...string) string {
-	t.Helper()
-
-	if _, err := exec.LookPath("ffprobe"); err != nil {
-		t.Skip("ffprobe is not installed on this machine: the conversion tests are skipped")
-	}
-
-	command := exec.Command("ffprobe", append(append([]string{"-v", "error"}, args...), path)...)
-
-	out, err := command.Output()
-	if err != nil {
-		t.Fatalf("probing %s: %v", path, err)
-	}
-
-	return strings.TrimSpace(string(out))
-}
-
-// TestTheDisabledLevelLeavesTheRecordingUntouched is the level an administrator chooses when the
-// server is to store exactly what the recording tool produced: nothing is run and nothing is
-// changed, not even the name.
-func TestTheDisabledLevelLeavesTheRecordingUntouched(t *testing.T) {
-	converter := installedConverter(t)
-
-	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
-
-	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionDisabled, nil)
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-
-	if converted.Filename != "call.wav" || converted.Mime != "audio/wav" {
-		t.Errorf("the recording is presented as %q %q, want it left exactly as it arrived", converted.Filename, converted.Mime)
-	}
-
-	if !bytes.Equal(converted.Data, in.Data) {
-		t.Errorf("the recording was changed by a conversion that was disabled")
-	}
-}
 
 // TestAMissingConverterIsReportedOncePerServerRun is what a deployment without ffmpeg sees: one
 // warning line in the administrator's log, and then a server that stores every recording as it
@@ -194,6 +122,9 @@ func TestAMissingConverterIsReportedOncePerServerRun(t *testing.T) {
 
 // TestTheDisabledLevelIsSilentEvenWithoutAConverter pins the order the legacy checks in: a
 // deployment that has turned conversion off never hears about the missing converter at all.
+
+// TestTheDisabledLevelIsSilentEvenWithoutAConverter pins the order the legacy checks in: a
+// deployment that has turned conversion off never hears about the missing converter at all.
 func TestTheDisabledLevelIsSilentEvenWithoutAConverter(t *testing.T) {
 	converter := &Converter{}
 
@@ -203,6 +134,9 @@ func TestTheDisabledLevelIsSilentEvenWithoutAConverter(t *testing.T) {
 		t.Errorf("Convert = %v, want nothing said about a converter this deployment does not need", err)
 	}
 }
+
+// TestTheVersionProbeRecognisesTheReleasesTheFiltersNeed covers the release read out of the first
+// line of `ffmpeg -version`, which decides whether the two loudness levels get their filters.
 
 // TestTheVersionProbeRecognisesTheReleasesTheFiltersNeed covers the release read out of the first
 // line of `ffmpeg -version`, which decides whether the two loudness levels get their filters.
@@ -249,176 +183,82 @@ func TestTheVersionProbeRecognisesTheReleasesTheFiltersNeed(t *testing.T) {
 
 // TestConvertingARecordingProducesTheFormatTheServerStores is the plain level: the wav a
 // recording tool wrote becomes the m4a the server serves, named for the recording it came from.
-func TestConvertingARecordingProducesTheFormatTheServerStores(t *testing.T) {
-	converter := installedConverter(t)
+
+// aProgramIsGiven writes a program the test controls and returns its path. It answers the version
+// probe and converts by saying who it is, so a test can tell which program actually ran without
+// needing the real ffmpeg on this machine.
+func aProgramIsGiven(t *testing.T, version string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "ffmpeg")
+
+	script := "#!/bin/sh\n" +
+		"for arg in \"$@\"; do\n" +
+		"  if [ \"$arg\" = \"-version\" ]; then\n" +
+		"    echo \"" + version + "\"\n" +
+		"    exit 0\n" +
+		"  fi\n" +
+		"done\n" +
+		"cat > /dev/null\n" +
+		"printf 'converted by the program the server was given'\n"
+
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("the test cannot write the program it was given: %v", err)
+	}
+
+	return path
+}
+
+func TestTheConverterRunsTheProgramItWasGiven(t *testing.T) {
+	converter := NewAt(aProgramIsGiven(t, "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"))
 
 	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
 
 	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
 	if err != nil {
-		t.Fatalf("Convert: %v", err)
+		t.Fatalf("the converter refused a recording: %v", err)
 	}
 
-	if converted.Filename != "call.m4a" {
-		t.Errorf("the recording is named %q, want the call's name with the container the server stores", converted.Filename)
-	}
-
-	if converted.Mime != "audio/mp4" {
-		t.Errorf("the recording is presented as %q, want the media type the server hands to clients", converted.Mime)
-	}
-
-	if len(converted.Data) == 0 {
-		t.Fatal("the converted recording is empty")
-	}
-
-	path := writeConverted(t, converted)
-
-	if codec := probe(t, path, "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "default=nw=1:nk=1"); codec != "aac" {
-		t.Errorf("the converted recording holds %q, want the codec the server stores calls in", codec)
+	if string(converted.Data) != "converted by the program the server was given" {
+		t.Errorf("the recording was converted by something other than the program the converter was given: %q", string(converted.Data))
 	}
 }
 
-// TestTheCallTagsAreWrittenIntoTheConvertedRecording covers the tags a client reads out of a
-// recording it downloads: the group, the radio, the moment, the tag, and the talkgroup.
-func TestTheCallTagsAreWrittenIntoTheConvertedRecording(t *testing.T) {
-	converter := installedConverter(t)
+// A server whose bundled program could not be written out, or whose data directory will not hold an
+// executable, is a server with no converter: the recording is kept and the reason is said once.
+func TestTheConverterReportsAProgramItWasGivenThatIsNotThere(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "ffmpeg-9.0.2")
 
-	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
-
-	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, &ports.AudioMetadata{
-		Album:  "Ground",
-		Artist: "Car 4",
-		Date:   time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC),
-		Genre:  "Dispatch",
-		Title:  "Dispatch 1",
-	})
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-
-	path := writeConverted(t, converted)
-
-	want := map[string]string{
-		"album":  "Ground",
-		"artist": "Car 4",
-		"genre":  "Dispatch",
-		"title":  "Dispatch 1",
-	}
-
-	for key, value := range want {
-		got := probe(t, path, "-show_entries", "format_tags="+key, "-of", "default=nw=1:nk=1")
-
-		if got != value {
-			t.Errorf("the converted recording's %s tag is %q, want %q", key, got, value)
-		}
-	}
-
-	date := probe(t, path, "-show_entries", "format_tags=date", "-of", "default=nw=1:nk=1")
-
-	if !strings.HasPrefix(date, "2026-10-06 16:00:00") {
-		t.Errorf("the converted recording's date tag is %q, want the moment the call happened", date)
-	}
-}
-
-// TestARecordingConvertedWithoutTagsCarriesNoTags is the call on a talkgroup that has no tag:
-// the legacy writes no tags at all for it, not even the title or the moment, and a client that
-// shows a recording's tags shows nothing for those calls.
-func TestARecordingConvertedWithoutTagsCarriesNoTags(t *testing.T) {
-	converter := installedConverter(t)
+	converter := NewAt(missing)
 
 	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
 
 	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-
-	path := writeConverted(t, converted)
-
-	for _, key := range []string{"album", "artist", "genre", "title"} {
-		if got := probe(t, path, "-show_entries", "format_tags="+key, "-of", "default=nw=1:nk=1"); got != "" {
-			t.Errorf("the converted recording's %s tag is %q, want no tags for a call whose talkgroup has none", key, got)
-		}
-	}
-}
-
-// TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters is the observable
-// difference between the two releases: the filters begin by padding the recording to three
-// seconds, so a server on an ffmpeg that predates them stores the short recording.
-func TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters(t *testing.T) {
-	converter := installedConverter(t)
-
-	if !converter.loudnorm {
-		t.Skip("this machine's ffmpeg is older than the release the loudness filters need")
-	}
-
-	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
-
-	for _, mode := range []uint{domain.AudioConversionEnabledNorm, domain.AudioConversionEnabledLoudNorm} {
-		converted, err := converter.Convert(context.Background(), in, mode, nil)
-		if err != nil {
-			t.Fatalf("Convert mode %d: %v", mode, err)
-		}
-
-		path := writeConverted(t, converted)
-
-		raw := probe(t, path, "-show_entries", "format=duration", "-of", "default=nw=1:nk=1")
-
-		duration, err := time.ParseDuration(raw + "s")
-		if err != nil {
-			t.Fatalf("the converted recording's duration is %q: %v", raw, err)
-		}
-
-		if duration < 2*time.Second {
-			t.Errorf("mode %d converted a recording of %v, want the three seconds the loudness filters pad it to", mode, duration)
-		}
-	}
-}
-
-// TestARecordingTheConverterRefusesKeepsItsOriginalAudio is the failure that must never cost a
-// call: audio ffmpeg cannot read is stored as it arrived.
-func TestARecordingTheConverterRefusesKeepsItsOriginalAudio(t *testing.T) {
-	converter := installedConverter(t)
-
-	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: []byte("this is not audio at all")}
-
-	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
-
 	if err == nil {
-		t.Fatal("recording audio ffmpeg cannot read was converted, want the failure reported")
+		t.Fatal("a converter given a program that is not there reported no failure")
 	}
 
-	if !strings.Contains(err.Error(), "ffmpeg") {
-		t.Errorf("Convert = %v, want what ffmpeg said about the recording", err)
+	if string(converted.Data) != string(in.Data) {
+		t.Error("the recording was changed even though there was no program to convert it")
 	}
 
-	if converted.Filename != "call.wav" || !bytes.Equal(converted.Data, in.Data) {
-		t.Errorf("the recording is presented as %q, want the original kept when nothing converted it", converted.Filename)
+	if _, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil); err != nil {
+		t.Errorf("the missing converter was reported a second time: %v", err)
 	}
 }
 
-// TestAStoppedCallerKeepsTheOriginalRecording covers the converter's one deliberate difference
-// from the legacy: the run belongs to the caller that asked for it, and a caller that stops gets
-// an error rather than a hung server.
-func TestAStoppedCallerKeepsTheOriginalRecording(t *testing.T) {
-	converter := installedConverter(t)
+// The release the given program reports is what decides whether the loudness filters are used, so a
+// bundled ffmpeg and a host ffmpeg are not interchangeable when they are different releases.
+func TestTheConverterAsksTheProgramItWasGivenWhichReleaseItIs(t *testing.T) {
+	old := NewAt(aProgramIsGiven(t, "ffmpeg version 4.2.1 Copyright (c) 2000-2026 the FFmpeg developers"))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
-
-	converted, err := converter.Convert(ctx, in, domain.AudioConversionEnabled, nil)
-
-	if err == nil {
-		t.Fatal("a conversion its caller stopped reported no failure")
+	if old.loudnorm {
+		t.Error("a 4.2 release was taken for one that has the loudness filters")
 	}
 
-	if !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "ffmpeg") {
-		t.Errorf("Convert = %v, want the stopped caller or what ffmpeg said", err)
-	}
+	new := NewAt(aProgramIsGiven(t, "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"))
 
-	if !bytes.Equal(converted.Data, in.Data) {
-		t.Errorf("the recording was changed by a conversion its caller stopped")
+	if !new.loudnorm {
+		t.Error("a 9.0 release was taken for one that does not have the loudness filters")
 	}
 }

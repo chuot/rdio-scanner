@@ -29,11 +29,13 @@ import (
 )
 
 // The tool's whole job is to run the right commands in the right order with the resolved version in
-// them. These tests assert the plan it composes rather than running a build: what npm and go are
-// asked to do, in what order, with what in the environment, and what the process exits with when a
-// step says no.
+// them. The plan it composes is tested in commands_test.go and the machine it touches in
+// build_test.go; what is tested here is the run itself: the order the steps happen in, what the
+// process exits with when a step says no, what the version subcommand prints, and what the run says
+// about the version it resolved.
 
 // fakeRun is a tool that records what it was told to run instead of running it.
+
 func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 	var ran []step
 
@@ -130,90 +132,6 @@ func TestEachSubcommandRunsOnlyTheStepsItNames(t *testing.T) {
 // The version reaches the server through the linker and the applications through the environment.
 // Neither is rewritten in a source file, which is the mechanism that produced the drift this tool
 // exists to remove.
-func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
-	tl, _, ran := fakeRun(development, "")
-
-	if code := tl.run([]string{"server"}, io.Discard); code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
-	}
-
-	server := (*ran)[0]
-
-	want := "go build -ldflags -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath() + " ./cmd/rdio-scanner"
-	got := strings.Join(append([]string{server.name}, server.args...), " ")
-	if got != want {
-		t.Errorf("the server is built with\n  %s\nwant\n  %s", got, want)
-	}
-
-	if server.dir != "/repo" {
-		t.Errorf("the server is built in %q, want the repository root", server.dir)
-	}
-}
-
-func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
-	tl, _, ran := fakeRun(development, "")
-
-	if code := tl.run([]string{"client"}, io.Discard); code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
-	}
-
-	for _, app := range []string{"scanner", "admin"} {
-		step := (*ran)[0]
-		if app == "admin" {
-			step = (*ran)[1]
-		}
-
-		if step.name != "npm" {
-			t.Errorf("%s is built with %q, want npm", app, step.name)
-		}
-
-		if strings.Join(step.args, " ") != "run build:"+app {
-			t.Errorf("%s is built with %v, want npm run build:%s", app, step.args, app)
-		}
-
-		if step.dir != "/repo/internal/presentation" {
-			t.Errorf("%s is built in %q, want the presentation directory", app, step.dir)
-		}
-
-		if !contains(step.env, "RDIO_VERSION=8.0.0+gdb79311") {
-			t.Errorf("%s is built with env %v, which does not carry the resolved version", app, step.env)
-		}
-	}
-}
-
-// Client dependencies are installed once, and only when they are not already there.
-func TestClientDependenciesAreInstalledOnlyWhenTheyAreNotAlreadyThere(t *testing.T) {
-	tl, _, ran := fakeRun(released, "")
-	tl.installed = func(string) bool { return false }
-
-	if code := tl.run([]string{"client"}, io.Discard); code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
-	}
-
-	install := (*ran)[0]
-	if strings.Join(install.args, " ") != "ci --loglevel=error --no-progress" {
-		t.Errorf("the install step is %v, want npm ci --loglevel=error --no-progress", install.args)
-	}
-
-	if len(*ran) != 3 {
-		t.Errorf("%d steps ran, want the install and the two applications", len(*ran))
-	}
-}
-
-func TestTheOutputPathIsTheOneTheOperatorNamed(t *testing.T) {
-	tl, _, ran := fakeRun(released, "")
-
-	if code := tl.run([]string{"server", "-o", "./rdio-scanner"}, io.Discard); code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
-	}
-
-	if !contains((*ran)[0].args, "./rdio-scanner") {
-		t.Errorf("the server is built with %v, which does not write to the named path", (*ran)[0].args)
-	}
-}
-
-// A prerelease is an instruction about the version, so a name that does not fit the grammar is a
-// command line the tool cannot honour rather than a build that fails halfway through.
 func TestAPreReleaseNameThatIsNotAPrereleaseIsRejectedBeforeAnythingIsBuilt(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -230,7 +148,7 @@ func TestAPreReleaseNameThatIsNotAPrereleaseIsRejectedBeforeAnythingIsBuilt(t *t
 	}
 }
 
-func TestACommandTheToolDoesNotKnowIsRejected(t *testing.T) {
+func TestACommandTheToolDoesNotKnowIsRejectedBeforeAnythingRuns(t *testing.T) {
 	for _, args := range [][]string{
 		{"--not_a_flag"},
 		{"not_a_subcommand"},
@@ -300,14 +218,4 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 			t.Errorf("the version line %q does not say %q", line, want)
 		}
 	}
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-
-	return false
 }
