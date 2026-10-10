@@ -6,7 +6,7 @@
 data-dev/
 
 # the client's dependencies
-internal/presentation/clients/node_modules
+internal/presentation/node_modules
 
 # server build outputs and the local state a running server writes
 /*.db
@@ -19,10 +19,10 @@ internal/presentation/clients/node_modules
 /__debug_bin
 /autocert
 /rdio-scanner
-/internal/presentation/serving/scanner/bundle/*
-!/internal/presentation/serving/scanner/bundle/.gitkeep
-/internal/presentation/serving/admin/bundle/*
-!/internal/presentation/serving/admin/bundle/.gitkeep
+/internal/presentation/scanner/frontend/bundle/*
+!/internal/presentation/scanner/frontend/bundle/.gitkeep
+/internal/presentation/admin/frontend/bundle/*
+!/internal/presentation/admin/frontend/bundle/.gitkeep
 
 # the ffmpeg this project compiles per target: the gzipped pair the server binary embeds, and the
 # scratch the compile runs in. Deleting either costs a rebuild and nothing else.

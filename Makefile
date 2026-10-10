@@ -21,8 +21,10 @@ date := 2026/05/16
 # itself: no shell is started, and the value comes back without the trailing newline.
 ver := $(file < VERSION.txt)
 
-clientSrc := $(wildcard internal/presentation/clients/*.json internal/presentation/clients/*.mjs) \
-	$(shell find internal/presentation/clients/scanner internal/presentation/clients/admin internal/presentation/clients/shared -type f)
+# The sources each bundle is built from. The built bundle sits inside the application's own folder,
+# so it is excluded: a rule that watched its own output would rebuild on every run.
+clientSrc := $(wildcard internal/presentation/*.json internal/presentation/*.mjs) \
+	$(shell find internal/presentation/scanner/frontend internal/presentation/admin/frontend internal/presentation/common/frontend -type f -not -path '*/bundle/*')
 server := $(shell find cmd internal -type f -name '*.go')
 
 # A server binary is built for one target, and the ffmpeg that target carries is compiled first: the
@@ -49,8 +51,8 @@ zip = @cd dist/$(1)-$(2) && zip -q ../$(app)-$(1)-$(2)-v$(ver).zip * && cd ..
 all: clean dist
 
 clean:
-	@rm -fr internal/presentation/clients/node_modules dist
-	@find internal/presentation/serving/scanner/bundle internal/presentation/serving/admin/bundle -mindepth 1 -not -name .gitkeep -delete
+	@rm -fr internal/presentation/node_modules dist
+	@find internal/presentation/scanner/frontend/bundle internal/presentation/admin/frontend/bundle -mindepth 1 -not -name .gitkeep -delete
 
 container: client linux-amd64
 	@podman build --pull --build-arg VERSION=$(ver) -t $(app):latest .
@@ -63,20 +65,20 @@ sed:
 
 client: scanner admin
 
-scanner: internal/presentation/serving/scanner/bundle/index.html
+scanner: internal/presentation/scanner/frontend/bundle/index.html
 
-admin: internal/presentation/serving/admin/bundle/index.html
+admin: internal/presentation/admin/frontend/bundle/index.html
 
 # Each bundle is built by the rule for the Go package that embeds it, so `make scanner` cannot leave the
 # admin bundle stale and `make admin` cannot leave the scanner bundle stale. Both rules watch the same
 # client sources, because the two applications share modules and a stylesheet.
-internal/presentation/serving/scanner/bundle/index.html: $(clientSrc)
-	@cd internal/presentation/clients && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd internal/presentation/clients && npm run build:scanner
+internal/presentation/scanner/frontend/bundle/index.html: $(clientSrc)
+	@cd internal/presentation && test -d node_modules || npm ci --loglevel=error --no-progress
+	@cd internal/presentation && npm run build:scanner
 
-internal/presentation/serving/admin/bundle/index.html: $(clientSrc)
-	@cd internal/presentation/clients && test -d node_modules || npm ci --loglevel=error --no-progress
-	@cd internal/presentation/clients && npm run build:admin
+internal/presentation/admin/frontend/bundle/index.html: $(clientSrc)
+	@cd internal/presentation && test -d node_modules || npm ci --loglevel=error --no-progress
+	@cd internal/presentation && npm run build:admin
 
 freebsd: freebsd-amd64
 freebsd-amd64: client dist/$(app)-freebsd-amd64-v$(ver).zip
