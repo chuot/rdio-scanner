@@ -178,7 +178,9 @@ export function createListenerUseCases({
       if (playbackRefreshing) {
         stopPlaybackMode();
 
-        if (config?.playbackGoesLive) startLivefeed();
+        // Exhaustion always goes live (FEAT-016): the retired playback-goes-live
+        // option is gone, and the listener returns to the live feed.
+        startLivefeed();
       } else {
         playbackRefreshing = true;
         searchCalls(playbackList.options);
