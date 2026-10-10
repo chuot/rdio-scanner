@@ -1,6 +1,7 @@
 // rdio-admin-login (T031): admin login form (legacy login.component.ts).
-// Password required; form disabled while submitting; failed attempts (wrong
-// password or rate-limit 401) show "Invalid password" and re-enable the form.
+// Password required; form disabled while submitting; a wrong password shows
+// "Invalid password", and a server that cannot be reached is named as such —
+// the form re-enables for a retry either way.
 
 import { getAdminContext } from '../../application/admin-context.js';
 
@@ -34,12 +35,14 @@ class RdioAdminLogin extends HTMLElement {
       this.setDisabled(true);
       this.field.setError('');
 
-      const loggedIn = await getAdminContext().useCases.login(password);
+      const result = await getAdminContext().useCases.login(password);
 
-      if (!loggedIn) {
+      if (result !== 'ok') {
         this.setDisabled(false);
         this.input.value = '';
-        this.field.setError('Invalid password');
+        this.field.setError(result === 'unreachable'
+          ? 'The server cannot be reached. Check that it is running.'
+          : 'Invalid password');
         this.input.focus();
       }
     });

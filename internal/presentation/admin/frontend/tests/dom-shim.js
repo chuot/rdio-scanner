@@ -87,6 +87,37 @@ class ShimNode {
   click() {
     for (const fn of this.listeners.click ?? []) fn();
   }
+
+  // Forms refocus their input after a failed submit; the shim records the focus
+  // so a test can see it happened.
+  focus() {
+    this.focused = true;
+  }
+
+  // Forms are driven by dispatching their submit event, the way a browser does:
+  // the listener receives the event object the test hands in.
+  dispatchEvent(event) {
+    for (const fn of this.listeners[event.type] ?? []) fn(event);
+  }
+
+  // form.elements is the control list the login form disables while submitting:
+  // the shim answers with the form's descendant controls, in document order.
+  get elements() {
+    if (this.tag !== 'form') return undefined;
+
+    const controls = [];
+
+    const walk = (node) => {
+      for (const child of node.children ?? []) {
+        if (['input', 'button', 'select', 'textarea'].includes(child.tag)) controls.push(child);
+        walk(child);
+      }
+    };
+
+    walk(this);
+
+    return controls;
+  }
 }
 
 globalThis.HTMLElement = ShimNode;

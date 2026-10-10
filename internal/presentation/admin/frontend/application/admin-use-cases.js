@@ -175,7 +175,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
   }
 
   async function login(password) {
-    if (!password) return false;
+    if (!password) return 'invalid';
 
     try {
       const res = await api.login(password);
@@ -186,9 +186,12 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
       await loadConfig();
 
-      return true;
-    } catch {
-      return false;
+      return 'ok';
+    } catch (error) {
+      // A fetch that never reached the server is a TypeError; a wrong password or
+      // a rate limit is the adapter's Unauthorized. The operator must be told
+      // which one happened: "Invalid password" over a stopped server is a lie.
+      return error instanceof TypeError ? 'unreachable' : 'invalid';
     }
   }
 

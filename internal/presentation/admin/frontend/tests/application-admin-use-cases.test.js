@@ -170,7 +170,7 @@ test('login stores the token, marks the session authenticated, and opens the con
 
   const ok = await useCases.login('secret');
 
-  assert.equal(ok, true);
+  assert.equal(ok, 'ok');
   assert.deepEqual(api.calls[0], ['login', 'secret']);
   assert.deepEqual(storage.calls, [['set', 'jwt-1']]);
   assert.equal(store.getState().auth.authenticated, true);
@@ -178,16 +178,28 @@ test('login stores the token, marks the session authenticated, and opens the con
   assert.equal(sockets.opened[0].token, 'jwt-1');
 });
 
-test('login failure (401 / rate limit) returns false and keeps the login screen', async () => {
+test('login failure (401 / rate limit) returns invalid and keeps the login screen', async () => {
   const { sockets, storage, store, useCases } = setup({
     apiOptions: { loginResult: new Error('Unauthorized') },
   });
 
   const ok = await useCases.login('wrong');
 
-  assert.equal(ok, false);
+  assert.equal(ok, 'invalid');
   assert.equal(store.getState().auth.authenticated, false);
   assert.equal(storage.getAdminToken(), null);
+  assert.equal(sockets.opened.length, 0);
+});
+
+test('login while the server is unreachable returns unreachable, not invalid', async () => {
+  const { sockets, store, useCases } = setup({
+    apiOptions: { loginResult: new TypeError('Failed to fetch') },
+  });
+
+  const ok = await useCases.login('secret');
+
+  assert.equal(ok, 'unreachable');
+  assert.equal(store.getState().auth.authenticated, false);
   assert.equal(sockets.opened.length, 0);
 });
 
