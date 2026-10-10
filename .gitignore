@@ -29,3 +29,7 @@ internal/presentation/node_modules
 /internal/infrastructure/ffmpeg/bundle/*/*
 !/internal/infrastructure/ffmpeg/bundle/*/.gitkeep
 /.build/
+
+# the ffmpeg and ffprobe binaries dropped at the repo root for local runs. The server embeds its
+# own copies, so these are scratch: deleting them costs a re-download and nothing else.
+/ffmpeg/
