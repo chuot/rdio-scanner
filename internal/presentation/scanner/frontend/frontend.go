@@ -22,6 +22,7 @@ package frontend
 
 import (
 	"embed"
+	"io/fs"
 	"net/http"
 
 	"rdio-scanner/internal/presentation/common/spa"
@@ -42,6 +43,21 @@ import (
 //
 //go:embed all:bundle
 var bundle embed.FS
+
+// bundleIsBuilt is the bundle question asked of a file set: the application shell is what a
+// built bundle is judged by, the same file the build tool judges a bundle's freshness by. A
+// bundle with nothing in it but the placeholder is a bundle no client build has ever written,
+// and the server says so at startup.
+func bundleIsBuilt(files fs.FS) bool {
+	_, err := fs.Stat(files, "bundle/index.html")
+
+	return err == nil
+}
+
+// BundleIsBuilt is the same question asked of the package's own embedded bundle.
+func BundleIsBuilt() bool {
+	return bundleIsBuilt(bundle)
+}
 
 // Embedded returns the catch-all handler for the scanner application, served from the
 // root of the server: the path a listener connects to is the path the page is served

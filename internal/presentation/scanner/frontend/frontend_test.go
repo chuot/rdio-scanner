@@ -20,7 +20,11 @@
 
 package frontend
 
-import "testing"
+import (
+	"os"
+	"testing"
+	"testing/fstest"
+)
 
 // TestThePackageCompilesWithAnUnbuiltClient is the compile-time case. The bundle directory is
 // committed with nothing in it but `.gitkeep`, and `//go:embed all:bundle` is the pattern that
@@ -30,5 +34,37 @@ import "testing"
 func TestThePackageCompilesWithAnUnbuiltClient(t *testing.T) {
 	if _, err := bundle.ReadFile("bundle/.gitkeep"); err != nil {
 		t.Fatalf("bundle/.gitkeep is not embedded, so this package would not compile against a placeholder-only bundle: %v", err)
+	}
+}
+
+// The bundle question is asked of a file set, so the placeholder-only case is testable: a file
+// set carrying the application shell is built, and a file set carrying only the placeholder is
+// not. The server warns about an unbuilt bundle, and the warning is judged by this question.
+func TestABundleIsBuiltWhenItCarriesTheApplicationShell(t *testing.T) {
+	built := fstest.MapFS{
+		"bundle/.gitkeep":   &fstest.MapFile{Data: []byte("")},
+		"bundle/index.html": &fstest.MapFile{Data: []byte("<html>")},
+	}
+
+	if !bundleIsBuilt(built) {
+		t.Error("a file set carrying bundle/index.html is not seen as built")
+	}
+
+	unbuilt := fstest.MapFS{
+		"bundle/.gitkeep": &fstest.MapFile{Data: []byte("")},
+	}
+
+	if bundleIsBuilt(unbuilt) {
+		t.Error("a file set carrying only the placeholder is seen as built")
+	}
+}
+
+// The same question asked of the package's own embedded bundle answers the way the tree says:
+// the embed is the bundle, and the check is the same check the build tool judges a bundle by.
+func TestTheEmbeddedBundleIsBuiltWhenTheTreeHasTheApplicationShell(t *testing.T) {
+	_, treeErr := os.Stat("bundle/index.html")
+
+	if BundleIsBuilt() != (treeErr == nil) {
+		t.Errorf("the embedded bundle is seen as built %v, want what the tree says about bundle/index.html (tree stat error %v)", BundleIsBuilt(), treeErr)
 	}
 }
