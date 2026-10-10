@@ -42,7 +42,7 @@ import (
 func TestAnActionTheServiceManagerDoesNotKnowEndsWithAFailureAndSaysNothing(t *testing.T) {
 	var out bytes.Buffer
 
-	code := run([]string{"-base_dir", t.TempDir(), "-service", "bogus"}, &out)
+	code := run([]string{"-base_dir", t.TempDir(), "-service", "bogus"}, &out, noBundlesUnbuilt)
 
 	if code != -1 {
 		t.Errorf("an action the service manager does not know ended with %d, want the code of a refusal", code)

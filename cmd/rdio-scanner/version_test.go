@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 func TestVersionModePrintsVersionAndExitsWithoutError(t *testing.T) {
 	var out bytes.Buffer
 
-	code := run([]string{"-version"}, &out)
+	code := run([]string{"-version"}, &out, noBundlesUnbuilt)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
@@ -154,7 +154,7 @@ func pinnedWireCore(t *testing.T) string {
 func TestUnknownFlagIsRejected(t *testing.T) {
 	var out bytes.Buffer
 
-	if code := run([]string{"-not_a_flag"}, &out); code != 2 {
+	if code := run([]string{"-not_a_flag"}, &out, noBundlesUnbuilt); code != 2 {
 		t.Errorf("exit code = %d, want 2", code)
 	}
 }

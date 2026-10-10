@@ -40,7 +40,54 @@ import (
 
 // These are the tests of the command line itself: the modes the program reaches before it starts a server,
 // and the exit codes it ends with. Everything below drives `run`, the whole program, from the arguments an
-// operator types.
+// operator types. The last argument of `run` is the stand-in answer to which embedded web bundles have no
+// application shell; the real answer is what the two application packages say about their own embeds.
+
+// A server whose embedded bundle has no application shell says so at startup, names the command that
+// builds the bundles, and keeps serving: the API and the websocket work without the bundles, and the
+// operator is told what the missing pages are. The server is asked to listen on a word it cannot listen
+// on, so the run ends at the server starting and the warning is what the output holds.
+func TestTheServerWarnsAboutAnUnbuiltBundleAndNamesTheCommand(t *testing.T) {
+	base := t.TempDir()
+
+	out := &bytes.Buffer{}
+
+	code := run([]string{"-base_dir", base, "-listen", "not-an-address"}, out, func() []string { return []string{"scanner"} })
+	if code == 0 {
+		t.Fatal("a server that cannot listen exited 0")
+	}
+
+	text := out.String()
+
+	if !strings.Contains(text, "scanner") || !strings.Contains(text, "go run ./cmd/build client") {
+		t.Errorf("the output does not warn about the unbuilt scanner bundle and name the build command:\n%s", text)
+	}
+}
+
+// A server whose bundles are built says nothing about bundles.
+func TestTheServerSaysNothingWhenBothBundlesAreBuilt(t *testing.T) {
+	base := t.TempDir()
+
+	out := &bytes.Buffer{}
+
+	code := run([]string{"-base_dir", base, "-listen", "not-an-address"}, out, func() []string { return nil })
+	if code == 0 {
+		t.Fatal("a server that cannot listen exited 0")
+	}
+
+	if strings.Contains(out.String(), "go run ./cmd/build client") {
+		t.Errorf("a server whose bundles are built warned about bundles:\n%s", out.String())
+	}
+}
+
+// The warning names every application it says is unbuilt, and the one command that builds them.
+func TestTheBundleWarningNamesEveryUnbuiltApplication(t *testing.T) {
+	line := bundleWarning([]string{"scanner", "admin"})
+
+	if !strings.Contains(line, "scanner") || !strings.Contains(line, "admin") || !strings.Contains(line, "go run ./cmd/build client") {
+		t.Errorf("the warning %q does not name both applications and the command that builds them", line)
+	}
+}
 
 // The -admin_password mode is a one-shot: it stores the credential, says so in the log view, and stops
 // without starting a server.
@@ -49,7 +96,7 @@ func TestAdminPasswordModeStoresTheCredentialAndStops(t *testing.T) {
 
 	out := &bytes.Buffer{}
 
-	code := run([]string{"-base_dir", base, "-admin_password", "a-chosen-one"}, out)
+	code := run([]string{"-base_dir", base, "-admin_password", "a-chosen-one"}, out, noBundlesUnbuilt)
 	if code != 0 {
 		t.Fatalf("the admin password mode exited %d, want 0: %s", code, out.String())
 	}
@@ -88,7 +135,7 @@ func TestAdminPasswordModeStoresTheCredentialAndStops(t *testing.T) {
 func TestAdminPasswordModeIsTheCredentialTheServerAccepts(t *testing.T) {
 	base := t.TempDir()
 
-	if code := run([]string{"-base_dir", base, "-admin_password", "a-chosen-one"}, io.Discard); code != 0 {
+	if code := run([]string{"-base_dir", base, "-admin_password", "a-chosen-one"}, io.Discard, noBundlesUnbuilt); code != 0 {
 		t.Fatalf("the admin password mode failed, exit %d", code)
 	}
 
@@ -158,6 +205,12 @@ func init() {
 // theCommandVersion is the version a test's server reports. The version a build injects is a fact about the
 // build, not a fact about a server, so these tests name the version they configure the server with.
 const theCommandVersion = "8.0.0"
+
+// noBundlesUnbuilt is the stand-in answer for the tests that reach a mode which never starts a
+// server: the bundle question is not asked in those modes, so the answer does not matter.
+func noBundlesUnbuilt() []string {
+	return nil
+}
 
 // postTo sends a request to a server the test built and reports how it answered.
 func postTo(srv *app.Server, path, body string) *httptest.ResponseRecorder {

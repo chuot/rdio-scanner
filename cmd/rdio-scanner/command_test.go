@@ -637,7 +637,7 @@ func runTheCommandMode(t *testing.T, baseDir string, args ...string) (int, strin
 
 	var out bytes.Buffer
 
-	code := run(append([]string{"-base_dir", baseDir, "-cmd"}, args...), &out)
+	code := run(append([]string{"-base_dir", baseDir, "-cmd"}, args...), &out, noBundlesUnbuilt)
 
 	return code, out.String()
 }

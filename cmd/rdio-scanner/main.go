@@ -27,18 +27,52 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"rdio-scanner/internal/app"
 	"rdio-scanner/internal/application/ports"
+	adminfrontend "rdio-scanner/internal/presentation/admin/frontend"
+	scannerfrontend "rdio-scanner/internal/presentation/scanner/frontend"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout))
+	os.Exit(run(os.Args[1:], os.Stdout, unbuiltBundles))
+}
+
+// unbuiltBundles answers which applications the embedded bundles do not carry. A bundle with
+// nothing in it but the placeholder is a bundle no client build has ever written, and the pages
+// it serves are the pages the operator will not see.
+func unbuiltBundles() []string {
+	var names []string
+
+	if !scannerfrontend.BundleIsBuilt() {
+		names = append(names, "scanner")
+	}
+
+	if !adminfrontend.BundleIsBuilt() {
+		names = append(names, "admin")
+	}
+
+	return names
+}
+
+// bundleWarning is the one line the server says about bundles it cannot serve: the applications
+// named, and the command that builds them.
+func bundleWarning(names []string) string {
+	apps := strings.Join(names, " and ")
+
+	noun, verb := "application", "is not built"
+	if len(names) > 1 {
+		noun, verb = "applications", "are not built"
+	}
+
+	return fmt.Sprintf("warning  the %s %s %s; run go run ./cmd/build client before running", apps, noun, verb)
 }
 
 // run dispatches the modes the command line asks for. It returns the process exit code instead of calling
-// os.Exit directly, so the modes stay testable.
-func run(args []string, stdout io.Writer) int {
+// os.Exit directly, so the modes stay testable. The unbuilt answer is the bundle question the two
+// application packages ask of their own embeds; the real answer is unbuiltBundles.
+func run(args []string, stdout io.Writer, unbuilt func() []string) int {
 	exePath, err := os.Executable()
 	if err != nil {
 		exePath = ""
@@ -80,6 +114,14 @@ func run(args []string, stdout io.Writer) int {
 	// credential was lost.
 	if config.NewAdminPassword != "" {
 		return changeAdminPassword(config)
+	}
+
+	// The server embeds both applications, so a bundle that has never been built is a bundle whose
+	// pages the server answers with 404. The warning is said after the one-shot modes have returned
+	// and before the server starts: the operator running from a tree that has never built the
+	// clients is told what the missing pages are, and the server keeps serving without them.
+	if names := unbuilt(); len(names) > 0 {
+		fmt.Fprintln(stdout, bundleWarning(names))
 	}
 
 	return serve(config, stdout)
