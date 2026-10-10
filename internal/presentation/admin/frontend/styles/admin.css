@@ -614,6 +614,14 @@ rdio-admin .rdio-admin-card.tools input[type="file"] {
   max-width: 100%;
 }
 
+/* File inputs sit in row.top beside the system select, aligned like the options
+   rows: same flex basis, so select and file input share the control column. */
+
+rdio-admin .rdio-admin-card.tools .row.top > input[type="file"] {
+  flex: 0 1 320px;
+  min-width: 200px;
+}
+
 rdio-admin .rdio-admin-csv-preview {
   border-collapse: collapse;
   margin: 8px 12px;

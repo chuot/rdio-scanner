@@ -9,7 +9,7 @@ import { ADMIN_CONFIG_SECTIONS } from '../../../../common/frontend/domain/config
 import { migrateLegacyConfig } from '../../domain/config-legacy-keys.js';
 import { importTalkgroups, importUnits, parseCsv } from '../../domain/csv-import.js';
 import { version } from '../../../../common/frontend/infrastructure/version.js';
-import { openApiBox, sectionWorking, setSectionWorking } from './section-shell.js';
+import { sectionWorking, setSectionWorking } from './section-shell.js';
 import { passwordPanel } from './password-panel.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -42,7 +42,6 @@ class RdioAdminTools extends HTMLElement {
     root.append(this.csvPanel('talkgroups', 'Import talkgroups', 'Upload a talkgroups CSV file (id, frequency, label, group, name, tag, description columns). Missing groups and tags are created automatically.'));
     root.append(this.csvPanel('units', 'Import units', 'Upload a units CSV file (id, label columns).'));
     root.append(passwordPanel());
-    root.append(openApiBox('tools'));
 
     this.replaceChildren(root);
   }
@@ -120,11 +119,15 @@ class RdioAdminTools extends HTMLElement {
       }
     });
 
+    const captionEl = document.createElement('p');
+    captionEl.className = 'caption';
+    captionEl.textContent = 'Export downloads the saved config as JSON. Upload a config JSON file to load it into the section working copies, then save each section to apply.';
+
     const row = document.createElement('div');
-    row.className = 'row';
+    row.className = 'row top';
     row.append(exportButton, importInput);
 
-    details.append(row);
+    details.append(captionEl, row);
 
     return details;
   }
@@ -132,7 +135,7 @@ class RdioAdminTools extends HTMLElement {
   // --- csv imports ---------------------------------------------------------------
 
   csvPanel(kind, title, caption) {
-    const details = this.panel(title, kind === 'talkgroups' ? 'import_talkgroups' : 'import_units');
+    const details = this.panel(title, kind === 'talkgroups' ? 'group_work' : 'directions_car');
 
     const captionEl = document.createElement('p');
     captionEl.className = 'caption';
@@ -246,11 +249,15 @@ class RdioAdminTools extends HTMLElement {
       showSnackbar(kind === 'talkgroups' ? 'Talkgroups imported — save the systems, groups and tags sections to apply' : 'Units imported — save the systems section to apply');
     });
 
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.append(systemSelect, fileInput);
+    const top = document.createElement('div');
+    top.className = 'row top';
+    top.append(systemSelect, fileInput);
 
-    details.append(captionEl, row, table, importButton);
+    const bottom = document.createElement('div');
+    bottom.className = 'row bottom';
+    bottom.append(importButton);
+
+    details.append(captionEl, top, table, bottom);
 
     return details;
   }
