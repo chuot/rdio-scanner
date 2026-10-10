@@ -336,9 +336,9 @@ async function buildApp(config) {
 // importing it must not rebuild the webapp.
 const runThisBuild = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-// `--scanner` or `--admin` builds one application; with neither, the build produces both. The Makefile
-// always builds both, because each bundle is written beside the Go package that embeds it and a build
-// that produced only one would leave the other stale without saying so.
+// `--scanner` or `--admin` builds one application; with neither, the build produces both. The Go build
+// tool runs one application per step, so each bundle is built by the step that names it and the run says
+// which one it built.
 const only = args.includes('--scanner') ? 'scanner' : args.includes('--admin') ? 'admin' : null;
 
 if (runThisBuild) {

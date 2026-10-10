@@ -46,7 +46,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         > ~/rdio-scanner-freebsd-amd64-v8.0.0.zip 
         Archive:  ../rdio-scanner-freebsd-amd64-v8.0.0.zip
          extracting: rdio-scanner  
-         extracting: rdio-scanner.pdf
+         extracting: rdio-scanner.html
+         extracting: FFMPEG.md
 
 3. Run the executable.
 

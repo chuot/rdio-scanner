@@ -7,10 +7,10 @@ dist/
 data-dev/
 testdata/
 
-# the client is built by `make client` before the image is built. The server embeds the built bundles
-# from internal/presentation/scanner/frontend/bundle/ and internal/presentation/admin/frontend/bundle/,
-# which are copied. The sources sit in the same folders as the bundles they build, so the sources are
-# excluded one by one and the bundle directories are left in.
+# the client is built by `go run ./cmd/build client` before the image is built. The server embeds the
+# built bundles from internal/presentation/scanner/frontend/bundle/ and
+# internal/presentation/admin/frontend/bundle/, which are copied. The sources sit in the same folders as
+# the bundles they build, so the sources are excluded one by one and the bundle directories are left in.
 internal/presentation/node_modules
 internal/presentation/build.mjs
 internal/presentation/package.json

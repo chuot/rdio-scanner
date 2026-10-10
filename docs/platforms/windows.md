@@ -47,7 +47,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         C:\Users\rdio\rdio-scanner> tar -xvf ^
             ..\downloads\rdio-scanner-windows-amd64-v8.0.0.zip
         x rdio-scanner.exe
-        x rdio-scanner.pdf
+        x rdio-scanner.html
+        x FFMPEG.md
 
 3. Run the executable.
 

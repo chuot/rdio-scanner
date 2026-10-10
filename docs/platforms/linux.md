@@ -46,7 +46,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
         > ~/Downloads/rdio-scanner-linux-amd64-v8.0.0.zip 
         Archive:  /home/rdio/Downloads/rdio-scanner-linux-amd64-v8.0.0.zip
           inflating: rdio-scanner            
-          inflating: rdio-scanner.pdf     
+          inflating: rdio-scanner.html   
+          inflating: FFMPEG.md
 
 3. Run the executable.
 

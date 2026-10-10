@@ -42,7 +42,8 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 4. Access the administrative dashboard to finalize the configuration.
 
-More detailed instructions are available in the `rdio-scanner.pdf` file provided in the precompiled archives.
+More detailed instructions are available in the `rdio-scanner.html` file provided in the precompiled
+archives. It is a single self-contained file, so it opens in a browser with no network access.
 
 ## Docker
 
