@@ -56,6 +56,19 @@ test('the banner shows the open todos in the content column, above the section c
     'the banner must sit in the content column, above the section card');
 });
 
+test('the topbar carries the brand and the logout control, and no role text', () => {
+  const { el } = shell();
+
+  const roles = findAll(el, (node) => node.className.includes('rdio-admin-role'));
+
+  assert.equal(roles.length, 0, 'the topbar must not show the Admin role text');
+
+  const headers = findAll(el, (node) => node.className.includes('rdio-admin-header'));
+
+  assert.equal(headers.length, 1, 'the shell has one header');
+  assert.ok(texts(findAll(headers[0], (node) => node.tag === 'h1')).includes('Rdio Scanner'), 'the header must carry the brand');
+});
+
 test('the banner renders nothing when there is nothing to say', () => {
   const { store, el } = shell();
 

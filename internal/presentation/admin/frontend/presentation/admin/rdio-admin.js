@@ -77,11 +77,7 @@ class RdioAdmin extends HTMLElement {
     const title = document.createElement('h1');
     title.textContent = 'Rdio Scanner';
 
-    const role = document.createElement('span');
-    role.className = 'rdio-admin-role';
-    role.textContent = 'Admin';
-
-    brand.append(logo, title, role);
+    brand.append(logo, title);
     header.append(brand);
 
     const logout = document.createElement('button');
