@@ -351,3 +351,85 @@ func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 		t.Errorf("the run ran\n  %v\nwant\n  %v", got, want)
 	}
 }
+
+// The container image builds the server inside itself, so the run that prepares it builds the
+// applications and the ffmpeg the image's architecture embeds, and then asks podman to build the image.
+// Building a server binary here would be a binary the image throws away.
+func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"container"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-amd64",
+		"container rdio-scanner:latest",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
+
+// The version the image reports is the one the run resolved, through the build argument the
+// Containerfile reads. An image built without it reports the development fallback, which is the sign
+// that nobody said what the image is.
+func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"container"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	last := (*ran)[len(*ran)-1]
+
+	if last.name != "podman" {
+		t.Fatalf("the container run ended with %s, want podman", last.name)
+	}
+
+	want := []string{"build", "--pull", "--build-arg", "VERSION=8.0.0", "-t", "rdio-scanner:latest", "."}
+
+	if strings.Join(last.args, " ") != strings.Join(want, " ") {
+		t.Errorf("podman ran with %v, want %v", last.args, want)
+	}
+}
+
+// A development build's image says it is one, the same way the binary built from the same commit does.
+func TestTheContainerImageOfADevelopmentBuildCarriesTheDevelopmentVersion(t *testing.T) {
+	tl, _, ran := fakeRun(development, "")
+
+	if code := tl.run([]string{"container"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	last := (*ran)[len(*ran)-1]
+
+	if !strings.Contains(strings.Join(last.args, " "), "VERSION=8.0.0+gdb79311") {
+		t.Errorf("the image was built with %v, which does not carry the development version", last.args)
+	}
+}
+
+// The image is linux-amd64, because that is the architecture the Containerfile's guard checks for. A
+// container run asked for another target is a run that would build an ffmpeg the image never embeds.
+func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T) {
+	o, err := parseArgs([]string{"container"})
+	if err != nil {
+		t.Fatalf("a container run was refused: %v", err)
+	}
+
+	if o.target != "linux-amd64" {
+		t.Errorf("a container run builds for %q, want the architecture the Containerfile checks for", o.target)
+	}
+
+	if _, err := parseArgs([]string{"container", "linux-arm64"}); err == nil {
+		t.Error("a container run for linux-arm64 was accepted, and the image builds for linux-amd64")
+	}
+}

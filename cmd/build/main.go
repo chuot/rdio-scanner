@@ -89,7 +89,7 @@ type tool struct {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|version] [--pre <name>] [-o <path>]\n", err)
 		return 2
 	}
 
@@ -146,6 +146,21 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		if err := t.ffmpeg(o, stdout); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", subFFmpeg, err))
 		}
+	}
+
+	// The container image compiles its own server, so the run that prepares it ends with podman: the
+	// applications and the ffmpeg the image's architecture embeds are what the Containerfile needs on
+	// disk, and a server binary built here is one the image throws away.
+	if o.sub == subContainer {
+		s := containerStep(o, t.repo, version)
+
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+
+		return 0
 	}
 
 	if o.buildsServer() {

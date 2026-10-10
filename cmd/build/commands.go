@@ -31,13 +31,21 @@ import (
 // The subcommands the tool knows. An empty one is the whole pipeline: both applications, then the
 // ffmpeg the server carries, then the server that carries both.
 const (
-	subClient  = "client"
-	subScanner = "scanner"
-	subAdmin   = "admin"
-	subFFmpeg  = "ffmpeg"
-	subServer  = "server"
-	subVersion = "version"
-	subDist    = "dist"
+	subClient    = "client"
+	subScanner   = "scanner"
+	subAdmin     = "admin"
+	subFFmpeg    = "ffmpeg"
+	subServer    = "server"
+	subVersion   = "version"
+	subDist      = "dist"
+	subContainer = "container"
+)
+
+// The container image is linux-amd64, because that is the architecture the Containerfile's guard checks
+// for, and the name the image is tagged with.
+const (
+	containerTarget = "linux-amd64"
+	containerImage  = "rdio-scanner:latest"
 )
 
 // The two things a release writes that are not external commands: the document the archive carries, and
@@ -75,11 +83,11 @@ type options struct {
 }
 
 func (o options) buildsClients() bool {
-	return o.sub == "" || o.sub == subClient || o.sub == subScanner || o.sub == subAdmin || o.sub == subDist
+	return o.sub == "" || o.sub == subClient || o.sub == subScanner || o.sub == subAdmin || o.sub == subDist || o.sub == subContainer
 }
 
 func (o options) buildsFFmpeg() bool {
-	return o.sub == "" || o.sub == subFFmpeg
+	return o.sub == "" || o.sub == subFFmpeg || o.sub == subContainer
 }
 
 func (o options) buildsServer() bool {
@@ -134,12 +142,25 @@ func parseArgs(args []string) (options, error) {
 			o.output = args[i]
 			o.outputNamed = true
 
-		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist:
+		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subContainer:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
 			}
 
 			o.sub = arg
+
+			// The container image is one architecture: the Containerfile's guard checks for the ffmpeg
+			// compiled for linux-amd64, and the image builds for that architecture. A target named after
+			// it is a run that would build an ffmpeg the image never embeds.
+			if arg == subContainer {
+				if i+1 < len(args) && isTarget(args[i+1]) {
+					return options{}, fmt.Errorf("the container image is %s, so %s is not a target a container run builds for", containerTarget, args[i+1])
+				}
+
+				o.target = containerTarget
+
+				continue
+			}
 
 			// The ffmpeg phase and the release matrix are the two things this tool builds for a platform
 			// the operator names, because that is how the release matrix cross-builds from one machine.
@@ -242,9 +263,9 @@ func plan(o options, repo string, version buildinfo.Version, npmName string) []s
 
 		for _, app := range []string{subScanner, subAdmin} {
 			// A run that named one application builds that application. A run that named the whole
-			// pipeline, both applications, or the release matrix builds both: the bundles are the same
-			// for every target, so the matrix builds them once.
-			if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != app {
+			// pipeline, both applications, the release matrix, or the container image builds both: the
+			// bundles are the same for every target, so the matrix builds them once.
+			if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != subContainer && o.sub != app {
 				continue
 			}
 
@@ -289,5 +310,25 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 			"./cmd/rdio-scanner",
 		},
 		env: []string{"GOOS=" + serverGoos(target), "GOARCH=" + goarch},
+	}
+}
+
+// containerStep asks podman to build the image. The version reaches it through the build argument the
+// Containerfile reads into the linker flag: an image built without it reports the development fallback,
+// which is the sign that nobody said what the image is. The server binary is compiled inside the image,
+// so the run that prepares it builds no binary of its own.
+func containerStep(o options, repo string, version buildinfo.Version) step {
+	return step{
+		label:  subContainer,
+		result: containerImage,
+		dir:    repo,
+		name:   "podman",
+		args: []string{
+			"build",
+			"--pull",
+			"--build-arg", "VERSION=" + version.String(),
+			"-t", containerImage,
+			".",
+		},
 	}
 }
