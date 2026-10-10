@@ -31,10 +31,9 @@ import (
 	"testing"
 )
 
-// One archive per release target. What it carries is the contract in
-// docs/specs/FEAT-013-go-build-retires-the-makefile/contract-release-archive.md: the binary, the
-// documentation as the files it is written in, the images those files reference, and the ffmpeg licence
-// when the target carries an ffmpeg.
+// One archive per release target. What it carries is the release-archive contract FEAT-013 set: the
+// binary, the documentation as the files it is written in, the images those files reference, and the
+// ffmpeg licence when the target carries an ffmpeg.
 
 // The archive's name is the name the platform document's transcript tells the reader to download, so a
 // release that writes a file the document does not name is a release a reader cannot follow.
