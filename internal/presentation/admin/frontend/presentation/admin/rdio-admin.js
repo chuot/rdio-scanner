@@ -12,6 +12,7 @@ import './rdio-admin-apikeys.js';
 import './rdio-admin-dirwatch.js';
 import './rdio-admin-downstreams.js';
 import './rdio-admin-groups.js';
+import './rdio-admin-ingestion.js';
 import './rdio-admin-options.js';
 import './rdio-admin-logs.js';
 import './rdio-admin-sites.js';
@@ -32,6 +33,7 @@ const SECTIONS = [
   { name: 'sites', label: 'Sites', icon: 'place' },
   { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
   { name: 'units', label: 'Units', icon: 'directions_car' },
+  { name: 'ingestion', label: 'Ingestion', icon: 'cloud_upload' },
   { name: 'options', label: 'Options', icon: 'tune' },
   { name: 'logs', label: 'Logs', icon: 'article' },
   { name: 'tools', label: 'Tools', icon: 'build' },
