@@ -24,7 +24,8 @@
 //
 // It is a drop-in for the legacy server: the same configuration files, the same
 // database a legacy deployment left behind, and the same interfaces clients already
-// speak to — including the version it reports, which is pinned in testdata/golden/.
+// speak to — including the version it reports, which is pinned in the captures recorded beside the
+// tests that prove them.
 package main
 
 // Version is the release version this binary reports. cmd/build replaces it at build time with

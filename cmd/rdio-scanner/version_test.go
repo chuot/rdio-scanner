@@ -30,13 +30,13 @@ import (
 	"rdio-scanner/internal/buildinfo"
 )
 
-// captureVersion is the version the server that produced the pinned captures reported.
+// captureVersion is the version the server that produced the recorded captures reported.
 //
-// The parity tests in this package compare bytes against testdata/golden/, and the version a build
-// injects is a fact about the build, not a fact about a capture. So the tests name the release they
-// compare against instead of inheriting it from whatever the binary being compiled happens to carry:
-// a development build reporting `dev` still compares its bytes against a capture taken from 8.0.0,
-// which is what it is doing.
+// The parity tests in this package compare bytes against the captures recorded in the package that
+// proves them, and the version a build injects is a fact about the build, not a fact about a capture.
+// So the tests name the release they compare against instead of inheriting it from whatever the binary
+// being compiled happens to carry: a development build reporting `dev` still compares its bytes against
+// a capture taken from 8.0.0, which is what it is doing.
 const captureVersion = "8.0.0"
 
 func TestMain(m *testing.M) {
@@ -64,12 +64,11 @@ func TestVersionMatchesThePinnedWireContract(t *testing.T) {
 	// is not in this repository, so the test skipped — every day, since the legacy trees were
 	// deleted — and a test that always skips asserts nothing.
 	//
-	// What the legacy server reported is not lost. testdata/golden/payload-ver.json is the payload
-	// the legacy server put on the wire for a version request, captured in the configuration every
-	// golden was taken in and pinned to the tree the goldens are pinned to. Five of the pinned
-	// captures carry that version, because what a server reports is part of what a client is told.
-	// Comparing against the contract is what comparing against the legacy source was for, and it
-	// does not reach into a directory that is no longer here.
+	// What the legacy server reported is not lost. capturedVersionAnswer is the payload the legacy
+	// server put on the wire for a version request, captured in the configuration every capture was
+	// taken in and pinned to the tree the captures are pinned to. Five of the recorded captures carry
+	// that version, because what a server reports is part of what a client is told. Comparing against
+	// the contract is what comparing against the legacy source was for.
 	//
 	// What is compared is the core the build system resolves from VERSION.txt, not the value compiled
 	// into the binary being tested: a binary built without the tool reports the development fallback,
@@ -123,33 +122,30 @@ func TestThePinnedWireContractComparesCoresAndNotWholeVersions(t *testing.T) {
 	}
 }
 
-// pinnedWireCore reads the core of the version out of the pinned capture of a version response.
+// capturedVersionAnswer is the answer a legacy server gave to a version request, recorded byte for
+// byte. It lives in the test that compares against it, which is what REQ-007 asks for: no fixture
+// directory, no manifest, and nothing outside the test that proves it.
+const capturedVersionAnswer = `{"branding":"Capture Dispatch","email":"dispatch@example.com","version":"8.0.0"}`
+
+// pinnedWireCore reads the core of the version out of the recorded answer.
 func pinnedWireCore(t *testing.T) string {
 	t.Helper()
-
-	path := filepath.Join("..", "..", "testdata", "golden", "payload-ver.json")
-
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("%s is missing: %v\n"+
-			"the goldens are pinned bytes and nothing regenerates them; see testdata/golden/manifest.json", path, err)
-	}
 
 	var payload struct {
 		Version string `json:"version"`
 	}
 
-	if err := json.Unmarshal(b, &payload); err != nil {
-		t.Fatalf("%s does not parse: %v", path, err)
+	if err := json.Unmarshal([]byte(capturedVersionAnswer), &payload); err != nil {
+		t.Fatalf("the recorded version answer does not parse: %v", err)
 	}
 
 	if payload.Version == "" {
-		t.Fatalf("%s names no version", path)
+		t.Fatalf("the recorded version answer names no version")
 	}
 
 	core, err := buildinfo.CoreOf(payload.Version)
 	if err != nil {
-		t.Fatalf("%s pins %v", path, err)
+		t.Fatalf("the recorded version answer pins %v", err)
 	}
 
 	return core
