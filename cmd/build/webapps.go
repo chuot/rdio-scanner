@@ -91,6 +91,11 @@ func clientSources(repo string) ([]string, error) {
 		}
 	}
 
+	// The administration bundle carries the OpenAPI contract as a static file, and the
+	// OpenAPI section renders from it: a contract edit must make the bundle stale, or the
+	// section ships endpoints the server no longer answers.
+	files = append(files, filepath.Join(repo, "docs", "openapi.json"))
+
 	return files, nil
 }
 

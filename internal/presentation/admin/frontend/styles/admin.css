@@ -660,10 +660,10 @@ rdio-admin .rdio-admin-card.tools details.rdio-admin-row form {
   padding: var(--rdio-space-2) var(--rdio-space-3) var(--rdio-space-3);
 }
 
-/* --- openapi help box --------------------------------------------------------------- */
+/* --- openapi section ------------------------------------------------------------------ */
 
-/* The small box every section card ends with: the endpoints the section saves
-   through, and one curl example. It is read, never clicked. */
+/* The boxes the OpenAPI section renders from the contract: method chip, path, and
+   the operation summary. They are read, never clicked. */
 
 rdio-admin .rdio-admin-openapi-box {
   background: rgba(255, 255, 255, 0.04);
@@ -699,7 +699,23 @@ rdio-admin .rdio-admin-openapi-box ul {
 }
 
 rdio-admin .rdio-admin-openapi-box li {
+  align-items: baseline;
+  display: flex;
+  gap: var(--rdio-space-2);
   margin: 2px 0;
+}
+
+rdio-admin .rdio-admin-openapi-box .method {
+  color: rgba(255, 255, 255, 0.65);
+  font-family: var(--rdio-mono);
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 38px;
+  text-align: right;
+}
+
+rdio-admin .rdio-admin-openapi-box .method.delete {
+  color: var(--rdio-warn);
 }
 
 rdio-admin .rdio-admin-openapi-box code {
@@ -710,15 +726,9 @@ rdio-admin .rdio-admin-openapi-box code {
   padding: 2px 6px;
 }
 
-rdio-admin .rdio-admin-openapi-box pre {
-  background: var(--rdio-primary-dark);
-  border-radius: var(--rdio-radius-row);
-  font-family: var(--rdio-mono);
-  font-size: 12px;
-  margin: 0;
-  overflow-x: auto;
-  padding: var(--rdio-space-2) 10px;
-  white-space: pre-wrap;
+rdio-admin .rdio-admin-openapi-box .summary {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
 }
 
 /* --- systems-selection dialog tree ----------------------------------------------------- */

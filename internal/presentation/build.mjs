@@ -146,14 +146,16 @@ export const scannerConfig = {
     outDir: scannerBundle,
 };
 
-/** The admin application: no service worker, no offline cache, its own shell and manifest. */
+/** The admin application: no service worker, no offline cache, its own shell and manifest.
+ * The OpenAPI contract rides along as `openapi.json`: the OpenAPI section renders from it,
+ * so the contract file is the single source of truth for the endpoints the admin sees. */
 export const adminConfig = {
     name: 'admin',
     srcDir: adminDir,
     entryPoints: [join(adminDir, 'main.js')],
     indexHtml: join(adminDir, 'index.html'),
     serviceWorker: null,
-    staticFiles: [join(sharedDir, 'favicon.ico'), join(adminDir, 'manifest.webmanifest')],
+    staticFiles: [join(sharedDir, 'favicon.ico'), join(adminDir, 'manifest.webmanifest'), join(here, '..', '..', 'docs', 'openapi.json')],
     staticDirs: copiedAssets,
     outDir: adminBundle,
 };

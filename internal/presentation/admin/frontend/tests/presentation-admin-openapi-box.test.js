@@ -1,8 +1,9 @@
-// The API entrypoint submenu (FEAT-018, CA-005): one API section card lists every
-// OpenAPI entry point in seven groups, each group with one curl example, and every
-// endpoint it names exists in docs/openapi.json. No other section card
-// carries an OpenAPI box. The boxes are informational: the test reads what they
-// render, never what they request.
+// The OpenAPI submenu (FEAT-018 CA-005, FEAT-024 CA-003): the section renders the
+// endpoint groups derived from docs/openapi.json — method, path, and summary per
+// endpoint — through the shared box. The auth sentence is stated once in the card
+// intro. A contract that cannot be fetched renders one honest caption. No other
+// section card carries an OpenAPI box. The boxes are informational: the test reads
+// what they render, never what they request.
 
 import './dom-shim.js';
 
@@ -13,13 +14,12 @@ import { readFileSync } from 'node:fs';
 import { getAdminContext } from '../application/admin-context.js';
 
 import '../presentation/admin/openapi-box.js';
-import '../presentation/admin/rdio-admin-api.js';
+import '../presentation/admin/rdio-admin-openapi.js';
 import '../presentation/admin/rdio-admin-access.js';
 import '../presentation/admin/rdio-admin-apikeys.js';
 import '../presentation/admin/rdio-admin-dirwatch.js';
 import '../presentation/admin/rdio-admin-downstreams.js';
 import '../presentation/admin/rdio-admin-groups.js';
-import '../presentation/admin/rdio-admin-ingestion.js';
 import '../presentation/admin/rdio-admin-logs.js';
 import '../presentation/admin/rdio-admin-options.js';
 import '../presentation/admin/rdio-admin-sites.js';
@@ -31,19 +31,7 @@ import '../presentation/admin/rdio-admin-units.js';
 
 import { findAll, texts } from './dom-shim.js';
 
-const openapi = JSON.parse(readFileSync(new URL('../../../../../docs/openapi.json', import.meta.url), 'utf8'));
-
-const DOC_PATHS = Object.keys(openapi.paths);
-
-function endpointKnown(endpoint) {
-  const [method, path] = endpoint.split(' ');
-
-  return DOC_PATHS.some((docPath) => {
-    const pattern = new RegExp(`^${docPath.replace(/\{[^}]+\}/g, '[^/]+')}$`);
-
-    return pattern.test(path) && (openapi.paths[docPath][method.toLowerCase()] !== undefined);
-  });
-}
+const contract = JSON.parse(readFileSync(new URL('../../../../../docs/openapi.json', import.meta.url), 'utf8'));
 
 function seed() {
   const { store } = getAdminContext();
@@ -72,91 +60,92 @@ function seed() {
   store.setState(state);
 }
 
-const GROUPS = ['authentication', 'config', 'alerts', 'logs', 'password', 'users', 'ingestion'];
-
-function apiCard() {
+async function openApiCard(fetchImpl) {
   seed();
 
-  const el = new (customElements.get('rdio-admin-api'))();
+  globalThis.fetch = fetchImpl ?? (async () => ({ ok: true, json: async () => contract }));
 
-  el.connectedCallback();
+  const el = new (customElements.get('rdio-admin-openapi'))();
+
+  await el.connectedCallback();
+
+  delete globalThis.fetch;
 
   const boxes = findAll(el, (node) => node.tag === 'rdio-admin-openapi-box');
-
-  assert.equal(boxes.length, GROUPS.length, 'the API card does not carry the seven entrypoint groups');
 
   for (const box of boxes) box.connectedCallback();
 
   return { el, boxes };
 }
 
-function apiBoxes() {
-  return apiCard().boxes;
-}
+test('the OpenAPI card renders one box per group, each endpoint with method, path, and summary', async () => {
+  const { boxes } = await openApiCard();
 
-function endpointsOf(box) {
-  return texts(findAll(box, (node) => node.tag === 'code'));
-}
+  assert.equal(boxes.length, 8, 'the OpenAPI card does not carry the eight contract groups');
 
-test('the API card lists every entry point in seven groups, all known to the OpenAPI document', () => {
-  const boxes = apiBoxes();
+  const titles = boxes.map((box) => texts(findAll(box, (node) => node.className === 'box-title').flatMap((p) => findAll(p, (node) => node.tag === 'span')))[0]);
 
-  for (const box of boxes) {
-    const endpoints = endpointsOf(box);
+  assert.deepEqual(titles, ['Authentication', 'Config', 'Alerts', 'Logs', 'Password', 'Users', 'Capture', 'Applications']);
 
-    assert.ok(endpoints.length >= 1, 'a group names no endpoint');
+  const login = findAll(boxes[0], (node) => node.tag === 'li')[0];
 
-    for (const endpoint of endpoints) {
-      assert.ok(endpointKnown(endpoint), `a group names ${endpoint}, absent from docs/openapi.json`);
-    }
+  assert.deepEqual(texts(findAll(login, (node) => node.className.startsWith('method '))), ['POST']);
+  assert.deepEqual(texts(findAll(login, (node) => node.tag === 'code')), ['/api/admin/login']);
+  assert.deepEqual(texts(findAll(login, (node) => node.className === 'summary')), ['Log in and obtain a JWT']);
+});
 
-    const examples = findAll(box, (node) => node.tag === 'pre');
+test('the OpenAPI card names every endpoint of the contract and nothing else', async () => {
+  const { boxes } = await openApiCard();
 
-    assert.equal(examples.length, 1, 'a group has no curl example');
-    assert.ok(examples[0].textContent.startsWith('curl'), 'a group example is not a curl call');
+  const paths = boxes.flatMap((box) => texts(findAll(box, (node) => node.tag === 'code')));
+
+  const contractPaths = Object.keys(contract.paths);
+
+  for (const path of paths) {
+    assert.ok(contractPaths.includes(path), `the card names ${path}, absent from docs/openapi.json`);
+  }
+
+  for (const path of contractPaths) {
+    assert.ok(paths.includes(path), `the card does not name ${path}, an endpoint of the contract`);
   }
 });
 
-test('the Authentication group names login and logout, the Ingestion group names both capture endpoints', () => {
-  const byGroup = Object.fromEntries(apiBoxes().map((box) => [box.dataset.group, endpointsOf(box)]));
-
-  assert.deepEqual(Object.keys(byGroup).sort(), [...GROUPS].sort(), 'the API card does not carry the named groups');
-
-  assert.ok(byGroup.authentication.includes('POST /api/admin/login'), 'the Authentication group does not name login');
-  assert.ok(byGroup.authentication.includes('POST /api/admin/logout'), 'the Authentication group does not name logout');
-
-  for (const level of ['sites', 'talkgroups', 'units']) {
-    assert.ok(byGroup.config.includes(`GET /api/admin/config/systems/{systemId}/${level}`), `the Config group does not name GET the ${level} level`);
-    assert.ok(byGroup.config.includes(`PUT /api/admin/config/systems/{systemId}/${level}`), `the Config group does not name PUT the ${level} level`);
-  }
-
-  assert.ok(byGroup.ingestion.includes('POST /api/call-upload'), 'the Ingestion group does not name the capture endpoint');
-  assert.ok(byGroup.ingestion.includes('POST /api/trunk-recorder-call-upload'), 'the Ingestion group does not name the trunk-recorder endpoint');
-});
-
-test('the auth sentence is stated once on the page and no box repeats it', () => {
-  const { el, boxes } = apiCard();
+test('the auth sentence is stated once on the page and no box repeats it', async () => {
+  const { el, boxes } = await openApiCard();
 
   const sentence = 'Admin endpoints take the raw JWT in the Authorization header, no Bearer prefix; the capture endpoints authenticate with the key form field.';
 
   const captions = texts(findAll(el, (node) => node.className === 'caption'));
 
-  assert.equal(captions.length, 1, 'the API card intro is not a single caption');
-  assert.ok(captions[0].includes(sentence), 'the API card intro does not state the auth sentence');
+  assert.equal(captions.length, 1, 'the OpenAPI card intro is not a single caption');
+  assert.ok(captions[0].includes(sentence), 'the OpenAPI card intro does not state the auth sentence');
 
   for (const box of boxes) {
     assert.equal(findAll(box, (node) => node.className === 'caption').length, 0, 'an entrypoint box carries a caption');
   }
 });
 
-test('the Config box groups its endpoints by resource', () => {
-  const boxes = apiBoxes();
+test('the Config box groups its endpoints by resource', async () => {
+  const { boxes } = await openApiCard();
 
-  const config = boxes.find((box) => box.dataset.group === 'config');
+  const config = boxes.find((box) => texts(findAll(box, (node) => node.className === 'box-title').flatMap((p) => findAll(p, (node) => node.tag === 'span'))).includes('Config'));
 
   const labels = texts(findAll(config, (node) => node.className === 'group-label'));
 
   assert.deepEqual(labels, ['config', 'sites', 'talkgroups', 'units'], 'the Config box does not group by resource');
+});
+
+test('a contract that cannot be fetched renders one honest caption, not a broken card', async () => {
+  const { el, boxes } = await openApiCard(async () => {
+    throw new TypeError('Failed to fetch');
+  });
+
+  assert.equal(boxes.length, 0, 'the card renders boxes without a contract');
+
+  const captions = texts(findAll(el, (node) => node.className === 'caption'));
+
+  assert.equal(captions.length, 2, 'the card does not render the intro and the unavailable caption');
+  assert.ok(captions[1].includes('not available'), 'the failure caption does not name the problem');
 });
 
 const SECTIONS = [

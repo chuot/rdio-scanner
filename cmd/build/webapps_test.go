@@ -228,6 +228,7 @@ func TestABundleIsCurrentWhenItIsNewerThanEverySourceItIsBuiltFrom(t *testing.T)
 		filepath.Join(presentationDir, "scanner", "frontend", "main.js"),
 		filepath.Join(presentationDir, "common", "frontend", "application", "app.js"),
 		filepath.Join(presentationDir, "admin", "frontend", "main.js"),
+		filepath.Join("docs", "openapi.json"),
 	}
 
 	for _, path := range sources {
@@ -270,6 +271,7 @@ func TestTheBuiltBundleIsNotASourceOfEitherBundle(t *testing.T) {
 		filepath.Join(presentationDir, "scanner", "frontend", "main.js"),
 		filepath.Join(presentationDir, "admin", "frontend", "main.js"),
 		filepath.Join(presentationDir, "common", "frontend", "application", "app.js"),
+		filepath.Join("docs", "openapi.json"),
 	}
 
 	for _, path := range sources {
