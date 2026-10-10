@@ -93,6 +93,14 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 
 			return nil
 		},
+
+		// A clean run removes files from the tree. The stand-in records that it ran; what it removes is
+		// tested in build_test.go, in a tree the test made.
+		clean: func(repo string) ([]string, error) {
+			ran = append(ran, step{label: subClean, result: repo})
+
+			return []string{"removed"}, nil
+		},
 	}
 
 	return t, out, &ran
@@ -431,5 +439,40 @@ func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T
 
 	if _, err := parseArgs([]string{"container", "linux-arm64"}); err == nil {
 		t.Error("a container run for linux-arm64 was accepted, and the image builds for linux-amd64")
+	}
+}
+
+// A clean run removes what a release and a client build leave behind, and builds nothing: the
+// dependencies, the release output, and the contents of both bundles. A run that cleaned and then
+// rebuilt is a run that answered a question nobody asked.
+func TestACleanRunRemovesTheReleaseOutputTheDependenciesAndTheBundleContents(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"clean"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	if len(*ran) != 1 {
+		t.Fatalf("the clean run ran %d steps, want the clean step alone", len(*ran))
+	}
+
+	if (*ran)[0].label != subClean {
+		t.Errorf("the clean run ran %s, want the clean step", (*ran)[0].label)
+	}
+}
+
+// A clean run is a command the tool honours, and it names no target: there is nothing to build for.
+func TestACleanRunIsACommandTheToolHonours(t *testing.T) {
+	o, err := parseArgs([]string{"clean"})
+	if err != nil {
+		t.Fatalf("a clean run was refused: %v", err)
+	}
+
+	if o.sub != subClean {
+		t.Errorf("the run's command is %q, want %s", o.sub, subClean)
+	}
+
+	if o.target != "" {
+		t.Errorf("a clean run builds for %q, and a clean run builds nothing", o.target)
 	}
 }

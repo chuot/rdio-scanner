@@ -38,6 +38,7 @@ const (
 	subServer    = "server"
 	subVersion   = "version"
 	subDist      = "dist"
+	subClean     = "clean"
 	subContainer = "container"
 )
 
@@ -142,22 +143,29 @@ func parseArgs(args []string) (options, error) {
 			o.output = args[i]
 			o.outputNamed = true
 
-		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subContainer:
+		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
 			}
 
 			o.sub = arg
 
-			// The container image is one architecture: the Containerfile's guard checks for the ffmpeg
-			// compiled for linux-amd64, and the image builds for that architecture. A target named after
-			// it is a run that would build an ffmpeg the image never embeds.
-			if arg == subContainer {
+			// A clean run builds nothing, so a target after it is a word lying at the end of a command
+			// line. The container image is one architecture: the Containerfile's guard checks for the
+			// ffmpeg compiled for linux-amd64, and a target named after it is a run that would build an
+			// ffmpeg the image never embeds.
+			if arg == subClean || arg == subContainer {
 				if i+1 < len(args) && isTarget(args[i+1]) {
+					if arg == subClean {
+						return options{}, fmt.Errorf("a clean run builds nothing, so %s is not a target it is asked for", args[i+1])
+					}
+
 					return options{}, fmt.Errorf("the container image is %s, so %s is not a target a container run builds for", containerTarget, args[i+1])
 				}
 
-				o.target = containerTarget
+				if arg == subContainer {
+					o.target = containerTarget
+				}
 
 				continue
 			}

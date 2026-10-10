@@ -124,3 +124,67 @@ func TestAStepRunsInItsOwnDirectoryWithItsOwnExit(t *testing.T) {
 		t.Error("a step whose program says no is reported as having succeeded")
 	}
 }
+
+// A clean run removes the release output, the client dependencies, and the contents of both bundles,
+// and leaves the `.gitkeep` files that keep a plain go build compiling. The placeholders are the reason
+// the bundle contents are removed one by one and the bundle directory itself is left standing.
+func TestCleanRemovesTheReleaseOutputAndTheBundleContentsAndLeavesThePlaceholders(t *testing.T) {
+	repo := t.TempDir()
+
+	writeTreeFile(t, repo, filepath.Join("dist", "linux-amd64", "rdio-scanner"), "the binary")
+	writeTreeFile(t, repo, filepath.Join("dist", "rdio-scanner-linux-amd64-v8.0.0.zip"), "the archive")
+	writeTreeFile(t, repo, filepath.Join(presentationDir, "node_modules", "esbuild", "package.json"), "the dependency")
+
+	for _, app := range []string{subScanner, subAdmin} {
+		bundle := filepath.Join(presentationDir, app, "frontend", "bundle")
+
+		writeTreeFile(t, repo, filepath.Join(bundle, ".gitkeep"), "")
+		writeTreeFile(t, repo, filepath.Join(bundle, "index.html"), "the bundle")
+		writeTreeFile(t, repo, filepath.Join(bundle, "assets", "app.js"), "the bundle")
+	}
+
+	removed, err := cleanTree(repo)
+	if err != nil {
+		t.Fatalf("cleanTree: %v", err)
+	}
+
+	for _, path := range []string{"dist", filepath.Join(presentationDir, "node_modules")} {
+		if directoryExists(filepath.Join(repo, path)) {
+			t.Errorf("%s survived a clean run", path)
+		}
+	}
+
+	for _, app := range []string{subScanner, subAdmin} {
+		bundle := filepath.Join(repo, presentationDir, app, "frontend", "bundle")
+
+		if _, err := os.Stat(filepath.Join(bundle, ".gitkeep")); err != nil {
+			t.Errorf("%s lost the placeholder that keeps a plain go build compiling", bundle)
+		}
+
+		for _, name := range []string{"index.html", "assets"} {
+			if _, err := os.Stat(filepath.Join(bundle, name)); err == nil {
+				t.Errorf("%s kept %s, which a clean run removes", bundle, name)
+			}
+		}
+	}
+
+	// The release output, the dependencies, and the two bundles' contents.
+	if len(removed) != 6 {
+		t.Errorf("the clean run named %d removals, want 6: %v", len(removed), removed)
+	}
+}
+
+// writeTreeFile puts a file into a tree the tool is being asked to clean.
+func writeTreeFile(t *testing.T, repo string, path string, contents string) {
+	t.Helper()
+
+	full := filepath.Join(repo, path)
+
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("making %s: %v", filepath.Dir(full), err)
+	}
+
+	if err := os.WriteFile(full, []byte(contents), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}

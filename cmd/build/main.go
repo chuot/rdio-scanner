@@ -50,6 +50,7 @@ func main() {
 		execute:      runStep,
 		write:        writeFile,
 		archive:      writeArchive,
+		clean:        cleanTree,
 		document:     renderDocument,
 		releaseFiles: archiveFiles,
 	}
@@ -73,6 +74,9 @@ type tool struct {
 	write   func(path string, body []byte) error
 	archive func(path string, files []archiveFile) error
 
+	// clean removes what a clean run removes. It is not an external command.
+	clean func(repo string) ([]string, error)
+
 	// document renders the archive document for a target, and releaseFiles reads what the archive
 	// carries. Both read the tree, so the stand-in answers them: what they do is tested in docs_test.go
 	// and archive_test.go.
@@ -89,7 +93,7 @@ type tool struct {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
 		return 2
 	}
 
@@ -113,6 +117,21 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 	if src.dirty {
 		fmt.Fprintln(stdout, "note   working tree is dirty; the version does not say so")
+	}
+
+	// A clean run removes what a release and a client build leave behind, and builds nothing. It needs
+	// no npm, no ffmpeg, and no compiler, so it ends the run where it started.
+	if o.sub == subClean {
+		removed, err := t.clean(t.repo)
+		if err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", subClean, err))
+		}
+
+		for _, path := range removed {
+			fmt.Fprintf(stdout, "%-7s %s\n", subClean, path)
+		}
+
+		return 0
 	}
 
 	npmName := ""

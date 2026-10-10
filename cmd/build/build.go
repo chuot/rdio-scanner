@@ -81,6 +81,54 @@ func writeFile(path string, body []byte) error {
 	return nil
 }
 
+// cleanTree removes what a clean run removes: the release output, the client dependencies, and the
+// contents of both bundles. The `.gitkeep` file in each bundle is left standing, because it is the
+// placeholder that keeps a plain go build compiling: the bundle directory has to exist for the Go
+// package that embeds it, and the contents are what a build puts there.
+//
+// The run names what it removed, so a tree that was already clean says so by naming nothing.
+func cleanTree(repo string) ([]string, error) {
+	targets := []string{filepath.Join(repo, "dist"), filepath.Join(repo, presentationDir, "node_modules")}
+
+	for _, app := range []string{subScanner, subAdmin} {
+		bundle := filepath.Join(repo, presentationDir, app, "frontend", "bundle")
+
+		entries, err := os.ReadDir(bundle)
+		if err != nil {
+			// A tree that has never been built has no bundle contents to remove.
+			if os.IsNotExist(err) {
+				continue
+			}
+
+			return nil, fmt.Errorf("the clean run cannot read %s: %w", bundle, err)
+		}
+
+		for _, entry := range entries {
+			if entry.Name() == ".gitkeep" {
+				continue
+			}
+
+			targets = append(targets, filepath.Join(bundle, entry.Name()))
+		}
+	}
+
+	var removed []string
+
+	for _, path := range targets {
+		if _, err := os.Lstat(path); err != nil {
+			continue
+		}
+
+		if err := os.RemoveAll(path); err != nil {
+			return nil, fmt.Errorf("the clean run cannot remove %s: %w", path, err)
+		}
+
+		removed = append(removed, path)
+	}
+
+	return removed, nil
+}
+
 // runStep runs one step, with its own directory and its extra environment, and lets whatever the
 // program says reach the operator.
 func runStep(s step) error {
