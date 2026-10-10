@@ -69,6 +69,21 @@ test('the topbar carries the brand and the logout control, and no role text', ()
   assert.ok(texts(findAll(headers[0], (node) => node.tag === 'h1')).includes('Rdio Scanner'), 'the header must carry the brand');
 });
 
+test('the navigation lists the sections alphabetically by label', () => {
+  const { el } = shell();
+
+  const navs = findAll(el, (node) => node.className.includes('rdio-admin-nav'));
+
+  assert.equal(navs.length, 1, 'the shell has one navigation column');
+
+  const labels = texts(findAll(navs[0], (node) => node.tag === 'span'));
+
+  assert.deepEqual(labels, [...labels].sort((a, b) => a.localeCompare(b, 'en')), 'the navigation is not alphabetical by label');
+
+  assert.ok(!labels.includes('Ingestion'), 'the navigation still carries the Ingestion section');
+  assert.ok(labels.includes('OpenAPI'), 'the navigation does not carry the OpenAPI section');
+});
+
 test('the banner renders nothing when there is nothing to say', () => {
   const { store, el } = shell();
 

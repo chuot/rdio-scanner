@@ -22,21 +22,23 @@ import './rdio-admin-tags.js';
 import './rdio-admin-tools.js';
 import './rdio-admin-units.js';
 
+// The navigation is alphabetical by label: an operator looking for a section
+// knows where to scan. Keep this list sorted.
 const SECTIONS = [
   { name: 'access', label: 'Access', icon: 'vpn_key' },
   { name: 'apikeys', label: 'API Keys', icon: 'key' },
   { name: 'dirwatch', label: 'Dirwatch', icon: 'folder', hiddenWhenDocker: true },
   { name: 'downstreams', label: 'Downstreams', icon: 'import_export' },
   { name: 'groups', label: 'Groups', icon: 'group' },
-  { name: 'tags', label: 'Tags', icon: 'label' },
-  { name: 'systems', label: 'Systems', icon: 'settings' },
-  { name: 'sites', label: 'Sites', icon: 'place' },
-  { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
-  { name: 'units', label: 'Units', icon: 'directions_car' },
+  { name: 'logs', label: 'Logs', icon: 'article' },
   { name: 'openapi', label: 'OpenAPI', icon: 'api' },
   { name: 'options', label: 'Options', icon: 'tune' },
-  { name: 'logs', label: 'Logs', icon: 'article' },
+  { name: 'sites', label: 'Sites', icon: 'place' },
+  { name: 'systems', label: 'Systems', icon: 'settings' },
+  { name: 'tags', label: 'Tags', icon: 'label' },
+  { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
   { name: 'tools', label: 'Tools', icon: 'build' },
+  { name: 'units', label: 'Units', icon: 'directions_car' },
 ];
 
 class RdioAdmin extends HTMLElement {
