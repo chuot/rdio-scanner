@@ -206,6 +206,47 @@ func TestIsDuplicateOfUsesTheLegacyRule(t *testing.T) {
 	}
 }
 
+// TestIsDuplicateOfRequiresTheSameSite pins the site rule: calls on the same system
+// and talkgroup are duplicates only when they share the site. A call with no site
+// (SiteRef 0) is a duplicate only of site-less calls; a site-bearing call never
+// matches a site-less one, in either direction.
+func TestIsDuplicateOfRequiresTheSameSite(t *testing.T) {
+	window := DefaultOptions().DuplicateDetectionWindow()
+
+	first := validCall()
+	first.SiteRef = 3
+
+	sameSite := validCall()
+	sameSite.SiteRef = 3
+
+	if !sameSite.IsDuplicateOf(first, window) {
+		t.Error("a call on the same site, system and talkgroup must be a duplicate")
+	}
+
+	otherSite := validCall()
+	otherSite.SiteRef = 4
+
+	if otherSite.IsDuplicateOf(first, window) {
+		t.Error("the same talkgroup on another site is a real call, not a duplicate")
+	}
+
+	siteless := validCall()
+
+	if siteless.IsDuplicateOf(first, window) {
+		t.Error("a site-less call must not be reported as a duplicate of a site-bearing call")
+	}
+
+	if first.IsDuplicateOf(siteless, window) {
+		t.Error("a site-bearing call must not be reported as a duplicate of a site-less call")
+	}
+
+	pair := validCall()
+
+	if !pair.IsDuplicateOf(siteless, window) {
+		t.Error("two site-less calls on the same system and talkgroup are duplicates of each other")
+	}
+}
+
 func TestIsDuplicateOfNeverMatchesWithoutResolvedIdentities(t *testing.T) {
 	window := DefaultOptions().DuplicateDetectionWindow()
 

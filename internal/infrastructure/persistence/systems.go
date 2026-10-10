@@ -116,6 +116,116 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 	return nil
 }
 
+// SaveSystemSites replaces the sites of one system: the submitted rows are renumbered
+// 1-based and reconciled with the stored rows, exactly as the whole-systems save does
+// them, and a system the store does not have is reported as ErrNotFound.
+func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	for i := range sites {
+		sites[i].Order = uint(i + 1)
+		sites[i].SystemID = systemID
+	}
+
+	if err := saveSystemLevel(ctx, systems.store, systemID, func(tx transaction) error {
+		return writeSites(ctx, tx, systemID, sites)
+	}); err != nil {
+		return err
+	}
+
+	loaded, err := readSystems(ctx, systems.store)
+	if err != nil {
+		return err
+	}
+
+	systems.live = loaded
+
+	return nil
+}
+
+// SaveSystemTalkgroups replaces the talkgroups of one system, renumbering their order
+// and reconciling their group memberships.
+func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups) error {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	for i := range talkgroups {
+		talkgroups[i].Order = uint(i + 1)
+	}
+
+	if err := saveSystemLevel(ctx, systems.store, systemID, func(tx transaction) error {
+		return writeTalkgroups(ctx, tx, systems.store.dialect, systemID, talkgroups)
+	}); err != nil {
+		return err
+	}
+
+	loaded, err := readSystems(ctx, systems.store)
+	if err != nil {
+		return err
+	}
+
+	systems.live = loaded
+
+	return nil
+}
+
+// SaveSystemUnits replaces the units of one system, renumbering their order.
+func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, units domain.Units) error {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	for i := range units {
+		units[i].Order = uint(i + 1)
+		units[i].SystemID = systemID
+	}
+
+	if err := saveSystemLevel(ctx, systems.store, systemID, func(tx transaction) error {
+		return writeUnits(ctx, tx, systemID, units)
+	}); err != nil {
+		return err
+	}
+
+	loaded, err := readSystems(ctx, systems.store)
+	if err != nil {
+		return err
+	}
+
+	systems.live = loaded
+
+	return nil
+}
+
+// saveSystemLevel performs the shared part of the three per-level saves: one
+// transaction that checks the system exists, writes the level's rows, and commits. A
+// system the table does not have is reported as ErrNotFound, which the REST layer
+// answers with 404.
+func saveSystemLevel(ctx context.Context, s store, systemID uint64, write func(transaction) error) error {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return operationError("systems", "savesystemlevel", err)
+	}
+
+	defer tx.rollback()
+
+	const query = `SELECT COUNT(*) FROM "systems" WHERE "systemId" = ?`
+
+	var count uint64
+	if err := tx.queryRow(ctx, query, systemID).Scan(&count); err != nil {
+		return statementError("systems", "savesystemlevel", err, query)
+	}
+
+	if count == 0 {
+		return ports.ErrNotFound
+	}
+
+	if err := write(tx); err != nil {
+		return err
+	}
+
+	return tx.commit()
+}
+
 // readSystems is the legacy `Systems.Read`: one transaction that reads the catalog and then reads
 // each system's sites, talkgroups, and units through the same transaction, and hands back the
 // result sorted by display order.

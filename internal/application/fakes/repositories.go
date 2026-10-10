@@ -108,9 +108,9 @@ func (calls *Calls) SaveCall(ctx context.Context, call domain.Call) (domain.Call
 	return call, nil
 }
 
-// FindDuplicateCandidates returns the stored calls on the same system and talkgroup
-// whose timestamps fall between from and to, inclusive.
-func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, from, to time.Time) ([]domain.Call, error) {
+// FindDuplicateCandidates returns the stored calls on the same system, talkgroup and
+// site whose timestamps fall between from and to, inclusive.
+func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, siteRef uint, from, to time.Time) ([]domain.Call, error) {
 	if calls.Err != nil {
 		return nil, calls.Err
 	}
@@ -118,7 +118,7 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 	out := []domain.Call{}
 
 	for _, call := range calls.Stored {
-		if call.System.ID != systemID || call.Talkgroup.ID != talkgroupID {
+		if call.System.ID != systemID || call.Talkgroup.ID != talkgroupID || call.SiteRef != siteRef {
 			continue
 		}
 
@@ -283,6 +283,13 @@ type Systems struct {
 	Stored  domain.Systems
 	Err     error
 	SaveErr error
+
+	// SubSectionLevel, SubSectionSystemID and SubSectionSaved record the last
+	// per-level save: which level was asked for, of which system, and the rows the
+	// store kept, renumbered the way the stored tables renumber them.
+	SubSectionLevel    string
+	SubSectionSystemID uint64
+	SubSectionSaved    []any
 }
 
 var _ ports.SystemRepository = (*Systems)(nil)
@@ -334,6 +341,195 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 	systems.Stored = out
 
 	return nil
+}
+
+// SaveSystemSites records the sites of one system, renumbering their order the way the
+// stored table renumbers them. A system the fake does not store reports ErrNotFound.
+func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error {
+	return systems.saveSubSection("sites", systemID, sites)
+}
+
+// SaveSystemTalkgroups records the talkgroups of one system, renumbering their order.
+func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups) error {
+	return systems.saveSubSection("talkgroups", systemID, talkgroups)
+}
+
+// SaveSystemUnits records the units of one system, renumbering their order.
+func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, units domain.Units) error {
+	return systems.saveSubSection("units", systemID, units)
+}
+
+// saveSubSection performs the shared part of the three per-level saves: the store
+// checks the system, renumbers the submitted rows 1-based, and keeps them.
+func (systems *Systems) saveSubSection(level string, systemID uint64, rows any) error {
+	if systems.Err != nil {
+		return systems.Err
+	}
+
+	found := false
+
+	for _, system := range systems.Stored {
+		if system.ID == systemID {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		return ports.ErrNotFound
+	}
+
+	if systems.SaveErr != nil {
+		return systems.SaveErr
+	}
+
+	systems.SubSectionLevel = level
+	systems.SubSectionSystemID = systemID
+
+	switch typed := rows.(type) {
+	case domain.Sites:
+		for i := range typed {
+			typed[i].Order = uint(i + 1)
+			typed[i].SystemID = systemID
+		}
+
+		systems.SubSectionSaved = append([]any{}, sitesToAny(typed)...)
+	case domain.Talkgroups:
+		for i := range typed {
+			typed[i].Order = uint(i + 1)
+		}
+
+		systems.SubSectionSaved = append([]any{}, talkgroupsToAny(typed)...)
+	case domain.Units:
+		for i := range typed {
+			typed[i].Order = uint(i + 1)
+			typed[i].SystemID = systemID
+		}
+
+		systems.SubSectionSaved = append([]any{}, unitsToAny(typed)...)
+	}
+
+	// The save replaces the level's rows on the stored system, so the configuration
+	// read back after the save answers what was submitted, as the stored tables do.
+	for i := range systems.Stored {
+		if systems.Stored[i].ID != systemID {
+			continue
+		}
+
+		switch typed := rows.(type) {
+		case domain.Sites:
+			next := maxSiteID(systems.Stored) + 1
+
+			for j := range typed {
+				if typed[j].ID == 0 {
+					typed[j].ID = next
+
+					next++
+				}
+			}
+
+			systems.Stored[i].Sites = typed
+		case domain.Talkgroups:
+			next := maxTalkgroupID(systems.Stored) + 1
+
+			for j := range typed {
+				if typed[j].ID == 0 {
+					typed[j].ID = next
+
+					next++
+				}
+			}
+
+			systems.Stored[i].Talkgroups = typed
+		case domain.Units:
+			next := maxUnitID(systems.Stored) + 1
+
+			for j := range typed {
+				if typed[j].ID == 0 {
+					typed[j].ID = next
+
+					next++
+				}
+			}
+
+			systems.Stored[i].Units = typed
+		}
+	}
+
+	return nil
+}
+
+func maxSiteID(systems domain.Systems) uint64 {
+	max := uint64(0)
+
+	for _, system := range systems {
+		for _, site := range system.Sites {
+			if site.ID > max {
+				max = site.ID
+			}
+		}
+	}
+
+	return max
+}
+
+func maxTalkgroupID(systems domain.Systems) uint64 {
+	max := uint64(0)
+
+	for _, system := range systems {
+		for _, talkgroup := range system.Talkgroups {
+			if talkgroup.ID > max {
+				max = talkgroup.ID
+			}
+		}
+	}
+
+	return max
+}
+
+func maxUnitID(systems domain.Systems) uint64 {
+	max := uint64(0)
+
+	for _, system := range systems {
+		for _, unit := range system.Units {
+			if unit.ID > max {
+				max = unit.ID
+			}
+		}
+	}
+
+	return max
+}
+
+func sitesToAny(sites domain.Sites) []any {
+	out := []any{}
+
+	for _, site := range sites {
+		out = append(out, site)
+	}
+
+	return out
+}
+
+func talkgroupsToAny(talkgroups domain.Talkgroups) []any {
+	out := []any{}
+
+	for _, talkgroup := range talkgroups {
+		out = append(out, talkgroup)
+	}
+
+	return out
+}
+
+func unitsToAny(units domain.Units) []any {
+	out := []any{}
+
+	for _, unit := range units {
+		out = append(out, unit)
+	}
+
+	return out
 }
 
 // assignAggregateIDs gives the talkgroups, sites, and units of one system the identifiers

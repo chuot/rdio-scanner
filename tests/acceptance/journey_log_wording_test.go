@@ -53,7 +53,7 @@ func TestTheServerLogViewNamesThePartOfTheServerThatWroteEachEntry(t *testing.T)
 	}
 
 	// A configuration save, the way an administrator's form saves one section.
-	if rec := srv.put("/api/admin/config/options", token, `{"dimmerDelay":6000}`); rec.Code != http.StatusOK {
+	if rec := srv.put("/api/admin/config/options", token, `{"maxClients":60}`); rec.Code != http.StatusOK {
 		t.Fatalf("saving the options was answered %d: %s", rec.Code, rec.Body.String())
 	}
 

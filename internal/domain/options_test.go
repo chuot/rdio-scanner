@@ -30,19 +30,15 @@ func TestDefaultOptionsMatchTheLegacyServer(t *testing.T) {
 	o := DefaultOptions()
 
 	checks := map[string]struct{ got, want any }{
-		"AudioConversion":             {o.AudioConversion, AudioConversionEnabled},
-		"AutoPopulate":                {o.AutoPopulate, true},
-		"DimmerDelay":                 {o.DimmerDelay, uint(5000)},
-		"DisableDuplicateDetection":   {o.DisableDuplicateDetection, false},
-		"DuplicateDetectionTimeFrame": {o.DuplicateDetectionTimeFrame, uint(500)},
-		"KeypadBeeps":                 {o.KeypadBeeps, "uniden"},
-		"MaxClients":                  {o.MaxClients, uint(200)},
-		"PlaybackGoesLive":            {o.PlaybackGoesLive, false},
-		"PruneDays":                   {o.PruneDays, uint(7)},
-		"ShowListenersCount":          {o.ShowListenersCount, false},
-		"SortTalkgroups":              {o.SortTalkgroups, false},
-		"Time12hFormat":               {o.Time12hFormat, false},
-		"AdminPasswordNeedChange":     {o.AdminPasswordNeedChange, true},
+		"AudioConversion":           {o.AudioConversion, AudioConversionEnabled},
+		"AutoPopulate":              {o.AutoPopulate, true},
+		"DisableDuplicateDetection": {o.DisableDuplicateDetection, false},
+		"KeypadBeeps":               {o.KeypadBeeps, "uniden"},
+		"MaxClients":                {o.MaxClients, uint(200)},
+		"PruneDays":                 {o.PruneDays, uint(7)},
+		"ShowListenersCount":        {o.ShowListenersCount, false},
+		"SortTalkgroups":            {o.SortTalkgroups, false},
+		"AdminPasswordNeedChange":   {o.AdminPasswordNeedChange, true},
 	}
 
 	for name, c := range checks {
@@ -54,37 +50,29 @@ func TestDefaultOptionsMatchTheLegacyServer(t *testing.T) {
 
 func TestApplyMapReadsEveryEditableOption(t *testing.T) {
 	o := DefaultOptions().ApplyMap(map[string]any{
-		"audioConversion":             float64(3),
-		"autoPopulate":                false,
-		"branding":                    "City of Test",
-		"dimmerDelay":                 float64(9000),
-		"disableDuplicateDetection":   true,
-		"duplicateDetectionTimeFrame": float64(1500),
-		"email":                       "ops@example.com",
-		"keypadBeeps":                 "whistler",
-		"maxClients":                  float64(25),
-		"playbackGoesLive":            true,
-		"pruneDays":                   float64(30),
-		"showListenersCount":          true,
-		"sortTalkgroups":              true,
-		"time12hFormat":               true,
+		"audioConversion":           float64(3),
+		"autoPopulate":              false,
+		"branding":                  "City of Test",
+		"disableDuplicateDetection": true,
+		"email":                     "ops@example.com",
+		"keypadBeeps":               "whistler",
+		"maxClients":                float64(25),
+		"pruneDays":                 float64(30),
+		"showListenersCount":        true,
+		"sortTalkgroups":            true,
 	})
 
 	checks := map[string]struct{ got, want any }{
-		"AudioConversion":             {o.AudioConversion, uint(3)},
-		"AutoPopulate":                {o.AutoPopulate, false},
-		"Branding":                    {o.Branding, "City of Test"},
-		"DimmerDelay":                 {o.DimmerDelay, uint(9000)},
-		"DisableDuplicateDetection":   {o.DisableDuplicateDetection, true},
-		"DuplicateDetectionTimeFrame": {o.DuplicateDetectionTimeFrame, uint(1500)},
-		"Email":                       {o.Email, "ops@example.com"},
-		"KeypadBeeps":                 {o.KeypadBeeps, "whistler"},
-		"MaxClients":                  {o.MaxClients, uint(25)},
-		"PlaybackGoesLive":            {o.PlaybackGoesLive, true},
-		"PruneDays":                   {o.PruneDays, uint(30)},
-		"ShowListenersCount":          {o.ShowListenersCount, true},
-		"SortTalkgroups":              {o.SortTalkgroups, true},
-		"Time12hFormat":               {o.Time12hFormat, true},
+		"AudioConversion":           {o.AudioConversion, uint(3)},
+		"AutoPopulate":              {o.AutoPopulate, false},
+		"Branding":                  {o.Branding, "City of Test"},
+		"DisableDuplicateDetection": {o.DisableDuplicateDetection, true},
+		"Email":                     {o.Email, "ops@example.com"},
+		"KeypadBeeps":               {o.KeypadBeeps, "whistler"},
+		"MaxClients":                {o.MaxClients, uint(25)},
+		"PruneDays":                 {o.PruneDays, uint(30)},
+		"ShowListenersCount":        {o.ShowListenersCount, true},
+		"SortTalkgroups":            {o.SortTalkgroups, true},
 	}
 
 	for name, c := range checks {
@@ -163,6 +151,23 @@ func TestApplyMapLegacyDisableAudioConversion(t *testing.T) {
 
 	if o := DefaultOptions().ApplyMap(map[string]any{"disableAudioConversion": false}); o.AudioConversion != AudioConversionDisabled {
 		t.Errorf("AudioConversion = %d, want %d", o.AudioConversion, AudioConversionDisabled)
+	}
+}
+
+// TestApplyMapIgnoresTheRetiredOptions pins the retirement of the 12-hour format,
+// dimmer delay, duplicate detection time frame and playback-goes-live options: a
+// submitted body that still carries them (a legacy admin page, a migrated config)
+// changes nothing, and the duplicate window stays the domain constant.
+func TestApplyMapIgnoresTheRetiredOptions(t *testing.T) {
+	o := DefaultOptions().ApplyMap(map[string]any{
+		"dimmerDelay":                 float64(9000),
+		"duplicateDetectionTimeFrame": float64(1500),
+		"playbackGoesLive":            true,
+		"time12hFormat":               true,
+	})
+
+	if got, want := o.DuplicateDetectionWindow(), 500*time.Millisecond; got != want {
+		t.Errorf("DuplicateDetectionWindow = %v, want the 500 ms constant with the submitted time frame ignored", got)
 	}
 }
 

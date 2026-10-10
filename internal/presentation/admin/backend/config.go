@@ -61,6 +61,10 @@ type AdminDeps struct {
 	// ConfigurationSection saves one section, which is what the administrator's page does.
 	ConfigurationSection *application.UpdateConfigurationSectionHandler
 
+	// SystemSubSection saves one level of one system — its sites, talkgroups or units —
+	// which is what the administrator's page does since each level is saved on its own.
+	SystemSubSection *application.UpdateSystemSubSectionHandler
+
 	// ConfigSocket is the administrator's configuration socket: the thing the whole-configuration path hands
 	// a request that asks to become a websocket connection. It is an http.Handler rather than a socket type
 	// because this package has no business knowing what a socket is, and the composition root wires the real
@@ -92,6 +96,7 @@ type Admin struct {
 	configSocket         http.Handler
 	configuration        *application.UpdateConfigurationHandler
 	configurationSection *application.UpdateConfigurationSectionHandler
+	systemSubSection     *application.UpdateSystemSubSectionHandler
 	docker               bool
 	logout               *application.AdminLogoutHandler
 	searchLogs           *application.SearchLogsHandler
@@ -116,6 +121,7 @@ func NewAdmin(deps AdminDeps) *Admin {
 		configSocket:         deps.ConfigSocket,
 		configuration:        deps.Configuration,
 		configurationSection: deps.ConfigurationSection,
+		systemSubSection:     deps.SystemSubSection,
 		docker:               deps.Docker,
 		logout:               deps.Logout,
 		searchLogs:           deps.SearchLogs,
@@ -142,6 +148,14 @@ func (admin *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/alerts", admin.Alerts)
 	mux.HandleFunc("/api/admin/config", admin.Config)
 	mux.HandleFunc("/api/admin/config/", admin.Section)
+
+	// The per-level endpoints hang off the systems path. They are registered as six
+	// specific patterns rather than a subtree, so that the systems section path itself
+	// keeps answering as a section: a subtree pattern would redirect it.
+	for _, level := range []string{"sites", "talkgroups", "units"} {
+		mux.HandleFunc("GET /api/admin/config/systems/{systemId}/"+level, admin.SubSection)
+		mux.HandleFunc("PUT /api/admin/config/systems/{systemId}/"+level, admin.SubSection)
+	}
 	mux.HandleFunc("/api/admin/login", admin.Login)
 	mux.HandleFunc("/api/admin/logs", admin.Logs)
 	mux.HandleFunc("/api/admin/logout", admin.Logout)

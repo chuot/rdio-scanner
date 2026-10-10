@@ -367,6 +367,24 @@ func siteEntries(sites domain.Sites) []map[string]any {
 	return out
 }
 
+// SiteListPayload is the sites of one system, in the shape an administrator is shown
+// them. It is the same shape the systems section writes under each system.
+func SiteListPayload(sites domain.Sites) []map[string]any {
+	return siteEntries(sites)
+}
+
+// TalkgroupListPayload is the talkgroups of one system, in the shape an administrator
+// is shown them.
+func TalkgroupListPayload(talkgroups domain.Talkgroups) []map[string]any {
+	return talkgroupEntriesForAdmin(talkgroups)
+}
+
+// UnitListPayload is the units of one system, in the shape an administrator is shown
+// them.
+func UnitListPayload(units domain.Units) []map[string]any {
+	return unitEntries(units)
+}
+
 // OptionsPayload is the settings an administrator is shown.
 //
 // It is not everything the server holds about its settings: the stored password, whether that password
@@ -375,20 +393,16 @@ type OptionsPayload domain.Options
 
 // optionsBody is the settings an administrator is shown, in the order they are written.
 type optionsBody struct {
-	AudioConversion             uint   `json:"audioConversion"`
-	AutoPopulate                bool   `json:"autoPopulate"`
-	Branding                    string `json:"branding"`
-	DimmerDelay                 uint   `json:"dimmerDelay"`
-	DisableDuplicateDetection   bool   `json:"disableDuplicateDetection"`
-	DuplicateDetectionTimeFrame uint   `json:"duplicateDetectionTimeFrame"`
-	Email                       string `json:"email"`
-	KeypadBeeps                 string `json:"keypadBeeps"`
-	MaxClients                  uint   `json:"maxClients"`
-	PlaybackGoesLive            bool   `json:"playbackGoesLive"`
-	PruneDays                   uint   `json:"pruneDays"`
-	ShowListenersCount          bool   `json:"showListenersCount"`
-	SortTalkgroups              bool   `json:"sortTalkgroups"`
-	Time12hFormat               bool   `json:"time12hFormat"`
+	AudioConversion           uint   `json:"audioConversion"`
+	AutoPopulate              bool   `json:"autoPopulate"`
+	Branding                  string `json:"branding"`
+	DisableDuplicateDetection bool   `json:"disableDuplicateDetection"`
+	Email                     string `json:"email"`
+	KeypadBeeps               string `json:"keypadBeeps"`
+	MaxClients                uint   `json:"maxClients"`
+	PruneDays                 uint   `json:"pruneDays"`
+	ShowListenersCount        bool   `json:"showListenersCount"`
+	SortTalkgroups            bool   `json:"sortTalkgroups"`
 }
 
 // MarshalJSON writes the settings.
@@ -396,19 +410,15 @@ func (payload OptionsPayload) MarshalJSON() ([]byte, error) {
 	options := domain.Options(payload)
 
 	return json.Marshal(optionsBody{
-		AudioConversion:             options.AudioConversion,
-		AutoPopulate:                options.AutoPopulate,
-		Branding:                    options.Branding,
-		DimmerDelay:                 options.DimmerDelay,
-		DisableDuplicateDetection:   options.DisableDuplicateDetection,
-		DuplicateDetectionTimeFrame: options.DuplicateDetectionTimeFrame,
-		Email:                       options.Email,
-		KeypadBeeps:                 options.KeypadBeeps,
-		MaxClients:                  options.MaxClients,
-		PlaybackGoesLive:            options.PlaybackGoesLive,
-		PruneDays:                   options.PruneDays,
-		ShowListenersCount:          options.ShowListenersCount,
-		SortTalkgroups:              options.SortTalkgroups,
-		Time12hFormat:               options.Time12hFormat,
+		AudioConversion:           options.AudioConversion,
+		AutoPopulate:              options.AutoPopulate,
+		Branding:                  options.Branding,
+		DisableDuplicateDetection: options.DisableDuplicateDetection,
+		Email:                     options.Email,
+		KeypadBeeps:               options.KeypadBeeps,
+		MaxClients:                options.MaxClients,
+		PruneDays:                 options.PruneDays,
+		ShowListenersCount:        options.ShowListenersCount,
+		SortTalkgroups:            options.SortTalkgroups,
 	})
 }

@@ -159,10 +159,10 @@ func TestAdminOptionsCarryNoPasswordAndNoSecret(t *testing.T) {
 		}
 	}
 
-	want := `{"audioConversion":0,"autoPopulate":false,"branding":"Capture Dispatch","dimmerDelay":5000,` +
-		`"disableDuplicateDetection":true,"duplicateDetectionTimeFrame":500,"email":"dispatch@example.com",` +
-		`"keypadBeeps":"uniden","maxClients":200,"playbackGoesLive":true,"pruneDays":7,` +
-		`"showListenersCount":true,"sortTalkgroups":true,"time12hFormat":true}`
+	want := `{"audioConversion":0,"autoPopulate":false,"branding":"Capture Dispatch",` +
+		`"disableDuplicateDetection":true,"email":"dispatch@example.com",` +
+		`"keypadBeeps":"uniden","maxClients":200,"pruneDays":7,` +
+		`"showListenersCount":true,"sortTalkgroups":true}`
 
 	if got != want {
 		t.Errorf("options payload =\n  %s\nwant\n  %s", got, want)
@@ -194,7 +194,6 @@ func captureConfiguration() AdminConfigPayload {
 
 	snapshot.Options.AudioConversion = 0
 	snapshot.Options.DisableDuplicateDetection = true
-	snapshot.Options.DuplicateDetectionTimeFrame = 500
 	snapshot.Options.MaxClients = 200
 	snapshot.Options.PruneDays = 7
 

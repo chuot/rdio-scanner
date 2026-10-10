@@ -54,17 +54,14 @@ func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 	body := map[string]any{
 		"alerts":             alertTones,
 		"branding":           options.Branding,
-		"dimmerDelay":        options.DimmerDelay,
 		"email":              options.Email,
 		"groups":             groupsMap(systems, payload.Snapshot.Groups),
 		"groupsData":         groupList(systems, payload.Snapshot.Groups),
 		"keypadBeeps":        keypadBeeps(options.KeypadBeeps),
-		"playbackGoesLive":   options.PlaybackGoesLive,
 		"showListenersCount": options.ShowListenersCount,
 		"systems":            systemEntries(systems),
 		"tags":               tagsMap(systems, payload.Snapshot.Tags),
 		"tagsData":           tagList(systems, payload.Snapshot.Tags),
-		"time12hFormat":      options.Time12hFormat,
 	}
 
 	return json.Marshal(body)

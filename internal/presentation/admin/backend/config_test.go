@@ -128,6 +128,7 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		}),
 		Configuration:        application.NewUpdateConfigurationHandler(fixture.configurationPorts()),
 		ConfigurationSection: application.NewUpdateConfigurationSectionHandler(fixture.configurationPorts()),
+		SystemSubSection:     application.NewUpdateSystemSubSectionHandler(fixture.configurationPorts()),
 		Config:               application.NewGetConfigHandler(fixture.repositories()),
 		ConfigSocket:         fixture.configSocket,
 		Docker:               fixture.Docker,

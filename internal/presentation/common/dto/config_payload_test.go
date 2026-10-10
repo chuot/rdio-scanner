@@ -176,18 +176,15 @@ func TestConfigPayloadCarriesOnlyTheOptionsAListenerIsTold(t *testing.T) {
 
 	for key, want := range map[string]string{
 		"branding":           `"Capture Dispatch"`,
-		"dimmerDelay":        "5000",
 		"email":              `"dispatch@example.com"`,
-		"playbackGoesLive":   "true",
 		"showListenersCount": "true",
-		"time12hFormat":      "true",
 	} {
 		if !carriesKey(t, body, key, want) {
 			t.Errorf("%s = %s, want %s:%s", key, body, key, want)
 		}
 	}
 
-	for _, key := range []string{"secret", "adminPassword", "maxClients", "pruneDays", "audioConversion", "autoPopulate", "sortTalkgroups", "duplicateDetectionTimeFrame", "disableDuplicateDetection"} {
+	for _, key := range []string{"secret", "adminPassword", "maxClients", "pruneDays", "audioConversion", "autoPopulate", "sortTalkgroups", "duplicateDetectionTimeFrame", "disableDuplicateDetection", "dimmerDelay", "playbackGoesLive", "time12hFormat"} {
 		if carriesKey(t, body, key, "") {
 			t.Errorf("the listener payload carries %s: %s", key, body)
 		}
@@ -249,13 +246,10 @@ func captureSnapshot() ports.ConfigSnapshot {
 		},
 		Options: domain.Options{
 			Branding:           "Capture Dispatch",
-			DimmerDelay:        5000,
 			Email:              "dispatch@example.com",
 			KeypadBeeps:        "uniden",
-			PlaybackGoesLive:   true,
 			ShowListenersCount: true,
 			SortTalkgroups:     true,
-			Time12hFormat:      true,
 		},
 	}
 }

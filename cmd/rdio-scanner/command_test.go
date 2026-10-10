@@ -387,7 +387,7 @@ func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	dead := anAddressNothingAnswersOn(t)
 
 	in := filepath.Join(t.TempDir(), "configuration.json")
-	if err := os.WriteFile(in, []byte(`{"options":{"dimmerDelay":6000}}`), 0600); err != nil {
+	if err := os.WriteFile(in, []byte(`{"options":{"maxClients":60}}`), 0600); err != nil {
 		t.Fatalf("writing the configuration the operator holds: %v", err)
 	}
 

@@ -1318,7 +1318,7 @@ func testSnapshot() ports.ConfigSnapshot {
 				},
 			},
 		},
-		Options: domain.Options{Branding: "Capture Dispatch", DimmerDelay: 5000},
+		Options: domain.Options{Branding: "Capture Dispatch"},
 	}
 }
 

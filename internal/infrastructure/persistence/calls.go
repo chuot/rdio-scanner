@@ -651,8 +651,8 @@ func expandedTalkgroups(pairs []domain.TalkgroupScope) []callSearchPair {
 const nothingMatches = `1 = 0`
 
 // FindDuplicateCandidates returns the recorded calls that could make a call a duplicate of an
-// earlier one: the calls on the same system and talkgroup whose timestamps fall between from and
-// to, inclusive.
+// earlier one: the calls on the same system, talkgroup and site whose timestamps fall between
+// from and to, inclusive.
 //
 // A call waiting out a delay is a candidate, because the legacy `Calls.CheckDuplicate` counts
 // every call in the window whether or not it has been made visible yet.
@@ -661,10 +661,10 @@ const nothingMatches = `1 = 0`
 // not as whole aggregates. The rule never looks at audio, and loading the recording of every call
 // in the window would make duplicate detection the most expensive part of ingest; the legacy
 // server does not load them either, it only counts them.
-func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, from, to time.Time) ([]domain.Call, error) {
-	const query = `SELECT c."callId", c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."systemId" = ? AND c."talkgroupId" = ? AND c."timestamp" BETWEEN ? AND ? ORDER BY c."timestamp"`
+func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, siteRef uint, from, to time.Time) ([]domain.Call, error) {
+	const query = `SELECT c."callId", c."timestamp", c."systemId", c."talkgroupId", c."siteRef", s."systemRef", t."talkgroupRef" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."systemId" = ? AND c."talkgroupId" = ? AND c."siteRef" = ? AND c."timestamp" BETWEEN ? AND ? ORDER BY c."timestamp"`
 
-	rows, err := calls.query(ctx, query, systemID, talkgroupID, millisOf(from), millisOf(to))
+	rows, err := calls.query(ctx, query, systemID, talkgroupID, siteRef, millisOf(from), millisOf(to))
 	if err != nil {
 		return nil, statementError("calls", "checkduplicate", err, query)
 	}
@@ -679,11 +679,12 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 			timestamp     int64
 			candidateSys  int64
 			candidateTalk int64
+			candidateSite int64
 			systemRef     int64
 			talkgroupRef  int64
 		)
 
-		if err := rows.Scan(&id, &timestamp, &candidateSys, &candidateTalk, &systemRef, &talkgroupRef); err != nil {
+		if err := rows.Scan(&id, &timestamp, &candidateSys, &candidateTalk, &candidateSite, &systemRef, &talkgroupRef); err != nil {
 			return nil, statementError("calls", "checkduplicate", err, query)
 		}
 
@@ -691,6 +692,7 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 
 		call.ID = uint64(id)
 		call.Timestamp = instantOf(timestamp)
+		call.SiteRef = uint(candidateSite)
 		call.System = domain.System{ID: uint64(candidateSys), SystemRef: uint(systemRef)}
 		call.Talkgroup = domain.Talkgroup{ID: uint64(candidateTalk), TalkgroupRef: uint(talkgroupRef)}
 

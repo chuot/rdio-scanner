@@ -210,11 +210,11 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 
 // resetOptions reproduces the reset `Options.Read` performs before it applies the stored rows.
 //
-// The legacy reset covers every option it has a default for except three: `branding`, `email`,
-// and `time12hFormat` are left alone, and so is the secret. A stored row replaces them in every
-// database the legacy server wrote, so the difference only shows when a row is missing — and
-// then the legacy server keeps the value it was already running with, which is what this does
-// too.
+// The legacy reset covers every option it has a default for except two: `branding` and `email`
+// are left alone, and so is the secret. A stored row replaces them in every database the legacy
+// server wrote, so the difference only shows when a row is missing — and then the legacy server
+// keeps the value it was already running with, which is what this does too. (`time12hFormat` was
+// in that leave-alone list too; the option is retired, so it is gone from the reset as well.)
 //
 // One value is deliberately not produced here: the legacy reset puts a freshly generated bcrypt
 // hash of the default administrator password in place before the stored rows are applied, so a
@@ -227,7 +227,6 @@ func resetOptions(live domain.Options) domain.Options {
 
 	next.Branding = live.Branding
 	next.Email = live.Email
-	next.Time12hFormat = live.Time12hFormat
 	next.Secret = live.Secret
 
 	return next
@@ -263,26 +262,16 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 			options.Branding = v
 		}
 
-	case "dimmerDelay":
-		if v, ok := row.value.(float64); ok {
-			options.DimmerDelay = uint(v)
-		}
-
 	case "disableDuplicateDetection":
 		if v, ok := row.value.(bool); ok {
 			options.DisableDuplicateDetection = v
 		}
 
-	// Q1, reproduced rather than fixed: the window is stored under
-	// `duplicateDetectionTimeFrame` (capital F) by `Options.Write` and read under
-	// `duplicateDetectionTimeframe` (lowercase f) by `Options.Read`, so a re-derivation never
-	// finds the stored window and restores the 500 ms default. Fixing the key would silently
-	// start applying a setting that has been ignored for every existing deployment, and is left
-	// to its own specification.
-	case "duplicateDetectionTimeframe":
-		if v, ok := row.value.(float64); ok {
-			options.DuplicateDetectionTimeFrame = uint(v)
-		}
+	// Retired options: `dimmerDelay`, `duplicateDetectionTimeframe`,
+	// `playbackGoesLive` and `time12hFormat` rows in a migrated legacy database are
+	// read and dropped. The dimmer delay lives in the scanner webapp, the duplicate
+	// window is the domain constant, playback always goes live, and the browser locale
+	// decides the time format.
 
 	case "email":
 		if v, ok := row.value.(string); ok {
@@ -297,11 +286,6 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 	case "maxClients":
 		if v, ok := row.value.(float64); ok {
 			options.MaxClients = uint(v)
-		}
-
-	case "playbackGoesLive":
-		if v, ok := row.value.(bool); ok {
-			options.PlaybackGoesLive = v
 		}
 
 	case "pruneDays":
@@ -328,11 +312,6 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 	case "sortTalkgroups":
 		if v, ok := row.value.(bool); ok {
 			options.SortTalkgroups = v
-		}
-
-	case "time12hFormat":
-		if v, ok := row.value.(bool); ok {
-			options.Time12hFormat = v
 		}
 	}
 
@@ -448,17 +427,13 @@ func optionRows(options domain.Options) []optionRow {
 		{"audioConversion", options.AudioConversion},
 		{"autoPopulate", options.AutoPopulate},
 		{"branding", options.Branding},
-		{"dimmerDelay", options.DimmerDelay},
 		{"disableDuplicateDetection", options.DisableDuplicateDetection},
-		{"duplicateDetectionTimeFrame", options.DuplicateDetectionTimeFrame},
 		{"email", options.Email},
 		{"keypadBeeps", options.KeypadBeeps},
 		{"maxClients", options.MaxClients},
-		{"playbackGoesLive", options.PlaybackGoesLive},
 		{"pruneDays", options.PruneDays},
 		{"secret", options.Secret},
 		{"showListenersCount", options.ShowListenersCount},
 		{"sortTalkgroups", options.SortTalkgroups},
-		{"time12hFormat", options.Time12hFormat},
 	}
 }

@@ -644,6 +644,41 @@ func TestIngestCallRejectsADuplicateWithinTheWindow(t *testing.T) {
 	}
 }
 
+// TestIngestCallStoresTheSameCallOnADifferentSite pins the site rule at the ingest seam:
+// the same talkgroup heard on two sites is two real calls, so the second one is stored.
+func TestIngestCallStoresTheSameCallOnADifferentSite(t *testing.T) {
+	fixture := newIngestFixture()
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+	call.SiteRef = 2
+
+	earlier := validIngestCall()
+	earlier.ID = 900
+	earlier.System = system
+	earlier.Talkgroup = system.Talkgroups[0]
+	earlier.SiteRef = 1
+	earlier.Timestamp = ingestTime.Add(-300 * time.Millisecond)
+
+	fixture.calls.Stored[900] = earlier
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallAccepted {
+		t.Errorf("outcome = %q, want %q: the same talkgroup on another site is a real call", result.Outcome, IngestCallAccepted)
+	}
+
+	if len(fixture.calls.Saved) != 1 {
+		t.Error("the call on the other site must be stored")
+	}
+}
+
 func TestIngestCallStoresASecondCallWhenDuplicateDetectionIsDisabled(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.options.Stored.DisableDuplicateDetection = true

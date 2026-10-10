@@ -21,6 +21,8 @@
 package backend
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -478,5 +480,209 @@ func TestSectionEndpointAnswersTheCapturedSections(t *testing.T) {
 		if got != want {
 			t.Errorf("%s answer =\n  %s\nwant\n  %s", capture.section, got, want)
 		}
+	}
+}
+
+// The per-level endpoints save one level of one system: sites, talkgroups or units.
+// They answer the same way a section does — 401 for a credential the server does not
+// accept, 404 for a system this server does not store, 400 for a body it cannot read,
+// 417 for a save that could not be stored — and a successful save is answered with the
+// level as re-read, and reaches every open administrator connection.
+
+// compactJSON marshals a decoded value so two answers can be compared as text.
+func compactJSON(t *testing.T, body string) string {
+	t.Helper()
+
+	var value any
+
+	if err := json.Unmarshal([]byte(body), &value); err != nil {
+		t.Fatalf("the answer is not JSON: %v", err)
+	}
+
+	out, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("the answer cannot be re-marshalled: %v", err)
+	}
+
+	return string(out)
+}
+
+func TestSubSectionEndpointShowsTheSitesOfOneSystem(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodGet, "/api/admin/config/systems/1/sites", "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	want := `[{"id":1,"label":"Metro East","siteRef":101,"systemId":1},{"id":2,"label":"Metro West","siteRef":102,"systemId":1}]`
+
+	if compactJSON(t, rec.Body.String()) != want {
+		t.Errorf("sites answer = %s, want the sites stored under system 1", rec.Body.String())
+	}
+}
+
+func TestSubSectionEndpointShowsTheTalkgroupsOfOneSystem(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodGet, "/api/admin/config/systems/1/talkgroups", "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	want := `[{"frequency":151400000,"groupIds":[7],"id":1,"label":"Ground","name":"Dispatch 1","tagId":3,"talkgroupRef":1514000,"type":"Aggregate"},` +
+		`{"groupIds":[3,7],"id":2,"label":"Ground","name":"Dispatch 2","tagId":4,"talkgroupRef":1514100},` +
+		`{"groupIds":[1],"id":3,"label":"Air","name":"Air 1","tagId":1,"talkgroupRef":1514200}]`
+
+	if compactJSON(t, rec.Body.String()) != want {
+		t.Errorf("talkgroups answer = %s, want the talkgroups stored under system 1", rec.Body.String())
+	}
+}
+
+func TestSubSectionEndpointShowsTheUnitsOfOneSystem(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodGet, "/api/admin/config/systems/1/units", "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	want := `[{"id":1001,"label":"Car 1","unitRef":1001},{"id":1002,"label":"Car 2","unitRef":1002}]`
+
+	if compactJSON(t, rec.Body.String()) != want {
+		t.Errorf("units answer = %s, want the units stored under system 1", rec.Body.String())
+	}
+}
+
+func TestSubSectionEndpointRejectsAnUnknownSystem(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodGet, "/api/admin/config/systems/99/sites", "")
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a system this server does not store: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSubSectionEndpointRejectsAnUnknownLevel(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/config/systems/1/widgets"})
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 and not 401: the level is decided before the credential", rec.Code)
+	}
+}
+
+func TestSubSectionEndpointRequiresACredentialTheServerAccepts(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/config/systems/1/sites", token: "not-a-token-the-server-issued"})
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for a credential the server does not accept", rec.Code)
+	}
+}
+
+func TestSubSectionSaveReplacesTheSitesOfOneSystem(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems/1/sites",
+		`[{"id":1,"label":"Renamed Site","siteRef":101},{"label":"New Site","siteRef":103}]`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	want := `[{"id":1,"label":"Renamed Site","order":1,"siteRef":101,"systemId":1},{"id":3,"label":"New Site","order":2,"siteRef":103,"systemId":1}]`
+
+	if compactJSON(t, rec.Body.String()) != want {
+		t.Errorf("sites answer = %s, want the submitted rows renumbered 1-based as re-read", rec.Body.String())
+	}
+
+	if fixture.systems.SubSectionLevel != "sites" || fixture.systems.SubSectionSystemID != 1 {
+		t.Errorf("the store was asked for level %q of system %d, want the sites of system 1",
+			fixture.systems.SubSectionLevel, fixture.systems.SubSectionSystemID)
+	}
+
+	if len(fixture.sessions.Announced) == 0 {
+		t.Error("the save did not reach the open administrator connections")
+	}
+}
+
+func TestSubSectionSaveRejectsAnUndecodableBody(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems/1/sites", `[{"label":`)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for a body this endpoint cannot read", rec.Code)
+	}
+}
+
+func TestSubSectionSaveReportsAnUnknownSystem(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems/99/sites", `[{"label":"Nowhere"}]`)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for a system this server does not store", rec.Code)
+	}
+
+	if len(fixture.sessions.Announced) != 0 {
+		t.Error("a save that did not work must not reach the open administrator connections")
+	}
+}
+
+func TestSubSectionSaveReportsAPersistenceFailure(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	fixture.systems.SaveErr = errors.New("no such table: sites")
+
+	rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems/1/sites", `[{"label":"Metro East"}]`)
+
+	if rec.Code != http.StatusExpectationFailed {
+		t.Errorf("status = %d, want 417 for a save that could not be stored", rec.Code)
+	}
+}
+
+func TestSubSectionEndpointRefusesAMethodItDoesNotAnswer(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodDelete, "/api/admin/config/systems/1/sites", "")
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want 405 for a method this endpoint does not answer", rec.Code)
+	}
+
+	rec = fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/config/systems/1/sites", token: captureToken, Upgrade: true})
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want 405 for a request asking to become a websocket connection", rec.Code)
 	}
 }

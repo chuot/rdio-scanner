@@ -49,16 +49,16 @@ func TestReadOptionsReportsTheOptionsTheLegacyServerStored(t *testing.T) {
 		t.Errorf("KeypadBeeps = %q, want the stored whistler, not the uniden default", options.KeypadBeeps)
 	}
 
-	if options.DimmerDelay != 5000 || options.MaxClients != 200 || options.PruneDays != 7 {
-		t.Errorf("DimmerDelay/MaxClients/PruneDays = %d/%d/%d, want the stored 5000/200/7", options.DimmerDelay, options.MaxClients, options.PruneDays)
+	if options.MaxClients != 200 || options.PruneDays != 7 {
+		t.Errorf("MaxClients/PruneDays = %d/%d, want the stored 200/7", options.MaxClients, options.PruneDays)
 	}
 
-	if !options.AutoPopulate || !options.ShowListenersCount || !options.Time12hFormat {
-		t.Errorf("AutoPopulate/ShowListenersCount/Time12hFormat = %v/%v/%v, want the stored true for each", options.AutoPopulate, options.ShowListenersCount, options.Time12hFormat)
+	if !options.AutoPopulate || !options.ShowListenersCount {
+		t.Errorf("AutoPopulate/ShowListenersCount = %v/%v, want the stored true for each", options.AutoPopulate, options.ShowListenersCount)
 	}
 
-	if options.SortTalkgroups || options.PlaybackGoesLive || options.DisableDuplicateDetection {
-		t.Errorf("SortTalkgroups/PlaybackGoesLive/DisableDuplicateDetection = %v/%v/%v, want the stored false for each", options.SortTalkgroups, options.PlaybackGoesLive, options.DisableDuplicateDetection)
+	if options.SortTalkgroups || options.DisableDuplicateDetection {
+		t.Errorf("SortTalkgroups/DisableDuplicateDetection = %v/%v, want the stored false for each", options.SortTalkgroups, options.DisableDuplicateDetection)
 	}
 
 	if !options.AdminPasswordNeedChange {
@@ -121,15 +121,13 @@ func TestReadOptionsAnswersFromTheLoadedValueRatherThanFromTheDatabase(t *testin
 	}
 }
 
-// TestReloadOptionsRestoresTheDefaultDuplicateDetectionWindow is Q1 proven against a database the
+// TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow is Q1 proven against a database the
 // legacy server wrote.
 //
-// The legacy `server/options.go` `Write` stores the window under `duplicateDetectionTimeFrame` (capital F) and
-// `Read` looks for `duplicateDetectionTimeframe` (lowercase f), so the stored window is never
-// among the rows the re-derivation applies: the fixture stores 750 and the server runs on 500 ms.
-// Reproduced, not fixed — fixing the key would silently start applying a setting every existing
-// deployment has been ignoring.
-func TestReloadOptionsRestoresTheDefaultDuplicateDetectionWindow(t *testing.T) {
+// The legacy fixture stores the window as 750 under `duplicateDetectionTimeFrame`. The option is
+// retired: the re-derivation ignores the stored row, the server runs on the 500 ms domain constant,
+// and the legacy row is left on record untouched.
+func TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow(t *testing.T) {
 	db := openLegacyDatabase(t)
 
 	if stored := readOptionValue(t, db, "duplicateDetectionTimeFrame"); stored != "750" {
@@ -141,12 +139,8 @@ func TestReloadOptionsRestoresTheDefaultDuplicateDetectionWindow(t *testing.T) {
 		t.Fatalf("ReloadOptions: %v", err)
 	}
 
-	if reloaded.DuplicateDetectionTimeFrame != 500 {
-		t.Errorf("the re-derived window = %d ms, want the 500 ms default: the stored 750 is stored under a name the reader does not look for", reloaded.DuplicateDetectionTimeFrame)
-	}
-
 	if reloaded.DuplicateDetectionWindow() != 500*time.Millisecond {
-		t.Errorf("DuplicateDetectionWindow = %v, want 500ms", reloaded.DuplicateDetectionWindow())
+		t.Errorf("DuplicateDetectionWindow = %v, want the 500 ms constant: the retired stored row is ignored", reloaded.DuplicateDetectionWindow())
 	}
 
 	if stored := readOptionValue(t, db, "duplicateDetectionTimeFrame"); stored != "750" {
@@ -249,7 +243,7 @@ func TestStoreSecretPutsTheSigningSecretOnRecord(t *testing.T) {
 		t.Errorf("the stored secret = %s, want the generated secret as the JSON the reader unmarshals", stored)
 	}
 
-	if count := countRows(t, db, "options"); count != 17 {
+	if count := countRows(t, db, "options"); count != 13 {
 		t.Errorf("the options table has %d rows, want the secret row updated in place and nothing else written", count)
 	}
 
@@ -268,8 +262,8 @@ func TestStoreSecretPutsTheSigningSecretOnRecord(t *testing.T) {
 }
 
 // TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith pins §9 for this section:
-// a save replaces what the server runs with, and nothing is read back — which is why the saved
-// window survives until the next re-derivation and then disappears.
+// a save replaces what the server runs with, and nothing is read back. The duplicate window is the
+// domain constant, so a save cannot move it, and the retired window key is no longer stored.
 func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
@@ -277,7 +271,6 @@ func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *te
 	next := domain.DefaultOptions()
 	next.Branding = "Acme Dispatch"
 	next.PruneDays = 30
-	next.DuplicateDetectionTimeFrame = 1200
 
 	if err := options.WriteOptions(context.Background(), next); err != nil {
 		t.Fatalf("WriteOptions: %v", err)
@@ -288,12 +281,16 @@ func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *te
 		t.Fatalf("ReadOptions: %v", err)
 	}
 
-	if live.Branding != "Acme Dispatch" || live.PruneDays != 30 || live.DuplicateDetectionTimeFrame != 1200 {
-		t.Errorf("the server is running with %q/%d/%d, want what was submitted", live.Branding, live.PruneDays, live.DuplicateDetectionTimeFrame)
+	if live.Branding != "Acme Dispatch" || live.PruneDays != 30 {
+		t.Errorf("the server is running with %q/%d, want what was submitted", live.Branding, live.PruneDays)
 	}
 
-	if stored := readOptionValue(t, db, "duplicateDetectionTimeFrame"); stored != "1200" {
-		t.Errorf("the window is stored as %s, want 1200", stored)
+	if live.DuplicateDetectionWindow() != 500*time.Millisecond {
+		t.Errorf("DuplicateDetectionWindow = %v, want the 500 ms constant", live.DuplicateDetectionWindow())
+	}
+
+	if count := countOptionRowsForKey(t, db, "duplicateDetectionTimeFrame"); count != 0 {
+		t.Errorf("the retired window key has %d rows, want none written for it", count)
 	}
 
 	reloaded, err := options.ReloadOptions(context.Background())
@@ -301,8 +298,8 @@ func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *te
 		t.Fatalf("ReloadOptions: %v", err)
 	}
 
-	if reloaded.DuplicateDetectionTimeFrame != 500 {
-		t.Errorf("the re-derived window = %d ms, want the 500 ms default the stored row cannot give back", reloaded.DuplicateDetectionTimeFrame)
+	if reloaded.DuplicateDetectionWindow() != 500*time.Millisecond {
+		t.Errorf("the re-derived window = %v, want the 500 ms constant", reloaded.DuplicateDetectionWindow())
 	}
 }
 
@@ -314,7 +311,6 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 	next := domain.DefaultOptions()
 	next.Branding = "Acme Dispatch"
 	next.AdminPasswordHash = "$2a$10$abcdefghijklmnopqrstuvwxyzabcdefgh"
-	next.DimmerDelay = 1234
 
 	if err := NewOptions(db, DialectSqlite).WriteOptions(context.Background(), next); err != nil {
 		t.Fatalf("WriteOptions: %v", err)
@@ -329,26 +325,22 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 		{"audioConversion", "1"},
 		{"autoPopulate", "true"},
 		{"branding", `"Acme Dispatch"`},
-		{"dimmerDelay", "1234"},
 		{"disableDuplicateDetection", "false"},
-		{"duplicateDetectionTimeFrame", "500"},
 		{"email", `""`},
 		{"keypadBeeps", `"uniden"`},
 		{"maxClients", "200"},
-		{"playbackGoesLive", "false"},
 		{"pruneDays", "7"},
 		{"secret", `""`},
 		{"showListenersCount", "false"},
 		{"sortTalkgroups", "false"},
-		{"time12hFormat", "false"},
 	} {
 		if stored := readOptionValue(t, db, tc.key); stored != tc.want {
 			t.Errorf("%s is stored as %s, want %s", tc.key, stored, tc.want)
 		}
 	}
 
-	if count := countRows(t, db, "options"); count != 17 {
-		t.Errorf("the options table has %d rows, want the 16 keys the legacy server writes plus the audio-conversion mode it never stored", count)
+	if count := countRows(t, db, "options"); count != 13 {
+		t.Errorf("the options table has %d rows, want the 13 keys this server writes", count)
 	}
 }
 
@@ -409,7 +401,6 @@ func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 
 	next := domain.DefaultOptions()
 	next.MaxClients = 50
-	next.DimmerDelay = 100
 	next.PruneDays = 1
 	next.ShowListenersCount = true
 	next.AutoPopulate = false
@@ -418,7 +409,7 @@ func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 		t.Fatalf("WriteOptions: %v", err)
 	}
 
-	for _, key := range []string{"maxClients", "dimmerDelay", "pruneDays", "showListenersCount", "autoPopulate"} {
+	for _, key := range []string{"maxClients", "pruneDays", "showListenersCount", "autoPopulate"} {
 		if _, err := db.Exec(`DELETE FROM "options" WHERE "key" = ?`, key); err != nil {
 			t.Fatalf("DELETE: %v", err)
 		}
@@ -429,8 +420,8 @@ func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 		t.Fatalf("ReloadOptions: %v", err)
 	}
 
-	if reloaded.MaxClients != 200 || reloaded.DimmerDelay != 5000 || reloaded.PruneDays != 7 {
-		t.Errorf("re-derived MaxClients/DimmerDelay/PruneDays = %d/%d/%d, want the defaults 200/5000/7", reloaded.MaxClients, reloaded.DimmerDelay, reloaded.PruneDays)
+	if reloaded.MaxClients != 200 || reloaded.PruneDays != 7 {
+		t.Errorf("re-derived MaxClients/PruneDays = %d/%d, want the defaults 200/7", reloaded.MaxClients, reloaded.PruneDays)
 	}
 
 	if !reloaded.AutoPopulate {
@@ -442,27 +433,27 @@ func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsKeepsTheBrandingEmailAndTwelveHourFormatTheServerIsRunningWith pins the part of
-// the legacy reset that is not a reset.
+// TestReloadOptionsKeepsTheBrandingAndEmailTheServerIsRunningWith pins the part of the legacy
+// reset that is not a reset.
 //
-// The legacy `server/options.go` `Read` resets every option it has a default for except `branding`, `email`,
-// and `time12hFormat` — and not the secret either. A stored row replaces them in every database
-// the legacy server wrote; when the row is missing, the value the server was already running with
-// survives the re-derivation instead of falling back to the default.
-func TestReloadOptionsKeepsTheBrandingEmailAndTwelveHourFormatTheServerIsRunningWith(t *testing.T) {
+// The legacy `server/options.go` `Read` resets every option it has a default for except `branding`
+// and `email` — and not the secret either. (`time12hFormat` was in that leave-alone list too; the
+// option is retired.) A stored row replaces them in every database the legacy server wrote; when
+// the row is missing, the value the server was already running with survives the re-derivation
+// instead of falling back to the default.
+func TestReloadOptionsKeepsTheBrandingAndEmailTheServerIsRunningWith(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
 
 	next := domain.DefaultOptions()
 	next.Branding = "Acme Dispatch"
 	next.Email = "dispatch@example.com"
-	next.Time12hFormat = true
 
 	if err := options.WriteOptions(context.Background(), next); err != nil {
 		t.Fatalf("WriteOptions: %v", err)
 	}
 
-	for _, key := range []string{"branding", "email", "time12hFormat"} {
+	for _, key := range []string{"branding", "email"} {
 		if _, err := db.Exec(`DELETE FROM "options" WHERE "key" = ?`, key); err != nil {
 			t.Fatalf("DELETE: %v", err)
 		}
@@ -479,10 +470,6 @@ func TestReloadOptionsKeepsTheBrandingEmailAndTwelveHourFormatTheServerIsRunning
 
 	if reloaded.Email != "dispatch@example.com" {
 		t.Errorf("Email = %q after the stored row was removed, want the value the server was running with", reloaded.Email)
-	}
-
-	if !reloaded.Time12hFormat {
-		t.Error("Time12hFormat = false after the stored row was removed, want the value the server was running with")
 	}
 }
 
@@ -659,6 +646,21 @@ func readOptionValue(t *testing.T, db *sql.DB, key string) string {
 	}
 
 	return value
+}
+
+// countOptionRowsForKey reports how many rows the options table holds for one key. A
+// retired key must have none.
+func countOptionRowsForKey(t *testing.T, db *sql.DB, key string) int {
+	t.Helper()
+
+	query := `SELECT COUNT(*) FROM "options" WHERE "key" = ?`
+
+	var count int
+	if err := db.QueryRow(query, key).Scan(&count); err != nil {
+		t.Fatalf("%s (%s): %v", query, key, err)
+	}
+
+	return count
 }
 
 // The legacy server puts a freshly generated hash of the default administrator password in place at

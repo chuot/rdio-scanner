@@ -108,6 +108,40 @@ func ParseTags(value any) Tags {
 	return tags
 }
 
+// ParseSites builds the sites of one system from the list an administrator submitted.
+func ParseSites(value any) Sites {
+	sites := Sites{}
+
+	for _, entry := range sectionEntries(value) {
+		sites = append(sites, Site{}.ApplyMap(entry))
+	}
+
+	return sites
+}
+
+// ParseTalkgroups builds the talkgroups of one system from the list an administrator
+// submitted. The empty group list is kept non-nil, as every talkgroup on the wire is.
+func ParseTalkgroups(value any) Talkgroups {
+	talkgroups := Talkgroups{}
+
+	for _, entry := range sectionEntries(value) {
+		talkgroups = append(talkgroups, Talkgroup{GroupIDs: []uint64{}}.ApplyMap(entry))
+	}
+
+	return talkgroups
+}
+
+// ParseUnits builds the units of one system from the list an administrator submitted.
+func ParseUnits(value any) Units {
+	units := Units{}
+
+	for _, entry := range sectionEntries(value) {
+		units = append(units, Unit{}.ApplyMap(entry))
+	}
+
+	return units
+}
+
 // sectionEntries is the rule every list section shares: the submitted value is a list of entries, each
 // entry is a set of fields, and anything that is neither is not part of the submission.
 //

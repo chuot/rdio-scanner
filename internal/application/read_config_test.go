@@ -49,7 +49,7 @@ func TestGetConfigQueryReturnsEverySection(t *testing.T) {
 		t.Errorf("dirwatches = %v, want the two stored watched directories", configuration.Dirwatches)
 	}
 
-	if configuration.Options.DuplicateDetectionTimeFrame == 0 {
+	if configuration.Options.MaxClients == 0 {
 		t.Errorf("options = %+v, want the stored options", configuration.Options)
 	}
 }

@@ -133,8 +133,13 @@ func (call Call) DuplicateWindow(window time.Duration) (time.Time, time.Time) {
 }
 
 // IsDuplicateOf reports whether another call already covers this one: the same system,
-// the same talkgroup, and a timestamp within the window on either side. Unit content,
-// labels and audio are not part of the rule.
+// the same talkgroup, the same site, and a timestamp within the window on either side.
+// Unit content, labels and audio are not part of the rule.
+//
+// The site is part of the rule because the same talkgroup heard on two sites is two
+// real calls: a time window alone used to suppress the second one. A call with no site
+// (SiteRef 0) matches only calls with no site; a site-bearing call never matches a
+// site-less one, in either direction.
 //
 // A window of zero means duplicate detection is switched off, and nothing is a
 // duplicate. Calls whose system and talkgroup have not been resolved cannot match each
@@ -150,6 +155,10 @@ func (call Call) IsDuplicateOf(other Call, window time.Duration) bool {
 	}
 
 	if call.Talkgroup.ID == 0 || other.Talkgroup.ID == 0 || call.Talkgroup.ID != other.Talkgroup.ID {
+		return false
+	}
+
+	if call.SiteRef != other.SiteRef {
 		return false
 	}
 

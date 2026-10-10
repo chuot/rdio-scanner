@@ -46,9 +46,9 @@ type CallRepository interface {
 	SearchCalls(ctx context.Context, search CallSearch) (CallSearchPage, error)
 
 	// FindDuplicateCandidates returns the calls that could make a call a duplicate of an
-	// earlier one: the calls on the same system and talkgroup whose timestamps fall
+	// earlier one: the calls on the same system, talkgroup and site whose timestamps fall
 	// between from and to.
-	FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, from, to time.Time) ([]domain.Call, error)
+	FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, siteRef uint, from, to time.Time) ([]domain.Call, error)
 
 	// DeleteCallsBefore removes the recorded calls older than the given instant and
 	// reports how many went.
@@ -120,6 +120,19 @@ type SystemRepository interface {
 	// not in the list are removed, and the rest are inserted or updated along with
 	// their talkgroups, sites, and units.
 	SaveSystems(ctx context.Context, systems domain.Systems) error
+
+	// SaveSystemSites reconciles the stored sites of one system with the given ones,
+	// renumbering their order. A system the store does not have reports ErrNotFound.
+	SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error
+
+	// SaveSystemTalkgroups reconciles the stored talkgroups of one system with the
+	// given ones, renumbering their order. A system the store does not have reports
+	// ErrNotFound.
+	SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups) error
+
+	// SaveSystemUnits reconciles the stored units of one system with the given ones,
+	// renumbering their order. A system the store does not have reports ErrNotFound.
+	SaveSystemUnits(ctx context.Context, systemID uint64, units domain.Units) error
 }
 
 // GroupRepository stores the talkgroup groups the administrator configures.

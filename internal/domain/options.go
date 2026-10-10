@@ -37,6 +37,11 @@ const (
 // reports that the password needs changing.
 const DefaultAdminPassword = "rdio-scanner"
 
+// DuplicateDetectionWindowMs is how close two calls on the same system, talkgroup and
+// site must be to count as duplicates. The option that used to tune it is retired; the
+// window is a domain constant.
+const DuplicateDetectionWindowMs = 500
+
 // SecretLength is the length of the signing secret persisted in the options table.
 const SecretLength = 256
 
@@ -44,20 +49,16 @@ const secretAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123
 
 // Options holds the server-wide business settings and their defaults.
 type Options struct {
-	AudioConversion             uint
-	AutoPopulate                bool
-	Branding                    string
-	DimmerDelay                 uint
-	DisableDuplicateDetection   bool
-	DuplicateDetectionTimeFrame uint
-	Email                       string
-	KeypadBeeps                 string
-	MaxClients                  uint
-	PlaybackGoesLive            bool
-	PruneDays                   uint
-	ShowListenersCount          bool
-	SortTalkgroups              bool
-	Time12hFormat               bool
+	AudioConversion           uint
+	AutoPopulate              bool
+	Branding                  string
+	DisableDuplicateDetection bool
+	Email                     string
+	KeypadBeeps               string
+	MaxClients                uint
+	PruneDays                 uint
+	ShowListenersCount        bool
+	SortTalkgroups            bool
 
 	// AdminPasswordHash is the bcrypt hash produced outside the domain; the domain
 	// only stores and reports it.
@@ -71,18 +72,14 @@ type Options struct {
 // DefaultOptions returns the option values a fresh server starts with.
 func DefaultOptions() Options {
 	return Options{
-		AudioConversion:             AudioConversionEnabled,
-		AutoPopulate:                true,
-		DimmerDelay:                 5000,
-		DisableDuplicateDetection:   false,
-		DuplicateDetectionTimeFrame: 500,
-		KeypadBeeps:                 "uniden",
-		MaxClients:                  200,
-		PlaybackGoesLive:            false,
-		PruneDays:                   7,
-		ShowListenersCount:          false,
-		SortTalkgroups:              false,
-		Time12hFormat:               false,
+		AudioConversion:           AudioConversionEnabled,
+		AutoPopulate:              true,
+		DisableDuplicateDetection: false,
+		KeypadBeeps:               "uniden",
+		MaxClients:                200,
+		PruneDays:                 7,
+		ShowListenersCount:        false,
+		SortTalkgroups:            false,
 
 		AdminPasswordNeedChange: true,
 	}
@@ -141,12 +138,6 @@ func (options Options) ApplyMap(m map[string]any) Options {
 		options.Branding = v
 	}
 
-	if v, ok := m["dimmerDelay"].(float64); ok {
-		options.DimmerDelay = uint(v)
-	} else {
-		options.DimmerDelay = 5000
-	}
-
 	// Retired legacy option: the old boolean flag maps onto the conversion modes.
 	if v, ok := m["disableAudioConversion"].(bool); ok {
 		if v {
@@ -160,12 +151,6 @@ func (options Options) ApplyMap(m map[string]any) Options {
 		options.DisableDuplicateDetection = v
 	} else {
 		options.DisableDuplicateDetection = false
-	}
-
-	if v, ok := m["duplicateDetectionTimeFrame"].(float64); ok {
-		options.DuplicateDetectionTimeFrame = uint(v)
-	} else {
-		options.DuplicateDetectionTimeFrame = 500
 	}
 
 	if v, ok := m["email"].(string); ok {
@@ -182,10 +167,6 @@ func (options Options) ApplyMap(m map[string]any) Options {
 		options.MaxClients = uint(v)
 	} else {
 		options.MaxClients = 200
-	}
-
-	if v, ok := m["playbackGoesLive"].(bool); ok {
-		options.PlaybackGoesLive = v
 	}
 
 	if v, ok := m["pruneDays"].(float64); ok {
@@ -206,23 +187,17 @@ func (options Options) ApplyMap(m map[string]any) Options {
 		options.SortTalkgroups = false
 	}
 
-	if v, ok := m["time12hFormat"].(bool); ok {
-		options.Time12hFormat = v
-	} else {
-		options.Time12hFormat = false
-	}
-
 	return options
 }
 
 // DuplicateDetectionWindow is how close two calls must be to count as duplicates; a
-// zero window means detection is disabled.
+// zero window means detection is disabled. The window is the domain constant.
 func (options Options) DuplicateDetectionWindow() time.Duration {
 	if options.DisableDuplicateDetection {
 		return 0
 	}
 
-	return time.Duration(options.DuplicateDetectionTimeFrame) * time.Millisecond
+	return time.Duration(DuplicateDetectionWindowMs) * time.Millisecond
 }
 
 // PruneBefore is the instant before which calls and logs are old enough to be pruned.

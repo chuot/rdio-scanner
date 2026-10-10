@@ -49,6 +49,46 @@ test('all 8 per-section GET/PUT pairs are documented', () => {
   }
 });
 
+// The systems tree saves each level of one system on its own, so the document must
+// carry the three per-level pairs with the system path parameter and the entity schema
+// the level is made of.
+const SUB_LEVELS = { sites: 'Site', talkgroups: 'Talkgroup', units: 'Unit' };
+
+test('the six per-level system GET/PUT pairs are documented', () => {
+  for (const [level, schema] of Object.entries(SUB_LEVELS)) {
+    const path = '/api/admin/config/systems/{systemId}/' + level;
+    const item = doc.paths?.[path];
+
+    assert.ok(item?.get, `missing GET ${path}`);
+    assert.ok(item?.put, `missing PUT ${path}`);
+
+    const param = item.parameters.find((p) => p.name === 'systemId');
+
+    assert.ok(param?.required, `${path} missing the required systemId path parameter`);
+
+    for (const method of ['get', 'put']) {
+      const response = item[method].responses['200'].content['application/json'].schema;
+
+      assert.equal(response.items?.$ref, `#/components/schemas/${schema}`,
+        `${method.toUpperCase()} ${path} 200 does not reference ${schema}`);
+
+      assert.ok(doc.components?.schemas?.[schema], `missing schema ${schema}`);
+    }
+
+    const body = item.put.requestBody.content['application/json'].schema;
+
+    assert.equal(body.items?.$ref, `#/components/schemas/${schema}`,
+      `PUT ${path} body does not reference ${schema}`);
+
+    for (const status of ['400', '401', '404', '417']) {
+      assert.ok(item.put.responses[status], `PUT ${path} missing response ${status}`);
+    }
+
+    assert.ok(item.get.responses['401'], `GET ${path} missing response 401`);
+    assert.ok(item.get.responses['404'], `GET ${path} missing response 404`);
+  }
+});
+
 test('raw-JWT bearer-less security scheme is declared and applied', () => {
   const scheme = doc.components?.securitySchemes?.adminJwt;
 

@@ -104,6 +104,7 @@ type configFixture struct {
 	get           *GetConfigHandler
 	update        *UpdateConfigurationHandler
 	updateSection *UpdateConfigurationSectionHandler
+	subsection    *UpdateSystemSubSectionHandler
 }
 
 func (fixture *configFixture) save(changes ConfigurationChanges) (UpdateConfigurationResult, error) {

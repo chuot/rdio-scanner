@@ -312,7 +312,7 @@ func TestAConfigurationSaveReachesEveryOpenAdministratorConnection(t *testing.T)
 
 	pushed := presentedCredential(t, conn, token)
 
-	rec := srv.put("/api/admin/config/options", token, `{"dimmerDelay":6000}`)
+	rec := srv.put("/api/admin/config/options", token, `{"maxClients":60}`)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("saving the options was answered %d: %s", rec.Code, rec.Body.String())
@@ -353,8 +353,8 @@ func TestAConfigurationSaveReachesEveryOpenAdministratorConnection(t *testing.T)
 		t.Fatalf("the configuration sent to the open connection carries no options: %v", pushedConfiguration)
 	}
 
-	if options["dimmerDelay"] != float64(6000) {
-		t.Errorf("the configuration sent to the open connection holds dimmerDelay %v, want the value the save stored", options["dimmerDelay"])
+	if options["maxClients"] != float64(60) {
+		t.Errorf("the configuration sent to the open connection holds maxClients %v, want the value the save stored", options["maxClients"])
 	}
 
 	if got := countLogLines(t, srv.db, "the options configuration changed"); got != 1 {

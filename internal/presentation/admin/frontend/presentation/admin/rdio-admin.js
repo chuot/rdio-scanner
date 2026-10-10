@@ -6,7 +6,6 @@
 
 import { getAdminContext } from '../../application/admin-context.js';
 import './rdio-admin-login.js';
-import './rdio-admin-todos.js';
 import './rdio-admin-access.js';
 import './rdio-admin-apikeys.js';
 import './rdio-admin-dirwatch.js';
@@ -20,7 +19,6 @@ import './rdio-admin-tags.js';
 import './rdio-admin-tools.js';
 
 const SECTIONS = [
-  { name: 'todos', label: 'Todos', icon: 'checklist' },
   { name: 'access', label: 'Access', icon: 'vpn_key' },
   { name: 'apikeys', label: 'API Keys', icon: 'key' },
   { name: 'dirwatch', label: 'Dirwatch', icon: 'folder', hiddenWhenDocker: true },
@@ -39,7 +37,7 @@ class RdioAdmin extends HTMLElement {
     if (this.dataset.bound) return;
     this.dataset.bound = '1';
 
-    getAdminContext().store.subscribe(['auth'], () => this.render());
+    getAdminContext().store.subscribe(['auth', 'todos'], () => this.render());
 
     this.render();
   }
@@ -48,7 +46,7 @@ class RdioAdmin extends HTMLElement {
     const { store, useCases } = getAdminContext();
     const { authenticated, docker } = store.getState().auth;
 
-    if (!this.current) this.current = 'todos';
+    if (!this.current) this.current = 'access';
 
     if (!authenticated) {
       this.replaceChildren(document.createElement('rdio-admin-login'));
@@ -66,6 +64,8 @@ class RdioAdmin extends HTMLElement {
     logout.innerHTML = `<i class="material-icons" aria-hidden="true">logout</i><span>Logout</span>`;
     logout.addEventListener('click', () => useCases.logout());
     header.append(logout);
+
+    const banner = this.todosBanner(store.getState().todos ?? []);
 
     const layout = document.createElement('div');
     layout.className = 'rdio-admin-layout';
@@ -93,7 +93,33 @@ class RdioAdmin extends HTMLElement {
 
     layout.append(nav, content);
 
-    this.replaceChildren(header, layout);
+    this.replaceChildren(header, banner, layout);
+  }
+
+  // todosBanner is the persistent banner under the header: every open todo, one row
+  // each. It renders nothing when the list is empty, and it is never dismissible —
+  // a todo disappears when the administrator fixes what caused it.
+  todosBanner(todos) {
+    const banner = document.createElement('div');
+    banner.className = 'rdio-admin-todos-banner';
+
+    for (const todo of todos) {
+      const item = document.createElement('div');
+      item.className = `todo ${todo.level}`;
+
+      const icon = document.createElement('i');
+      icon.className = 'material-icons';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = todo.level === 'warn' ? 'warning' : 'notifications';
+
+      const label = document.createElement('span');
+      label.textContent = todo.message;
+
+      item.append(icon, label);
+      banner.append(item);
+    }
+
+    return banner;
   }
 
   openSection(name) {

@@ -391,7 +391,7 @@ func TestFindDuplicateCandidatesReadsTheCallTheLegacyServerDelayed(t *testing.T)
 
 	systemID, talkgroupID := storedAggregates(t, db, 10001, 1514002)
 
-	candidates, err := NewCalls(db, DialectSqlite).FindDuplicateCandidates(context.Background(), systemID, talkgroupID, fixtureDelayedTimestamp.Add(-time.Hour), fixtureDelayedTimestamp.Add(time.Hour))
+	candidates, err := NewCalls(db, DialectSqlite).FindDuplicateCandidates(context.Background(), systemID, talkgroupID, 0, fixtureDelayedTimestamp.Add(-time.Hour), fixtureDelayedTimestamp.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("FindDuplicateCandidates: %v", err)
 	}
@@ -935,7 +935,7 @@ func TestFindDuplicateCandidatesReturnsTheCallsInTheWindowOnTheSameTalkgroup(t *
 	latest := fixture.storeCall(t, 10001, 1514000, at.Add(time.Second))
 	fixture.storeCall(t, 10001, 1514000, at.Add(2*time.Second))
 
-	candidates, err := fixture.calls.FindDuplicateCandidates(context.Background(), fixture.systemID(10001), fixture.talkgroupID(1514000), at.Add(-time.Second), at.Add(time.Second))
+	candidates, err := fixture.calls.FindDuplicateCandidates(context.Background(), fixture.systemID(10001), fixture.talkgroupID(1514000), 0, at.Add(-time.Second), at.Add(time.Second))
 	if err != nil {
 		t.Fatalf("FindDuplicateCandidates: %v", err)
 	}
@@ -955,7 +955,7 @@ func TestFindDuplicateCandidatesLeavesOutCallsOnAnotherSystemOrTalkgroup(t *test
 	fixture.storeCall(t, 10001, 1514001, at)
 	fixture.storeCall(t, 10002, 1520000, at)
 
-	candidates, err := fixture.calls.FindDuplicateCandidates(context.Background(), fixture.systemID(10001), fixture.talkgroupID(1514000), at.Add(-time.Second), at.Add(time.Second))
+	candidates, err := fixture.calls.FindDuplicateCandidates(context.Background(), fixture.systemID(10001), fixture.talkgroupID(1514000), 0, at.Add(-time.Second), at.Add(time.Second))
 	if err != nil {
 		t.Fatalf("FindDuplicateCandidates: %v", err)
 	}
@@ -976,7 +976,7 @@ func TestFindDuplicateCandidatesIncludesACallWaitingOutADelay(t *testing.T) {
 	waiting := fixture.storeCall(t, 10001, 1514000, at)
 	fixture.delay(t, waiting.ID, at.Add(90*time.Minute))
 
-	candidates, err := fixture.calls.FindDuplicateCandidates(context.Background(), fixture.systemID(10001), fixture.talkgroupID(1514000), at.Add(-time.Second), at.Add(time.Second))
+	candidates, err := fixture.calls.FindDuplicateCandidates(context.Background(), fixture.systemID(10001), fixture.talkgroupID(1514000), 0, at.Add(-time.Second), at.Add(time.Second))
 	if err != nil {
 		t.Fatalf("FindDuplicateCandidates: %v", err)
 	}

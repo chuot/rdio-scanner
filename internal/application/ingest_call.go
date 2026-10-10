@@ -427,7 +427,7 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 		from, to := call.DuplicateWindow(window)
 
-		candidates, err := handler.calls.FindDuplicateCandidates(ctx, call.System.ID, call.Talkgroup.ID, from, to)
+		candidates, err := handler.calls.FindDuplicateCandidates(ctx, call.System.ID, call.Talkgroup.ID, call.SiteRef, from, to)
 		if err != nil {
 			return logError(err)
 		}

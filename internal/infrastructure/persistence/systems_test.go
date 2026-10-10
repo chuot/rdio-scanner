@@ -23,9 +23,12 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/application/ports"
 
 	"rdio-scanner/internal/domain"
 )
@@ -1174,4 +1177,190 @@ func containsID(ids []uint64, want uint64) bool {
 	}
 
 	return false
+}
+
+// TestSaveSystemSitesReplacesTheSitesOfOneSystem pins the per-level save: the submitted
+// rows are renumbered 1-based, an existing row is updated, a new row is inserted, and the
+// other system keeps its sites.
+func TestSaveSystemSitesReplacesTheSitesOfOneSystem(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	sites := domain.Sites{
+		{ID: 1, SiteRef: 77, Label: "Metro East"},
+		{SiteRef: 102, Label: "Metro West"},
+	}
+
+	if err := repo.SaveSystemSites(context.Background(), 1, sites); err != nil {
+		t.Fatalf("SaveSystemSites: %v", err)
+	}
+
+	systems, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := systems.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if len(first.Sites) != 2 {
+		t.Fatalf("system 1 has %d sites, want the two submitted rows", len(first.Sites))
+	}
+
+	if first.Sites[0].Label != "Metro East" || first.Sites[0].Order != 1 || first.Sites[0].SiteRef != 77 {
+		t.Errorf("the stored row = %+v, want the submitted row updated in place at order 1", first.Sites[0])
+	}
+
+	if first.Sites[1].Label != "Metro West" || first.Sites[1].Order != 2 || first.Sites[1].SiteRef != 102 {
+		t.Errorf("the inserted row = %+v, want order 2", first.Sites[1])
+	}
+
+	second, ok := systems.ByID(2)
+	if !ok {
+		t.Fatalf("system 2 is not stored")
+	}
+
+	for _, site := range second.Sites {
+		if site.SystemID != 2 {
+			t.Errorf("system 2's site %+v was touched by a save of system 1", site)
+		}
+	}
+}
+
+// TestSaveSystemSitesRemovesTheRowsNotSubmitted pins the reconciliation: a site the save
+// does not name is removed from the system.
+func TestSaveSystemSitesRemovesTheRowsNotSubmitted(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	sites := domain.Sites{{SiteRef: 200, Label: "Only Site"}}
+
+	if err := repo.SaveSystemSites(context.Background(), 1, sites); err != nil {
+		t.Fatalf("SaveSystemSites: %v", err)
+	}
+
+	systems, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := systems.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if len(first.Sites) != 1 || first.Sites[0].Label != "Only Site" || first.Sites[0].Order != 1 {
+		t.Errorf("system 1 has sites %+v, want only the submitted row at order 1", first.Sites)
+	}
+}
+
+// TestSaveSystemSitesReportsAnUnknownSystem pins the 404 half of the contract: a system the
+// store does not have is reported as ErrNotFound, and nothing is written.
+func TestSaveSystemSitesReportsAnUnknownSystem(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	err := repo.SaveSystemSites(context.Background(), 99, domain.Sites{{SiteRef: 1, Label: "Nowhere"}})
+	if !errors.Is(err, ports.ErrNotFound) {
+		t.Errorf("SaveSystemSites error = %v, want ports.ErrNotFound", err)
+	}
+
+	systems, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := systems.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if len(first.Sites) != 1 || first.Sites[0].Label != "North Site" {
+		t.Errorf("system 1 has sites %+v, want the stored site untouched by a save of an unknown system", first.Sites)
+	}
+}
+
+// TestSaveSystemTalkgroupsReplacesTheTalkgroupsOfOneSystem pins the per-level talkgroup
+// save, including the group memberships the submitted rows carry.
+func TestSaveSystemTalkgroupsReplacesTheTalkgroupsOfOneSystem(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	talkgroups := domain.Talkgroups{
+		{ID: 1, TalkgroupRef: 1514000, Label: "Ground", Name: "Dispatch 1", TagID: 3, GroupIDs: []uint64{1}},
+		{TalkgroupRef: 1514100, Label: "Fire", Name: "Dispatch 2", TagID: 6, GroupIDs: []uint64{3}},
+	}
+
+	if err := repo.SaveSystemTalkgroups(context.Background(), 1, talkgroups); err != nil {
+		t.Fatalf("SaveSystemTalkgroups: %v", err)
+	}
+
+	systems, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := systems.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if len(first.Talkgroups) != 2 {
+		t.Fatalf("system 1 has %d talkgroups, want the two submitted rows: the stored talkgroup 3 is removed", len(first.Talkgroups))
+	}
+
+	if first.Talkgroups[0].TalkgroupRef != 1514000 || first.Talkgroups[0].Order != 1 {
+		t.Errorf("the stored row = %+v, want the submitted row updated in place at order 1", first.Talkgroups[0])
+	}
+
+	if first.Talkgroups[1].TalkgroupRef != 1514100 || first.Talkgroups[1].Order != 2 {
+		t.Errorf("the inserted row = %+v, want order 2", first.Talkgroups[1])
+	}
+
+	if strings.Join(idsAsText(first.Talkgroups[0].GroupIDs), ",") != "1" {
+		t.Errorf("the stored talkgroup has groups %v, want the submitted membership", first.Talkgroups[0].GroupIDs)
+	}
+
+	if strings.Join(idsAsText(first.Talkgroups[1].GroupIDs), ",") != "3" {
+		t.Errorf("the inserted talkgroup has groups %v, want the submitted membership", first.Talkgroups[1].GroupIDs)
+	}
+}
+
+// TestSaveSystemUnitsReplacesTheUnitsOfOneSystem pins the per-level unit save.
+func TestSaveSystemUnitsReplacesTheUnitsOfOneSystem(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	units := domain.Units{
+		{ID: 1, UnitRef: 12345, Label: "Engine 12"},
+		{UnitRef: 678, Label: "Car 3"},
+	}
+
+	if err := repo.SaveSystemUnits(context.Background(), 1, units); err != nil {
+		t.Fatalf("SaveSystemUnits: %v", err)
+	}
+
+	systems, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := systems.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if len(first.Units) != 2 {
+		t.Fatalf("system 1 has %d units, want the two submitted rows", len(first.Units))
+	}
+
+	if first.Units[0].Label != "Engine 12" || first.Units[0].Order != 1 {
+		t.Errorf("the stored row = %+v, want the submitted row updated in place at order 1", first.Units[0])
+	}
+
+	if first.Units[1].Label != "Car 3" || first.Units[1].Order != 2 {
+		t.Errorf("the inserted row = %+v, want order 2", first.Units[1])
+	}
 }

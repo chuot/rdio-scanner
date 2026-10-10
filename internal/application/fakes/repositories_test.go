@@ -79,7 +79,7 @@ func TestCallsGetMissingCallReportsNotFound(t *testing.T) {
 	}
 }
 
-func TestCallsFindDuplicateCandidatesFiltersByAggregatesAndWindow(t *testing.T) {
+func TestCallsFindDuplicateCandidatesFiltersByAggregatesSiteAndWindow(t *testing.T) {
 	calls := NewCalls()
 
 	calls.Stored = map[uint64]domain.Call{
@@ -88,15 +88,20 @@ func TestCallsFindDuplicateCandidatesFiltersByAggregatesAndWindow(t *testing.T) 
 		3: testCall(3, 4, 1514000, baseTime().Add(5*time.Second)),
 		4: testCall(4, 5, 1514000, baseTime()),
 		5: testCall(5, 4, 1514001, baseTime()),
+		6: func() domain.Call {
+			c := testCall(6, 4, 1514000, baseTime())
+			c.SiteRef = 7
+			return c
+		}(),
 	}
 
-	candidates, err := calls.FindDuplicateCandidates(context.Background(), 4, 1514000, baseTime().Add(-time.Second), baseTime().Add(time.Second))
+	candidates, err := calls.FindDuplicateCandidates(context.Background(), 4, 1514000, 0, baseTime().Add(-time.Second), baseTime().Add(time.Second))
 	if err != nil {
 		t.Fatalf("FindDuplicateCandidates: %v", err)
 	}
 
 	if len(candidates) != 2 {
-		t.Fatalf("FindDuplicateCandidates produced %d calls, want the two on the same system and talkgroup inside the window", len(candidates))
+		t.Fatalf("FindDuplicateCandidates produced %d calls, want the two on the same system, site and talkgroup inside the window", len(candidates))
 	}
 
 	if candidates[0].ID != 1 || candidates[1].ID != 2 {
