@@ -172,7 +172,6 @@ const SECTIONS = [
   ['rdio-admin-units', 'units'],
   ['rdio-admin-options', 'options'],
   ['rdio-admin-tools', 'tools'],
-  ['rdio-admin-ingestion', 'ingestion'],
 ];
 
 test('no other section card carries an OpenAPI box', () => {

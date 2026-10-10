@@ -45,9 +45,15 @@ test('the Ingestion section explains the three ingestion ways', () => {
   assert.ok(text.includes('Downstreams'), 'the section does not explain downstream ingestion');
 });
 
-test('the Ingestion section has no save bar and no OpenAPI box', () => {
+test('the Ingestion section has no save bar and renders the ingestion help box', () => {
   const el = ingestionSection();
 
   assert.equal(findAll(el, (node) => node.tag === 'rdio-admin-section-bar').length, 0, 'an informational section must not offer a save bar');
-  assert.equal(findAll(el, (node) => node.tag === 'rdio-admin-openapi-box').length, 0, 'the entrypoint list belongs to the API section');
+
+  // The help box below the three panels is the ingestion group of the shared
+  // OpenAPI box, the same renderer the API section uses.
+  const boxes = findAll(el, (node) => node.tag === 'rdio-admin-openapi-box');
+
+  assert.equal(boxes.length, 1, 'the section does not render the ingestion help box');
+  assert.equal(boxes[0].dataset.group, 'ingestion', 'the help box is not the ingestion group');
 });

@@ -2,10 +2,10 @@
 // only: it explains the three ways calls reach the server and names the OpenAPI
 // entry point of each. Nothing here is edited, so there is no store slice and
 // no save bar; the editing lives in the API Keys, Dirwatch and Downstreams
-// sections. The help box at the bottom names the capture endpoint from
-// docs/api.md.
+// sections. The help box at the bottom renders the ingestion group of the
+// OpenAPI entry points, the same box the API section uses.
 
-
+import './openapi-box.js';
 
 const METHODS = [
   [
@@ -68,7 +68,12 @@ class RdioAdminIngestion extends HTMLElement {
       root.append(details);
     }
 
+    // The help box the comment promises: the ingestion entry points, rendered by
+    // the shared box so it matches the API section.
+    const box = document.createElement('rdio-admin-openapi-box');
+    box.dataset.group = 'ingestion';
 
+    root.append(box);
 
     this.replaceChildren(root);
   }
