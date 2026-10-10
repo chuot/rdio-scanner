@@ -49,10 +49,10 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 	"rdio-scanner/internal/infrastructure/tokens"
 	adminbackend "rdio-scanner/internal/presentation/admin/backend"
+	adminfrontend "rdio-scanner/internal/presentation/admin/frontend"
 	"rdio-scanner/internal/presentation/common/upload"
 	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
-	"rdio-scanner/internal/presentation/serving/admin"
-	"rdio-scanner/internal/presentation/serving/scanner"
+	scannerfrontend "rdio-scanner/internal/presentation/scanner/frontend"
 )
 
 // everyInterface is the address the server binds when the configuration names an address with nothing in
@@ -430,7 +430,7 @@ func (s *server) wire(migrationLines []domain.LogEntry) error {
 	adminAPI.Register(mux)
 	uploads.Register(mux)
 
-	serveApplications(mux, listener, scanner.Embedded(), admin.Embedded())
+	serveApplications(mux, listener, scannerfrontend.Embedded(), adminfrontend.Embedded())
 
 	s.routes = mux
 

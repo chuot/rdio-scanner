@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-package scanner
+package frontend
 
 import (
 	"embed"
@@ -27,26 +27,28 @@ import (
 	"rdio-scanner/internal/presentation/common/spa"
 )
 
-// bundle is the scanner application compiled into the binary.
+// bundle is the administration application compiled into the binary.
 //
 // The directory has to be inside this package: a `go:embed` pattern cannot name a path
-// outside the package directory it is written in, so the client build writes its scanner
+// outside the package directory it is written in, so the client build writes its admin
 // output here, at `bundle/`, rather than somewhere this package could not reach.
 //
-// `all:` is the departure from the legacy `//go:embed webapp/*`, and it exists only so
-// this package compiles before the client has ever been built. `bundle/.gitkeep` is the
-// placeholder that keeps the directory in the repository, and a pattern without `all:`
-// refuses to match a directory whose only entry is a hidden file — the embed would fail
-// with "matches no files". A client build writes no hidden files, so once the bundle is
-// in place the two patterns embed exactly the same set.
+// `all:` exists only so this package compiles before the client has ever been built:
+// `bundle/.gitkeep` keeps the directory in the repository, and a pattern without `all:`
+// refuses to match a directory whose only entry is a hidden file. A client build writes
+// no hidden files, so once the bundle is in place the two patterns embed the same set.
 //
 //go:embed all:bundle
 var bundle embed.FS
 
-// Embedded returns the catch-all handler for the scanner application, served from the
-// root of the server: the path a listener connects to is the path the page is served
-// from, and the composition root decides which one a request is before this handler
-// ever sees it.
+// Embedded returns the catch-all handler for the administration application, mounted at
+// /admin. The mount is removed before a path is resolved against the bundle, so the
+// bundle is flat and holds no copy of the prefix inside itself.
+//
+// The mount is written without its trailing slash because the composition root registers
+// the subtree pattern `/admin/`, and `http.ServeMux` redirects a request for `/admin` to
+// `/admin/` before this handler sees it. That redirect is what makes every relative URL
+// in the shell resolve inside the admin bundle.
 func Embedded() http.Handler {
-	return spa.New(bundle, "")
+	return spa.New(bundle, "/admin")
 }

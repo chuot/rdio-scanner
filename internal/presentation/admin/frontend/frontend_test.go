@@ -12,12 +12,15 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
 
-package scanner
+package frontend
 
-import (
-	"testing"
-)
+import "testing"
 
 // TestThePackageCompilesWithAnUnbuiltClient is the compile-time case. The bundle directory is
 // committed with nothing in it but `.gitkeep`, and `//go:embed all:bundle` is the pattern that
