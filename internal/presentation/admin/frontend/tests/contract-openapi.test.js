@@ -1,6 +1,7 @@
-// The OpenAPI document for the admin REST surface is the contract the administrator front end is
-// written against. It must parse with Node's built-in JSON support and cover every endpoint the
-// server answers, including the eight per-section pairs.
+// The OpenAPI document docs/openapi.json is the contract the front ends and the command-line
+// tooling are written against. It must parse with Node's built-in JSON support and cover every
+// entry point the server answers: the admin REST surface, the two ingestion endpoints, the two
+// WebSocket surfaces, and the two static applications (FEAT-022).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,15 +9,20 @@ import { readFileSync } from 'node:fs';
 
 import { fileURLToPath } from 'node:url';
 
-const DOC_PATH = fileURLToPath(new URL('../../../../../docs/openapi-admin.json', import.meta.url));
+const DOC_PATH = fileURLToPath(new URL('../../../../../docs/openapi.json', import.meta.url));
+const VERSION_PATH = fileURLToPath(new URL('../../../../../VERSION.txt', import.meta.url));
 
 const doc = JSON.parse(readFileSync(DOC_PATH, 'utf8'));
 
 const SECTIONS = ['access', 'apikeys', 'dirwatch', 'downstreams', 'groups', 'options', 'systems', 'tags'];
 
-test('the admin OpenAPI document declares OpenAPI 3.1 with a title', () => {
+test('the OpenAPI document declares OpenAPI 3.1 with a title and the server version', () => {
   assert.equal(doc.openapi, '3.1.0');
   assert.ok(doc.info?.title);
+
+  const version = readFileSync(VERSION_PATH, 'utf8').trim();
+
+  assert.equal(doc.info.version, version, 'info.version must equal VERSION.txt');
 });
 
 test('every legacy admin endpoint from contract §3 is documented', () => {
@@ -114,16 +120,19 @@ test('raw-JWT bearer-less security scheme is declared and applied', () => {
   assert.equal(scheme?.in, 'header');
   assert.equal(scheme?.name, 'Authorization');
 
-  // login works without a token; the capture endpoints take the apikey form field.
+  // login works without a token; the capture endpoints take the apikey form field; the
+  // static applications are public. Everything else carries the admin JWT.
   const NO_TOKEN = ['/api/admin/login', '/api/call-upload', '/api/trunk-recorder-call-upload'];
+  const PUBLIC = ['/', '/admin', '/admin/'];
 
   for (const [path, item] of Object.entries(doc.paths ?? {})) {
-    if (NO_TOKEN.includes(path)) {
-      continue;
-    }
-
     for (const [method, operation] of Object.entries(item)) {
       if (!['get', 'put', 'post', 'patch', 'delete'].includes(method)) continue;
+
+      if (NO_TOKEN.includes(path) || PUBLIC.includes(path)) {
+        assert.deepEqual(operation.security, [], `${method.toUpperCase()} ${path} must declare no security`);
+        continue;
+      }
 
       assert.deepEqual(operation.security, [{ adminJwt: [] }], `${method.toUpperCase()} ${path} missing adminJwt security`);
     }
@@ -149,4 +158,70 @@ test('section responses reference the config entity schemas', () => {
     assert.ok(refs.has(entity), `section response does not reference schema ${entity}`);
     assert.ok(doc.components?.schemas?.[entity], `missing schema ${entity}`);
   }
+});
+
+// The ingestion endpoints are form uploads keyed by an apikey, not by the admin JWT. The
+// field catalogue is the parser's own: every field name internal/infrastructure/dirwatch/
+// parsers/multipart.go reads must appear in the documented form, and the trunk-recorder
+// endpoint adds its JSON sidecar field.
+const UPLOAD_FIELDS = [
+  'audio', 'audioFilename', 'audioName', 'audioMime', 'audioType', 'channelType',
+  'dateTime', 'frequency', 'frequencies', 'key', 'patches', 'patched_talkgroups',
+  'site', 'source', 'sources', 'system', 'systemLabel', 'talkgroup', 'talkgroupGroup',
+  'talkgroupGroups', 'talkgroupLabel', 'talkgroupName', 'talkgroupTag', 'timestamp',
+  'unit', 'units',
+];
+
+test('both ingestion endpoints are documented with the parser field catalogue', () => {
+  for (const path of ['/api/call-upload', '/api/trunk-recorder-call-upload']) {
+    const post = doc.paths?.[path]?.post;
+
+    assert.ok(post, `missing POST ${path}`);
+
+    const schema = post.requestBody?.content?.['multipart/form-data']?.schema;
+
+    assert.equal(schema?.type, 'object', `${path} must document a multipart form object`);
+
+    for (const field of UPLOAD_FIELDS) {
+      assert.ok(schema.properties?.[field], `${path} does not document the ${field} field`);
+    }
+  }
+
+  const sidecar = doc.paths?.['/api/trunk-recorder-call-upload']?.post?.requestBody?.content
+    ?.['multipart/form-data']?.schema?.properties?.meta;
+
+  assert.ok(sidecar, 'the trunk-recorder endpoint must document the meta sidecar field');
+});
+
+// The listener protocol and the administrator configuration socket are documented as
+// x-websocket components (decision-openapi-websocket-representation.md): the command set
+// mirrors internal/presentation/scanner/backend/message.go.
+const LISTENER_COMMANDS = ['CAL', 'CFG', 'IOS', 'LCL', 'LFM', 'LSC', 'MAX', 'PID', 'PIN', 'SRV', 'VER', 'XPR'];
+
+test('the listener WebSocket protocol is documented with its full command set', () => {
+  const listener = doc.components?.['x-websockets']?.listener;
+
+  assert.ok(listener, 'components.x-websockets.listener is missing');
+  assert.deepEqual(Object.keys(listener.commands).sort(), LISTENER_COMMANDS,
+    'the documented command set must mirror message.go');
+  assert.ok(listener.path, 'the listener socket must name its path');
+});
+
+test('the administrator configuration socket is documented on the whole-config path', () => {
+  const adminConfig = doc.components?.['x-websockets']?.adminConfig;
+
+  assert.ok(adminConfig, 'components.x-websockets.adminConfig is missing');
+  assert.equal(adminConfig.path, '/api/admin/config');
+
+  assert.ok(doc.paths?.['/api/admin/config']?.['x-websocket'],
+    'the whole-config path item must cross-reference the configuration socket');
+});
+
+test('the two static applications and the admin redirect are documented', () => {
+  assert.ok(doc.paths?.['/']?.get, 'missing GET / (the scanner webapp)');
+  assert.ok(doc.paths?.['/admin/']?.get, 'missing GET /admin/ (the admin shell)');
+
+  const redirect = doc.paths?.['/admin']?.get?.responses?.['307'];
+
+  assert.ok(redirect, 'GET /admin must document the 307 redirect to /admin/');
 });

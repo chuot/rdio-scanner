@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Rdio Scanner Admin API",
-    "version": "7.1.0",
-    "description": "Admin REST surface of the Rdio Scanner server: authentication, whole-config access (legacy, unchanged), per-section config endpoints (REQ-019, decision-admin-section-api.md), alerts, logs, password change, access user management, and the two call capture endpoints. Auth: raw JWT in the Authorization header, no Bearer prefix. HTTP 401 on invalid/expired token. The capture endpoints authenticate with the key form field. The admin config WebSocket (ws://host/api/admin/config, JWT as first message) is out of scope for this document."
+    "title": "Rdio Scanner API",
+    "version": "8.0.0",
+    "description": "The complete entry-point surface of the Rdio Scanner server: the administrator REST surface (authentication, whole-config access, per-section config endpoints, alerts, logs, password change, access user management), the two call ingestion endpoints, the two static applications, and the two WebSocket surfaces. Admin REST auth: raw JWT in the Authorization header, no Bearer prefix; HTTP 401 on invalid/expired token. The ingestion endpoints authenticate with the key form field. The WebSocket surfaces are documented as components.x-websockets (OpenAPI 3.1 has no native WebSocket construct): the listener protocol on any path, chosen by the Upgrade header, and the administrator configuration socket on /api/admin/config. The listener protocol is reserved for Saubeo Solutions native applications per API_ACCESS_POLICY.md."
   },
   "servers": [
     {
@@ -39,15 +39,20 @@
                   "$ref": "#/components/schemas/LoginResponse"
                 }
               }
-            }
+            },
+            "description": "A JWT and the session facts, in the legacy login response shape."
           },
           "400": {
             "description": "Undecodable body"
           },
           "401": {
             "description": "Wrong password or rate limit exceeded (3 attempts per IP, counter cleared on success)"
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Exchange the administrator password for a JWT. Rate limited to three attempts per address, cleared on success."
       }
     },
     "/api/admin/logout": {
@@ -63,9 +68,14 @@
             "description": "Empty body"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "End an administrator session. The token is presented raw in the Authorization header, without a Bearer prefix."
       }
     },
     "/api/admin/config": {
@@ -84,12 +94,18 @@
                   "$ref": "#/components/schemas/WholeConfigResponse"
                 }
               }
-            }
+            },
+            "description": "The whole configuration, in the legacy shape."
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Read the whole configuration in the legacy shape. A websocket upgrade on this path is taken over as the administrator configuration socket instead."
       },
       "put": {
         "summary": "Replace config sections via a whole-config body (legacy endpoint, kept unchanged). Only the top-level keys present in the body are applied.",
@@ -116,18 +132,27 @@
                   "$ref": "#/components/schemas/WholeConfigResponse"
                 }
               }
-            }
+            },
+            "description": "The saved configuration, in the legacy shape."
           },
           "400": {
             "description": "Undecodable body"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Persistence failure"
           }
-        }
+        },
+        "description": "Save the whole configuration in the legacy shape. A saved configuration is announced to every open administrator configuration socket."
+      },
+      "x-websocket": {
+        "$ref": "#/components/x-websockets/adminConfig"
       }
     },
     "/api/admin/config/{section}": {
@@ -148,7 +173,8 @@
               "systems",
               "tags"
             ]
-          }
+          },
+          "description": "The configuration section to read or save."
         }
       ],
       "get": {
@@ -212,15 +238,21 @@
                   ]
                 }
               }
-            }
+            },
+            "description": "The section as the administrator page edits it."
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown section"
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Read one configuration section as the administrator page edits it. A websocket upgrade on a section path is refused."
       },
       "put": {
         "summary": "Replace a single config section. Persists only that section, then broadcasts the full config to admin WebSocket clients.",
@@ -346,18 +378,20 @@
             "description": "Undecodable body (array expected for list sections, object for options)"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown section"
           },
           "405": {
-            "description": "Unsupported method or WebSocket upgrade on a section path"
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Persistence failure"
           }
-        }
+        },
+        "description": "Save one configuration section. A section that changed on the server since it was read is refused with 417."
       }
     },
     "/api/admin/config/systems/{systemId}/sites": {
@@ -396,12 +430,17 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown system"
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Read the sites of one system."
       },
       "put": {
         "summary": "Save the sites of one system",
@@ -441,18 +480,20 @@
             "description": "Undecodable body (array expected)"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown system"
           },
           "405": {
-            "description": "Unsupported method or WebSocket upgrade on a sub-section path"
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Persistence failure"
           }
-        }
+        },
+        "description": "Save the sites of one system. A level that changed on the server since it was read is refused with 417."
       }
     },
     "/api/admin/config/systems/{systemId}/talkgroups": {
@@ -491,12 +532,17 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown system"
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Read the talkgroups of one system."
       },
       "put": {
         "summary": "Save the talkgroups of one system",
@@ -536,18 +582,20 @@
             "description": "Undecodable body (array expected)"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown system"
           },
           "405": {
-            "description": "Unsupported method or WebSocket upgrade on a sub-section path"
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Persistence failure"
           }
-        }
+        },
+        "description": "Save the talkgroups of one system. A level that changed on the server since it was read is refused with 417."
       }
     },
     "/api/admin/config/systems/{systemId}/units": {
@@ -586,12 +634,17 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown system"
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Read the units of one system."
       },
       "put": {
         "summary": "Save the units of one system",
@@ -631,18 +684,20 @@
             "description": "Undecodable body (array expected)"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
           },
           "404": {
             "description": "Unknown system"
           },
           "405": {
-            "description": "Unsupported method or WebSocket upgrade on a sub-section path"
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Persistence failure"
           }
-        }
+        },
+        "description": "Save the units of one system. A level that changed on the server since it was read is refused with 417."
       }
     },
     "/api/admin/alerts": {
@@ -667,12 +722,18 @@
                   }
                 }
               }
-            }
+            },
+            "description": "The alert files keyed by name."
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           }
-        }
+        },
+        "description": "Read the audio alert files the server carries, keyed by name."
       }
     },
     "/api/admin/logs": {
@@ -701,18 +762,24 @@
                   "$ref": "#/components/schemas/LogsQueryResponse"
                 }
               }
-            }
+            },
+            "description": "One page of log entries and the total the filters matched."
           },
           "400": {
             "description": "Undecodable body"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Search failure"
           }
-        }
+        },
+        "description": "Search the log view: one page of entries with the filters the administrator log panel sends."
       }
     },
     "/api/admin/password": {
@@ -741,18 +808,24 @@
                   "$ref": "#/components/schemas/PasswordResponse"
                 }
               }
-            }
+            },
+            "description": "The answer of the password change."
           },
           "400": {
             "description": "Missing newPassword"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Current password invalid or persistence failure"
           }
-        }
+        },
+        "description": "Change the administrator password. The current password is checked first."
       }
     },
     "/api/admin/user-add": {
@@ -781,12 +854,17 @@
             "description": "Undecodable body"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Validation or persistence failure"
           }
-        }
+        },
+        "description": "Add an access user to the access list, or update the one with the id it names."
       }
     },
     "/api/admin/user-remove": {
@@ -824,12 +902,17 @@
             "description": "Undecodable body"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
           },
           "417": {
             "description": "Persistence failure"
           }
-        }
+        },
+        "description": "Remove from the access list the user with the id it names."
       }
     },
     "/api/call-upload": {
@@ -848,44 +931,109 @@
                 ],
                 "properties": {
                   "key": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "The apikey credential the upload is checked against."
                   },
                   "audio": {
                     "type": "string",
-                    "format": "binary"
+                    "format": "binary",
+                    "description": "The recording file part."
                   },
                   "audioFilename": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Recording file name (alias: audioName)."
+                  },
+                  "audioName": {
+                    "type": "string",
+                    "description": "Recording file name (alias of audioFilename)."
                   },
                   "audioMime": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Recording mime type (alias: audioType)."
                   },
-                  "system": {
-                    "type": "string"
+                  "audioType": {
+                    "type": "string",
+                    "description": "Recording mime type (alias of audioMime)."
                   },
-                  "talkgroup": {
-                    "type": "string"
+                  "channelType": {
+                    "type": "string",
+                    "description": "Call type."
                   },
-                  "talkgroupLabel": {
-                    "type": "string"
+                  "dateTime": {
+                    "type": "string",
+                    "description": "Call time in RFC3339 (timestamp is preferred)."
                   },
-                  "talkgroupName": {
-                    "type": "string"
-                  },
-                  "timestamp": {
-                    "type": "string"
-                  },
-                  "site": {
-                    "type": "string"
+                  "frequency": {
+                    "type": "string",
+                    "description": "Recording frequency in hertz."
                   },
                   "frequencies": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "JSON array of frequency changes: {dbm, errorCount, freq, len, pos, spikeCount}."
                   },
                   "patches": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "JSON array of patched talkgroups (alias: patched_talkgroups)."
+                  },
+                  "patched_talkgroups": {
+                    "type": "string",
+                    "description": "JSON array of patched talkgroups (alias of patches)."
+                  },
+                  "site": {
+                    "type": "string",
+                    "description": "Site id."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Source unit id."
                   },
                   "sources": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "JSON array of source unit ids."
+                  },
+                  "system": {
+                    "type": "string",
+                    "description": "System id."
+                  },
+                  "systemLabel": {
+                    "type": "string",
+                    "description": "System label."
+                  },
+                  "talkgroup": {
+                    "type": "string",
+                    "description": "Talkgroup id."
+                  },
+                  "talkgroupGroup": {
+                    "type": "string",
+                    "description": "Talkgroup group label."
+                  },
+                  "talkgroupGroups": {
+                    "type": "string",
+                    "description": "JSON array of group labels."
+                  },
+                  "talkgroupLabel": {
+                    "type": "string",
+                    "description": "Talkgroup label."
+                  },
+                  "talkgroupName": {
+                    "type": "string",
+                    "description": "Talkgroup label (alias of talkgroupLabel)."
+                  },
+                  "talkgroupTag": {
+                    "type": "string",
+                    "description": "Talkgroup tag label."
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "description": "Call time in unix milliseconds (more precise than dateTime)."
+                  },
+                  "unit": {
+                    "type": "string",
+                    "description": "Unit id."
+                  },
+                  "units": {
+                    "type": "string",
+                    "description": "JSON array of unit references."
                   }
                 },
                 "additionalProperties": true
@@ -895,18 +1043,59 @@
         },
         "responses": {
           "200": {
-            "description": "Call imported successfully."
+            "description": "Call imported successfully. — answered the same whether ingest then placed the call or not.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Call imported successfully.\n"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Not a multipart content, or a body the reader cannot parse"
+            "description": "Invalid content-type, or Not a multipart content.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "403": {
-            "description": "Invalid API key for the call"
+          "401": {
+            "description": "Invalid API key for system <nil> talkgroup <nil>. — the key is not a valid apikey.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Unsupported method — these endpoints answer POST only.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Unsupported method\n"
+                }
+              }
+            }
           },
           "417": {
-            "description": "Upload failure"
+            "description": "multipart: / ioread: read failure, Incomplete call data, or Call upload failed.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
-        }
+        },
+        "description": "Upload one recorded call as a multipart form. The key field carries the apikey credential that scopes the systems and talkgroups the upload may write to."
       }
     },
     "/api/trunk-recorder-call-upload": {
@@ -926,15 +1115,113 @@
                 ],
                 "properties": {
                   "key": {
-                    "type": "string"
-                  },
-                  "meta": {
                     "type": "string",
-                    "description": "The trunk-recorder sidecar JSON document"
+                    "description": "The apikey credential the upload is checked against."
                   },
                   "audio": {
                     "type": "string",
-                    "format": "binary"
+                    "format": "binary",
+                    "description": "The recording file part."
+                  },
+                  "audioFilename": {
+                    "type": "string",
+                    "description": "Recording file name (alias: audioName)."
+                  },
+                  "audioName": {
+                    "type": "string",
+                    "description": "Recording file name (alias of audioFilename)."
+                  },
+                  "audioMime": {
+                    "type": "string",
+                    "description": "Recording mime type (alias: audioType)."
+                  },
+                  "audioType": {
+                    "type": "string",
+                    "description": "Recording mime type (alias of audioMime)."
+                  },
+                  "channelType": {
+                    "type": "string",
+                    "description": "Call type."
+                  },
+                  "dateTime": {
+                    "type": "string",
+                    "description": "Call time in RFC3339 (timestamp is preferred)."
+                  },
+                  "frequency": {
+                    "type": "string",
+                    "description": "Recording frequency in hertz."
+                  },
+                  "frequencies": {
+                    "type": "string",
+                    "description": "JSON array of frequency changes: {dbm, errorCount, freq, len, pos, spikeCount}."
+                  },
+                  "patches": {
+                    "type": "string",
+                    "description": "JSON array of patched talkgroups (alias: patched_talkgroups)."
+                  },
+                  "patched_talkgroups": {
+                    "type": "string",
+                    "description": "JSON array of patched talkgroups (alias of patches)."
+                  },
+                  "site": {
+                    "type": "string",
+                    "description": "Site id."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Source unit id."
+                  },
+                  "sources": {
+                    "type": "string",
+                    "description": "JSON array of source unit ids."
+                  },
+                  "system": {
+                    "type": "string",
+                    "description": "System id."
+                  },
+                  "systemLabel": {
+                    "type": "string",
+                    "description": "System label."
+                  },
+                  "talkgroup": {
+                    "type": "string",
+                    "description": "Talkgroup id."
+                  },
+                  "talkgroupGroup": {
+                    "type": "string",
+                    "description": "Talkgroup group label."
+                  },
+                  "talkgroupGroups": {
+                    "type": "string",
+                    "description": "JSON array of group labels."
+                  },
+                  "talkgroupLabel": {
+                    "type": "string",
+                    "description": "Talkgroup label."
+                  },
+                  "talkgroupName": {
+                    "type": "string",
+                    "description": "Talkgroup label (alias of talkgroupLabel)."
+                  },
+                  "talkgroupTag": {
+                    "type": "string",
+                    "description": "Talkgroup tag label."
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "description": "Call time in unix milliseconds (more precise than dateTime)."
+                  },
+                  "unit": {
+                    "type": "string",
+                    "description": "Unit id."
+                  },
+                  "units": {
+                    "type": "string",
+                    "description": "JSON array of unit references."
+                  },
+                  "meta": {
+                    "type": "string",
+                    "description": "The trunk-recorder sidecar JSON document."
                   }
                 },
                 "additionalProperties": true
@@ -944,16 +1231,115 @@
         },
         "responses": {
           "200": {
-            "description": "Call imported successfully."
+            "description": "Call imported successfully. — answered the same whether ingest then placed the call or not.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Call imported successfully.\n"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Not a multipart content, or a body the reader cannot parse"
+            "description": "Invalid content-type, or Not a multipart content.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "403": {
-            "description": "Invalid API key for the call"
+          "401": {
+            "description": "Invalid API key for system <nil> talkgroup <nil>. — the key is not a valid apikey.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Unsupported method — these endpoints answer POST only.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "Unsupported method\n"
+                }
+              }
+            }
           },
           "417": {
-            "description": "Upload failure"
+            "description": "multipart: / ioread: read failure, Invalid call data (unreadable meta sidecar), Incomplete call data, or Call upload failed.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "description": "Upload one trunk-recorder call: the JSON sidecar in the meta field, the recording in the audio field, and the key field carrying the apikey credential."
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Scanner webapp: the single-page application bundle",
+        "description": "Every path that is not an /api path and not under /admin/ is answered by the scanner application: a request naming a bundle file gets the file, and every other request gets the application shell. A request carrying the Upgrade: websocket header is not the application at all: it is taken over as a listener connection (components.x-websockets.listener).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "A bundle file, or the application shell for every route that is not a file.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin": {
+      "get": {
+        "summary": "Administration subtree root: redirected to the trailing slash",
+        "description": "The administration application is served from /admin/ and /admin itself is deliberately not registered: the mux redirects the subtree root by adding the trailing slash, which is what makes every relative URL in the admin shell resolve inside the admin bundle.",
+        "security": [],
+        "responses": {
+          "307": {
+            "description": "Temporary Redirect to /admin/.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string",
+                  "example": "/admin/"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/": {
+      "get": {
+        "summary": "Admin shell: the administration single-page application bundle",
+        "description": "Every path under /admin/ that is not an API path is answered by the admin application: a request naming a bundle file gets the file, and every other request gets the application shell. A request carrying the Upgrade: websocket header is taken over as a listener connection (components.x-websockets.listener).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "A bundle file, or the application shell for every route that is not a file.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1596,6 +1982,75 @@
             "type": "boolean"
           }
         }
+      }
+    },
+    "x-websockets": {
+      "listener": {
+        "path": "*",
+        "summary": "Listener protocol: the connection the webapp and the native applications hold",
+        "description": "Any path under / and /admin/ carrying the Upgrade: websocket header is taken over as a listener connection before anything is looked up. Frames are JSON arrays: [command, ...args]. A server with access codes asks for one (PIN) before answering anything else; a server with no access codes is open. Reserved for Saubeo Solutions and its native applications per API_ACCESS_POLICY.md.",
+        "framing": "JSON array frames: [command, ...args]",
+        "auth": "The PIN command carries the access code when the server is restricted; no credential before it.",
+        "commands": {
+          "PIN": {
+            "direction": "client → server, server → client",
+            "summary": "Ask for an access code: refused, unlocked, and the configuration it unlocks."
+          },
+          "CAL": {
+            "direction": "client → server, server → client",
+            "summary": "Fetch one recorded call in full, audio included, and push one that has just been recorded."
+          },
+          "LCL": {
+            "direction": "client → server, server → client",
+            "summary": "Search one page of the recorded calls."
+          },
+          "CFG": {
+            "direction": "client → server, server → client",
+            "summary": "Read the configuration this listener is allowed to see."
+          },
+          "LFM": {
+            "direction": "client → server, server → client",
+            "summary": "Say which systems and talkgroups this listener wants live, and ack it."
+          },
+          "VER": {
+            "direction": "server → client",
+            "summary": "Report what server this is."
+          },
+          "LSC": {
+            "direction": "server → client",
+            "summary": "Report how many listeners are watching."
+          },
+          "XPR": {
+            "direction": "server → client",
+            "summary": "The access code this listener unlocked has run out."
+          },
+          "MAX": {
+            "direction": "server → client",
+            "summary": "This access code already has as many connections as it is allowed."
+          },
+          "IOS": {
+            "direction": "client → server",
+            "summary": "For the iOS applications; never sent to a web client.",
+            "reserved": true
+          },
+          "PID": {
+            "direction": "client → server",
+            "summary": "Push id, for the mobile applications; never sent to a web client.",
+            "reserved": true
+          },
+          "SRV": {
+            "direction": "client → server",
+            "summary": "For the native applications.",
+            "reserved": true
+          }
+        }
+      },
+      "adminConfig": {
+        "path": "/api/admin/config",
+        "summary": "Administrator configuration socket: live configuration change announcements",
+        "description": "The webapp holds this connection open on the whole-configuration path to learn about configuration changes as they happen. The upgrade is refused on the per-section and per-level paths. The connection sends its raw JWT as the first frame and only ever reads afterwards; the server pushes the configuration after each change. The upgrader insists the connection comes from the same origin the page was served from.",
+        "auth": "Raw JWT as the first frame; the connection is closed when the token is refused.",
+        "direction": "read-only after authentication"
       }
     }
   }
