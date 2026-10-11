@@ -475,3 +475,23 @@ test('changePassword reports failure without touching the auth flags', async () 
   assert.equal(ok, false);
   assert.equal(store.getState().auth.passwordNeedChange, true);
 });
+
+// --- the control a todo names -------------------------------------------------
+
+test('a todo that names the control clearing it raises the request the section answers', () => {
+  const { store, useCases } = setup();
+
+  useCases.focusControl('options', 'autoPopulate');
+
+  assert.deepEqual(store.getState().focus, { section: 'options', control: 'autoPopulate' });
+});
+
+test('the section that answered the request leaves nothing standing for the next visit', () => {
+  const { store, useCases } = setup();
+
+  useCases.focusControl('options', 'autoPopulate');
+
+  useCases.clearFocus();
+
+  assert.equal(store.getState().focus, null);
+});

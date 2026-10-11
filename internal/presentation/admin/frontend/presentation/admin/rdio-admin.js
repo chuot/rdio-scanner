@@ -144,7 +144,34 @@ class RdioAdmin extends HTMLElement {
       const label = document.createElement('span');
       label.textContent = todo.message;
 
-      item.append(icon, label);
+      // A todo that names the control clearing it is followed, not just read: the row
+      // opens the section that owns the control and asks for its attention.
+      if (!todo.step) {
+        item.append(icon, label);
+        banner.append(item);
+
+        continue;
+      }
+
+      const step = document.createElement('button');
+      step.type = 'button';
+      step.className = 'todo-step';
+
+      const go = document.createElement('i');
+      go.className = 'material-icons arrow';
+      go.setAttribute('aria-hidden', 'true');
+      go.textContent = 'arrow_right';
+
+      step.addEventListener('click', () => {
+        getAdminContext().useCases.focusControl(todo.step.section, todo.step.control);
+
+        this.openSection(todo.step.section);
+      });
+
+      step.append(icon, label, go);
+
+      item.append(step);
+
       banner.append(item);
     }
 

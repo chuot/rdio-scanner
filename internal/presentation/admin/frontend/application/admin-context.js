@@ -24,6 +24,9 @@ export function createAdminContext({ location, sessionStorage }) {
     config: null,
     todos: [],
     alerts: {},
+    // A request for the operator's attention on one control of one section, raised by
+    // a todo that names the control and consumed by the section that owns it.
+    focus: null,
     ...sections,
   });
 

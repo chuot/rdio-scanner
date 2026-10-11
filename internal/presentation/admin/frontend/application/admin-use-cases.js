@@ -45,6 +45,17 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     store.setState({ auth: { ...store.getState().auth, ...patch } });
   }
 
+  // A todo that names the control clearing it asks the section that owns that control
+  // to show it. The request is one-shot: the section consumes it, so the mark does not
+  // outlive the visit that asked for it.
+  function focusControl(section, control) {
+    store.setState({ focus: { section, control } });
+  }
+
+  function clearFocus() {
+    store.setState({ focus: null });
+  }
+
   function openSocket() {
     if (socket) return;
 
@@ -373,5 +384,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     saveSubSection,
     reloadSubSection,
     discardSubSection,
+    focusControl,
+    clearFocus,
   };
 }

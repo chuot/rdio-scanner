@@ -395,6 +395,16 @@ rdio-admin .rdio-admin-card.options > .row > rdio-toggle {
   margin: 0;
 }
 
+/* The control a todo sent the operator to. The mark is the accent the theme already
+   uses for the thing that matters, so the row the operator was sent to is the row
+   that reads as sent-to. */
+
+rdio-admin .rdio-admin-card.options > .row.highlight {
+  background: rgba(76, 175, 80, 0.12);
+  border-left: 3px solid var(--rdio-accent);
+  padding-left: var(--rdio-space-3);
+}
+
 /* --- section save bar -------------------------------------------------------------- */
 
 rdio-admin rdio-admin-section-bar {
@@ -487,6 +497,38 @@ rdio-admin .rdio-admin-todos-banner .todo.info .material-icons {
 }
 
 rdio-admin .rdio-admin-todos-banner .todo .material-icons {
+  font-size: 20px;
+}
+
+/* A todo that names the control clearing it is a control itself: the row opens the
+   section that owns the control and asks for its attention. */
+
+rdio-admin .rdio-admin-todos-banner .todo .todo-step {
+  align-items: center;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font-family: inherit;
+  font-size: 14px;
+  gap: 10px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+rdio-admin .rdio-admin-todos-banner .todo .todo-step:hover span {
+  text-decoration: underline;
+}
+
+rdio-admin .rdio-admin-todos-banner .todo .todo-step:focus-visible {
+  outline: 2px solid var(--rdio-accent);
+  outline-offset: 2px;
+}
+
+rdio-admin .rdio-admin-todos-banner .todo .todo-step .arrow {
+  color: #ffffff80;
   font-size: 20px;
 }
 

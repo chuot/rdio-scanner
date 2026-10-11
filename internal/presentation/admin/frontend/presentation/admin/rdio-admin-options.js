@@ -7,6 +7,7 @@
 // object and set only the edited key, so server-only keys (adminPassword,
 // secret) are preserved; per-section Save lives in the shared bar.
 
+import { getAdminContext } from '../../application/admin-context.js';
 import {
   bindSectionSlice,
   sectionSlice,
@@ -126,11 +127,14 @@ class RdioAdminOptions extends HTMLElement {
 
     this.unsubscribe = bindSectionSlice(NAME, () => this.render());
 
+    this.unwatchFocus = getAdminContext().store.subscribe(['focus'], () => this.applyFocus());
+
     this.render();
   }
 
   disconnectedCallback() {
     this.unsubscribe?.();
+    this.unwatchFocus?.();
   }
 
   render() {
@@ -161,11 +165,35 @@ class RdioAdminOptions extends HTMLElement {
     this.replaceChildren(root);
 
     for (const { field, message } of errorFields) field.setError(message);
+
+    this.applyFocus();
+  }
+
+  // The todo that named this control asked for it to be shown. The mark is applied
+  // once, the request is consumed with it, and a control this section does not have
+  // leaves the request untouched rather than marking nothing forever.
+  applyFocus() {
+    const { store, useCases } = getAdminContext();
+
+    const request = store.getState().focus;
+
+    if (request?.section !== NAME) return;
+
+    const row = this.querySelector(`[data-control="${request.control}"]`);
+
+    if (!row) return;
+
+    row.className = 'row highlight';
+
+    row.scrollIntoView?.({ block: 'center' });
+
+    useCases.clearFocus();
   }
 
   controlRow(control, options, errors, errorFields) {
     const row = document.createElement('div');
     row.className = 'row';
+    row.setAttribute('data-control', control.key);
 
     const description = document.createElement('p');
     description.innerHTML = '<span class="field-title"></span><br><span class="field-caption"></span>';

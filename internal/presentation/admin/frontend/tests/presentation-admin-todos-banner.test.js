@@ -107,3 +107,43 @@ test('todos is not a section in the navigation', () => {
   assert.ok(!sections.includes('todos'), 'the navigation still carries a todos item');
   assert.equal(sections[0], 'access', 'the first section is the one the page opens on');
 });
+
+test('a todo that names the control clearing it is a control the operator can follow', () => {
+  const { store, el } = shell();
+
+  store.setState({
+    todos: [{
+      level: 'info',
+      message: 'No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.',
+      step: { section: 'options', control: 'autoPopulate' },
+    }],
+  });
+
+  const steps = findAll(el, (node) => node.className === 'todo-step');
+
+  assert.equal(steps.length, 1, 'the todo that names a control must be followable');
+  assert.ok(texts(findAll(steps[0], (node) => node.tag === 'span'))
+    .includes('No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.'),
+  'the followable todo must state the path it follows');
+
+  const plain = findAll(el, (node) => node.className.startsWith('todo ') && !findAll(node, (n) => n.className === 'todo-step').length);
+
+  assert.equal(plain.length, 0, 'the stepped todo must not also render as a plain row');
+});
+
+test('following the todo opens the section that owns the control and asks for its attention', () => {
+  const { store, el } = shell();
+
+  store.setState({
+    todos: [{ level: 'info', message: 'no systems', step: { section: 'options', control: 'autoPopulate' } }],
+  });
+
+  findAll(el, (node) => node.className === 'todo-step')[0].click();
+
+  assert.deepEqual(store.getState().focus, { section: 'options', control: 'autoPopulate' },
+    'following the todo must raise the request the section consumes');
+
+  const opened = findAll(el, (node) => node.tag === 'rdio-admin-options');
+
+  assert.equal(opened.length, 1, 'following the todo must open the Options section');
+});

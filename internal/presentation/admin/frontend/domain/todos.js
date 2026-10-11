@@ -13,7 +13,10 @@ export function computeTodos(config, { passwordNeedChange } = {}) {
   if (!config?.systems?.length) {
     todos.push({
       level: 'info',
-      message: 'No systems defined. You can define one from the systems menu, or turn on Auto Populate in the Options menu to have them created for you.',
+      message: 'No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.',
+      // The todo names the control that clears it, so the operator can follow the
+      // path the sentence states instead of hunting for it.
+      step: { section: 'options', control: 'autoPopulate' },
     });
   }
 

@@ -21,7 +21,21 @@ describe('domain/todos — exact legacy messages', () => {
         const todos = computeTodos({ systems: [], apikeys: [{ id: 1 }], dirwatch: [] }, {});
 
         assert.deepEqual(todos.map((t) => t.level), ['info']);
-        assert.equal(todos[0].message, 'No systems defined. You can define one from the systems menu, or turn on Auto Populate in the Options menu to have them created for you.');
+        assert.equal(todos[0].message, 'No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.');
+    });
+
+    it('names the control that clears the systems todo, so the operator can follow the path', () => {
+        const todos = computeTodos({ systems: [], apikeys: [{ id: 1 }], dirwatch: [] }, {});
+
+        assert.deepEqual(todos[0].step, { section: 'options', control: 'autoPopulate' });
+    });
+
+    it('names no control for a todo that has no control to open', () => {
+        const password = computeTodos({ systems: [{ id: 1 }], apikeys: [{ id: 1 }], dirwatch: [] }, { passwordNeedChange: true });
+        const ingest = computeTodos({ systems: [{ id: 1 }], apikeys: [], dirwatch: [] }, {});
+
+        assert.equal(password[0].step, undefined);
+        assert.equal(ingest[0].step, undefined);
     });
 
     it('reports missing ingest sources when both apikeys and dirwatch are empty', () => {
