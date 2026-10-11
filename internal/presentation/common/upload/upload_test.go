@@ -22,6 +22,7 @@ package upload
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -196,6 +197,10 @@ type recordingUploadParser struct {
 
 	// SidecarErr, when set, is what the sidecar reading reports.
 	SidecarErr error
+
+	// Truncation, when set, is the warning the reading reports for the field it reads — the
+	// shape a list over the server's cap earns.
+	Truncation string
 }
 
 // produces sets the call the parser hands back for every field it is asked to read.
@@ -204,16 +209,16 @@ func (parser *recordingUploadParser) produces(call domain.Call) {
 	parser.HasCall = true
 }
 
-func (parser *recordingUploadParser) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call {
+func (parser *recordingUploadParser) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	parser.Fields = append(parser.Fields, part.FormName())
 	parser.FileNames = append(parser.FileNames, part.FileName())
 	parser.Bodies = append(parser.Bodies, data)
 
 	if parser.HasCall {
-		return parser.Completed
+		return parser.Completed, parser.Truncation
 	}
 
-	return call
+	return call, parser.Truncation
 }
 
 func (parser *recordingUploadParser) ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error {
@@ -903,5 +908,41 @@ func TestCallUploadEndpointAcceptsABodyUnderTheUploadCap(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("upload status = %d, want 200 for a body under the cap: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCallUploadEndpointFilesAnOversizedListTruncation (REQ-015, CA-015.2): the truncation is
+// the parser's decision, and the endpoint is the one with the operator's log. The upload is
+// still taken — the call is real, just bounded — and the truncation is filed where an
+// administrator reads it.
+func TestCallUploadEndpointFilesAnOversizedListTruncation(t *testing.T) {
+	fixture := newUploadFixture()
+
+	fixture.seedUploadSystem()
+	fixture.parser.produces(completeCall())
+	fixture.parser.Truncation = "the frequencies list was truncated to 4096 entries"
+
+	entries := make([]any, 5000)
+	for i := range entries {
+		entries[i] = map[string]any{"freq": float64(1514000 + i)}
+	}
+
+	raw, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatalf("marshaling the frequencies list: %v", err)
+	}
+
+	body, contentType := postedBody(t, append(captureUploadFields(uploadOpenKey),
+		uploadField{name: "frequencies", value: string(raw)})...)
+
+	rec := fixture.post("/api/call-upload", contentType, body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload status = %d, want 200 for an upload whose oversized list is bounded: %s",
+			rec.Code, rec.Body.String())
+	}
+
+	if !fixture.loggedAs(domain.LogSourceUpload, "frequencies list was truncated to 4096") {
+		t.Errorf("the truncation is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 }

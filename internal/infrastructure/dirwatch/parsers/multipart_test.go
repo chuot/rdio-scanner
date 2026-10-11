@@ -22,8 +22,10 @@ package parsers
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"mime/multipart"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +37,7 @@ import (
 // asserted here so that a change to this parser is caught by this suite rather than by a build of the
 // composition root.
 var _ interface {
-	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call
+	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string)
 	ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error
 } = (*Parsers)(nil)
 
@@ -100,7 +102,7 @@ func applyUploadFields(t *testing.T, call domain.Call, fields ...[2]string) doma
 	for _, field := range fields {
 		part, data := uploadField(t, field[0], field[1])
 
-		call = ApplyMultipart(part, data, call)
+		call, _ = ApplyMultipart(part, data, call)
 	}
 
 	return call
@@ -290,7 +292,7 @@ func TestApplyMultipartChannelTypeKeepsTheTwoNamesItAccepts(t *testing.T) {
 func TestApplyMultipartAudioPartCarriesTheRecordingAndItsFilename(t *testing.T) {
 	part, data := uploadFileField(t, "audio", "TG1514000-20261006120000.wav", "a recording")
 
-	call := ApplyMultipart(part, data, domain.NewCall())
+	call, _ := ApplyMultipart(part, data, domain.NewCall())
 
 	if call.AudioFilename != "TG1514000-20261006120000.wav" {
 		t.Errorf("the audio filename is %q, want the name the upload gave the recording", call.AudioFilename)
@@ -494,10 +496,10 @@ func TestApplyMultipartAppliesFieldsInTheOrderTheyArrived(t *testing.T) {
 	call := domain.NewCall()
 
 	part, data := uploadFileField(t, "audio", "first.wav", "a recording")
-	call = ApplyMultipart(part, data, call)
+	call, _ = ApplyMultipart(part, data, call)
 
 	part, data = uploadField(t, "audioFilename", "second.wav")
-	call = ApplyMultipart(part, data, call)
+	call, _ = ApplyMultipart(part, data, call)
 
 	if call.AudioFilename != "second.wav" {
 		t.Errorf("the recording is named %q, want the name that arrived last", call.AudioFilename)
@@ -506,10 +508,10 @@ func TestApplyMultipartAppliesFieldsInTheOrderTheyArrived(t *testing.T) {
 	reversed := domain.NewCall()
 
 	part, data = uploadField(t, "audioFilename", "second.wav")
-	reversed = ApplyMultipart(part, data, reversed)
+	reversed, _ = ApplyMultipart(part, data, reversed)
 
 	part, data = uploadFileField(t, "audio", "first.wav", "a recording")
-	reversed = ApplyMultipart(part, data, reversed)
+	reversed, _ = ApplyMultipart(part, data, reversed)
 
 	if reversed.AudioFilename != "first.wav" {
 		t.Errorf("the recording is named %q, want the name that arrived last", reversed.AudioFilename)
@@ -567,5 +569,90 @@ func TestApplyMultipartTimestampOfZeroIsTheMomentTheServerRefuses(t *testing.T) 
 	if unstamped.Timestamp.Year() != 1 {
 		t.Errorf("a call naming no moment is dated to the year %d, want the year 1 the guard was written to "+
 			"catch and does not", unstamped.Timestamp.Year())
+	}
+}
+
+// oversizedList posts one list field with more entries than the server will read, the way a
+// hostile upload does.
+func oversizedList(t *testing.T, entries int) []any {
+	t.Helper()
+
+	list := make([]any, entries)
+	for i := range list {
+		list[i] = map[string]any{"freq": float64(1514000 + i), "src": float64(i + 1), "dbm": float64(-100)}
+	}
+
+	return list
+}
+
+func postListField(t *testing.T, name string, list []any) (domain.Call, string) {
+	t.Helper()
+
+	raw, err := json.Marshal(list)
+	if err != nil {
+		t.Fatalf("marshaling the %s list: %v", name, err)
+	}
+
+	part, data := uploadField(t, name, string(raw))
+
+	return ApplyMultipart(part, data, domain.NewCall())
+}
+
+// TestApplyMultipartTruncatesOversizedLists (REQ-015, CA-015.2): the list fields are read into
+// server memory and stored with the call, so a five-thousand-entry list is not a recording — it
+// is a way to spend the server's memory from an upload. The decode keeps the first
+// maxListEntries entries and says out loud, in a warning the endpoint files, that it truncated.
+func TestApplyMultipartTruncatesOversizedFrequencyList(t *testing.T) {
+	call, warning := postListField(t, "frequencies", oversizedList(t, 5000))
+
+	if len(call.Frequencies) != maxListEntries {
+		t.Errorf("frequencies = %d entries, want truncation at %d", len(call.Frequencies), maxListEntries)
+	}
+
+	if !strings.Contains(warning, "frequencies") || !strings.Contains(warning, "truncated") {
+		t.Errorf("warning = %q, want it to name the field that was truncated", warning)
+	}
+}
+
+func TestApplyMultipartTruncatesOversizedUnitsList(t *testing.T) {
+	call, warning := postListField(t, "sources", oversizedList(t, 5000))
+
+	if len(call.Units) != maxListEntries {
+		t.Errorf("units = %d entries, want truncation at %d", len(call.Units), maxListEntries)
+	}
+
+	if !strings.Contains(warning, "sources") {
+		t.Errorf("warning = %q, want it to name the field that was truncated", warning)
+	}
+}
+
+func TestApplyMultipartTruncatesOversizedPatchList(t *testing.T) {
+	refs := make([]any, 5000)
+	for i := range refs {
+		refs[i] = float64(1514000 + i)
+	}
+
+	call, warning := postListField(t, "patches", refs)
+
+	if len(call.PatchTalkgroupRefs) != maxListEntries {
+		t.Errorf("patches = %d entries, want truncation at %d", len(call.PatchTalkgroupRefs), maxListEntries)
+	}
+
+	if !strings.Contains(warning, "patches") {
+		t.Errorf("warning = %q, want it to name the field that was truncated", warning)
+	}
+}
+
+// The cap must not cost the server its endpoint: a list under it is read whole and says nothing
+// about truncation.
+func TestApplyMultipartReadsAListUnderTheCapWholeAndQuiet(t *testing.T) {
+	call, warning := postListField(t, "frequencies", oversizedList(t, 10))
+
+	if len(call.Frequencies) != 10 {
+		t.Errorf("frequencies = %d entries, want all 10 read", len(call.Frequencies))
+	}
+
+	if warning != "" {
+		t.Errorf("warning = %q, want nothing said about a list under the cap", warning)
 	}
 }

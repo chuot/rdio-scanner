@@ -22,6 +22,7 @@ package parsers
 
 import (
 	"encoding/json"
+	"fmt"
 	"mime"
 	"mime/multipart"
 	"path"
@@ -33,6 +34,23 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
+// maxListEntries is the ceiling on a posted list field — frequencies, units, patches. These
+// lists are read into memory and stored with the call, so an unbounded one is a way for an
+// upload to spend the server's memory and storage at will (decision D2's companion, REQ-015).
+// A real call carries tens of entries; a list over the cap is truncated, and the truncation is
+// reported to the operator's log by the endpoint that files the upload.
+const maxListEntries = 4096
+
+// unixSeconds is the shape of a Unix second count, which the pre-v7 `dateTime` field may carry.
+// Compiled once: the endpoint reads a field per upload, and compiling a pattern per field is
+// work the server does for no reason.
+var unixSeconds = regexp.MustCompile(`^[0-9]+$`)
+
+// truncatedList is the warning one oversized list earns.
+func truncatedList(field string) string {
+	return fmt.Sprintf("the %s list was truncated to %d entries", field, maxListEntries)
+}
+
 // ApplyMultipart reads one form field of a call upload into the call.
 //
 // Every field is optional and every field is read on its own, so an upload that names a field
@@ -40,7 +58,13 @@ import (
 // field order is what decides which of two fields naming the same thing wins, because each one
 // writes over what an earlier one wrote — which is why an upload naming both `frequency` and
 // `frequencies` keeps whichever came last.
-func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call {
+//
+// The second result is what the reading had to say about the field: a list over the cap is
+// truncated, and the endpoint files that warning where an administrator reads it. A field read
+// whole says nothing.
+func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
+	warning := ""
+
 	switch part.FormName() {
 	case "audio":
 		call.Audio = data
@@ -63,12 +87,12 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.
 	case "dateTime":
 		// The pre-v7 name for the call instant, which a client may send as a Unix second count
 		// or as an RFC 3339 string.
-		if regexp.MustCompile(`^[0-9]+$`).Match(data) {
+		if unixSeconds.Match(data) {
 			if seconds, err := strconv.Atoi(string(data)); err == nil {
 				call.Timestamp = time.Unix(int64(seconds), 0)
 			}
 
-			return call
+			return call, warning
 		}
 
 		if timestamp, err := time.Parse(time.RFC3339, string(data)); err == nil {
@@ -86,9 +110,13 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.
 		}
 
 	case "frequencies":
-		list := decodeList(data)
+		list, truncated := decodeList(data)
 		if list == nil {
-			return call
+			return call, warning
+		}
+
+		if truncated {
+			warning = truncatedList("frequencies")
 		}
 
 		frequencies := []domain.CallFrequency{}
@@ -125,7 +153,12 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.
 		call.Frequencies = frequencies
 
 	case "patches", "patched_talkgroups":
-		for _, item := range decodeList(data) {
+		list, truncated := decodeList(data)
+		if truncated {
+			warning = truncatedList(part.FormName())
+		}
+
+		for _, item := range list {
 			if ref, ok := item.(float64); ok && ref > 0 {
 				call.PatchTalkgroupRefs = append(call.PatchTalkgroupRefs, uint(ref))
 			}
@@ -145,7 +178,12 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.
 		}
 
 	case "sources":
-		for _, item := range decodeList(data) {
+		list, truncated := decodeList(data)
+		if truncated {
+			warning = truncatedList("sources")
+		}
+
+		for _, item := range list {
 			unit := domain.CallUnit{}
 
 			entry, ok := item.(map[string]any)
@@ -218,7 +256,12 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.
 		}
 
 	case "units":
-		for _, item := range decodeList(data) {
+		list, truncated := decodeList(data)
+		if truncated {
+			warning = truncatedList("units")
+		}
+
+		for _, item := range list {
 			unit := domain.CallUnit{}
 
 			entry, ok := item.(map[string]any)
@@ -240,7 +283,7 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.
 		}
 	}
 
-	return call
+	return call, warning
 }
 
 // appendUnitMetadata pairs a unit's label with the reference it describes, once.
@@ -263,20 +306,25 @@ func appendUnitMetadata(call *domain.Call, unitRef uint, label string) {
 }
 
 // decodeList reads a form field whose value is a JSON array, and reports nothing when the
-// field is not one.
-func decodeList(data []byte) []any {
+// field is not one. A list over the cap is cut at it, and the second result says that it was:
+// the reading bounds the memory a posted list can spend, and the caller says so out loud.
+func decodeList(data []byte) ([]any, bool) {
 	var decoded any
 
 	if err := json.Unmarshal(data, &decoded); err != nil {
-		return nil
+		return nil, false
 	}
 
 	list, ok := decoded.([]any)
 	if !ok {
-		return nil
+		return nil, false
 	}
 
-	return list
+	if len(list) > maxListEntries {
+		return list[:maxListEntries], true
+	}
+
+	return list, false
 }
 
 // ApplyMultipart reads one posted field of a call upload into the call, for the value the call-upload
@@ -286,6 +334,6 @@ func decodeList(data []byte) []any {
 // watchers use for the files they read. The method exists because the endpoints are wired with a parser and
 // may not import this package directly (contract-server-ng.md §1), so the composition root hands them this
 // value and the endpoints reach the reading through the seam they declare themselves.
-func (parsers *Parsers) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call {
+func (parsers *Parsers) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	return ApplyMultipart(part, data, call)
 }

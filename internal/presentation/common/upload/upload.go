@@ -74,9 +74,11 @@ type Deps struct {
 // — the trunk-recorder sidecar in particular is read the same way from a watched directory and from an
 // upload.
 type Parser interface {
-	// ApplyMultipart reads one posted field into the call being built, and hands back the call. A field
-	// the parser does not know leaves the call as it was.
-	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) domain.Call
+	// ApplyMultipart reads one posted field into the call being built, and hands back the call
+	// and what the reading had to say about the field: a list over the server's cap is
+	// truncated, and the endpoint files that warning where an administrator reads it. A field
+	// the parser does not know leaves the call as it was and says nothing.
+	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string)
 
 	// ApplyTrunkRecorderSidecar reads the JSON document trunk-recorder writes beside a recording.
 	ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error
@@ -208,13 +210,16 @@ func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkR
 			return domain.Call{}, "", false
 		}
 
+		var warning string
+
 		switch part.FormName() {
 		case "key":
 			key = string(body)
 
 		case "meta":
 			if !trunkRecorder {
-				call = upload.parser.ApplyMultipart(part, body, call)
+				call, warning = upload.parser.ApplyMultipart(part, body, call)
+				upload.fileTruncation(warning)
 
 				break
 			}
@@ -228,7 +233,8 @@ func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkR
 			}
 
 		default:
-			call = upload.parser.ApplyMultipart(part, body, call)
+			call, warning = upload.parser.ApplyMultipart(part, body, call)
+			upload.fileTruncation(warning)
 		}
 	}
 
@@ -321,5 +327,22 @@ func (upload *Endpoints) logRefusal(reason string) {
 		Level:    domain.LogLevelError,
 		Source:   domain.LogSourceUpload,
 		Message:  fmt.Sprintf("the upload was refused: %s", strings.TrimSpace(reason)),
+	})
+}
+
+// fileTruncation files what the reading had to say about an oversized posted list. The upload
+// is still taken — the call is real, just bounded — so this is a warning, not a refusal: the
+// operator reads that a poster sent more entries than the server will carry, and the uploader
+// is answered the same success the frozen contract fixes.
+func (upload *Endpoints) fileTruncation(warning string) {
+	if len(warning) == 0 || upload.logs == nil {
+		return
+	}
+
+	upload.logs.AppendLog(context.Background(), domain.LogEntry{
+		DateTime: upload.clock.Now(),
+		Level:    domain.LogLevelWarn,
+		Source:   domain.LogSourceUpload,
+		Message:  warning,
 	})
 }
