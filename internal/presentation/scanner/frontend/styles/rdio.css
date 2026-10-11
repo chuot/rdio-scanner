@@ -907,11 +907,30 @@ rdio-search-panel .rdio-list th {
   letter-spacing: 0.1px;
   line-height: 22px;
 }
-
 rdio-search-panel .rdio-list td > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Below the toolbar's mobile breakpoint the fixed columns eat into the name
+ * column, and the duration column is the newest claim on it: there the mm:ss
+ * cell keeps its width on a tighter padding and the two 20% columns give four
+ * points each, which returns the name column the room it had before the
+ * duration column arrived. */
+@media (max-width: 599px) {
+  rdio-search-panel .rdio-list th:nth-child(4),
+  rdio-search-panel .rdio-list td:nth-child(4) {
+    padding: 0 4px;
+    width: 48px;
+  }
+
+  rdio-search-panel .rdio-list th:nth-child(5),
+  rdio-search-panel .rdio-list td:nth-child(5),
+  rdio-search-panel .rdio-list th:nth-child(6),
+  rdio-search-panel .rdio-list td:nth-child(6) {
+    width: 16%;
+  }
 }
 
 /* Legacy row control: a mat-icon-button, which is a 48px circle with 12px of
