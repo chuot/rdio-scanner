@@ -68,6 +68,10 @@ const (
 	// the same budget shape as the login one: quiet time renews it, and a history older than the
 	// window is dropped rather than kept.
 	accessAttemptsWindow = 10 * time.Minute
+
+	// closeWorkers is how many connections the stopping hub says goodbye to at the same
+	// time (REQ-007, CA-007.2), bounded like the administrator socket's goodbyes.
+	closeWorkers = 64
 )
 
 // Settings are the things about the server a hub has to know before it delivers anything to a
@@ -462,7 +466,13 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 // The departure is filed first, while the log can still be written to. The close frame is what ends the
 // connection, and the read loop it unblocks finds nothing left to report: disconnect reports only a session
 // the hub still holds.
-func (hub *Hub) Close() {
+// The close is made session by session in parallel (REQ-007, CA-007.2): the goodbye is a
+// delivery, and a listener whose writer is stuck in the socket holds that delivery for its
+// full write deadline. Made one session at a time, a wall of stalled listeners takes a
+// deadline per session and blows past the server's own shutdown window — which is how a
+// stopping server ends up needing the kill signal. The workers are bounded, like the
+// administrator socket's goodbyes.
+func (hub *Hub) Close(ctx context.Context) {
 	hub.mutex.Lock()
 
 	sessions := make([]*listener, 0, len(hub.sessions))
@@ -473,14 +483,29 @@ func (hub *Hub) Close() {
 
 	hub.mutex.Unlock()
 
-	for _, session := range sessions {
-		hub.disconnect(session)
+	workers := make(chan struct{}, closeWorkers)
 
-		// The code is the protocol's answer to a server that is going away, which is the only reason this
-		// method is called: a listener that reads it knows the connection ended at the far end and can ask
-		// for the next server rather than waiting out a read timeout on one that has already gone.
-		hub.deliver(session, delivery{code: websocket.CloseGoingAway})
+	var wg sync.WaitGroup
+
+	for _, session := range sessions {
+		wg.Add(1)
+
+		go func(session *listener) {
+			defer wg.Done()
+
+			workers <- struct{}{}
+			defer func() { <-workers }()
+
+			hub.disconnect(session)
+
+			// The code is the protocol's answer to a server that is going away, which is the only reason this
+			// method is called: a listener that reads it knows the connection ended at the far end and can ask
+			// for the next server rather than waiting out a read timeout on one that has already gone.
+			hub.deliver(session, delivery{code: websocket.CloseGoingAway})
+		}(session)
 	}
+
+	wg.Wait()
 
 	// And the close waits for the goroutines that were reading and writing those connections. A departure is
 	// written by the goroutine that was reading a connection, after it has already taken the session out of

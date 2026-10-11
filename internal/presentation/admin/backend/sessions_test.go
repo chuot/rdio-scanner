@@ -21,6 +21,7 @@
 package backend
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -534,7 +535,7 @@ func TestStoppingTheSessionsReportsEveryConnectionItIsHolding(t *testing.T) {
 
 	fixture.await(t, func() bool { return fixture.heldCount() == 2 }, "the server never took both connections")
 
-	fixture.sessions.CloseAll()
+	fixture.sessions.CloseAll(context.Background())
 
 	const left = "an administrator disconnected from 127.0.0.1"
 
@@ -595,7 +596,7 @@ func TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 	closed := make(chan struct{})
 
 	go func() {
-		fixture.sessions.CloseAll()
+		fixture.sessions.CloseAll(context.Background())
 
 		close(closed)
 	}()
@@ -976,4 +977,76 @@ func TestConfigSocketEndsAConnectionThatStopsAnswering(t *testing.T) {
 	}
 
 	fixture.awaitGone(t, 0)
+}
+
+// shutdownWindow is the window the stalled-close test gives the socket, the same length the
+// server's own stop gives its shutdown.
+const shutdownWindow = 10 * time.Second
+
+// TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline (REQ-007, CA-007.2):
+// a server that is stopping closes every administrator connection it is holding, and the close
+// is a write. A peer that stopped reading holds that write for its full deadline, and a close
+// made one connection at a time takes a deadline per stalled connection — a wall of stalled
+// sockets then blows past the server's own shutdown window, which is how a stopping server
+// ends up needing the kill signal. The closes are made together, inside the deadline.
+func TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline(t *testing.T) {
+	fixture := newFixture(t)
+
+	const stalled = 50
+
+	for i := 0; i < stalled; i++ {
+		conn := fixture.open(t)
+
+		fixture.present(t, conn, socketToken)
+	}
+
+	fixture.awaitCredential(t, stalled)
+
+	fixture.sessions.mutex.Lock()
+
+	admins := make([]*administrator, 0, len(fixture.sessions.conns))
+
+	for _, admin := range fixture.sessions.conns {
+		admins = append(admins, admin)
+	}
+
+	fixture.sessions.mutex.Unlock()
+
+	// Stall every writer: frames bigger than any socket buffer, pushed through the server's
+	// own write path, from the server, while the peers read nothing. Each flood stops when
+	// its write blocks and runs out its deadline — the stalled writer the shutdown has to
+	// close past.
+	body := bytes.Repeat([]byte("x"), 4*1024*1024)
+
+	wentStalled := make(chan struct{}, stalled)
+
+	for _, admin := range admins {
+		go func(admin *administrator) {
+			for fixture.sessions.write(admin, body) == nil {
+			}
+
+			wentStalled <- struct{}{}
+		}(admin)
+	}
+
+	for i := 0; i < stalled; i++ {
+		select {
+		case <-wentStalled:
+
+		case <-time.After(30 * time.Second):
+			t.Fatalf("only %d of the %d writers went stalled", i, stalled)
+		}
+	}
+
+	deadline := time.Now().Add(shutdownWindow)
+
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	fixture.sessions.CloseAll(ctx)
+
+	if elapsed := time.Since(deadline); elapsed > 5*time.Second {
+		t.Errorf("CloseAll finished %s after its deadline, want the stalled closes made "+
+			"together, inside the shutdown window: %s past", elapsed, elapsed.Round(time.Second))
+	}
 }

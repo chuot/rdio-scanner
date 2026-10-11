@@ -464,7 +464,7 @@ func TestStoppingTheHubReportsEveryConnectionItIsHolding(t *testing.T) {
 	f.hub.GrantAccess(second, domain.Access{ID: 1, Code: "open", Ident: "Capture open", Scope: access})
 	f.register(t, second)
 
-	f.hub.Close()
+	f.hub.Close(context.Background())
 
 	const left = "a listener left from 203.0.113.7:41000 as Capture open"
 
@@ -532,7 +532,7 @@ func TestClosingTheHubWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 	closed := make(chan struct{})
 
 	go func() {
-		f.hub.Close()
+		f.hub.Close(context.Background())
 
 		close(closed)
 	}()
@@ -1596,5 +1596,54 @@ func TestTheSendQueueIsBounded(t *testing.T) {
 
 	if cap(session.send) != 256 {
 		t.Errorf("the send queue holds %d slots, want 256", cap(session.send))
+	}
+}
+
+// TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline (REQ-007, CA-007.2): the
+// server that is stopping ends every listener with the protocol's own goodbye, and that
+// goodbye is a delivery. A listener whose writer is stuck in the socket holds that delivery
+// for its full write deadline, and a close made one session at a time takes a deadline per
+// stalled session — the wall of stalled sockets blows past the shutdown window, which is how
+// a stopping server ends up needing the kill signal. The closes are made together.
+func TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	const stalled = 50
+
+	big := strings.Repeat("x", 4*1024*1024)
+
+	for i := 0; i < stalled; i++ {
+		id, _ := f.dial(t)
+
+		f.register(t, id)
+
+		f.hub.mutex.Lock()
+		session := f.hub.sessions[id]
+		f.hub.mutex.Unlock()
+
+		// Fill the queue: the writer takes the first frame and blocks in the socket, and
+		// the goodbye the close wants to deliver has nowhere to go until the writer gives
+		// up on the frame it is holding.
+	fill:
+		for {
+			select {
+			case session.send <- delivery{frame: Message{Command: CommandVersion, Payload: big}}:
+
+			default:
+				break fill
+			}
+		}
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	f.hub.Close(ctx)
+
+	if elapsed := time.Since(deadline); elapsed > 5*time.Second {
+		t.Errorf("hub.Close finished %s after its deadline, want the stalled closes made "+
+			"together, inside the shutdown window: %s past", elapsed, elapsed.Round(time.Second))
 	}
 }

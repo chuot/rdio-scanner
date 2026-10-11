@@ -49,6 +49,16 @@ import (
 // written to, and it is far longer than a real client takes.
 const writeWait = 10 * time.Second
 
+// closeWait bounds the goodbye written on the way out. The close frame is small, and a peer
+// that cannot take it in two seconds is not going to take it in ten (REQ-007, CA-007.2): the
+// server that is stopping owes every connection a goodbye, not a ten-second patience each.
+const closeWait = 2 * time.Second
+
+// closeWorkers is how many connections the stopping server says goodbye to at the same time.
+// The closes are made together, bounded so a wall of stalled sockets does not add a goroutine
+// per socket on top of the goroutines the stop is already waiting on.
+const closeWorkers = 64
+
 // maxFrameSize is the largest frame the socket reads from one administrator connection, the
 // same bound the listener socket puts on its frames: a bigger frame is not something the
 // server can act on, and reading it is a way to make the server hold a message it will never
@@ -389,7 +399,7 @@ func (sessions *Sessions) leave(admin *administrator) {
 		return
 	}
 
-	sessions.depart(admin)
+	sessions.depart(context.Background(), admin)
 }
 
 // CloseAll ends every administrator connection the server is holding and reports each one leaving.
@@ -400,7 +410,12 @@ func (sessions *Sessions) leave(admin *administrator) {
 //
 // The connections are taken out of the set first, so the read loop each one unblocks has nothing left to
 // report: a departure is said by the half that ended the connection, once.
-func (sessions *Sessions) CloseAll() {
+//
+// The goodbyes are made together (REQ-007, CA-007.2): each one is a write, and a peer that stopped
+// reading holds its write for the full close deadline. Made one connection at a time, a wall of stalled
+// sockets takes a deadline per connection and blows past the server's own shutdown window — which is
+// how a stopping server ends up needing the kill signal.
+func (sessions *Sessions) CloseAll(ctx context.Context) {
 	sessions.mutex.Lock()
 
 	admins := make([]*administrator, 0, len(sessions.conns))
@@ -413,9 +428,24 @@ func (sessions *Sessions) CloseAll() {
 
 	sessions.mutex.Unlock()
 
+	workers := make(chan struct{}, closeWorkers)
+
+	var wg sync.WaitGroup
+
 	for _, admin := range admins {
-		sessions.depart(admin)
+		wg.Add(1)
+
+		go func(admin *administrator) {
+			defer wg.Done()
+
+			workers <- struct{}{}
+			defer func() { <-workers }()
+
+			sessions.depart(ctx, admin)
+		}(admin)
 	}
+
+	wg.Wait()
 
 	// And the close waits for the goroutines that were reading those connections. The entry saying a
 	// connection ended is written by the goroutine that was reading it, after that goroutine has already
@@ -427,14 +457,24 @@ func (sessions *Sessions) CloseAll() {
 
 // depart says that one administrator's connection ended and ends it, with the close code the web
 // application reads as a socket the server let go of.
-func (sessions *Sessions) depart(admin *administrator) {
+//
+// The write is bounded by the shutdown context the server is stopping under, and by closeWait
+// whichever is shorter: the goodbye is owed to every connection, and a stalled peer collects
+// only its own two seconds.
+func (sessions *Sessions) depart(ctx context.Context, admin *administrator) {
 	sessions.log(context.Background(), domain.LogLevelInfo,
 		fmt.Sprintf("an administrator disconnected from %s", admin.remoteAddr))
+
+	deadline := time.Now().Add(closeWait)
+
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
 
 	admin.writing.Lock()
 	defer admin.writing.Unlock()
 
-	if err := admin.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+	if err := admin.conn.SetWriteDeadline(deadline); err != nil {
 		admin.conn.Close()
 
 		return

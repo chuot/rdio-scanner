@@ -651,11 +651,11 @@ func (s *Server) stop(ctx context.Context) {
 		// otherwise the log view holds a connection that began and never ended, which is the shape an operator
 		// spends an afternoon chasing.
 		if s.adminSessions != nil {
-			s.adminSessions.CloseAll()
+			s.adminSessions.CloseAll(shuttingDown)
 		}
 
 		if s.listeners != nil {
-			s.listeners.Close()
+			s.listeners.Close(shuttingDown)
 		}
 
 		// The listener-count report is dropped last, because the departures above are themselves listener
