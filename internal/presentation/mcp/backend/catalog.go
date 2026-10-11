@@ -156,6 +156,27 @@ var capabilityCatalog = []Capability{
 		Effect:    EffectRead,
 		Endpoints: []string{"POST /api/calls/search"},
 	},
+	{
+		Name:      "inspect_system",
+		Kind:      KindTool,
+		Reach:     ReachAdministrator,
+		Effect:    EffectRead,
+		Endpoints: []string{"GET /api/admin/config", "GET /api/admin/alerts"},
+	},
+	{
+		Name:      "search_logs",
+		Kind:      KindTool,
+		Reach:     ReachAdministrator,
+		Effect:    EffectRead,
+		Endpoints: []string{"POST /api/admin/logs"},
+	},
+	{
+		Name:      "explain_error",
+		Kind:      KindTool,
+		Reach:     ReachAdministrator,
+		Effect:    EffectRead,
+		Endpoints: []string{"POST /api/admin/logs"},
+	},
 }
 
 // catalogOf is one capability of the inventory by its protocol name.

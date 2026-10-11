@@ -99,7 +99,7 @@ func (s *Server) registerReadResources(deps Deps) {
 		if !readable {
 			// A window that names nothing real looks onto nothing: the empty slice, the same
 			// answer a talkgroup with nothing recorded gets.
-			return jsonResource(req.Params.URI, pageAnswer(ports.CallSearchPage{}, searchCallsInput{}))
+			return jsonResource(req.Params.URI, pageAnswer(ports.CallSearchPage{}, defaultHistorySlice()))
 		}
 
 		page, err := deps.Search.Handle(ctx, application.SearchCallsQuery{
@@ -110,7 +110,7 @@ func (s *Server) registerReadResources(deps Deps) {
 			return nil, err
 		}
 
-		return jsonResource(req.Params.URI, pageAnswer(page, searchCallsInput{}))
+		return jsonResource(req.Params.URI, pageAnswer(page, criteria))
 	})
 }
 
@@ -143,6 +143,13 @@ func parseHistorySlice(uri string) (domain.CallSearch, bool) {
 		"date":      dayOf(parsed.Query().Get("date")),
 		"sort":      float64(1),
 	}), true
+}
+
+// defaultHistorySlice is the page an unreadable slice echoes: the page the server would have
+// applied to a window naming real numbers, so an empty slice answers with the same page shape a
+// filled-in window answers.
+func defaultHistorySlice() domain.CallSearch {
+	return domain.CallSearch{Limit: domain.DefaultCallSearchLimit, Sort: 1}
 }
 
 // dayOf is the day argument as the history reads it. The history's own criterion is an instant

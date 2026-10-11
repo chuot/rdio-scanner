@@ -61,9 +61,10 @@ func (s *Server) registerCallTools(deps Deps) {
 		Description: "One page of recorded calls, filtered by system, talkgroup, group label, tag " +
 			"label, day, paging, and sort direction. Every filter is an argument of this tool; there " +
 			"is no per-filter sibling to choose between. The answer is the page itself: the total the " +
-			"filters match, the earliest and latest call they match, and the rows, oldest or newest " +
-			"first. A filter naming something outside what this caller may see answers an empty page, " +
-			"the same answer a history with nothing in it gets.",
+			"filters match, the earliest and latest call they match, the rows, oldest or newest " +
+			"first, and the page as this server applied it, so the next page can be asked for by " +
+			"adding that page size to the offset. A filter naming something outside what this caller " +
+			"may see answers an empty page, the same answer a history with nothing in it gets.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchCallsInput) (*mcp.CallToolResult, callPage, error) {
 		who, ok := CallerOf(ctx)
@@ -71,15 +72,17 @@ func (s *Server) registerCallTools(deps Deps) {
 			return nil, callPage{}, errNoCaller
 		}
 
+		criteria := in.criteria()
+
 		page, err := deps.Search.Handle(ctx, application.SearchCallsQuery{
-			Criteria: in.criteria(),
+			Criteria: criteria,
 			Scope:    scopeOf(who),
 		})
 		if err != nil {
 			return nil, callPage{}, err
 		}
 
-		return nil, pageAnswer(page, in), nil
+		return nil, pageAnswer(page, criteria), nil
 	})
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
@@ -159,17 +162,39 @@ type searchCallsInput struct {
 
 // criteria is the history's own parsing of these filters, the same function the REST surface
 // parses its body with, so one rule reads a listener's payload and an assistant's arguments.
+//
+// Only the filters the caller named are handed over. The parser reads an absent page size as the
+// default and a named zero as a request for zero rows, and an assistant that named no page size
+// asked for the default, not for nothing.
 func (in searchCallsInput) criteria() domain.CallSearch {
-	return domain.ParseCallSearch(map[string]any{
-		"system":    float64(in.System),
-		"talkgroup": float64(in.Talkgroup),
-		"group":     in.Group,
-		"tag":       in.Tag,
-		"date":      in.Date,
-		"limit":     float64(in.Limit),
-		"offset":    float64(in.Offset),
-		"sort":      float64(in.Sort),
-	})
+	payload := map[string]any{}
+
+	if in.System != 0 {
+		payload["system"] = float64(in.System)
+	}
+	if in.Talkgroup != 0 {
+		payload["talkgroup"] = float64(in.Talkgroup)
+	}
+	if in.Group != "" {
+		payload["group"] = in.Group
+	}
+	if in.Tag != "" {
+		payload["tag"] = in.Tag
+	}
+	if in.Date != "" {
+		payload["date"] = in.Date
+	}
+	if in.Limit != 0 {
+		payload["limit"] = float64(in.Limit)
+	}
+	if in.Offset != 0 {
+		payload["offset"] = float64(in.Offset)
+	}
+	if in.Sort != 0 {
+		payload["sort"] = float64(in.Sort)
+	}
+
+	return domain.ParseCallSearch(payload)
 }
 
 // callPage is one page of history, shaped for the question "what happened".
@@ -198,13 +223,18 @@ type callRow struct {
 	AudioLength string `json:"audioLength,omitempty" jsonschema:"the recording's length as mm:ss, empty when it was never measured"`
 }
 
-func pageAnswer(page ports.CallSearchPage, in searchCallsInput) callPage {
+// pageAnswer is one page of the history, with the page it applied echoed back.
+//
+// The echo is the criteria as this server used them, and not the arguments as they arrived: an
+// assistant paging further along has to know the page size that was applied to work out the offset
+// of the next page, and an argument naming no page size is not a number it can compute with.
+func pageAnswer(page ports.CallSearchPage, criteria domain.CallSearch) callPage {
 	answer := callPage{
 		Count: page.Count,
 		Options: callOptions{
-			Limit:  in.Limit,
-			Offset: in.Offset,
-			Sort:   in.Sort,
+			Limit:  criteria.Limit,
+			Offset: criteria.Offset,
+			Sort:   criteria.Sort,
 		},
 		Results: []callRow{},
 	}

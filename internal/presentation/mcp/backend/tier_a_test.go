@@ -27,6 +27,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"rdio-scanner/internal/domain"
 )
 
 // The read-only capabilities an access-code caller reaches: the history search, one call, and the
@@ -157,6 +159,36 @@ func TestSearchCallsAnswersNoRowsForASystemOutsideTheCallersScope(t *testing.T) 
 
 	if page.Count != 0 {
 		t.Fatalf("a search outside the caller's scope answered %d rows, want none", page.Count)
+	}
+}
+
+// A page that names no size gets the server's default, and carries every row the filters match —
+// not the one row a page size of zero would carry.
+func TestSearchCallsAnswersTheDefaultPageWhenNoSizeIsNamed(t *testing.T) {
+	s := newCallerSession(t, Caller{Tier: TierFull})
+
+	answered := call(t, s, "search_calls", map[string]any{})
+
+	var page struct {
+		Count   uint `json:"count"`
+		Options struct {
+			Limit  uint `json:"limit"`
+			Offset uint `json:"offset"`
+		} `json:"options"`
+		Results []struct {
+			ID uint64 `json:"id"`
+		} `json:"results"`
+	}
+	decode(t, answered, &page)
+
+	if page.Options.Limit != domain.DefaultCallSearchLimit {
+		t.Fatalf("a page naming no size echoed %d, want the default the server applies",
+			page.Options.Limit)
+	}
+
+	if uint(len(page.Results)) != page.Count {
+		t.Fatalf("the page carried %d rows of a %d-call match: the size applied is not the size echoed",
+			len(page.Results), page.Count)
 	}
 }
 

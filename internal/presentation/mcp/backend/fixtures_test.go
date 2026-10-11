@@ -53,6 +53,10 @@ const (
 	listenerCode  = "753159"
 	listenerIdent = "dispatch-desk"
 
+	// fixtureApikey is the upload credential the fixture's configuration holds, so a test that
+	// checks a credential inventory is masked has a value to check is absent.
+	fixtureApikey = "0123456789abcdef-secr3t"
+
 	// The two systems the fixture's history is spread over.
 	systemOneRef = uint(10001)
 	systemTwoRef = uint(10002)
@@ -83,16 +87,27 @@ type serverBundle struct {
 	systems *fakes.Systems
 	groups  *fakes.Groups
 	tags    *fakes.Tags
+
+	// The rest of the configuration the deployment summary counts: the upload credentials and the
+	// ingestion plumbing, disabled entries included, and the options the summary reports.
+	apikeys     *fakes.Apikeys
+	dirwatches  *fakes.Dirwatches
+	downstreams *fakes.Downstreams
+	options     *fakes.Options
 }
 
 func newServer(t *testing.T, restricted bool) *serverBundle {
 	t.Helper()
 
 	bundle := &serverBundle{
-		accesses: &fakes.Accesses{},
-		logs:     &fakes.Logs{},
-		tokens:   fakes.NewTokens(),
-		clock:    fakes.NewClock(fixtureTime),
+		accesses:    &fakes.Accesses{},
+		logs:        &fakes.Logs{},
+		tokens:      fakes.NewTokens(),
+		clock:       fakes.NewClock(fixtureTime),
+		apikeys:     &fakes.Apikeys{},
+		dirwatches:  &fakes.Dirwatches{},
+		downstreams: &fakes.Downstreams{},
+		options:     &fakes.Options{},
 	}
 
 	bundle.tokens.Window = []string{adminToken}
@@ -115,12 +130,58 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 		3: fixtureCall(3, systemTwoRef, fixtureTime.Add(-1*time.Hour)),
 		4: fixtureCall(4, systemTwoRef, fixtureTime.Add(-27*time.Hour)),
 	}
-	bundle.systems = &fakes.Systems{Stored: domain.Systems{
-		{ID: 1, Label: "System", SystemRef: systemOneRef},
-		{ID: 2, Label: "System", SystemRef: systemTwoRef},
-	}}
 	bundle.groups = &fakes.Groups{Stored: domain.Groups{{ID: 1, Label: "Fire"}}}
 	bundle.tags = &fakes.Tags{Stored: domain.Tags{{ID: 3, Label: "Fire Dispatch"}}}
+
+	// The systems carry the parts under them, so the deployment summary counts talkgroups, sites,
+	// and units as real things and not as none.
+	bundle.systems = &fakes.Systems{Stored: domain.Systems{
+		{
+			ID: 1, Label: "System", SystemRef: systemOneRef,
+			Talkgroups: domain.Talkgroups{
+				{ID: 1, TalkgroupRef: 1514000, Label: "Talkgroup", TagID: 3},
+				{ID: 2, TalkgroupRef: 1514001, Label: "Second Talkgroup", TagID: 3},
+			},
+			Sites: domain.Sites{{ID: 1, SiteRef: 1, Label: "Site"}},
+			Units: domain.Units{{ID: 1, UnitRef: 1001, Label: "Unit"}},
+		},
+		{
+			ID: 2, Label: "System", SystemRef: systemTwoRef,
+			Talkgroups: domain.Talkgroups{{ID: 3, TalkgroupRef: 1514002, Label: "Other Talkgroup", TagID: 3}},
+			Sites:      domain.Sites{{ID: 2, SiteRef: 2, Label: "Site"}},
+			Units:      domain.Units{{ID: 2, UnitRef: 1002, Label: "Unit"}},
+		},
+	}}
+
+	// The options the summary reports: a prune horizon, a listener ceiling, recordings converted,
+	// duplicates detected, auto-populate on, and the server's own notice that the default
+	// credential is still in place.
+	bundle.options = &fakes.Options{Stored: domain.Options{
+		AudioConversion:         domain.AudioConversionEnabled,
+		AutoPopulate:            true,
+		MaxClients:              200,
+		PruneDays:               7,
+		AdminPasswordNeedChange: true,
+	}}
+
+	// The ingestion plumbing and the upload credentials, so the deployment summary counts real
+	// things and counts disabled ones as disabled.
+	bundle.apikeys = &fakes.Apikeys{Stored: domain.Apikeys{
+		{ID: 1, Ident: "trunk-recorder", Key: fixtureApikey},
+		{ID: 2, Ident: "dirwatch", Key: "second-key", Disabled: true},
+	}}
+	bundle.dirwatches = &fakes.Dirwatches{Stored: domain.Dirwatches{
+		{ID: 1, Directory: "/var/spool/asterisk/monitor", Disabled: true},
+		{ID: 2, Directory: "/var/spool/asterisk/monitor-second"},
+	}}
+	bundle.downstreams = &fakes.Downstreams{Stored: domain.Downstreams{
+		{ID: 1, URL: "https://peer.example/api/trunk-recorder-call-upload", Disabled: true},
+		{ID: 2, URL: "https://second.example/api/call-upload"},
+	}}
+
+	// The log view, spread over four subsystems so a search by subsystem, a search by severity, and
+	// an explanation that reads a subsystem's neighbourhood all have something to read.
+	bundle.logs.Stored = fixtureLogEntries()
 
 	bundle.server = New(bundle.Deps())
 	bundle.handler = bundle.server.Handler()
@@ -144,6 +205,18 @@ func fixtureCall(id uint64, systemRef uint, at time.Time) domain.Call {
 	return call
 }
 
+// fixtureLogEntries is the log view the diagnostics read: four subsystems, three severities, and a
+// failure with lines on both sides of it in its own subsystem and in a neighbour's.
+func fixtureLogEntries() []domain.LogEntry {
+	return []domain.LogEntry{
+		{ID: 1, DateTime: fixtureTime.Add(-4 * time.Hour), Level: domain.LogLevelInfo, Source: domain.LogSourceFFmpeg, Message: "ffmpeg is converting call 12"},
+		{ID: 2, DateTime: fixtureTime.Add(-3 * time.Hour), Level: domain.LogLevelError, Source: domain.LogSourceFFmpeg, Message: "ffmpeg conversion failed for call 12"},
+		{ID: 3, DateTime: fixtureTime.Add(-3*time.Hour + 30*time.Minute), Level: domain.LogLevelInfo, Source: domain.LogSourceIngest, Message: "call 12 arrived on system 10001"},
+		{ID: 4, DateTime: fixtureTime.Add(-2 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceAccess, Message: "the access code of dispatch-desk expired"},
+		{ID: 5, DateTime: fixtureTime.Add(-1 * time.Hour), Level: domain.LogLevelInfo, Source: domain.LogSourcePrune, Message: "pruned 3 calls"},
+	}
+}
+
 // Deps is the wiring the composition root does for this surface, with the use cases built over the
 // fixture's in-memory stores.
 func (bundle *serverBundle) Deps() Deps {
@@ -153,11 +226,11 @@ func (bundle *serverBundle) Deps() Deps {
 		Search:  application.NewSearchCallsQueryHandler(bundle.calls, bundle.systems, bundle.groups, bundle.tags),
 		Config: application.NewGetConfigHandler(application.ConfigurationRepositories{
 			Accesses:    bundle.accesses,
-			Apikeys:     &fakes.Apikeys{},
-			Dirwatches:  &fakes.Dirwatches{},
-			Downstreams: &fakes.Downstreams{},
+			Apikeys:     bundle.apikeys,
+			Dirwatches:  bundle.dirwatches,
+			Downstreams: bundle.downstreams,
 			Groups:      bundle.groups,
-			Options:     &fakes.Options{},
+			Options:     bundle.options,
 			Systems:     bundle.systems,
 			Tags:        bundle.tags,
 		}),
