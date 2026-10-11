@@ -331,7 +331,12 @@ func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, s
 func migrateGroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateGroups", "groups"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerGroups"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerGroups")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -444,7 +449,12 @@ func migrateGroups(ctx context.Context, s store, progress Progress) error {
 func migrateTags(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateTags", "tags"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerTags"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerTags")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -562,7 +572,12 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 func migrateSystems(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateSystems", "systems"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerSystems"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerSystems")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -711,7 +726,12 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateTalkgroups", "talkgroups"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerTalkgroups"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerTalkgroups")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -1012,7 +1032,12 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 func migrateUnits(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateUnits", "units"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerUnits"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerUnits")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -1251,6 +1276,40 @@ func ensureOptionsKeyIndex(ctx context.Context, s store) error {
 	return nil
 }
 
+// tableExists asks the database's own catalog whether a table is there (CA-012.1).
+//
+// The v6 gates used to answer this by running `SELECT COUNT(*) FROM <table>` and
+// reading every failure as "not there": a locked database, an expired context, a
+// schema the driver cannot read — all of them became a silent skip, the pass moved
+// no rows and said no word, and a deployment's v6 rows sat un-migrated behind a
+// startup log that named nothing. The catalog answers the question the gates ask —
+// is the table there — and a probe that cannot read is a failure the caller is
+// told about, naming the step that asked.
+func tableExists(ctx context.Context, s store, table string) (bool, error) {
+	// Views count as there: the legacy probe read a view as easily as a table, and
+	// the migrations that consume the v6 names meet the same failures over a view as
+	// the legacy met — the drop of a table refuses a view, and that failure is the
+	// legacy's own, returned, not a silent skip. The MySQL and PostgreSQL catalogs
+	// this queries already answer for views as well as tables.
+	query := `SELECT COUNT(*) FROM "sqlite_master" WHERE ("type" = 'table' OR "type" = 'view') AND "name" = ?`
+
+	switch s.dialect {
+	case DialectMariadb, DialectMysql:
+		query = `SELECT COUNT(*) FROM "information_schema"."TABLES" WHERE "TABLE_SCHEMA" = DATABASE() AND "TABLE_NAME" = ?`
+
+	case DialectPostgresql:
+		query = `SELECT COUNT(*) FROM "information_schema"."tables" WHERE "table_name" = ?`
+	}
+
+	var count int
+
+	if err := s.queryRow(ctx, query, table).Scan(&count); err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 // hasOptionsKeyIndex asks the database's own catalog whether the options table already
 // carries the unique index on its key.
 func hasOptionsKeyIndex(ctx context.Context, s store) (bool, error) {
@@ -1280,7 +1339,12 @@ func hasOptionsKeyIndex(ctx context.Context, s store) (bool, error) {
 func migrateOptions(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateOptions", "options"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerConfigs"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerConfigs")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -1553,7 +1617,12 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 func migrateMeta(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateMeta", "meta"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerMeta"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerMeta")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -1580,7 +1649,12 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 func migrateLogs(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateLogs", "logs"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerLogs"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerLogs")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -1722,7 +1796,12 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDownstreams", "downstreams"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerDownstreams"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerDownstreams")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -2135,7 +2214,12 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 func migrateCalls(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateCalls", "calls"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerCalls"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerCalls")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -2524,7 +2608,12 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateApikeys", "apikeys"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerApiKeys"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerApiKeys")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 
@@ -2654,7 +2743,12 @@ func migrateApikeys(ctx context.Context, s store, progress Progress) error {
 func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateAccesses", "accesses"
 
-	if _, err := s.exec(ctx, `SELECT COUNT(*) FROM "rdioScannerAccesses"`); err != nil {
+	exists, err := tableExists(ctx, s, "rdioScannerAccesses")
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if !exists {
 		return nil
 	}
 

@@ -3258,3 +3258,56 @@ func TestMigrateReportsAContextCancelledMidPreload(t *testing.T) {
 		t.Error("the v6 talkgroups table was dropped by a pass that failed mid-preload")
 	}
 }
+
+// TestMigrateReportsAProbeThatCannotRead (REQ-012, CA-012.1): the v6-table probe
+// answers one question — is this v6 table there. A table that is not there means
+// nothing to do, and the step says nothing and does nothing. A probe that cannot
+// read — a locked database, an expired context — is not an answer to that question,
+// and today every failure is read as "not there": the pass moves no rows, says no
+// word, and the deployment's v6 rows sit un-migrated behind a startup log that
+// names nothing.
+func TestMigrateReportsAProbeThatCannotRead(t *testing.T) {
+	db := openSchemaDatabase(t)
+
+	defer db.Close()
+
+	if _, err := db.Exec(`CREATE TABLE "rdioScannerTags" ("_id" integer primary key autoincrement, "label" varchar(255) not null)`); err != nil {
+		t.Fatalf("creating the v6 table: %v", err)
+	}
+
+	// A row to migrate: the pass has real work to do, work whose every write the
+	// lock will refuse.
+	if _, err := db.Exec(`INSERT INTO "rdioScannerTags" ("label") VALUES ('Locked tag')`); err != nil {
+		t.Fatalf("seeding the v6 row: %v", err)
+	}
+
+	// A writer holds the database, and the context expires while it does.
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("opening the writer: %v", err)
+	}
+
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`INSERT INTO "systems" ("systemRef", "label") VALUES (999, 'Lock holder')`); err != nil {
+		t.Fatalf("taking the write lock: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	migration := newStore(db, DialectSqlite)
+	migration.clock = fixedClock{migrationInstant}
+
+	err = migrateTags(ctx, migration, func(string, string) {})
+
+	if err == nil {
+		t.Fatal("migrateTags = nil for a probe that could not read, want the failure named")
+	}
+
+	// A v6 table that is not there is nothing to do: the step says nothing and
+	// does nothing, as it has always done.
+	if err := migrateGroups(context.Background(), newStore(db, DialectSqlite), func(string, string) {}); err != nil {
+		t.Errorf("migrateGroups = %v for a database with no rdioScannerGroups, want the silent skip", err)
+	}
+}
