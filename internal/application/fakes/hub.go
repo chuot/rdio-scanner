@@ -21,6 +21,8 @@
 package fakes
 
 import (
+	"sync"
+
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 )
@@ -57,6 +59,12 @@ type Hub struct {
 
 	// AccessLimits records the sessions told their identity had too many sessions open.
 	AccessLimits []string
+
+	// Stall, when set, is a one-shot gate on the broadcast: the first BroadcastCall
+	// announces itself by closing Entered and waits for Release — the shape of a delivery
+	// that cannot finish, a listener whose queue is full. Every broadcast after the first
+	// passes through, so a test can tell a stalled delivery from a serialized server.
+	Stall *BroadcastStall
 
 	// Versions records the version reports sent to each session.
 	Versions map[string][]string
@@ -121,6 +129,10 @@ func (hub *Hub) Open(clientID, remoteAddr string) {
 // BroadcastCall delivers a call to every session whose access grants it and whose
 // live-watch selection asks for it.
 func (hub *Hub) BroadcastCall(call domain.Call) {
+	if hub.Stall != nil {
+		hub.Stall.gate()
+	}
+
 	for clientID := range hub.remoteAddrs {
 		if hub.Restricted {
 			access, ok := hub.accesses[clientID]
@@ -284,4 +296,38 @@ func (hub *Hub) ListenerCount() int {
 // RemoteAddrOf reports where a session connected from.
 func (hub *Hub) RemoteAddrOf(clientID string) string {
 	return hub.remoteAddrs[clientID]
+}
+
+// BroadcastStall is the one-shot gate the hub fake puts in front of its first broadcast.
+// Only the first broadcast waits on the gate; every later one passes straight through —
+// sync.Once would make every caller wait for the first to finish, which is exactly the
+// serialization a test using this gate is looking for.
+type BroadcastStall struct {
+	// Entered is closed when the first broadcast is waiting.
+	Entered chan struct{}
+
+	// Release lets it go.
+	Release chan struct{}
+
+	mutex   sync.Mutex
+	stalled bool
+}
+
+// gate holds the first broadcast on the stall and lets every later one through.
+func (stall *BroadcastStall) gate() {
+	stall.mutex.Lock()
+
+	if stall.stalled {
+		stall.mutex.Unlock()
+
+		return
+	}
+
+	stall.stalled = true
+
+	stall.mutex.Unlock()
+
+	close(stall.Entered)
+
+	<-stall.Release
 }

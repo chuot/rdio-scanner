@@ -144,9 +144,22 @@ func NewIngestCallHandler(
 }
 
 // Handle resolves, filters, stores, and delivers one ingested call.
+//
+// The delivery is made after the ingest lock is released (decision D24): the store, the log,
+// and the duplicate decision are the server's own work and run under the lock, while the
+// delivery is the part a listener can stall — a listener that cannot keep up waits in its own
+// delivery, and the next call the server ingests is not serialized behind it.
 func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallCommand) (IngestCallResult, error) {
+	var deliver domain.Call
+
 	handler.writes.Lock()
-	defer handler.writes.Unlock()
+	defer func() {
+		handler.writes.Unlock()
+
+		if deliver.ID != 0 {
+			handler.DeliverCall(ctx, deliver)
+		}
+	}()
 
 	call := cmd.Call.Sanitized()
 
@@ -452,7 +465,7 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 	logCall(domain.LogLevelInfo, stored, "success")
 
-	handler.DeliverCall(ctx, stored)
+	deliver = stored
 
 	return IngestCallResult{Outcome: IngestCallAccepted, CallID: stored.ID}, nil
 }

@@ -1715,3 +1715,84 @@ func TestIngestCallSanitizesSuppliedTextIntoSingleLogLines(t *testing.T) {
 		t.Errorf("system label = %q, want the stored label free of control characters", label)
 	}
 }
+
+// TestIngestCallDeliveryDoesNotSerializeTheNextIngest (REQ-005, CA-005.2, decision D24): the
+// delivery is the part of ingest a listener can stall — a listener that cannot keep up waits in
+// its own queue. The store, the log, and the duplicate decision are the server's own work, and
+// the next call the server ingests must not be serialized behind one slow listener: the ingest
+// lock is released before the delivery is made.
+func TestIngestCallDeliveryDoesNotSerializeTheNextIngest(t *testing.T) {
+	fixture := newIngestFixture()
+
+	system := domain.System{
+		ID:        1,
+		SystemRef: 1,
+		Label:     "Test System",
+		Talkgroups: domain.Talkgroups{
+			{ID: 10, TalkgroupRef: 123, Label: "Test Talkgroup", Name: "Test Talkgroup", TagID: 10},
+			{ID: 11, TalkgroupRef: 124, Label: "Second Talkgroup", Name: "Second Talkgroup", TagID: 10},
+		},
+	}
+
+	fixture.systems.Stored = append(fixture.systems.Stored, system)
+
+	stall := &fakes.BroadcastStall{Entered: make(chan struct{}), Release: make(chan struct{})}
+	fixture.hub.Stall = stall
+
+	first := validIngestCall()
+	first.System = system
+	first.Talkgroup = system.Talkgroups[0]
+
+	go fixture.ingest(first)
+
+	select {
+	case <-stall.Entered:
+
+	case <-time.After(2 * time.Second):
+		close(stall.Release)
+		t.Fatal("the first call's broadcast never reached the hub gate")
+	}
+
+	// A real second call, on the same system and a talkgroup the server stores: the
+	// server must be able to take it while the first call's delivery is stuck.
+	second := validIngestCall()
+	second.System = system
+	second.Talkgroup = system.Talkgroups[1]
+	second.AudioFilename = "second.wav"
+
+	done := make(chan IngestCallResult, 1)
+
+	go func() {
+		result, _ := fixture.ingest(second)
+
+		done <- result
+	}()
+
+	select {
+	case result := <-done:
+		if result.Outcome != IngestCallAccepted {
+			close(stall.Release)
+			t.Fatalf("outcome = %q, want the second call accepted while the first delivery is stuck",
+				result.Outcome)
+		}
+
+	case <-time.After(2 * time.Second):
+		close(stall.Release)
+		t.Fatal("the second ingest was serialized behind the first call's delivery: " +
+			"the ingest lock was held across the broadcast")
+	}
+
+	if len(fixture.calls.Saved) != 2 {
+		close(stall.Release)
+		t.Fatalf("stored %d calls, want the second call stored while the first delivery is stuck",
+			len(fixture.calls.Saved))
+	}
+
+	if !fixture.loggedAs(domain.LogSourceIngest, "call from system 1 talkgroup 124 success, second.m4a") {
+		close(stall.Release)
+		t.Errorf("logs = %v, want the second call recorded, naming the call it is about",
+			fixture.logMessages())
+	}
+
+	close(stall.Release)
+}
