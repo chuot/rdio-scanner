@@ -184,3 +184,20 @@ func writeFile(t *testing.T, path, content string) {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
+
+// TestConfigSaveCreatesTheIniFileForItsOwnerOnly (REQ-013, CA-013.2): the ini file
+// holds the database password, and on a shared host a world-readable ini hands it
+// to every account on the machine. The save creates it readable and writable by
+// its owner alone.
+func TestConfigSaveCreatesTheIniFileForItsOwnerOnly(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-config_save")
+
+	info, err := os.Stat(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("stat saved ini: %v", err)
+	}
+
+	if mode := info.Mode().Perm(); mode != 0600 {
+		t.Errorf("the saved ini file is created %o, want 0600: the ini holds the database password", mode)
+	}
+}

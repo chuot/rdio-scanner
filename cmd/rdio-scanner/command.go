@@ -348,7 +348,10 @@ func (cmd *command) configGet() error {
 		return nil
 	}
 
-	f, err := os.Create(cmd.out)
+	// The file holds the server's whole configuration — signing secret, database
+	// password, administrator hash — so it is created for its owner alone
+	// (CA-013.2), wherever the operator pointed it.
+	f, err := os.OpenFile(cmd.out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}

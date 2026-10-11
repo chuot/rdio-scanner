@@ -733,3 +733,33 @@ func TestTheUsageTextNamesTheLoginTheOperatorRuns(t *testing.T) {
 		t.Errorf("the usage text does not name the session file the mode keeps, %s:\n%s", tokenFileOf(baseDir), out)
 	}
 }
+
+// TestTheCommandModeCreatesTheConfigurationFileForItsOwnerOnly (REQ-013, CA-013.2):
+// config-get writes the server's whole configuration — the signing secret, the
+// database password, the administrator hash — to a file the operator names. The
+// file is created readable and writable by its owner alone, so the secrets do not
+// sit world-readable in whatever directory the operator pointed at.
+func TestTheCommandModeCreatesTheConfigurationFileForItsOwnerOnly(t *testing.T) {
+	url := commandTestServer(t)
+
+	baseDir := t.TempDir()
+
+	if code, out := runTheCommandMode(t, baseDir, "login", commandArgURL, url); code != 0 {
+		t.Fatalf("login ended with %d: %s", code, out)
+	}
+
+	named := filepath.Join(t.TempDir(), "configuration")
+
+	if code, out := runTheCommandMode(t, baseDir, "config-get", commandArgURL, url, commandArgOut, named); code != 0 {
+		t.Fatalf("config-get ended with %d: %s", code, out)
+	}
+
+	info, err := os.Stat(named + ".json")
+	if err != nil {
+		t.Fatalf("stat %s: %v", named+".json", err)
+	}
+
+	if mode := info.Mode().Perm(); mode != 0600 {
+		t.Errorf("config-get created %s with mode %o, want 0600: the file holds the signing secret and the database password", named+".json", mode)
+	}
+}

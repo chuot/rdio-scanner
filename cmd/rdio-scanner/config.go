@@ -330,7 +330,10 @@ func (config *Config) saveConfig() error {
 		ini = append(ini, fmt.Sprintf("trusted_proxies = %s", config.TrustedProxies))
 	}
 
-	file, err := os.Create(config.GetConfigFilePath())
+	// The ini holds the database password, so it is created readable and writable
+	// by its owner alone (CA-013.2): a world-readable ini on a shared host hands
+	// that password to every account on the machine.
+	file, err := os.OpenFile(config.GetConfigFilePath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
