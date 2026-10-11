@@ -439,8 +439,8 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 
 	after := readSchemaObjects(t, db)
 
-	if len(after) != len(before)+4 {
-		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes and the migration archive with its index", len(after)-len(before))
+	if len(after) != len(before)+5 {
+		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, and the migration archive with its index", len(after)-len(before))
 	}
 
 	// The logs table is the one object allowed to read differently afterwards, and only because it
@@ -466,12 +466,13 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 		added = append(added, object)
 	}
 
-	if len(added) != 4 ||
+	if len(added) != 5 ||
 		!isLogIndex(added[0], "logs_source_idx") ||
 		!isLogIndex(added[1], "logs_time_idx") ||
 		!isMigrationArchiveIndex(added[2]) ||
-		!isMigrationArchiveTable(added[3]) {
-		t.Errorf("the schema objects a v7 database gained: %v, want logs_source_idx, logs_time_idx, the migrationArchive table, and its migration_archive_table_row index", added)
+		!isLogIndex(added[3], "options_key") ||
+		!isMigrationArchiveTable(added[4]) {
+		t.Errorf("the schema objects a v7 database gained: %v, want logs_source_idx, logs_time_idx, the options_key index, the migrationArchive table, and its migration_archive_table_row index", added)
 	}
 
 	if !hasString(after, `index logs_source_idx `+logIndexDefinition(t, db, "logs_source_idx")) {
@@ -3103,4 +3104,97 @@ func countArrangedCalls(t *testing.T, db *sql.DB) int {
 	}
 
 	return carried
+}
+
+// TestMigrateDeduplicatesDuplicateOptionRowsKeepingTheLastWritten (REQ-010, CA-010.2,
+// decision D10): the shape a MySQL deployment's options table reaches — every key
+// written again by every save, because the driver reports no changed rows and the save
+// reads that as no row there. The pass removes the duplicates, the last row written
+// for each key winning (it is the value the server has been running with), and the
+// table carries the unique index that refuses a duplicate from then on.
+func TestMigrateDeduplicatesDuplicateOptionRowsKeepingTheLastWritten(t *testing.T) {
+	db := openSchemaDatabase(t)
+
+	defer db.Close()
+
+	for _, value := range []string{`"one"`, `"two"`} {
+		if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', ?)`, value); err != nil {
+			t.Fatalf("seeding the duplicate rows: %v", err)
+		}
+	}
+
+	if progress := migrateDatabase(t, db); len(progress) != 0 {
+		t.Errorf("the pass announced: %v", progress)
+	}
+
+	var rows int
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "options" WHERE "key" = 'branding'`).Scan(&rows); err != nil {
+		t.Fatalf("counting the branding rows: %v", err)
+	}
+
+	if rows != 1 {
+		t.Fatalf("the options table holds %d rows for branding, want the one row the pass keeps", rows)
+	}
+
+	var value string
+
+	if err := db.QueryRow(`SELECT "value" FROM "options" WHERE "key" = 'branding'`).Scan(&value); err != nil {
+		t.Fatalf("reading the branding row: %v", err)
+	}
+
+	if value != `"two"` {
+		t.Errorf("branding is stored as %s, want the last row written", value)
+	}
+
+	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', '"three"')`); err == nil {
+		t.Error("the table accepted a duplicate key after the migration, want the options_key index to refuse it")
+	}
+}
+
+// TestMigrateGivesAFreshDatabaseTheUniqueOptionKeyIndex (REQ-010, CA-010.1, decision
+// D10): a database this server creates gets the same rule as one it repairs — one row
+// per option key, the database itself refusing the duplicate.
+func TestMigrateGivesAFreshDatabaseTheUniqueOptionKeyIndex(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	defer db.Close()
+
+	if progress := migrateDatabase(t, db); len(progress) != 0 {
+		t.Errorf("the pass announced: %v", progress)
+	}
+
+	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', '"one"')`); err != nil {
+		t.Fatalf("seeding the option row: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', '"two"')`); err == nil {
+		t.Error("the fresh database accepted a second row for the same option key, want the options_key index to refuse it")
+	}
+}
+
+// TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce (REQ-010, decision D10): the
+// dedup and the index are a step of the startup pass, and a restart runs the pass
+// again over the table it already fixed — with no row to remove, no index to create,
+// and no word to say.
+func TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce(t *testing.T) {
+	db := openSchemaDatabase(t)
+
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', '"one"')`); err != nil {
+		t.Fatalf("seeding the option row: %v", err)
+	}
+
+	migrateDatabase(t, db)
+
+	before := countRows(t, db, "options")
+
+	if progress := migrateDatabase(t, db); len(progress) != 0 {
+		t.Errorf("the second pass announced: %v", progress)
+	}
+
+	if after := countRows(t, db, "options"); after != before {
+		t.Errorf("the second pass changed the options: %d rows, was %d", after, before)
+	}
 }

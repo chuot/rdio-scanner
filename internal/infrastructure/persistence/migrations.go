@@ -120,6 +120,14 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 		return operationError("database", "migrate", err)
 	}
 
+	// The options table is given its one-row-per-key rule before any step writes
+	// option rows: the duplicates a MySQL deployment's saves left behind (the audit's
+	// H13) are removed, and the unique index that refuses them from then on is created
+	// over the deduplicated table, not over the duplicates.
+	if err := ensureOptionsKeyIndex(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
 	for _, migrate := range []func(context.Context, store, Progress) error{
 		migrateGroups,
 		migrateTags,
@@ -1125,6 +1133,78 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 //
 // The unpacked values are stored as the JSON text of the value, so a string option is stored
 // with its quotes — which is what the legacy options reader unmarshals.
+// ensureOptionsKeyIndex gives the options table the one rule its own writes assume: a
+// key appears once.
+//
+// The save updates a key's row and inserts only when no row carries the key, and on
+// MySQL the update of an unchanged value reports no changed rows, the insert fires, and
+// every save duplicates every key (the audit's H13, decision D10) — the effective
+// values become whichever duplicate the reader happens to reach. The duplicates a
+// deployment already has are removed first, keeping the last row written for each key,
+// which is the value the server has been running with; the unique index is what
+// refuses duplicates from then on.
+//
+// It is a step of the migration pass rather than of the schema, the way the log
+// table's column and indexes are: the schema is the legacy server's and has to leave a
+// database the other server wrote exactly as it found it.
+func ensureOptionsKeyIndex(ctx context.Context, s store) error {
+	const section, operation = "migration", "ensureOptionsKeyIndex"
+
+	// The last row written for each key wins. The derived table is what lets the same
+	// statement run on MySQL, which will not delete rows selected from the very table
+	// it deletes from, as plainly as SQLite and PostgreSQL read it.
+	dedup := `DELETE FROM "options" WHERE "optionId" NOT IN (SELECT "kept" FROM (SELECT MAX("optionId") AS "kept" FROM "options" GROUP BY "key") AS "survivors")`
+
+	if _, err := s.exec(ctx, dedup); err != nil {
+		return statementError(section, operation, err, dedup)
+	}
+
+	created, err := hasOptionsKeyIndex(ctx, s)
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	if created {
+		return nil
+	}
+
+	// MySQL is the dialect with no `CREATE INDEX IF NOT EXISTS`, which is why the index
+	// is probed rather than asked for, the same way the log indexes are.
+	const index = `CREATE UNIQUE INDEX "options_key" ON "options" ("key")`
+
+	if _, err := s.exec(ctx, index); err != nil {
+		return statementError(section, operation, err, index)
+	}
+
+	return nil
+}
+
+// hasOptionsKeyIndex asks the database's own catalog whether the options table already
+// carries the unique index on its key.
+func hasOptionsKeyIndex(ctx context.Context, s store) (bool, error) {
+	query := `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = 'options' AND "name" = ?`
+
+	switch s.dialect {
+	case DialectMariadb, DialectMysql:
+		query = `SELECT COUNT(DISTINCT "INDEX_NAME") FROM "information_schema"."STATISTICS" WHERE "TABLE_SCHEMA" = DATABASE() AND "TABLE_NAME" = 'options' AND "INDEX_NAME" = ?`
+
+	case DialectPostgresql:
+		query = `SELECT COUNT(*) FROM "pg_indexes" WHERE "tablename" = 'options' AND "indexname" = ?`
+	}
+
+	var count int
+
+	if err := s.queryRow(ctx, query, "options_key").Scan(&count); err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 func migrateOptions(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateOptions", "options"
 

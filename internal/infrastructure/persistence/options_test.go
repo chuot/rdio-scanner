@@ -747,3 +747,33 @@ func countOptionRows(t *testing.T, db *sql.DB) int {
 
 	return rows
 }
+
+// TestWriteOptionsTwiceLeavesOneRowPerKey (REQ-010, CA-010.1, decision D10): saving the
+// configuration is an update of the stored rows, not a fresh copy of them. On MySQL the
+// update reports no changed rows when the value is unchanged, the insert fires for
+// every key, and the table ends up with two rows per key — the audit's H13. On every
+// dialect the table holds exactly one row per key after two saves.
+func TestWriteOptionsTwiceLeavesOneRowPerKey(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+
+	options := NewOptions(db, DialectSqlite)
+
+	next := domain.DefaultOptions()
+	next.Branding = "Acme Dispatch"
+
+	for i := 0; i < 2; i++ {
+		if err := options.WriteOptions(context.Background(), next); err != nil {
+			t.Fatalf("WriteOptions %d: %v", i, err)
+		}
+	}
+
+	var rows int
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "options"`).Scan(&rows); err != nil {
+		t.Fatalf("counting the option rows: %v", err)
+	}
+
+	if want := len(optionRows(next)); rows != want {
+		t.Errorf("the options table holds %d rows after two saves, want the %d keys the save writes", rows, want)
+	}
+}

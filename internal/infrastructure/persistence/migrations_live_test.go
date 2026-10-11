@@ -679,3 +679,49 @@ func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
 	t.Logf("%s at %s:%d refused the connection, which is what a live test is supposed to report",
 		DialectMariadb, settings.Host, settings.Port)
 }
+
+// TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows (REQ-010, CA-010.2, decision
+// D10): the duplicate-row fixture on the backend that creates the duplicates. MySQL
+// and MariaDB report an unchanged option update as no changed rows, the save reads
+// that as no row there, and every save writes every key again. The live pass removes
+// the duplicates, last row written wins, and the unique index refuses the next one.
+func TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows(t *testing.T) {
+	db := liveDatabase(t, DialectMariadb)
+
+	if err := ApplySchema(context.Background(), db, DialectMariadb); err != nil {
+		t.Fatalf("ApplySchema: %v", err)
+	}
+
+	// The fixture: every key written twice, the second copy written later.
+	for _, value := range []string{`"one"`, `"two"`} {
+		if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', ?)`, value); err != nil {
+			t.Fatalf("seeding the duplicate rows: %v", err)
+		}
+	}
+
+	liveMigrate(t, db, DialectMariadb)
+
+	var rows int
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "options" WHERE "key" = 'branding'`).Scan(&rows); err != nil {
+		t.Fatalf("counting the branding rows: %v", err)
+	}
+
+	if rows != 1 {
+		t.Fatalf("the options table holds %d rows for branding, want the one row the pass keeps", rows)
+	}
+
+	var value string
+
+	if err := db.QueryRow(`SELECT "value" FROM "options" WHERE "key" = 'branding'`).Scan(&value); err != nil {
+		t.Fatalf("reading the branding row: %v", err)
+	}
+
+	if value != `"two"` {
+		t.Errorf("branding is stored as %s, want the last row written", value)
+	}
+
+	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', '"three"')`); err == nil {
+		t.Error("the table accepted a duplicate key after the migration, want the options_key index to refuse it")
+	}
+}

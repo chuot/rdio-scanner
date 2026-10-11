@@ -116,8 +116,13 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 	case DialectMariadb, DialectMysql:
 		// ANSI_QUOTES is what lets the same double-quoted identifiers in the schema work on
 		// MariaDB and MySQL as they do on sqlite and PostgreSQL.
+		//
+		// clientFoundRows is what makes an option update report the row it found rather
+		// than the rows it changed: an update that writes the same value changes nothing,
+		// and the save reads "nothing changed" as "no such row" and inserts a duplicate
+		// for every key (the audit's H13, decision D10).
 		return "mysql", fmt.Sprintf(
-			"%s:%s@tcp(%s:%d)/%s?sql_mode=ANSI_QUOTES",
+			"%s:%s@tcp(%s:%d)/%s?sql_mode=ANSI_QUOTES&clientFoundRows=true",
 			settings.Username, settings.Password, settings.Host, settings.Port, settings.Name,
 		), nil
 

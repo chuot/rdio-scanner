@@ -159,7 +159,9 @@ func TestMysqlAndMariadbDataSourcesAreTheLegacyOne(t *testing.T) {
 		t.Errorf("driver = %q, want MariaDB served by the mysql driver, as the legacy server does", driver)
 	}
 
-	const want = "rdio:secret@tcp(db.internal:3306)/rdio-scanner?sql_mode=ANSI_QUOTES"
+	// The legacy connection string, plus clientFoundRows (decision D10): the mysql
+	// driver's changed-rows answer is what made every option save duplicate its keys.
+	const want = "rdio:secret@tcp(db.internal:3306)/rdio-scanner?sql_mode=ANSI_QUOTES&clientFoundRows=true"
 
 	if dsn != want {
 		t.Errorf("dsn = %q, want %q", dsn, want)
@@ -196,5 +198,32 @@ func TestPostgresqlDataSourceIsTheLegacyOne(t *testing.T) {
 
 	if dsn != want {
 		t.Errorf("dsn = %q, want %q", dsn, want)
+	}
+}
+
+// TestMysqlAndMariadbDataSourcesCarryClientFoundRows (REQ-010, CA-010.3, decision D10):
+// the mysql driver reports changed rows, not found rows, so an option update that
+// writes the same value reports nothing and the save inserts a duplicate row for every
+// key. The data source has to ask for found rows.
+func TestMysqlAndMariadbDataSourcesCarryClientFoundRows(t *testing.T) {
+	_, dsn, err := dataSourceName(Settings{
+		Dialect:  DialectMysql,
+		Host:     "db.internal",
+		Port:     3306,
+		Username: "rdio",
+		Password: "secret",
+		Name:     "rdio-scanner",
+	})
+	if err != nil {
+		t.Fatalf("dataSourceName: %v", err)
+	}
+
+	parsed, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		t.Fatalf("the data source is not one the mysql driver accepts: %v", err)
+	}
+
+	if !parsed.ClientFoundRows {
+		t.Error("clientFoundRows is not set on the data source: an option update that changes nothing must report the row it found, not nothing, or the save duplicates every key")
 	}
 }
