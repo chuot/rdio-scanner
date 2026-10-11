@@ -22,6 +22,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -179,22 +180,26 @@ func settingsOf(options domain.Options, restricted bool) scannerbackend.Settings
 // optionsSecrets hands the token adapter the signing secret the server is running with.
 //
 // The secret is read when a token is made rather than remembered, because the options are the
-// configuration in effect and a re-derivation can replace the secret. An options read that fails answers
-// with nothing, and a token that cannot be signed is a login the administrator is told failed — which is
-// the answer the legacy server gives when its own signing fails.
+// configuration in effect and a re-derivation can replace the secret. An options read that fails is
+// reported, not answered with the empty string (CA-013.3): Issue fails beside it, and a token that
+// cannot be signed is a login the administrator is told failed — which is the answer the legacy server
+// gives when its own signing fails.
 type optionsSecrets struct {
 	options ports.OptionsRepository
 }
 
 var _ tokens.Secrets = optionsSecrets{}
 
-func (secrets optionsSecrets) Secret() string {
+func (secrets optionsSecrets) Secret() (string, error) {
 	options, err := secrets.options.ReadOptions(context.Background())
 	if err != nil {
-		return ""
+		// The failure is reported, not answered with the empty string (CA-013.3):
+		// Issue fails beside it, and the login handler's existing failure report is
+		// the one log entry the operator reads.
+		return "", fmt.Errorf("tokens: reading the signing secret: %w", err)
 	}
 
-	return options.Secret
+	return options.Secret, nil
 }
 
 // ingestSink hands a call a directory watcher found to the use case that decides what to do with it.

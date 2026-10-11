@@ -54,7 +54,11 @@ var ErrNotIssued = errors.New("token was not issued by this server")
 // verifying. Reading the secret once at startup would hide that behind a server that
 // appears to keep its sessions alive.
 type Secrets interface {
-	Secret() string
+	// Secret answers the signing secret in effect. A read that fails is reported,
+	// not answered with the empty string (CA-013.3): an empty key signs tokens
+	// every server accepts as signature-valid text, and a login that "worked"
+	// against no secret is the failure this seam must make audible.
+	Secret() (string, error)
 }
 
 // Tokens issues and checks the administrator session tokens.
@@ -91,11 +95,24 @@ func (tokens *Tokens) Issue(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("tokens.issue: %w", err)
 	}
 
+	// The secret is read first and the failure reported (CA-013.3): signing with
+	// the empty string — what a failed read used to answer with — makes a token
+	// whose signature is the HMAC of nothing, and the login is reported as a
+	// success against no secret at all.
+	secret, err := tokens.secrets.Secret()
+	if err != nil {
+		return "", fmt.Errorf("tokens.issue: %w", err)
+	}
+
+	if secret == "" {
+		return "", errors.New("tokens.issue: the server holds no signing secret to sign with")
+	}
+
 	// Only the session identifier is claimed. No expiry is claimed, because a token the
 	// server stops holding is what ends a session here, not a timestamp.
 	credential, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		ID: id.String(),
-	}).SignedString([]byte(tokens.secrets.Secret()))
+	}).SignedString([]byte(secret))
 
 	if err != nil {
 		return "", fmt.Errorf("tokens.issue: %w", err)
@@ -125,7 +142,16 @@ func (tokens *Tokens) Validate(ctx context.Context, token string) error {
 			return nil, fmt.Errorf("unexpected signing method: %v", credential.Header["alg"])
 		}
 
-		return []byte(tokens.secrets.Secret()), nil
+		secret, err := tokens.secrets.Secret()
+		if err != nil {
+			return nil, err
+		}
+
+		if secret == "" {
+			return nil, errors.New("the server holds no signing secret to check against")
+		}
+
+		return []byte(secret), nil
 	})
 
 	if err != nil {

@@ -30,9 +30,12 @@ import (
 	"testing"
 	"time"
 
+	"path/filepath"
+
 	"github.com/kardianos/service"
 
 	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/persistence"
 )
 
 // The composition root is the one place that decides whose copy of the server's log entries an operator
@@ -283,4 +286,32 @@ func (manager *recordedServiceLogger) String() string {
 	}
 
 	return out
+}
+
+// TestTheOptionsSecretReportsAReadFailure (REQ-013, CA-013.3): the signing secret
+// is read from the options when a token is made, and today a read that fails
+// answers with the empty string — the server then signs a session token with an
+// empty key and reports the login as a success, telling the operator nothing. The
+// seam reports the failure, Issue fails beside it, and the login handler's
+// existing failure report is the one log entry the operator reads.
+func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
+	db, err := persistence.Open(persistence.Settings{Dialect: persistence.DialectSqlite, FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db")})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	secrets := optionsSecrets{options: persistence.NewOptions(db, persistence.DialectSqlite)}
+
+	secret, err := secrets.Secret()
+	if err == nil {
+		t.Fatalf("Secret: returned %q with no error, want the read failure reported", secret)
+	}
+
+	if secret != "" {
+		t.Errorf("Secret returned %q beside the failure, want nothing to sign with", secret)
+	}
 }

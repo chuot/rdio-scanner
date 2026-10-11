@@ -34,10 +34,14 @@ import (
 // does to a deployment whose stored secret is not a full-length one.
 type secretSource struct {
 	value string
+
+	// failure is the read failure the seam answers with — what a failed options
+	// read looks like to the token issuer (CA-013.3).
+	failure error
 }
 
-func (source *secretSource) Secret() string {
-	return source.value
+func (source *secretSource) Secret() (string, error) {
+	return source.value, source.failure
 }
 
 func newSecretSource() *secretSource {
@@ -78,7 +82,12 @@ func TestIssueClaimsOnlyTheSessionIdentifier(t *testing.T) {
 	claims := &jwt.RegisteredClaims{}
 
 	parsed, err := jwt.ParseWithClaims(credential, claims, func(token *jwt.Token) (any, error) {
-		return []byte(source.Secret()), nil
+		secret, err := source.Secret()
+		if err != nil {
+			return nil, err
+		}
+
+		return []byte(secret), nil
 	})
 
 	if err != nil {
@@ -166,9 +175,14 @@ func TestValidateRefusesACredentialThisServerDidNotIssue(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
 
+	secret, err := source.Secret()
+	if err != nil {
+		t.Fatalf("Secret: %v", err)
+	}
+
 	forged, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		ID: "not-a-session-this-server-issued",
-	}).SignedString([]byte(source.Secret()))
+	}).SignedString([]byte(secret))
 
 	if err != nil {
 		t.Fatalf("SignedString: %v", err)
@@ -283,5 +297,64 @@ func TestRevokeOnACredentialThisServerDidNotIssueIsNotAFailure(t *testing.T) {
 
 	if err := issuer.Revoke(context.Background(), "whatever"); err != nil {
 		t.Errorf("Revoke = %v for a credential the server does not hold, want no failure", err)
+	}
+}
+
+// TestIssueFailsWhenTheSigningSecretCannotBeRead (REQ-013, CA-013.3): the signing
+// secret is read from the options when a token is made. A read that fails used to
+// answer with the empty string, and the server signed the token with it — the
+// login was reported as a success. The seam reports the failure, Issue fails with
+// it, and the administrator is told the session could not be started.
+func TestIssueFailsWhenTheSigningSecretCannotBeRead(t *testing.T) {
+	source := newSecretSource()
+
+	source.failure = errors.New("options.read: database is closed")
+
+	tokens := New(source)
+
+	token, err := tokens.Issue(context.Background())
+	if err == nil {
+		t.Fatalf("Issue: returned %q, want a failure: the secret behind the token cannot be read", token)
+	}
+
+	if !strings.Contains(err.Error(), "database is closed") {
+		t.Errorf("Issue failed with %q, want it to name the secret read failure", err)
+	}
+}
+
+// TestIssueNeverSignsATokenWithAnEmptySecret (REQ-013, CA-013.3): an empty signing
+// secret — what a failed read used to answer with — signs a token whose signature
+// is the HMAC of nothing, and the login is reported as a success. Issue refuses
+// it: a server that holds no signing secret does not issue sessions.
+func TestIssueNeverSignsATokenWithAnEmptySecret(t *testing.T) {
+	source := newSecretSource()
+
+	source.value = ""
+
+	tokens := New(source)
+
+	token, err := tokens.Issue(context.Background())
+	if err == nil {
+		t.Fatalf("Issue: returned a token signed with the empty secret: %q", token)
+	}
+}
+
+// TestValidateRefusesWhenTheSigningSecretCannotBeRead (REQ-013, CA-013.3): the
+// same seam answers every validation, and a read that fails there must refuse the
+// credential, not verify it against the empty string.
+func TestValidateRefusesWhenTheSigningSecretCannotBeRead(t *testing.T) {
+	source := newSecretSource()
+
+	tokens := New(source)
+
+	token, err := tokens.Issue(context.Background())
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	source.failure = errors.New("options.read: database is closed")
+
+	if err := tokens.Validate(context.Background(), token); err == nil {
+		t.Error("Validate accepted a credential while the signing secret could not be read, want a refusal")
 	}
 }
