@@ -328,6 +328,41 @@ func TestApplyMultipartAudioFilenameDerivesTheMediaTypeFromIt(t *testing.T) {
 	}
 }
 
+// TestApplyMultipartAudioLengthReadsTheUploadersOwnCount: a recorder that knows how long its
+// recording is says so in seconds, and the server takes its word — the length lands on the
+// call, at the millisecond the count names.
+func TestApplyMultipartAudioLengthReadsTheUploadersOwnCount(t *testing.T) {
+	call := applyUploadFields(t, domain.NewCall(), [2]string{"audioLength", "2.5"})
+
+	if call.AudioLength != 2500*time.Millisecond {
+		t.Errorf("the audio length is %v, want the 2.5 seconds the upload counted", call.AudioLength)
+	}
+
+	call = applyUploadFields(t, domain.NewCall(), [2]string{"audioLength", "3.010667"})
+
+	if call.AudioLength != 3011*time.Millisecond {
+		t.Errorf("the audio length is %v, want the count rounded to the millisecond it names", call.AudioLength)
+	}
+
+	call = applyUploadFields(t, domain.NewCall(), [2]string{"audioLength", "7"})
+
+	if call.AudioLength != 7*time.Second {
+		t.Errorf("the audio length is %v, want 7 seconds", call.AudioLength)
+	}
+}
+
+// A length the upload cannot state is no length at all: the server keeps the call and leaves
+// the length unmeasured, and it never invents a negative one.
+func TestApplyMultipartAudioLengthReadsNonsenseAsNoLength(t *testing.T) {
+	for _, value := range []string{"", "not-a-number", "-2.5", "NaN", "Inf"} {
+		call := applyUploadFields(t, domain.NewCall(), [2]string{"audioLength", value})
+
+		if call.AudioLength != 0 {
+			t.Errorf("audioLength %q lands as %v, want no length", value, call.AudioLength)
+		}
+	}
+}
+
 // TestApplyMultipartReadsTheInstantFromEveryNameTheEndpointAccepts pins the three fields that
 // carry the moment the call happened, in the two vocabularies the endpoint has carried.
 func TestApplyMultipartReadsTheInstantFromEveryNameTheEndpointAccepts(t *testing.T) {

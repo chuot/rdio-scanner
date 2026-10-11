@@ -23,6 +23,7 @@ package parsers
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"mime"
 	"mime/multipart"
 	"path"
@@ -76,6 +77,14 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain
 
 	case "audioMime", "audioType":
 		call.AudioMime = string(data)
+
+	case "audioLength":
+		// The recorder's own count of its recording, in seconds. The server takes its word
+		// and measures nothing; a count it cannot read is no count, and the length stays
+		// unmeasured rather than invented.
+		if seconds, err := strconv.ParseFloat(string(data), 64); err == nil && seconds > 0 && !math.IsNaN(seconds) && !math.IsInf(seconds, 0) {
+			call.AudioLength = time.Duration(math.Round(seconds*1000)) * time.Millisecond
+		}
 
 	case "channelType":
 		channelType := strings.ToLower(strings.TrimSpace(string(data)))
