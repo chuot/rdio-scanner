@@ -1581,3 +1581,20 @@ func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
 
 	f.expectClosed(t)
 }
+
+// TestTheSendQueueIsBounded (REQ-006, CA-006.3): the frames waiting for one listener are
+// server memory, and a queue of thousands of frames per listener is a way for a handful of
+// slow listeners to spend it. The queue is 256 slots.
+func TestTheSendQueueIsBounded(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	id, _ := f.dial(t)
+
+	f.hub.mutex.Lock()
+	session := f.hub.sessions[id]
+	f.hub.mutex.Unlock()
+
+	if cap(session.send) != 256 {
+		t.Errorf("the send queue holds %d slots, want 256", cap(session.send))
+	}
+}

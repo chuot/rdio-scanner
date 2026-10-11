@@ -60,8 +60,9 @@ const (
 	// sendBuffer is how many frames may be waiting for one listener before the server stops and waits
 	// for it to catch up. A listener that cannot keep up holds up the delivery that is going to it,
 	// which is what the legacy server does and what a slow client therefore cannot silently cost a
-	// server its calls.
-	sendBuffer = 8192
+	// server its calls. The queue is bounded (REQ-006, CA-006.3): the frames waiting for a slow
+	// listener are server memory, and thousands of them per listener is a way to spend it.
+	sendBuffer = 256
 
 	// accessAttemptsWindow is the interval an address's access-code attempts are measured over,
 	// the same budget shape as the login one: quiet time renews it, and a history older than the

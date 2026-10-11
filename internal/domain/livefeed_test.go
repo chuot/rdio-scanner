@@ -21,6 +21,7 @@
 package domain
 
 import (
+	"strconv"
 	"testing"
 )
 
@@ -125,5 +126,55 @@ func TestLivefeedWatchesPatchedTalkgroups(t *testing.T) {
 
 	if livefeed.Watches(otherSystem) {
 		t.Error("a patch must be watched only on the system it belongs to")
+	}
+}
+
+// TestParseLivefeedRefusesAnOversizedSelection (REQ-006, CA-006.3): the live-watch payload is
+// a listener's own selection, and a five-thousand-entry one is not a selection — it is a way
+// to spend the server's memory from one frame. The oversized payload is refused: nothing is
+// switched on.
+func TestParseLivefeedRefusesAnOversizedSelection(t *testing.T) {
+	payload := map[string]any{}
+
+	for i := 0; i < 5000; i++ {
+		system := strconv.Itoa(1000 + i/10)
+
+		talkgroups, ok := payload[system].(map[string]any)
+		if !ok {
+			talkgroups = map[string]any{}
+			payload[system] = talkgroups
+		}
+
+		talkgroups[strconv.Itoa(1514000+i)] = true
+	}
+
+	livefeed := ParseLivefeed(payload)
+
+	if !livefeed.AllOff() {
+		t.Errorf("an oversized selection was parsed into %d systems, want it refused: "+
+			"nothing switched on", len(livefeed.Matrix))
+	}
+}
+
+// The cap must not cost the server its endpoint: a selection under it is read whole.
+func TestParseLivefeedReadsASelectionUnderTheCapWhole(t *testing.T) {
+	payload := map[string]any{}
+
+	for i := 0; i < 100; i++ {
+		system := strconv.Itoa(1000 + i/10)
+
+		talkgroups, ok := payload[system].(map[string]any)
+		if !ok {
+			talkgroups = map[string]any{}
+			payload[system] = talkgroups
+		}
+
+		talkgroups[strconv.Itoa(1514000+i)] = true
+	}
+
+	livefeed := ParseLivefeed(payload)
+
+	if livefeed.AllOff() {
+		t.Error("a selection under the cap was refused, want it read whole")
 	}
 }
