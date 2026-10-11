@@ -1348,3 +1348,126 @@ func jsonOf(t *testing.T, from any) string {
 
 	return string(b)
 }
+
+// TestAddressAccessAttemptsCountAcrossSessions: the per-session counter is bypassable by
+// reconnecting, so the hub counts an address's access-code attempts across its sessions.
+func TestAddressAccessAttemptsCountAcrossSessions(t *testing.T) {
+	f := newFixture(t, restrictedSettings)
+
+	id1, _ := f.dial(t)
+	id2, _ := f.dial(t)
+
+	if got := f.hub.RecordAddressAccessAttempt(id1); got != 1 {
+		t.Errorf("first attempt = %d, want 1", got)
+	}
+
+	if got := f.hub.RecordAddressAccessAttempt(id1); got != 2 {
+		t.Errorf("second attempt from the same session = %d, want 2", got)
+	}
+
+	if got := f.hub.RecordAddressAccessAttempt(id2); got != 3 {
+		t.Errorf("first attempt from a second session at the same address = %d, want 3: reconnecting "+
+			"is not a way to get more tries", got)
+	}
+}
+
+// TestAddressAccessAttemptsWindowAgesOut: the address budget is measured over a window, and quiet
+// time renews it — the same shape as the login budget.
+func TestAddressAccessAttemptsWindowAgesOut(t *testing.T) {
+	f := newFixture(t, restrictedSettings)
+
+	id, _ := f.dial(t)
+
+	for want := uint(1); want <= 5; want++ {
+		if got := f.hub.RecordAddressAccessAttempt(id); got != want {
+			t.Fatalf("attempt %d = %d, want %d", want, got, want)
+		}
+	}
+
+	f.hub.clock.(*fakes.Clock).At = hubClockTime.Add(accessAttemptsWindow + time.Minute)
+
+	if got := f.hub.RecordAddressAccessAttempt(id); got != 1 {
+		t.Errorf("attempt after the window = %d, want the budget to start over", got)
+	}
+}
+
+// TestAddressAccessAttemptsWarnOncePerWindow: a tool that guesses a hundred codes from one address
+// must leave one warning line in the operator's log view, not a hundred — and a new window is a
+// new warning.
+func TestAddressAccessAttemptsWarnOncePerWindow(t *testing.T) {
+	f := newFixture(t, restrictedSettings)
+
+	id1, _ := f.dial(t)
+	id2, _ := f.dial(t)
+
+	f.hub.RecordAddressAccessAttempt(id1)
+
+	if !f.hub.ShouldWarnAccessAttempt(id1) {
+		t.Error("the first refused attempt of the window should write the warning")
+	}
+
+	if f.hub.ShouldWarnAccessAttempt(id1) {
+		t.Error("the second refused attempt of the window should stay quiet")
+	}
+
+	f.hub.RecordAddressAccessAttempt(id2)
+
+	if f.hub.ShouldWarnAccessAttempt(id2) {
+		t.Error("a second session at the same address is the same window: it should stay quiet")
+	}
+
+	f.hub.clock.(*fakes.Clock).At = hubClockTime.Add(accessAttemptsWindow + time.Minute)
+
+	f.hub.RecordAddressAccessAttempt(id1)
+
+	if !f.hub.ShouldWarnAccessAttempt(id1) {
+		t.Error("a lockout in a new window is a new warning")
+	}
+}
+
+// TestAddressAccessAttemptHistoriesAreEvicted: histories quiet for longer than the window are
+// dropped from the map, so a guessing tool rotating its spoofed keys cannot grow the server's
+// memory with every address it ever used.
+func TestAddressAccessAttemptHistoriesAreEvicted(t *testing.T) {
+	f := newBareFixture(t, restrictedSettings)
+
+	id1, _ := f.dial(t)
+
+	f.hub.RecordAddressAccessAttempt(id1)
+
+	f.hub.clock.(*fakes.Clock).At = hubClockTime.Add(accessAttemptsWindow + time.Minute)
+
+	// A second address, attached the way the fixture's endpoint attaches, under its own address.
+	f.endpoint = func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("upgrading: %v", err)
+
+			return
+		}
+
+		id, ok := f.hub.Attach(conn, "198.51.100.4:1234", f.dispatch.handle)
+		if !ok {
+			f.attached <- ""
+
+			return
+		}
+
+		f.attached <- id
+	}
+
+	id2, _ := f.dial(t)
+
+	if got := f.hub.RecordAddressAccessAttempt(id2); got != 1 {
+		t.Errorf("first attempt from the second address = %d, want 1", got)
+	}
+
+	f.hub.mutex.Lock()
+	kept := len(f.hub.accessAttempts)
+	f.hub.mutex.Unlock()
+
+	if kept != 1 {
+		t.Errorf("address histories = %d, want the aged history of the first address evicted, leaving "+
+			"only the second: %v", kept, f.hub.accessAttempts)
+	}
+}

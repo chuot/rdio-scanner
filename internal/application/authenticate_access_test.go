@@ -23,6 +23,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -272,6 +273,71 @@ func TestAuthenticateAccessKeepsTheAttemptsWhenACodeIsRefused(t *testing.T) {
 
 	if got := fixture.hub.AttemptsOf("listener"); got != 1 {
 		t.Errorf("attempts = %d, want a refused code to keep spending tries", got)
+	}
+}
+
+// TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions (decision D23): the
+// per-session counter alone is bypassable by reconnecting — a tool that guesses codes can open a
+// fresh session for every guess and never spend any session's budget. The attempts of one address
+// are counted across its sessions, in a window that ages like the login budget.
+func TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions(t *testing.T) {
+	fixture := newAccessFixture()
+	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
+
+	for session := uint(1); session <= domain.MaxAccessAuthAttempts; session++ {
+		clientID := fmt.Sprintf("guesser-%d", session)
+		fixture.hub.Open(clientID, "10.0.0.1")
+
+		result, err := fixture.presentCode(clientID, "not-the-code")
+		if err != nil {
+			t.Fatalf("Handle: %v", err)
+		}
+
+		if result.Outcome != AccessCodeInvalid {
+			t.Fatalf("attempt %d from one address = %q, want it answered on its merits", session, result.Outcome)
+		}
+	}
+
+	fixture.hub.Open("guesser-last", "10.0.0.1")
+
+	result, err := fixture.presentCode("guesser-last", "not-the-code")
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome != AccessAttemptsExhausted {
+		t.Errorf("the sixth attempt from one address across six sessions = %q, want it refused: "+
+			"reconnecting is not a way to get more tries", result.Outcome)
+	}
+}
+
+// TestAuthenticateAccessWarnsAboutAnAddressOncePerWindow: a tool that guesses a hundred codes from
+// one address must not write a hundred lines into the operator's log view and the database behind
+// it. The refused attempts are still refused; the warning is written once per window per address.
+func TestAuthenticateAccessWarnsAboutAnAddressOncePerWindow(t *testing.T) {
+	fixture := newAccessFixture()
+	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
+
+	for guess := 1; guess <= 100; guess++ {
+		clientID := fmt.Sprintf("guesser-%d", guess)
+		fixture.hub.Open(clientID, "10.0.0.1")
+
+		if _, err := fixture.presentCode(clientID, "not-the-code"); err != nil {
+			t.Fatalf("Handle: %v", err)
+		}
+	}
+
+	warnings := 0
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Level == domain.LogLevelWarn && strings.Contains(entry.Message, "10.0.0.1") {
+			warnings++
+		}
+	}
+
+	if warnings > 1 {
+		t.Errorf("warnings naming the address = %d, want at most one per window: a guessing tool "+
+			"must not fill the log view", warnings)
 	}
 }
 

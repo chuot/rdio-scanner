@@ -56,6 +56,11 @@ const (
 	// which is what the legacy server does and what a slow client therefore cannot silently cost a
 	// server its calls.
 	sendBuffer = 8192
+
+	// accessAttemptsWindow is the interval an address's access-code attempts are measured over,
+	// the same budget shape as the login one: quiet time renews it, and a history older than the
+	// window is dropped rather than kept.
+	accessAttemptsWindow = 10 * time.Minute
 )
 
 // Settings are the things about the server a hub has to know before it delivers anything to a
@@ -118,6 +123,13 @@ type Hub struct {
 	listens  map[string]*listener
 	nextID   uint64
 
+	// accessAttempts counts the access-code attempts spent per address, in a window that ages
+	// like the login budget. The per-session counter alone is bypassable by reconnecting — a
+	// guessing tool opens a fresh session per guess — so the address counter is what makes
+	// "five tries" mean five tries per machine, and the warned flag is what keeps a hundred
+	// guesses from writing a hundred lines into the operator's log view.
+	accessAttempts map[string]*accessWindow
+
 	// held counts the goroutines that read the connections the hub has taken over. A server that is stopping
 	// has to finish them before it closes the database the log lives in: a departure is written by the
 	// goroutine that was reading the connection, and it is written after that goroutine has already taken the
@@ -146,18 +158,28 @@ var _ ports.Hub = (*Hub)(nil)
 // terminal at the moment they happened.
 func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository, clock ports.Clock) *Hub {
 	return &Hub{
-		changes:       changes,
-		clock:         clock,
-		handshakeWait: pongWait,
-		listens:       map[string]*listener{},
-		logs:          logs,
-		nextID:        0,
-		pingPeriod:    pingPeriod,
-		pongWait:      pongWait,
-		sessions:      map[string]*listener{},
-		settings:      settings,
-		writeWait:     writeWait,
+		accessAttempts: map[string]*accessWindow{},
+		changes:        changes,
+		clock:          clock,
+		handshakeWait:  pongWait,
+		listens:        map[string]*listener{},
+		logs:           logs,
+		nextID:         0,
+		pingPeriod:     pingPeriod,
+		pongWait:       pongWait,
+		sessions:       map[string]*listener{},
+		settings:       settings,
+		writeWait:      writeWait,
 	}
+}
+
+// accessWindow is one address's access-attempt history: how many tries have been spent in the
+// current window, when the most recent one was, and whether the refused-code warning for this
+// window has been written.
+type accessWindow struct {
+	count  uint
+	warned bool
+	date   time.Time
 }
 
 // Attach takes over one upgraded listener connection and returns the identifier this session is known
@@ -490,14 +512,77 @@ func (hub *Hub) RecordAccessAttempt(clientID string) uint {
 }
 
 // ResetAccessAttempts clears a session's attempt counter, which happens only when an access code is
-// accepted.
+// accepted — and with it the history of the address the session connected from: an accepted code
+// renews the budget of the machine it was accepted from, exactly as a successful sign-in renews the
+// login budget.
 func (hub *Hub) ResetAccessAttempts(clientID string) {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
 
 	if session, ok := hub.sessions[clientID]; ok {
 		session.attempts = 0
+		delete(hub.accessAttempts, session.remoteAddr)
 	}
+}
+
+// RecordAddressAccessAttempt counts one access-code attempt against the address the session
+// connected from and reports how many attempts that address has spent in the current window. A
+// window that has passed starts over, and histories quiet for longer than the window are dropped:
+// a map that only ever grows is a memory a guessing tool fills with the addresses it spoofs.
+func (hub *Hub) RecordAddressAccessAttempt(clientID string) uint {
+	hub.mutex.Lock()
+	defer hub.mutex.Unlock()
+
+	session, ok := hub.sessions[clientID]
+	if !ok {
+		return 1
+	}
+
+	now := hub.clock.Now()
+
+	history, ok := hub.accessAttempts[session.remoteAddr]
+	if !ok {
+		history = &accessWindow{}
+		hub.accessAttempts[session.remoteAddr] = history
+	}
+
+	if now.Sub(history.date) > accessAttemptsWindow {
+		history.count = 0
+		history.warned = false
+	}
+
+	history.count++
+	history.date = now
+
+	for address, aged := range hub.accessAttempts {
+		if address != session.remoteAddr && now.Sub(aged.date) > accessAttemptsWindow {
+			delete(hub.accessAttempts, address)
+		}
+	}
+
+	return history.count
+}
+
+// ShouldWarnAccessAttempt reports whether the refused-code warning is due for this session's
+// address: the first refused attempt of the window writes the line, the rest of the window stays
+// quiet, so a tool that guesses a hundred codes leaves one line, not a hundred.
+func (hub *Hub) ShouldWarnAccessAttempt(clientID string) bool {
+	hub.mutex.Lock()
+	defer hub.mutex.Unlock()
+
+	session, ok := hub.sessions[clientID]
+	if !ok {
+		return false
+	}
+
+	history, ok := hub.accessAttempts[session.remoteAddr]
+	if !ok || history.warned {
+		return false
+	}
+
+	history.warned = true
+
+	return true
 }
 
 // AccessSessionCount reports how many listeners are watching under one access. A session that is open

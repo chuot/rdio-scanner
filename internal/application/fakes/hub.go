@@ -73,8 +73,20 @@ type Hub struct {
 	// attempts records how many access-code attempts each session has made.
 	attempts map[string]uint
 
+	// addressAttempts records, per address, how many access-code attempts have been spent
+	// there and whether the refused-code warning has already been written for it. The
+	// per-session counter is bypassable by reconnecting; this is the counter that makes
+	// five tries mean five tries per machine.
+	addressAttempts map[string]*fakesAddressAttempt
+
 	// remoteAddrs records where each session connected from.
 	remoteAddrs map[string]string
+}
+
+// fakesAddressAttempt is one address's access-attempt history in the fake hub.
+type fakesAddressAttempt struct {
+	count  uint
+	warned bool
 }
 
 // ClosedClient is one session that was ended.
@@ -95,6 +107,7 @@ func NewHub() *Hub {
 		Versions:         map[string][]string{},
 		accesses:         map[string]domain.Access{},
 		attempts:         map[string]uint{},
+		addressAttempts:  map[string]*fakesAddressAttempt{},
 		remoteAddrs:      map[string]string{},
 	}
 }
@@ -202,9 +215,40 @@ func (hub *Hub) RecordAccessAttempt(clientID string) uint {
 	return hub.attempts[clientID]
 }
 
-// ResetAccessAttempts clears a session's attempt counter.
+// RecordAddressAccessAttempt counts one access-code attempt against the address the session
+// connected from and reports how many that address has spent.
+func (hub *Hub) RecordAddressAccessAttempt(clientID string) uint {
+	address := hub.remoteAddrs[clientID]
+
+	history, ok := hub.addressAttempts[address]
+	if !ok {
+		history = &fakesAddressAttempt{}
+		hub.addressAttempts[address] = history
+	}
+
+	history.count++
+
+	return history.count
+}
+
+// ShouldWarnAccessAttempt reports whether the refused-code warning is due for this session's
+// address: the first refused attempt of the window warns, the rest of the window stays quiet.
+func (hub *Hub) ShouldWarnAccessAttempt(clientID string) bool {
+	history, ok := hub.addressAttempts[hub.remoteAddrs[clientID]]
+	if !ok || history.warned {
+		return false
+	}
+
+	history.warned = true
+
+	return true
+}
+
+// ResetAccessAttempts clears a session's attempt counter, and with it the address's history:
+// an accepted code renews the budget of the machine it was accepted from.
 func (hub *Hub) ResetAccessAttempts(clientID string) {
 	delete(hub.attempts, clientID)
+	delete(hub.addressAttempts, hub.remoteAddrs[clientID])
 }
 
 // AttemptsOf reports how many attempts a session has made.

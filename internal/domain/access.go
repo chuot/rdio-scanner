@@ -21,6 +21,7 @@
 package domain
 
 import (
+	"crypto/subtle"
 	"sort"
 	"time"
 )
@@ -115,10 +116,14 @@ func (accesses Accesses) Restricted() bool {
 	return len(accesses) > 0
 }
 
-// ByCode finds the access a listener presented.
+// ByCode finds the access a listener presented. The comparison is constant-time: a code is a
+// credential, and a comparison that stops at the first wrong character tells a guessing tool how far
+// each guess got. Lengths still differ — which the window limit bounds — positions do not leak.
 func (accesses Accesses) ByCode(code string) (Access, bool) {
+	given := []byte(code)
+
 	for _, access := range accesses {
-		if access.Code == code {
+		if subtle.ConstantTimeCompare([]byte(access.Code), given) == 1 {
 			return access, true
 		}
 	}

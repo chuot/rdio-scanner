@@ -90,6 +90,18 @@ type Hub interface {
 	// has used up its tries.
 	RecordAccessAttempt(clientID string) uint
 
+	// RecordAddressAccessAttempt counts one access-code attempt against the address the
+	// listener connected from and reports how many attempts that address has spent in the
+	// current window. The per-session counter alone is bypassable by reconnecting; the
+	// address counter is what makes "five tries" mean five tries per machine, and its
+	// window ages like the login budget.
+	RecordAddressAccessAttempt(clientID string) uint
+
+	// ShouldWarnAccessAttempt reports whether the refused-code warning should be written
+	// for this listener's address now: once per window per address, so a tool that guesses
+	// a hundred codes leaves one line in the operator's log view, not a hundred.
+	ShouldWarnAccessAttempt(clientID string) bool
+
 	// ResetAccessAttempts clears a session's attempt counter, which happens only when an
 	// access code is accepted: a session that is refused for a bad code, for arriving too
 	// late, for an expired access, or for its connection limit keeps spending tries.

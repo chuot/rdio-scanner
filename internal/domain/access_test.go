@@ -113,6 +113,29 @@ func TestMaxAccessAuthAttemptsIsTheLegacyLimit(t *testing.T) {
 	}
 }
 
+// TestAccessesByCodeFindsThePresentedCode pins the lookup semantics the constant-time comparison
+// (decision D23's companion in REQ-003) must keep: the access under the presented code is found,
+// a code that is not written down is not, and the first access under a shared code is the one
+// handed back.
+func TestAccessesByCodeFindsThePresentedCode(t *testing.T) {
+	accesses := Accesses{
+		{ID: 1, Code: "dispatch-code", Ident: "dispatch"},
+		{ID: 2, Code: "harbour-code", Ident: "harbour"},
+	}
+
+	if access, ok := accesses.ByCode("harbour-code"); !ok || access.ID != 2 {
+		t.Errorf("ByCode = %+v, %v, want the access presented", access, ok)
+	}
+
+	if access, ok := accesses.ByCode("not-the-code"); ok {
+		t.Errorf("ByCode = %+v, want no access for a code that is not written down", access)
+	}
+
+	if access, ok := accesses.ByCode(""); ok {
+		t.Errorf("ByCode of nothing = %+v, want no access", access)
+	}
+}
+
 func TestAccessesUpsertByCodeAddsAnUnseenAccess(t *testing.T) {
 	accesses := Accesses{{ID: 1, Code: "dispatch-code", Ident: "dispatch"}}
 

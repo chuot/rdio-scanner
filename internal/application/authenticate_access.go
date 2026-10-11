@@ -125,8 +125,9 @@ func NewAuthenticateAccessHandler(
 // Handle authenticates one listener session.
 func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd AuthenticateAccessCommand) (AuthenticateAccessResult, error) {
 	attempt := handler.hub.RecordAccessAttempt(cmd.ClientID)
+	addressAttempts := handler.hub.RecordAddressAccessAttempt(cmd.ClientID)
 
-	if attempt > domain.MaxAccessAuthAttempts {
+	if attempt > domain.MaxAccessAuthAttempts || addressAttempts > domain.MaxAccessAuthAttempts {
 		handler.hub.RequestAccessCode(cmd.ClientID)
 
 		return AuthenticateAccessResult{Outcome: AccessAttemptsExhausted}, nil
@@ -153,9 +154,12 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 	access, ok := accesses.ByCode(cmd.Code)
 	if !ok {
 		// The code the listener presented is not written down. It is a credential, and a wrong guess at a
-		// credential is not something to keep in a log an operator reads.
-		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a listener from %s presented an access code that is not valid",
-			handler.hub.RemoteAddrOf(cmd.ClientID)))
+		// credential is not something to keep in a log an operator reads. The warning names the address
+		// once per window, not once per guess: a guessing tool must not fill the log view.
+		if handler.hub.ShouldWarnAccessAttempt(cmd.ClientID) {
+			handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a listener from %s presented an access code that is not valid",
+				handler.hub.RemoteAddrOf(cmd.ClientID)))
+		}
 
 		handler.hub.RequestAccessCode(cmd.ClientID)
 
