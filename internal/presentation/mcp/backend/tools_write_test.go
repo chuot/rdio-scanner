@@ -23,6 +23,7 @@ package backend
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -631,6 +632,319 @@ func refusedOrRejected(t *testing.T, s *session, tool string, args map[string]an
 	}
 
 	return answeredText(answered)
+}
+
+// The write capabilities, with the arguments each one accepts against the fixture. The arguments
+// have to be arguments the capability takes: the protocol validates them before the capability runs,
+// and a probe whose arguments belong to another capability proves nothing about this one.
+func writeCapabilityProbes() []struct {
+	tool string
+	args map[string]any
+} {
+	return []struct {
+		tool string
+		args map[string]any
+	}{
+		{"manage_config", map[string]any{
+			"section": "options",
+			"payload": map[string]any{"maxClients": float64(50)},
+		}},
+		{"manage_config", map[string]any{
+			"section": "talkgroups",
+			"system":  float64(systemOneRef),
+			"payload": []any{map[string]any{"id": float64(0), "talkgroupRef": float64(1234), "label": "Fire Dispatch", "tagId": float64(3)}},
+		}},
+		{"manage_access_user", map[string]any{"action": "add", "ident": "volunteer", "systems": "*"}},
+		{"manage_access_user", map[string]any{"action": "remove", "ident": "volunteer"}},
+		{"rotate_admin_password", map[string]any{"newPassword": "a-long-new-administrator-credential"}},
+	}
+}
+
+// An access-code caller is refused every write capability, and the refusal it gets is the refusal a
+// caller carrying no credential gets for the same capability: reaching the deployment's writes is
+// done by signing in as an administrator, and no weaker credential is read as a partial signature.
+func TestTheAdministratorsWriteCapabilitiesRefuseAnAccessCodeCallerTheSameWayTheyRefuseACallerWithNoCredential(t *testing.T) {
+	asListener := newAdministratorSetSession(t, readScoped())
+	asAnonymous := newAdministratorSetSession(t, Caller{Tier: TierReadOnly})
+
+	for _, probe := range writeCapabilityProbes() {
+		listenerSaid := refusedCall(t, asListener, probe.tool, probe.args)
+		anonymousSaid := refusedCall(t, asAnonymous, probe.tool, probe.args)
+
+		if !strings.Contains(listenerSaid, "administrator") {
+			t.Fatalf("%s refused an access-code caller with %q, which does not say what is required",
+				probe.tool, listenerSaid)
+		}
+
+		if listenerSaid != anonymousSaid {
+			t.Fatalf("%s refused the same caller differently by credential: access code %q, no credential %q",
+				probe.tool, listenerSaid, anonymousSaid)
+		}
+	}
+}
+
+// The refusal above is the drift proof: a write capability standing in front of the caller is
+// refused by its own handler. This is the shape the caller actually reaches — the capability set
+// its credential opens — where the write capabilities are not offered at all and cannot be reached
+// by naming them.
+func TestTheReadOnlyTiersOfferNoWriteCapability(t *testing.T) {
+	for _, who := range []Caller{readScoped(), {Tier: TierReadOnly}} {
+		s := newCallerSession(t, who)
+
+		listed, err := s.ListTools(context.Background(), &mcp.ListToolsParams{})
+		if err != nil {
+			t.Fatalf("listing the capabilities: %v", err)
+		}
+
+		for _, tool := range listed.Tools {
+			capability, ok := catalogOf(tool.Name)
+			if !ok {
+				t.Fatalf("%s is offered and is not in the catalog", tool.Name)
+			}
+
+			if capability.Effect == EffectWrite || capability.Effect == EffectDestructive {
+				t.Fatalf("the read-only tier offers %s, a %s capability", tool.Name, capability.Effect)
+			}
+		}
+
+		for _, probe := range writeCapabilityProbes() {
+			before := deploymentState(t, s.bundle)
+
+			refusedOrRejected(t, s, probe.tool, probe.args)
+
+			if after := deploymentState(t, s.bundle); after != before {
+				t.Fatalf("%s wrote to the deployment for a read-only caller:\n%s\n%s", probe.tool, before, after)
+			}
+		}
+	}
+}
+
+// The administrator's journey: read a section the way the administrator's page reads it, write it
+// back, write one level of one system, onboard a listener, remove them, and replace the credential.
+// Each step goes over the entry point the capability names, and each answer is the acknowledgement
+// of a change made — the surface's own rows, with the credentials masked, and never the server's
+// domain values.
+func TestTheAdministratorsWriteJourneyGoesOverTheEntryPointsItNames(t *testing.T) {
+	s, _ := newConfirmingSession(t, "accept")
+
+	// The settings, read as the resource answers them and written back with one setting changed.
+	settings := readSection(t, s, optionsURI)
+
+	payload := writableSettingsOf(settings)
+	payload["maxClients"] = float64(50)
+
+	answered := call(t, s, "manage_config", map[string]any{"section": "options", "payload": payload})
+
+	assertAcknowledgement(t, "manage_config", answered)
+
+	if got := s.bundle.options.Stored.MaxClients; got != 50 {
+		t.Fatalf("the settings save left the listener ceiling at %d, want 50", got)
+	}
+	if got := s.bundle.options.Stored.PruneDays; got != 7 {
+		t.Fatalf("the settings save moved the prune horizon to %d; the journey did not ask for it", got)
+	}
+
+	// One level of one system, read as the template answers it and written back with one entry
+	// added. The other system is not this level's business and keeps what it had.
+	levels := readRows(t, s, "rdio-scanner://systems/"+strconv.FormatUint(uint64(systemOneRef), 10)+"/talkgroups")
+
+	levels = append(levels, map[string]any{
+		"id": float64(0), "talkgroupRef": float64(1234), "label": "Fire Dispatch", "tagId": float64(3),
+	})
+
+	answered = call(t, s, "manage_config", map[string]any{
+		"section": "talkgroups", "system": float64(systemOneRef), "payload": levels,
+	})
+
+	assertAcknowledgement(t, "manage_config", answered)
+
+	first, _ := s.bundle.systems.Stored.ByRef(systemOneRef)
+	second, _ := s.bundle.systems.Stored.ByRef(systemTwoRef)
+
+	if len(first.Talkgroups) != 3 {
+		t.Fatalf("system 1 holds %d talkgroups after the level write, want the fixture's two and the new one: %+v",
+			len(first.Talkgroups), first.Talkgroups)
+	}
+	if len(second.Talkgroups) != 1 {
+		t.Fatalf("the level write of system 1 left system 2 with %d talkgroups, want the one it had: %+v",
+			len(second.Talkgroups), second.Talkgroups)
+	}
+
+	// A listener onboarded, then removed, over the same pair of entry points the page uses.
+	answered = call(t, s, "manage_access_user", map[string]any{
+		"action":     "add",
+		"ident":      "volunteer",
+		"systems":    []any{map[string]any{"systemRef": float64(systemOneRef), "talkgroups": []any{float64(1514000)}}},
+		"expiration": "2026-12-31T00:00:00Z",
+	})
+
+	assertAcknowledgement(t, "manage_access_user", answered)
+
+	if len(s.bundle.accesses.Stored) != 2 {
+		t.Fatalf("the access list holds %d codes after the onboarding, want the fixture's and the new one: %+v",
+			len(s.bundle.accesses.Stored), s.bundle.accesses.Stored)
+	}
+
+	onboarded := s.bundle.accesses.Stored[1]
+
+	if onboarded.Ident != "volunteer" {
+		t.Fatalf("the new code is filed under %q, want volunteer", onboarded.Ident)
+	}
+	if !onboarded.Scope.GrantsReferences(systemOneRef, 1514000) {
+		t.Fatalf("the new code does not grant the scope that was named: %+v", onboarded.Scope)
+	}
+	if onboarded.Scope.GrantsReferences(systemTwoRef, 1514002) {
+		t.Fatalf("the new code grants a system the journey never named: %+v", onboarded.Scope)
+	}
+
+	answered = call(t, s, "manage_access_user", map[string]any{"action": "remove", "ident": "volunteer"})
+
+	assertAcknowledgement(t, "manage_access_user", answered)
+
+	if len(s.bundle.accesses.Stored) != 1 {
+		t.Fatalf("the access list holds %d codes after the removal, want only the fixture's: %+v",
+			len(s.bundle.accesses.Stored), s.bundle.accesses.Stored)
+	}
+
+	// The credential, replaced. The server stops asking for the default one, and the answer never
+	// carries the credential it replaced.
+	answered = call(t, s, "rotate_admin_password", map[string]any{"newPassword": "a-long-new-administrator-credential"})
+
+	assertAcknowledgement(t, "rotate_admin_password", answered)
+
+	if s.bundle.options.Stored.AdminPasswordHash == "" {
+		t.Fatal("the credential change left the server with no credential hash")
+	}
+	if s.bundle.options.Stored.AdminPasswordNeedChange {
+		t.Fatal("the server still says the default credential is in place after the credential was replaced")
+	}
+}
+
+// writeAnswerFields is the vocabulary each write capability answers in. An answer outside it is an
+// answer carrying something the surface never declared: the server's own values, or a credential.
+var writeAnswerFields = map[string][]string{
+	"manage_config":         {"section", "system", "outcome", "current", "added", "changed", "removed", "settings", "reset", "saved", "note"},
+	"manage_access_user":    {"action", "ident", "outcome", "added", "changed", "removed", "note"},
+	"rotate_admin_password": {"outcome", "passwordNeedsChange", "note"},
+}
+
+// The names the server's domain values are spelled with. They are not this surface's vocabulary:
+// an answer that carries one has handed the caller the server's persistence shape, with the fields
+// a configuration payload does not name.
+var domainSpellings = []string{
+	"TalkgroupRef", "SiteRef", "UnitRef", "SystemRef", "GroupIDs", "TagID", "AdminPasswordHash",
+	"Secret", "MaxClients", "PruneDays", "AutoPopulate", "KeypadBeeps", "ShowListenersCount",
+	"SortTalkgroups", "DisableDuplicateDetection", "AudioConversion", "Expiration", "Scope",
+	"SystemID", "DeleteAfter", "Directory", "ID",
+}
+
+// assertAcknowledgement is the shape a write capability's answer has to have: the outcome of the
+// change, in the vocabulary the capability declared, with the credentials masked and the server's
+// own values kept out of the answer.
+func assertAcknowledgement(t *testing.T, tool string, answered *mcp.CallToolResult) {
+	t.Helper()
+
+	fields := map[string]json.RawMessage{}
+
+	body, err := json.Marshal(answered.StructuredContent)
+	if err != nil {
+		t.Fatalf("%s answered content that is not the structured answer it declares: %v", tool, err)
+	}
+
+	if err := json.Unmarshal(body, &fields); err != nil {
+		t.Fatalf("%s answered content that is not the structured answer it declares: %v\n%s",
+			tool, err, body)
+	}
+
+	if _, has := fields["outcome"]; !has {
+		t.Fatalf("%s answered %s, which does not say what the server did", tool, body)
+	}
+
+	for name := range fields {
+		declared := false
+
+		for _, allowed := range writeAnswerFields[tool] {
+			if name == allowed {
+				declared = true
+
+				break
+			}
+		}
+
+		if !declared {
+			t.Fatalf("%s answers with %s, which the capability does not declare", tool, name)
+		}
+	}
+
+	text := string(body)
+
+	for _, spelling := range domainSpellings {
+		if strings.Contains(text, `"`+spelling+`"`) {
+			t.Fatalf("%s answers with the server's own value %s: %s", tool, spelling, text)
+		}
+	}
+
+	for _, credential := range []string{listenerCode, fixtureApikey, "a-long-new-administrator-credential"} {
+		if strings.Contains(text, credential) {
+			t.Fatalf("%s answers with the credential %s it touched", tool, credential)
+		}
+	}
+}
+
+// readSection is a configuration resource read the way an assistant reads it: the text the resource
+// answers, which for a section is the section's rows and for the settings is the settings view.
+func readSection(t *testing.T, s *session, uri string) map[string]any {
+	t.Helper()
+
+	answer, err := s.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("reading %s: %v", uri, err)
+	}
+
+	view := map[string]any{}
+
+	if err := json.Unmarshal([]byte(answer.Contents[0].Text), &view); err != nil {
+		t.Fatalf("%s is not the JSON it declares: %v\n%s", uri, err, answer.Contents[0].Text)
+	}
+
+	return view
+}
+
+// writableSettingsOf is the settings a caller can write back, read from the settings the server
+// answered. The server's own notices are not settings, and a submission naming one is refused.
+func writableSettingsOf(view map[string]any) map[string]any {
+	payload := map[string]any{}
+
+	for _, name := range writableSettings {
+		if value, has := view[name]; has {
+			payload[name] = value
+		}
+	}
+
+	return payload
+}
+
+// readRows is a level resource read the way an assistant reads it: the list of rows the template
+// answers, which is the shape the payload that writes the level back takes.
+func readRows(t *testing.T, s *session, uri string) []any {
+	t.Helper()
+
+	answer, err := s.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("reading %s: %v", uri, err)
+	}
+
+	rows := []any{}
+
+	if err := json.Unmarshal([]byte(answer.Contents[0].Text), &rows); err != nil {
+		t.Fatalf("%s is not the list of rows it declares: %v\n%s", uri, err, answer.Contents[0].Text)
+	}
+
+	if len(rows) == 0 {
+		t.Fatalf("%s answers no rows: %s", uri, answer.Contents[0].Text)
+	}
+
+	return rows
 }
 
 // probeToolOf is the capability a probe's arguments belong to: the access and password arguments
