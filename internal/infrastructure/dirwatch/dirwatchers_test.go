@@ -159,6 +159,15 @@ func watchingOver(t *testing.T, directory string, configure func(domain.Dirwatch
 func watchingOverWith(t *testing.T, directory string, configure func(domain.Dirwatch) domain.Dirwatch, calls *ingestRecorder) *watchedDirectory {
 	t.Helper()
 
+	return watchingOverWithSink(t, directory, configure, calls)
+}
+
+// watchingOverWithSink starts one watch over a directory the test already has, handing it
+// an ingest path the test built — the blocking sink, for the tests that watch a watch
+// working through a slow ingest.
+func watchingOverWithSink(t *testing.T, directory string, configure func(domain.Dirwatch) domain.Dirwatch, sink IngestSink) *watchedDirectory {
+	t.Helper()
+
 	watch := domain.NewDirwatch()
 	watch.Directory = directory
 	watch.Mask = "#SYS-#TG-#UNIT-#DATE-#TIME"
@@ -172,13 +181,21 @@ func watchingOverWith(t *testing.T, directory string, configure func(domain.Dirw
 	watchers := NewDirwatchers(
 		parsers.New(&fakes.Systems{Stored: recordedSystems()}, fakes.NewClock(recordedAt)),
 		logs,
-		calls,
+		sink,
 		fakes.NewClock(recordedAt),
 	)
 
 	watchers.Start(context.Background(), domain.Dirwatches{watch})
 
-	return &watchedDirectory{watchers: watchers, directory: directory, calls: calls, logs: logs}
+	dir := &watchedDirectory{watchers: watchers, directory: directory, logs: logs}
+
+	// The recorder is the watched directory's own report when the test's sink is one:
+	// the tests that dial the ingest path directly read it through calls.
+	if recorder, ok := sink.(*ingestRecorder); ok {
+		dir.calls = recorder
+	}
+
+	return dir
 }
 
 // recordedSystems is the configuration the parsers read the names in a filename against.
@@ -1007,4 +1024,275 @@ func putRecordingUntilIngested(t *testing.T, watched *watchedDirectory, name str
 	t.Fatalf("the watch never ingested the probe %q, want the settle path to read it", name)
 
 	return
+}
+
+// blockingSink is an ingest path that tells the test when each read starts and ends, and
+// blocks the calls it is told to block on a gate the test closes — the shape of an ingest
+// that takes a long time, which is what the watch must keep working through.
+type blockingSink struct {
+	events chan string
+
+	// gate is closed by the test to release the blocked reads.
+	gate chan struct{}
+
+	mutex  sync.Mutex
+	blocks int
+}
+
+func newBlockingSink() *blockingSink {
+	return &blockingSink{
+		events: make(chan string, 32),
+		gate:   make(chan struct{}),
+	}
+}
+
+var _ IngestSink = (*blockingSink)(nil)
+
+// blockNext makes the next call the sink is handed sit on the gate.
+func (sink *blockingSink) blockNext() {
+	sink.mutex.Lock()
+	defer sink.mutex.Unlock()
+
+	sink.blocks++
+}
+
+func (sink *blockingSink) IngestCall(ctx context.Context, call domain.Call) error {
+	sink.events <- "start:" + call.AudioFilename
+
+	sink.mutex.Lock()
+	blocks := sink.blocks > 0
+	if blocks {
+		sink.blocks--
+	}
+	sink.mutex.Unlock()
+
+	if blocks {
+		<-sink.gate
+	}
+
+	sink.events <- "end:" + call.AudioFilename
+
+	return nil
+}
+
+// release ends the blocking: every read the gate was holding carries on.
+func (sink *blockingSink) release() {
+	close(sink.gate)
+}
+
+// nextEvent waits for one start/end event, and fails the test if none comes.
+func (sink *blockingSink) nextEvent(t *testing.T, within time.Duration) string {
+	t.Helper()
+
+	select {
+	case event := <-sink.events:
+		return event
+
+	case <-time.After(within):
+		t.Fatalf("no ingest event within %v", within)
+
+		return ""
+	}
+}
+
+// noEventWithin insists on silence: a watch that keeps working through a slow ingest
+// hands over nothing extra, and the test says so by the quiet.
+func (sink *blockingSink) noEventWithin(t *testing.T, within time.Duration) {
+	t.Helper()
+
+	select {
+	case event := <-sink.events:
+		t.Fatalf("the ingest event %q arrived, want silence within %v", event, within)
+
+	case <-time.After(within):
+	}
+}
+
+// probeRecording is the recording the blocking-sink tests ingest first, as the test's own
+// proof that the subscription is live before the blocked read begins.
+const probeRecording = "10001-1514000-1111-20261006-110000.wav"
+
+// secondRecording is a recording with a system, talkgroup, unit, and stamp of its own.
+const secondRecording = "10002-1514001-6790-20261006-120100.wav"
+
+// putProbeUntilIngested keeps presenting the probe to the watch until it is read: the
+// subscription is only live once the startup pass has registered the directory, and every
+// re-write is a fresh event for a watch that has begun listening.
+func putProbeUntilIngested(t *testing.T, watched *watchedDirectory, sink *blockingSink) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+
+	for time.Now().Before(deadline) {
+		putRecording(t, watched.directory, probeRecording)
+
+		start := time.Now()
+
+		for time.Since(start) < settleWait {
+			select {
+			case event := <-sink.events:
+				if event == "end:"+probeRecording {
+					return
+				}
+
+			case <-time.After(settleWait):
+			}
+		}
+	}
+
+	t.Fatal("the watch never ingested the probe, want the settle path to read it")
+}
+
+// TestEventsKeepArmingWhileARecordingIsBeingIngested (REQ-008, CA-008.2): the watch must
+// keep taking in new recordings while it is handing one over. Today the settle read holds
+// the watch's mutex through the whole ingest, and the event loop's arming of the next
+// file waits behind it — a slow ingest stops the watch.
+func TestEventsKeepArmingWhileARecordingIsBeingIngested(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	sink := newBlockingSink()
+
+	watched := watchingOverWithSink(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = false
+
+		return watch
+	}, sink)
+
+	putProbeUntilIngested(t, watched, sink)
+
+	sink.blockNext()
+
+	putRecording(t, directory, recordedFile)
+
+	if event := sink.nextEvent(t, settleWait+settleWait); event != "start:"+recordedFile {
+		t.Fatalf("the watch handed over %q, want the recording's read to start", event)
+	}
+
+	// The recording tool writes a second recording while the first is being ingested.
+	sink.blockNext()
+
+	putRecording(t, directory, secondRecording)
+
+	// The second read starts while the first is still held on the gate. Today the arming
+	// waits behind the first file's ingest and this event never comes within the window —
+	// this is where this test fails today.
+	if event := sink.nextEvent(t, settleWait); event != "start:"+secondRecording {
+		t.Fatalf("the watch handed over %q, want the second recording's read to start while the first is still being ingested", event)
+	}
+
+	sink.release()
+
+	ends := map[string]bool{}
+
+	for i := 0; i < 2; i++ {
+		event := sink.nextEvent(t, settleWait)
+
+		if !strings.HasPrefix(event, "end:") {
+			t.Fatalf("the watch handed over %q, want both reads to complete", event)
+		}
+
+		ends[event] = true
+	}
+
+	for _, name := range []string{recordedFile, secondRecording} {
+		if !ends["end:"+name] {
+			t.Errorf("the watch completed %v, want the read of %s among them", ends, name)
+		}
+	}
+}
+
+// TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce (REQ-008, CA-008.3): the
+// startup pass over a watched directory and the settle timer read the same files, and
+// today nothing claims a file while it is being read — a recording tool that writes the
+// file again while the startup pass is halfway through it gets the same recording
+// ingested twice.
+func TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	// The recording is there when the server starts watching.
+	putRecording(t, directory, recordedFile)
+
+	sink := newBlockingSink()
+	sink.blockNext()
+
+	watchingOverWithSink(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = true
+
+		return watch
+	}, sink)
+
+	if event := sink.nextEvent(t, settleWait+settleWait); event != "start:"+recordedFile {
+		t.Fatalf("the watch handed over %q, want the startup pass to start reading the recording", event)
+	}
+
+	// The tool writes the same recording again while the startup pass is holding it.
+	putRecording(t, directory, recordedFile)
+
+	// The settle timer for that write runs while the startup pass is still reading the
+	// same file. Today the startup pass claims nothing, and the settle read ingests the
+	// recording a second time — this is where this test fails today.
+	sink.noEventWithin(t, settleWait)
+
+	sink.release()
+
+	if event := sink.nextEvent(t, settleWait); event != "end:"+recordedFile {
+		t.Fatalf("the watch handed over %q, want the one read to complete", event)
+	}
+
+	sink.noEventWithin(t, settleWait)
+}
+
+// TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress (REQ-008, CA-008.2): a
+// configuration save brackets the watchers by stopping them, and it may not wait for a
+// recording that is halfway through being handed over. Today the settle read holds the
+// watch's mutex through the ingest and the stop waits behind it.
+func TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	sink := newBlockingSink()
+
+	watched := watchingOverWithSink(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = false
+
+		return watch
+	}, sink)
+
+	putProbeUntilIngested(t, watched, sink)
+
+	sink.blockNext()
+
+	putRecording(t, directory, recordedFile)
+
+	if event := sink.nextEvent(t, settleWait+settleWait); event != "start:"+recordedFile {
+		t.Fatalf("the watch handed over %q, want the recording's read to start", event)
+	}
+
+	// The read is being held on the gate. Today the stop waits behind the mutex the
+	// ingest is holding — this is where this test fails today.
+	stopped := make(chan struct{})
+
+	go func() {
+		watched.watchers.Stop(context.Background())
+
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+
+	case <-time.After(settleWait):
+		t.Fatal("the stop is waiting for the ingest in progress, want it to end the watching and leave")
+	}
+
+	sink.release()
+
+	if event := sink.nextEvent(t, settleWait); event != "end:"+recordedFile {
+		t.Fatalf("the watch handed over %q, want the read in progress to finish", event)
+	}
 }

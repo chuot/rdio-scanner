@@ -138,6 +138,7 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 			log:      watchers.log,
 			dirs:     map[string]bool{},
 			timers:   map[string]*time.Timer{},
+			inFlight: map[string]bool{},
 		}
 
 		if err := w.start(run); err != nil {
@@ -205,13 +206,21 @@ type watch struct {
 
 	watcher *fsnotify.Watcher
 
-	// mutex guards dirs and timers, and is held for the whole of a file being read and
-	// ingested. Holding it that long is what the legacy does, and it is what keeps one
-	// recording from being ingested twice when the tool that wrote it produces a create event
-	// and then a write event for the same file.
+	// mutex guards dirs, timers, and inFlight. It is not held while a file is read and
+	// ingested: the legacy held it that long, which made a slow ingest stop the event
+	// loop's arming and a configuration save's stop (CA-008.2); the single-flight claim
+	// in inFlight is what keeps one recording from being ingested twice when the tool
+	// that wrote it produces a create event and then a write event for the same file.
 	mutex  sync.Mutex
 	dirs   map[string]bool
 	timers map[string]*time.Timer
+
+	// inFlight names the files whose read is running right now. The startup pass and the
+	// settle timer read the same files, and a file being read by one is not read by the
+	// other (CA-008.3); the claim is taken and released around the read, outside the
+	// mutex, so the event loop's arming never waits on a recording being handed over
+	// (CA-008.2) and a configuration save's stop never waits on one either.
+	inFlight map[string]bool
 }
 
 // start subscribes to the directory and begins the two loops that read it: the event loop, and
@@ -362,9 +371,26 @@ func (w *watch) settle(ctx context.Context, path string) {
 	}()
 
 	w.mutex.Lock()
-	defer w.mutex.Unlock()
 
 	delete(w.timers, path)
+
+	// A file the startup pass is reading is not read by this timer, and a file this
+	// timer is reading is not read by the startup pass (CA-008.3).
+	if w.inFlight[path] {
+		w.mutex.Unlock()
+
+		return
+	}
+
+	w.inFlight[path] = true
+
+	w.mutex.Unlock()
+
+	defer func() {
+		w.mutex.Lock()
+		delete(w.inFlight, path)
+		w.mutex.Unlock()
+	}()
 
 	// The file has to still be there. A recording tool that writes into a watched
 	// directory and moves the finished recording elsewhere, or another application that
@@ -414,13 +440,40 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 		// the server started, which is quirk Q49: the files are there, the watch is running,
 		// and nothing arrives, because nothing changed.
 		if w.dirwatch.DeleteAfter {
-			w.ingest(ctx, path)
+			w.readClaimed(ctx, path)
 		}
 
 		return nil
 	}); err != nil {
 		w.log(ctx, domain.LogLevelError, fmt.Sprintf("the directory %s could not be read: %s", w.dirwatch.Directory, err.Error()))
 	}
+}
+
+// readClaimed reads a recording the startup pass found, claiming it the way the settle
+// timer claims its files: a recording the startup pass is handing over is not read again
+// by a settle timer firing over the same file while the tool that wrote it is still at
+// work (CA-008.3), and the claim is held outside the mutex so the event loop keeps
+// arming through it (CA-008.2).
+func (w *watch) readClaimed(ctx context.Context, path string) {
+	w.mutex.Lock()
+
+	if w.inFlight[path] {
+		w.mutex.Unlock()
+
+		return
+	}
+
+	w.inFlight[path] = true
+
+	w.mutex.Unlock()
+
+	defer func() {
+		w.mutex.Lock()
+		delete(w.inFlight, path)
+		w.mutex.Unlock()
+	}()
+
+	w.ingest(ctx, path)
 }
 
 // registerBelow registers a directory that appeared inside a watched directory, and every
