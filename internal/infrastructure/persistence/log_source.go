@@ -23,6 +23,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sort"
 
 	"rdio-scanner/internal/domain"
@@ -212,7 +213,7 @@ func hasLogIndex(ctx context.Context, s store, name string) (bool, error) {
 	var count int
 
 	if err := s.queryRow(ctx, query, name).Scan(&count); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
 

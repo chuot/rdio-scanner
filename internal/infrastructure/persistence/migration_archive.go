@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -133,7 +134,7 @@ func hasMigrationArchiveIndex(ctx context.Context, s store) (bool, error) {
 	var count int
 
 	if err := s.queryRow(ctx, query).Scan(&count); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
 
