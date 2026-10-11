@@ -1614,6 +1614,11 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 // the v6 migration bookkeeping table has no v7 counterpart, so it is dropped, and unlike every
 // other migration its failure is returned rather than printed — the legacy server stops there,
 // with the v6 tables the later migrations would have consumed still in place.
+//
+// The rows are archived before the drop (CA-012.3). The deployment's migration history is what
+// this table holds, it is exactly what the drop takes away, and an archive that exists so that
+// no row leaves a migration without a record should not let the smallest of them — the record
+// of the migrations themselves — go without one.
 func migrateMeta(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateMeta", "meta"
 
@@ -1628,9 +1633,79 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 
 	progress(domain.LogLevelInfo, "migrating meta...")
 
-	query := `DROP TABLE "rdioScannerMeta"`
-	if _, err := s.exec(ctx, query); err != nil {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	arch := archiving(ctx, tx, progress, "rdioScannerMeta", "migration record", "migration records")
+
+	query := `SELECT "name" FROM "rdioScannerMeta" ORDER BY "name"`
+
+	rows, err := readV6Table(ctx, s, tx, query)
+	if err != nil {
+		tx.rollback()
+
 		return statementError(section, operation, err, query)
+	}
+
+	unread := false
+	rowId := int64(0)
+
+	for rows.Next() {
+		var name sql.NullString
+
+		if err := rows.Scan(&name); err != nil {
+			unread = true
+
+			break
+		}
+
+		rowId++
+
+		if err := arch.skip(rowId, namedRow("migration record", rowId, name),
+			"this server has no migration bookkeeping to carry it into", name.String); err != nil {
+			tx.rollback()
+
+			return err
+		}
+	}
+
+	rows.Close()
+
+	arch.report()
+
+	if unread || rows.Err() != nil {
+		// A row the pass never saw: the table keeps it, as every other migration
+		// leaves a table it could not read whole. The drop is all this pass does,
+		// and a table it could not read whole is not a table it drops.
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
+
+		if err := tx.commit(); err != nil {
+			tx.rollback()
+
+			return operationError(section, operation, err)
+		}
+
+		return nil
+	}
+
+	// The legacy server returned the meta drop's failure rather than printing it,
+	// and stopped the whole upgrade there; that stays. The drop runs inside this
+	// table's transaction, so its failure rolls back the archive rows with it and
+	// the pass stops with the v6 tables standing, exactly as the pinned test reads.
+	drop := `DROP TABLE "rdioScannerMeta"`
+
+	if _, err := tx.exec(ctx, drop); err != nil {
+		tx.rollback()
+
+		return statementError(section, operation, err, drop)
+	}
+
+	if err := tx.commit(); err != nil {
+		tx.rollback()
+
+		return operationError(section, operation, err)
 	}
 
 	return nil

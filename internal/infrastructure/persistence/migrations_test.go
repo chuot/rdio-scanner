@@ -378,6 +378,9 @@ func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.
 		{level: domain.LogLevelWarn, message: `the migration could not carry unit 304 "Orphan Engine": its system 10009 is not in this database`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry 1 config row: it is kept in the migrationArchive table`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry the config row "options": it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry 2 migration records: they are kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry migration record 1 "20210115105958-new-v5.1-tables": this server has no migration bookkeeping to carry it into`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry migration record 2 "20220101070000-new-v6-tables": this server has no migration bookkeeping to carry it into`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry 1 log: it is kept in the migrationArchive table`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry log 405: it holds no message`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry 1 downstream: it is kept in the migrationArchive table`},
@@ -2948,13 +2951,13 @@ func auditReferences(t *testing.T, db *sql.DB) {
 	}
 }
 
-// TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor is the declared-exception half of REQ-006: the two
-// things the pass does remove, and does not archive, because the v8 schema has no place for them and they
-// are not deployment data.
+// TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor is the declared-exception half of REQ-006: the things
+// the pass does remove, because the v8 schema has no place for them.
 //
-// `rdioScannerMeta` is v6's own migration bookkeeping. `usePolling` is a v6 dirwatch column v7 removed
-// with the polling feature: the dirwatch row itself is carried, and the one value of it v8 cannot hold is
-// said to be dropped here rather than left to be discovered.
+// `rdioScannerMeta` is v6's own migration bookkeeping: the table is dropped, and since CA-012.3 its
+// rows are archived first, so the deployment's migration history outlives the table. `usePolling` is a
+// v6 dirwatch column v7 removed with the polling feature: the dirwatch row itself is carried, and the
+// one value of it v8 cannot hold is said to be dropped here rather than left to be discovered.
 func TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -3003,8 +3006,11 @@ func auditDeclaredDrops(t *testing.T, db *sql.DB, dialect Dialect) {
 		t.Error("the v6 rdioScannerMeta table survived the pass, which is v6 bookkeeping with no v8 counterpart")
 	}
 
-	if rows := readRows(t, db, `SELECT "rowId" FROM "migrationArchive" WHERE "tableName" = 'rdioScannerMeta'`); len(rows) > 0 {
-		t.Errorf("the archive holds %v for rdioScannerMeta, want nothing: its rows are not deployment data", rows)
+	// The v6 migration bookkeeping is archived before its drop (CA-012.3): the
+	// deployment's migration history is exactly what the table holds, and the drop
+	// is exactly what takes it away, so every row of it is kept in the archive.
+	if got, want := len(readRows(t, db, `SELECT "rowId" FROM "migrationArchive" WHERE "tableName" = 'rdioScannerMeta'`)), len(readRows(t, db, `SELECT "name" FROM "auditrdioScannerMeta"`)); got != want {
+		t.Errorf("the archive holds %d rdioScannerMeta rows, want the %d the v6 table had: the migration history is archived before its drop", got, want)
 	}
 
 	if got := len(readRows(t, db, `SELECT "name" FROM "auditrdioScannerMeta"`)); got == 0 {
@@ -3309,5 +3315,33 @@ func TestMigrateReportsAProbeThatCannotRead(t *testing.T) {
 	// does nothing, as it has always done.
 	if err := migrateGroups(context.Background(), newStore(db, DialectSqlite), func(string, string) {}); err != nil {
 		t.Errorf("migrateGroups = %v for a database with no rdioScannerGroups, want the silent skip", err)
+	}
+}
+
+// TestMigrateArchivesTheMetaRowsItDrops (REQ-012, CA-012.3): the v6 migration
+// bookkeeping table has no v7 counterpart, so the pass drops it — today with its
+// rows in it, the deployment's migration history gone with no record left behind,
+// the very defect the archive exists to end. The rows are archived under their
+// table name, in name order, before the drop, and the pass says so the way it
+// says every row it left in the archive.
+func TestMigrateArchivesTheMetaRowsItDrops(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	migrateDatabase(t, db)
+
+	got := readRows(t, db, `SELECT "tableName", "rowId", "reason", "contents" FROM "migrationArchive" WHERE "tableName" = 'rdioScannerMeta' ORDER BY "rowId"`)
+
+	want := [][]string{
+		{"rdioScannerMeta", "1", "this server has no migration bookkeeping to carry it into", `"20210115105958-new-v5.1-tables"`},
+		{"rdioScannerMeta", "2", "this server has no migration bookkeeping to carry it into", `"20220101070000-new-v6-tables"`},
+	}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the migration archive holds the meta rows:\n  got  %v\n  want %v", got, want)
+	}
+
+	// The table is dropped, as it has always been.
+	if hasV6Table(t, db, "rdioScannerMeta") {
+		t.Error("the v6 meta table is still there, want it dropped after its rows were archived")
 	}
 }
