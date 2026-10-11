@@ -28,7 +28,6 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -47,11 +46,11 @@ type Converter struct {
 	// or the name `ffmpeg` when the server's target carries none and the host's is used.
 	program string
 
-	// available is whether `ffmpeg -version` ran at all.
+	// available is whether the filter probe — `ffmpeg -hide_banner -filters` — ran at all.
 	available bool
 
-	// loudnorm is whether that ffmpeg is new enough for the loudness filters, which the
-	// legacy records as version43 and applies to the two modes that ask for them.
+	// loudnorm is whether that program's filter list names the loudnorm filter,
+	// which is what decides whether the two loudness modes get their filters (D17).
 	loudnorm bool
 
 	// warned records that the missing converter has already been reported. The legacy
@@ -74,51 +73,37 @@ func New() *Converter {
 // NewAt builds the converter for the ffmpeg at the path the server was given, which is the one it
 // carries inside its own binary and writes out to its data directory before running it.
 //
-// The release that program is gets asked of that program, so a bundled ffmpeg and a host ffmpeg are
-// not taken for the same release when they are not.
+// The filters that program has get asked of that program — `ffmpeg -hide_banner -filters` is the
+// probe (D17) — so a bundled ffmpeg and a host ffmpeg are not taken for the same filter list when
+// they are not.
 func NewAt(program string) *Converter {
 	converter := &Converter{program: program}
 
 	stdout := bytes.NewBuffer([]byte(nil))
 
-	command := exec.Command(program, "-version")
+	command := exec.Command(program, "-hide_banner", "-filters")
 	command.Stdout = stdout
 
 	if err := command.Run(); err == nil {
 		converter.available = true
 
-		if line, err := stdout.ReadString('\n'); err == nil {
-			converter.loudnorm = hasLoudnorm(line)
-		}
+		converter.loudnorm = hasLoudnorm(stdout.String())
 	}
 
 	return converter
 }
 
-// hasLoudnorm reads the release out of the first line of `ffmpeg -version` and reports whether
-// it is 4.3 or newer, which is the release that has the loudnorm filter the two conversion
-// levels ask for.
-//
-// The version is read as two single digits, so a release numbered 10.0 is not recognized and
-// converts without the filters. That is what the legacy reads, and it is worth knowing before a
-// deployment moves to a release numbered that way.
-func hasLoudnorm(line string) bool {
-	version := regexp.MustCompile(`.*ffmpeg version .{0,1}([0-9])\.([0-9])\.[0-9].*`).
-		ReplaceAllString(strings.TrimSuffix(line, "\n"), "$1.$2")
+// loudnormFilterLine matches the line `ffmpeg -filters` prints for the loudnorm filter: the
+// flag columns, then the filter name. The flag columns are three characters in the 4.x releases
+// and two in the 7.x ones — command support left the legend in 7.0 — so the pattern takes both.
+var loudnormFilterLine = regexp.MustCompile(`(?m)^\s*[TSC.]{2,3}\s+loudnorm\s`)
 
-	parts := strings.Split(version, ".")
-	if len(parts) < 2 {
-		return false
-	}
-
-	major, errMajor := strconv.Atoi(parts[0])
-	minor, errMinor := strconv.Atoi(parts[1])
-
-	if errMajor != nil || errMinor != nil {
-		return false
-	}
-
-	return major > 4 || (major == 4 && minor >= 3)
+// hasLoudnorm reports whether the filter list a program printed names the loudnorm filter
+// (D17, CA-018.1). The filter list is the ground truth: the legacy read the version string
+// instead, and misread 4.10, 10.0, tagged N-builds, and git-builds as releases without the
+// filter they print in their own list.
+func hasLoudnorm(filters string) bool {
+	return loudnormFilterLine.MatchString(filters)
 }
 
 // Arguments returns the argument list the converter gives ffmpeg for one recording: the recording

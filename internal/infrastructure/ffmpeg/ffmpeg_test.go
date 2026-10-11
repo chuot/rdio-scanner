@@ -135,67 +135,143 @@ func TestTheDisabledLevelIsSilentEvenWithoutAConverter(t *testing.T) {
 	}
 }
 
-// TestTheVersionProbeRecognisesTheReleasesTheFiltersNeed covers the release read out of the first
-// line of `ffmpeg -version`, which decides whether the two loudness levels get their filters.
-
-// TestTheVersionProbeRecognisesTheReleasesTheFiltersNeed covers the release read out of the first
-// line of `ffmpeg -version`, which decides whether the two loudness levels get their filters.
-func TestTheVersionProbeRecognisesTheReleasesTheFiltersNeed(t *testing.T) {
+// TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint (REQ-018,
+// CA-018.1, D17): the loudness filters are decided by the filter list the program
+// itself prints — `ffmpeg -hide_banner -filters` — and not by its version string.
+// The captured outputs below are the real filter lists of the releases named: the
+// 4.x releases print three flag columns, the 7.x ones dropped command support and
+// print two, and the probe reads both. The version-string path misread 4.10, 10.0,
+// tagged N-builds, and git-builds as having no filters; the filter list is the
+// ground truth, and every one of those releases prints loudnorm.
+func TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint(t *testing.T) {
 	cases := []struct {
-		name string
-		line string
-		want bool
+		name    string
+		filters string
+		want    bool
 	}{
-		{
-			name: "the release this machine has",
-			line: "ffmpeg version 8.0.1-3ubuntu2 Copyright (c) 2000-2025 the FFmpeg developers",
-			want: true,
-		},
-		{name: "the release that introduced the filter", line: "ffmpeg version 4.3.1 Copyright (c) 2000-2021", want: true},
-		{name: "a later release", line: "ffmpeg version 6.1.1-1 Copyright (c) 2000-2023", want: true},
-		{name: "a tagged build", line: "ffmpeg version n7.0.1 Copyright (c) 2000-2024", want: true},
-		{name: "the release before it", line: "ffmpeg version 4.2.7 Copyright (c) 2000-2020", want: false},
-		{
-			// The release the legacy reads as having no filters: a version line without a
-			// patch number is not a version line the pattern recognizes.
-			name: "a release that names no patch number",
-			line: "ffmpeg version 4.3 Copyright (c) 2000-2021",
-			want: false,
-		},
-		{
-			// And the release a deployment eventually moves to: the version is read as two
-			// single digits, so a two-digit major is read as its last digit.
-			name: "a release with a two-digit major version",
-			line: "ffmpeg version 10.0.1 Copyright (c) 2000-2027",
-			want: false,
-		},
-		{name: "a build that names no version at all", line: "ffmpeg version git-2026-01-01-abcd123", want: false},
+		{name: "the 4.3 release that introduced the filter", filters: filters43, want: true},
+		{name: "the 4.10 release the version string misread", filters: filters410, want: true},
+		{name: "the 10.0 release the version string misread", filters: filters100, want: true},
+		{name: "a tagged N-build", filters: filtersN7, want: true},
+		{name: "a git build", filters: filtersGit, want: true},
+		{name: "the release before the filter existed", filters: filters32, want: false},
+		{name: "a probe that printed nothing", filters: "", want: false},
+		{name: "a probe that printed noise", filters: "Abnormal exit at startup\nsee /usr/share/doc/ffmpeg\n", want: false},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := hasLoudnorm(c.line); got != c.want {
-				t.Errorf("hasLoudnorm(%q) = %v, want %v", c.line, got, c.want)
+			if got := hasLoudnorm(c.filters); got != c.want {
+				t.Errorf("hasLoudnorm of the %s filter list = %v, want %v", c.name, got, c.want)
 			}
 		})
 	}
 }
 
-// TestConvertingARecordingProducesTheFormatTheServerStores is the plain level: the wav a
-// recording tool wrote becomes the m4a the server serves, named for the recording it came from.
+// The captured `ffmpeg -hide_banner -filters` outputs. The loudnorm line rides the
+// flag columns the release of that name prints: three in the 4.x and 3.x form,
+// two in the 7.x-and-later form.
 
-// aProgramIsGiven writes a program the test controls and returns its path. It answers the version
-// probe and converts by saying who it is, so a test can tell which program actually ran without
-// needing the real ffmpeg on this machine.
-func aProgramIsGiven(t *testing.T, version string) string {
+const filters32 = `Filters:
+  T.. = Timeline support
+  .S. = Slice threading
+  ..C = Command support
+  A = Audio input/output
+  V = Video input/output
+  N = Dynamic number and/or type of input/output
+  | = Source or sink filter
+ T.. abuffer            0->1-...     Buffer audio source
+ .. anexamplifier      1->1         Amplify audio with a certain factor.
+ .. volume             1->1         Gain control for audio.
+`
+
+const filters43 = `Filters:
+  T.. = Timeline support
+  .S. = Slice threading
+  ..C = Command support
+  A = Audio input/output
+  V = Video input/output
+  N = Dynamic number and/or type of input/output
+  | = Source or sink filter
+ T.. abuffer            0->1-...     Buffer audio source
+ .. anexamplifier      1->1         Amplify audio with a certain factor.
+ .. loudnorm           1->1         EBU R128 loudness normalization
+ .. volume             1->1         Gain control for audio.
+`
+
+const filters410 = `Filters:
+  T.. = Timeline support
+  .S. = Slice threading
+  ..C = Command support
+  A = Audio input/output
+  V = Video input/output
+  N = Dynamic number and/or type of input/output
+  | = Source or sink filter
+ T.. abuffer            0->1-...     Buffer audio source
+ .. loudnorm           1->1         EBU R128 loudness normalization
+ .. volume             1->1         Gain control for audio.
+`
+
+const filters100 = `Filters:
+  T.. = Timeline support
+  .S. = Slice threading
+  A = Audio input/output
+  V = Video input/output
+  N = Dynamic number and/or type of input/output
+  | = Source or sink filter
+ TS aap               AA->A      Apply Affine Projection algorithm to first audio stream.
+ .. loudnorm          A->A       EBU R128 loudness normalization
+ .. volume            1->1       Gain control for audio.
+`
+
+const filtersN7 = `Filters:
+  T.. = Timeline support
+  .S. = Slice threading
+  A = Audio input/output
+  V = Video input/output
+  N = Dynamic number and/or type of input/output
+  | = Source or sink filter
+ .. loudnorm          A->A       EBU R128 loudness normalization
+ .. volume            1->1       Gain control for audio.
+`
+
+const filtersGit = `Filters:
+  T.. = Timeline support
+  .S. = Slice threading
+  A = Audio input/output
+  V = Video input/output
+  N = Dynamic number and/or type of input/output
+  | = Source or sink filter
+ .. loudnorm          A->A       EBU R128 loudness normalization
+ .. volume            1->1       Gain control for audio.
+`
+
+// The filter list a program the tests are given answers its probe with: the
+// loudnorm line in the form the releases from 4.3 on print it.
+const filtersWithLoudnorm = filters43
+
+// The filter list without it, in the 3.x form.
+const filtersWithoutLoudnorm = filters32
+
+// aProgramIsGiven writes a program the test controls and returns its path. It answers the filter
+// probe with the filter list it was given and converts by saying who it is, so a test can tell
+// which program actually ran without needing the real ffmpeg on this machine.
+func aProgramIsGiven(t *testing.T, filters string) string {
 	t.Helper()
 
-	path := filepath.Join(t.TempDir(), "ffmpeg")
+	dir := t.TempDir()
+
+	path := filepath.Join(dir, "ffmpeg")
+	filtersFile := filepath.Join(dir, "filters")
+
+	if err := os.WriteFile(filtersFile, []byte(filters), 0644); err != nil {
+		t.Fatalf("the test cannot write the filter list it was given: %v", err)
+	}
 
 	script := "#!/bin/sh\n" +
 		"for arg in \"$@\"; do\n" +
-		"  if [ \"$arg\" = \"-version\" ]; then\n" +
-		"    echo \"" + version + "\"\n" +
+		"  if [ \"$arg\" = \"-filters\" ]; then\n" +
+		"    cat \"" + filtersFile + "\"\n" +
 		"    exit 0\n" +
 		"  fi\n" +
 		"done\n" +
@@ -210,7 +286,7 @@ func aProgramIsGiven(t *testing.T, version string) string {
 }
 
 func TestTheConverterRunsTheProgramItWasGiven(t *testing.T) {
-	converter := NewAt(aProgramIsGiven(t, "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"))
+	converter := NewAt(aProgramIsGiven(t, filtersWithLoudnorm))
 
 	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
 
@@ -247,34 +323,42 @@ func TestTheConverterReportsAProgramItWasGivenThatIsNotThere(t *testing.T) {
 	}
 }
 
-// The release the given program reports is what decides whether the loudness filters are used, so a
-// bundled ffmpeg and a host ffmpeg are not interchangeable when they are different releases.
-func TestTheConverterAsksTheProgramItWasGivenWhichReleaseItIs(t *testing.T) {
-	old := NewAt(aProgramIsGiven(t, "ffmpeg version 4.2.1 Copyright (c) 2000-2026 the FFmpeg developers"))
+// The filter list the given program prints is what decides whether the loudness filters are
+// used, so a bundled ffmpeg and a host ffmpeg are not interchangeable when their filter lists
+// differ (D17).
+func TestTheConverterAsksTheProgramItWasGivenWhichFiltersItHas(t *testing.T) {
+	without := NewAt(aProgramIsGiven(t, filtersWithoutLoudnorm))
 
-	if old.loudnorm {
-		t.Error("a 4.2 release was taken for one that has the loudness filters")
+	if without.loudnorm {
+		t.Error("a program whose filter list names no loudnorm was taken for one that has the loudness filters")
 	}
 
-	new := NewAt(aProgramIsGiven(t, "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"))
+	with := NewAt(aProgramIsGiven(t, filtersWithLoudnorm))
 
-	if !new.loudnorm {
-		t.Error("a 9.0 release was taken for one that does not have the loudness filters")
+	if !with.loudnorm {
+		t.Error("a program whose filter list names loudnorm was taken for one that does not have the loudness filters")
 	}
 }
 
-// aProgramThatFailsWith writes a program that answers the version probe and fails with the
-// given transcript on stderr, the way a real ffmpeg floods its whole session log onto a
-// conversion failure.
+// aProgramThatFailsWith writes a program that answers the filter probe with a filter list and
+// fails with the given transcript on stderr, the way a real ffmpeg floods its whole session log
+// onto a conversion failure.
 func aProgramThatFailsWith(t *testing.T, transcript string) string {
 	t.Helper()
 
-	path := filepath.Join(t.TempDir(), "ffmpeg")
+	dir := t.TempDir()
+
+	path := filepath.Join(dir, "ffmpeg")
+	filtersFile := filepath.Join(dir, "filters")
+
+	if err := os.WriteFile(filtersFile, []byte(filtersWithLoudnorm), 0644); err != nil {
+		t.Fatalf("the test cannot write the filter list it was given: %v", err)
+	}
 
 	script := "#!/bin/sh\n" +
 		"for arg in \"$@\"; do\n" +
-		"  if [ \"$arg\" = \"-version\" ]; then\n" +
-		"    echo \"ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers\"\n" +
+		"  if [ \"$arg\" = \"-filters\" ]; then\n" +
+		"    cat \"" + filtersFile + "\"\n" +
 		"    exit 0\n" +
 		"  fi\n" +
 		"done\n" +
@@ -287,6 +371,43 @@ func aProgramThatFailsWith(t *testing.T, transcript string) string {
 	}
 
 	return path
+}
+
+// TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce (REQ-018, CA-018.1):
+// the filter probe is the converter's availability probe. A program that cannot
+// answer it is a converter this server does not have: the recording is kept, the
+// reason is said once, and the silence after it is the legacy's silence.
+func TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ffmpeg")
+
+	script := "#!/bin/sh\n" +
+		"printf 'ffmpeg: the filter probe exploded\n' >&2\n" +
+		"exit 1\n"
+
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("the test cannot write the program it was given: %v", err)
+	}
+
+	converter := NewAt(path)
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err == nil {
+		t.Fatal("a program whose filter probe failed reported no failure")
+	}
+
+	if !strings.Contains(err.Error(), "ffmpeg is not available") {
+		t.Errorf("the failure = %q, want the missing-converter report: a converter that cannot say what filters it has is a converter this server does not have", err)
+	}
+
+	if string(converted.Data) != string(in.Data) {
+		t.Error("the recording was changed even though the probe said there is no converter")
+	}
+
+	if _, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil); err != nil {
+		t.Errorf("the failed probe was reported a second time: %v", err)
+	}
 }
 
 // TestTheConverterReportsAFailingProgramShortAndQuiet (REQ-016, CA-016.2): ffmpeg's stderr on
