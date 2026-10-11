@@ -104,6 +104,7 @@ func callForForwarding() domain.Call {
 	call.Audio = []byte("a recording, long enough to be a recording")
 	call.AudioFilename = "TG1514000-20261006120000.wav"
 	call.AudioMime = "audio/wav"
+	call.AudioLength = 3500 * time.Millisecond
 	call.PatchTalkgroupRefs = []uint{1514001, 1514002}
 	call.Timestamp = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 
@@ -188,6 +189,7 @@ func TestForwardPostsTheCallToTheDownstreamsUploadEndpoint(t *testing.T) {
 
 	want := map[string]string{
 		"audioFilename":   call.AudioFilename,
+		"audioLength":     "3.500",
 		"audioMime":       call.AudioMime,
 		"dateTime":        "2026-10-06T12:00:00Z",
 		"key":             "downstream-key",
@@ -228,13 +230,44 @@ func TestForwardWritesEveryPartInTheOrderTheLegacyWritesThem(t *testing.T) {
 	}
 
 	want := []string{
-		"audio", "audioFilename", "audioMime", "dateTime", "frequencies", "key", "patches",
-		"system", "systemLabel", "talkgroup", "talkgroupGroups", "talkgroupLabel",
+		"audio", "audioFilename", "audioLength", "audioMime", "dateTime", "frequencies", "key",
+		"patches", "system", "systemLabel", "talkgroup", "talkgroupGroups", "talkgroupLabel",
 		"talkgroupName", "talkgroupTag", "timestamp", "units",
 	}
 
 	if strings.Join(received.names, ",") != strings.Join(want, ",") {
 		t.Errorf("the parts arrived as %v, want the legacy order %v", received.names, want)
+	}
+}
+
+// The length travels with the recording it describes, and only when some source named it:
+// a call whose length was never measured forwards no `audioLength` field at all, and the
+// receiving server measures its own way — the forwarder invents no zero-second recording.
+func TestForwardLeavesOutTheAudioLengthWhenTheCallHasNone(t *testing.T) {
+	received := &receivedUpload{}
+	server := newUploadServer(t, received)
+
+	defer server.Close()
+
+	groups, tags := configuredGroupsAndTags()
+	forwarder := NewForwarder(groups, tags)
+
+	call := callForForwarding()
+	call.AudioLength = 0
+
+	if err := forwarder.Forward(context.Background(), ports.DownstreamTarget{
+		URL:    server.URL,
+		Apikey: "downstream-key",
+	}, call); err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+
+	for _, name := range received.names {
+		if name == "audioLength" {
+			t.Errorf("the parts arrived as %v, want no audioLength field for a call with no known length", received.names)
+
+			return
+		}
 	}
 }
 

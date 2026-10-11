@@ -943,6 +943,11 @@
                     "type": "string",
                     "description": "Recording file name (alias: audioName)."
                   },
+                  "audioLength": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Recording length in seconds. The server takes its word for the length and measures nothing; a value it cannot read is ignored and the length is measured as usual."
+                  },
                   "audioName": {
                     "type": "string",
                     "description": "Recording file name (alias of audioFilename)."
@@ -1126,6 +1131,11 @@
                   "audioFilename": {
                     "type": "string",
                     "description": "Recording file name (alias: audioName)."
+                  },
+                  "audioLength": {
+                    "type": "number",
+                    "format": "double",
+                    "description": "Recording length in seconds. The server takes its word for the length and measures nothing; a value it cannot read is ignored and the length is measured as usual."
                   },
                   "audioName": {
                     "type": "string",

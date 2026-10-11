@@ -82,6 +82,13 @@ func (payload CallPayload) MarshalJSON() ([]byte, error) {
 		body["frequencies"] = frequencies
 	}
 
+	if call.AudioLength > 0 {
+		// The length of the recording, in seconds to the millisecond, and only when some
+		// source named it: a call whose length was never measured says nothing about its
+		// length, rather than claiming a zero-second recording.
+		body["audioLength"] = audioLengthSeconds(call.AudioLength)
+	}
+
 	if call.SiteRef > 0 {
 		body["site"] = call.SiteRef
 	}
@@ -144,4 +151,13 @@ func audioBuffer(audio []byte) map[string]any {
 		"data": json.RawMessage(numbers),
 		"type": "Buffer",
 	}
+}
+
+// audioLengthSeconds writes the length of a recording as the JSON number of seconds it is,
+// written to the millisecond — 3.500 for three and a half seconds — which is the count the
+// uploaders name in their `audioLength` field and the precision the server measures to. The
+// number is written as text so it keeps its three decimals on the wire, where a Go float
+// would drop them.
+func audioLengthSeconds(length time.Duration) json.RawMessage {
+	return json.RawMessage(strconv.FormatFloat(float64(length)/float64(time.Second), 'f', 3, 64))
 }

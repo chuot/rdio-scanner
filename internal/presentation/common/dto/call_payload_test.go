@@ -199,6 +199,42 @@ func TestCallPayloadRendersTheMomentToTheSecond(t *testing.T) {
 	}
 }
 
+// The length of the recording is the number of seconds it lasts, written to the millisecond,
+// and it is on the wire only when the server knows it: a call whose length was never measured
+// says nothing about its length, rather than claiming a zero-second recording.
+func TestCallPayloadCarriesTheAudioLengthInSecondsToTheMillisecond(t *testing.T) {
+	call := domain.Call{
+		ID:                 1,
+		Audio:              capturedRecording,
+		PatchTalkgroupRefs: []uint{},
+		AudioLength:        3500 * time.Millisecond,
+	}
+
+	if got := marshal(t, CallPayload{Call: call}); !carriesKey(t, got, "audioLength", "3.500") {
+		t.Errorf("a call three and a half seconds long = %s, want \"audioLength\":3.500", got)
+	}
+
+	call.AudioLength = 3010667 * time.Microsecond
+
+	if got := marshal(t, CallPayload{Call: call}); !carriesKey(t, got, "audioLength", "3.011") {
+		t.Errorf("a call 3.010667 seconds long = %s, want the length rounded to the millisecond it names", got)
+	}
+}
+
+// A call whose length no source ever named carries no length key at all: the payload says
+// nothing about a length the server does not know, and never invents a zero-second recording.
+func TestCallPayloadLeavesOutTheAudioLengthWhenItWasNeverMeasured(t *testing.T) {
+	call := domain.Call{
+		ID:                 1,
+		Audio:              capturedRecording,
+		PatchTalkgroupRefs: []uint{},
+	}
+
+	if got := marshal(t, CallPayload{Call: call}); strings.Contains(got, `"audioLength"`) {
+		t.Errorf("a call whose length was never measured = %s, want no audioLength key at all", got)
+	}
+}
+
 // capturedCall is the call the capture uploaded first, rebuilt from what the capture named.
 func capturedCall() domain.Call {
 	return domain.Call{

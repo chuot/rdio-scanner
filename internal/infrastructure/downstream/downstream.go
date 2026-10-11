@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,6 +153,15 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 
 	if err := writeField(writer, "audioFilename", call.AudioFilename); err != nil {
 		return nil, "", err
+	}
+
+	// The length of the recording, in seconds to the millisecond, and only when some
+	// source named it: a call whose length was never measured forwards no field at all,
+	// and the receiving server measures its own way.
+	if call.AudioLength > 0 {
+		if err := writeField(writer, "audioLength", audioLengthText(call.AudioLength)); err != nil {
+			return nil, "", err
+		}
 	}
 
 	if err := writeField(writer, "audioMime", call.AudioMime); err != nil {
@@ -350,6 +360,13 @@ func writeField(writer *multipart.Writer, name, value string) error {
 	_, err = part.Write([]byte(value))
 
 	return err
+}
+
+// audioLengthText writes a recording's length as the count of seconds it is, to the
+// millisecond — 3.500 for three and a half seconds — the same spelling the upload field
+// `audioLength` names on the way in and the call payload names on the way out.
+func audioLengthText(length time.Duration) string {
+	return strconv.FormatFloat(float64(length)/float64(time.Second), 'f', 3, 64)
 }
 
 // writeJSONField writes one form field whose value is a JSON document.

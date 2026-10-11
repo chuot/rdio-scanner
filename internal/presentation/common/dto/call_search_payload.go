@@ -69,11 +69,16 @@ type callSearchEnvelope struct {
 //
 // The moment is a Go time and so keeps its milliseconds, where the same call in a call payload is
 // formatted to the second.
+//
+// The length is on every row, named in seconds to the millisecond: the row is a struct, and a
+// struct always names its fields, so a row the server stored before any source could measure it
+// names the zero that means "never measured" — the same zero the column carries.
 type CallSearchRow struct {
-	ID        uint64    `json:"id"`
-	System    uint      `json:"system"`
-	Talkgroup uint      `json:"talkgroup"`
-	Timestamp time.Time `json:"dateTime"`
+	ID          uint64          `json:"id"`
+	System      uint            `json:"system"`
+	Talkgroup   uint            `json:"talkgroup"`
+	Timestamp   time.Time       `json:"dateTime"`
+	AudioLength json.RawMessage `json:"audioLength"`
 }
 
 func callSearchRows(summaries []ports.CallSummary) []CallSearchRow {
@@ -81,10 +86,11 @@ func callSearchRows(summaries []ports.CallSummary) []CallSearchRow {
 
 	for _, summary := range summaries {
 		rows = append(rows, CallSearchRow{
-			ID:        summary.ID,
-			System:    summary.SystemRef,
-			Talkgroup: summary.TalkgroupRef,
-			Timestamp: summary.Timestamp,
+			ID:          summary.ID,
+			System:      summary.SystemRef,
+			Talkgroup:   summary.TalkgroupRef,
+			Timestamp:   summary.Timestamp,
+			AudioLength: audioLengthSeconds(summary.AudioLength),
 		})
 	}
 

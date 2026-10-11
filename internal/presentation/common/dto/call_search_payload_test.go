@@ -150,7 +150,26 @@ func TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops(t *testing.T) {
 
 	got := marshal(t, page)
 
-	if !carriesKey(t, got, "results", `[{"id":1,"system":0,"talkgroup":0,"dateTime":"2026-10-06T12:00:00.5Z"}]`) {
+	if !carriesKey(t, got, "results", `[{"id":1,"system":0,"talkgroup":0,"dateTime":"2026-10-06T12:00:00.5Z","audioLength":0.000}]`) {
 		t.Errorf("a history row at half past a second = %s, want the fraction kept", got)
+	}
+}
+
+// The history row names its fields the way the legacy row always has — a struct always names
+// what it has — so the length is on every row, and the zero on a row the server stored before
+// any source could measure it is the server's own "never measured", the same zero the column
+// carries.
+func TestCallSearchRowCarriesTheAudioLengthOfTheCallInSeconds(t *testing.T) {
+	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+
+	page := CallSearchPagePayload{Page: ports.CallSearchPage{Results: []ports.CallSummary{
+		{ID: 1, Timestamp: at, AudioLength: 3500 * time.Millisecond},
+		{ID: 2, Timestamp: at, AudioLength: 3010667 * time.Microsecond},
+	}}}
+
+	got := marshal(t, page)
+
+	if !carriesKey(t, got, "results", `[{"id":1,"system":0,"talkgroup":0,"dateTime":"2026-10-06T12:00:00Z","audioLength":3.500},{"id":2,"system":0,"talkgroup":0,"dateTime":"2026-10-06T12:00:00Z","audioLength":3.011}]`) {
+		t.Errorf("history rows of a 3.5-second and a 3.010667-second call = %s, want each row naming its length in seconds to the millisecond", got)
 	}
 }
