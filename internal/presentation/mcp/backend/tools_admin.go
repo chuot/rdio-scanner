@@ -49,7 +49,7 @@ func (s *Server) registerAdminTools(deps Deps) {
 			"converted and duplicates detected, whether the administrator password still needs " +
 			"changing, and the alert sequences the server carries. Read this before changing anything: " +
 			"it is a summary built from the configuration and the alert sequences, not the " +
-			"configuration document.",
+			"configuration document. Composed from GET /api/admin/config and GET /api/admin/alerts.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ inspectSystemInput) (*mcp.CallToolResult, deploymentView, error) {
 		who, ok := CallerOf(ctx)
@@ -76,7 +76,8 @@ func (s *Server) registerAdminTools(deps Deps) {
 			"one tool; there is no per-filter sibling to choose between. The answer is the page: the " +
 			"total the filters match, the earliest and latest instant they match, the criteria as this " +
 			"server applied them, and the entries. The subsystem filter takes the names the server " +
-			"files entries under, and a name outside that vocabulary is reported, not ignored.",
+			"files entries under, and a name outside that vocabulary is reported, not ignored. Answers " +
+			"POST /api/admin/logs.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchLogsInput) (*mcp.CallToolResult, logView, error) {
 		who, ok := CallerOf(ctx)
@@ -105,7 +106,8 @@ func (s *Server) registerAdminTools(deps Deps) {
 			"subsystem. A single line is almost never the cause: the answer is the neighbourhood. Name " +
 			"the line by its subsystem, a substring of its message, and its day. The subsystem's own " +
 			"lines come back oldest first, so what led up to the line and what followed it are both " +
-			"there.",
+			"there. Composed from POST /api/admin/logs, asked three times: the line, the subsystem's " +
+			"own day, and the same day across every subsystem.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in explainErrorInput) (*mcp.CallToolResult, errorExplanation, error) {
 		who, ok := CallerOf(ctx)

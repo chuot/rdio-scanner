@@ -64,7 +64,8 @@ func (s *Server) registerCallTools(deps Deps) {
 			"filters match, the earliest and latest call they match, the rows, oldest or newest " +
 			"first, and the page as this server applied it, so the next page can be asked for by " +
 			"adding that page size to the offset. A filter naming something outside what this caller " +
-			"may see answers an empty page, the same answer a history with nothing in it gets.",
+			"may see answers an empty page, the same answer a history with nothing in it gets. Built " +
+			"from POST /api/calls/search, the entry point a listener's own history search uses.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchCallsInput) (*mcp.CallToolResult, callPage, error) {
 		who, ok := CallerOf(ctx)
@@ -93,7 +94,8 @@ func (s *Server) registerCallTools(deps Deps) {
 			"site, the units heard on it, the talkgroups it was patched to, and where its recording " +
 			"is served from. The recording itself is not in the answer: audioUrl names the entry " +
 			"point that serves it, so the answer stays small and the bytes are fetched on their own. " +
-			"A call this caller may not see is answered exactly as a call that is not there.",
+			"A call this caller may not see is answered exactly as a call that is not there. Built " +
+			"from GET /api/calls/{callId}; the recording is served by GET /api/calls/{callId}/audio.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getCallInput) (*mcp.CallToolResult, callDetail, error) {
 		who, ok := CallerOf(ctx)
@@ -126,7 +128,8 @@ func (s *Server) registerCallTools(deps Deps) {
 			"unit identifiers, with their labels. The list is projected through what this caller is " +
 			"allowed to see, so an access code that names two systems sees those two and nothing " +
 			"else, and an administrator sees the whole configuration. Read this before searching: a " +
-			"reference an assistant invented answers as an empty page.",
+			"reference an assistant invented answers as an empty page. Built from the systems section " +
+			"of GET /api/admin/config/{section}, projected through this caller's reach.",
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ listSystemsInput) (*mcp.CallToolResult, systemsView, error) {
 		who, ok := CallerOf(ctx)
