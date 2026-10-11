@@ -476,7 +476,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	serveApplications(mux, listener, scannerfrontend.Embedded(), adminfrontend.Embedded())
 
-	s.routes = mux
+	// Every request the server answers carries the CA-014.2 deadline: the
+	// administrator's request is answered with a failure by 25 seconds, not
+	// held open by a database that does not answer.
+	s.routes = withRequestDeadline(mux, requestDeadline)
 
 	return nil
 }

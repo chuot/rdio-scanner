@@ -21,10 +21,12 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -43,6 +45,156 @@ import (
 // ticker. The retention itself is read when a pruning runs and not when the timer is set, so a change
 // the administrator makes takes effect on the next hour.
 const pruneInterval = time.Hour
+
+// requestDeadline is the CA-014.2 bound on one request. It sits inside
+// httpTimeout, the socket bound: the socket timeouts fire when the socket goes
+// silent, and a handler blocked on a database that does not answer is a request
+// held open with the socket quietly connected — the administrator's browser
+// spins with no answer at all. The deadline gives every request a context that
+// expires, and the answer to a request whose work outlives it is a failure the
+// administrator can read.
+const requestDeadline = 25 * time.Second
+
+// pruneDeadline bounds the hourly retention pass (CA-014.3): the pass runs on
+// the server's own schedule with nobody waiting for its answer, and a pass
+// blocked on a database that does not answer would hold the schedule and write
+// no report. Five minutes is long enough for the pass on a full deployment and
+// short enough that the next hour always arrives.
+const pruneDeadline = 5 * time.Minute
+
+// withRequestDeadline is the middleware that gives each request a context with
+// the given deadline and answers with a failure when the work outlives it. The
+// server runs it with requestDeadline; a test runs it with a shorter one to
+// watch it fire.
+//
+// It is not the standard library's http.TimeoutHandler: that hands its handler
+// a response writer that does not implement http.Hijacker, and the listener
+// and configuration sockets are built by a library that refuses a writer
+// without it. This middleware passes the server's own writer through, wrapped
+// so the deadline answer can be written exactly once: a request that has
+// answered, or has taken over its connection, is left alone when the deadline
+// arrives — those connections live by what their sockets do, not by a request
+// context — and a request that has answered nothing gets the failure.
+func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), at)
+		defer cancel()
+
+		answered := &deadlineAnswer{w: w}
+
+		finished := make(chan struct{})
+
+		go func() {
+			// The handler's panic rides back to the server goroutine that is
+			// answering this request, where the server's own panic rules
+			// apply; a panic swallowed in this goroutine would leave the
+			// server running with a bug it never hears about.
+			defer func() {
+				if problem := recover(); problem != nil {
+					answered.panic = problem
+				}
+
+				close(finished)
+			}()
+
+			next.ServeHTTP(answered, r.WithContext(ctx))
+		}()
+
+		select {
+		case <-finished:
+			if answered.panic != nil {
+				panic(answered.panic)
+			}
+
+			return
+		case <-ctx.Done():
+		}
+
+		if answered.refuseDeadline() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			io.WriteString(w, "the request could not be finished in time")
+		}
+	})
+}
+
+// deadlineAnswer is the response writer the deadline middleware hands the
+// handler: everything passes through to the server's own writer — including
+// the hijack the websocket endpoints take — and the middleware watches what
+// arrived, so the deadline's failure is written only for a request that has
+// answered nothing.
+type deadlineAnswer struct {
+	w    http.ResponseWriter
+	mu   sync.Mutex
+	done bool // an answer has arrived, the connection was taken over, or the deadline answered
+
+	panic any
+}
+
+// refuseDeadline writes the deadline's failure if nothing has answered yet,
+// and reports whether it wrote it.
+func (d *deadlineAnswer) refuseDeadline() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.done {
+		return false
+	}
+
+	d.done = true
+
+	return true
+}
+
+func (d *deadlineAnswer) Header() http.Header { return d.w.Header() }
+
+func (d *deadlineAnswer) WriteHeader(code int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.done {
+		return // the deadline answered; the handler's late answer is dropped
+	}
+
+	d.done = true
+
+	d.w.WriteHeader(code)
+}
+
+func (d *deadlineAnswer) Write(b []byte) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.done {
+		return len(b), nil
+	}
+
+	d.done = true
+
+	return d.w.Write(b)
+}
+
+func (d *deadlineAnswer) Flush() {
+	if flusher, ok := d.w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// Hijack lets the websocket endpoints take the connection through this writer,
+// which is the whole reason this middleware is not the standard library's.
+func (d *deadlineAnswer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.done = true
+
+	return d.w.(http.Hijacker).Hijack()
+}
+
+var (
+	_ http.ResponseWriter = (*deadlineAnswer)(nil)
+	_ http.Hijacker       = (*deadlineAnswer)(nil)
+	_ http.Flusher        = (*deadlineAnswer)(nil)
+)
 
 // consoleLog is where the server writes the lines it says out loud: the startup lines an operator reads,
 // and the lines the endpoints say about a connection they could not take over. They are not the server's
@@ -290,7 +442,7 @@ func serveApplications(mux *http.ServeMux, listener, scannerApp, adminApp http.H
 //
 // It takes the scheduler rather than using the server's own so that the schedule can be tested without
 // waiting an hour for it.
-func pruneHourly(scheduler ports.Scheduler, prune *application.PruneOldCallsHandler) *hourlyPruning {
+func pruneHourly(scheduler ports.Scheduler, prune pruneRunner) *hourlyPruning {
 	schedule := &hourlyPruning{scheduler: scheduler, prune: prune}
 
 	schedule.next()
@@ -298,10 +450,19 @@ func pruneHourly(scheduler ports.Scheduler, prune *application.PruneOldCallsHand
 	return schedule
 }
 
+// pruneRunner is the retention pass as the schedule sees it: the schedule runs
+// the pass and nothing else, and the seam is what lets a test record the
+// context the pass ran under — where the deadline (CA-014.3) is visible.
+type pruneRunner interface {
+	Handle(ctx context.Context, cmd application.PruneOldCallsCommand) (application.PruneOldCallsResult, error)
+}
+
+var _ pruneRunner = (*application.PruneOldCallsHandler)(nil)
+
 // hourlyPruning is the server's retention schedule.
 type hourlyPruning struct {
 	scheduler ports.Scheduler
-	prune     *application.PruneOldCallsHandler
+	prune     pruneRunner
 
 	mutex   sync.Mutex
 	pending ports.Timer
@@ -313,9 +474,16 @@ var _ ports.Timer = (*hourlyPruning)(nil)
 // next puts the next pruning on the scheduler, unless the schedule has been ended.
 func (schedule *hourlyPruning) next() {
 	timer := schedule.scheduler.Schedule(pruneInterval, func() {
+		// The pass runs under the deadline (CA-014.3): a pass blocked on a
+		// database that does not answer stops at its bound, and the next hour
+		// always arrives.
+		//
 		// The legacy server's scheduler.run writes the failure into the log view and keeps going, and the
 		// pruning handler has already written it there. The next hour tries again.
-		_, _ = schedule.prune.Handle(context.Background(), application.PruneOldCallsCommand{})
+		ctx, cancel := context.WithTimeout(context.Background(), pruneDeadline)
+		defer cancel()
+
+		_, _ = schedule.prune.Handle(ctx, application.PruneOldCallsCommand{})
 
 		schedule.next()
 	})
