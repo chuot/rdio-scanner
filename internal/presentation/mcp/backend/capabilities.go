@@ -41,6 +41,7 @@ import (
 func (s *Server) registerCapabilities(deps Deps) {
 	s.registerVersionResource(deps)
 	s.registerCallTools(deps)
+	s.registerReadResources(deps)
 }
 
 // registerVersionResource publishes the fact an assistant needs before it asks for anything else: which

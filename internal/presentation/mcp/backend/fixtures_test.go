@@ -106,12 +106,14 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 	bundle.resolve = application.NewResolveAccessQueryHandler(bundle.accesses, bundle.logs, bundle.clock)
 
 	// The recorded history the capabilities answer from, spread over two systems so a scoped
-	// caller and an unscoped caller can be told apart by what they get back.
+	// caller and an unscoped caller can be told apart by what they get back, and over two days so
+	// a slice narrowed to one day can be told apart from a slice that was not narrowed at all.
 	bundle.calls = fakes.NewCalls()
 	bundle.calls.Stored = map[uint64]domain.Call{
 		1: fixtureCall(1, systemOneRef, fixtureTime.Add(-3*time.Hour)),
 		2: fixtureCall(2, systemOneRef, fixtureTime.Add(-2*time.Hour)),
 		3: fixtureCall(3, systemTwoRef, fixtureTime.Add(-1*time.Hour)),
+		4: fixtureCall(4, systemTwoRef, fixtureTime.Add(-27*time.Hour)),
 	}
 	bundle.systems = &fakes.Systems{Stored: domain.Systems{
 		{ID: 1, Label: "System", SystemRef: systemOneRef},
