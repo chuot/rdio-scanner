@@ -147,6 +147,13 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 			continue
 		}
 
+		// A mask whose regex captures more groups than it names tokens lines the
+		// filename's pieces up with the wrong values (CA-008.5): said when the watch
+		// starts, where the operator can read it, once, not per file.
+		if warning := parsers.MaskWarning(dirwatch.Mask); warning != "" {
+			watchers.log(ctx, domain.LogLevelWarn, warning)
+		}
+
 		// Said only for a directory that is there. A watch pointing at one that is not watches nothing, and
 		// the pass over it already says so in a line that names the directory; claiming the server is
 		// watching a directory it cannot read is a line an operator has to learn to distrust.

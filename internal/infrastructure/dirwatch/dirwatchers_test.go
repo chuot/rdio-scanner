@@ -1326,3 +1326,25 @@ func TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched(t *testing.T) {
 
 	watched.calls.nothingArrivesWithin(t, settleWait+settleWait)
 }
+
+// TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart (REQ-008, CA-008.5): a mask
+// carrying literal parentheses captures groups nobody named, and the filename's pieces
+// then line up with the wrong values. The mismatch is said when the watch starts, where
+// the operator can read it, not per file in the dark.
+func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	watched := watchingOver(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.Mask = "call(1)-#TG"
+
+		return watch
+	})
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "groups") {
+		lines := watched.reportedAfterStarting()
+
+		t.Errorf("the watch wrote %v, want a line saying the mask captures more groups than it names tokens", lines)
+	}
+}

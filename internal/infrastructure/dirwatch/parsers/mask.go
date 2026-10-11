@@ -41,17 +41,16 @@ type maskToken struct {
 	Pattern string
 }
 
-// maskTokens is the table of mask tokens, in the order the legacy applies it — and the order
-// is part of the behavior, because a token is replaced the first time its text is found and
-// a token whose text is the prefix of another one eats the longer token.
+// maskTokens is the table of mask tokens, applied longest-first (decision D16): a token
+// is replaced the first time its text is found, and a token whose text is the prefix of
+// another one eats the longer token when the shorter one goes first.
 //
-// `#UNIT` is the one token declared before a longer token that starts with it, and a
-// replacement only touches the first occurrence of the text it is looking for. So a mask that
-// names `#UNIT` before `#UNITLBL` is fine — the first occurrence is the standalone token — but
-// a mask that names only `#UNITLBL`, which is the obvious way to write it, has `#UNIT` replaced
-// inside the longer token, leaving the literal text `LBL` that the filename then has to end
-// with. That is quirk Q40, and reordering the table would fix it at the cost of changing what
-// every mask that already works matches.
+// That is quirk Q40, repaired: a mask naming only `#UNITLBL` — the obvious way to write
+// it — had `#UNIT` replaced inside the longer token, leaving a literal `LBL` the
+// filename then had to end with, and the mask silently matched nothing. The same ate
+// `#TGHZ` with `#HZ` and `#TGMHZ` with `#MHZ`. A mask naming the shorter token
+// standalone — `#UNIT` on its own — matches exactly what it always matched, because the
+// longer token it does not name is never applied.
 var maskTokens = []maskToken{
 	{Name: "date", Text: "#DATE", Pattern: `\d{4}[-_]{0,1}\d{2}[-_]{0,1}\d{2}`},
 	{Name: "group", Text: "#GROUP", Pattern: `[a-zA-Z0-9\.\ -]+`},
@@ -75,11 +74,56 @@ var maskTokens = []maskToken{
 	{Name: "ztime", Text: "#ZTIME", Pattern: `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 }
 
+// The table is ordered longest-first at init, keeping the relative order of same-length
+// tokens as the legacy declared them: the order among tokens that cannot eat each other
+// is the order their positions were lined up in, and nothing about them changes.
+func init() {
+	sort.SliceStable(maskTokens, func(i, j int) bool {
+		return len(maskTokens[i].Text) > len(maskTokens[j].Text)
+	})
+}
+
 // maskPosition is where in the mask a token was found, which is what lines the filename's
 // captured groups up with the values they name.
 type maskPosition struct {
 	Name     string
 	Position int
+}
+
+// MaskWarning reports the mismatch a mask's own regex shows: more captured groups than
+// the tokens it names means the filename's pieces line up with values nobody asked for,
+// and the call built from it reads the wrong pieces. The warning is said when the watch
+// starts, where the operator can read it, not per file in the dark (CA-008.5).
+func MaskWarning(mask string) string {
+	if len(mask) == 0 {
+		return ""
+	}
+
+	remaining := mask
+	tokens := 0
+
+	// The same replacement applyMask makes, applied the same longest-first way: the
+	// regex to count groups in is the one the watch will actually compile.
+	for _, token := range maskTokens {
+		if strings.Index(remaining, token.Text) != -1 {
+			tokens++
+
+			remaining = strings.Replace(remaining, token.Text, fmt.Sprintf("(%v)", token.Pattern), 1)
+		}
+	}
+
+	compiled, err := regexp.Compile(remaining)
+	if err != nil {
+		// The mask is refused at apply (decision D7); a mask that cannot compile has
+		// nothing left to say about its groups.
+		return ""
+	}
+
+	if groups := compiled.NumSubexp(); groups > tokens {
+		return fmt.Sprintf("the mask %q captures %d groups and names %d tokens: the values it reads will not line up", mask, groups, tokens)
+	}
+
+	return ""
 }
 
 // applyMask reads the call's metadata out of its filename, at the places the watch's mask

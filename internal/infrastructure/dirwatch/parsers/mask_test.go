@@ -496,43 +496,42 @@ func TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference(t *testing.T
 	}
 }
 
-// TestExtractDefaultManglesTheUnitLabelToken is quirk Q40: `#UNIT` is declared before
-// `#UNITLBL`, so it is replaced inside the longer token first, and the mask then requires the
-// filename to end with the literal text LBL. A mask written the obvious way reads no unit name
-// at all.
-func TestExtractDefaultManglesTheUnitLabelToken(t *testing.T) {
+// TestExtractDefaultReadsTheUnitLabelTokenWhole is quirk Q40, repaired by decision D16:
+// the token table applies longest-first, so a mask naming only `#UNITLBL` — the obvious
+// way to write it — has the label token replaced whole. It used to have `#UNIT` replaced
+// inside the longer token, leaving a literal LBL the filename then had to end with, and
+// the mask silently matched nothing.
+func TestExtractDefaultReadsTheUnitLabelTokenWhole(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNITLBL"
 
-	_, _, err := extract(t, watch, "10001-1514000-6789.wav")
-
-	if err == nil || !strings.Contains(err.Error(), "no system") {
-		t.Errorf("Extract = %v for a mask that names #UNITLBL, want the whole mask to have stopped matching the filename", err)
-	}
-
-	extracted, _, err := extract(t, watch, "10001-1514000-6789LBL.wav")
+	extracted, _, err := extract(t, watch, "10001-1514000-Engine 7.wav")
 	if err != nil {
-		t.Fatalf("Extract: %v", err)
+		t.Fatalf("Extract: %v, want the label token replaced whole and the mask to match", err)
 	}
 
 	if extracted.Call.Meta.SystemRef != 10001 || extracted.Call.Meta.TalkgroupRef != 1514000 {
-		t.Errorf("the call claims system %d talkgroup %d, want the tokens before the mangled one to still be read",
+		t.Errorf("the call claims system %d talkgroup %d, want the tokens around the label read as the mask names them",
 			extracted.Call.Meta.SystemRef, extracted.Call.Meta.TalkgroupRef)
 	}
 
-	if len(extracted.Call.Units) != 1 || extracted.Call.Units[0].UnitRef != 6789 {
-		t.Errorf("the call units are %#v, want the radio read from the digits the token left behind", extracted.Call.Units)
+	// The pairing rule is the legacy's and unchanged: a name lands on the unit the
+	// #UNIT token added. This mask names no unit, so the label is captured and has
+	// nothing to pair with.
+	if len(extracted.Call.Units) != 0 {
+		t.Errorf("the call units are %#v, want none: the mask names no unit token", extracted.Call.Units)
 	}
 
 	if len(extracted.Call.Meta.UnitLabels) != 0 {
-		t.Errorf("the unit labels are %#v, want none: the name token was never registered", extracted.Call.Meta.UnitLabels)
+		t.Errorf("the unit labels are %#v, want none: there is no unit for the name to pair with", extracted.Call.Meta.UnitLabels)
 	}
 }
 
 // TestExtractDefaultPairsTheUnitLabelWithTheUnitTheMaskNamed pins the pairing the mask
 // offers, which is one unit and one name however many the filename holds — and that the
 // pairing works when the mask names the unit itself before the label, which is the only way
-// the label token survives the replacement order (quirk Q40).
+// the label token survives the replacement order, as it now does however the mask names
+// the two tokens (decision D16).
 func TestExtractDefaultPairsTheUnitLabelWithTheUnitTheMaskNamed(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNIT-#UNITLBL"

@@ -881,3 +881,68 @@ func TestExtractTrunkRecorderNeverReadsAPathWalkingExtension(t *testing.T) {
 			extracted.Call.AudioFilename, len(extracted.Call.Audio))
 	}
 }
+
+// TestAMaskNamingOnlyTheUnitLabelMatches (REQ-008, CA-008.5, decision D16): quirk Q40 —
+// a mask naming only #UNITLBL has #UNIT replaced inside it, leaving a literal LBL the
+// filename then has to end with, so the obvious way to write the mask silently matches
+// nothing. The token table applies longest-first, and the label token is replaced whole.
+func TestAMaskNamingOnlyTheUnitLabelMatches(t *testing.T) {
+	watch := domain.NewDirwatch()
+	watch.Mask = "#SYS-#TG-#UNITLBL-#DATE-#TIME"
+
+	directory := t.TempDir()
+
+	name := filepath.Join(directory, "10001-1514000-Engine 7-20261006-120000.wav")
+
+	if err := os.WriteFile(name, recording, 0o644); err != nil {
+		t.Fatalf("writing the recording: %v", err)
+	}
+
+	extracted, recognized, err := extractWith(t, newParsers(configuredSystems()), watch, name)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+
+	if !recognized {
+		t.Fatal("a #UNITLBL-only mask was recognized as nothing, want the label token replaced whole")
+	}
+
+	// The mask matching is the repair: the system and talkgroup the mask names are read,
+	// where today the leftover literal LBL makes the whole filename miss.
+	if extracted.Call.Meta.SystemRef != 10001 {
+		t.Errorf("system ref = %d, want 10001 as the mask names it", extracted.Call.Meta.SystemRef)
+	}
+
+	if extracted.Call.Meta.TalkgroupRef != 1514000 {
+		t.Errorf("talkgroup ref = %d, want 1514000 as the mask names it", extracted.Call.Meta.TalkgroupRef)
+	}
+}
+
+// TestAMaskNamingTheUnitTokenStandaloneStillMatches is the other half of decision D16:
+// the reordering may not change what a mask that already works matches — the unit token
+// named on its own keeps reading the unit number.
+func TestAMaskNamingTheUnitTokenStandaloneStillMatches(t *testing.T) {
+	watch := domain.NewDirwatch()
+	watch.Mask = "#SYS-#TG-#UNIT-#DATE-#TIME"
+
+	directory := t.TempDir()
+
+	name := filepath.Join(directory, "10001-1514000-6789-20261006-120000.wav")
+
+	if err := os.WriteFile(name, recording, 0o644); err != nil {
+		t.Fatalf("writing the recording: %v", err)
+	}
+
+	extracted, recognized, err := extractWith(t, newParsers(configuredSystems()), watch, name)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+
+	if !recognized {
+		t.Fatal("a #UNIT mask was recognized as nothing, want it to keep matching as it always did")
+	}
+
+	if len(extracted.Call.Units) != 1 || extracted.Call.Units[0].UnitRef != 6789 {
+		t.Errorf("units = %v, want 6789 as the mask names it", extracted.Call.Units)
+	}
+}
