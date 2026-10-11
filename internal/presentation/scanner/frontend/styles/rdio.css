@@ -1186,6 +1186,47 @@ rdio-display .auth .rdio-field-box:hover::after {
   background-color: rgba(0, 0, 0, 0.87);
 }
 
+/* Material answers the press on a fill field: the fill darkens under the
+ * pointer and the indicator takes the pressed 2px line. The filter fields
+ * only - the unlock field keeps its own quiet look. */
+rdio-search-panel .rdio-filters .rdio-field-box {
+  transition: background-color 120ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:hover {
+  background-color: #efefef;
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:active {
+  background-color: #e8e8e8;
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:active::after {
+  background-color: #424242;
+  height: 2px;
+}
+
+rdio-search-panel .rdio-filters rdio-form-field select {
+  cursor: pointer;
+}
+
+/* The native popup is open while the control is focused, so the arrow
+ * turns with the focus - the field's own signal that its list is unwrapped. */
+rdio-search-panel .rdio-filters .rdio-field-box::before {
+  transition: transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:focus-within::before {
+  transform: rotate(180deg);
+}
+
+/* The unwrapped list is drawn by the operating system; naming the option
+ * colors keeps it light like the field instead of inheriting the dark drawer. */
+rdio-search-panel .rdio-filters rdio-form-field select option {
+  background: white;
+  color: rgba(0, 0, 0, 0.87);
+}
+
 /* Material shows focus by thickening the indicator to 2px in the primary colour
  * rather than by drawing an outline, which is what keeps keyboard focus visible
  * here without the black ring a native control draws around itself. */
