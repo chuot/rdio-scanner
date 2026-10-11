@@ -226,6 +226,17 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 
 // writeAudio writes the recording itself, under the part name the upload endpoint reads it
 // from and under the filename the call carries.
+//
+// The filename is written through the standard library's `CreateFormFile`, and what the
+// receiver sees is the standard library's escaping of it, not the call's own string: the
+// library strips any path from the name and escapes the characters a quoted
+// `Content-Disposition` cannot carry (Go's `escapeFilename` and `escapeQuotes` in
+// `mime/multipart/writer.go`). A filename with a `"` in it arrives at the downstream
+// quoted, not ending the header. This is pinned here, not hidden, because it is a
+// property of the wire format the server does not own and must not pretend to control
+// (CA-020.1): the legacy server forwarded through this same library, so the escaping
+// the two servers put on the wire is byte-identical, and a receiver that parses the
+// header sees the same name from either.
 func (forwarder *Forwarder) writeAudio(writer *multipart.Writer, call domain.Call) error {
 	part, err := writer.CreateFormFile("audio", call.AudioFilename)
 	if err != nil {

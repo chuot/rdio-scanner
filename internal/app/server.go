@@ -281,7 +281,18 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	// s.clock was created in newServer, before the migration, because the migration stamps the rows it
 	// archives with the server's clock.
-	s.scheduler = clock.NewScheduler()
+	// Scheduled work that panics is recovered by the scheduler and said here
+	// (CA-020.1): a debounced listener report, an hourly pruning, or a delayed
+	// call that falls over is a failure the operator sees in the log view, not
+	// a server that dies on a goroutine nobody owns.
+	s.scheduler = clock.NewScheduler(func(problem any) {
+		_ = logs.AppendLog(ctx, domain.LogEntry{
+			DateTime: s.clock.Now(),
+			Level:    domain.LogLevelWarn,
+			Source:   domain.LogSourceServer,
+			Message:  fmt.Sprintf("scheduled work panicked: %v", problem),
+		})
+	})
 
 	// The clamp lines (CA-017.2): a stored value the read cannot hold — a negative
 	// expiration, limit, or order — is clamped to the safe reading, and the row and

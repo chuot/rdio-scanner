@@ -427,9 +427,18 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 	}
 
 	countQuery := `SELECT COUNT(*) ` + from
-	if err := calls.queryRow(ctx, countQuery, args...).Scan(&page.Count); err != nil {
+
+	// The count is scanned as the 64-bit integer the database answers and
+	// clamped, not cast (CA-020.1): `page.Count` is a `uint`, which on a
+	// 32-bit build is 32 bits wide, and a negative — the shape a signed
+	// column can carry — cast through it is the largest count there is.
+	var count int64
+
+	if err := calls.queryRow(ctx, countQuery, args...).Scan(&count); err != nil {
 		return ports.CallSearchPage{}, statementError("calls", "search", err, countQuery)
 	}
+
+	page.Count = uint(clampNonNegative(count))
 
 	order := "DESC"
 	if search.Ascending {

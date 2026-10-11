@@ -116,6 +116,12 @@ func (t transaction) rollback() {
 // It is a scan rather than a parser, and it is safe for the queries this package writes: a `?`
 // inside a quoted identifier or a quoted literal is copied verbatim, and no query here puts a
 // placeholder inside a literal in the first place.
+//
+// The invariant the scan relies on, pinned by a test (CA-020.1): SQL writes a quote inside a
+// literal as a doubled quote — `”` — and the scan reads a doubled pair as the end of one quoted
+// span and the start of the next. A literal like `'it”s'` is copied whole, a `?` inside it is
+// copied as the literal's own character, and the numbering counts only the placeholders outside
+// literals.
 func (d Dialect) bind(query string) string {
 	if d != DialectPostgresql {
 		return query

@@ -186,7 +186,11 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		return ports.LogSearchPage{}, statementError("logs", "search", err, countQuery)
 	}
 
-	page.Count = uint64(count)
+	// The count is scanned as the 64-bit integer the database answers and
+	// clamped, not cast (CA-020.1): a cast of a negative is the largest count
+	// there is, and on a 32-bit build a plain `int` target truncates in
+	// silence.
+	page.Count = clampNonNegative(count)
 
 	// The per-subsystem counts are read over the whole match and not over the page, so they stay the same
 	// while the log view pages through 200 entries at a time.

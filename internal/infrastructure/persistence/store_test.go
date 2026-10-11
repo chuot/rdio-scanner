@@ -176,3 +176,19 @@ func TestOperationErrorNamesTheOperationWithoutInventingAStatement(t *testing.T)
 		t.Errorf("error = %v, want %s", err, want)
 	}
 }
+
+// TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral (REQ-020, CA-020.1): the
+// invariant that makes the scan in bind safe, pinned in its sharpest case. SQL
+// writes a quote inside a literal as a doubled quote — 'it”s' — and the scan
+// reads that doubled pair as the end of one quoted span and the start of the
+// next: the literal is copied verbatim, its `?` is the literal's own character
+// and not a placeholder, and the numbering counts only the placeholders outside.
+func TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral(t *testing.T) {
+	const query = `SELECT "value" FROM "options" WHERE "key" = ? AND "value" LIKE 'it''s?x' AND "other" = ?`
+
+	const want = `SELECT "value" FROM "options" WHERE "key" = $1 AND "value" LIKE 'it''s?x' AND "other" = $2`
+
+	if bound := DialectPostgresql.bind(query); bound != want {
+		t.Errorf("bound query = %s, want %s: the ? inside the literal is not a placeholder, and the numbering must not count it", bound, want)
+	}
+}

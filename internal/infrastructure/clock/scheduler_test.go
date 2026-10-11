@@ -21,6 +21,7 @@
 package clock
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -31,7 +32,7 @@ import (
 func TestSchedulerRunsTheWorkAfterTheDelay(t *testing.T) {
 	ran := make(chan struct{}, 1)
 
-	NewScheduler().Schedule(20*time.Millisecond, func() { ran <- struct{}{} })
+	NewScheduler(nil).Schedule(20*time.Millisecond, func() { ran <- struct{}{} })
 
 	select {
 	case <-ran:
@@ -46,7 +47,7 @@ func TestSchedulerRunsTheWorkAfterTheDelay(t *testing.T) {
 func TestSchedulerCancelsWorkThatHasNotRunYet(t *testing.T) {
 	ran := make(chan struct{}, 1)
 
-	timer := NewScheduler().Schedule(50*time.Millisecond, func() { ran <- struct{}{} })
+	timer := NewScheduler(nil).Schedule(50*time.Millisecond, func() { ran <- struct{}{} })
 
 	timer.Cancel()
 
@@ -63,7 +64,7 @@ func TestSchedulerCancelsWorkThatHasNotRunYet(t *testing.T) {
 func TestSchedulerIgnoresACancelOfWorkThatAlreadyRan(t *testing.T) {
 	ran := make(chan struct{}, 1)
 
-	timer := NewScheduler().Schedule(time.Millisecond, func() { ran <- struct{}{} })
+	timer := NewScheduler(nil).Schedule(time.Millisecond, func() { ran <- struct{}{} })
 
 	select {
 	case <-ran:
@@ -75,11 +76,34 @@ func TestSchedulerIgnoresACancelOfWorkThatAlreadyRan(t *testing.T) {
 
 	other := make(chan struct{}, 1)
 
-	NewScheduler().Schedule(time.Millisecond, func() { other <- struct{}{} })
+	NewScheduler(nil).Schedule(time.Millisecond, func() { other <- struct{}{} })
 
 	select {
 	case <-other:
 	case <-time.After(2 * time.Second):
 		t.Fatalf("a cancel of work that had already run stopped later work from running")
+	}
+}
+
+// TestScheduledWorkThatPanicsIsRecoveredAndReported (REQ-020, CA-020.1): scheduled
+// work runs on the timer's own goroutine, and today a panic there is a panic in a
+// goroutine nobody owns — the whole server goes down with no report in its own log.
+// The scheduler recovers the panic and tells the report it was built with.
+func TestScheduledWorkThatPanicsIsRecoveredAndReported(t *testing.T) {
+	reported := make(chan any, 1)
+
+	scheduler := NewScheduler(func(problem any) { reported <- problem })
+
+	scheduler.Schedule(10*time.Millisecond, func() {
+		panic("the scheduled report fell over")
+	})
+
+	select {
+	case problem := <-reported:
+		if got, want := fmt.Sprint(problem), "the scheduled report fell over"; got != want {
+			t.Errorf("the report was told %v, want the panic's own value", problem)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the scheduled panic was never reported: the server took the panic silently, or not at all")
 	}
 }
