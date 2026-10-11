@@ -84,24 +84,38 @@ func NewAccesses(db *sql.DB, dialect Dialect) *Accesses {
 
 // AllAccesses returns the access list the server is running with.
 func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, error) {
+	// The cache answers under the mutex, and the read that fills an empty cache
+	// runs outside it (CA-014.4): the mutex is what the server's own enforcement
+	// reads through every moment of a connection check, and holding it across
+	// the database statements of a read or a save stops those checks for the
+	// length of every statement.
 	accesses.mutex.Lock()
-	defer accesses.mutex.Unlock()
 
-	if !accesses.loaded {
-		list, clamped, err := accesses.read(ctx)
-		if err != nil {
-			return nil, err
-		}
+	if accesses.loaded {
+		list := accesses.live.Ordered()
 
-		accesses.live = list
-		accesses.loaded = true
+		accesses.mutex.Unlock()
 
-		accesses.reportClamps(clamped)
+		return list, nil
 	}
+
+	accesses.mutex.Unlock()
+
+	list, clamped, err := accesses.read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	accesses.mutex.Lock()
+	accesses.live = list
+	accesses.loaded = true
+	accesses.mutex.Unlock()
+
+	accesses.reportClamps(clamped)
 
 	// Ordered is a copy: the list the server enforces with is not the slice every
 	// caller gets to edit (CA-017.1).
-	return accesses.live.Ordered(), nil
+	return list.Ordered(), nil
 }
 
 // SaveAccesses reconciles the stored accesses with the given ones and makes them the accesses
@@ -113,13 +127,14 @@ func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, err
 // After a write that succeeded, the stored rows are read back and cached, which is the `Read`
 // the legacy `ConfigHandler` runs after a successful `Write`.
 func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses) error {
-	accesses.mutex.Lock()
-	defer accesses.mutex.Unlock()
-
 	// A copy, for the same reason as the read path: the submitted slice stays the
-	// caller's to do with as the caller likes (CA-017.1).
+	// caller's to do with as the caller likes (CA-017.1). The assignment takes
+	// the mutex; the statements run outside it (CA-014.4), so the server keeps
+	// enforcing from the cache while the save walks the database.
+	accesses.mutex.Lock()
 	accesses.live = next.Ordered()
 	accesses.loaded = true
+	accesses.mutex.Unlock()
 
 	if err := accesses.write(ctx, next); err != nil {
 		return err
@@ -130,7 +145,9 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 		return err
 	}
 
+	accesses.mutex.Lock()
 	accesses.live = reloaded
+	accesses.mutex.Unlock()
 
 	accesses.reportClamps(clamped)
 

@@ -95,20 +95,34 @@ func (options *Options) StoreInitialCredential(credential string) {
 // ReadOptions returns the options the server is currently running with. The first call is the
 // startup read: the defaults with the stored rows applied on top.
 func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error) {
+	// The cache answers under the mutex, and the read that fills an empty cache
+	// runs outside it (CA-014.4): the login handler, the retention pass, and the
+	// signing secret all read through here, and holding the mutex across the
+	// fetch of the stored rows stops the server's own configuration reads for
+	// the length of every statement.
 	options.mutex.Lock()
-	defer options.mutex.Unlock()
 
-	if !options.loaded {
-		next, err := options.rederive(ctx, domain.Options{})
-		if err != nil {
-			return domain.Options{}, err
-		}
+	if options.loaded {
+		next := options.live
 
-		options.live = next
-		options.loaded = true
+		options.mutex.Unlock()
+
+		return next, nil
 	}
 
-	return options.live, nil
+	options.mutex.Unlock()
+
+	next, err := options.rederive(ctx, domain.Options{})
+	if err != nil {
+		return domain.Options{}, err
+	}
+
+	options.mutex.Lock()
+	options.live = next
+	options.loaded = true
+	options.mutex.Unlock()
+
+	return next, nil
 }
 
 // WriteOptions makes the given options the ones the server runs with and then stores them.
@@ -118,11 +132,12 @@ func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error)
 // answered after a save is what they submitted — including the duplicate-detection window the
 // stored rows cannot give back (Q1).
 func (options *Options) WriteOptions(ctx context.Context, next domain.Options) error {
+	// The submitted options take effect under the mutex; the rows are written
+	// outside it (CA-014.4), as in `Accesses.SaveAccesses`.
 	options.mutex.Lock()
-	defer options.mutex.Unlock()
-
 	options.live = next
 	options.loaded = true
+	options.mutex.Unlock()
 
 	if err := options.write(ctx, next); err != nil {
 		return err
@@ -136,16 +151,21 @@ func (options *Options) WriteOptions(ctx context.Context, next domain.Options) e
 // options to their defaults before it applies the stored rows, so an option stored under a name
 // the reader does not look for comes back as the default. Q15 is about exactly this.
 func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, error) {
+	// The re-derivation reads the stored rows outside the mutex (CA-014.4);
+	// the options it produces take effect under it.
 	options.mutex.Lock()
-	defer options.mutex.Unlock()
+	from := options.live
+	options.mutex.Unlock()
 
-	next, err := options.rederive(ctx, options.live)
+	next, err := options.rederive(ctx, from)
 	if err != nil {
 		return domain.Options{}, err
 	}
 
+	options.mutex.Lock()
 	options.live = next
 	options.loaded = true
+	options.mutex.Unlock()
 
 	return next, nil
 }

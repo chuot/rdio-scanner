@@ -65,37 +65,45 @@ func NewApikeys(db *sql.DB, dialect Dialect) *Apikeys {
 
 // AllApikeys returns the upload credentials the server is running with.
 func (apikeys *Apikeys) AllApikeys(ctx context.Context) (domain.Apikeys, error) {
+	// The cache answers under the mutex, and the read that fills an empty cache
+	// runs outside it (CA-014.4), as in `Accesses.AllAccesses`.
 	apikeys.mutex.Lock()
-	defer apikeys.mutex.Unlock()
 
-	if !apikeys.loaded {
-		list, clamped, err := apikeys.read(ctx)
-		if err != nil {
-			return nil, err
-		}
+	if apikeys.loaded {
+		list := apikeys.live.Ordered()
 
-		apikeys.live = list
-		apikeys.loaded = true
+		apikeys.mutex.Unlock()
 
-		apikeys.reportClamps(clamped)
+		return list, nil
 	}
 
-	// Ordered is a copy: the list the server enforces with is not the slice every
-	// caller gets to edit (CA-017.1).
-	return apikeys.live.Ordered(), nil
+	apikeys.mutex.Unlock()
+
+	list, clamped, err := apikeys.read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	apikeys.mutex.Lock()
+	apikeys.live = list
+	apikeys.loaded = true
+	apikeys.mutex.Unlock()
+
+	apikeys.reportClamps(clamped)
+
+	return list.Ordered(), nil
 }
 
 // SaveApikeys reconciles the stored credentials with the given ones and makes them the
 // credentials the server accepts uploads against, with the same order of operations as
 // `SaveAccesses`: replace what is in effect, then store it, then read the stored rows back.
 func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) error {
+	// The assignment takes the mutex; the statements run outside it (CA-014.4),
+	// as in `Accesses.SaveAccesses`.
 	apikeys.mutex.Lock()
-	defer apikeys.mutex.Unlock()
-
-	// A copy, for the same reason as the read path: the submitted slice stays the
-	// caller's to do with as the caller likes (CA-017.1).
 	apikeys.live = next.Ordered()
 	apikeys.loaded = true
+	apikeys.mutex.Unlock()
 
 	if err := apikeys.write(ctx, next); err != nil {
 		return err
@@ -106,7 +114,9 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 		return err
 	}
 
+	apikeys.mutex.Lock()
 	apikeys.live = reloaded
+	apikeys.mutex.Unlock()
 
 	apikeys.reportClamps(clamped)
 

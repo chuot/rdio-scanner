@@ -815,3 +815,67 @@ func TestReloadOptionsReportsAContextCancelledMidRead(t *testing.T) {
 		t.Fatal("ReloadOptions = nil for a read cancelled mid-iteration, want the failure of the read it did not finish")
 	}
 }
+
+// TestReadOptionsAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase (REQ-014,
+// CA-014.4): the options cache answers the server's own reads — the login
+// handler, the retention pass, the signing secret — and today a configuration
+// save holds the cache's mutex across the thirteen rows it writes. The cache
+// answers while the save is in flight.
+func TestReadOptionsAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {
+	db, counted := openCountedSchemaDatabase(t)
+
+	options := NewOptions(db, DialectSqlite)
+
+	options.StoreInitialCredential("initial-credential")
+
+	running, err := options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	counted.setDelay(200 * time.Millisecond)
+
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+
+		running.PruneDays = 30
+
+		if err := options.WriteOptions(context.Background(), running); err != nil {
+			t.Errorf("WriteOptions: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	started := time.Now()
+
+	cached, err := options.ReadOptions(context.Background())
+	elapsed := time.Since(started)
+
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if elapsed > 250*time.Millisecond {
+		t.Errorf("the cache answer took %v with a save in flight, want the running options back without waiting on the save's statements", elapsed)
+	}
+
+	if cached.AdminPasswordHash == "" {
+		t.Error("the cache answered with options that name no administrator credential, want the running options")
+	}
+
+	<-finished
+
+	counted.setDelay(0)
+
+	after, err := options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if after.PruneDays != 30 {
+		t.Errorf("the options after the save read PruneDays %d, want 30: the save takes effect when it is written", after.PruneDays)
+	}
+}

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/domain"
 )
@@ -519,5 +520,86 @@ func TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 
 	if n := counted.count(`SELECT "apikeyId" FROM "apikeys" WHERE "apikeyId" IN (`); n != 1 {
 		t.Errorf("the save ran %d membership statements, want exactly one", n)
+	}
+}
+
+// TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase (REQ-014,
+// CA-014.4): the credential twin of the access cache — the listener check that
+// reads a credential answers from the cache, and today a save's mutex holds the
+// cache across every statement the save runs.
+func TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {
+	db, counted := openCountedSchemaDatabase(t)
+
+	const query = `INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (0, 'cached-key', 'cached-secret', 1, '"*"')`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("seeding the cached credential: %v", err)
+	}
+
+	apikeys := NewApikeys(db, DialectSqlite)
+
+	cached, err := apikeys.AllApikeys(context.Background())
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	if len(cached) != 1 {
+		t.Fatalf("the cache holds %d credentials, want the one seeded", len(cached))
+	}
+
+	saved := domain.Apikeys{}
+
+	for i := 1; i <= 10; i++ {
+		saved = append(saved, domain.Apikey{Ident: fmt.Sprintf("saving-%02d", i), Key: fmt.Sprintf("saving-key-%02d", i)})
+	}
+
+	counted.setDelay(200 * time.Millisecond)
+
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+
+		if err := apikeys.SaveApikeys(context.Background(), saved); err != nil {
+			t.Errorf("SaveApikeys: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	started := time.Now()
+
+	list, err := apikeys.AllApikeys(context.Background())
+	elapsed := time.Since(started)
+
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	if elapsed > 250*time.Millisecond {
+		t.Errorf("the cache answer took %v with a save in flight, want the cached list back without waiting on the save's statements", elapsed)
+	}
+
+	// One complete state, as in the accesses twin: the cached list, or the
+	// submitted list that takes effect the moment the save begins.
+	if len(list) == 1 && list[0].Ident == "cached-key" {
+		// The cached list answered.
+	} else if len(list) == 10 && list[0].Ident == "saving-01" {
+		// The submitted list has taken effect.
+	} else {
+		t.Errorf("the cache answered %v, want one complete list — the cached one or the submitted one, never a state assembled halfway through the save's statements", list)
+	}
+
+	<-finished
+
+	counted.setDelay(0)
+
+	after, err := apikeys.AllApikeys(context.Background())
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	if len(after) != 10 {
+		t.Errorf("the cache holds %d credentials after the save, want the ten saved", len(after))
 	}
 }

@@ -935,3 +935,94 @@ func TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 		t.Errorf("the save ran %d membership statements, want exactly one", n)
 	}
 }
+
+// TestAllAccessesAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase (REQ-014,
+// CA-014.4): the access list the server enforces is read from the cache, and
+// today the cache's mutex is held across every statement of a save — an
+// administrator's slow save stops the listener checks that are answering from
+// the cached list a moment ago. The cache answers while the save is in flight.
+func TestAllAccessesAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {
+	db, counted := openCountedSchemaDatabase(t)
+
+	const query = `INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ('cached', 1893456000, 'cached-ident', 0, 1, '"*"')`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("seeding the cached access: %v", err)
+	}
+
+	accesses := NewAccesses(db, DialectSqlite)
+
+	cached, err := accesses.AllAccesses(context.Background())
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	if len(cached) != 1 {
+		t.Fatalf("the cache holds %d accesses, want the one seeded", len(cached))
+	}
+
+	// The save the administrator is asking for, on a database that takes 200 ms
+	// a statement: delete, ten rows, the read back — seconds of statements.
+	saved := domain.Accesses{}
+
+	for i := 1; i <= 10; i++ {
+		saved = append(saved, domain.Access{Code: fmt.Sprintf("saving-%02d", i), Expiration: 1893456000, Ident: fmt.Sprintf("saving-%02d", i)})
+	}
+
+	counted.setDelay(200 * time.Millisecond)
+
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+
+		if err := accesses.SaveAccesses(context.Background(), saved); err != nil {
+			t.Errorf("SaveAccesses: %v", err)
+		}
+	}()
+
+	// The save is in flight — its first statements are walking the database.
+	time.Sleep(100 * time.Millisecond)
+
+	started := time.Now()
+
+	list, err := accesses.AllAccesses(context.Background())
+	elapsed := time.Since(started)
+
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	if elapsed > 250*time.Millisecond {
+		t.Errorf("the cache answer took %v with a save in flight, want the cached list back without waiting on the save's statements", elapsed)
+	}
+
+	// The answer is one of the two complete states: the cached list, or the
+	// submitted list — which takes effect the moment the save begins, the
+	// legacy server's order of operations. What it must never be is a list
+	// assembled halfway through the save's statements.
+	if len(list) == 1 && list[0].Code == "cached" {
+		// The cached list answered, as it does when the save has not reached
+		// its first assignment yet.
+	} else if len(list) == 10 && list[0].Code == "saving-01" {
+		// The submitted list has taken effect; the save is still walking the
+		// database behind it.
+	} else {
+		t.Errorf("the cache answered %v, want one complete list — the cached one or the submitted one, never a state assembled halfway through the save's statements", list)
+	}
+
+	<-finished
+
+	counted.setDelay(0)
+
+	// The save is done: the stored rows are what the cache now answers, read
+	// back as the legacy server reads them back.
+	after, err := accesses.AllAccesses(context.Background())
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	if len(after) != 10 {
+		t.Errorf("the cache holds %d accesses after the save, want the ten saved", len(after))
+	}
+}

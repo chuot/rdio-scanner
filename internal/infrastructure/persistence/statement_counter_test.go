@@ -32,7 +32,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	modernc "modernc.org/sqlite"
 )
@@ -42,6 +44,21 @@ import (
 type statementCounter struct {
 	mutex   sync.Mutex
 	queries []string
+
+	// delay is the pause every statement takes on its way through, in
+	// nanoseconds: a test arms it to watch a cache answer while a save is
+	// still walking the database (CA-014.4).
+	delay atomic.Int64
+}
+
+// setDelay pauses every statement the counted connection runs by d. Zero —
+// the resting state — runs them as fast as the database does.
+func (c *statementCounter) setDelay(d time.Duration) {
+	c.delay.Store(int64(d))
+}
+
+func (c *statementCounter) currentDelay() time.Duration {
+	return time.Duration(c.delay.Load())
 }
 
 func (c *statementCounter) record(query string) {
@@ -146,6 +163,10 @@ func (c countedConn) PrepareContext(ctx context.Context, query string) (driver.S
 func (c countedConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	c.counter.record(query)
 
+	if d := c.counter.currentDelay(); d > 0 {
+		time.Sleep(d)
+	}
+
 	if inner, ok := c.conn.(driver.ExecerContext); ok {
 		return inner.ExecContext(ctx, query, args)
 	}
@@ -162,6 +183,10 @@ func (c countedConn) ExecContext(ctx context.Context, query string, args []drive
 
 func (c countedConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.counter.record(query)
+
+	if d := c.counter.currentDelay(); d > 0 {
+		time.Sleep(d)
+	}
 
 	if inner, ok := c.conn.(driver.QueryerContext); ok {
 		return inner.QueryContext(ctx, query, args)
