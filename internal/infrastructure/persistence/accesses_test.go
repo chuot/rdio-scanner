@@ -796,3 +796,83 @@ func identsOf(list domain.Accesses) []string {
 
 	return idents
 }
+
+// TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy (REQ-017,
+// CA-017.1): AllAccesses answers from the loaded list, and it hands that list
+// straight to the caller. A caller that sorts, trims, or edits the slice it was
+// handed is editing the list the server enforces with — the next AllAccesses
+// answers from the very same slice, and the server goes on enforcing what some
+// caller scribbled. The cache must hand out a copy.
+func TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t *testing.T) {
+	accesses := NewAccesses(openLegacyDatabase(t), DialectSqlite)
+
+	first, err := accesses.AllAccesses(context.Background())
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	first[0].Code = "scribbled over"
+	first[0].Expiration = 1
+	first[0].Limit = 9
+
+	second, err := accesses.AllAccesses(context.Background())
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	if second[0].Code != "dispatch-code" || second[0].Expiration != 1893456000 || second[0].Limit != 2 {
+		t.Errorf("the enforced access list reads back as %+v, want the stored dispatch access: the cache handed its own slice to the caller", second[0])
+	}
+}
+
+// TestStoredNegativeAccessValuesReadAsZeroWithAWarning (REQ-017, CA-017.2): the
+// expiration, limit, and order columns are signed, and the list reads them into
+// unsigned fields. A stored -1 — the value a legacy row carries for "no
+// expiration" — becomes the largest number of seconds there is: an access that
+// never expires, read as a success. The read clamps negatives to zero (an
+// expiration of 0 expires immediately, the safe direction) and says the clamp to
+// the operator rather than letting a deployment's policy change in silence.
+func TestStoredNegativeAccessValuesReadAsZeroWithAWarning(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	defer db.Close()
+
+	const query = `INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ('legacy-row', -1, 'old', -5, -3, '"*"')`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	accesses := NewAccesses(db, DialectSqlite)
+
+	warnings := []string{}
+
+	accesses.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := accesses.AllAccesses(context.Background())
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	var legacy domain.Access
+
+	for _, access := range list {
+		if access.Code == "legacy-row" {
+			legacy = access
+		}
+	}
+
+	if legacy.Expiration != 0 || legacy.Limit != 0 || legacy.Order != 0 {
+		t.Errorf("the stored -1, -5, -3 read as expiration %d, limit %d, order %d, want 0, 0, 0: a negative expiration must not become an access that never expires", legacy.Expiration, legacy.Limit, legacy.Order)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning row naming the access and the values it held")
+	}
+
+	if !strings.Contains(warnings[0], "legacy-row") {
+		t.Errorf("the warning says %q, want it to name the access it clamped", warnings[0])
+	}
+}

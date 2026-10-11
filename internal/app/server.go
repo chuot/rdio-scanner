@@ -280,6 +280,23 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	// archives with the server's clock.
 	s.scheduler = clock.NewScheduler()
 
+	// The clamp lines (CA-017.2): a stored value the read cannot hold — a negative
+	// expiration, limit, or order — is clamped to the safe reading, and the row and
+	// its values are filed as a problem in the log view, naming what the server
+	// enforces instead. A deployment's policy changing in silence is the failure
+	// this ends.
+	clampWarning := func(message string) {
+		_ = logs.AppendLog(ctx, domain.LogEntry{
+			DateTime: s.clock.Now(),
+			Level:    domain.LogLevelWarn,
+			Source:   domain.LogSourceConfig,
+			Message:  message,
+		})
+	}
+
+	accesses.OnWarn(clampWarning)
+	apikeys.OnWarn(clampWarning)
+
 	credentials := passwords.NewBcrypt()
 	s.hashes = credentials
 

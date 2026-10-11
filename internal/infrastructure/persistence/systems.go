@@ -123,6 +123,10 @@ func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, si
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
+	// The renumbering below is this save's own work, not a service to the caller:
+	// the submitted slice stays untouched (CA-017.4).
+	sites = append(domain.Sites{}, sites...)
+
 	for i := range sites {
 		sites[i].Order = uint(i + 1)
 		sites[i].SystemID = systemID
@@ -150,6 +154,10 @@ func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint6
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
+	// The renumbering is this save's own work: the caller's slice stays untouched
+	// (CA-017.4).
+	talkgroups = append(domain.Talkgroups{}, talkgroups...)
+
 	for i := range talkgroups {
 		talkgroups[i].Order = uint(i + 1)
 	}
@@ -174,6 +182,10 @@ func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint6
 func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, units domain.Units) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
+
+	// The renumbering is this save's own work: the caller's slice stays untouched
+	// (CA-017.4).
+	units = append(domain.Units{}, units...)
 
 	for i := range units {
 		units[i].Order = uint(i + 1)

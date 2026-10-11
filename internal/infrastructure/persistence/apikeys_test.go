@@ -393,3 +393,78 @@ func readApikeyScopeText(t *testing.T, db *sql.DB, id uint64) string {
 
 	return text
 }
+
+// TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy (REQ-017,
+// CA-017.1): the credential list the server enforces with is the slice AllApikeys
+// hands out, not a copy of it. A caller that edits what it was handed — a sort, a
+// trim, a field — edits the enforced list, and the next AllApikeys answers from it.
+// The cache must hand out a copy.
+func TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t *testing.T) {
+	apikeys := NewApikeys(openLegacyDatabase(t), DialectSqlite)
+
+	first, err := apikeys.AllApikeys(context.Background())
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	first[0].Key = "scribbled-over"
+	first[0].Disabled = true
+
+	second, err := apikeys.AllApikeys(context.Background())
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	if second[0].Key != "fixture-apikey-0123456789" || second[0].Disabled {
+		t.Errorf("the enforced credential reads back as %+v, want the stored scanner key enabled: the cache handed its own slice to the caller", second[0])
+	}
+}
+
+// TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning (REQ-017, CA-017.2): the
+// order column is signed and the list reads it into an unsigned field; a stored
+// -3 becomes the largest display order there is, and the credential moves to the
+// end of every list the operator sees. The read clamps it to zero and says so.
+func TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	defer db.Close()
+
+	const query = `INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (0, 'old-key', 'legacy-negative-order', -3, '"*"')`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	apikeys := NewApikeys(db, DialectSqlite)
+
+	warnings := []string{}
+
+	apikeys.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := apikeys.AllApikeys(context.Background())
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	var legacy domain.Apikey
+
+	for _, apikey := range list {
+		if apikey.Key == "legacy-negative-order" {
+			legacy = apikey
+		}
+	}
+
+	if legacy.Order != 0 {
+		t.Errorf("the stored -3 order reads as %d, want 0: a negative order must not become the last credential in every list", legacy.Order)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning row naming the credential and the value it held")
+	}
+
+	if !strings.Contains(warnings[0], "old-key") {
+		t.Errorf("the warning says %q, want it to name the credential it clamped", warnings[0])
+	}
+}

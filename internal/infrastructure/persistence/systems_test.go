@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -1362,5 +1363,63 @@ func TestSaveSystemUnitsReplacesTheUnitsOfOneSystem(t *testing.T) {
 
 	if first.Units[1].Label != "Car 3" || first.Units[1].Order != 2 {
 		t.Errorf("the inserted row = %+v, want order 2", first.Units[1])
+	}
+}
+
+// TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched (REQ-017, CA-017.4): the
+// per-system saves renumber the submitted rows' display order and stamp the system
+// identity into them — and they did it to the caller's own slice. A caller that
+// keeps the list it submitted for its own view, or re-sends it, finds its rows
+// renumbered by a save it already answered for. The save renumbers a copy.
+func TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	defer db.Close()
+
+	repo := NewSystems(db, DialectSqlite)
+
+	sites := domain.Sites{
+		{ID: 1, SiteRef: 77, Label: "Metro East"},
+		{SiteRef: 102, Label: "Metro West"},
+	}
+
+	sitesWant := append(domain.Sites{}, sites...)
+
+	talkgroups := domain.Talkgroups{
+		{ID: 1, TalkgroupRef: 1514000, Label: "Ground", Name: "Dispatch 1", TagID: 3, GroupIDs: []uint64{1}},
+		{TalkgroupRef: 1514100, Label: "Fire", Name: "Dispatch 2", TagID: 6, GroupIDs: []uint64{3}},
+	}
+
+	talkgroupsWant := append(domain.Talkgroups{}, talkgroups...)
+
+	units := domain.Units{
+		{ID: 1, UnitRef: 12345, Label: "Engine 12"},
+		{UnitRef: 678, Label: "Car 3"},
+	}
+
+	unitsWant := append(domain.Units{}, units...)
+
+	if err := repo.SaveSystemSites(context.Background(), 1, sites); err != nil {
+		t.Fatalf("SaveSystemSites: %v", err)
+	}
+
+	if err := repo.SaveSystemTalkgroups(context.Background(), 1, talkgroups); err != nil {
+		t.Fatalf("SaveSystemTalkgroups: %v", err)
+	}
+
+	if err := repo.SaveSystemUnits(context.Background(), 1, units); err != nil {
+		t.Fatalf("SaveSystemUnits: %v", err)
+	}
+
+	if !reflect.DeepEqual(sites, sitesWant) {
+		t.Errorf("SaveSystemSites renumbered the caller's slice:\n  got  %v\n  want %v", sites, sitesWant)
+	}
+
+	if !reflect.DeepEqual(talkgroups, talkgroupsWant) {
+		t.Errorf("SaveSystemTalkgroups renumbered the caller's slice:\n  got  %v\n  want %v", talkgroups, talkgroupsWant)
+	}
+
+	if !reflect.DeepEqual(units, unitsWant) {
+		t.Errorf("SaveSystemUnits renumbered the caller's slice:\n  got  %v\n  want %v", units, unitsWant)
 	}
 }

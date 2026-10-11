@@ -2824,3 +2824,35 @@ func TestTheHeldCallCollectorReturnsAfterTheServerStops(t *testing.T) {
 		t.Fatal("the held-call collector is still running after the server stopped, want it ended with the delayer's stream")
 	}
 }
+
+// TestTheServerFilesTheClampWarningsTheAccessReadSays (REQ-017, CA-017.2): the
+// persistence read clamps a stored negative and says the line — the wiring is what
+// makes that line a row in the log view, where the operator of a server running as
+// a service actually looks. A deployment's policy changing in silence is the
+// failure; the log view is where the silence ends.
+func TestTheServerFilesTheClampWarningsTheAccessReadSays(t *testing.T) {
+	baseDir := t.TempDir()
+
+	console := strings.Builder{}
+
+	srv, err := New(testConfigIn(baseDir, &console))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	const query = `INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES ('legacy-row', -1, 'old', -5, -3, '"*"')`
+
+	if _, err := srv.db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'config' AND "level" = 'warn' AND "message" LIKE 'accesses.read: access %legacy-row%'`); got != 1 {
+		t.Errorf("the log view holds %d entries for the clamped access, want exactly one: the clamp must reach the operator as a warning row", got)
+	}
+}

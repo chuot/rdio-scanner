@@ -23,6 +23,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -34,6 +35,10 @@ import (
 // loaded once, replaced by a save before it is stored, and read back after a save that worked.
 type Apikeys struct {
 	store store
+
+	// warn is the credential list's way of telling the operator about a stored
+	// value it had to clamp (CA-017.2), wired by the server to its log.
+	warn func(message string)
 
 	mutex  sync.Mutex
 	loaded bool
@@ -50,6 +55,10 @@ const (
 	apikeyUpdateQuery    = `UPDATE "apikeys" SET "disabled" = ?, "ident" = ?, "key" = ?, "order" = ?, "systems" = ? WHERE "apikeyId" = ?`
 )
 
+// OnWarn sets the listener that hears about stored values the read had to clamp,
+// the same seam the access list has.
+func (apikeys *Apikeys) OnWarn(report func(message string)) { apikeys.warn = report }
+
 // NewApikeys returns the apikey repository for one database.
 func NewApikeys(db *sql.DB, dialect Dialect) *Apikeys {
 	return &Apikeys{store: newStore(db, dialect)}
@@ -61,16 +70,20 @@ func (apikeys *Apikeys) AllApikeys(ctx context.Context) (domain.Apikeys, error) 
 	defer apikeys.mutex.Unlock()
 
 	if !apikeys.loaded {
-		list, err := apikeys.read(ctx)
+		list, clamped, err := apikeys.read(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		apikeys.live = list
 		apikeys.loaded = true
+
+		apikeys.reportClamps(clamped)
 	}
 
-	return apikeys.live, nil
+	// Ordered is a copy: the list the server enforces with is not the slice every
+	// caller gets to edit (CA-017.1).
+	return apikeys.live.Ordered(), nil
 }
 
 // SaveApikeys reconciles the stored credentials with the given ones and makes them the
@@ -80,19 +93,23 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 	apikeys.mutex.Lock()
 	defer apikeys.mutex.Unlock()
 
-	apikeys.live = next
+	// A copy, for the same reason as the read path: the submitted slice stays the
+	// caller's to do with as the caller likes (CA-017.1).
+	apikeys.live = next.Ordered()
 	apikeys.loaded = true
 
 	if err := apikeys.write(ctx, next); err != nil {
 		return err
 	}
 
-	reloaded, err := apikeys.read(ctx)
+	reloaded, clamped, err := apikeys.read(ctx)
 	if err != nil {
 		return err
 	}
 
 	apikeys.live = reloaded
+
+	apikeys.reportClamps(clamped)
 
 	return nil
 }
@@ -104,15 +121,17 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 // that as the integer 1 or 0, and a row written by either server reads back as the boolean it
 // means. A row that carries the text `true` or `false` — which is what a database restored from
 // a text dump can hold — reads back the same way.
-func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, error) {
+func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, []string, error) {
 	rows, err := apikeys.store.query(ctx, apikeySelectQuery)
 	if err != nil {
-		return nil, statementError("apikeys", "read", err, apikeySelectQuery)
+		return nil, nil, statementError("apikeys", "read", err, apikeySelectQuery)
 	}
 
 	defer rows.Close()
 
 	list := domain.Apikeys{}
+
+	clamped := []string{}
 
 	for rows.Next() {
 		var (
@@ -125,7 +144,16 @@ func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, error) {
 		)
 
 		if err := rows.Scan(&id, &disabled, &ident, &key, &order, &systems); err != nil {
-			return nil, operationError("apikeys", "read", err)
+			return nil, nil, operationError("apikeys", "read", err)
+		}
+
+		// The order column is signed and the field is not (CA-017.2): a stored -3
+		// read as unsigned is the largest display order there is, and the credential
+		// moves to the end of every list the operator sees. Zero is the first order,
+		// and the clamp is said.
+		if order < 0 {
+			clamped = append(clamped, fmt.Sprintf("apikeys.read: apikey %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
+				id, ident, order))
 		}
 
 		list = append(list, domain.Apikey{
@@ -133,16 +161,31 @@ func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, error) {
 			Disabled: disabled,
 			Ident:    ident,
 			Key:      key,
-			Order:    uint(order),
+			Order:    uint(clampNonNegative(order)),
 			Scope:    parseScope(systems),
 		})
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("apikeys", "read", err)
+		return nil, nil, operationError("apikeys", "read", err)
 	}
 
-	return list.Ordered(), nil
+	// The clamp lines are collected, not said, inside the loop: the read holds the
+	// table open while it walks it, and a line said here is a write into the table
+	// the cursor is reading — the server's own read blocks its own report.
+	return list.Ordered(), clamped, nil
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (apikeys *Apikeys) reportClamps(clamped []string) {
+	if apikeys.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		apikeys.warn(line)
+	}
 }
 
 // write is the legacy `Apikeys.Write`, in one transaction, with the values out of the statements.

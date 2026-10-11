@@ -23,6 +23,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -51,7 +52,16 @@ type Accesses struct {
 	mutex  sync.Mutex
 	loaded bool
 	live   domain.Accesses
+
+	// warn is the repository's way of telling the operator about a stored value it
+	// had to clamp (CA-017.2). The server wires it to its log; a repository without
+	// it clamps silently, which is what every caller that does not log gets.
+	warn func(message string)
 }
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (accesses *Accesses) OnWarn(report func(message string)) { accesses.warn = report }
 
 var _ ports.AccessRepository = (*Accesses)(nil)
 
@@ -79,16 +89,20 @@ func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, err
 	defer accesses.mutex.Unlock()
 
 	if !accesses.loaded {
-		list, err := accesses.read(ctx)
+		list, clamped, err := accesses.read(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		accesses.live = list
 		accesses.loaded = true
+
+		accesses.reportClamps(clamped)
 	}
 
-	return accesses.live, nil
+	// Ordered is a copy: the list the server enforces with is not the slice every
+	// caller gets to edit (CA-017.1).
+	return accesses.live.Ordered(), nil
 }
 
 // SaveAccesses reconciles the stored accesses with the given ones and makes them the accesses
@@ -103,19 +117,23 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 	accesses.mutex.Lock()
 	defer accesses.mutex.Unlock()
 
-	accesses.live = next
+	// A copy, for the same reason as the read path: the submitted slice stays the
+	// caller's to do with as the caller likes (CA-017.1).
+	accesses.live = next.Ordered()
 	accesses.loaded = true
 
 	if err := accesses.write(ctx, next); err != nil {
 		return err
 	}
 
-	reloaded, err := accesses.read(ctx)
+	reloaded, clamped, err := accesses.read(ctx)
 	if err != nil {
 		return err
 	}
 
 	accesses.live = reloaded
+
+	accesses.reportClamps(clamped)
 
 	return nil
 }
@@ -127,15 +145,17 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 // unrestricted. Here the value already in effect is left alone, because §9 makes the adapter's
 // live list the configuration the server is running with, and silently un-restricting a server
 // on a failed query is not a parity behavior anyone chose.
-func (accesses *Accesses) read(ctx context.Context) (domain.Accesses, error) {
+func (accesses *Accesses) read(ctx context.Context) (domain.Accesses, []string, error) {
 	rows, err := accesses.store.query(ctx, accessSelectQuery)
 	if err != nil {
-		return nil, statementError("accesses", "read", err, accessSelectQuery)
+		return nil, nil, statementError("accesses", "read", err, accessSelectQuery)
 	}
 
 	defer rows.Close()
 
 	list := domain.Accesses{}
+
+	clamped := []string{}
 
 	for rows.Next() {
 		var (
@@ -149,25 +169,82 @@ func (accesses *Accesses) read(ctx context.Context) (domain.Accesses, error) {
 		)
 
 		if err := rows.Scan(&id, &code, &expiration, &ident, &limit, &order, &systems); err != nil {
-			return nil, operationError("accesses", "read", err)
+			return nil, nil, operationError("accesses", "read", err)
+		}
+
+		// The columns are signed and the fields are not (CA-017.2): a stored -1 —
+		// the value a legacy row carries for "no expiration" — read as unsigned is
+		// the largest number of seconds there is, an access that never expires, and
+		// a negative limit or order becomes the largest of each. Zero is the safe
+		// reading in both directions: an expiration of 0 expires immediately, and
+		// 0 is the first order. The clamp is said, because a deployment's policy
+		// changing in silence is exactly what the operator must not have to discover.
+		if expiration < 0 || limit < 0 || order < 0 {
+			clamped = append(clamped, clampLine(id, code, expiration, limit, order))
 		}
 
 		list = append(list, domain.Access{
 			ID:         uint64(id),
 			Code:       code,
-			Expiration: uint64(expiration),
+			Expiration: clampNonNegative(expiration),
 			Ident:      ident,
-			Limit:      uint(limit),
-			Order:      uint(order),
+			Limit:      uint(clampNonNegative(limit)),
+			Order:      uint(clampNonNegative(order)),
 			Scope:      parseScope(systems),
 		})
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("accesses", "read", err)
+		return nil, nil, operationError("accesses", "read", err)
 	}
 
-	return list.Ordered(), nil
+	// The clamp lines are collected, not said, inside the loop: the read holds the
+	// table open while it walks it, and a line said here is a write into the table
+	// the cursor is reading — the server's own read blocks its own report.
+	return list.Ordered(), clamped, nil
+}
+
+// clampLine words one access's stored negative values the way the operator needs
+// to hear them: which row, which values, and what the server will enforce instead.
+func clampLine(id int64, code string, expiration, limit, order int64) string {
+	clamped := []string{}
+
+	if expiration < 0 {
+		clamped = append(clamped, fmt.Sprintf("expiration %d read as 0 (expires immediately)", expiration))
+	}
+
+	if limit < 0 {
+		clamped = append(clamped, fmt.Sprintf("limit %d read as 0", limit))
+	}
+
+	if order < 0 {
+		clamped = append(clamped, fmt.Sprintf("order %d read as 0", order))
+	}
+
+	return fmt.Sprintf("accesses.read: access %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+		id, code, strings.Join(clamped, ", "))
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (accesses *Accesses) reportClamps(clamped []string) {
+	if accesses.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		accesses.warn(line)
+	}
+}
+
+// clampNonNegative turns a stored signed value into the unsigned one the list
+// carries, keeping zero for every value below it.
+func clampNonNegative(value int64) uint64 {
+	if value < 0 {
+		return 0
+	}
+
+	return uint64(value)
 }
 
 // write is the legacy `Accesses.Write`, in one transaction: select the stored identities,
