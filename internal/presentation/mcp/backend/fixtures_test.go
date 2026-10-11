@@ -137,7 +137,7 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 	// and units as real things and not as none.
 	bundle.systems = &fakes.Systems{Stored: domain.Systems{
 		{
-			ID: 1, Label: "System", SystemRef: systemOneRef,
+			ID: 1, Label: "System", SystemRef: systemOneRef, AutoPopulate: true, Delay: 5000,
 			Talkgroups: domain.Talkgroups{
 				{ID: 1, TalkgroupRef: 1514000, Label: "Talkgroup", TagID: 3},
 				{ID: 2, TalkgroupRef: 1514001, Label: "Second Talkgroup", TagID: 3},
@@ -171,12 +171,15 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 		{ID: 2, Ident: "dirwatch", Key: "second-key", Disabled: true},
 	}}
 	bundle.dirwatches = &fakes.Dirwatches{Stored: domain.Dirwatches{
-		{ID: 1, Directory: "/var/spool/asterisk/monitor", Disabled: true},
+		{ID: 1, Directory: "/var/spool/asterisk/monitor", Disabled: true, SystemID: 1},
 		{ID: 2, Directory: "/var/spool/asterisk/monitor-second"},
 	}}
 	bundle.downstreams = &fakes.Downstreams{Stored: domain.Downstreams{
 		{ID: 1, URL: "https://peer.example/api/trunk-recorder-call-upload", Disabled: true},
-		{ID: 2, URL: "https://second.example/api/call-upload"},
+		{ID: 2, URL: "https://second.example/api/call-upload", Scope: domain.AccessScope{
+			Present: true,
+			Systems: []domain.ScopedSystem{{SystemRef: systemOneRef, TalkgroupsGiven: true, TalkgroupsWildcard: true}},
+		}},
 	}}
 
 	// The log view, spread over four subsystems so a search by subsystem, a search by severity, and
@@ -214,6 +217,11 @@ func fixtureLogEntries() []domain.LogEntry {
 		{ID: 3, DateTime: fixtureTime.Add(-3*time.Hour + 30*time.Minute), Level: domain.LogLevelInfo, Source: domain.LogSourceIngest, Message: "call 12 arrived on system 10001"},
 		{ID: 4, DateTime: fixtureTime.Add(-2 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceAccess, Message: "the access code of dispatch-desk expired"},
 		{ID: 5, DateTime: fixtureTime.Add(-1 * time.Hour), Level: domain.LogLevelInfo, Source: domain.LogSourcePrune, Message: "pruned 3 calls"},
+
+		// The server's own startup line, which is what a restart leaves in the log view, and a
+		// feed line naming the talkgroup the feed diagnosis is asked about.
+		{ID: 6, DateTime: fixtureTime.Add(-5 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceServer, Message: "server started"},
+		{ID: 7, DateTime: fixtureTime.Add(-90 * time.Minute), Level: domain.LogLevelWarn, Source: domain.LogSourceLivefeed, Message: "the livefeed for talkgroup 1514000 on system 10001 stopped"},
 	}
 }
 

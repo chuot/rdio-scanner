@@ -145,7 +145,7 @@ func TestSearchLogsAnswersTheFiltersAndEchoesThePageItUsed(t *testing.T) {
 		args  map[string]any
 		count uint64
 	}{
-		{"the whole day", map[string]any{"date": day}, 5},
+		{"the whole day", map[string]any{"date": day}, 7},
 		{"by severity", map[string]any{"date": day, "level": "error"}, 1},
 		{"by subsystem", map[string]any{"date": day, "source": "ffmpeg"}, 2},
 		{"by message", map[string]any{"date": day, "text": "call 12"}, 3},

@@ -43,6 +43,7 @@ func (s *Server) registerCapabilities(deps Deps) {
 	s.registerCallTools(deps)
 	s.registerReadResources(deps)
 	s.registerAdminTools(deps)
+	s.registerCompositeTools(deps)
 }
 
 // registerVersionResource publishes the fact an assistant needs before it asks for anything else: which
