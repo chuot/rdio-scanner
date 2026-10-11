@@ -41,6 +41,7 @@ export function createAppContext({ location, localStorage, document }) {
     map: {},
     pause: false,
     playbackList: null,
+    playbackListSeq: 0,
     queue: 0,
   });
 

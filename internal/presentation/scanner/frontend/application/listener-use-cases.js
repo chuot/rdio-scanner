@@ -43,6 +43,7 @@ export function createListenerUseCases({
   let skipDelay = null;
 
   let playbackList = null;
+  let playbackListSeq = 0;
   let playbackPending = undefined;
   let playbackRefreshing = false;
 
@@ -490,13 +491,22 @@ export function createListenerUseCases({
       case 'LCL': {
         playbackList = event.payload ?? null;
 
-        if (playbackList) {
+        // The store deep-compares slices, so an answer equal to the list already on screen
+        // notifies nobody. The counter rides every answer so the search panel's progress bar
+        // always learns the search ended - identical answers, empty pages, and payloads
+        // without a results array alike.
+        playbackListSeq += 1;
+
+        if (playbackList && Array.isArray(playbackList.results)) {
           playbackList.results = playbackList.results.map((c) => transformCall(config, c));
-
-          emit({ playbackList });
-
-          if (livefeedMode === LivefeedMode.Playback) playbackNextCall();
+        } else if (playbackList) {
+          playbackList = null;
         }
+
+        emit({ playbackList, playbackListSeq });
+
+        if (playbackList && livefeedMode === LivefeedMode.Playback) playbackNextCall();
+
         break;
       }
 

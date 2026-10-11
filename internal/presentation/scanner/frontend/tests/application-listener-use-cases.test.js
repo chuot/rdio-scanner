@@ -380,6 +380,66 @@ describe('application/listener-use-cases — playback mode (search PLAY)', () =>
     });
 });
 
+// The search panel's progress bar is cleared by its store subscription on the playback list.
+// The store deep-compares slices, so an answer equal to the list already on screen notifies
+// nobody and the bar runs forever. Every call-list answer must carry a signal that cannot
+// compare equal: a sequence counter.
+describe('application/listener-use-cases — call-list answers always notify', () => {
+    const page = { count: 0, options: { limit: 200, offset: 0, sort: -1 }, results: [] };
+
+    function countNotices(options = {}) {
+        const socket = createFakeSocket();
+        const store = createStore({});
+        let notices = 0;
+
+        store.subscribe(['playbackList', 'playbackListSeq'], () => notices++);
+
+        const useCases = createListenerUseCases({
+            socket,
+            storage: createFakeStorage(),
+            audio: createFakeAudio(),
+            store,
+            instanceId: 'default',
+            ...createFakeTimers(),
+        });
+
+        socket.inject('CFG', cfgPayload);
+
+        for (const payload of options.answers) {
+            socket.inject('LCL', payload);
+        }
+
+        return { useCases, notices };
+    }
+
+    it('two deep-equal answers both notify the playback-list subscriber', () => {
+        const { notices } = countNotices({ answers: [page, page] });
+
+        assert.equal(notices, 2, 'the second identical answer was swallowed by the store diff');
+    });
+
+    it('a zero-result answer notifies', () => {
+        const { useCases, notices } = countNotices({ answers: [page] });
+
+        assert.equal(notices, 1);
+        assert.equal(useCases.playbackList.count, 0);
+    });
+
+    it('a null payload notifies with the playback list cleared', () => {
+        const { useCases, notices } = countNotices({ answers: [page, null] });
+
+        assert.equal(notices, 2, 'the null answer emitted nothing and the panel never learns the search ended');
+        assert.equal(useCases.playbackList, null);
+    });
+
+    it('a payload without a results array clears the list and throws nothing', () => {
+        const { useCases, notices } = countNotices({ answers: [{ count: 0 }, null] });
+
+        assert.equal(notices, 2);
+        assert.equal(useCases.playbackList, null);
+    });
+});
+
 describe('application/listener-use-cases — auth', () => {
     it('authenticate sends the base64 pin; PIN reply demands a pin; MAX caps attempts', () => {
         const { useCases, socket, events } = setup();
