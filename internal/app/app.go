@@ -105,10 +105,11 @@ type Config struct {
 	// operator started, which says its entries to the console.
 	Echo LogEcho
 
-	// Converter decides which ffmpeg the server converts with, given the folder the server writes the
-	// program it carries into, and answers with the converter to use and what the operator has to be told
-	// about it. It is decided once while the server is wired, and said once when it starts.
-	Converter func(dir string) (ports.AudioConverter, string)
+	// Converter decides which ffmpeg the server converts with and which ffprobe it measures lengths
+	// with, given the folder the server writes the programs it carries into, and answers with the
+	// converter, the prober, and what the operator has to be told about them. It is decided once
+	// while the server is wired, and said once when it starts.
+	Converter func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string)
 }
 
 // GetPath resolves a possibly relative path against the base directory.

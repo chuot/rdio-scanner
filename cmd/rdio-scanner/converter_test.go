@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"rdio-scanner/internal/app"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -59,15 +60,44 @@ func aRecording() ports.AudioFile {
 	return ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: []byte("audio")}
 }
 
+// aProbeProgramTheServerCarries is a bundled ffprobe the test controls: it answers the version
+// probe, and answers a probe of a file with a fixed duration, so a test can tell which ffprobe
+// actually measured the recording.
+func aProbeProgramTheServerCarries(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "ffprobe-9.0.2")
+
+	script := "#!/bin/sh\n" +
+		"for arg in \"$@\"; do\n" +
+		"  if [ \"$arg\" = \"-version\" ]; then\n" +
+		"    echo \"ffprobe version 9.0.2 Copyright (c) 2007-2026 the FFmpeg developers\"\n" +
+		"    exit 0\n" +
+		"  fi\n" +
+		"done\n" +
+		"printf '{\"format\":{\"duration\":\"3.010667\"}}'\n"
+
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("the test cannot write the ffprobe the server carries: %v", err)
+	}
+
+	return path
+}
+
 // The whole point of carrying an ffmpeg is that the server converts with the one it carries, and not
 // with whatever the host happens to have installed.
 func TestTheServerConvertsWithTheFfmpegItCarriesInsideItsOwnBinary(t *testing.T) {
 	bundled := aProgramTheServerCarries(t)
+	bundledProbe := aProbeProgramTheServerCarries(t)
 
-	choice := theConverter(bundled, "")
+	choice := theConverter(bundled, bundledProbe, "")
 
 	if choice.Program != bundled {
 		t.Errorf("the server chose %s, want the ffmpeg it carries at %s", choice.Program, bundled)
+	}
+
+	if choice.ProbeProgram != bundledProbe {
+		t.Errorf("the server chose %s to measure lengths, want the ffprobe it carries at %s", choice.ProbeProgram, bundledProbe)
 	}
 
 	if choice.Notice != "" {
@@ -82,15 +112,30 @@ func TestTheServerConvertsWithTheFfmpegItCarriesInsideItsOwnBinary(t *testing.T)
 	if string(converted.Data) != "converted by the ffmpeg the server carries" {
 		t.Errorf("the recording was converted by %q, not by the ffmpeg the server carries", string(converted.Data))
 	}
+
+	// The pair travels together: the ffprobe the server carries is the one that measures, and it
+	// answers with the length the carried program reported.
+	length, err := choice.prober(t.TempDir()).Probe(context.Background(), aRecording())
+	if err != nil {
+		t.Fatalf("the server refused to probe a recording: %v", err)
+	}
+
+	if length != 3010667*time.Microsecond {
+		t.Errorf("the carried ffprobe measured %v, want the 3.010667 seconds it reported", length)
+	}
 }
 
 // macOS, FreeBSD, and every plain go build a developer runs carry no ffmpeg of their own, and those
 // deployments convert with the ffmpeg their host installs, which is what they have always done.
 func TestAServerWhoseTargetCarriesNoFfmpegConvertsWithTheOneItsHostInstalls(t *testing.T) {
-	choice := theConverter("", "")
+	choice := theConverter("", "", "")
 
 	if choice.Program != theHostFFmpeg {
 		t.Errorf("the server chose %s, want the ffmpeg its host installs", choice.Program)
+	}
+
+	if choice.ProbeProgram != theHostFFprobe {
+		t.Errorf("the server chose %s to measure lengths, want the ffprobe its host installs", choice.ProbeProgram)
 	}
 
 	if choice.Notice != "" {
@@ -104,10 +149,14 @@ func TestAServerWhoseTargetCarriesNoFfmpegConvertsWithTheOneItsHostInstalls(t *t
 func TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts(t *testing.T) {
 	failure := "the server cannot prepare /data/ffmpeg for its ffmpeg"
 
-	choice := theConverter("", failure)
+	choice := theConverter("", "", failure)
 
 	if choice.Program != theHostFFmpeg {
 		t.Errorf("the server chose %s, want the ffmpeg its host installs after its own failed", choice.Program)
+	}
+
+	if choice.ProbeProgram != theHostFFprobe {
+		t.Errorf("the server chose %s to measure lengths, want the ffprobe its host installs after its own failed", choice.ProbeProgram)
 	}
 
 	if choice.Notice != failure {

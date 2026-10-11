@@ -43,6 +43,7 @@ type ingestFixture struct {
 	options   *fakes.Options
 	logs      *fakes.Logs
 	converter *fakes.Converter
+	prober    *fakes.Prober
 	hub       *fakes.Hub
 	delayer   *fakes.Delayer
 	clock     *fakes.Clock
@@ -67,6 +68,7 @@ func newIngestFixture() *ingestFixture {
 		options:     &fakes.Options{Stored: domain.DefaultOptions()},
 		logs:        &fakes.Logs{},
 		converter:   fakes.NewConverter(),
+		prober:      fakes.NewProber(),
 		hub:         fakes.NewHub(),
 		delayer:     &fakes.Delayer{Now: ingestTime},
 		clock:       fakes.NewClock(ingestTime),
@@ -82,6 +84,7 @@ func newIngestFixture() *ingestFixture {
 		fixture.options,
 		fixture.logs,
 		fixture.converter,
+		fixture.prober,
 		fixture.hub,
 		fixture.delayer,
 		fixture.downstreams,
@@ -830,6 +833,192 @@ func TestIngestCallLeavesAudioAloneWhenConversionIsDisabled(t *testing.T) {
 
 	if fixture.calls.Saved[0].AudioFilename != "test.wav" {
 		t.Errorf("stored audio filename = %q, want the recorded audio kept", fixture.calls.Saved[0].AudioFilename)
+	}
+}
+
+// TestIngestCallKeepsTheLengthTheUploaderCounted: a recorder that counted its recording's
+// seconds is believed. The conversion the administrator configured still converts — the
+// length rule measures nothing, and measuring is exactly what the uploader already did.
+func TestIngestCallKeepsTheLengthTheUploaderCounted(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.converter.Duration = 3010 * time.Millisecond
+	fixture.prober.Length = 9990 * time.Millisecond
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+	call.AudioLength = 2500 * time.Millisecond
+
+	if _, err := fixture.ingest(call); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if stored := fixture.calls.Saved[0]; stored.AudioLength != 2500*time.Millisecond {
+		t.Errorf("stored length = %v, want the 2.5 seconds the uploader counted, not a measured value", stored.AudioLength)
+	}
+
+	if len(fixture.converter.Modes) != 1 {
+		t.Errorf("conversions = %d, want the configured conversion to have run", len(fixture.converter.Modes))
+	}
+
+	if len(fixture.prober.Probed) != 0 {
+		t.Errorf("probes = %d, want no probe for a call whose length is already known", len(fixture.prober.Probed))
+	}
+}
+
+// The conversion states the running time of the file it wrote, and that is the length of
+// the recording the server stores — no probe runs for a call the conversion already
+// measured.
+func TestIngestCallStoresTheLengthTheConversionReported(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.converter.Duration = 3010 * time.Millisecond
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	if _, err := fixture.ingest(call); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if stored := fixture.calls.Saved[0]; stored.AudioLength != 3010*time.Millisecond {
+		t.Errorf("stored length = %v, want the 3.01 seconds the conversion stated", stored.AudioLength)
+	}
+
+	if len(fixture.prober.Probed) != 0 {
+		t.Errorf("probes = %d, want no probe for a call the conversion measured", len(fixture.prober.Probed))
+	}
+}
+
+// Conversion switched off is ffmpeg not running: the audio the server stores is the audio
+// it probed, and the probe is what names its length.
+func TestIngestCallProbesTheAudioWhenConversionIsOff(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.options.Stored.AudioConversion = domain.AudioConversionDisabled
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	if _, err := fixture.ingest(call); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if len(fixture.converter.Modes) != 0 {
+		t.Error("with conversion disabled the converter must not be invoked at all")
+	}
+
+	if len(fixture.prober.Probed) != 1 {
+		t.Fatalf("probes = %d, want the stored audio probed once", len(fixture.prober.Probed))
+	}
+
+	if name := fixture.prober.Probed[0].Filename; name != "test.wav" {
+		t.Errorf("the probed audio is named %q, want the recording the server stores", name)
+	}
+
+	if stored := fixture.calls.Saved[0]; stored.AudioLength != 2500*time.Millisecond {
+		t.Errorf("stored length = %v, want the probed length", stored.AudioLength)
+	}
+}
+
+// A conversion that failed keeps the original recording — the rule that never loses a call
+// over its audio — and the probe measures that same kept audio, so the stored call's length
+// describes the stored call's audio.
+func TestIngestCallProbesTheKeptAudioWhenConversionFails(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.converter.Err = errors.New("ffmpeg is not available, no audio conversion will be performed")
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	if _, err := fixture.ingest(call); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	stored := fixture.calls.Saved[0]
+
+	if stored.AudioFilename != "test.wav" {
+		t.Errorf("stored audio filename = %q, want the original audio kept", stored.AudioFilename)
+	}
+
+	if len(fixture.prober.Probed) != 1 {
+		t.Fatalf("probes = %d, want the kept audio probed once", len(fixture.prober.Probed))
+	}
+
+	if stored.AudioLength != 2500*time.Millisecond {
+		t.Errorf("stored length = %v, want the probed length of the kept audio", stored.AudioLength)
+	}
+}
+
+// A conversion that states no running time — a quiet run, a build that prints no stats —
+// has produced the file the server stores without naming its length: the probe measures
+// the converted recording, not the one that went in.
+func TestIngestCallProbesTheConvertedAudioWhenTheConversionNamesNoLength(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.converter.Duration = 0
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	if _, err := fixture.ingest(call); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if len(fixture.prober.Probed) != 1 {
+		t.Fatalf("probes = %d, want the converted audio probed once", len(fixture.prober.Probed))
+	}
+
+	if name := fixture.prober.Probed[0].Filename; name != "test.m4a" {
+		t.Errorf("the probed audio is named %q, want the converted recording the server stores", name)
+	}
+
+	if stored := fixture.calls.Saved[0]; stored.AudioLength != 2500*time.Millisecond {
+		t.Errorf("stored length = %v, want the probed length", stored.AudioLength)
+	}
+}
+
+// A probe that cannot answer — no ffprobe installed, a recording it refuses — leaves the
+// call with no known length, and the call is stored all the same: the length is a fact the
+// server learns, never a reason to lose a recording. The reason is said once, under the
+// same part of the server the conversion reports under.
+func TestIngestCallStoresTheCallWithNoLengthWhenTheProbeFails(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.options.Stored.AudioConversion = domain.AudioConversionDisabled
+	fixture.prober.Err = errors.New("ffprobe is not available, no audio length will be measured")
+
+	system := fixture.seedKnownSystem()
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallAccepted {
+		t.Errorf("outcome = %q, want %q: a probe failure must not lose the call", result.Outcome, IngestCallAccepted)
+	}
+
+	if stored := fixture.calls.Saved[0]; stored.AudioLength != 0 {
+		t.Errorf("stored length = %v, want no length from a probe that could not answer", stored.AudioLength)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceFFmpeg, "the recording length could not be measured: ffprobe is not available, no audio length will be measured") {
+		t.Errorf("logs = %v, want the probe failure recorded under the converter", fixture.logMessages())
 	}
 }
 

@@ -175,8 +175,8 @@ func testConfigIn(base string) app.Config {
 
 		// The converter is the ffmpeg the host installs: the one the command-line tests' server
 		// converts with, so that what a test proves is the program and not what one build carries.
-		Converter: func(dir string) (ports.AudioConverter, string) {
-			return ffmpeg.New(), ""
+		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
+			return ffmpeg.New(), ffmpeg.NewProber(dir), ""
 		},
 	}
 }
@@ -188,8 +188,8 @@ func testConfigIn(base string) app.Config {
 func commandTestConfig(t *testing.T) app.Config {
 	config := testConfigIn(t.TempDir())
 
-	config.Converter = func(dir string) (ports.AudioConverter, string) {
-		return ffmpeg.New(), ""
+	config.Converter = func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
+		return ffmpeg.New(), ffmpeg.NewProber(dir), ""
 	}
 
 	return config

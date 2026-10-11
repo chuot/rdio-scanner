@@ -84,6 +84,7 @@ type IngestCallHandler struct {
 	options     ports.OptionsRepository
 	logs        ports.LogRepository
 	converter   ports.AudioConverter
+	prober      ports.AudioLengthProber
 	hub         ports.Hub
 	delayer     ports.CallDelayer
 	downstreams ports.DownstreamRepository
@@ -121,6 +122,7 @@ func NewIngestCallHandler(
 	options ports.OptionsRepository,
 	logs ports.LogRepository,
 	converter ports.AudioConverter,
+	prober ports.AudioLengthProber,
 	hub ports.Hub,
 	delayer ports.CallDelayer,
 	downstreams ports.DownstreamRepository,
@@ -135,6 +137,7 @@ func NewIngestCallHandler(
 		options:     options,
 		logs:        logs,
 		converter:   converter,
+		prober:      prober,
 		hub:         hub,
 		delayer:     delayer,
 		downstreams: downstreams,
@@ -560,8 +563,23 @@ func downstreamLine(call domain.Call, url string, outcome string) string {
 // convertAudio converts the call's audio and replaces it with the converted file. When
 // the converter cannot convert, the original audio is kept, which is what the legacy
 // server ends up storing; the difference is that this server records why.
+//
+// It is also the step that makes the call know how long its recording is, taking the
+// length from the first source that can name it: the uploader's own count, which the
+// server believes and never re-measures; the conversion's report of the running time of
+// the file it wrote; and ffprobe's measurement of the audio the server ends up storing.
+// A source that cannot answer leaves the call with no known length — the length is a
+// fact the server learns, never a reason to lose a recording.
 func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain.Call, options domain.Options, tags domain.Tags) error {
+	// The recorder counted its own recording; the server takes its word and measures
+	// nothing, and the conversion the administrator configured runs all the same.
+	known := call.AudioLength > 0
+
 	if options.AudioConversion == domain.AudioConversionDisabled {
+		if !known {
+			handler.probeLength(ctx, call)
+		}
+
 		return nil
 	}
 
@@ -583,6 +601,12 @@ func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain
 		Data:     call.Audio,
 	}, options.AudioConversion, metadata)
 	if err != nil {
+		// The original audio is kept, and it is that kept audio the probe measures, so
+		// the stored call's length describes the stored call's audio.
+		if !known {
+			handler.probeLength(ctx, call)
+		}
+
 		return err
 	}
 
@@ -590,7 +614,35 @@ func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain
 	call.AudioFilename = converted.Filename
 	call.AudioMime = converted.Mime
 
+	if !known {
+		if converted.Duration > 0 {
+			call.AudioLength = converted.Duration
+		} else {
+			// The conversion wrote the stored recording without naming its length;
+			// the probe measures that recording, not the one that went in.
+			handler.probeLength(ctx, call)
+		}
+	}
+
 	return nil
+}
+
+// probeLength asks ffprobe how long the audio the server is about to store lasts, and
+// records the answer on the call. A probe that cannot answer says so once, under the same
+// part of the server the conversion reports under, and the call keeps no length.
+func (handler *IngestCallHandler) probeLength(ctx context.Context, call *domain.Call) {
+	length, err := handler.prober.Probe(ctx, ports.AudioFile{
+		Filename: call.AudioFilename,
+		Mime:     call.AudioMime,
+		Data:     call.Audio,
+	})
+	if err != nil {
+		handler.log(ctx, domain.LogLevelWarn, domain.LogSourceFFmpeg, fmt.Sprintf("the recording length could not be measured: %v", err.Error()))
+
+		return
+	}
+
+	call.AudioLength = length
 }
 
 // log writes one entry to the server log, naming the part of the server the entry is about.

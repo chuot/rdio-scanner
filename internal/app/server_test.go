@@ -1954,8 +1954,8 @@ func testConfigIn(baseDir string, out io.Writer) Config {
 		// The converter a test server is given is the ffmpeg the host installs. Every test that reaches
 		// the converter turns conversion off, so that what a test proves is the server and not what one
 		// version of ffmpeg makes of a recording; conversion is compared where ffmpeg is the subject.
-		Converter: func(dir string) (ports.AudioConverter, string) {
-			return ffmpeg.New(), ""
+		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
+			return ffmpeg.New(), ffmpeg.NewProber(dir), ""
 		},
 	}
 }

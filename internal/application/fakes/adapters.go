@@ -45,6 +45,10 @@ type Converter struct {
 	// Modes records the conversion level each conversion was asked for.
 	Modes []uint
 
+	// Duration is the length the converter reports on the file it returns, standing in
+	// for the running time a real ffmpeg states while it converts. Zero reports no length.
+	Duration time.Duration
+
 	// Err, when set, is returned by every conversion.
 	Err error
 
@@ -81,8 +85,40 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 	out := in
 	out.Filename = strings.TrimSuffix(in.Filename, extensionOf(in.Filename)) + ".m4a"
 	out.Mime = "audio/mp4"
+	out.Duration = converter.Duration
 
 	return out, nil
+}
+
+// Prober is an in-memory audio length prober. It reports the length it was configured with
+// and records the audio it was asked about, standing in for the ffprobe that reads a
+// length off a file the converter could not measure.
+type Prober struct {
+	// Probed records each probe, in the order they were asked for.
+	Probed []ports.AudioFile
+
+	// Length is the length the prober reports.
+	Length time.Duration
+
+	// Err, when set, is returned by every probe.
+	Err error
+}
+
+var _ ports.AudioLengthProber = (*Prober)(nil)
+
+// NewProber returns a prober that measures.
+func NewProber() *Prober {
+	return &Prober{Length: 2500 * time.Millisecond}
+}
+
+func (prober *Prober) Probe(ctx context.Context, in ports.AudioFile) (time.Duration, error) {
+	prober.Probed = append(prober.Probed, in)
+
+	if prober.Err != nil {
+		return 0, prober.Err
+	}
+
+	return prober.Length, nil
 }
 
 func extensionOf(name string) string {

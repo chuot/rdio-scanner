@@ -194,10 +194,11 @@ func serverConfig(config *Config, out io.Writer, echo app.LogEcho) app.Config {
 		Version:     Version,
 		Out:         out,
 		Echo:        echo,
-		Converter: func(dir string) (ports.AudioConverter, string) {
-			choice := theConverter(bundledFFmpeg(dir))
+		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
+			ffmpegPath, ffprobePath, failure := bundledFFmpeg(dir)
+			choice := theConverter(ffmpegPath, ffprobePath, failure)
 
-			return choice.converter(), choice.Notice
+			return choice.converter(), choice.prober(dir), choice.Notice
 		},
 	}
 }

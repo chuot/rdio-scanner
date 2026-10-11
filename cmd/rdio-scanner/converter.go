@@ -29,12 +29,20 @@ import (
 // own target carries none: macOS, FreeBSD, and every plain `go build` a developer runs.
 const theHostFFmpeg = "ffmpeg"
 
-// converterChoice is which ffmpeg this server converts with, and what the operator has to be told
-// about it.
+// theHostFFprobe is the ffprobe that same deployment installs, measured the same way: the server
+// probes lengths with the ffprobe of the pair it carries, and with its host's when it carries none.
+const theHostFFprobe = "ffprobe"
+
+// converterChoice is which ffmpeg this server converts with, which ffprobe it measures lengths
+// with, and what the operator has to be told about them.
 type converterChoice struct {
 	// Program is the ffmpeg the server runs: the path of the one it carries inside its own binary, or
 	// the name ffmpeg when it runs the one its host installs.
 	Program string
+
+	// ProbeProgram is the ffprobe the server measures lengths with: the path of the one it carries
+	// inside its own binary, or the name ffprobe when it runs the one its host installs.
+	ProbeProgram string
 
 	// Notice is what the operator has to be told about the converter, and is empty when there is
 	// nothing to say.
@@ -50,35 +58,49 @@ func (choice converterChoice) converter() *ffmpeg.Converter {
 	return ffmpeg.NewAt(choice.Program)
 }
 
-// theConverter decides which ffmpeg a server converts with from what its own bundle produced.
+// prober builds the prober this server measures lengths with, working in the folder the server
+// writes its programs into: the probe files share that folder with the programs, and the probe
+// removes them when the probe ends.
+func (choice converterChoice) prober(workDir string) *ffmpeg.Prober {
+	if choice.ProbeProgram == theHostFFprobe {
+		return ffmpeg.NewProber(workDir)
+	}
+
+	return ffmpeg.NewProberAt(choice.ProbeProgram, workDir)
+}
+
+// theConverter decides which ffmpeg a server converts with, and which ffprobe measures its
+// lengths, from what its own bundle produced.
 //
 // The ffmpeg the server carries wins over whatever the host happens to have installed, because the
 // server was built for the host it will run on and its ffmpeg was compiled for that architecture.
 // A server that carries none converts with the host's and has nothing to say about it; a server that
-// carried one and could not use it converts with the host's too, and says why.
-func theConverter(bundled string, failure string) converterChoice {
-	if bundled != "" {
-		return converterChoice{Program: bundled}
+// carried one and could not use it converts with the host's too, and says why. The ffprobe travels
+// the same branch: the pair the bundle materializes is one decision, not two programs decided
+// apart.
+func theConverter(bundled string, bundledProbe string, failure string) converterChoice {
+	if bundled != "" && bundledProbe != "" {
+		return converterChoice{Program: bundled, ProbeProgram: bundledProbe}
 	}
 
-	return converterChoice{Program: theHostFFmpeg, Notice: failure}
+	return converterChoice{Program: theHostFFmpeg, ProbeProgram: theHostFFprobe, Notice: failure}
 }
 
-// bundledFFmpeg writes the ffmpeg this binary carries into the folder the server was given for it and
-// returns the path to run it from, or reports why the server will have to do without.
+// bundledFFmpeg writes the pair this binary carries into the folder the server was given for it and
+// returns the paths to run them from, or reports why the server will have to do without.
 //
 // A server whose target carries no ffmpeg is not a failure and reports no reason: it is the ordinary
 // case for the targets this project does not compile an ffmpeg for.
-func bundledFFmpeg(dir string) (string, string) {
+func bundledFFmpeg(dir string) (string, string, string) {
 	bundled, ok := bundle.Lookup()
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
 
-	path, _, err := bundled.Materialize(dir)
+	ffmpegPath, ffprobePath, err := bundled.Materialize(dir)
 	if err != nil {
-		return "", err.Error()
+		return "", "", err.Error()
 	}
 
-	return path, ""
+	return ffmpegPath, ffprobePath, ""
 }
