@@ -126,17 +126,18 @@ func NewHandler(deps Deps) *Handler {
 // ServeHTTP takes over one listener connection.
 //
 // Any path answers a websocket request, because that is what today's clients ask for: they open a
-// connection on the page they are on, and a server that only answers one path loses them. The origin is
-// not checked, which is what the legacy server does and what a native application on a phone depends on.
+// connection on the page they are on, and a server that only answers one path loses them.
+//
+// The origin is checked the way the socket library checks it (decision D4): a connection that names no
+// origin — a native application, which is not a browser and sends no such header — passes, as the
+// native applications on phones depend; a browser connection passes only from the very address the page
+// was served from, because a page from anywhere else opening this socket is a cross-site request that
+// would read every live call and every answer the listener socket carries.
 //
 // The connection is not answered here. The hub holds it from here on, and this handler is called back
 // for each frame that arrives.
 func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(*http.Request) bool {
-			return true
-		},
-
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}

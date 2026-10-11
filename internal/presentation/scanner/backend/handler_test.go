@@ -706,3 +706,47 @@ func capturedSessionCommands(t *testing.T) []string {
 	// which belong to the hub's own tests rather than to this one.
 	return commands[:8]
 }
+
+// TestTheListenerSocketRefusesAWebPageFromAnotherOrigin (REQ-006, CA-006.4, decision D4): a
+// browser names the page it came from when it opens a WebSocket, and a page from anywhere
+// else opening this socket is a cross-site request that would read every live call and every
+// answer the listener socket carries. A connection with no Origin at all — a native
+// application, which is not a browser and sends no such header — passes, as the native apps
+// depend, and so does the hosted webapp, whose origin is the server's own address.
+func TestTheListenerSocketRefusesAWebPageFromAnotherOrigin(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	wiredTo(t, f)
+
+	address := "ws://" + strings.TrimPrefix(f.server.URL, "http://")
+	host := strings.TrimPrefix(f.server.URL, "http://")
+
+	cross, resp, err := websocket.DefaultDialer.Dial(address, http.Header{
+		"Origin": []string{"https://evil.example.com"},
+	})
+	if err == nil {
+		cross.Close()
+
+		t.Fatal("a cross-origin upgrade was accepted, want it refused")
+	}
+
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Errorf("the cross-origin refusal = %v, want 403", resp)
+	}
+
+	native, _, err := websocket.DefaultDialer.Dial(address, nil)
+	if err != nil {
+		t.Fatalf("a connection with no Origin was refused: %v — native applications send no Origin", err)
+	}
+
+	native.Close()
+
+	same, _, err := websocket.DefaultDialer.Dial(address, http.Header{
+		"Origin": []string{"http://" + host},
+	})
+	if err != nil {
+		t.Fatalf("a same-origin connection was refused: %v — the hosted webapp connects from this very address", err)
+	}
+
+	same.Close()
+}
