@@ -45,6 +45,12 @@
 rdio-app {
   align-items: center;
   background-color: var(--rdio-background);
+
+  /* The closed drawers rest at translateX(±100%) inside this box, and their level-16
+   * shadow reaches past its bottom edge. Clipped here, an off-screen panel adds no
+   * scroll extent to the page, so no scrollbar flashes while a panel slides. clip,
+   * not hidden: the shell is not a scroll container and takes no scroll position. */
+  overflow: clip;
   color: var(--rdio-foreground);
   display: flex;
   flex-direction: row;
