@@ -1296,3 +1296,33 @@ func TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress(t *testing.T) {
 		t.Fatalf("the watch handed over %q, want the read in progress to finish", event)
 	}
 }
+
+// TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched (REQ-008, CA-008.4): a
+// symlink to a directory inside a watched tree is registered today — the watch follows
+// the link and reads recordings written into the directory it points at, which is
+// recordings from anywhere the link reaches. A linked directory is not a directory the
+// server was told to watch, and it watches nothing.
+func TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	outside := t.TempDir()
+
+	if err := os.Symlink(outside, filepath.Join(directory, "linked")); err != nil {
+		t.Fatalf("linking the outside directory: %v", err)
+	}
+
+	watched := watchingOver(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = false
+
+		return watch
+	})
+
+	// The link is there when the server starts watching. Today the watch follows it, and
+	// this recording is ingested from outside the watched tree — this is where this test
+	// fails today.
+	putRecording(t, outside, recordedFile)
+
+	watched.calls.nothingArrivesWithin(t, settleWait+settleWait)
+}

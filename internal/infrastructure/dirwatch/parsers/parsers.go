@@ -689,10 +689,23 @@ func hasExtension(filePath, configured, fallback string) bool {
 
 // audioExtension is the recording extension a trunk-recorder watch looks for beside the
 // sidecar it read.
+//
+// The name composes a filesystem path, so a stored name that is not a plain name — the
+// kind an old server left behind before the apply-time rule (decision D8) — asks for a
+// file outside the watched directory, and it asks for nothing here: the pair is not read
+// (CA-008.4).
 func audioExtension(configured string) string {
 	if len(configured) > 0 {
+		if !plainExtensionPattern.MatchString(configured) {
+			return ""
+		}
+
 		return fmt.Sprintf(".%s", configured)
 	}
 
 	return ".wav"
 }
+
+// plainExtensionPattern is what a recording extension may be: letters and digits, one to
+// ten of them — the same shape the domain refuses at apply.
+var plainExtensionPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,10}$`)

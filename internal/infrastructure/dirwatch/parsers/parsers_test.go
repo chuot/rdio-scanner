@@ -824,3 +824,60 @@ func TestExtractTrunkRecorderIgnoresAFileThatIsNotASidecar(t *testing.T) {
 		t.Errorf("Extract = %v %v for a recording, want it left alone", recognized, err)
 	}
 }
+
+// TestExtractTrunkRecorderNeverReadsAPathWalkingExtension (REQ-008, CA-008.4, decision D8):
+// the recording path a trunk-recorder watch composes from the configured extension walks
+// out of the watched directory when an old server stored a name that is not a name —
+// "x/../../secret.wav" lands two levels up. The parser reads the pair beside the
+// sidecar, and
+// nothing outside the watched directory.
+func TestExtractTrunkRecorderNeverReadsAPathWalkingExtension(t *testing.T) {
+	base := t.TempDir()
+
+	directory := filepath.Join(base, "watched")
+
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatalf("creating the watched directory: %v", err)
+	}
+
+	// The traversal needs its steps to exist: the composed path is
+	// <watched>/call.x/../../secret.wav, and the kernel resolves it to <base>/secret.wav
+	// only with call.x there as a directory.
+	if err := os.MkdirAll(filepath.Join(directory, "call.x"), 0o755); err != nil {
+		t.Fatalf("creating the traversal step: %v", err)
+	}
+
+	secret := filepath.Join(base, "secret.wav")
+
+	if err := os.WriteFile(secret, []byte(strings.Repeat("the file outside the watched directory. ", 32)), 0o600); err != nil {
+		t.Fatalf("planting the file outside the watched directory: %v", err)
+	}
+
+	sidecar := filepath.Join(directory, "call.json")
+
+	if err := os.WriteFile(sidecar, []byte(`{
+		"short_name": "Grand Metro",
+		"talkgroup": 1514000,
+		"talkgroup_description": "Dispatch 1",
+		"talkgroup_group": "Ground",
+		"talkgroup_group_tag": "Dispatch",
+		"talkgroup_tag": "Main",
+		"timestamp": 1791288000000
+	}`), 0o644); err != nil {
+		t.Fatalf("writing the sidecar: %v", err)
+	}
+
+	watch := domain.NewDirwatch()
+	watch.Kind = domain.DirwatchTypeTrunkRecorder
+	watch.Extension = "x/../../secret.wav"
+
+	extracted, recognized, err := extractWith(t, newParsers(configuredSystems()), watch, sidecar)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+
+	if recognized {
+		t.Errorf("the parser ingested %q with %d bytes of audio, want the path-walking extension refused: the recording it read is not beside the sidecar",
+			extracted.Call.AudioFilename, len(extracted.Call.Audio))
+	}
+}

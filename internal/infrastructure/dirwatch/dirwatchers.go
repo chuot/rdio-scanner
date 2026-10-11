@@ -184,10 +184,12 @@ func watchDelay(dirwatch domain.Dirwatch) time.Duration {
 	return time.Duration(math.Max(float64(dirwatch.Delay), minimumWatchDelay)) * time.Millisecond
 }
 
-// isDirectory is what the legacy asks of every path an event names, and asks the same way: a
-// path that cannot be read is not a directory.
+// isDirectory is what the legacy asks of every path an event names, and asks the same way:
+// a path that cannot be read is not a directory. It asks with Lstat, so a symlink to a
+// directory is not a directory: the server watches the tree it was told to watch, not
+// whatever a link inside it reaches (CA-008.4).
 func isDirectory(path string) bool {
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return false
 	}
@@ -422,9 +424,15 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 		return
 	}
 
-	if err := fs.WalkDir(os.DirFS(w.dirwatch.Directory), ".", func(p string, _ fs.DirEntry, err error) error {
+	if err := fs.WalkDir(os.DirFS(w.dirwatch.Directory), ".", func(p string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+
+		// A symlink is skipped, not followed and not read: the server watches the tree
+		// it was told to watch, and a link names a file somewhere else (CA-008.4).
+		if entry.Type()&fs.ModeSymlink != 0 {
+			return nil
 		}
 
 		path := filepath.Join(w.dirwatch.Directory, p)
