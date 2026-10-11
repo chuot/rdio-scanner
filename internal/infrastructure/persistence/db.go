@@ -23,9 +23,12 @@ package persistence
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
@@ -59,6 +62,24 @@ type Settings struct {
 	Username string
 	Password string
 	Name     string
+
+	// TLS is the mysql driver's tls parameter (the db_tls ini option): "true",
+	// "skip-verify", "false", or the name of a registered tls config (D12).
+	// Empty — the default — connects in plaintext, exactly as deployments
+	// connect today; the operator opts in.
+	TLS string
+
+	// SslMode is the postgres sslmode parameter (the db_sslmode ini option),
+	// in the form pgx reads it: "disable", "require", "verify-ca",
+	// "verify-full", and the rest of the postgres names (D12). Empty — the
+	// default — is what the server sends today.
+	SslMode string
+
+	// ConnectTimeout is how long the connection attempt waits (the
+	// db_connect_timeout ini option), in Go's duration form ("5s"). Empty —
+	// the default — leaves the timing to the driver and the operating system,
+	// as it is today (D12).
+	ConnectTimeout string
 }
 
 // Open connects to the database the server was started with and leaves it ready for the
@@ -111,7 +132,18 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		// `busy_timeout=10000`. It is kept because it works, and because a connection string
 		// that differs from the one the other server writes is a difference someone would have
 		// to explain.
-		return "sqlite", fmt.Sprintf("file:%s?_pragma=foreign_keys=on&_pragma=busy_timeout%%3d10000", settings.FilePath), nil
+		// The path is escaped into the URL the driver reads (CA-014.1): the
+		// legacy install lives under "Rdio Scanner", and a path with a space,
+		// a `#`, or a `?` in it is a path, not a query. Escaping is segment by
+		// segment so the separators stay separators, and a plain path escapes
+		// to itself — byte-for-byte the string the legacy server wrote.
+		segments := strings.Split(settings.FilePath, "/")
+
+		for i, segment := range segments {
+			segments[i] = url.PathEscape(segment)
+		}
+
+		return "sqlite", "file:" + strings.Join(segments, "/") + "?_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000", nil
 
 	case DialectMariadb, DialectMysql:
 		// ANSI_QUOTES is what lets the same double-quoted identifiers in the schema work on
@@ -121,16 +153,74 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		// than the rows it changed: an update that writes the same value changes nothing,
 		// and the save reads "nothing changed" as "no such row" and inserts a duplicate
 		// for every key (the audit's H13, decision D10).
-		return "mysql", fmt.Sprintf(
-			"%s:%s@tcp(%s:%d)/%s?sql_mode=ANSI_QUOTES&clientFoundRows=true",
-			settings.Username, settings.Password, settings.Host, settings.Port, settings.Name,
-		), nil
+		source := &mysql.Config{
+			User:   settings.Username,
+			Passwd: settings.Password,
+			Net:    "tcp",
+			Addr:   fmt.Sprintf("%s:%d", settings.Host, settings.Port),
+			DBName: settings.Name,
+
+			Params: map[string]string{"sql_mode": "ANSI_QUOTES"},
+
+			// The driver's own defaults, named so FormatDSN says nothing about
+			// them: the data source carries the legacy option set and nothing
+			// else (CA-014.1).
+			AllowNativePasswords: true,
+			CheckConnLiveness:    true,
+			MaxAllowedPacket:     64 << 20,
+
+			// clientFoundRows is what makes an option update report the row it
+			// found (decision D10); the driver's own field is what carries it.
+			ClientFoundRows: true,
+		}
+
+		if settings.TLS != "" {
+			source.Params["tls"] = settings.TLS
+		}
+
+		if settings.ConnectTimeout != "" {
+			timeout, err := time.ParseDuration(settings.ConnectTimeout)
+			if err != nil {
+				return "", "", fmt.Errorf("database connect timeout %s is not a duration: %w", settings.ConnectTimeout, err)
+			}
+
+			source.Timeout = timeout
+		}
+
+		return "mysql", source.FormatDSN(), nil
 
 	case DialectPostgresql:
-		return "pgx", fmt.Sprintf(
-			"postgresql://%s:%s@%s:%d/%s",
-			settings.Username, settings.Password, settings.Host, settings.Port, settings.Name,
-		), nil
+		// The URL form escapes the credential (CA-014.1): a password with an
+		// `@`, a `/`, or a `%` in it is a password, not a piece of the
+		// connection string, and today's plain interpolation hands it to the
+		// parser as structure. With nothing opted in, the URL reads byte-for-byte
+		// as the string the legacy server wrote.
+		source := &url.URL{
+			Scheme: "postgresql",
+			User:   url.UserPassword(settings.Username, settings.Password),
+			Host:   fmt.Sprintf("%s:%d", settings.Host, settings.Port),
+			Path:   "/" + settings.Name,
+		}
+
+		query := source.Query()
+
+		if settings.SslMode != "" {
+			query.Set("sslmode", settings.SslMode)
+		}
+
+		if settings.ConnectTimeout != "" {
+			timeout, err := time.ParseDuration(settings.ConnectTimeout)
+			if err != nil {
+				return "", "", fmt.Errorf("database connect timeout %s is not a duration: %w", settings.ConnectTimeout, err)
+			}
+
+			// pgx reads connect_timeout in seconds.
+			query.Set("connect_timeout", strconv.Itoa(int(timeout.Seconds())))
+		}
+
+		source.RawQuery = query.Encode()
+
+		return "pgx", source.String(), nil
 
 	default:
 		// The legacy server writes this to the log and exits. Here it is an error, which is

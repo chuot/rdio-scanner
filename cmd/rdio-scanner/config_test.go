@@ -253,3 +253,53 @@ func TestABcryptCostOutsideTheRangeIsRejected(t *testing.T) {
 		}
 	}
 }
+
+// TestDatabaseTransportOptionsComeFromTheIniFile (REQ-014, CA-014.1, D12): the
+// transport options are ini options the operator opts in to; the defaults say
+// nothing, and a deployment that says nothing connects exactly as it connects
+// today — plaintext, driver's own timing.
+func TestDatabaseTransportOptionsComeFromTheIniFile(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+
+	if cfg.DbTLS != "" || cfg.DbSslMode != "" || cfg.DbConnectTimeout != "" {
+		t.Errorf("the default transport options are tls %q, sslmode %q, timeout %q, want all empty: the defaults must not change how a deployment connects", cfg.DbTLS, cfg.DbSslMode, cfg.DbConnectTimeout)
+	}
+
+	baseDir := t.TempDir()
+
+	writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_tls = true\ndb_sslmode = require\ndb_connect_timeout = 5s\n")
+
+	out := &bytes.Buffer{}
+
+	cfg, _, err := newConfig([]string{"-base_dir", baseDir}, "", out)
+	if err != nil {
+		t.Fatalf("newConfig: %v", err)
+	}
+
+	if got, want := cfg.DbTLS, "true"; got != want {
+		t.Errorf("db_tls = %q, want %q", got, want)
+	}
+
+	if got, want := cfg.DbSslMode, "require"; got != want {
+		t.Errorf("db_sslmode = %q, want %q", got, want)
+	}
+
+	if got, want := cfg.DbConnectTimeout, "5s"; got != want {
+		t.Errorf("db_connect_timeout = %q, want %q", got, want)
+	}
+}
+
+// TestAnUnparseableConnectTimeoutIsRejected (REQ-014, CA-014.1, D12): the connect
+// timeout is a duration, and "5" is not one — a server that started with a typo's
+// timeout would connect on a timing the operator never named.
+func TestAnUnparseableConnectTimeoutIsRejected(t *testing.T) {
+	for _, timeout := range []string{"5", "bogus"} {
+		baseDir := t.TempDir()
+
+		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_connect_timeout = "+timeout+"\n")
+
+		if _, _, err := newConfig([]string{"-base_dir", baseDir}, "", &bytes.Buffer{}); err == nil {
+			t.Errorf("newConfig accepted db_connect_timeout %s, want a rejection", timeout)
+		}
+	}
+}

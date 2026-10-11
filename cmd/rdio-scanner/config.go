@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"time"
 
 	"gopkg.in/ini.v1"
 
@@ -112,8 +113,11 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.StringVar(&config.ConfigFile, "config", defaultConfigFile, "server config file")
 	fs.StringVar(&config.DbFile, "db_file", defaultDbFile, "sqlite database file")
 	fs.StringVar(&config.DbHost, "db_host", defaultDbHost, "database host ip or hostname")
+	fs.StringVar(&config.DbConnectTimeout, "db_connect_timeout", "", "database connection timeout, a Go duration such as 5s")
 	fs.StringVar(&config.DbName, "db_name", "", "database name")
 	fs.StringVar(&config.DbPassword, "db_pass", "", "database password")
+	fs.StringVar(&config.DbSslMode, "db_sslmode", "", "postgres sslmode, one of the postgres sslmode names")
+	fs.StringVar(&config.DbTLS, "db_tls", "", "mysql tls, one of true, false, skip-verify, or a registered tls config name")
 	fs.UintVar(&config.DbPort, "db_port", defaultDbPortMariaDb, "database host port")
 	fs.StringVar(&config.DbType, "db_type", defaultDbType, fmt.Sprintf("database type, one of %s, %s, %s, %s", DbTypeSqlite, DbTypeMariadb, DbTypeMysql, DbTypePostgresql))
 	fs.IntVar(&config.BcryptCost, "bcrypt_cost", defaultBcryptCost, "admin credential bcrypt cost, 10 to 14")
@@ -165,6 +169,15 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	// typo's cost would hash the administrator credential at a cost the
 	// operator never asked for, and the credential on record is the one thing
 	// a typo must not touch.
+	// The connect timeout is a duration (D12): "5" is not one, and a server
+	// that started with a typo's timeout would connect on a timing the
+	// operator never named.
+	if config.DbConnectTimeout != "" {
+		if _, err := time.ParseDuration(config.DbConnectTimeout); err != nil {
+			return nil, ModeExit, fmt.Errorf("database connect timeout %s is not a duration: %w", config.DbConnectTimeout, err)
+		}
+	}
+
 	if config.BcryptCost < 10 || config.BcryptCost > 14 {
 		return nil, ModeExit, fmt.Errorf("bcrypt cost %d is outside the range 10 to 14", config.BcryptCost)
 	}
@@ -223,7 +236,10 @@ func (config *Config) applyIniFile() error {
 	overlayString(section, "db_file", &config.DbFile)
 	overlayString(section, "db_host", &config.DbHost)
 	overlayString(section, "db_name", &config.DbName)
+	overlayString(section, "db_connect_timeout", &config.DbConnectTimeout)
 	overlayString(section, "db_pass", &config.DbPassword)
+	overlayString(section, "db_sslmode", &config.DbSslMode)
+	overlayString(section, "db_tls", &config.DbTLS)
 	overlayString(section, "db_type", &config.DbType)
 	overlayString(section, "db_user", &config.DbUsername)
 	overlayString(section, "listen", &config.Listen)
@@ -308,6 +324,18 @@ func (config *Config) saveConfig() error {
 
 		if config.DbPassword != "" {
 			ini = append(ini, fmt.Sprintf("db_pass = %s", config.DbPassword))
+		}
+
+		if config.DbTLS != "" {
+			ini = append(ini, fmt.Sprintf("db_tls = %s", config.DbTLS))
+		}
+
+		if config.DbSslMode != "" {
+			ini = append(ini, fmt.Sprintf("db_sslmode = %s", config.DbSslMode))
+		}
+
+		if config.DbConnectTimeout != "" {
+			ini = append(ini, fmt.Sprintf("db_connect_timeout = %s", config.DbConnectTimeout))
 		}
 
 		if config.DbPort > 0 {

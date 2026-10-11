@@ -188,13 +188,16 @@ func New(config Config) (*Server, error) {
 	srv.dialect = dialect
 
 	db, err := persistence.Open(persistence.Settings{
-		Dialect:  dialect,
-		FilePath: config.GetDbFilePath(),
-		Host:     config.DbHost,
-		Port:     config.DbPort,
-		Username: config.DbUsername,
-		Password: config.DbPassword,
-		Name:     config.DbName,
+		Dialect:        dialect,
+		FilePath:       config.GetDbFilePath(),
+		Host:           config.DbHost,
+		Port:           config.DbPort,
+		Username:       config.DbUsername,
+		Password:       config.DbPassword,
+		Name:           config.DbName,
+		TLS:            config.DbTLS,
+		SslMode:        config.DbSslMode,
+		ConnectTimeout: config.DbConnectTimeout,
 	})
 	if err != nil {
 		return nil, err
