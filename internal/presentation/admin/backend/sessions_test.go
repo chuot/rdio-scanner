@@ -948,3 +948,32 @@ func TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigSocketEndsAConnectionThatStopsAnswering (REQ-007, CA-007.1, decision D5): the
+// server asks its administrator connections every so often, and a connection that stops
+// answering is one the server cannot send the configuration to — a half-open peer holds its
+// goroutine and its slot, and a server that is stopping waits on it. The socket ends the
+// connection within its pong window, the way the listener socket ends a silent listener.
+func TestConfigSocketEndsAConnectionThatStopsAnswering(t *testing.T) {
+	fixture := newFixture(t)
+
+	fixture.sessions.pingPeriod = 50 * time.Millisecond
+	fixture.sessions.pongWait = 200 * time.Millisecond
+
+	conn := fixture.open(t)
+
+	// The peer receives the server's pings and answers none of them.
+	conn.SetPingHandler(func(string) error { return nil })
+
+	fixture.present(t, conn, socketToken)
+	fixture.awaitCredential(t, 1)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("the configuration socket kept a connection that stopped answering, " +
+			"want the server to have ended it")
+	}
+
+	fixture.awaitGone(t, 0)
+}

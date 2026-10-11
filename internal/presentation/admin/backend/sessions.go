@@ -96,6 +96,13 @@ type Sessions struct {
 	// written by the goroutine that was reading it, and it is written after that goroutine has already taken
 	// the connection out of the set, so nothing else can tell that the entry is still on its way.
 	held sync.WaitGroup
+
+	// pongWait is how long a connection may go without answering before it is given up on, and
+	// pingPeriod is how often the server asks — the same discipline the listener socket holds
+	// its connections to (decision D5). They are fields, not constants, for the same reason the
+	// hub's are: only this package's tests need to pick a shorter one at all.
+	pongWait   time.Duration
+	pingPeriod time.Duration
 }
 
 // administrator is one open administrator connection, whether it has said who it is, and the lock that
@@ -121,6 +128,10 @@ type administrator struct {
 	// The legacy server does not care, and gets away with it only because the map it walks while broadcasting
 	// is being changed by another goroutine at the same time anyway (quirk Q65).
 	writing sync.Mutex
+
+	// quit is closed when the read loop ends, telling the goroutine that keeps asking this
+	// connection to answer that there is nothing left to ask.
+	quit chan struct{}
 }
 
 // SessionDeps is what the administrator connections need: the use case that answers whether a credential is one
@@ -144,6 +155,9 @@ func NewSessions(deps SessionDeps) *Sessions {
 		clock:   deps.Clock,
 		trusted: deps.Trusted,
 		conns:   map[*websocket.Conn]*administrator{},
+
+		pongWait:   60 * time.Second,
+		pingPeriod: 60 * time.Second / 10 * 9,
 	}
 }
 
@@ -237,10 +251,56 @@ func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, config
 // rolling window retires an old login's credential, and a connection holding one is ended the next time it
 // says anything.
 func (sessions *Sessions) listen(admin *administrator) {
-	// An administrator connection is not held to an interval. A listener that stops answering is ended
-	// because the server is waiting for an answer; an administrator that has nothing to say is not, because
-	// there is nothing it is being asked to answer.
-	admin.conn.SetReadDeadline(time.Time{})
+	// An administrator connection is held to the same interval a listener connection is
+	// (decision D5): the server asks every so often, and a connection that stops answering
+	// is one the server cannot send the configuration to — a half-open peer holds its
+	// goroutine, its slot, and the server that is stopping and waits on it. The hosted web
+	// app answers pings automatically; a native administrator client must answer them too.
+	admin.conn.SetReadDeadline(time.Now().Add(sessions.pongWait))
+	admin.conn.SetPongHandler(func(string) error {
+		return admin.conn.SetReadDeadline(time.Now().Add(sessions.pongWait))
+	})
+
+	defer close(admin.quit)
+
+	// The asking happens while the reading waits: a connection that has gone quiet is not
+	// one whose next frame the server is sitting down to read. The ping goroutine writes
+	// under the same lock every other writer of this connection takes, and it is counted
+	// with the rest: a server that is stopping finishes every goroutine that can still
+	// speak on a connection before it closes the log they write to.
+	sessions.held.Add(1)
+
+	go func() {
+		defer sessions.held.Done()
+		defer admin.conn.Close()
+
+		ticker := time.NewTicker(sessions.pingPeriod)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				admin.writing.Lock()
+
+				if err := admin.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+					admin.writing.Unlock()
+
+					return
+				}
+
+				err := admin.conn.WriteMessage(websocket.PingMessage, nil)
+
+				admin.writing.Unlock()
+
+				if err != nil {
+					return
+				}
+
+			case <-admin.quit:
+				return
+			}
+		}
+	}()
 
 	for {
 		_, b, err := admin.conn.ReadMessage()
@@ -269,7 +329,7 @@ func (sessions *Sessions) listen(admin *administrator) {
 // join puts a connection in the set of open administrator connections and hands back the record of it. The
 // connection is open from the moment it is handed over; being open is not the same as being told anything.
 func (sessions *Sessions) join(conn *websocket.Conn, remoteAddr string) *administrator {
-	admin := &administrator{conn: conn, remoteAddr: remoteAddr}
+	admin := &administrator{conn: conn, remoteAddr: remoteAddr, quit: make(chan struct{})}
 
 	sessions.mutex.Lock()
 	sessions.conns[conn] = admin
