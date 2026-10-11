@@ -46,6 +46,11 @@ type Calls struct {
 	// Saved records the calls that were written, in the order they were written.
 	Saved []domain.Call
 
+	// Searched records the resolved criteria each history search ran with, in the order they ran.
+	// The paging bounds and the caller's scope are resolved by the query handler, and the endpoint
+	// tests need to see what the search actually ran with rather than infer it from a row count.
+	Searched []ports.CallSearch
+
 	// Entered, when set, is signalled when a write begins. Tests use it to know that the server is
 	// inside a write rather than merely about to start one.
 	Entered chan struct{}
@@ -138,6 +143,8 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 // left out, because a call that is waiting out a delay is not part of the history until
 // its delay has run.
 func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (ports.CallSearchPage, error) {
+	calls.Searched = append(calls.Searched, search)
+
 	if calls.Err != nil {
 		return ports.CallSearchPage{}, calls.Err
 	}
@@ -201,6 +208,7 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 			SystemRef:    call.System.SystemRef,
 			TalkgroupRef: call.Talkgroup.TalkgroupRef,
 			Timestamp:    call.Timestamp,
+			AudioLength:  call.AudioLength,
 		})
 	}
 
