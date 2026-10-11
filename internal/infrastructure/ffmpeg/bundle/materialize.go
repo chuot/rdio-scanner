@@ -23,6 +23,7 @@ package bundle
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -69,7 +70,12 @@ func (b Bundle) Materialize(dir string) (string, string, error) {
 	for _, one := range programs {
 		path := filepath.Join(dir, one.Name+"-"+version+suffix)
 
-		if isTheSameProgram(path, one.Body) {
+		same, err := isTheSameProgram(path, one.Body)
+		if err != nil {
+			return "", "", err
+		}
+
+		if same {
 			written = append(written, path)
 			continue
 		}
@@ -120,16 +126,48 @@ func readGzip(files fs.FS, name string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-// isTheSameProgram reports whether the file on disk is already this program, which is decided by its
-// length: the two programs of a bundle are fixed once the binary is built, so a file of the right
-// length that a previous server wrote is this one.
-func isTheSameProgram(path string, body []byte) bool {
-	info, err := os.Stat(path)
+// isTheSameProgram reports whether the file on disk is already this program, decided by its
+// sha256 (CA-018.2): a program's identity is its content, not its length, and a file planted at
+// the program's path with the bundle program's length is not the bundle's program. The hash is
+// streamed, so verifying a 40 MB program does not pull it into memory.
+//
+// The path is inspected with os.Lstat: a symlink at the program's path is not a program the
+// server wrote, and the server does not write its program through a link it did not make — it
+// says so, and stops.
+func isTheSameProgram(path string, body []byte) (bool, error) {
+	info, err := os.Lstat(path)
 	if err != nil {
-		return false
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("the server cannot inspect %s: %w", path, err)
 	}
 
-	return info.Mode().IsRegular() && info.Size() == int64(len(body))
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("%s is a symlink the server did not write; the server will not write its program through it", path)
+	}
+
+	if !info.Mode().IsRegular() {
+		return false, nil
+	}
+
+	onDisk, err := os.Open(path)
+	if err != nil {
+		return false, fmt.Errorf("the server cannot read %s: %w", path, err)
+	}
+
+	defer onDisk.Close()
+
+	hash := sha256.New()
+
+	if _, err := io.Copy(hash, onDisk); err != nil {
+		return false, fmt.Errorf("the server cannot read %s: %w", path, err)
+	}
+
+	want := sha256.Sum256(body)
+
+	return bytes.Equal(hash.Sum(nil), want[:]), nil
 }
 
 // writeProgram writes the program through a temporary file and moves it into place, so a server that

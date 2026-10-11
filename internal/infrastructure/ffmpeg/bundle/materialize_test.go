@@ -167,7 +167,9 @@ func TestMaterializingAWindowsBundleNamesItsProgramsAsWindowsPrograms(t *testing
 }
 
 // A server that starts again must not rewrite a program another server may be running out from under
-// it, so a program that is already the right one is left exactly as it is.
+// it, so a program that is already the right one is left exactly as it is. The right one is decided
+// by content (CA-018.2): the second materialising verifies the sha256, finds the program it wrote,
+// and touches nothing — the file on disk stays the very file, same modification time and all.
 func TestMaterializingABundleAgainLeavesTheProgramsItAlreadyWrote(t *testing.T) {
 	bundle := aBundle(t, "linux-amd64", "the ffmpeg", "the ffprobe")
 
@@ -178,22 +180,31 @@ func TestMaterializingABundleAgainLeavesTheProgramsItAlreadyWrote(t *testing.T) 
 		t.Fatalf("materialising the bundle failed: %v", err)
 	}
 
-	// The same length as what was written, so a rewrite cannot be hiding behind a size check.
-	if err := os.WriteFile(ffmpegPath, []byte(strings.Repeat("x", len("the ffmpeg"))), 0755); err != nil {
-		t.Fatalf("the test cannot mark the program it wrote: %v", err)
+	before, err := os.Stat(ffmpegPath)
+	if err != nil {
+		t.Fatalf("the program the server wrote is gone: %v", err)
 	}
 
 	if _, _, err := bundle.Materialize(dir); err != nil {
 		t.Fatalf("materialising the bundle a second time failed: %v", err)
 	}
 
-	body, err := os.ReadFile(ffmpegPath)
+	after, err := os.Stat(ffmpegPath)
 	if err != nil {
 		t.Fatalf("the program the server already wrote is gone: %v", err)
 	}
 
-	if string(body) != strings.Repeat("x", len("the ffmpeg")) {
-		t.Errorf("the second materialising rewrote a program that was already there: got %q", string(body))
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Errorf("the second materialising rewrote a program that was already the right one: mtime %v then %v", before.ModTime(), after.ModTime())
+	}
+
+	body, err := os.ReadFile(ffmpegPath)
+	if err != nil {
+		t.Fatalf("the program the server already wrote is unreadable: %v", err)
+	}
+
+	if string(body) != "the ffmpeg" {
+		t.Errorf("the program the server already wrote is %q, want the bundle's program untouched", string(body))
 	}
 }
 
@@ -265,5 +276,79 @@ func TestMaterializingABundleReportsTheDirectoryItCannotWriteTo(t *testing.T) {
 
 	if _, _, err := bundle.Materialize(blocker); err == nil {
 		t.Fatal("materialising into a path that is not a directory reported no failure")
+	}
+}
+
+// TestAMaterializedProgramThatWasChangedOnDiskIsWrittenAgain (REQ-018, CA-018.2):
+// a program's identity is its content, not its length. A file planted at the
+// program's path with the bundle program's length is not the bundle's program,
+// and the next materialize rewrites it.
+func TestAMaterializedProgramThatWasChangedOnDiskIsWrittenAgain(t *testing.T) {
+	bundle := aBundle(t, "linux-arm64", "the ffmpeg", "the ffprobe")
+
+	dir := t.TempDir()
+
+	ffmpegPath, _, err := bundle.Materialize(dir)
+	if err != nil {
+		t.Fatalf("materialising the bundle failed: %v", err)
+	}
+
+	// The same length, a different program.
+	planted := []byte(strings.Repeat("x", len("the ffmpeg")))
+
+	if err := os.WriteFile(ffmpegPath, planted, 0755); err != nil {
+		t.Fatalf("the test cannot plant its file: %v", err)
+	}
+
+	if _, _, err := bundle.Materialize(dir); err != nil {
+		t.Fatalf("materialising again failed: %v", err)
+	}
+
+	body, err := os.ReadFile(ffmpegPath)
+	if err != nil {
+		t.Fatalf("reading the program back: %v", err)
+	}
+
+	if string(body) != "the ffmpeg" {
+		t.Errorf("the program on disk is %q, want the bundle's program rewritten: a program's identity is its content, not its length", string(body))
+	}
+}
+
+// TestAMaterializeRefusesASymlinkAtTheProgramPath (REQ-018, CA-018.2): the data
+// directory is a directory an operator's work can touch. A symlink at the
+// program's path is not a program the server wrote, and the server does not
+// write through a link it did not make — it says so, and the file the link
+// points at stays as it was.
+func TestAMaterializeRefusesASymlinkAtTheProgramPath(t *testing.T) {
+	bundle := aBundle(t, "linux-arm64", "the ffmpeg", "the ffprobe")
+
+	dir := t.TempDir()
+
+	ffmpegPath, _, err := bundle.Materialize(dir)
+	if err != nil {
+		t.Fatalf("materialising the bundle failed: %v", err)
+	}
+
+	outside := filepath.Join(t.TempDir(), "someone-elses-file")
+
+	if err := os.WriteFile(outside, []byte("someone else's file"), 0644); err != nil {
+		t.Fatalf("the test cannot write the file outside the data directory: %v", err)
+	}
+
+	if err := os.Remove(ffmpegPath); err != nil {
+		t.Fatalf("the test cannot remove the program it materialized: %v", err)
+	}
+
+	if err := os.Symlink(outside, ffmpegPath); err != nil {
+		t.Fatalf("the test cannot plant its symlink: %v", err)
+	}
+
+	if _, _, err := bundle.Materialize(dir); err == nil {
+		t.Fatal("materializing with a symlink at the program's path reported no failure: the server is not writing its program through a link it did not make")
+	}
+
+	body, err := os.ReadFile(outside)
+	if err != nil || string(body) != "someone else's file" {
+		t.Errorf("the file the symlink points at is %q, want it untouched", string(body))
 	}
 }
