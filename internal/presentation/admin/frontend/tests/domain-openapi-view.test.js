@@ -40,7 +40,7 @@ test('the groups carry the admin-facing names of the surface', () => {
   ]);
 });
 
-// FEAT-029: the call history over HTTP. The section shows what the server answers, so the three
+// The call history over HTTP. The section shows what the server answers, so the three
 // endpoints the contract names appear as their own group, read between the log view and the
 // password change.
 test('the Calls group names the three call history endpoints', () => {

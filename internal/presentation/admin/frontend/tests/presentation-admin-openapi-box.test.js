@@ -132,7 +132,7 @@ test('the OpenAPI card renders one box per group, each endpoint naming method, p
   assert.deepEqual(texts(findAll(login, (node) => node.className === 'summary')), ['Log in and obtain a JWT']);
 });
 
-// FEAT-029: the call history over HTTP. The card shows what the server answers, so the three call
+// The call history over HTTP. The card shows what the server answers, so the three call
 // endpoints appear in their own box, read between the log view and the password change.
 test('the Calls box renders the three call history endpoints', async () => {
   const { boxes } = await openApiCard();
