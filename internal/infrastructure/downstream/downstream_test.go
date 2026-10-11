@@ -25,6 +25,7 @@ import (
 	"errors"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -595,4 +596,140 @@ func containsName(names []string, name string) bool {
 	}
 
 	return false
+}
+
+// TestForwardRefusesAnAddressThatIsNotAnHttpAddress (REQ-009, CA-009.1, decision D9):
+// the forwarder re-checks the scheme at forward time, because an address stored by an
+// older server is read by this one. The refusal names the address and the schemes it
+// must be, and costs the addressed server nothing.
+func TestForwardRefusesAnAddressThatIsNotAnHttpAddress(t *testing.T) {
+	requests := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	defer server.Close()
+
+	groups, tags := configuredGroupsAndTags()
+	forwarder := NewForwarder(groups, tags)
+
+	// The address names this test's server over a refused scheme: a forward that did
+	// not refuse it would be seen by the server.
+	err := forwarder.Forward(context.Background(), ports.DownstreamTarget{
+		URL:    "ftp://" + server.Listener.Addr().String(),
+		Apikey: "downstream-key",
+	}, callForForwarding())
+
+	if err == nil {
+		t.Fatal("Forward = nil for an ftp:// address, want it refused")
+	}
+
+	if !strings.Contains(err.Error(), "http") {
+		t.Errorf("Forward error = %q, want it to name the http schemes the address must be", err)
+	}
+
+	if requests != 0 {
+		t.Errorf("the server was handed %d requests, want none: a refused address is never posted to", requests)
+	}
+}
+
+// TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody (REQ-009, CA-009.2,
+// decision D9): a downstream that answers 301 points the upload somewhere else, and
+// today the client follows it — the recording and the apikey are re-posted to whatever
+// address the redirect names. The redirect is a failure the log names, and the body is
+// handed to nobody else.
+func TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody(t *testing.T) {
+	replayed := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/call-upload" {
+			w.Header().Set("Location", "/somewhere-else")
+
+			w.WriteHeader(http.StatusMovedPermanently)
+
+			return
+		}
+
+		body, _ := io.ReadAll(r.Body)
+
+		if len(body) > 0 {
+			replayed++
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	defer server.Close()
+
+	groups, tags := configuredGroupsAndTags()
+	forwarder := NewForwarder(groups, tags)
+
+	err := forwarder.Forward(context.Background(), ports.DownstreamTarget{
+		URL:    server.URL,
+		Apikey: "downstream-key",
+	}, callForForwarding())
+
+	if err == nil {
+		t.Fatal("Forward = nil for a 301 downstream, want the redirect reported as a failure")
+	}
+
+	if !strings.Contains(err.Error(), "301") {
+		t.Errorf("Forward error = %q, want it to name the status the downstream answered", err)
+	}
+
+	if replayed != 0 {
+		t.Errorf("the redirect target was handed %d bodies, want none: the recording and the apikey go to the address the administrator named, not to wherever a redirect points", replayed)
+	}
+}
+
+// TestForwardDrainsTheBodyOfARefusedUpload (REQ-009, CA-009.3): a refused upload's
+// body is read out before the connection is handed back. A body left unread makes the
+// connection unusable, and every later call to the same downstream pays for a fresh
+// connection — a deployment with a refusing downstream turns its call log into a
+// connection storm.
+func TestForwardDrainsTheBodyOfARefusedUpload(t *testing.T) {
+	connections := 0
+
+	requests := 0
+
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+
+		w.WriteHeader(http.StatusInternalServerError)
+
+		w.Write([]byte("the receiving server said no, and its answer has bytes in it"))
+	}))
+
+	server.Config.ConnState = func(conn net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			connections++
+		}
+	}
+
+	server.Start()
+
+	defer server.Close()
+
+	groups, tags := configuredGroupsAndTags()
+	forwarder := NewForwarder(groups, tags)
+
+	for i := 0; i < 2; i++ {
+		if err := forwarder.Forward(context.Background(), ports.DownstreamTarget{
+			URL:    server.URL,
+			Apikey: "downstream-key",
+		}, callForForwarding()); err == nil {
+			t.Fatal("Forward = nil for a 500 downstream, want it reported as a failure")
+		}
+	}
+
+	if requests != 2 {
+		t.Fatalf("the server saw %d requests, want the two uploads", requests)
+	}
+
+	if connections != 1 {
+		t.Errorf("the server saw %d connections for two refused uploads, want 1: the refused body was left unread and the connection thrown away", connections)
+	}
 }

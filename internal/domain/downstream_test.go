@@ -129,3 +129,26 @@ func TestDownstreamsApplyListAndOrder(t *testing.T) {
 		t.Errorf("Ordered = %+v, want the list sorted by display order", ordered)
 	}
 }
+
+// TestDownstreamsValidateRefusesANonHttpAddress (REQ-009, CA-009.1, decision D9): the
+// forwarder posts recordings and the apikey to an address the administrator typed. An
+// address that is not http or https — ftp://, gopher://, a name that is not an address
+// at all — is refused at apply, before it can be stored and read by the forwarder. An
+// empty address is a downstream that forwards nothing, which the list already allows.
+func TestDownstreamsValidateRefusesANonHttpAddress(t *testing.T) {
+	for _, url := range []string{"ftp://peer.example/upload", "gopher://peer.example", "not-an-address", "https:"} {
+		stored := Downstreams{{ID: 1, URL: url}}
+
+		if err := stored.Validate(); err == nil {
+			t.Errorf("Validate = nil for the downstream address %q, want it refused", url)
+		}
+	}
+
+	for _, url := range []string{"http://peer.example", "https://peer.example", "https://peer.example/api/call-upload", ""} {
+		stored := Downstreams{{ID: 1, URL: url}}
+
+		if err := stored.Validate(); err != nil {
+			t.Errorf("Validate = %v for the downstream address %q, want it accepted", err, url)
+		}
+	}
+}

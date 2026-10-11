@@ -20,7 +20,11 @@
 
 package domain
 
-import "sort"
+import (
+	"fmt"
+	"net/url"
+	"sort"
+)
 
 // Downstream is another Rdio Scanner server this one re-posts its calls to, and the
 // scope of systems and talkgroups whose calls get re-posted.
@@ -80,6 +84,45 @@ func (downstream Downstream) Forwards() bool {
 
 // Downstreams is the server's list of downstream servers.
 type Downstreams []Downstream
+
+// Validate reports the first reason the list cannot be stored (decision D9, CA-009.1):
+// the forwarder posts recordings and the apikey to the address the administrator
+// typed, so an address that is not http or https is refused at apply — it is an
+// address the server must not post to over some other protocol, and a redirect or a
+// foreign scheme must not be able to carry the recording elsewhere. An empty address
+// is a downstream that forwards nothing, which the list already allows.
+func (downstreams Downstreams) Validate() error {
+	for _, downstream := range downstreams {
+		if err := downstream.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Validate reports the first reason this downstream's address cannot be posted to.
+func (downstream Downstream) Validate() error {
+	if len(downstream.URL) == 0 {
+		return nil
+	}
+
+	parsed, err := url.Parse(downstream.URL)
+	if err != nil {
+		return fmt.Errorf("the downstream address %s is not an address: %s", downstream.URL, err.Error())
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("the downstream address %s must be an http or https address", downstream.URL)
+	}
+
+	// An http address with no host names no server: there is nothing to post to.
+	if parsed.Host == "" {
+		return fmt.Errorf("the downstream address %s must name a server to post to", downstream.URL)
+	}
+
+	return nil
+}
 
 // ApplyList replaces the whole list with an administrator payload.
 func (downstreams Downstreams) ApplyList(list []any) Downstreams {

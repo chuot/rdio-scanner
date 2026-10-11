@@ -117,6 +117,12 @@ type Forwarder struct {
 	// waiting re-post finish.
 	Release chan struct{}
 
+	// InFlight counts the re-posts entered and not yet returned, and maxInFlight is the
+	// most that were in at once — the shape a test watches when it wants the server to
+	// cap how many calls it posts to its downstreams at the same time.
+	InFlight    int
+	maxInFlight int
+
 	entered  sync.Once
 	finished sync.Once
 
@@ -135,6 +141,13 @@ var _ ports.DownstreamForwarder = (*Forwarder)(nil)
 func (forwarder *Forwarder) Forward(ctx context.Context, target ports.DownstreamTarget, call domain.Call) error {
 	forwarder.mutex.Lock()
 	forwarder.Forwarded = append(forwarder.Forwarded, ForwardedCall{Target: target, Call: call})
+
+	forwarder.InFlight++
+
+	if forwarder.InFlight > forwarder.maxInFlight {
+		forwarder.maxInFlight = forwarder.InFlight
+	}
+
 	forwarder.mutex.Unlock()
 
 	if forwarder.Started != nil {
@@ -145,11 +158,25 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 		<-forwarder.Release
 	}
 
+	forwarder.mutex.Lock()
+
+	forwarder.InFlight--
+
+	forwarder.mutex.Unlock()
+
 	if forwarder.Finished != nil {
 		forwarder.finished.Do(func() { close(forwarder.Finished) })
 	}
 
 	return forwarder.Err
+}
+
+// MaxInFlight is the most re-posts this fake was ever handed at the same time.
+func (forwarder *Forwarder) MaxInFlight() int {
+	forwarder.mutex.Lock()
+	defer forwarder.mutex.Unlock()
+
+	return forwarder.maxInFlight
 }
 
 // Reposts returns the re-posts recorded so far.

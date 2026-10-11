@@ -241,6 +241,13 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 
 		return saver.repos.Dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)
 	case DownstreamsSection:
+		// Addresses are refused at apply (decision D9): the forwarder posts recordings
+		// and the apikey to whatever the administrator typed, and a scheme that is not
+		// http or https never gets stored to be posted to.
+		if err := changes.Downstreams.Validate(); err != nil {
+			return err
+		}
+
 		return saver.repos.Downstreams.SaveDownstreams(ctx, *changes.Downstreams)
 	case GroupsSection:
 		return saver.repos.Groups.SaveGroups(ctx, *changes.Groups)

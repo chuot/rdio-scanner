@@ -55,19 +55,27 @@ const requestTimeout = 30 * time.Second
 // the legacy resolves them too, from the configuration in effect rather than from anything
 // the call itself carries.
 type Forwarder struct {
-	groups  ports.GroupRepository
-	tags    ports.TagRepository
-	client  *http.Client
-	timeout time.Duration
+	groups ports.GroupRepository
+	tags   ports.TagRepository
+	client *http.Client
 }
 
 // NewForwarder builds the forwarder for a server that re-posts its calls to other servers.
+//
+// The client does not follow redirects (decision D9): a downstream that answers 3xx
+// points the upload at an address the administrator did not name, and following it
+// would re-post the recording and the apikey there. The redirect is reported as the
+// failure it is.
 func NewForwarder(groups ports.GroupRepository, tags ports.TagRepository) *Forwarder {
 	return &Forwarder{
-		groups:  groups,
-		tags:    tags,
-		client:  &http.Client{Timeout: requestTimeout},
-		timeout: requestTimeout,
+		groups: groups,
+		tags:   tags,
+		client: &http.Client{
+			Timeout: requestTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
 }
 
@@ -90,6 +98,13 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 		return operationError(err)
 	}
 
+	// The scheme is re-checked here (decision D9, CA-009.1): an address stored by an
+	// older server — before the apply-time rule — is read by this forwarder, and it is
+	// posted to only over http or https.
+	if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
+		return operationError(fmt.Errorf("the downstream address %s must be an http or https address", target.URL))
+	}
+
 	endpoint.Path = path.Join(endpoint.Path, uploadPath)
 
 	// The legacy builds a fresh client per send and hands it no context, so a shutdown
@@ -110,6 +125,11 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
+		// The answer is read out before the connection is handed back (CA-009.3): a
+		// body left unread makes the connection unusable, and every later call to the
+		// same downstream pays for a fresh one.
+		io.Copy(io.Discard, response.Body)
+
 		return operationError(fmt.Errorf("bad status: %s", response.Status))
 	}
 

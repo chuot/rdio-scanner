@@ -23,6 +23,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1795,4 +1796,55 @@ func TestIngestCallDeliveryDoesNotSerializeTheNextIngest(t *testing.T) {
 	}
 
 	close(stall.Release)
+}
+
+// TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce (REQ-009, decision D9):
+// a burst of ingested calls must not turn into an unbounded flood of posts to the
+// downstream servers. The server caps how many calls it posts at the same time; the
+// rest queue behind it.
+func TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce(t *testing.T) {
+	fixture := newIngestFixture()
+
+	fixture.seedKnownSystem()
+
+	fixture.downstreams.Stored = domain.Downstreams{{
+		ID:     1,
+		Apikey: "downstream-key",
+		URL:    "http://downstream.example",
+		Scope:  domain.AccessScope{Present: true, Wildcard: true},
+	}}
+
+	// Every re-post is held until the test releases it, so the number in flight at
+	// once is what the server chose, not what the timing happened to show.
+	fixture.forwarder.Release = make(chan struct{})
+
+	for i := 0; i < 12; i++ {
+		call := claimedIngestCall()
+
+		call.AudioFilename = fmt.Sprintf("TG1514000-2026100612000%d.wav", i)
+		call.Timestamp = ingestTime.Add(time.Duration(i) * time.Second)
+
+		if result, err := fixture.ingest(call); err != nil {
+			t.Fatalf("ingest %d failed: %v", i, err)
+		} else if result.Outcome != IngestCallAccepted {
+			t.Fatalf("ingest %d outcome = %v, want accepted", i, result.Outcome)
+		}
+	}
+
+	// The posts are held on the gate: the number in flight is settled once it stops
+	// growing. Today every call's post runs the moment the call is accepted, so all
+	// twelve enter at once — this is where this test fails today.
+	deadline := time.Now().Add(5 * time.Second)
+
+	for time.Now().Before(deadline) && fixture.forwarder.MaxInFlight() < 12 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	max := fixture.forwarder.MaxInFlight()
+
+	close(fixture.forwarder.Release)
+
+	if max > 8 {
+		t.Errorf("the server posted %d calls to the downstream at once, want no more than 8", max)
+	}
 }

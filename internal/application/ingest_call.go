@@ -511,6 +511,12 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 // The forwarding also outlives the request or the watch cycle that produced the call, which
 // is why its context is detached from that cycle's cancellation. What bounds it instead is
 // the forwarder's own timeout.
+// forwardSlots caps how many calls the server posts to its downstreams at the same
+// time (decision D9): a burst of ingested calls — a directory drained at startup, a
+// flood of uploads — must not turn into an unbounded flood of posts on the receiving
+// servers. The posts queue behind the eight in flight.
+var forwardSlots = make(chan struct{}, 8)
+
 func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
 	go func() {
 		ctx = context.WithoutCancel(ctx)
@@ -523,10 +529,14 @@ func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.C
 		}
 
 		for _, downstream := range downstreams.Accepting(call) {
+			forwardSlots <- struct{}{}
+
 			err := handler.forwarder.Forward(ctx, ports.DownstreamTarget{
 				URL:    downstream.URL,
 				Apikey: downstream.Apikey,
 			}, call)
+
+			<-forwardSlots
 
 			if err != nil {
 				handler.log(ctx, domain.LogLevelError, domain.LogSourceDownstream, downstreamLine(call, downstream.URL, err.Error()))
