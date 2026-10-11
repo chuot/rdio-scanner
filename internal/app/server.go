@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -502,6 +503,12 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		s.mcpSurface = mcpbackend.New(mcpbackend.Deps{
 			Version: s.config.Version,
 			Docker:  os.Getenv("DOCKER") != "",
+
+			// The surface's lines land in the log view the operator already reads, filed under the
+			// subsystem the surface is, and echoed out loud the way every other writer's lines are:
+			// the same repository, the same clock, the same view. An assistant's work on this
+			// deployment is part of the deployment's story.
+			Logger:  slog.New(mcpbackend.NewLogViewHandler(s.logs, s.clock)),
 			Session: application.NewCheckAdminSessionHandler(tokensAdapter),
 			Resolve: resolveAccess,
 			Trusted: s.trusted,

@@ -96,6 +96,12 @@ func (s *Server) Gate() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			who, ok := s.who(r)
 			if !ok {
+				// A caller the gate refuses is the event an operator wants to see: somebody knocking
+				// on the assistant's endpoint with nothing this server accepts. The address is the
+				// story. What the caller presented is a credential, and a credential is not what a
+				// log view is for.
+				s.log.Warn("the surface refused a caller", "address", httpaddr.Address(r, s.trusted))
+
 				w.WriteHeader(http.StatusUnauthorized)
 
 				return

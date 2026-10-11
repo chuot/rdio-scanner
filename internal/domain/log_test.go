@@ -196,7 +196,7 @@ func TestKnownLogSourcesAreTheDeclaredVocabulary(t *testing.T) {
 	want := []LogSource{
 		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
 		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
-		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
 		LogSourceCalls, LogSourceLegacy,
 	}
 
@@ -223,7 +223,7 @@ func TestEveryLogSourceSaysWhetherAWriterWritesIt(t *testing.T) {
 	written := []LogSource{
 		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
 		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
-		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
 	}
 
 	// calls is the name this feature found rather than the one it designed: the legacy server's call

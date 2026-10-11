@@ -60,7 +60,7 @@ func (s *Server) registerCapabilities(deps Deps) {
 		registerHealthReview,
 		registerConfigResources,
 		registerStandingQuestions,
-		registerWriteTools,
+		func(target *mcp.Server, deps Deps) { registerWriteTools(target, deps, s.writeTools) },
 	} {
 		build(s.full, deps)
 	}

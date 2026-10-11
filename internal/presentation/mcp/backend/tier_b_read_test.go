@@ -246,6 +246,30 @@ func TestSearchLogsAnswersTheFiltersAndEchoesThePageItUsed(t *testing.T) {
 	}
 }
 
+// TestSearchLogsReportsASubsystemThisServerDoesNotHave: a subsystem name outside the vocabulary is not
+// a filter that matches nothing. It is a caller asking about a part of the server that does not exist,
+// and answering them with a page of everything is worse than an empty page — the caller reads it as the
+// answer to the question they asked. The administrator's endpoint refuses it with the vocabulary; the
+// capability promises the same, and a capability that quietly drops the criterion answers a question
+// nobody asked.
+func TestSearchLogsReportsASubsystemThisServerDoesNotHave(t *testing.T) {
+	s := newCallerSession(t, Caller{Tier: TierFull})
+
+	refused := refusedCall(t, s, "search_logs", map[string]any{"source": "nonsense"})
+
+	if !strings.Contains(refused, "nonsense") {
+		t.Fatalf("the refusal says %q, and does not name the subsystem the caller asked for: the caller "+
+			"has to be able to see which word they got wrong", refused)
+	}
+
+	for _, want := range []string{"ffmpeg", "legacy"} {
+		if !strings.Contains(refused, want) {
+			t.Fatalf("the refusal says %q, and does not name %q among the subsystems this server has: the "+
+				"caller needs the vocabulary, not just a no", refused, want)
+		}
+	}
+}
+
 func TestSearchLogsNamesTheSpanTheCriteriaMatch(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 

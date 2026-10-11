@@ -22,6 +22,8 @@ package backend
 
 import (
 	"context"
+	"errors"
+	"iter"
 	"log/slog"
 	"net/http"
 	"time"
@@ -148,6 +150,15 @@ type Server struct {
 	session *application.CheckAdminSessionHandler
 	resolve *application.ResolveAccessQueryHandler
 	trusted *httpaddr.Trusted
+
+	// log is where the surface's own lines go: the caller it would not let in, the caller a
+	// capability refused, the capability that changed the deployment.
+	log *slog.Logger
+
+	// writeTools names the capabilities that change the deployment, recorded as they are registered.
+	// The surface files a line when one of them writes, and the list is built by the code that
+	// registers them, so it cannot name a capability that is not one and cannot miss one that is.
+	writeTools map[string]bool
 }
 
 // New builds the surface from the use cases it answers with, and registers its capabilities on the
@@ -158,12 +169,22 @@ func New(deps Deps) *Server {
 		Version: deps.Version,
 	}
 
+	// The surface always has somewhere to file its lines. Left no logger, the lines go nowhere and
+	// the surface answers exactly as it did before it had a log view of its own; the composition
+	// root hands it the server's.
+	logger := deps.Logger
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+
 	srv := &Server{
-		readonly: mcp.NewServer(implementation, nil),
-		full:     mcp.NewServer(implementation, nil),
-		session:  deps.Session,
-		resolve:  deps.Resolve,
-		trusted:  deps.Trusted,
+		readonly:   mcp.NewServer(implementation, &mcp.ServerOptions{Logger: logger}),
+		full:       mcp.NewServer(implementation, &mcp.ServerOptions{Logger: logger}),
+		session:    deps.Session,
+		resolve:    deps.Resolve,
+		trusted:    deps.Trusted,
+		log:        logger,
+		writeTools: map[string]bool{},
 	}
 
 	srv.registerCapabilities(deps)
@@ -173,6 +194,12 @@ func New(deps Deps) *Server {
 	// the narrower one that lets a capability that runs out of time answer its own failure.
 	srv.readonly.AddReceivingMiddleware(withToolDeadline(deps.toolDeadline(), deps.sessionKeepalive()))
 	srv.full.AddReceivingMiddleware(withToolDeadline(deps.toolDeadline(), deps.sessionKeepalive()))
+
+	// The surface files what the operator asks about after the fact, and it files from what the
+	// capability answered. It is registered last, so it is the outermost middleware and sees the
+	// answer the caller reads — including the refusal a capability's own bound produced.
+	srv.readonly.AddReceivingMiddleware(withActivityLog(logger, srv.writeTools))
+	srv.full.AddReceivingMiddleware(withActivityLog(logger, srv.writeTools))
 
 	// The sessions the surface is holding are asked whether they are still there, at the interval
 	// that keeps a stream writing inside the socket's write bound.
@@ -271,18 +298,11 @@ func withToolDeadline(at, keepalive time.Duration) mcp.Middleware {
 
 			answered, err := next(working, method, req)
 
-			// The capability's own bound is what expired — the caller is still listening — and
-			// the work did not answer: the assistant gets the refusal naming the capability it
-			// asked for, and not the text a repository answered a cancellation with. A capability
-			// that answered, or answered a failure of its own before its bound expired, keeps
-			// what it answered.
-			if err == nil {
-				if result, ok := answered.(*mcp.CallToolResult); !ok || !result.IsError {
-					return answered, err
-				}
-			}
-
-			if working.Err() == nil || ctx.Err() != nil {
+			// Only a capability whose own bound expired gets the surface's refusal, and only while
+			// the caller is still listening. A capability that answered, a capability that answered a
+			// failure of its own before its bound expired, and a caller that asked for a capability
+			// this surface does not have all keep the answer they were given.
+			if !ranOutOfItsBound(working, ctx) || !theWorkFailed(answered, err) {
 				return answered, err
 			}
 
@@ -295,6 +315,25 @@ func withToolDeadline(at, keepalive time.Duration) mcp.Middleware {
 			}, nil
 		}
 	}
+}
+
+// ranOutOfItsBound reports whether the capability's own bound expired while the caller is still
+// listening. A caller that hung up has nothing left to be answered.
+func ranOutOfItsBound(working, request context.Context) bool {
+	return working.Err() != nil && request.Err() == nil
+}
+
+// theWorkFailed reports whether the capability did not answer: a tool-level failure the caller read
+// as a refusal, or a work failure that reached the protocol. A refusal the capability answered on its
+// own is its answer and not the bound's, and the bound does not overwrite it.
+func theWorkFailed(answered mcp.Result, err error) bool {
+	if err != nil {
+		return errors.Is(err, context.DeadlineExceeded)
+	}
+
+	result, ok := answered.(*mcp.CallToolResult)
+
+	return ok && result != nil && result.IsError
 }
 
 // keepStreamAlive asks the session carrying a capability's answer whether it is still there, at the
@@ -352,6 +391,21 @@ func (s *Server) keepSessionsAlive(interval time.Duration) {
 			}
 		}
 	}()
+}
+
+// Sessions are the assistant sessions the surface is holding right now. The stopping server asks for
+// them after it says it closed them: the stop's promise is that no session outlives it, and the only
+// way to hold the stop to that promise is to look at the surface the stop was asked to close.
+func (s *Server) Sessions() iter.Seq[*mcp.ServerSession] {
+	return func(yield func(*mcp.ServerSession) bool) {
+		for _, target := range []*mcp.Server{s.readonly, s.full} {
+			for session := range target.Sessions() {
+				if !yield(session) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // CloseSessions says goodbye to every assistant holding a session, the way the stopping server says

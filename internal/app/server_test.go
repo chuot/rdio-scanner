@@ -47,6 +47,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/fakes"
@@ -55,6 +56,7 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg"
 	"rdio-scanner/internal/infrastructure/passwords"
 	"rdio-scanner/internal/infrastructure/persistence"
+	mcpbackend "rdio-scanner/internal/presentation/mcp/backend"
 )
 
 // The MCP surface is opt-in, and the way it is opt-in is observable from outside: with the switch off,
@@ -988,6 +990,154 @@ func TestTheServerSaysItStoppedOnceEvenWhenTwoGoroutinesStopIt(t *testing.T) {
 	if said := strings.Count(written, "info server: the server stopped"); said != 1 {
 		t.Errorf("the server said it stopped %d times, want once, wrote:\n%s", said, written)
 	}
+}
+
+// TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound: an assistant holding a
+// Model Context Protocol session is a connection this server took over, and shutting an address down
+// does not wait for a connection it handed over. The stop closes the surface's sessions beside the
+// administrator's configuration sockets and the listener sockets, for the same reason those do: a
+// connection the stop leaves open is a connection whose departure cannot be written to the log the
+// stop closes a few lines later.
+//
+// The session here is opened over the composed server — the surface's own endpoint, behind the
+// credential gate, on the server's own routes — and it is left open while the server is asked to
+// stop. The stop must return inside the bound it is given, and not at it: a stop that waits out its
+// bound because an assistant is holding a session is a stop that hangs on every deployment that has
+// an assistant connected.
+func TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound(t *testing.T) {
+	srv := startedTestServerWithTheMcpSurface(t)
+
+	token := loginTheTestAdministrator(t, srv)
+
+	endpoint := httptest.NewServer(srv.routes)
+
+	// Registered first, so it runs last: closing a test endpoint waits for a connection it is
+	// still carrying, and the session has to be let go before the endpoint is closed.
+	t.Cleanup(endpoint.Close)
+
+	session := connectTheTestAssistant(t, endpoint.URL, token)
+
+	if open := openTestAssistantSessions(srv); open != 1 {
+		_ = session.Close()
+
+		t.Fatalf("the surface holds %d assistant sessions after a session was opened over the composed "+
+			"server, want 1: the session was not opened through the surface the stop is asked to close", open)
+	}
+
+	// The session answers while it is open, which is what makes the session the stop has to close a
+	// session that was really there.
+	if answered, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "list_systems",
+		Arguments: map[string]any{},
+	}); err != nil || answered.IsError {
+		t.Fatalf("the assistant's capability was answered %v %v, wanting an answer: the session the stop "+
+			"has to close is not answering before the stop", answered, err)
+	}
+
+	asked := time.Now()
+
+	srv.stop(context.Background())
+
+	if elapsed := time.Since(asked); elapsed > 5*time.Second {
+		t.Fatalf("the server stopped %s after it was asked, want it inside the %s it was given: the stop "+
+			"waits on the assistant's session, the way it would wait on a configuration socket it had "+
+			"not ended", elapsed.Round(time.Millisecond), shutdownTimeout)
+	}
+
+	if open := openTestAssistantSessions(srv); open != 0 {
+		_ = session.Close()
+
+		t.Fatalf("the surface still holds %d assistant sessions after the server stopped: the stop closed "+
+			"the addresses and the sockets it tracks and left the assistant's session open", open)
+	}
+
+	// The client's side of the same fact: the session it was told is gone, and the capability it asks
+	// for after that meets a server that has nothing to answer it with.
+	_, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "list_systems",
+		Arguments: map[string]any{},
+	})
+
+	// The client is let go here and not left to the end of the suite: a client whose server has stopped
+	// is a client with machinery still running, and a test that leaves that running while the rest of
+	// the suite is doing its TLS handshakes is a test that makes the rest of the suite slow.
+	_ = session.Close()
+
+	if err == nil {
+		t.Fatal("the assistant's session answered a capability after the server stopped: the stop left an " +
+			"open session in front of a server that has stopped")
+	}
+}
+
+// loginTheTestAdministrator logs in the way an administrator logs in and hands back the session token
+// the login answer carries.
+func loginTheTestAdministrator(t *testing.T, srv *Server) string {
+	t.Helper()
+
+	rec := srv.post("/api/admin/login", `{"password":"rdio-scanner"}`)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login was answered %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var answered struct {
+		Token string `json:"token"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &answered); err != nil {
+		t.Fatalf("the login answer is not the answer the login endpoint gives: %v", err)
+	}
+
+	if answered.Token == "" {
+		t.Fatalf("the login answer carries no session: %s", rec.Body.String())
+	}
+
+	return answered.Token
+}
+
+// connectTheTestAssistant connects an assistant to the surface over the composed server, presenting
+// the administrator's session token the way the surface's gate reads it. The assistant keeps no
+// standing stream of its own: the session the stop has to close is the POST-and-answer kind, the
+// kind an assistant that only asks questions is.
+func connectTheTestAssistant(t *testing.T, url, token string) *mcp.ClientSession {
+	t.Helper()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "rdio-scanner-stop-test", Version: "1"}, nil)
+
+	session, err := client.Connect(t.Context(), &mcp.StreamableClientTransport{
+		Endpoint:             url + mcpbackend.EndpointPath,
+		HTTPClient:           &http.Client{Transport: testCredentialRoundTripper{token: token}},
+		DisableStandaloneSSE: true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("connecting the assistant to the surface: %v", err)
+	}
+
+	return session
+}
+
+// testCredentialRoundTripper presents the session token the surface's gate reads in the Authorization
+// header, the way the administrator's own page presents it.
+type testCredentialRoundTripper struct {
+	token string
+}
+
+func (transport testCredentialRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	sent := req.Clone(req.Context())
+	sent.Header.Set("Authorization", transport.token)
+
+	return http.DefaultTransport.RoundTrip(sent)
+}
+
+// openTestAssistantSessions counts the assistant sessions the surface is holding.
+func openTestAssistantSessions(srv *Server) int {
+	open := 0
+
+	for range srv.mcpSurface.Sessions() {
+		open++
+	}
+
+	return open
 }
 
 // consoleCapture is a console a test can read, from more than one goroutine at a time.

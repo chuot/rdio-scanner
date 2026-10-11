@@ -23,6 +23,7 @@ package backend
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -89,6 +90,17 @@ func registerAdminTools(target *mcp.Server, deps Deps) {
 		}
 
 		criteria := in.criteria()
+
+		// A subsystem this server does not have is not a filter that matches nothing: it is a
+		// caller asking about a part of the server that does not exist. The administrator's endpoint
+		// refuses it with the vocabulary, and this capability says the same thing it does: answering
+		// a page of everything is how a typo becomes an assistant concluding that nothing happened.
+		if criteria.SourceWasRejected() {
+			return refused("the subsystem filter takes the names this server files its entries under: " +
+				strings.Join(logSourceNames(), ", ") + ". " +
+				"The name " + in.Source + " is not one of them, and this server does not answer a subsystem it " +
+				"does not have with a page of everything."), logView{}, nil
+		}
 
 		page, err := deps.Logs.Handle(ctx, application.SearchLogsQuery{Search: criteria})
 		if err != nil {
@@ -518,4 +530,19 @@ func parseDay(day string) time.Time {
 	}
 
 	return at
+}
+
+// logSourceNames is the subsystem vocabulary, in the order the log view lists it. A caller who named
+// a subsystem this server does not have is told what the server has: the answer to a wrong name is
+// the vocabulary, and not just a no.
+func logSourceNames() []string {
+	known := domain.KnownLogSources()
+
+	names := make([]string, 0, len(known))
+
+	for _, source := range known {
+		names = append(names, string(source))
+	}
+
+	return names
 }

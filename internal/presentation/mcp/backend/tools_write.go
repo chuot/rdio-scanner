@@ -50,8 +50,11 @@ import (
 // are registered on that set alone, and their handlers check the credential again: a capability
 // that changes the deployment has no business being reachable by anything weaker, whatever the
 // catalog says about where it was mounted.
-func registerWriteTools(target *mcp.Server, deps Deps) {
-	mcp.AddTool(target, &mcp.Tool{
+//
+// Each one is recorded in `changes` as it is registered. The surface files a line when one of them
+// writes, and a list built by the code that registers the capabilities cannot drift from them.
+func registerWriteTools(target *mcp.Server, deps Deps, changes map[string]bool) {
+	addWriteTool(target, changes, &mcp.Tool{
 		Name:  "manage_config",
 		Title: "Change one section of the configuration",
 		Description: "Change one section of this server's configuration, or one level of one system, " +
@@ -68,7 +71,7 @@ func registerWriteTools(target *mcp.Server, deps Deps) {
 		Annotations: writes(true),
 	}, manageConfigHandler(deps))
 
-	mcp.AddTool(target, &mcp.Tool{
+	addWriteTool(target, changes, &mcp.Tool{
 		Name:  "manage_access_user",
 		Title: "Onboard or remove a listener",
 		Description: "Add a listener access code, or remove every code carrying one identity. The add " +
@@ -83,7 +86,7 @@ func registerWriteTools(target *mcp.Server, deps Deps) {
 		Annotations: writes(true),
 	}, manageAccessUserHandler(deps))
 
-	mcp.AddTool(target, &mcp.Tool{
+	addWriteTool(target, changes, &mcp.Tool{
 		Name:  "rotate_admin_password",
 		Title: "Replace the administrator credential",
 		Description: "Replace the credential an administrator signs in with. Every open administrator " +
@@ -94,6 +97,16 @@ func registerWriteTools(target *mcp.Server, deps Deps) {
 			"credential change does. Writes POST /api/admin/password.",
 		Annotations: writes(false),
 	}, rotateAdminPasswordHandler(deps))
+}
+
+// addWriteTool registers one write capability and records its name. The name is recorded as the
+// capability is registered, by the code that registers it: the list of capabilities that change the
+// deployment is built from the registrations themselves, so it cannot name a capability that is not
+// one, and cannot leave out one that is.
+func addWriteTool[In, Out any](target *mcp.Server, changes map[string]bool, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
+	changes[tool.Name] = true
+
+	mcp.AddTool(target, tool, handler)
 }
 
 // writes is the annotation set a write capability carries: it is not a read, it can modify or

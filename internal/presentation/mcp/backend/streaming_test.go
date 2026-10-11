@@ -49,9 +49,9 @@ import (
 // session goes with it. The surface keeps each session it is holding alive by asking it, at an
 // interval, whether it is still there.
 
-// newStreamingServer is the surface with its streaming dependencies named: the bound one capability's
+// newSurfaceWithDeps is the surface with its streaming dependencies named: the bound one capability's
 // work gets, and the interval its sessions are kept alive at.
-func newStreamingServer(t *testing.T, tweak func(*serverBundle, Deps) Deps) *serverBundle {
+func newSurfaceWithDeps(t *testing.T, tweak func(*serverBundle, Deps) Deps) *serverBundle {
 	t.Helper()
 
 	bundle := newServer(t, true)
@@ -75,7 +75,7 @@ func TestAToolWhoseWorkOutlivesItsOwnDeadlineAnswersAFailureTheAssistantCanRead(
 		theWorkTakes   = 200 * time.Millisecond
 	)
 
-	bundle := newStreamingServer(t, func(b *serverBundle, deps Deps) Deps {
+	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.ToolDeadline = itsOwnDeadline
 		deps.Logs = application.NewSearchLogsHandler(slowLogs{Logs: b.logs, after: theWorkTakes}, b.clock)
 
@@ -110,7 +110,7 @@ func TestAToolWhoseWorkOutlivesItsOwnDeadlineAnswersAFailureTheAssistantCanRead(
 // capability that answers inside its bound answers as it always did, with no notice of the bound at
 // all.
 func TestAToolWhoseWorkFitsItsOwnDeadlineIsNotRefusedByIt(t *testing.T) {
-	bundle := newStreamingServer(t, func(b *serverBundle, deps Deps) Deps {
+	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.ToolDeadline = 5 * time.Second
 
 		return deps
@@ -139,7 +139,7 @@ func TestAToolWhoseWorkFitsItsOwnDeadlineIsNotRefusedByIt(t *testing.T) {
 func TestTheSurfaceKeepsItsSessionsStreamsAlive(t *testing.T) {
 	const interval = 40 * time.Millisecond
 
-	bundle := newStreamingServer(t, func(b *serverBundle, deps Deps) Deps {
+	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.SessionKeepalive = interval
 
 		return deps

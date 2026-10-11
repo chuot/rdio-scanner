@@ -67,6 +67,13 @@ const (
 	LogSourceDatabase   LogSource = "database"
 	LogSourceAdmin      LogSource = "admin"
 
+	// LogSourceMcp names the work an assistant does through this server's Model Context Protocol
+	// surface. It is its own name and not the administrator's because the two are different things the
+	// operator may want to look at apart: the administrator's own page, and what came through an
+	// assistant. An operator filtering for it is asking who did what through an assistant, and that
+	// question has to have a name to filter by.
+	LogSourceMcp LogSource = "mcp"
+
 	// LogSourceCalls names the call repository of the server this one replaced. No writer here files under
 	// it: see backfillOnlyLogSources.
 	LogSourceCalls LogSource = "calls"
@@ -83,7 +90,7 @@ const (
 var writtenLogSources = []LogSource{
 	LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
 	LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
-	LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin,
+	LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
 }
 
 // backfillOnlyLogSources are the names in the vocabulary that no writer of this server writes. They are in

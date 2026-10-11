@@ -29,6 +29,7 @@ The log is in three places, and they are the same log:
 | `logs` | Log search | The log view failing to answer a search |
 | `database` | Database | The database migration: what it migrated, what it refused, and what it left damaged |
 | `admin` | Administration | The administrator account: a password changed or not changed, a user added or removed, a new signing secret, the administration app's own connection — joined, ended, or presenting a session token this server did not issue — and a request from the administrator whose body the server could not read |
+| `mcp` | Assistant surface | The Model Context Protocol endpoint, when it is enabled: a caller it would not let in, named by the address the request came from; a capability refusing a caller, named by the capability and the identity the caller's credential is filed under; a capability that changed the deployment; and the endpoint's own transport trouble. It files no entry for a read an assistant was entitled to, and no entry ever carries a credential |
 | `calls` | Calls | A call an operator acted on, such as pinning one. The current server writes nothing under this name; on a database upgraded from the previous server it holds the entries that server wrote |
 | `legacy` | From the previous server | Entries that arrived before this field existed, or from a server that does not write it |
 

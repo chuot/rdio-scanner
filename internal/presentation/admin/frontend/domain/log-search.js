@@ -30,6 +30,7 @@ export const LOG_SOURCES = [
   ['logs', 'Log search'],
   ['database', 'Database'],
   ['admin', 'Administration'],
+  ['mcp', 'Assistant surface'],
   ['calls', 'Calls'],
   ['legacy', 'From the previous server'],
 ];
