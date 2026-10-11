@@ -79,6 +79,11 @@ type Delayer struct {
 	mutex  sync.Mutex
 	timers map[uint64]ports.Timer
 	closed bool
+
+	// sending counts the delivers in flight, so Close knows the last one has landed and can
+	// close the stream its collector reads — telling that collector, by the stream ending,
+	// that the server is going away (REQ-007, CA-007.6).
+	sending sync.WaitGroup
 }
 
 var _ ports.CallDelayer = (*Delayer)(nil)
@@ -174,27 +179,41 @@ func (delayer *Delayer) Restore(ctx context.Context) error {
 	return nil
 }
 
-// Close abandons the holds this delayer armed, and stops it taking any more.
+// Close abandons the holds this delayer armed, stops it taking any more, and ends the
+// stream of calls whose hold has run out.
 //
 // What was written down stays written down. A server that stops is not a server that forgot the
 // calls it was holding, and the next startup reads them back.
+//
+// The order is what makes closing the stream safe: the wake-up goes out first, the delivers in
+// flight land and are counted out, and only then, with no sender left, is the stream closed —
+// the collector's own exit signal (REQ-007, CA-007.6).
 func (delayer *Delayer) Close() {
 	delayer.mutex.Lock()
-	defer delayer.mutex.Unlock()
 
 	if delayer.closed {
+		delayer.mutex.Unlock()
+
 		return
 	}
 
 	delayer.closed = true
 
-	close(delayer.done)
-
-	for _, timer := range delayer.timers {
-		timer.Cancel()
-	}
+	timers := delayer.timers
 
 	delayer.timers = map[uint64]ports.Timer{}
+
+	delayer.mutex.Unlock()
+
+	close(delayer.done)
+
+	delayer.sending.Wait()
+
+	close(delayer.waiting)
+
+	for _, timer := range timers {
+		timer.Cancel()
+	}
 }
 
 // take is the one place the decision is made, for a call that has just been recorded and for a call
@@ -262,12 +281,28 @@ func (delayer *Delayer) finished(ctx context.Context, call domain.Call) {
 //
 // It waits for the collector rather than dropping a recording nobody has been told about, but it
 // stops waiting as soon as the delayer is closed: a server that is going away is not going to
-// collect anything, and a timer goroutine held open by it would outlive the server.
+// collect anything, and a timer goroutine held open by it would outlive the server. A closed
+// delayer takes nothing at all, and a delivery in flight is counted, so Close knows when the
+// stream has no sender left and can close it.
 func (delayer *Delayer) deliver(call domain.Call) {
+	delayer.mutex.Lock()
+
+	if delayer.closed {
+		delayer.mutex.Unlock()
+
+		return
+	}
+
+	delayer.sending.Add(1)
+
+	delayer.mutex.Unlock()
+
 	select {
 	case delayer.waiting <- call:
 	case <-delayer.done:
 	}
+
+	delayer.sending.Done()
 }
 
 // logf writes one line to the server log. These lines are the server's log and not its console: a

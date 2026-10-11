@@ -433,13 +433,18 @@ func heldCall(id uint64, at time.Time, delayMinutes uint) domain.Call {
 }
 
 // delivered takes the calls the delayer has handed over and are waiting to be collected. It never
-// waits: a delayer that has handed over nothing has handed over nothing.
+// waits: a delayer that has handed over nothing has handed over nothing. A closed stream is the end
+// of the stream — it hands over nothing, and nothing is read from it.
 func delivered(delayer *Delayer) []domain.Call {
 	got := []domain.Call{}
 
 	for {
 		select {
-		case call := <-delayer.Waiting():
+		case call, ok := <-delayer.Waiting():
+			if !ok {
+				return got
+			}
+
 			got = append(got, call)
 
 		default:

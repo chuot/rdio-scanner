@@ -1575,8 +1575,11 @@ func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
 
 	big := make([]byte, 2*1024*1024)
 
+	// A write that fails here is the rule answering early: the socket ends the connection
+	// at the limit, and the client's own write can be the frame's first contact with that
+	// end. What the test insists on is the session being over, whichever half notices.
 	if err := f.client.WriteMessage(websocket.TextMessage, big); err != nil {
-		t.Fatalf("writing the oversized frame: %v", err)
+		t.Logf("the oversized frame's write failed: %v", err)
 	}
 
 	f.expectClosed(t)

@@ -112,6 +112,11 @@ type Server struct {
 	prune   *application.PruneOldCallsHandler
 	held    *delayer.Delayer
 
+	// collectorDone is closed when the loop carrying held calls back into the pipeline has
+	// returned: the delayer closing its stream is what ends that loop, and a server that
+	// has stopped does not leave a collector behind (REQ-007, CA-007.6).
+	collectorDone chan struct{}
+
 	// ingest is the path every recorded call goes through, kept because the calls whose hold has run
 	// out are delivered through the same path rather than through a copy of it.
 	ingest *application.IngestCallHandler
@@ -520,6 +525,8 @@ func (s *Server) Start(ctx context.Context) error {
 	//
 	// The loop that carries them into the pipeline starts before they are read back, so that the ones
 	// handed over at once have somewhere to go.
+	s.collectorDone = make(chan struct{})
+
 	go s.deliverHeldCalls(ctx)
 
 	if err := s.held.Restore(ctx); err != nil {
@@ -546,10 +553,19 @@ func (s *Server) Start(ctx context.Context) error {
 // It runs for as long as the server does. A hold that runs out after the server has stopped is not
 // delivered by this loop, and the call is still where it was written down, which is how the next
 // startup finds it.
+//
+// The delayer closing its stream is the loop's own ending: the stream closes with the server's
+// stop, and the loop leaves with it (REQ-007, CA-007.6).
 func (s *Server) deliverHeldCalls(ctx context.Context) {
+	defer close(s.collectorDone)
+
 	for {
 		select {
-		case call := <-s.held.Waiting():
+		case call, ok := <-s.held.Waiting():
+			if !ok {
+				return
+			}
+
 			if ctx.Err() != nil {
 				return
 			}

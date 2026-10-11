@@ -2805,3 +2805,22 @@ func TestTheServerStopsWhenItCannotAnswerItsTLSAddress(t *testing.T) {
 		t.Errorf("the terminal holds %q, want the TLS failure said on it too", console.String())
 	}
 }
+
+// TestTheHeldCallCollectorReturnsAfterTheServerStops (REQ-007, CA-007.6): the loop that
+// carries held calls back into the pipeline reads the delayer's stream, and the delayer
+// closing its holds is the fact that tells that loop the server is going away. A collector
+// left running after the stop is a goroutine blocked on a stream nobody will ever write to
+// again — it outlives the server it was started by, and the process ends with it still in
+// the runtime.
+func TestTheHeldCallCollectorReturnsAfterTheServerStops(t *testing.T) {
+	srv := startedTestServer(t)
+
+	srv.stop(context.Background())
+
+	select {
+	case <-srv.collectorDone:
+
+	case <-time.After(5 * time.Second):
+		t.Fatal("the held-call collector is still running after the server stopped, want it ended with the delayer's stream")
+	}
+}
