@@ -232,6 +232,13 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 
 		return saver.repos.Apikeys.SaveApikeys(ctx, *changes.Apikeys)
 	case DirwatchSection:
+		// Masks and extensions are refused at apply (decision D7, D8), before they can be
+		// stored: the domain owns the rules, this is the door through which every submitted
+		// watch list passes.
+		if err := changes.Dirwatches.Validate(); err != nil {
+			return err
+		}
+
 		return saver.repos.Dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)
 	case DownstreamsSection:
 		return saver.repos.Downstreams.SaveDownstreams(ctx, *changes.Downstreams)

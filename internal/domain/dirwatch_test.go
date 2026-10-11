@@ -45,7 +45,7 @@ func TestNewDirwatchCarriesTheLegacyDefaults(t *testing.T) {
 func TestDirwatchApplyMapReadsTheTypeKey(t *testing.T) {
 	dirwatch := NewDirwatch().ApplyMap(map[string]any{
 		"id":          float64(2),
-		"delay":       float64(5000),
+		"delay":       float64(500),
 		"deleteAfter": false,
 		"directory":   "/var/spool/dsdplus",
 		"disabled":    true,
@@ -63,7 +63,10 @@ func TestDirwatchApplyMapReadsTheTypeKey(t *testing.T) {
 		t.Errorf("Kind = %q, want %q read from the type key", dirwatch.Kind, DirwatchTypeDSDPlus)
 	}
 
-	if dirwatch.ID != 2 || dirwatch.Delay != 5000 || dirwatch.DeleteAfter || !dirwatch.Disabled ||
+	// The delay submitted here is under the day-long ceiling (CA-008.6) so that this test
+	// can keep asking the question it asks: that every submitted field is carried through.
+	// The clamp itself is the test next to this one.
+	if dirwatch.ID != 2 || dirwatch.Delay != 500 || dirwatch.DeleteAfter || !dirwatch.Disabled ||
 		dirwatch.Directory != "/var/spool/dsdplus" || dirwatch.Extension != ".wav" || dirwatch.Frequency != 100 ||
 		dirwatch.Mask != "{TYPE} {TGID} {UID} {TIME}" || dirwatch.Order != 3 ||
 		dirwatch.SiteID != 11 || dirwatch.SystemID != 7 || dirwatch.TalkgroupID != 21 {
@@ -122,5 +125,63 @@ func TestDirwatchesEnabledSkipsTheUnwatchable(t *testing.T) {
 
 	if len(enabled) != 1 || enabled[0].Directory != "/a" {
 		t.Errorf("Enabled = %+v, want only the enabled watch with a directory", enabled)
+	}
+}
+
+// TestDirwatchesValidateRefusesAnUncompilableMask (REQ-008, CA-008.1, decision D7): a mask
+// that does not compile is stored today and crashes the server from a timer goroutine on the
+// next matching file — a panic with no recovery on the server's own clock. The list refuses
+// it at apply, where an administrator can be told, not in the dark of a timer.
+func TestDirwatchesValidateRefusesAnUncompilableMask(t *testing.T) {
+	dirwatches := Dirwatches{
+		{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "(", Extension: "wav"},
+	}
+
+	if err := dirwatches.Validate(); err == nil {
+		t.Error("Validate = nil, want the uncompilable mask refused: it crashes the server from a timer goroutine on the next matching file")
+	}
+}
+
+// TestDirwatchesValidateAcceptsAListWithRealMasks is the other half: the rule must not
+// refuse the watches the endpoint legitimately carries.
+func TestDirwatchesValidateAcceptsAListWithRealMasks(t *testing.T) {
+	dirwatches := Dirwatches{
+		{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "#(UNITlbl)", Extension: "wav"},
+		{ID: 2, Directory: "/var/spool/other", Kind: "generic", Extension: "m4a"},
+	}
+
+	if err := dirwatches.Validate(); err != nil {
+		t.Errorf("Validate = %v, want the list accepted", err)
+	}
+}
+
+// TestDirwatchDelayOverTheDayIsClamped (REQ-008, CA-008.6): the legacy minute counter wraps
+// silently at its ceiling, and a watch naming a week's hold is a watch nobody configured.
+// A delay over one day is clamped to one day at apply.
+func TestDirwatchDelayOverTheDayIsClamped(t *testing.T) {
+	dirwatch := NewDirwatch().ApplyMap(map[string]any{"delay": float64(24*60 + 60)})
+
+	if dirwatch.Delay != 24*60 {
+		t.Errorf("delay = %d minutes, want the clamp at 24 hours", dirwatch.Delay)
+	}
+
+	// A delay under the ceiling is the administrator's own number, untouched.
+	kept := NewDirwatch().ApplyMap(map[string]any{"delay": float64(24 * 60)})
+
+	if kept.Delay != 24*60 {
+		t.Errorf("delay = %d minutes, want 1440 kept as named", kept.Delay)
+	}
+}
+
+// TestDirwatchesValidateRefusesAPathWalkingExtension (REQ-008, CA-008.4, decision D8): the
+// extension composes filesystem paths, so a name carrying a slash, a backslash, a dot, or
+// ".." is refused at apply.
+func TestDirwatchesValidateRefusesAPathWalkingExtension(t *testing.T) {
+	for _, extension := range []string{"ws/../wav", "a/b", "a\\b", "..", "wav.old", "wav x"} {
+		dirwatches := Dirwatches{{ID: 1, Directory: "/var/spool/rdio", Extension: extension}}
+
+		if err := dirwatches.Validate(); err == nil {
+			t.Errorf("extension %q was accepted, want it refused: it is a path walk wearing an extension", extension)
+		}
 	}
 }

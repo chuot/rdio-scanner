@@ -20,6 +20,11 @@
 
 package domain
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // The four directory-watch parsers a watched directory can be configured with. The
 // value is part of the administrator payload and selects which parser reads the files
 // that appear in the directory.
@@ -77,6 +82,12 @@ func (dirwatch Dirwatch) ApplyMap(m map[string]any) Dirwatch {
 
 	if v, ok := m["delay"].(float64); ok {
 		dirwatch.Delay = uint(v)
+
+		// A hold over a day is clamped (CA-008.6): the legacy minute counter wraps
+		// silently at its ceiling, and a watch naming a week is a watch nobody configured.
+		if dirwatch.Delay > maxDirwatchDelayMinutes {
+			dirwatch.Delay = maxDirwatchDelayMinutes
+		}
 	}
 
 	if v, ok := m["deleteAfter"].(bool); ok {
@@ -134,6 +145,53 @@ func (dirwatch Dirwatch) Watches() bool {
 
 // Dirwatches is the server's set of watched directories.
 type Dirwatches []Dirwatch
+
+// maxDirwatchDelayMinutes is the longest hold a watch can name: one day. A delay over it is
+// clamped at apply (CA-008.6): the legacy server's minute counter wraps silently at the
+// ceiling, and a watch that names a week is a watch whose files arrive on a schedule nobody
+// configured.
+const maxDirwatchDelayMinutes = 24 * 60
+
+// extensionPattern is what a file extension may be: letters and digits, one to ten of them
+// (decision D8). The extension composes filesystem paths, so a name carrying a slash, a
+// backslash, a dot, or ".." is not an extension — it is a path walk wearing one.
+var extensionPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,10}$`)
+
+// Validate refuses a watch list carrying a mask that does not compile (decision D7) or an
+// extension that is not a file extension (decision D8).
+//
+// An uncompilable mask is stored today and crashes the server from a timer goroutine on the
+// next matching file — a panic with no recovery, on the server's own clock, in a build whose
+// web endpoints are answering while the part that watches directories is gone. The refusal
+// belongs to the list itself, at apply, where an administrator can be told, not in the dark
+// of a timer.
+func (dirwatches Dirwatches) Validate() error {
+	for _, dirwatch := range dirwatches {
+		if err := dirwatch.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Validate refuses this watch's mask when it does not compile, and its extension when it is
+// not a file extension. A watch with no mask parses generically and a watch with no
+// extension uses the parser's own default, as they always have; the rule is on the values
+// that are named.
+func (dirwatch Dirwatch) Validate() error {
+	if dirwatch.Mask != "" {
+		if _, err := regexp.Compile(dirwatch.Mask); err != nil {
+			return fmt.Errorf("the dirwatch on %q has a mask that does not compile: %v", dirwatch.Directory, err)
+		}
+	}
+
+	if dirwatch.Extension != "" && !extensionPattern.MatchString(dirwatch.Extension) {
+		return fmt.Errorf("the dirwatch on %q has an extension that is not a file extension: %q", dirwatch.Directory, dirwatch.Extension)
+	}
+
+	return nil
+}
 
 // ApplyList replaces the whole set with an administrator payload, which is what the
 // legacy server does: a payload that lists fewer watches removes the rest.

@@ -689,3 +689,58 @@ func TestUpdateConfigurationSectionRefusesAKeylessApikey(t *testing.T) {
 		t.Errorf("apikeys = %v, want the stored list left alone: a refused save stores nothing", fixture.apikeys.Stored)
 	}
 }
+
+// TestUpdateConfigurationSectionRefusesAnUncompilableMask (REQ-008, CA-008.1, decision D7):
+// a dirwatch payload whose mask does not compile is refused at apply — the section save
+// reports the failure, the list is not stored, and the server keeps the watches it had.
+func TestUpdateConfigurationSectionRefusesAnUncompilableMask(t *testing.T) {
+	fixture := newConfigFixture()
+
+	before := append(domain.Dirwatches{}, fixture.dirwatches.Stored...)
+
+	dirwatches := domain.Dirwatches{
+		{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "(", Extension: "wav"},
+	}
+
+	result, err := fixture.saveSection(DirwatchSection, ConfigurationChanges{Dirwatches: &dirwatches})
+
+	if err == nil {
+		t.Error("the reason the dirwatch save failed must reach the caller, which logs it")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: a per-section save reports its failure", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Failed) != 1 || result.Failed[0] != DirwatchSection {
+		t.Errorf("failed = %v, want the dirwatch section reported as not stored", result.Failed)
+	}
+
+	if len(fixture.dirwatches.Stored) != len(before) {
+		t.Errorf("dirwatches = %v, want the stored list left alone: a refused save stores nothing", fixture.dirwatches.Stored)
+	}
+}
+
+// TestUpdateConfigurationSectionStoresAWatchWithAValidMask is the other half of CA-008.1:
+// a watch carrying a mask that compiles is stored, as it has always been.
+func TestUpdateConfigurationSectionStoresAWatchWithAValidMask(t *testing.T) {
+	fixture := newConfigFixture()
+
+	dirwatches := domain.Dirwatches{
+		{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "#(UNITlbl)", Extension: "wav"},
+	}
+
+	result, err := fixture.saveSection(DirwatchSection, ConfigurationChanges{Dirwatches: &dirwatches})
+
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	if result.Outcome != ConfigurationSaved {
+		t.Errorf("outcome = %q, want %q", result.Outcome, ConfigurationSaved)
+	}
+
+	if len(fixture.dirwatches.Stored) != 1 || fixture.dirwatches.Stored[0].Mask != "#(UNITlbl)" {
+		t.Errorf("dirwatches = %v, want the watch with the valid mask stored", fixture.dirwatches.Stored)
+	}
+}
