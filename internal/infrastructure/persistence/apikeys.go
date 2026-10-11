@@ -223,13 +223,16 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 		return statementError("apikeys", "write", err, apikeySelectIDsQuery)
 	}
 
+	// The cursor closes on the way out of the function, whatever the way out is
+	// (CA-020.1), as in `Accesses`.
+	defer rows.Close()
+
 	stale := []uint64{}
 
 	for rows.Next() {
 		var id int64
 
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
 			tx.rollback()
 			return operationError("apikeys", "write", err)
 		}
@@ -238,8 +241,6 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 			stale = append(stale, uint64(id))
 		}
 	}
-
-	rows.Close()
 
 	if err := rows.Err(); err != nil {
 		tx.rollback()

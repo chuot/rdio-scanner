@@ -291,13 +291,17 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 		return statementError("accesses", "write", err, accessSelectIDsQuery)
 	}
 
+	// The cursor closes on the way out of the function, whatever the way out is
+	// (CA-020.1): the manual closes this loop used to have were two of them, and
+	// a function that gains a third exit keeps the table open.
+	defer rows.Close()
+
 	stale := []uint64{}
 
 	for rows.Next() {
 		var id int64
 
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
 			tx.rollback()
 			return operationError("accesses", "write", err)
 		}
@@ -306,8 +310,6 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 			stale = append(stale, uint64(id))
 		}
 	}
-
-	rows.Close()
 
 	if err := rows.Err(); err != nil {
 		tx.rollback()
