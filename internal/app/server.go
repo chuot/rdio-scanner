@@ -49,8 +49,10 @@ import (
 	"rdio-scanner/internal/infrastructure/tokens"
 	adminbackend "rdio-scanner/internal/presentation/admin/backend"
 	adminfrontend "rdio-scanner/internal/presentation/admin/frontend"
+	callsbackend "rdio-scanner/internal/presentation/calls/backend"
 	"rdio-scanner/internal/presentation/common/httpaddr"
 	"rdio-scanner/internal/presentation/common/upload"
+	mcpbackend "rdio-scanner/internal/presentation/mcp/backend"
 	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
 	scannerfrontend "rdio-scanner/internal/presentation/scanner/frontend"
 )
@@ -139,6 +141,11 @@ type Server struct {
 	listeners      *scannerbackend.Hub
 	adminSessions  *adminbackend.Sessions
 	listenerCounts *application.ListenerCountDebouncer
+
+	// mcpSurface is the Model Context Protocol endpoint, built only when the configuration names it. An
+	// assistant holding a session is a connection the server took over and has to end itself, the same
+	// reason the listener and the administrator's configuration sockets are ended here.
+	mcpSurface *mcpbackend.Server
 
 	routes http.Handler
 
@@ -482,10 +489,55 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Trusted:  s.trusted,
 	})
 
+	// The access-code resolver is built once for the whole listener. Its guess budget belongs to
+	// the address that spends it, not to the entry point the address arrives at: an address that
+	// guesses at the call history and then at the Model Context Protocol surface is one address
+	// guessing, and it spends one budget.
+	resolveAccess := application.NewResolveAccessQueryHandler(accesses, s.logs, s.clock)
+
+	// The Model Context Protocol surface is built only when the configuration names it. The use cases it
+	// answers with are the same ones the administrator's own page and the listener socket answer with:
+	// the surface adds no use case of its own, and no path from it reaches a socket.
+	if s.config.McpServer {
+		s.mcpSurface = mcpbackend.New(mcpbackend.Deps{
+			Version: s.config.Version,
+			Docker:  os.Getenv("DOCKER") != "",
+			Session: application.NewCheckAdminSessionHandler(tokensAdapter),
+			Resolve: resolveAccess,
+			Trusted: s.trusted,
+			Config:  application.NewGetConfigHandler(s.repos),
+			Logs:    application.NewSearchLogsHandler(s.logs, s.clock),
+			Clock:   s.clock,
+		})
+	}
+
 	mux := http.NewServeMux()
 
 	adminAPI.Register(mux)
 	uploads.Register(mux)
+
+	// The call history surface is registered unconditionally. It is the GPL HTTP half of the
+	// recorded-call capability — the side the access policy leaves unrestricted — and it is what
+	// the Model Context Protocol surface is built on. A deployment that never enabled the MCP
+	// surface still answers its call history over REST, the way it answers every other REST route.
+	callsAPI := callsbackend.NewCalls(callsbackend.CallsDeps{
+		Call:    application.NewGetCallQueryHandler(calls),
+		Clock:   s.clock,
+		Logs:    s.logs,
+		Resolve: resolveAccess,
+		Search:  application.NewSearchCallsQueryHandler(calls, systems, groups, tags),
+		Session: application.NewCheckAdminSessionHandler(tokensAdapter),
+		Trusted: s.trusted,
+	})
+
+	callsAPI.Register(mux)
+
+	// The Model Context Protocol surface is hung on the mux only when the operator named it. A
+	// deployment that never asked for it never learns the path exists: the unmatched-path answer an
+	// assistant gets from it is the answer every unmatched path gets.
+	if s.mcpSurface != nil {
+		s.mcpSurface.Register(mux)
+	}
 
 	serveApplications(mux, listener, scannerfrontend.Embedded(), adminfrontend.Embedded())
 
@@ -723,6 +775,20 @@ func (s *Server) stop(ctx context.Context) {
 		// spends an afternoon chasing.
 		if s.adminSessions != nil {
 			s.adminSessions.CloseAll(shuttingDown)
+		}
+
+		// An assistant holding a Model Context Protocol session is a connection this server took over,
+		// and shutting an address down does not wait for a connection it handed over. So the surface's
+		// sessions are ended here, beside the sockets the same reasoning applies to.
+		if s.mcpSurface != nil {
+			if err := s.mcpSurface.CloseSessions(shuttingDown); err != nil {
+				_ = s.logs.AppendLog(ctx, domain.LogEntry{
+					DateTime: s.clock.Now(),
+					Level:    domain.LogLevelError,
+					Source:   domain.LogSourceServer,
+					Message:  fmt.Sprintf("the server could not close a Model Context Protocol session: %v", err),
+				})
+			}
 		}
 
 		if s.listeners != nil {

@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -158,6 +159,119 @@ func TestConfigSaveWritesHostSectionForServerDatabases(t *testing.T) {
 	const want = "db_host = db.internal\ndb_name = rdio\ndb_pass = secret\ndb_port = 3307\ndb_type = mysql\ndb_user = rdio\nlisten = :3000\nssl_listen = :3443\n"
 	if string(data) != want {
 		t.Errorf("saved ini =\n%q\nwant\n%q", string(data), want)
+	}
+}
+
+// The MCP surface is off unless the operator asks for it, at every entry point: the flag, the ini file,
+// and the file -config_save writes. A deployment that never heard of it must keep behaving exactly as it
+// does today, so an ini file without the key leaves the switch off rather than turning it on.
+func TestMcpServerIsOffUnlessTheOperatorAsksForIt(t *testing.T) {
+	t.Run("the flag default is off", func(t *testing.T) {
+		cfg, _ := newTestConfig(t)
+
+		if cfg.McpServer {
+			t.Errorf("McpServer = %v, want off: the surface is opt-in", cfg.McpServer)
+		}
+	})
+
+	t.Run("the flag turns it on", func(t *testing.T) {
+		cfg, _ := newTestConfig(t, "-mcp_server")
+
+		if !cfg.McpServer {
+			t.Errorf("McpServer = %v, want on: -mcp_server asked for the surface", cfg.McpServer)
+		}
+	})
+
+	t.Run("the ini file turns it on", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeFile(t, filepath.Join(baseDir, "mcp.ini"), "mcp_server = true\n")
+
+		cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-config", "mcp.ini"}, "", &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("newConfig: %v", err)
+		}
+
+		if !cfg.McpServer {
+			t.Errorf("McpServer = %v, want on: the ini file names mcp_server = true", cfg.McpServer)
+		}
+	})
+
+	t.Run("an ini file without the key leaves it off", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeFile(t, filepath.Join(baseDir, "plain.ini"), "listen = :9000\n")
+
+		cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-config", "plain.ini"}, "", &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("newConfig: %v", err)
+		}
+
+		if cfg.McpServer {
+			t.Errorf("McpServer = %v, want off: the ini file says nothing about the surface", cfg.McpServer)
+		}
+	})
+}
+
+// -config_save writes mcp_server only when the operator asked for the surface, the way it writes
+// bcrypt_cost only when it differs from its default: a saved file stays comparable with the files the
+// deployments that never asked for MCP carry.
+func TestConfigSaveWritesTheMcpSwitchOnlyWhenItIsOn(t *testing.T) {
+	off, _ := newTestConfig(t, "-config_save")
+
+	data, err := os.ReadFile(filepath.Join(off.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("read saved ini: %v", err)
+	}
+
+	if strings.Contains(string(data), "mcp_server") {
+		t.Errorf("saved ini =\n%q\nwant no mcp_server line: the operator never asked for the surface", string(data))
+	}
+
+	on, _ := newTestConfig(t, "-mcp_server", "-config_save")
+
+	data, err = os.ReadFile(filepath.Join(on.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("read saved ini: %v", err)
+	}
+
+	if !strings.Contains(string(data), "mcp_server = true") {
+		t.Errorf("saved ini =\n%q\nwant an mcp_server = true line", string(data))
+	}
+}
+
+// The saved file is the thing a later start reads, so the switch has to survive the round trip: a
+// deployment that asked for the surface keeps it after a restart, and one that did not keeps its absence.
+func TestTheMcpSwitchSurvivesTheSavedFileRoundTrip(t *testing.T) {
+	baseDir := t.TempDir()
+
+	first, _, err := newConfig([]string{"-base_dir", baseDir, "-mcp_server", "-config_save"}, "", &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("first start: %v", err)
+	}
+
+	second, _, err := newConfig([]string{"-base_dir", baseDir}, "", &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("second start: %v", err)
+	}
+
+	if !first.McpServer || !second.McpServer {
+		t.Errorf("McpServer after the round trip = first %v, second %v; want both on",
+			first.McpServer, second.McpServer)
+	}
+
+	other := t.TempDir()
+
+	if _, _, err := newConfig([]string{"-base_dir", other, "-config_save"}, "", &bytes.Buffer{}); err != nil {
+		t.Fatalf("third start: %v", err)
+	}
+
+	quiet, _, err := newConfig([]string{"-base_dir", other}, "", &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("fourth start: %v", err)
+	}
+
+	if quiet.McpServer {
+		t.Errorf("McpServer = %v, want off: a deployment that never asked for the surface stays without it",
+			quiet.McpServer)
 	}
 }
 

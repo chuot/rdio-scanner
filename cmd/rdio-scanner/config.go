@@ -129,6 +129,7 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
 	fs.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
 	fs.StringVar(&config.TrustedProxies, "trusted_proxies", "", "comma-separated proxy addresses (CIDR or bare) whose X-Forwarded-For is honored")
+	fs.BoolVar(&config.McpServer, "mcp_server", false, "serve the Model Context Protocol endpoint")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, ModeExit, usageError{err}
@@ -249,6 +250,8 @@ func (config *Config) applyIniFile() error {
 	overlayString(section, "ssl_listen", &config.SslListen)
 	overlayString(section, "trusted_proxies", &config.TrustedProxies)
 
+	overlayBool(section, "mcp_server", &config.McpServer)
+
 	if cost, err := section.Key("bcrypt_cost").Int(); err == nil {
 		config.BcryptCost = cost
 	} else {
@@ -269,6 +272,15 @@ func (config *Config) applyIniFile() error {
 
 func overlayString(section *ini.Section, key string, target *string) {
 	if v := section.Key(key).String(); len(v) > 0 {
+		*target = v
+	}
+}
+
+// overlayBool overlays one switch from the ini file. A key that is absent, or that does not read as a
+// boolean, leaves the flag's own value alone: an ini file that says nothing about the switch is not the
+// file that decides it.
+func overlayBool(section *ini.Section, key string, target *bool) {
+	if v, err := section.Key(key).Bool(); err == nil {
 		*target = v
 	}
 }
@@ -373,6 +385,13 @@ func (config *Config) saveConfig() error {
 
 	if config.TrustedProxies != "" {
 		ini = append(ini, fmt.Sprintf("trusted_proxies = %s", config.TrustedProxies))
+	}
+
+	// The switch is written only when the operator asked for the surface, the way bcrypt_cost is
+	// written only when it differs from its default: a saved file stays comparable with the files the
+	// deployments that never asked for the MCP surface carry.
+	if config.McpServer {
+		ini = append(ini, "mcp_server = true")
 	}
 
 	if config.BcryptCost != defaultBcryptCost {

@@ -122,10 +122,20 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 // the hijack the websocket endpoints take — and the middleware watches what
 // arrived, so the deadline's failure is written only for a request that has
 // answered nothing.
+//
+// Two facts are kept apart, and the difference is the whole point of this writer.
+// `answered` means the handler began answering; `refused` means the deadline
+// answered first. A handler that has begun answering keeps answering: a content
+// endpoint names its status and then writes its bytes in as many writes as the
+// content needs, and a writer that delivered only the first of them would
+// truncate every such endpoint to an empty body. Only after the deadline has
+// written its own failure does the handler's late answer get dropped, because
+// by then the request has an answer and two bodies would be one answer too many.
 type deadlineAnswer struct {
-	w    http.ResponseWriter
-	mu   sync.Mutex
-	done bool // an answer has arrived, the connection was taken over, or the deadline answered
+	w       http.ResponseWriter
+	mu      sync.Mutex
+	answered bool // the handler began answering, or took over its connection
+	refused  bool // the deadline answered
 
 	panic any
 }
@@ -136,11 +146,11 @@ func (d *deadlineAnswer) refuseDeadline() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.done {
+	if d.answered {
 		return false
 	}
 
-	d.done = true
+	d.refused = true
 
 	return true
 }
@@ -151,11 +161,11 @@ func (d *deadlineAnswer) WriteHeader(code int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.done {
+	if d.refused {
 		return // the deadline answered; the handler's late answer is dropped
 	}
 
-	d.done = true
+	d.answered = true
 
 	d.w.WriteHeader(code)
 }
@@ -164,11 +174,11 @@ func (d *deadlineAnswer) Write(b []byte) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.done {
+	if d.refused {
 		return len(b), nil
 	}
 
-	d.done = true
+	d.answered = true
 
 	return d.w.Write(b)
 }
@@ -185,7 +195,7 @@ func (d *deadlineAnswer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.done = true
+	d.answered = true
 
 	return d.w.(http.Hijacker).Hijack()
 }

@@ -93,6 +93,12 @@ type Config struct {
 	// the login budget and the access warnings are keyed on.
 	TrustedProxies string
 
+	// McpServer is whether this server serves the Model Context Protocol endpoint: the surface an AI
+	// assistant administers the deployment through. Off is the default at every entry point — the zero
+	// value, the flag's default, and an ini file without the key all leave the surface absent, and the
+	// server registers the route only when the operator named it.
+	McpServer bool
+
 	// Version is the release the server reports to clients, and is what the build tool resolved from
 	// VERSION.txt and git.
 	Version string

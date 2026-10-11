@@ -319,6 +319,38 @@ func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
 	}
 }
 
+// TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte:
+// a content endpoint answers the way `http.ServeContent` answers — the status
+// first, then the bytes, in as many writes as the content needs. The deadline's
+// writer treats the first write as the answer and drops what follows, which
+// silently truncates every such endpoint to an empty body: the recording is
+// announced with its length and delivered as nothing.
+func TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte(t *testing.T) {
+	handler := withRequestDeadline(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/wav")
+		w.WriteHeader(http.StatusOK)
+
+		for _, part := range []string{"first", "second", "third"} {
+			if _, err := w.Write([]byte(part)); err != nil {
+				t.Errorf("Write: %v", err)
+			}
+		}
+	}), time.Second)
+
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/calls/1/audio", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	if got, want := rec.Body.String(), "firstsecondthird"; got != want {
+		t.Errorf("the body = %q, want %q: an endpoint that names its status before its bytes must "+
+			"keep every byte it writes", got, want)
+	}
+}
+
 // TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline:
 // the socket timeouts bound the socket, not the work — a handler blocked on a
 // database that does not answer holds the request open, and the administrator's

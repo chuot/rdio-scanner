@@ -57,6 +57,32 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
+// The MCP surface is opt-in, and the way it is opt-in is observable from outside: with the switch off,
+// the MCP path is not a route the server registered, so it falls to the application the server answers
+// every unmatched path with — byte for byte what a deployment that never heard of MCP does today. With
+// the switch on, the path belongs to the MCP endpoint and is not answered by an application bundle.
+func TestTheMcpEndpointIsServedOnlyWhenTheConfigurationNamesIt(t *testing.T) {
+	off := startedTestServer(t)
+
+	unmatched := off.get("/a/path/that/is/not/an/endpoint")
+	mcpOff := off.get("/mcp")
+
+	if mcpOff.Code != unmatched.Code {
+		t.Errorf("GET /mcp with the switch off = %d, want the answer an unmatched path gets (%d): "+
+			"the server must not register the MCP route when the operator never asked for it",
+			mcpOff.Code, unmatched.Code)
+	}
+
+	on := startedTestServerWithTheMcpSurface(t)
+
+	mcpOn := on.get("/mcp")
+
+	if mcpOn.Code == unmatched.Code && bytes.Equal(mcpOn.Body.Bytes(), unmatched.Body.Bytes()) {
+		t.Errorf("GET /mcp with the switch on reached the application bundle, want the MCP endpoint to "+
+			"answer its own path: %s", mcpOn.Body.String())
+	}
+}
+
 // A server pointed at a database it has never seen starts that database, reads its configuration out of
 // it, and answers the paths the legacy server answers.
 func TestServerStartsAgainstAFreshDatabaseAndAnswersTheAdministrator(t *testing.T) {
@@ -1912,6 +1938,28 @@ func startedTestServer(t *testing.T) *Server {
 	t.Helper()
 
 	srv := testServer(t)
+
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	return srv
+}
+
+// startedTestServerWithTheMcpSurface is a started server whose configuration names the MCP surface. It
+// is the switch's other half: the same composition root, with the operator's one request added to it.
+func startedTestServerWithTheMcpSurface(t *testing.T) *Server {
+	t.Helper()
+
+	cfg := testConfigIn(t.TempDir(), io.Discard)
+	cfg.McpServer = true
+
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
 
 	if err := srv.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
