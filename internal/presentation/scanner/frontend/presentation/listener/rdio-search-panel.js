@@ -60,7 +60,9 @@ class RdioSearchPanel extends HTMLElement {
 
     this.querySelector('tbody').addEventListener('click', (ev) => this.rowClick(ev));
 
-    this.unsubscribe = store.subscribe(['playbackList', 'call', 'livefeedMode', 'config'], () => {
+    // The counter rides every call-list answer, so the results render - and the progress
+    // bar ends - even when the answer equals the list already on screen.
+    this.unsubscribe = store.subscribe(['playbackList', 'playbackListSeq', 'call', 'livefeedMode', 'config'], () => {
       this.refreshFilters();
       this.refreshResults();
     });
