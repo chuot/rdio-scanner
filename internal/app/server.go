@@ -49,6 +49,7 @@ import (
 	"rdio-scanner/internal/infrastructure/tokens"
 	adminbackend "rdio-scanner/internal/presentation/admin/backend"
 	adminfrontend "rdio-scanner/internal/presentation/admin/frontend"
+	"rdio-scanner/internal/presentation/common/httpaddr"
 	"rdio-scanner/internal/presentation/common/upload"
 	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
 	scannerfrontend "rdio-scanner/internal/presentation/scanner/frontend"
@@ -133,6 +134,10 @@ type Server struct {
 	// the first to finish.
 	stopping sync.Once
 
+	// trusted is the parsed TrustedProxies configuration: the proxy list every endpoint that names an
+	// address honors, so the address an operator reads and the address the limiter counts are one address.
+	trusted *httpaddr.Trusted
+
 	// stopFailed is the failure the stop could not file: the database that would have held the report is
 	// the database that failed to close.
 	stopFailed error
@@ -151,6 +156,16 @@ func New(config Config) (*Server, error) {
 	ctx := context.Background()
 
 	srv := &Server{config: &config, console: newConsoleLog(config.Out)}
+
+	// The proxy list is parsed before anything opens, because a list the operator wrote that is not a
+	// list of addresses is a configuration error the server refuses at startup, not one it discovers
+	// while deciding who to trust mid-request.
+	trusted, err := httpaddr.ParseTrusted(config.TrustedProxies)
+	if err != nil {
+		return nil, err
+	}
+
+	srv.trusted = trusted
 
 	dialect, err := dialectOf(config.DbType)
 	if err != nil {
@@ -358,6 +373,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Version: s.config.Version,
 		Logs:    s.logs,
 		Clock:   s.clock,
+		Trusted: s.trusted,
 	})
 
 	s.adminSessions = adminSessions
@@ -395,6 +411,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		RemoveUser:           application.NewRemoveAccessUserHandler(accessUserPorts),
 		Session:              application.NewCheckAdminSessionHandler(tokensAdapter),
 		Version:              s.config.Version,
+		Trusted:              s.trusted,
 	})
 
 	uploads := upload.New(upload.Deps{
@@ -416,6 +433,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Search:   application.NewSearchCallsQueryHandler(calls, systems, groups, tags),
 		Settings: s.settings,
 		Version:  s.config.Version,
+		Trusted:  s.trusted,
 	})
 
 	mux := http.NewServeMux()

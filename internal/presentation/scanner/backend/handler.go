@@ -76,6 +76,10 @@ type Deps struct {
 
 	// Version is the version the server reports about itself.
 	Version string
+
+	// Trusted is the proxy list the operator named: the connections whose forwarding header the endpoint
+	// honors when it names a listener — the same list the access warnings are keyed on.
+	Trusted *httpaddr.Trusted
 }
 
 // Handler is the listener endpoint: it takes over an upgraded connection, hands each frame that arrives
@@ -96,6 +100,7 @@ type Handler struct {
 	search   *application.SearchCallsQueryHandler
 	settings ServerSettings
 	version  string
+	trusted  *httpaddr.Trusted
 }
 
 var _ http.Handler = (*Handler)(nil)
@@ -114,6 +119,7 @@ func NewHandler(deps Deps) *Handler {
 		search:   deps.Search,
 		settings: deps.Settings,
 		version:  deps.Version,
+		trusted:  deps.Trusted,
 	}
 }
 
@@ -142,7 +148,7 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handler.hub.Attach(conn, httpaddr.Address(r), handler.dispatch)
+	handler.hub.Attach(conn, httpaddr.Address(r, handler.trusted), handler.dispatch)
 }
 
 // logf files one decision this endpoint made about a connection. It is the endpoint's own log and not a line

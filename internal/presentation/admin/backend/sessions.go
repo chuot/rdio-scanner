@@ -76,6 +76,10 @@ type Sessions struct {
 	logs  ports.LogRepository
 	clock ports.Clock
 
+	// trusted is the proxy list the operator named: the connections whose forwarding header the socket
+	// honors when it names them, the same list the login budget is keyed on.
+	trusted *httpaddr.Trusted
+
 	// mutex guards the set of connections and what each one has been granted. It is never held while a
 	// connection is being written to.
 	mutex sync.Mutex
@@ -95,8 +99,8 @@ type administrator struct {
 
 	// remoteAddr is the address the connection came from, which is what an operator reads when they are
 	// looking for one connection among the ones the server has held. It is read the way every other entry
-	// in this log reads an address — the machine, with the forwarding header honoured — rather than taken
-	// off the socket, because the socket of a deployment behind a proxy belongs to the proxy.
+	// in this log reads an address — the forwarding header honored only for a proxy the operator named —
+	// so that the address on these lines is the address the login budget counts.
 	remoteAddr string
 
 	// granted says this connection has presented a credential the server accepts, and so may be told what
@@ -114,13 +118,15 @@ type administrator struct {
 }
 
 // SessionDeps is what the administrator connections need: the use case that answers whether a credential is one
-// this server issued, the version to report alongside the configuration, and the server log this socket
-// reports its own connections to.
+// this server issued, the version to report alongside the configuration, the server log this socket
+// reports its own connections to, and the proxy addresses whose forwarding header the socket honors when
+// it names a connection.
 type SessionDeps struct {
 	Session *application.CheckAdminSessionHandler
 	Version string
 	Logs    ports.LogRepository
 	Clock   ports.Clock
+	Trusted *httpaddr.Trusted
 }
 
 // NewSessions builds the server's set of administrator connections.
@@ -130,6 +136,7 @@ func NewSessions(deps SessionDeps) *Sessions {
 		version: deps.Version,
 		logs:    deps.Logs,
 		clock:   deps.Clock,
+		trusted: deps.Trusted,
 		conns:   map[*websocket.Conn]*administrator{},
 	}
 }
@@ -151,7 +158,7 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	admin := sessions.join(conn, httpaddr.Address(r))
+	admin := sessions.join(conn, httpaddr.Address(r, sessions.trusted))
 
 	sessions.held.Add(1)
 

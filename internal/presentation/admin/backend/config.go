@@ -74,6 +74,11 @@ type AdminDeps struct {
 	RemoveUser *application.RemoveAccessUserHandler
 	Session    *application.CheckAdminSessionHandler
 
+	// Trusted is the proxy list the operator named: the connections whose forwarding header this surface
+	// honors when it names a request — the same list the login budget is keyed on, so the address an
+	// operator reads and the address the limiter counts are one address.
+	Trusted *httpaddr.Trusted
+
 	// Docker is whether the server thinks it is running in a container. The legacy server asks the
 	// environment each time it answers; the answer cannot change while the server is running, so the
 	// composition root asks once and hands the answer here.
@@ -111,6 +116,9 @@ type Admin struct {
 	// page does both.
 	logs  ports.LogRepository
 	clock ports.Clock
+
+	// trusted is the proxy list the operator named, handed down from Deps.
+	trusted *httpaddr.Trusted
 }
 
 // NewAdmin builds the administrator surface from the use cases it answers with.
@@ -132,6 +140,7 @@ func NewAdmin(deps AdminDeps) *Admin {
 		version:              deps.Version,
 		logs:                 deps.Logs,
 		clock:                deps.Clock,
+		trusted:              deps.Trusted,
 	}
 }
 
@@ -188,7 +197,7 @@ func (admin *Admin) Login(w http.ResponseWriter, r *http.Request) {
 
 	result, err := admin.login.Handle(r.Context(), application.AdminLoginCommand{
 		Credential: credential,
-		RemoteAddr: httpaddr.Address(r),
+		RemoteAddr: httpaddr.Address(r, admin.trusted),
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusExpectationFailed)
@@ -690,7 +699,7 @@ func (admin *Admin) reportUnreadableRequest(r *http.Request, reason error) {
 		Level:    domain.LogLevelWarn,
 		Source:   domain.LogSourceAdmin,
 		Message: fmt.Sprintf("the administrator's request to %s from %s could not be read: %v",
-			r.URL.Path, httpaddr.Address(r), reason),
+			r.URL.Path, httpaddr.Address(r, admin.trusted), reason),
 	}); err != nil {
 		// A request this server could not read is still a request it refused the same way.
 		return

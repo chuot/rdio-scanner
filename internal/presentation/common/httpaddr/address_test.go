@@ -25,14 +25,26 @@ import (
 	"testing"
 )
 
-// The forwarding header is what the server names when there is one, because a server behind a proxy is
-// otherwise described by the proxy's address and every warning it writes is about the wrong machine.
+// The forwarding header is what the server names when the connection came from a proxy the operator
+// named, because a server behind a proxy is otherwise described by the proxy's address and every warning
+// it writes is about the wrong machine. These tests name the localhost peer as the trusted proxy.
+func trustedLocalhost(t *testing.T) *Trusted {
+	t.Helper()
+
+	trusted, err := ParseTrusted("127.0.0.0/8")
+	if err != nil {
+		t.Fatalf("ParseTrusted: %v", err)
+	}
+
+	return trusted
+}
+
 func TestAddressIsTheFirstForwardedEntryWithoutItsPort(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.Header.Set("X-Forwarded-For", "203.0.113.7:8123, 198.51.100.4")
 	r.RemoteAddr = "127.0.0.1:43210"
 
-	if got := Address(r); got != "203.0.113.7" {
+	if got := Address(r, trustedLocalhost(t)); got != "203.0.113.7" {
 		t.Errorf("address = %q, want the first forwarded entry with its port removed", got)
 	}
 }
@@ -45,7 +57,7 @@ func TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived(t *testing.
 	r.Header.Set("X-Forwarded-For", ":8123, 198.51.100.4")
 	r.RemoteAddr = "127.0.0.1:43210"
 
-	if got := Address(r); got != ":8123" {
+	if got := Address(r, trustedLocalhost(t)); got != ":8123" {
 		t.Errorf("address = %q, want the first forwarded entry, which the pattern cannot cut", got)
 	}
 }
@@ -57,7 +69,7 @@ func TestAddressKeepsAForwardedAddressInBracketsWhole(t *testing.T) {
 	r.Header.Set("X-Forwarded-For", "[2001:db8::1]:1234")
 	r.RemoteAddr = "127.0.0.1:43210"
 
-	if got := Address(r); got != "[2001:db8::1]" {
+	if got := Address(r, trustedLocalhost(t)); got != "[2001:db8::1]" {
 		t.Errorf("address = %q, want the bracketed address without its port", got)
 	}
 }
@@ -68,7 +80,7 @@ func TestAddressIsTheConnectionAddressWithoutItsPortWhenNothingIsForwarded(t *te
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.RemoteAddr = "127.0.0.1:43210"
 
-	if got := Address(r); got != "127.0.0.1" {
+	if got := Address(r, nil); got != "127.0.0.1" {
 		t.Errorf("address = %q, want the connection address with its port removed", got)
 	}
 }
@@ -80,7 +92,7 @@ func TestAddressIgnoresAForwardingHeaderThatNamesNothing(t *testing.T) {
 	r.Header.Set("X-Forwarded-For", "")
 	r.RemoteAddr = "127.0.0.1:43210"
 
-	if got := Address(r); got != "127.0.0.1" {
+	if got := Address(r, nil); got != "127.0.0.1" {
 		t.Errorf("address = %q, want the connection address", got)
 	}
 }
@@ -91,7 +103,7 @@ func TestAddressReportsAnAddressWithNoPortAsItArrived(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.RemoteAddr = "127.0.0.1"
 
-	if got := Address(r); got != "127.0.0.1" {
+	if got := Address(r, nil); got != "127.0.0.1" {
 		t.Errorf("address = %q, want the address as it arrived", got)
 	}
 }

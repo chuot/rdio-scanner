@@ -129,6 +129,7 @@ func newFixtureLogging(t *testing.T, logs recordedLogs) *fixture {
 		Version: captureVersion,
 		Logs:    fixture.logs,
 		Clock:   fakes.NewClock(adminSocketTime),
+		Trusted: trustedLocalhostProxy(),
 	})
 
 	fixture.server = httptest.NewServer(fixture.sessions)

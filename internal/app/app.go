@@ -72,6 +72,12 @@ type Config struct {
 	SslKeyFile  string
 	SslListen   string
 
+	// TrustedProxies names the proxy addresses whose X-Forwarded-For the server honors: a
+	// comma-separated list of CIDR prefixes and bare addresses. Empty — the default — means the
+	// server trusts no proxy and names every request by the address of its connection, which is what
+	// the login budget and the access warnings are keyed on.
+	TrustedProxies string
+
 	// Version is the release the server reports to clients, and is what the build tool resolved from
 	// VERSION.txt and git.
 	Version string

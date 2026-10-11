@@ -122,6 +122,7 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	fs.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
 	fs.StringVar(&config.SslListen, "ssl_listen", "", "listening address for ssl")
+	fs.StringVar(&config.TrustedProxies, "trusted_proxies", "", "comma-separated proxy addresses (CIDR or bare) whose X-Forwarded-For is honored")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, ModeExit, usageError{err}
@@ -219,6 +220,7 @@ func (config *Config) applyIniFile() error {
 	overlayString(section, "ssl_cert_file", &config.SslCertFile)
 	overlayString(section, "ssl_key_file", &config.SslKeyFile)
 	overlayString(section, "ssl_listen", &config.SslListen)
+	overlayString(section, "trusted_proxies", &config.TrustedProxies)
 
 	if port, err := section.Key("db_port").Uint(); err == nil {
 		config.DbPort = port
@@ -322,6 +324,10 @@ func (config *Config) saveConfig() error {
 
 	if config.SslListen != "" {
 		ini = append(ini, fmt.Sprintf("ssl_listen = %s", config.SslListen))
+	}
+
+	if config.TrustedProxies != "" {
+		ini = append(ini, fmt.Sprintf("trusted_proxies = %s", config.TrustedProxies))
 	}
 
 	file, err := os.Create(config.GetConfigFilePath())

@@ -31,6 +31,7 @@ import (
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
 // The administrator endpoints are tested against the captures taken from the legacy server, so that a
@@ -38,6 +39,19 @@ import (
 // author remembers it answering.
 
 var captureTime = time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
+
+// trustedLocalhostProxy names the peers these tests connect from — the httptest server's localhost and
+// the documentation address httptest.NewRequest carries — as proxies the operator named, so the
+// forwarding header the captured requests carry is honored: the address the endpoints name is the
+// address the captures name. The list is a fixed literal; a parse failure is a bug in this file.
+func trustedLocalhostProxy() *httpaddr.Trusted {
+	trusted, err := httpaddr.ParseTrusted("127.0.0.0/8, 192.0.2.0/24")
+	if err != nil {
+		panic("the test's own proxy list does not parse: " + err.Error())
+	}
+
+	return trusted
+}
 
 const (
 	captureAddress    = "203.0.113.7"
@@ -141,6 +155,7 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		RemoveUser:           application.NewRemoveAccessUserHandler(application.AccessUserPorts{ConfigurationRepositories: fixture.repositories(), Logs: fixture.logs, Admin: fixture.sessions, Clock: fixture.clock}),
 		Session:              application.NewCheckAdminSessionHandler(fixture.tokens),
 		Version:              captureVersion,
+		Trusted:              trustedLocalhostProxy(),
 	}).Register(mux)
 
 	return mux

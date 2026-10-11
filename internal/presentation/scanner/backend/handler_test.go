@@ -33,7 +33,21 @@ import (
 	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/presentation/common/httpaddr"
 )
+
+// trustedLocalhostProxy names the peers these tests connect from — the httptest server's localhost and
+// the documentation address httptest.NewRequest carries — as proxies the operator named, so the
+// forwarding header these tests carry is honored: the address the endpoint names is the address the
+// access warnings are keyed on. The list is a fixed literal; a parse failure is a bug in this file.
+func trustedLocalhostProxy() *httpaddr.Trusted {
+	trusted, err := httpaddr.ParseTrusted("127.0.0.0/8, 192.0.2.0/24")
+	if err != nil {
+		panic("the test's own proxy list does not parse: " + err.Error())
+	}
+
+	return trusted
+}
 
 // The version report is answered before anything else, including the request for an access code: a
 // client that is trying to work out what server it is talking to has not been asked for a code yet, and
@@ -454,9 +468,10 @@ func TestAConnectionTheServerWouldNotTakeOverIsFiled(t *testing.T) {
 }
 
 // The address the server names for a listener is the address in the forwarding header, without its port,
-// and the address of the connection when there is no such header. It is the same address the server
-// names in its warnings about guessed access codes, so that a line about a guessed code and a line about
-// a listener joining can be read as being about the same machine.
+// when the connection came from the proxy the operator named, and the address of the connection when
+// there is no such header. It is the same address the server names in its warnings about guessed access
+// codes, so that a line about a guessed code and a line about a listener joining can be read as being
+// about the same machine.
 func TestTheAddressTheServerNamesIsTheForwardedOneWithoutItsPort(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -609,6 +624,7 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 		Search:   application.NewSearchCallsQueryHandler(w.calls, w.systems, w.groups, w.tags),
 		Settings: f.settings,
 		Version:  "8.0.0",
+		Trusted:  trustedLocalhostProxy(),
 	})
 
 	// A session on a whole server needs longer than the hub tests' window to get as far as its first
