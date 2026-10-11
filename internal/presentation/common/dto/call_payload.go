@@ -46,8 +46,43 @@ type CallPayload struct {
 // call read out of the database has no list at all and comes out as `null`, and a call being made has
 // an empty one and comes out as `[]`.
 func (payload CallPayload) MarshalJSON() ([]byte, error) {
-	call := payload.Call
+	return json.Marshal(callPayloadMap(payload.Call))
+}
 
+// CallMetadataPayload is one recorded call as the HTTP call-history surface answers it: the same
+// keys the listener's call payload carries, with the recording's own bytes left out and the link to
+// them named instead.
+//
+// The recording is a separate entry point, and that is the reason this shape exists. A metadata
+// question is asked far more often than a recording is listened to, and a metadata answer that
+// carries the recording carries a download in every answer. The name, the type, and the length of
+// the recording stay: they are metadata, and they are what a caller needs before it asks for the
+// bytes.
+type CallMetadataPayload struct {
+	Call domain.Call
+}
+
+// MarshalJSON writes the call without its recording, and names where the recording is.
+func (payload CallMetadataPayload) MarshalJSON() ([]byte, error) {
+	body := callPayloadMap(payload.Call)
+
+	delete(body, "audio")
+
+	body["audioUrl"] = "/api/calls/" + strconv.FormatUint(payload.Call.ID, 10) + "/audio"
+
+	return json.Marshal(body)
+}
+
+// callPayloadMap is the call as the wire carries it, built as a map because the legacy server builds
+// it from a map and every client that reads it today reads the bytes that produced. A struct would
+// put the keys in the order its fields are declared, which is a different byte stream for the same
+// call.
+//
+// Seven keys are always there — id, audio, audioName, audioType, dateTime, delayed, patches — and
+// the rest only when the call has the thing they describe. `patches` is the exception worth knowing:
+// a call read out of the database has no list at all and comes out as `null`, and a call being made
+// has an empty one and comes out as `[]`.
+func callPayloadMap(call domain.Call) map[string]any {
 	body := map[string]any{
 		"id":        call.ID,
 		"audio":     audioBuffer(call.Audio),
@@ -126,7 +161,7 @@ func (payload CallPayload) MarshalJSON() ([]byte, error) {
 		body["sources"] = sources
 	}
 
-	return json.Marshal(body)
+	return body
 }
 
 // audioBuffer writes the recording as the number of each byte under a wrapper that says it is a
