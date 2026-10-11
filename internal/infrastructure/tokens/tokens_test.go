@@ -25,6 +25,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -67,9 +68,10 @@ func TestIssueReturnsACredentialThisServerAccepts(t *testing.T) {
 	}
 }
 
-// TestIssueClaimsOnlyTheSessionIdentifier pins the claim set the legacy issues: one
-// identifier, and no expiry — a session ends here when the server stops holding the
-// credential, not when a timestamp passes.
+// TestIssueClaimsOnlyTheSessionIdentifier pins the claim set: one identifier and the
+// seven-day expiry D11 adds — a session ends here when the server stops holding the
+// credential, and the expiry bounds the life of a stolen token the window cannot
+// evict on its own. The other time claims stay out, as the legacy issued none.
 func TestIssueClaimsOnlyTheSessionIdentifier(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
@@ -102,9 +104,15 @@ func TestIssueClaimsOnlyTheSessionIdentifier(t *testing.T) {
 		t.Error("the credential carries no session identifier")
 	}
 
-	if claims.ExpiresAt != nil || claims.IssuedAt != nil || claims.NotBefore != nil {
-		t.Errorf("the credential claims expiry %v, issued at %v, not before %v, want none of them",
-			claims.ExpiresAt, claims.IssuedAt, claims.NotBefore)
+	// The seven-day expiry rides with the identifier (D11); the other time claims
+	// stay out, as the legacy issued none of them.
+	if claims.ExpiresAt == nil {
+		t.Error("the credential carries no expiry, want the seven-day expiry D11 gives it")
+	}
+
+	if claims.IssuedAt != nil || claims.NotBefore != nil {
+		t.Errorf("the credential claims issued at %v, not before %v, want neither",
+			claims.IssuedAt, claims.NotBefore)
 	}
 
 	if claims.Subject != "" || len(claims.Audience) != 0 {
@@ -356,5 +364,73 @@ func TestValidateRefusesWhenTheSigningSecretCannotBeRead(t *testing.T) {
 
 	if err := tokens.Validate(context.Background(), token); err == nil {
 		t.Error("Validate accepted a credential while the signing secret could not be read, want a refusal")
+	}
+}
+
+// TestIssuedTokensCarryASevenDayExpiry (REQ-013, CA-013.4, D11): a token the server
+// stops holding is what ends a session here, and that is the primary rule — but a
+// stolen token is today valid until the window evicts it, and a server that keeps
+// issuing never evicts the fifth token on its own. The seven-day expiry bounds the
+// blast radius the window cannot.
+func TestIssuedTokensCarryASevenDayExpiry(t *testing.T) {
+	source := newSecretSource()
+	issuer := New(source)
+
+	at := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
+
+	issuer.now = func() time.Time { return at }
+
+	token, err := issuer.Issue(context.Background())
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	claims := &jwt.RegisteredClaims{}
+
+	// The claims are read with their validation off: this test looks at what the
+	// credential carries, not at whether the wall clock finds it live.
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+
+	if _, err := parser.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
+		return []byte(source.value), nil
+	}); err != nil {
+		t.Fatalf("parsing the issued credential: %v", err)
+	}
+
+	if claims.ExpiresAt == nil {
+		t.Fatal("the issued credential carries no expiry, want the seven-day expiry D11 asks for")
+	}
+
+	if got, want := claims.ExpiresAt.UTC(), at.Add(7*24*time.Hour); !got.Equal(want) {
+		t.Errorf("the credential expires at %v, want %v: seven days from the instant it was issued", got, want)
+	}
+}
+
+// TestAnExpiredTokenIsRefusedInsideTheIssuedWindow (REQ-013, CA-013.4, D11): the
+// window stays the primary rule — a token this server issued and still holds is
+// the token it accepts — and expiry is the bound the window cannot provide: the
+// window never expires a token on its own, only the sixth login does.
+func TestAnExpiredTokenIsRefusedInsideTheIssuedWindow(t *testing.T) {
+	source := newSecretSource()
+	issuer := New(source)
+
+	// The issue instant is the real now, so the credential is live for every
+	// wall-clock check on the way, and it is the server's own clock — the fake
+	// one, eight days on — that must find it expired.
+	at := time.Now().UTC().Truncate(time.Second)
+
+	issuer.now = func() time.Time { return at }
+
+	token, err := issuer.Issue(context.Background())
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	// Eight days on: the window still holds the token — the server issued it and
+	// nothing evicted it — and its expiry has passed.
+	issuer.now = func() time.Time { return at.Add(8 * 24 * time.Hour) }
+
+	if err := issuer.Validate(context.Background(), token); err == nil {
+		t.Error("Validate accepted an expired token the window still holds, want refusal: a stolen token must not stay valid until eviction")
 	}
 }

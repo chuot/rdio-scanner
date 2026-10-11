@@ -22,9 +22,11 @@ package tokens
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
@@ -43,6 +45,16 @@ const windowSize = 5
 // credential that is perfectly well signed with the right secret is still refused when
 // this process did not issue it.
 var ErrNotIssued = errors.New("token was not issued by this server")
+
+// ErrExpired reports a credential whose seven-day life has run out (D11): this
+// server issued it and its window may still hold it, and the token is refused
+// beside that. The window is the primary rule — it never ages a token on its
+// own, only the sixth login does — and the expiry bounds the blast radius the
+// window cannot.
+var ErrExpired = errors.New("token has expired")
+
+// tokenLifetime is the life D11 gives an issued credential.
+const tokenLifetime = 7 * 24 * time.Hour
 
 // Secrets is the signing secret, read every time it is needed rather than once when the
 // adapter is built.
@@ -63,12 +75,16 @@ type Secrets interface {
 
 // Tokens issues and checks the administrator session tokens.
 //
-// A token is a signed, non-expiring credential whose only claim is the session identifier,
-// and what makes it valid is that this process issued it: nothing is persisted, so a
-// restart retires every session the administrator had, and a token that worked before the
-// restart is refused after it.
+// A token is a signed credential whose claim is the session identifier, with the
+// seven-day expiry D11 adds, and what makes it valid is that this process issued it:
+// nothing is persisted, so a restart retires every session the administrator had, and
+// a token that worked before the restart is refused after it.
 type Tokens struct {
 	secrets Secrets
+
+	// now is the clock the token's expiry is measured against. The server runs on
+	// the wall clock; a test replaces it to watch a token age past its expiry.
+	now func() time.Time
 
 	// issued is the rolling window, oldest first.
 	//
@@ -84,6 +100,7 @@ type Tokens struct {
 func New(secrets Secrets) *Tokens {
 	return &Tokens{
 		secrets: secrets,
+		now:     time.Now,
 		issued:  []string{},
 	}
 }
@@ -108,10 +125,13 @@ func (tokens *Tokens) Issue(ctx context.Context) (string, error) {
 		return "", errors.New("tokens.issue: the server holds no signing secret to sign with")
 	}
 
-	// Only the session identifier is claimed. No expiry is claimed, because a token the
-	// server stops holding is what ends a session here, not a timestamp.
+	// The session identifier is the claim, and the seven-day expiry rides with it
+	// (D11): a token the server stops holding is what ends a session here — that
+	// stays the primary rule — and the expiry bounds the life of a stolen token
+	// the window cannot evict on its own.
 	credential, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		ID: id.String(),
+		ID:        id.String(),
+		ExpiresAt: jwt.NewNumericDate(tokens.now().Add(tokenLifetime)),
 	}).SignedString([]byte(secret))
 
 	if err != nil {
@@ -137,7 +157,9 @@ func (tokens *Tokens) Validate(ctx context.Context, token string) error {
 		return ErrNotIssued
 	}
 
-	parsed, err := jwt.Parse(token, func(credential *jwt.Token) (any, error) {
+	claims := &jwt.RegisteredClaims{}
+
+	parsed, err := jwt.ParseWithClaims(token, claims, func(credential *jwt.Token) (any, error) {
 		if _, ok := credential.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", credential.Header["alg"])
 		}
@@ -160,6 +182,13 @@ func (tokens *Tokens) Validate(ctx context.Context, token string) error {
 
 	if !parsed.Valid {
 		return fmt.Errorf("tokens.validate: token is not valid")
+	}
+
+	// The expiry is measured on this server's clock (D11): a credential with no
+	// expiry claim is not one this server issued, and one whose claim has run out
+	// is refused even while the window still holds it.
+	if claims.ExpiresAt == nil || claims.ExpiresAt.Time.Before(tokens.now()) {
+		return fmt.Errorf("tokens.validate: %w", ErrExpired)
 	}
 
 	return nil
@@ -193,8 +222,11 @@ func (tokens *Tokens) wasIssued(token string) bool {
 	tokens.mu.Lock()
 	defer tokens.mu.Unlock()
 
+	// The compare is constant-time (CA-013.4): the window membership is checked
+	// against tokens an attacker is guessing, and a compare that fails earlier on
+	// a prefix is a channel for learning a token one character at a time.
 	for _, issued := range tokens.issued {
-		if issued == token {
+		if subtle.ConstantTimeCompare([]byte(issued), []byte(token)) == 1 {
 			return true
 		}
 	}
