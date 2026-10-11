@@ -223,6 +223,13 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 	case AccessSection:
 		return saver.repos.Accesses.SaveAccesses(ctx, *changes.Access)
 	case ApikeysSection:
+		// A credential list with a keyless row is refused here, at apply time, before it can
+		// be stored: the domain owns the rule, this is the door through which every submitted
+		// list passes.
+		if err := changes.Apikeys.Validate(); err != nil {
+			return err
+		}
+
 		return saver.repos.Apikeys.SaveApikeys(ctx, *changes.Apikeys)
 	case DirwatchSection:
 		return saver.repos.Dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)

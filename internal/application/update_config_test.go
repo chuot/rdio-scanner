@@ -657,3 +657,35 @@ func TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten(t *
 		t.Errorf("configuration broadcasts = %d, want the listeners still told the new configuration", len(fixture.hub.BroadcastConfigs))
 	}
 }
+
+// TestUpdateConfigurationSectionRefusesAKeylessApikey (REQ-004, CA-004.2): an apikey row with no
+// key is refused at apply time — the section save reports the failure, the list is not stored,
+// and the server keeps the credentials it had.
+func TestUpdateConfigurationSectionRefusesAKeylessApikey(t *testing.T) {
+	fixture := newConfigFixture()
+
+	before := append(domain.Apikeys{}, fixture.apikeys.Stored...)
+
+	apikeys := domain.Apikeys{
+		{ID: 1, Ident: "dispatch", Key: "dispatch-key"},
+		{ID: 2, Ident: "nameless"},
+	}
+
+	result, err := fixture.saveSection(ApikeysSection, ConfigurationChanges{Apikeys: &apikeys})
+
+	if err == nil {
+		t.Error("the reason the apikey save failed must reach the caller, which logs it")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: a per-section save reports its failure", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Failed) != 1 || result.Failed[0] != ApikeysSection {
+		t.Errorf("failed = %v, want the apikeys section reported as not stored", result.Failed)
+	}
+
+	if len(fixture.apikeys.Stored) != len(before) {
+		t.Errorf("apikeys = %v, want the stored list left alone: a refused save stores nothing", fixture.apikeys.Stored)
+	}
+}

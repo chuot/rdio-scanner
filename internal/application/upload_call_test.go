@@ -379,3 +379,32 @@ func TestUploadCallHandlerDeliversTheUploadedCallToTheListenersWatchingIt(t *tes
 		t.Fatalf("the listener was sent %v, want the one call it is watching", broadcast)
 	}
 }
+
+// TestUploadCallHandlerRefusesAKeylessUpload (REQ-004, CA-004.2): a row stored with no key —
+// saved by an older server, before the apply-time rule — must not answer a keyless upload. The
+// upload endpoint's answer to no credential is the same refusal it gives a credential it does not
+// know.
+func TestUploadCallHandlerRefusesAKeylessUpload(t *testing.T) {
+	fixture := newUploadFixture()
+
+	fixture.seedUploadSystem()
+
+	fixture.apikeys.Stored = append(fixture.apikeys.Stored, domain.Apikey{
+		ID:    4,
+		Ident: "nameless",
+		Scope: domain.AccessScope{Present: true, Wildcard: true},
+	})
+
+	result, err := fixture.upload("", uploadedCall())
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+
+	if result.Outcome != UploadCallRefused {
+		t.Fatalf("outcome = %q, want refused: an empty key must match nothing", result.Outcome)
+	}
+
+	if len(fixture.calls.Saved) != 0 {
+		t.Errorf("the server stored %v, want nothing for a keyless upload", fixture.calls.Saved)
+	}
+}

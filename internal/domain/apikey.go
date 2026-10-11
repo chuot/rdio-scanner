@@ -20,7 +20,11 @@
 
 package domain
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // Apikey is the credential an ingest source presents when it uploads calls to this
 // server, and the scope of systems and talkgroups it is allowed to upload to.
@@ -98,9 +102,31 @@ func (apikeys Apikeys) AcceptsUpload(key string, call Call) bool {
 // Apikeys is the server's upload credential list.
 type Apikeys []Apikey
 
+// Validate refuses a credential list that contains a row with no key. A row with no key matches
+// every keyless upload, which turns an empty credential field on the administrator's page into an
+// open door; the rule belongs to the list itself, so every path that takes a submitted list runs
+// into it (decision D3).
+func (apikeys Apikeys) Validate() error {
+	for _, apikey := range apikeys {
+		if len(strings.TrimSpace(apikey.Key)) == 0 {
+			return fmt.Errorf("the apikey %q has no key to present", apikey.Ident)
+		}
+	}
+
+	return nil
+}
+
 // ByKey finds the apikey an ingest source presented. A disabled credential is still
 // found, so the caller can report why it was refused.
+//
+// A presentation of nothing matches nothing, even a keyless row an older server left in the list:
+// the empty key is not a credential, and refusing it here is the second door behind the
+// apply-time rule in Validate.
 func (apikeys Apikeys) ByKey(key string) (Apikey, bool) {
+	if len(key) == 0 {
+		return Apikey{}, false
+	}
+
 	for _, apikey := range apikeys {
 		if apikey.Key == key {
 			return apikey, true

@@ -64,3 +64,43 @@ func TestApikeyScopeGrantsTheSameWayAsAccess(t *testing.T) {
 		t.Error("an unrestricted apikey must grant the call")
 	}
 }
+
+// TestApikeysValidateRejectsAnEmptyKey (REQ-004, CA-004.2): a row stored with no key matches every
+// keyless upload, which turns an empty credential field in the administrator's page into an open
+// door. The list is refused at apply time, before it can be saved.
+func TestApikeysValidateRejectsAnEmptyKey(t *testing.T) {
+	apikeys := Apikeys{
+		{ID: 1, Ident: "dispatch", Key: "dispatch-key"},
+		{ID: 2, Ident: "nameless"},
+	}
+
+	if err := apikeys.Validate(); err == nil {
+		t.Error("Validate = nil, want the keyless row refused: a row with no key matches every keyless upload")
+	}
+}
+
+// The rule must not cost the server its endpoint: a list of real keys is accepted.
+func TestApikeysValidateAcceptsAListOfRealKeys(t *testing.T) {
+	apikeys := Apikeys{
+		{ID: 1, Ident: "dispatch", Key: "dispatch-key"},
+		{ID: 2, Ident: "harbour", Key: "harbour-key"},
+	}
+
+	if err := apikeys.Validate(); err != nil {
+		t.Errorf("Validate = %v, want a list of real keys accepted", err)
+	}
+}
+
+// TestApikeysByKeyRefusesAKeylessPresentation: even a list that already holds a keyless row —
+// saved by an older server — must not answer a keyless upload. The lookup itself refuses the
+// empty presentation.
+func TestApikeysByKeyRefusesAKeylessPresentation(t *testing.T) {
+	apikeys := Apikeys{
+		{ID: 1, Ident: "nameless"},
+		{ID: 2, Ident: "dispatch", Key: "dispatch-key"},
+	}
+
+	if apikey, ok := apikeys.ByKey(""); ok {
+		t.Errorf("ByKey of nothing = %+v, want no credential: an empty key must match nothing", apikey)
+	}
+}
