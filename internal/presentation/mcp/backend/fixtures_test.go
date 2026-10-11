@@ -94,6 +94,16 @@ type serverBundle struct {
 	dirwatches  *fakes.Dirwatches
 	downstreams *fakes.Downstreams
 	options     *fakes.Options
+
+	// The things a configuration save needs beside the stores: the listener connections a saved
+	// configuration is announced to, the directory watchers a save brackets, the administrator
+	// connections an access change is announced to, and the credential machinery the password
+	// change compares and hashes with.
+	hub      *fakes.Hub
+	sessions *fakes.AdministratorSessions
+	watches  *fakes.Dirwatchers
+	password *fakes.PasswordVerifier
+	hashes   *fakes.PasswordHasher
 }
 
 func newServer(t *testing.T, restricted bool) *serverBundle {
@@ -108,6 +118,11 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 		dirwatches:  &fakes.Dirwatches{},
 		downstreams: &fakes.Downstreams{},
 		options:     &fakes.Options{},
+		hub:         fakes.NewHub(),
+		sessions:    fakes.NewAdministratorSessions(),
+		watches:     fakes.NewDirwatchers(),
+		password:    fakes.NewPasswordVerifier(),
+		hashes:      fakes.NewPasswordHasher(),
 	}
 
 	bundle.tokens.Window = []string{adminToken}
@@ -246,6 +261,52 @@ func (bundle *serverBundle) Deps() Deps {
 		Resolve: bundle.resolve,
 		Session: application.NewCheckAdminSessionHandler(bundle.tokens),
 		Clock:   bundle.clock,
+
+		Section:    application.NewUpdateConfigurationSectionHandler(bundle.configurationPorts()),
+		SubSection: application.NewUpdateSystemSubSectionHandler(bundle.configurationPorts()),
+		AddUser:    application.NewAddAccessUserHandler(bundle.accessUserPorts()),
+		RemoveUser: application.NewRemoveAccessUserHandler(bundle.accessUserPorts()),
+		Password: application.NewChangeAdminPasswordHandler(
+			bundle.options, bundle.password, bundle.hashes, bundle.logs, bundle.clock),
+	}
+}
+
+// repositories is the set of stores the configuration is spread over, the same set the
+// administrator's own surface saves through.
+func (bundle *serverBundle) repositories() application.ConfigurationRepositories {
+	return application.ConfigurationRepositories{
+		Accesses:    bundle.accesses,
+		Apikeys:     bundle.apikeys,
+		Dirwatches:  bundle.dirwatches,
+		Downstreams: bundle.downstreams,
+		Groups:      bundle.groups,
+		Options:     bundle.options,
+		Systems:     bundle.systems,
+		Tags:        bundle.tags,
+	}
+}
+
+// configurationPorts is everything a configuration save needs: the stores, the log view it reports
+// a failure to, the listener connections a saved configuration is announced to, the administrator
+// connections an access change is announced to, the directory watchers it brackets, and the clock.
+func (bundle *serverBundle) configurationPorts() application.ConfigurationPorts {
+	return application.ConfigurationPorts{
+		ConfigurationRepositories: bundle.repositories(),
+		Logs:                      bundle.logs,
+		Hub:                       bundle.hub,
+		Admin:                     bundle.sessions,
+		Dirwatchers:               bundle.watches,
+		Clock:                     bundle.clock,
+	}
+}
+
+// accessUserPorts is what adding and removing a listener needs.
+func (bundle *serverBundle) accessUserPorts() application.AccessUserPorts {
+	return application.AccessUserPorts{
+		ConfigurationRepositories: bundle.repositories(),
+		Logs:                      bundle.logs,
+		Admin:                     bundle.sessions,
+		Clock:                     bundle.clock,
 	}
 }
 

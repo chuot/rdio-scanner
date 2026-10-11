@@ -60,6 +60,7 @@ func (s *Server) registerCapabilities(deps Deps) {
 		registerHealthReview,
 		registerConfigResources,
 		registerStandingQuestions,
+		registerWriteTools,
 	} {
 		build(s.full, deps)
 	}

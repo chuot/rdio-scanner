@@ -87,6 +87,16 @@ type Deps struct {
 	// environment once, because the answer cannot change while the server is running, and hands the
 	// answer here — the same way it hands the administrator's surface.
 	Docker bool
+
+	// The writes: one section of the configuration, one level of one system, the listener access
+	// codes, and the credential an administrator signs in with. They are the same use cases the
+	// administrator's own page saves with, so an assistant's change and an operator's change go
+	// through one rule, and the surface adds no rule of its own to the save.
+	Section    *application.UpdateConfigurationSectionHandler
+	SubSection *application.UpdateSystemSubSectionHandler
+	AddUser    *application.AddAccessUserHandler
+	RemoveUser *application.RemoveAccessUserHandler
+	Password   *application.ChangeAdminPasswordHandler
 }
 
 // Server is the MCP surface: the two capability sets the two tiers read, and the HTTP handler that

@@ -181,7 +181,7 @@ func registerStandingQuestions(target *mcp.Server, deps Deps) {
 		Arguments: []*mcp.PromptArgument{
 			{Name: "ident", Description: "the identity the code belongs to, as the operator names it", Required: true},
 			{Name: "systems", Description: "what the code may see: systemRef, systemRef:*, or systemRef:talkgroup, several separated by commas; a bare reference means every talkgroup on that system", Required: true},
-			{Name: "expires", Description: "when the code stops working, as seconds since 1970", Required: true},
+			{Name: "expires", Description: "when the code stops working, as an instant the configuration takes, like 2026-12-31T00:00:00Z", Required: true},
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		ident, systems, expires, err := requireOnboarding(req)
@@ -198,15 +198,17 @@ func registerStandingQuestions(target *mcp.Server, deps Deps) {
 			"Give "+ident+" an access code on this rdio-scanner deployment, expiring at "+expires+".\n\n"+
 				"1. Read the resource "+accessURI+" first, so the identity is not already taken and so the "+
 				"scope being asked for is not already granted by a code that exists.\n"+
-				"2. Call manage_access_user with the add form: identity "+ident+", expiry "+expires+", and the "+
-				"scope spelled out below. The scope is the systems the code may see, each with the talkgroups "+
-				"under it; the star means every talkgroup on that system.\n"+
+				"2. Call manage_access_user with the add form: identity "+ident+", expiration "+expires+
+				", and the scope spelled out below. The scope is the systems the code may see, each with "+
+				"the talkgroups under it; the star means every talkgroup on that system. Do not name a "+
+				"code: the server generates one, and no answer of the tool carries it.\n"+
 				"   "+scope+"\n"+
 				"3. Nothing is written by this prompt. manage_access_user answers the change it intends to "+
-				"make and asks; report what it says it will change, and write only in the confirmed round, "+
-				"when the operator confirms it.\n"+
-				"4. Say what the code costs: it is a credential. An access code repeated into a chat log is a "+
-				"leaked credential, and the inventory of codes is read with the codes masked for that reason.")
+				"make and asks the operator; report what it says it will change, and write only in the "+
+				"confirmed round, when the operator confirms it.\n"+
+				"4. Say what the code costs: it is a credential. An access code repeated into a chat log "+
+				"is a leaked credential, and the code is read back from the administrator's access page "+
+				"by the operator, for that reason.")
 	})
 }
 

@@ -510,6 +510,15 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 			Call:    application.NewGetCallQueryHandler(calls),
 			Search:  application.NewSearchCallsQueryHandler(calls, systems, groups, tags),
 			Clock:   s.clock,
+
+			// The writes go through the same use cases, built from the same ports, that the
+			// administrator's own page saves with: an assistant's change and an operator's
+			// change run the same rules over the same stores.
+			Section:    application.NewUpdateConfigurationSectionHandler(configurationPorts),
+			SubSection: application.NewUpdateSystemSubSectionHandler(configurationPorts),
+			AddUser:    application.NewAddAccessUserHandler(accessUserPorts),
+			RemoveUser: application.NewRemoveAccessUserHandler(accessUserPorts),
+			Password:   application.NewChangeAdminPasswordHandler(options, credentials, credentials, s.logs, s.clock),
 		})
 	}
 

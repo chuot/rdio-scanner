@@ -196,6 +196,32 @@ var capabilityCatalog = []Capability{
 		},
 	},
 	{
+		Name:   "manage_config",
+		Kind:   KindTool,
+		Reach:  ReachAdministrator,
+		Effect: EffectWrite,
+		Endpoints: []string{
+			"GET /api/admin/config/{section}",
+			"PUT /api/admin/config/{section}",
+			"GET /api/admin/config/systems/{systemId}/{sites|talkgroups|units}",
+			"PUT /api/admin/config/systems/{systemId}/{sites|talkgroups|units}",
+		},
+	},
+	{
+		Name:      "manage_access_user",
+		Kind:      KindTool,
+		Reach:     ReachAdministrator,
+		Effect:    EffectWrite,
+		Endpoints: []string{"GET /api/admin/config/{access}", "POST /api/admin/user-add", "POST /api/admin/user-remove"},
+	},
+	{
+		Name:      "rotate_admin_password",
+		Kind:      KindTool,
+		Reach:     ReachAdministrator,
+		Effect:    EffectWrite,
+		Endpoints: []string{"POST /api/admin/password"},
+	},
+	{
 		Name:      optionsURI,
 		Kind:      KindResource,
 		Reach:     ReachAdministrator,

@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -95,21 +96,7 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 			"done with the configuration tool, not by reading this.",
 
 		func(deps Deps, configuration domain.Configuration) any {
-			return optionsView{
-				AudioConversion:           configuration.Options.AudioConversion,
-				AutoPopulate:              configuration.Options.AutoPopulate,
-				Branding:                  configuration.Options.Branding,
-				DisableDuplicateDetection: configuration.Options.DisableDuplicateDetection,
-				Email:                     configuration.Options.Email,
-				KeypadBeeps:               configuration.Options.KeypadBeeps,
-				MaxClients:                configuration.Options.MaxClients,
-				PruneDays:                 configuration.Options.PruneDays,
-				ShowListenersCount:        configuration.Options.ShowListenersCount,
-				SortTalkgroups:            configuration.Options.SortTalkgroups,
-				PasswordNeedsChange:       configuration.Options.AdminPasswordNeedChange,
-				Version:                   deps.Version,
-				Masked:                    []string{"adminPasswordHash", "secret"},
-			}
+			return optionsViewOf(deps, configuration.Options)
 		})
 
 	section(configSystemsURI, "systems", "The whole systems tree",
@@ -150,16 +137,7 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 			rows := []accessRow{}
 
 			for _, access := range configuration.Access {
-				rows = append(rows, accessRow{
-					ID:      access.ID,
-					Ident:   access.Ident,
-					Expires: access.Expiration,
-					Expired: access.Expiration > 0 && uint64(deps.Clock.Now().Unix()) > access.Expiration,
-					Limit:   access.Limit,
-					Order:   access.Order,
-					Systems: scopeView(access.Scope),
-					Code:    maskedCredential,
-				})
+				rows = append(rows, accessRowOf(deps.Clock.Now(), access))
 			}
 
 			return rows
@@ -174,14 +152,7 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 			rows := []apikeyRow{}
 
 			for _, apikey := range configuration.Apikeys {
-				rows = append(rows, apikeyRow{
-					ID:       apikey.ID,
-					Ident:    apikey.Ident,
-					Disabled: apikey.Disabled,
-					Order:    apikey.Order,
-					Systems:  scopeView(apikey.Scope),
-					Key:      maskedCredential,
-				})
+				rows = append(rows, apikeyRowOf(apikey))
 			}
 
 			return rows
@@ -198,21 +169,7 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 			rows := []dirwatchRow{}
 
 			for _, dirwatch := range configuration.Dirwatches {
-				rows = append(rows, dirwatchRow{
-					ID:          dirwatch.ID,
-					Directory:   dirwatch.Directory,
-					Kind:        dirwatch.Kind,
-					Disabled:    dirwatch.Disabled,
-					Delay:       dirwatch.Delay,
-					Extension:   dirwatch.Extension,
-					Frequency:   dirwatch.Frequency,
-					Mask:        dirwatch.Mask,
-					Order:       dirwatch.Order,
-					DeleteAfter: dirwatch.DeleteAfter,
-					SiteID:      dirwatch.SiteID,
-					SystemID:    dirwatch.SystemID,
-					TalkgroupID: dirwatch.TalkgroupID,
-				})
+				rows = append(rows, dirwatchRowOf(dirwatch))
 			}
 
 			return rows
@@ -228,14 +185,7 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 			rows := []downstreamRow{}
 
 			for _, downstream := range configuration.Downstreams {
-				rows = append(rows, downstreamRow{
-					ID:       downstream.ID,
-					URL:      downstream.URL,
-					Disabled: downstream.Disabled,
-					Order:    downstream.Order,
-					Systems:  scopeView(downstream.Scope),
-					Apikey:   maskedCredential,
-				})
+				rows = append(rows, downstreamRowOf(downstream))
 			}
 
 			return rows
@@ -355,6 +305,28 @@ type optionsView struct {
 
 	// Masked names the fields this inventory deliberately does not answer.
 	Masked []string `json:"masked"`
+}
+
+// optionsViewOf is the settings section as this surface answers it. The view is shared by the
+// resource and by the configuration change tool, so the settings an assistant reads and the
+// settings it is shown before it confirms a change are the same shape, and the secrets are kept
+// out of both.
+func optionsViewOf(deps Deps, options domain.Options) optionsView {
+	return optionsView{
+		AudioConversion:           options.AudioConversion,
+		AutoPopulate:              options.AutoPopulate,
+		Branding:                  options.Branding,
+		DisableDuplicateDetection: options.DisableDuplicateDetection,
+		Email:                     options.Email,
+		KeypadBeeps:               options.KeypadBeeps,
+		MaxClients:                options.MaxClients,
+		PruneDays:                 options.PruneDays,
+		ShowListenersCount:        options.ShowListenersCount,
+		SortTalkgroups:            options.SortTalkgroups,
+		PasswordNeedsChange:       options.AdminPasswordNeedChange,
+		Version:                   deps.Version,
+		Masked:                    []string{"adminPasswordHash", "secret"},
+	}
 }
 
 // accessRow is one listener access code, without its code.
@@ -497,48 +469,64 @@ func talkgroupsOf(talkgroups domain.Talkgroups) []talkgroupRow {
 	answer := []talkgroupRow{}
 
 	for _, talkgroup := range talkgroups {
-		answer = append(answer, talkgroupRow{
-			ID:           talkgroup.ID,
-			TalkgroupRef: talkgroup.TalkgroupRef,
-			Label:        talkgroup.Label,
-			Name:         talkgroup.Name,
-			Kind:         talkgroup.Kind,
-			Frequency:    talkgroup.Frequency,
-			Delay:        talkgroup.Delay,
-			Order:        talkgroup.Order,
-			TagID:        talkgroup.TagID,
-			GroupIDs:     talkgroup.GroupIDs,
-			Alert:        talkgroup.Alert,
-			LED:          talkgroup.LED,
-		})
+		answer = append(answer, talkgroupRowOf(talkgroup))
 	}
 
 	return answer
+}
+
+// talkgroupRowOf is one talkgroup as a row of the answer. The row builders are shared by the
+// resources and by the configuration change tool, so what an assistant reads of a section and what
+// it is shown before it confirms a change to that section are the same shape, and the credentials
+// are masked in both.
+func talkgroupRowOf(talkgroup domain.Talkgroup) talkgroupRow {
+	return talkgroupRow{
+		ID:           talkgroup.ID,
+		TalkgroupRef: talkgroup.TalkgroupRef,
+		Label:        talkgroup.Label,
+		Name:         talkgroup.Name,
+		Kind:         talkgroup.Kind,
+		Frequency:    talkgroup.Frequency,
+		Delay:        talkgroup.Delay,
+		Order:        talkgroup.Order,
+		TagID:        talkgroup.TagID,
+		GroupIDs:     talkgroup.GroupIDs,
+		Alert:        talkgroup.Alert,
+		LED:          talkgroup.LED,
+	}
 }
 
 func sitesOf(sites domain.Sites) []siteRow {
 	answer := []siteRow{}
 
 	for _, site := range sites {
-		answer = append(answer, siteRow{
-			ID: site.ID, SiteRef: site.SiteRef, Label: site.Label, Order: site.Order, SystemID: site.SystemID,
-		})
+		answer = append(answer, siteRowOf(site))
 	}
 
 	return answer
+}
+
+func siteRowOf(site domain.Site) siteRow {
+	return siteRow{
+		ID: site.ID, SiteRef: site.SiteRef, Label: site.Label, Order: site.Order, SystemID: site.SystemID,
+	}
 }
 
 func unitsOf(units domain.Units) []unitRow {
 	answer := []unitRow{}
 
 	for _, unit := range units {
-		answer = append(answer, unitRow{
-			ID: unit.ID, UnitRef: unit.UnitRef, Label: unit.Label, Order: unit.Order,
-			SystemID: unit.SystemID, UnitFrom: unit.UnitFrom, UnitTo: unit.UnitTo,
-		})
+		answer = append(answer, unitRowOf(unit))
 	}
 
 	return answer
+}
+
+func unitRowOf(unit domain.Unit) unitRow {
+	return unitRow{
+		ID: unit.ID, UnitRef: unit.UnitRef, Label: unit.Label, Order: unit.Order,
+		SystemID: unit.SystemID, UnitFrom: unit.UnitFrom, UnitTo: unit.UnitTo,
+	}
 }
 
 // groupsOf is the group inventory, and tagsOf the tag inventory: the same shape, because the
@@ -547,24 +535,85 @@ func groupsOf(groups domain.Groups) []labelRow {
 	answer := []labelRow{}
 
 	for _, group := range groups {
-		answer = append(answer, labelRow{
-			ID: group.ID, Label: group.Label, Alert: group.Alert, LED: group.LED, Order: group.Order,
-		})
+		answer = append(answer, groupRowOf(group))
 	}
 
 	return answer
+}
+
+func groupRowOf(group domain.Group) labelRow {
+	return labelRow{
+		ID: group.ID, Label: group.Label, Alert: group.Alert, LED: group.LED, Order: group.Order,
+	}
 }
 
 func tagsOf(tags domain.Tags) []labelRow {
 	answer := []labelRow{}
 
 	for _, tag := range tags {
-		answer = append(answer, labelRow{
-			ID: tag.ID, Label: tag.Label, Alert: tag.Alert, LED: tag.LED, Order: tag.Order,
-		})
+		answer = append(answer, tagRowOf(tag))
 	}
 
 	return answer
+}
+
+func tagRowOf(tag domain.Tag) labelRow {
+	return labelRow{
+		ID: tag.ID, Label: tag.Label, Alert: tag.Alert, LED: tag.LED, Order: tag.Order,
+	}
+}
+
+func accessRowOf(now time.Time, access domain.Access) accessRow {
+	return accessRow{
+		ID:      access.ID,
+		Ident:   access.Ident,
+		Expires: access.Expiration,
+		Expired: access.Expiration > 0 && uint64(now.Unix()) > access.Expiration,
+		Limit:   access.Limit,
+		Order:   access.Order,
+		Systems: scopeView(access.Scope),
+		Code:    maskedCredential,
+	}
+}
+
+func apikeyRowOf(apikey domain.Apikey) apikeyRow {
+	return apikeyRow{
+		ID:       apikey.ID,
+		Ident:    apikey.Ident,
+		Disabled: apikey.Disabled,
+		Order:    apikey.Order,
+		Systems:  scopeView(apikey.Scope),
+		Key:      maskedCredential,
+	}
+}
+
+func dirwatchRowOf(dirwatch domain.Dirwatch) dirwatchRow {
+	return dirwatchRow{
+		ID:          dirwatch.ID,
+		Directory:   dirwatch.Directory,
+		Kind:        dirwatch.Kind,
+		Disabled:    dirwatch.Disabled,
+		Delay:       dirwatch.Delay,
+		Extension:   dirwatch.Extension,
+		Frequency:   dirwatch.Frequency,
+		Mask:        dirwatch.Mask,
+		Order:       dirwatch.Order,
+		DeleteAfter: dirwatch.DeleteAfter,
+		SiteID:      dirwatch.SiteID,
+		SystemID:    dirwatch.SystemID,
+		TalkgroupID: dirwatch.TalkgroupID,
+	}
+}
+
+func downstreamRowOf(downstream domain.Downstream) downstreamRow {
+	return downstreamRow{
+		ID:       downstream.ID,
+		URL:      downstream.URL,
+		Disabled: downstream.Disabled,
+		Order:    downstream.Order,
+		Systems:  scopeView(downstream.Scope),
+		Apikey:   maskedCredential,
+	}
 }
 
 // scopeView is what a credential is entitled to, in the shape the configuration payloads use: the

@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -235,17 +236,10 @@ func refusedCall(t *testing.T, s *session, tool string, args map[string]any) str
 		t.Fatalf("call %s: %v", tool, err)
 	}
 	if !answered.IsError {
-		t.Fatalf("%s answered %+v, want a refusal", tool, answered.Content)
+		t.Fatalf("%s answered %+v, want a refusal", tool, answered.StructuredContent)
 	}
 
-	var lines []string
-	for _, content := range answered.Content {
-		if text, ok := content.(*mcp.TextContent); ok {
-			lines = append(lines, text.Text)
-		}
-	}
-
-	return fmt.Sprint(lines)
+	return answeredText(answered)
 }
 
 func TestListSystemsProjectsOnlyTheSystemsTheCallerMaySee(t *testing.T) {
@@ -298,9 +292,28 @@ func call(t *testing.T, s *session, tool string, args map[string]any) *mcp.CallT
 		t.Fatalf("call %s: %v", tool, err)
 	}
 	if answered.IsError {
-		t.Fatalf("%s answered a failure: %+v", tool, answered.Content)
+		t.Fatalf("%s answered a failure: %s", tool, answeredText(answered))
 	}
 	return answered
+}
+
+// answeredText is what a capability said, as text. A content list printed whole is a list of
+// pointers, and a test that fails without saying what the surface answered is a test that sends
+// the reader back to the code to work out what it said.
+func answeredText(answered *mcp.CallToolResult) string {
+	lines := []string{}
+
+	for _, content := range answered.Content {
+		if text, ok := content.(*mcp.TextContent); ok {
+			lines = append(lines, text.Text)
+		}
+	}
+
+	if len(lines) == 0 {
+		return fmt.Sprint(answered.Content)
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // decode reads a tool's structured answer into the shape the test asks about.

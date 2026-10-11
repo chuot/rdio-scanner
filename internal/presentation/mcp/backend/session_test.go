@@ -72,8 +72,14 @@ func newAdministratorSetSession(t *testing.T, who Caller) *session {
 	return newSessionOn(t, bundle, bundle.server.full, who)
 }
 
-func newSessionOn(t *testing.T, bundle *serverBundle, target *mcp.Server, who Caller) *session {
+func newSessionOn(t *testing.T, bundle *serverBundle, target *mcp.Server, who Caller,
+	clientOpts ...*mcp.ClientOptions) *session {
 	t.Helper()
+
+	options := &mcp.ClientOptions{}
+	if len(clientOpts) > 0 && clientOpts[0] != nil {
+		options = clientOpts[0]
+	}
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
@@ -83,7 +89,7 @@ func newSessionOn(t *testing.T, bundle *serverBundle, target *mcp.Server, who Ca
 		t.Fatalf("connect the surface to an in-memory session: %v", err)
 	}
 
-	client := mcp.NewClient(&mcp.Implementation{Name: "rdio-scanner-test-harness", Version: "1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "rdio-scanner-test-harness", Version: "1"}, options)
 
 	clientSession, err := client.Connect(context.Background(), clientTransport, nil)
 	if err != nil {
