@@ -5,7 +5,7 @@
 import { getAppContext } from '../../application/context.js';
 import { computeFilterOptions } from '../../domain/search-filters.js';
 import { clientSlice, needsRefetch, serverOffset } from '../../../../common/frontend/domain/search-pagination.js';
-import { formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
+import { formatDuration, formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
 
 const SERVER_PAGE = 200;
 const CLIENT_PAGE = 10;
@@ -17,7 +17,7 @@ class RdioSearchPanel extends HTMLElement {
     this.innerHTML = `
       <div class="rdio-list">
         <table>
-          <thead><tr><th></th><th>Date</th><th>Time</th><th>System</th><th>Talkgroup</th><th>Name</th></tr></thead>
+          <thead><tr><th></th><th>Date</th><th>Time</th><th>Dur</th><th>System</th><th>Talkgroup</th><th>Name</th></tr></thead>
           <tbody></tbody>
         </table>
         <div class="progress-bar"></div>
@@ -200,7 +200,7 @@ class RdioSearchPanel extends HTMLElement {
     const downloadMode = this.downloadMode.checked;
 
     this.tbody.innerHTML = rows.map((row) => {
-      if (!row) return '<tr><td colspan="6"></td></tr>';
+      if (!row) return '<tr><td colspan="7"></td></tr>';
 
       let control = '';
 
@@ -216,7 +216,7 @@ class RdioSearchPanel extends HTMLElement {
 
       const date = new Date(row.dateTime);
 
-      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${row.systemData?.label ?? row.system}</span></td><td><span>${row.talkgroupData?.label ?? row.talkgroup}</span></td><td><span>${row.talkgroupData?.name ?? ''}</span></td></tr>`;
+      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${formatDuration(row.audioLength)}</span></td><td><span>${row.systemData?.label ?? row.system}</span></td><td><span>${row.talkgroupData?.label ?? row.talkgroup}</span></td><td><span>${row.talkgroupData?.name ?? ''}</span></td></tr>`;
     }).join('');
   }
 
