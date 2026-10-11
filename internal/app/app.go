@@ -32,6 +32,7 @@ package app
 import (
 	"context"
 	"io"
+	"os"
 	"path"
 	"path/filepath"
 
@@ -141,10 +142,13 @@ func (config *Config) GetAutocertCachePath() string {
 	return config.GetPath("autocert")
 }
 
-// GetFFmpegDirPath returns the directory the server writes the ffmpeg it carries inside its own binary
-// into, so that it has a program it can actually run.
+// GetFFmpegDirPath returns the directory the server writes the pair it carries inside its own binary
+// into, so that it has programs it can actually run, and the directory the length probe writes its
+// probe files into and clears after each probe. It is the system's temp directory under the server's
+// own name: a disposable folder, not a path the operator configures, and not a thing that joins the
+// data directory the configuration, database, and recordings live in.
 func (config *Config) GetFFmpegDirPath() string {
-	return config.GetPath("ffmpeg")
+	return filepath.Join(os.TempDir(), "rdio-scanner.ffmpeg")
 }
 
 // LogEcho is where a log entry is said out loud, as well as being written to the log view the

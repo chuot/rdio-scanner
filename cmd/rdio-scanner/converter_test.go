@@ -169,7 +169,9 @@ func TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts(t *tes
 func TestTheServerWritesTheFfmpegItCarriesIntoItsOwnFolder(t *testing.T) {
 	config := &Config{Config: app.Config{BaseDir: t.TempDir()}}
 
-	if got := config.GetFFmpegDirPath(); got != filepath.Join(config.BaseDir, "ffmpeg") {
-		t.Errorf("the server's ffmpeg folder is %s, want %s", got, filepath.Join(config.BaseDir, "ffmpeg"))
+	want := filepath.Join(os.TempDir(), "rdio-scanner.ffmpeg")
+
+	if got := config.GetFFmpegDirPath(); got != want {
+		t.Errorf("the server's ffmpeg folder is %s, want %s", got, want)
 	}
 }

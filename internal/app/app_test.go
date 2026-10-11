@@ -54,7 +54,6 @@ func TestTheConfigurationResolvesEveryPathAgainstTheBaseDirectory(t *testing.T) 
 		{config.GetSslCertFilePath(), "/srv/rdio/cert.pem"},
 		{config.GetSslKeyFilePath(), "/srv/rdio/key.pem"},
 		{config.GetAutocertCachePath(), "/srv/rdio/autocert"},
-		{config.GetFFmpegDirPath(), "/srv/rdio/ffmpeg"},
 	} {
 		if c.got != c.want {
 			t.Errorf("the path is %q, want %q", c.got, c.want)
@@ -65,6 +64,20 @@ func TestTheConfigurationResolvesEveryPathAgainstTheBaseDirectory(t *testing.T) 
 
 	if got := config.GetSslCertFilePath(); got != "/etc/ssl/cert.pem" {
 		t.Errorf("an absolute certificate path resolves to %q, want the path the operator gave", got)
+	}
+}
+
+// The folder the server writes the programs it carries into is not a path the operator configures:
+// it is the server's own folder in the system's temp directory, disposable by rule — a host that
+// clears its temp dir costs the server nothing beyond writing the programs out again at the next
+// startup — and shared with the probe files the length probe writes and removes.
+func TestTheFfmpegFolderIsTheServersOwnInTempDirectory(t *testing.T) {
+	config := Config{BaseDir: "/srv/rdio"}
+
+	want := filepath.Join(os.TempDir(), "rdio-scanner.ffmpeg")
+
+	if got := config.GetFFmpegDirPath(); got != want {
+		t.Errorf("the ffmpeg folder is %q, want %q", got, want)
 	}
 }
 
