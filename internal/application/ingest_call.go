@@ -148,7 +148,7 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 	handler.writes.Lock()
 	defer handler.writes.Unlock()
 
-	call := cmd.Call
+	call := cmd.Call.Sanitized()
 
 	if err := call.IsValid(); err != nil {
 		return IngestCallResult{Outcome: IngestCallIncomplete}, err

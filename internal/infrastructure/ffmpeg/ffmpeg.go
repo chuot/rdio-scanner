@@ -189,7 +189,19 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 		// The legacy prints what ffmpeg said onto the server's standard output and reports
 		// no failure, so a deployment whose recordings fail to convert sees nothing in its
 		// log. Here it is reported, and the recording is kept either way.
-		return in, fmt.Errorf("ffmpeg: %s", strings.TrimSpace(stderr.String()))
+		//
+		// The report is short and quiet (REQ-016, CA-016.2): a real ffmpeg floods its whole
+		// session onto a failure — thousands of bytes, newlines, ANSI colors — and pasted
+		// into the server's log line that flood forges entries and drives the terminal
+		// reading them. The first 512 bytes, control characters replaced, is what the log
+		// gets; the whole transcript is what the operator reads from the shell.
+		report := stderr.String()
+
+		if len(report) > 512 {
+			report = report[:512]
+		}
+
+		return in, fmt.Errorf("ffmpeg: %s", strings.TrimSpace(domain.SanitizeText(report, 0)))
 	}
 
 	return ports.AudioFile{

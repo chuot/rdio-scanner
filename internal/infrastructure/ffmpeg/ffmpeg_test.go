@@ -262,3 +262,58 @@ func TestTheConverterAsksTheProgramItWasGivenWhichReleaseItIs(t *testing.T) {
 		t.Error("a 9.0 release was taken for one that does not have the loudness filters")
 	}
 }
+
+// aProgramThatFailsWith writes a program that answers the version probe and fails with the
+// given transcript on stderr, the way a real ffmpeg floods its whole session log onto a
+// conversion failure.
+func aProgramThatFailsWith(t *testing.T, transcript string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "ffmpeg")
+
+	script := "#!/bin/sh\n" +
+		"for arg in \"$@\"; do\n" +
+		"  if [ \"$arg\" = \"-version\" ]; then\n" +
+		"    echo \"ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers\"\n" +
+		"    exit 0\n" +
+		"  fi\n" +
+		"done\n" +
+		"cat > /dev/null\n" +
+		"printf '" + transcript + "' >&2\n" +
+		"exit 1\n"
+
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("the test cannot write the program it was given: %v", err)
+	}
+
+	return path
+}
+
+// TestTheConverterReportsAFailingProgramShortAndQuiet (REQ-016, CA-016.2): ffmpeg's stderr on
+// a failure is written into the server's log line. A real ffmpeg floods a whole session —
+// thousands of bytes, newlines, ANSI colors — and pasted into a log line it forges entries
+// and fills the operator's view. The report keeps the first 512 bytes and nothing that can
+// forge.
+func TestTheConverterReportsAFailingProgramShortAndQuiet(t *testing.T) {
+	flood := strings.Repeat("x", 2000) + "\\nsecond\\nline\\t\\033[31mred\\033[0m\\n"
+
+	converter := NewAt(aProgramThatFailsWith(t, flood))
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	_, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err == nil {
+		t.Fatal("a failing conversion program reported no failure")
+	}
+
+	message := err.Error()
+
+	if strings.ContainsAny(message, "\n\r\t\x1b") {
+		t.Errorf("the failure report = %q, want no newlines, tabs, or escapes: it is one log line", message)
+	}
+
+	if len(message) > len("ffmpeg: ")+512 {
+		t.Errorf("the failure report = %d bytes, want at most 512 after the prefix: %q",
+			len(message), message[:min(len(message), 80)])
+	}
+}

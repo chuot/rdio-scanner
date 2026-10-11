@@ -1661,3 +1661,57 @@ func TestIngestCallDoesNotWaitForADownstreamThatTakesItsTime(t *testing.T) {
 
 	close(fixture.forwarder.Release)
 }
+
+// TestIngestCallSanitizesSuppliedTextIntoSingleLogLines (REQ-016, CA-016.1): a label an
+// upload supplies with a newline in it is a way to write a second line into the server's log
+// view — the forged line reads like the server's own. The ingested call's text arrives as one
+// line per decision, the stored labels carry no control characters, and the log view holds
+// exactly the entries the decisions make.
+func TestIngestCallSanitizesSuppliedTextIntoSingleLogLines(t *testing.T) {
+	fixture := newIngestFixture()
+
+	call := validIngestCall()
+	call.AudioFilename = "recording.wav\nthe forge line"
+	call.Meta.SystemLabel = "Grand Metro\nthe forge line"
+	call.Meta.TalkgroupRef = 1514000
+	call.Meta.TalkgroupLabel = "FIRE\tDispatch\x1b[31m"
+	call.Meta.TalkgroupGroup = []string{"Fire\ngroup"}
+	call.Meta.TalkgroupTag = "Fire\n"
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallAccepted {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, IngestCallAccepted)
+	}
+
+	for _, message := range fixture.logMessages() {
+		if strings.ContainsAny(message, "\r\n\t\x1b") {
+			t.Errorf("log line = %q, want one line with no control characters: a posted string "+
+				"must not forge a second entry", message)
+		}
+	}
+
+	created := 0
+
+	for _, message := range fixture.logMessages() {
+		if strings.Contains(message, "created the system") {
+			created++
+		}
+	}
+
+	if created != 1 {
+		t.Errorf("the log view holds %d system-creation lines, want exactly one: the forged "+
+			"line must not read as a second decision", created)
+	}
+
+	if len(fixture.systems.Stored) != 1 {
+		t.Fatalf("stored %d systems, want the claimed system invented once", len(fixture.systems.Stored))
+	}
+
+	if label := fixture.systems.Stored[0].Label; strings.ContainsAny(label, "\r\n\t\x1b") {
+		t.Errorf("system label = %q, want the stored label free of control characters", label)
+	}
+}
