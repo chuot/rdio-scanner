@@ -297,7 +297,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	accesses.OnWarn(clampWarning)
 	apikeys.OnWarn(clampWarning)
 
-	credentials := passwords.NewBcrypt()
+	credentials := passwords.NewBcrypt(s.config.BcryptCost)
 	s.hashes = credentials
 
 	// The migration said these things while the log table was still being rebuilt, which is why they were
@@ -436,7 +436,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Logs:                 s.logs,
 		Clock:                s.clock,
 		SearchLogs:           application.NewSearchLogsHandler(s.logs, s.clock),
-		Login:                application.NewAdminLoginHandler(options, s.logs, tokensAdapter, credentials, s.clock),
+		Login:                application.NewAdminLoginHandler(options, s.logs, tokensAdapter, credentials, credentials, credentials, s.clock),
 		Password:             application.NewChangeAdminPasswordHandler(options, credentials, credentials, s.logs, s.clock),
 		RemoveUser:           application.NewRemoveAccessUserHandler(accessUserPorts),
 		Session:              application.NewCheckAdminSessionHandler(tokensAdapter),

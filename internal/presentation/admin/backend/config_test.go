@@ -150,7 +150,7 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		Logs:                 fixture.logs,
 		Clock:                fixture.clock,
 		SearchLogs:           application.NewSearchLogsHandler(fixture.logs, fixture.clock),
-		Login:                application.NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.password, fixture.clock),
+		Login:                application.NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.password, fixture.hashes, fixture.password, fixture.clock),
 		Password:             application.NewChangeAdminPasswordHandler(fixture.options, fixture.password, fixture.hashes, fixture.logs, fixture.clock),
 		RemoveUser:           application.NewRemoveAccessUserHandler(application.AccessUserPorts{ConfigurationRepositories: fixture.repositories(), Logs: fixture.logs, Admin: fixture.sessions, Clock: fixture.clock}),
 		Session:              application.NewCheckAdminSessionHandler(fixture.tokens),

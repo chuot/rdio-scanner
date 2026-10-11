@@ -36,15 +36,28 @@ import (
 // the one it ships with is generated at startup from the default credential, and every password
 // change replaces it with a new hash — so a deployment that swaps servers keeps the credential its
 // administrator already set. This adapter is what makes that hash readable by both.
-type Bcrypt struct{}
+type Bcrypt struct {
+	// cost is the bcrypt cost the deployment is configured for. The hash this
+	// adapter writes, and the bar `NeedsUpgrade` measures stored hashes against,
+	// are both set by it (CA-013.5).
+	cost int
+}
 
 var _ ports.PasswordVerifier = (*Bcrypt)(nil)
 var _ ports.PasswordHasher = (*Bcrypt)(nil)
+var _ ports.PasswordUpgrader = (*Bcrypt)(nil)
 
-// NewBcrypt returns the credential adapter, which holds no state: the credential is always the
-// one the caller hands it.
-func NewBcrypt() *Bcrypt {
-	return &Bcrypt{}
+// NewBcrypt returns the credential adapter, hashing at the cost the deployment is
+// configured for. A cost below bcrypt's own floor — the zero value of a
+// configuration that never heard of the option — is answered with bcrypt's
+// default, the cost the legacy server hashed at, so a deployment that says
+// nothing hashes exactly as it does today.
+func NewBcrypt(cost int) *Bcrypt {
+	if cost < bcrypt.MinCost {
+		cost = bcrypt.DefaultCost
+	}
+
+	return &Bcrypt{cost: cost}
 }
 
 // Matches reports whether the submitted credential reproduces the stored hash.
@@ -59,17 +72,32 @@ func (hashes *Bcrypt) Matches(ctx context.Context, storedCredential string, subm
 
 // Hash returns the bcrypt hash the server stores for a credential.
 //
-// The cost is bcrypt's default, which is the cost the legacy server uses both for the credential
-// it ships with and for every credential its administrator replaces, so the hashes the two servers
-// write are the same shape.
+// The cost is the one the deployment is configured for (CA-013.5), whose default
+// is bcrypt's default — the cost the legacy server uses both for the credential it
+// ships with and for every credential its administrator replaces — so the hashes
+// the two servers write are the same shape until an operator raises the cost.
 //
 // It fails for a credential bcrypt cannot store — longer than the 72 bytes bcrypt reads — which is
 // the failure the legacy server returns from its password change as well.
 func (hashes *Bcrypt) Hash(ctx context.Context, credential string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(credential), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(credential), hashes.cost)
 	if err != nil {
 		return "", fmt.Errorf("passwords.hash: %w", err)
 	}
 
 	return string(hash), nil
+}
+
+// NeedsUpgrade reports whether a stored credential was hashed more cheaply than
+// the deployment hashes at now (CA-013.5). The cost lives in the hash itself —
+// bcrypt writes it into the stored form — so the question is answered from the
+// stored value, and a stored value that is not a hash reports no upgrade: there
+// is no cost in it to raise.
+func (hashes *Bcrypt) NeedsUpgrade(storedCredential string) bool {
+	cost, err := bcrypt.Cost([]byte(storedCredential))
+	if err != nil {
+		return false
+	}
+
+	return cost < hashes.cost
 }

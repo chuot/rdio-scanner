@@ -54,3 +54,16 @@ type PasswordHasher interface {
 	// Hash returns the form of a credential the server can store and later compare against.
 	Hash(ctx context.Context, credential string) (string, error)
 }
+
+// PasswordUpgrader reports whether a stored credential was hashed more cheaply
+// than the deployment is configured to hash now (CA-013.5). The verifier proved
+// the credential; the upgrade renews the stored form at the configured cost, so
+// a deployment that raised its bcrypt cost does not keep answering logins with
+// the cheap hash. It is a separate port from the verifier and the hasher
+// because the login use case asks only this question and the renewal answer —
+// it does not decide what "cheaper" means, and bcrypt's cost lives in the
+// stored hash, which is the adapter's to read.
+type PasswordUpgrader interface {
+	// NeedsUpgrade reports whether the stored credential is below the configured cost.
+	NeedsUpgrade(storedCredential string) bool
+}

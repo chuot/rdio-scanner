@@ -24,6 +24,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // legacyStoredCredential is the hash the legacy server wrote into the options table of the database
@@ -33,7 +35,7 @@ import (
 const legacyStoredCredential = `$2a$10$1GFizQ/sWHxheggO6YSNk.D4RnbiFbnTnuiMEuuf3mCsYQhRcsBQ6`
 
 func TestACredentialTheLegacyServerStoredIsAcceptedByThisServer(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	if !hashes.Matches(context.Background(), legacyStoredCredential, "rdio-scanner") {
 		t.Error("the credential the legacy server stored does not verify here, so a deployment that swaps servers locks its administrator out")
@@ -41,7 +43,7 @@ func TestACredentialTheLegacyServerStoredIsAcceptedByThisServer(t *testing.T) {
 }
 
 func TestAStoredCredentialRefusesAnotherOne(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	for _, submitted := range []string{"rdio-scanner ", "Rdio-Scanner", "", "password"} {
 		if hashes.Matches(context.Background(), legacyStoredCredential, submitted) {
@@ -55,7 +57,7 @@ func TestAStoredCredentialRefusesAnotherOne(t *testing.T) {
 // not a hash — an empty column included — makes every comparison fail. The login use case treats
 // that as a refusal, and this adapter must not turn it into a success.
 func TestAStoredCredentialThatIsNotACredentialRefuses(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	for _, stored := range []string{"", "not a bcrypt hash", "$2a$10$", `"$2a$10$1GFizQ/sWHxheggO6YSNk."`} {
 		if hashes.Matches(context.Background(), stored, "rdio-scanner") {
@@ -65,7 +67,7 @@ func TestAStoredCredentialThatIsNotACredentialRefuses(t *testing.T) {
 }
 
 func TestHashingACredentialProducesAHashThatVerifiesAgainstIt(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	hash, err := hashes.Hash(context.Background(), "rdio-scanner")
 	if err != nil {
@@ -85,7 +87,7 @@ func TestHashingACredentialProducesAHashThatVerifiesAgainstIt(t *testing.T) {
 // deployment already has was written at bcrypt's default cost, and a hash this server writes has
 // to be readable by the legacy one.
 func TestHashingIsBcryptAtTheLegacyCost(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	hash, err := hashes.Hash(context.Background(), "rdio-scanner")
 	if err != nil {
@@ -101,7 +103,7 @@ func TestHashingIsBcryptAtTheLegacyCost(t *testing.T) {
 // hash useless on its own: two deployments with the same credential do not share a database value,
 // and a hash cannot be compared to another hash.
 func TestHashingTheSameCredentialTwiceProducesDifferentHashes(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	first, err := hashes.Hash(context.Background(), "rdio-scanner")
 	if err != nil {
@@ -128,7 +130,7 @@ func TestHashingTheSameCredentialTwiceProducesDifferentHashes(t *testing.T) {
 // too: bcrypt stores at most 72 bytes, so a password change to a longer credential fails, and the
 // failure is returned rather than swallowed.
 func TestHashingACredentialLongerThanBcryptReadsIsAFailure(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	hash, err := hashes.Hash(context.Background(), strings.Repeat("a", 73))
 
@@ -158,7 +160,7 @@ func TestHashingACredentialLongerThanBcryptReadsIsAFailure(t *testing.T) {
 // The asymmetry is worth stating: a credential longer than 72 bytes can never be stored, so this
 // only bites a deployment that logs in with a longer credential than it could ever set.
 func TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte(t *testing.T) {
-	hashes := NewBcrypt()
+	hashes := NewBcrypt(bcrypt.DefaultCost)
 
 	hash, err := hashes.Hash(context.Background(), strings.Repeat("a", 72))
 	if err != nil {
@@ -171,5 +173,57 @@ func TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte(t
 
 	if hashes.Matches(context.Background(), hash, strings.Repeat("b", 72)+" and more") {
 		t.Error("a longer credential that does not share the stored one's first 72 bytes is accepted")
+	}
+}
+
+// TestHashUsesTheConfiguredCost (REQ-013, CA-013.5): the deployment's bcrypt cost
+// drives the hash the server writes. The legacy server hashed at 10 and this
+// server defaults to 10, so the default keeps the hashes the two servers write
+// identical; an operator who raises the cost gets hashes at the raised cost.
+func TestHashUsesTheConfiguredCost(t *testing.T) {
+	hashes := NewBcrypt(12)
+
+	hash, err := hashes.Hash(context.Background(), "credential")
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+
+	if !strings.HasPrefix(hash, "$2a$12$") {
+		t.Errorf("the stored hash is %q, want it hashed at the configured cost 12", hash)
+	}
+}
+
+// TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost (REQ-013,
+// CA-013.5): a deployment that raises its cost keeps answering logins with the
+// cheap stored hash until the credential is proven and renewed. The upgrade
+// question is asked of the stored form and answered from it — the cost lives in
+// the hash, so nothing outside the adapter has to know bcrypt to ask it.
+func TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost(t *testing.T) {
+	cheap, err := NewBcrypt(10).Hash(context.Background(), "credential")
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+
+	expensive, err := NewBcrypt(12).Hash(context.Background(), "credential")
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+
+	raised := NewBcrypt(12)
+
+	if !raised.NeedsUpgrade(cheap) {
+		t.Error("a hash at 10 beside a configured cost of 12 reports no upgrade, want the renewal")
+	}
+
+	if raised.NeedsUpgrade(expensive) {
+		t.Error("a hash at the configured cost reports an upgrade, want none")
+	}
+
+	if NewBcrypt(10).NeedsUpgrade(cheap) {
+		t.Error("a hash at the configured cost reports an upgrade, want none")
+	}
+
+	if NewBcrypt(12).NeedsUpgrade("not a hash") {
+		t.Error("a stored value that is not a hash reports an upgrade, want none: there is no cost to raise it to")
 	}
 }

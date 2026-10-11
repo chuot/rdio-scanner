@@ -66,6 +66,12 @@ type Config struct {
 	DbUsername string
 	DbPassword string
 
+	// BcryptCost is the bcrypt cost the deployment hashes the administrator
+	// credential at (CA-013.5). The ini option is validated to 10–14 at the
+	// composition root; the zero value — a Config built without the option —
+	// means bcrypt's default, the legacy server's cost.
+	BcryptCost int
+
 	Listen      string
 	SslAutoCert string
 	SslCertFile string

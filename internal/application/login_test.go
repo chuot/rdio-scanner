@@ -44,6 +44,7 @@ type loginFixture struct {
 	logs      *fakes.Logs
 	tokens    *fakes.Tokens
 	passwords *fakes.PasswordVerifier
+	hashes    *fakes.PasswordHasher
 	clock     *fakes.Clock
 
 	login  *AdminLoginHandler
@@ -61,10 +62,11 @@ func newLoginFixture() *loginFixture {
 		logs:      &fakes.Logs{},
 		tokens:    fakes.NewTokens(),
 		passwords: fakes.NewPasswordVerifier(),
+		hashes:    fakes.NewPasswordHasher(),
 		clock:     fakes.NewClock(loginTime),
 	}
 
-	fixture.login = NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.passwords, fixture.clock)
+	fixture.login = NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.passwords, fixture.hashes, fixture.passwords, fixture.clock)
 	fixture.logout = NewAdminLogoutHandler(fixture.tokens, fixture.logs, fixture.clock)
 	fixture.check = NewCheckAdminSessionHandler(fixture.tokens)
 
@@ -700,5 +702,80 @@ func TestLoginHandlerSixthSessionRetiresTheFirstToken(t *testing.T) {
 
 	if result.Outcome != AdminLogoutRefused {
 		t.Errorf("outcome = %q, want the token the rolling window retired to be refused", result.Outcome)
+	}
+}
+
+// TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost (REQ-013,
+// CA-013.5): the credential is proven, and the stored form is below the cost the
+// deployment is configured for — the login renews it. A deployment that raised its
+// bcrypt cost must not keep answering logins with the cheap hash forever.
+func TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost(t *testing.T) {
+	fixture := newLoginFixture()
+
+	fixture.passwords.Upgrade = true
+	fixture.hashes.Form = "renewed hash"
+
+	result, err := fixture.attempt(adminCredential)
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	if result.Outcome != AdminLoginAccepted {
+		t.Fatalf("login outcome = %v, want the session: the renewal is not the login", result.Outcome)
+	}
+
+	if got := fixture.options.Stored.AdminPasswordHash; got != "renewed hash" {
+		t.Errorf("the stored credential is %q, want the renewed hash: a proven credential below the configured cost is renewed", got)
+	}
+}
+
+// TestALoginAtTheConfiguredCostWritesNoNewHash (REQ-013, CA-013.5): the renewal is
+// an upgrade, not a re-hash on every login — a login whose stored hash is already
+// at the configured cost hashes nothing and writes nothing.
+func TestALoginAtTheConfiguredCostWritesNoNewHash(t *testing.T) {
+	fixture := newLoginFixture()
+
+	if _, err := fixture.attempt(adminCredential); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	if n := fixture.hashes.HashFor(); n != 0 {
+		t.Errorf("credential hashes = %d, want none: the stored hash is at the configured cost", n)
+	}
+
+	if got := fixture.options.Stored.AdminPasswordHash; got != adminCredential {
+		t.Errorf("the stored credential is %q, want it untouched", got)
+	}
+}
+
+// TestALoginWhoseRenewalFailsIsStillALoginAndSaysTheFailure (REQ-013, CA-013.5):
+// the credential is proven — the login is a login. A renewal that cannot be
+// written is reported in the server log, not answered to the administrator as a
+// failed login.
+func TestALoginWhoseRenewalFailsIsStillALoginAndSaysTheFailure(t *testing.T) {
+	fixture := newLoginFixture()
+
+	fixture.passwords.Upgrade = true
+	fixture.hashes.Err = errors.New("hashing: out of memory")
+
+	result, err := fixture.attempt(adminCredential)
+	if err != nil {
+		t.Fatalf("login: %v, want the session: the credential was proven", err)
+	}
+
+	if result.Outcome != AdminLoginAccepted {
+		t.Errorf("login outcome = %v, want the session", result.Outcome)
+	}
+
+	said := false
+
+	for _, entry := range fixture.entries() {
+		if strings.Contains(entry.Message, "re-hashed") {
+			said = true
+		}
+	}
+
+	if !said {
+		t.Errorf("the login said nothing about the failed renewal, want it said in the server log: %v", fixture.entries())
 	}
 }

@@ -201,3 +201,55 @@ func TestConfigSaveCreatesTheIniFileForItsOwnerOnly(t *testing.T) {
 		t.Errorf("the saved ini file is created %o, want 0600: the ini holds the database password", mode)
 	}
 }
+
+// TestBcryptCostComesFromTheIniFileAndDefaultsToTen (REQ-013, CA-013.5): the cost
+// is an ini option; the default is the legacy server's cost, so a deployment that
+// says nothing hashes exactly as it does today.
+func TestBcryptCostComesFromTheIniFileAndDefaultsToTen(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+
+	if got, want := cfg.BcryptCost, 10; got != want {
+		t.Errorf("default bcrypt cost = %d, want %d: the legacy server hashed at 10", got, want)
+	}
+
+	baseDir := t.TempDir()
+
+	writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "bcrypt_cost = 12\n")
+
+	out := &bytes.Buffer{}
+
+	cfg, _, err := newConfig([]string{"-base_dir", baseDir}, "", out)
+	if err != nil {
+		t.Fatalf("newConfig: %v", err)
+	}
+
+	if got, want := cfg.BcryptCost, 12; got != want {
+		t.Errorf("bcrypt cost from the ini = %d, want %d", got, want)
+	}
+
+	flagged, _, err := newConfig([]string{"-base_dir", t.TempDir(), "-bcrypt_cost", "13"}, "", out)
+	if err != nil {
+		t.Fatalf("newConfig with -bcrypt_cost: %v", err)
+	}
+
+	if got, want := flagged.BcryptCost, 13; got != want {
+		t.Errorf("bcrypt cost from the flag = %d, want %d", got, want)
+	}
+}
+
+// TestABcryptCostOutsideTheRangeIsRejected (REQ-013, CA-013.5): the range is the
+// operator's contract — 10 is today's cost, 14 is the ceiling this server will
+// hash at — and a cost outside it is a typo. A server that started with the
+// typo's cost would hash the administrator credential at a cost the operator
+// never asked for, so the typo is refused at startup.
+func TestABcryptCostOutsideTheRangeIsRejected(t *testing.T) {
+	for _, cost := range []string{"9", "15"} {
+		baseDir := t.TempDir()
+
+		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "bcrypt_cost = "+cost+"\n")
+
+		if _, _, err := newConfig([]string{"-base_dir", baseDir}, "", &bytes.Buffer{}); err == nil {
+			t.Errorf("newConfig accepted bcrypt_cost %s, want a rejection", cost)
+		}
+	}
+}

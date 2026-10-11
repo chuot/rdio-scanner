@@ -53,6 +53,7 @@ import (
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/ffmpeg"
+	"rdio-scanner/internal/infrastructure/passwords"
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
@@ -2854,5 +2855,61 @@ func TestTheServerFilesTheClampWarningsTheAccessReadSays(t *testing.T) {
 
 	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'config' AND "level" = 'warn' AND "message" LIKE 'accesses.read: access %legacy-row%'`); got != 1 {
 		t.Errorf("the log view holds %d entries for the clamped access, want exactly one: the clamp must reach the operator as a warning row", got)
+	}
+}
+
+// TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin (REQ-013,
+// CA-013.5): the ini cost reaches the credential adapter through the wiring, and
+// a login proven against a hash below it renews the stored hash at the configured
+// cost. The default credential is stored at the legacy cost of 10; a deployment
+// configured for 12 must not keep answering that login with the cheap hash.
+func TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin(t *testing.T) {
+	baseDir := t.TempDir()
+
+	cfg := testConfigIn(baseDir, io.Discard)
+	cfg.BcryptCost = 12
+
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	t.Cleanup(func() { srv.stop(context.Background()) })
+
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// The deployment's stored credential is the default one hashed at the legacy
+	// cost of 10 — what a server started before the cost was raised leaves on
+	// record. It is put there through the options repository, the same seam the
+	// server's own password change writes through.
+	options, err := srv.options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	cheap, err := passwords.NewBcrypt(10).Hash(context.Background(), "rdio-scanner")
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+
+	options.AdminPasswordHash = cheap
+
+	if err := srv.options.WriteOptions(context.Background(), options); err != nil {
+		t.Fatalf("WriteOptions: %v", err)
+	}
+
+	if rec := srv.post("/api/admin/login", `{"password":"rdio-scanner"}`); rec.Code != http.StatusOK {
+		t.Fatalf("login answered %d, want the session: %s", rec.Code, rec.Body.String())
+	}
+
+	renewed, err := srv.options.ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if !strings.HasPrefix(renewed.AdminPasswordHash, "$2a$12$") {
+		t.Errorf("after a proven login the stored credential is %q, want it renewed at the configured cost 12", renewed.AdminPasswordHash)
 	}
 }

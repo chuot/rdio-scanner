@@ -48,6 +48,7 @@ const (
 	defaultConfigFile       = "rdio-scanner.ini"
 	defaultDbFile           = "rdio-scanner.db"
 	defaultDbHost           = "localhost"
+	defaultBcryptCost       = 10
 	defaultDbPortMariaDb    = uint(3306)
 	defaultDbPortPostgreSql = uint(5432)
 	defaultDbType           = DbTypeSqlite
@@ -115,6 +116,7 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.StringVar(&config.DbPassword, "db_pass", "", "database password")
 	fs.UintVar(&config.DbPort, "db_port", defaultDbPortMariaDb, "database host port")
 	fs.StringVar(&config.DbType, "db_type", defaultDbType, fmt.Sprintf("database type, one of %s, %s, %s, %s", DbTypeSqlite, DbTypeMariadb, DbTypeMysql, DbTypePostgresql))
+	fs.IntVar(&config.BcryptCost, "bcrypt_cost", defaultBcryptCost, "admin credential bcrypt cost, 10 to 14")
 	fs.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	fs.StringVar(&config.Listen, "listen", defaultListen, "listening address")
 	fs.StringVar(&config.NewAdminPassword, "admin_password", "", "change admin password")
@@ -156,6 +158,15 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 
 	if !isDbTypeSupported(config.DbType) {
 		return nil, ModeExit, fmt.Errorf("unknown database type %s", config.DbType)
+	}
+
+	// The bcrypt cost is checked here, at the composition root, because a cost
+	// outside 10 to 14 is a typo (CA-013.5): a server that started with the
+	// typo's cost would hash the administrator credential at a cost the
+	// operator never asked for, and the credential on record is the one thing
+	// a typo must not touch.
+	if config.BcryptCost < 10 || config.BcryptCost > 14 {
+		return nil, ModeExit, fmt.Errorf("bcrypt cost %d is outside the range 10 to 14", config.BcryptCost)
 	}
 
 	// The -cmd mode is decided here rather than left for the composition root to notice, because this is
@@ -221,6 +232,12 @@ func (config *Config) applyIniFile() error {
 	overlayString(section, "ssl_key_file", &config.SslKeyFile)
 	overlayString(section, "ssl_listen", &config.SslListen)
 	overlayString(section, "trusted_proxies", &config.TrustedProxies)
+
+	if cost, err := section.Key("bcrypt_cost").Int(); err == nil {
+		config.BcryptCost = cost
+	} else {
+		config.BcryptCost = defaultBcryptCost
+	}
 
 	if port, err := section.Key("db_port").Uint(); err == nil {
 		config.DbPort = port
@@ -328,6 +345,10 @@ func (config *Config) saveConfig() error {
 
 	if config.TrustedProxies != "" {
 		ini = append(ini, fmt.Sprintf("trusted_proxies = %s", config.TrustedProxies))
+	}
+
+	if config.BcryptCost != defaultBcryptCost {
+		ini = append(ini, fmt.Sprintf("bcrypt_cost = %d", config.BcryptCost))
 	}
 
 	// The ini holds the database password, so it is created readable and writable

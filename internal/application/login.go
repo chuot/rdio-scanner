@@ -126,6 +126,8 @@ type AdminLoginHandler struct {
 	logs      ports.LogRepository
 	tokens    ports.TokenIssuer
 	passwords ports.PasswordVerifier
+	hashes    ports.PasswordHasher
+	upgrader  ports.PasswordUpgrader
 	clock     ports.Clock
 
 	// attempts counts the login attempts seen from each address, in the shape the legacy
@@ -154,6 +156,8 @@ func NewAdminLoginHandler(
 	logs ports.LogRepository,
 	tokens ports.TokenIssuer,
 	passwords ports.PasswordVerifier,
+	hashes ports.PasswordHasher,
+	upgrader ports.PasswordUpgrader,
 	clock ports.Clock,
 ) *AdminLoginHandler {
 	return &AdminLoginHandler{
@@ -161,6 +165,8 @@ func NewAdminLoginHandler(
 		logs:      logs,
 		tokens:    tokens,
 		passwords: passwords,
+		hashes:    hashes,
+		upgrader:  upgrader,
 		clock:     clock,
 		attempts:  map[string]*loginAttempt{},
 	}
@@ -203,6 +209,24 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a login attempt from %v was refused", cmd.RemoteAddr))
 
 		return AdminLoginResult{Outcome: AdminLoginInvalidCredential}, nil
+	}
+
+	// The credential is proven, so the stored hash is renewed at the cost the
+	// deployment is configured for (CA-013.5): a deployment that raised its
+	// bcrypt cost renews a stored hash the next time the credential is proven,
+	// and the stored form stops being the cheap one. The renewal is not the
+	// login — a login whose renewal failed is still a login, and the failure is
+	// said in the server log.
+	if handler.upgrader.NeedsUpgrade(options.AdminPasswordHash) {
+		hash, err := handler.hashes.Hash(ctx, cmd.Credential)
+		if err == nil {
+			options.AdminPasswordHash = hash
+
+			err = handler.options.WriteOptions(ctx, options)
+		}
+		if err != nil {
+			handler.log(ctx, domain.LogLevelWarn, "the administrator credential could not be re-hashed at the configured cost")
+		}
 	}
 
 	token, err := handler.tokens.Issue(ctx)
