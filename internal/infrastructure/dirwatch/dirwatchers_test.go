@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+
 	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/dirwatch/parsers"
@@ -1346,5 +1348,74 @@ func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
 		lines := watched.reportedAfterStarting()
 
 		t.Errorf("the watch wrote %v, want a line saying the mask captures more groups than it names tokens", lines)
+	}
+}
+
+// TestARecordingMovedIntoAWatchedDirectoryIsIngested (REQ-008, CA-008.6): a recording
+// tool that finishes by moving the file into the watched directory — the shape of
+// mv /staging/x.wav /watched/x.wav on one filesystem — arrives as a rename whose name
+// is there. inotify says MOVED_TO, fsnotify sets both the create and the rename bits,
+// and today's exact-match switch sees neither: the recording sits in the watched
+// directory and is never read.
+func TestARecordingMovedIntoAWatchedDirectoryIsIngested(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	staging := t.TempDir()
+
+	watched := watchingOver(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = false
+
+		return watch
+	})
+
+	putRecordingUntilIngested(t, watched, probeRecording)
+
+	// The finished recording is staged outside the watched directory on the same
+	// filesystem and moved in: the watch sees one rename event naming the file.
+	putRecording(t, staging, recordedFile)
+
+	if err := os.Rename(filepath.Join(staging, recordedFile), filepath.Join(directory, recordedFile)); err != nil {
+		t.Fatalf("moving the recording into the watched directory: %v", err)
+	}
+
+	call := watched.calls.next(t, settleWait+settleWait)
+
+	if call.AudioFilename != recordedFile {
+		t.Errorf("the watch ingested %q, want the recording that was moved in", call.AudioFilename)
+	}
+}
+
+// TestARenameEventNamingAFileThatIsThereReArmsIt (REQ-008, CA-008.6): the watch's own
+// reading of a rename event. The backends that report a moved-in file as a rename hand
+// over an event whose name is there, and today the watch ignores every rename event:
+// the recording sits in the watched directory and is never read. The file here is
+// placed before the watch starts, so no create event names it — the rename is the only
+// event this test gives the watch.
+func TestARenameEventNamingAFileThatIsThereReArmsIt(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	putRecording(t, directory, recordedFile)
+
+	watched := watchingOver(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = false
+
+		return watch
+	})
+
+	w := watched.watchers.running[0]
+
+	w.handle(context.Background(), fsnotify.Event{
+		Name: filepath.Join(directory, recordedFile),
+		Op:   fsnotify.Rename,
+	})
+
+	call := watched.calls.next(t, settleWait+settleWait)
+
+	if call.AudioFilename != recordedFile {
+		t.Errorf("the watch ingested %q, want the file the rename named", call.AudioFilename)
 	}
 }

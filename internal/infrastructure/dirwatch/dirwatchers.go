@@ -301,8 +301,11 @@ func (w *watch) loop(ctx context.Context) {
 
 // handle acts on one notification.
 func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
-	switch event.Op {
-	case fsnotify.Create:
+	// The ops are tested by bit, not by exact value: a file moved in from another
+	// directory on the same filesystem arrives as MOVED_TO, which carries the create
+	// and the rename bits together, and an exact-match switch sees neither (CA-008.6).
+	switch {
+	case event.Op&fsnotify.Create == fsnotify.Create:
 		if isDirectory(event.Name) {
 			// A directory that appeared is registered along with everything below it, and
 			// nothing in it is read: a recording that was already in a directory that was
@@ -316,7 +319,7 @@ func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
 
 		w.arm(ctx, event.Name)
 
-	case fsnotify.Remove:
+	case event.Op&fsnotify.Remove == fsnotify.Remove:
 		w.mutex.Lock()
 		registered := w.dirs[event.Name]
 		w.mutex.Unlock()
@@ -335,8 +338,17 @@ func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
 		delete(w.dirs, event.Name)
 		w.mutex.Unlock()
 
-	case fsnotify.Write:
+	case event.Op&fsnotify.Write == fsnotify.Write:
 		w.arm(ctx, event.Name)
+
+	case event.Op&fsnotify.Rename == fsnotify.Rename:
+		// A rename whose name is there is a file that moved in — the shape the backends
+		// that report moves as renames hand over, and the recording arrived (CA-008.6).
+		// A rename whose name is not there is a file that moved out, which is what the
+		// legacy ignores and this keeps ignoring: the watch reads files that are there.
+		if _, err := os.Lstat(event.Name); err == nil {
+			w.arm(ctx, event.Name)
+		}
 	}
 }
 
@@ -425,8 +437,14 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 		}
 	}()
 
+	// The startup pass waits out the settle delay before reading the directory, and the
+	// timer is stopped when the watch is cancelled: a server that stops should not carry
+	// a live timer through the delay it no longer needs.
+	settle := time.NewTimer(w.delay)
+	defer settle.Stop()
+
 	select {
-	case <-time.After(w.delay):
+	case <-settle.C:
 	case <-ctx.Done():
 		return
 	}
@@ -445,7 +463,7 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 		path := filepath.Join(w.dirwatch.Directory, p)
 
 		if isDirectory(path) {
-			w.register(path)
+			w.register(ctx, path)
 
 			return nil
 		}
@@ -500,7 +518,7 @@ func (w *watch) registerBelow(ctx context.Context, directory string) error {
 		}
 
 		if path := filepath.Join(directory, p); isDirectory(path) {
-			w.register(path)
+			w.register(ctx, path)
 		}
 
 		return nil
@@ -508,7 +526,7 @@ func (w *watch) registerBelow(ctx context.Context, directory string) error {
 }
 
 // register subscribes to one directory, once.
-func (w *watch) register(path string) {
+func (w *watch) register(ctx context.Context, path string) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
@@ -518,11 +536,14 @@ func (w *watch) register(path string) {
 
 	w.dirs[path] = true
 
-	// A directory the subscription cannot be opened for is remembered as watched and is not
-	// watched, and nothing is said about it. That is what the legacy does, and it is quirk
-	// Q48: the recordings in that directory are never read and the administrator's log has no
-	// line saying why.
-	w.watcher.Add(path)
+	// A directory the subscription cannot be opened for is remembered as watched and is
+	// not watched. That stays (decision D15, quirk Q48): the recordings in that directory
+	// are never read, and marking it watched is what the legacy does. The repair is the
+	// line the administrator's log was silent about — a warning, naming the directory and
+	// the reason the subscription failed.
+	if err := w.watcher.Add(path); err != nil {
+		w.log(ctx, domain.LogLevelWarn, fmt.Sprintf("the directory %s could not be watched: %s", path, err.Error()))
+	}
 }
 
 // ingest reads one file and hands what it found to the ingest path.
