@@ -304,6 +304,12 @@ func isLogsTable(object string) bool {
 	return strings.HasPrefix(object, "table logs ")
 }
 
+// isCallsTable names the calls table the same way: the startup pass gives it the audioLength
+// column, so it is the other object allowed to read differently after the pass.
+func isCallsTable(object string) bool {
+	return strings.HasPrefix(object, "table calls ")
+}
+
 func isLogIndex(object string, name string) bool {
 	return strings.HasPrefix(object, "index "+name+" ")
 }

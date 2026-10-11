@@ -59,7 +59,7 @@ var fixtureCallTimestamp = time.Unix(1750000000, 0)
 var fixtureDelayedTimestamp = time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func TestGetCallReadsACallTheLegacyServerWrote(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	call, err := calls.GetCall(context.Background(), fixtureCallID)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestGetCallCarriesTheDelaysThatHoldACallBack(t *testing.T) {
 // TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte is the audio half of the requirement: a
 // recording written by one server is read back by the other without a byte moving.
 func TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := migratedLegacyDatabase(t)
 
 	stored := storedAudioBlob(t, db, fixtureCallID)
 
@@ -169,7 +169,7 @@ func TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte(t *testing.T) 
 // never looks at it: `ParseMultipartContent` records the part's filename only, so the stored
 // `audioMime` is empty. Reading the call back must not invent a type that was never stored.
 func TestGetCallReportsTheAudioMimeTheLegacyServerStored(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	call, err := calls.GetCall(context.Background(), fixtureCallID)
 	if err != nil {
@@ -186,7 +186,7 @@ func TestGetCallReportsTheAudioMimeTheLegacyServerStored(t *testing.T) {
 }
 
 func TestGetCallReadsTheFrequencyTheLegacyServerStored(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	call, err := calls.GetCall(context.Background(), fixtureCallID)
 	if err != nil {
@@ -213,7 +213,7 @@ func TestGetCallReadsTheFrequencyTheLegacyServerStored(t *testing.T) {
 }
 
 func TestGetCallReadsTheSourceUnitTheLegacyServerStored(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	call, err := calls.GetCall(context.Background(), fixtureCallID)
 	if err != nil {
@@ -240,7 +240,7 @@ func TestGetCallReadsTheSourceUnitTheLegacyServerStored(t *testing.T) {
 }
 
 func TestGetCallReadsThePatchTheLegacyServerStored(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	call, err := calls.GetCall(context.Background(), fixtureCallID)
 	if err != nil {
@@ -256,7 +256,7 @@ func TestGetCallReadsThePatchTheLegacyServerStored(t *testing.T) {
 // server reports the same situation as `cannot retrieve system id 0 for call id N`, because it
 // carries on past its own no-rows result with every value still zero.
 func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	_, err := calls.GetCall(context.Background(), 9999)
 
@@ -301,7 +301,7 @@ func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
 // fetched out of the history carries no delayed flag. The delayer sets it on the call it hands
 // to the hub.
 func TestGetCallDoesNotReportAStoredCallAsWaitingOutADelay(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := migratedLegacyDatabase(t)
 
 	if got := countRows(t, db, "delayed"); got != 1 {
 		t.Fatalf("the fixture has %d delayed rows, want the one generate.sh produced", got)
@@ -318,7 +318,7 @@ func TestGetCallDoesNotReportAStoredCallAsWaitingOutADelay(t *testing.T) {
 }
 
 func TestSearchCallsLeavesOutTheCallTheLegacyServerDelayed(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := migratedLegacyDatabase(t)
 
 	if got := countRows(t, db, "calls"); got != 2 {
 		t.Fatalf("the fixture has %d calls, want the two generate.sh recorded", got)
@@ -347,7 +347,7 @@ func TestSearchCallsLeavesOutTheCallTheLegacyServerDelayed(t *testing.T) {
 // caller's scope instead of adding to it, so a listener with an explicit scope loses the
 // `delayed` exclusion and sees calls that have not been made visible yet.
 func TestSearchCallsLeavesOutADelayedCallForAScopedCaller(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := migratedLegacyDatabase(t)
 
 	scope, _ := domain.ParseAccessScope([]any{
 		map[string]any{"id": float64(10001), "talkgroups": []any{float64(1514000), float64(1514002)}},
@@ -364,7 +364,7 @@ func TestSearchCallsLeavesOutADelayedCallForAScopedCaller(t *testing.T) {
 }
 
 func TestSearchCallsReadsALegacyWrittenCallAsASummary(t *testing.T) {
-	calls := NewCalls(openLegacyDatabase(t), DialectSqlite)
+	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
 	page, err := calls.SearchCalls(context.Background(), ports.CallSearch{Limit: 200, Ascending: true})
 	if err != nil {
@@ -387,7 +387,7 @@ func TestSearchCallsReadsALegacyWrittenCallAsASummary(t *testing.T) {
 }
 
 func TestFindDuplicateCandidatesReadsTheCallTheLegacyServerDelayed(t *testing.T) {
-	db := openLegacyDatabase(t)
+	db := migratedLegacyDatabase(t)
 
 	systemID, talkgroupID := storedAggregates(t, db, 10001, 1514002)
 
@@ -484,6 +484,77 @@ func TestSaveCallRoundTripsTheAudioBlobByteForByte(t *testing.T) {
 
 	if !bytes.Equal(found.Audio, testAudio) {
 		t.Errorf("SaveCall stored %v, want the recording written back unchanged", found.Audio)
+	}
+}
+
+// The length of the recording is stored with the recording: a call read back says how long
+// its audio lasts, and a call stored with no known length reads back with no known length —
+// the zero is the server's own "never measured", carried through the database unchanged.
+func TestSaveCallRoundTripsTheAudioLength(t *testing.T) {
+	fixture := newCallsFixture(t)
+
+	call := fixture.newCall(10001, 1514000, callHistoryTime())
+	call.AudioLength = 3500 * time.Millisecond
+
+	saved, err := fixture.calls.SaveCall(context.Background(), call)
+	if err != nil {
+		t.Fatalf("SaveCall: %v", err)
+	}
+
+	found, err := fixture.calls.GetCall(context.Background(), saved.ID)
+	if err != nil {
+		t.Fatalf("GetCall: %v", err)
+	}
+
+	if found.AudioLength != 3500*time.Millisecond {
+		t.Errorf("stored length = %v, want the 3.5 seconds saved", found.AudioLength)
+	}
+
+	unknown := fixture.newCall(10001, 1514001, callHistoryTime())
+
+	savedUnknown, err := fixture.calls.SaveCall(context.Background(), unknown)
+	if err != nil {
+		t.Fatalf("SaveCall: %v", err)
+	}
+
+	foundUnknown, err := fixture.calls.GetCall(context.Background(), savedUnknown.ID)
+	if err != nil {
+		t.Fatalf("GetCall: %v", err)
+	}
+
+	if foundUnknown.AudioLength != 0 {
+		t.Errorf("stored length = %v, want no length for a call stored without one", foundUnknown.AudioLength)
+	}
+}
+
+// A call the legacy server wrote has no length: the column arrives with the default that
+// means never measured, and the history row for such a call says no length rather than
+// inventing one.
+func TestSearchCallsCarriesTheAudioLengthInTheSummary(t *testing.T) {
+	fixture := newCallsFixture(t)
+
+	call := fixture.newCall(10001, 1514000, callHistoryTime())
+	call.AudioLength = 3500 * time.Millisecond
+
+	if _, err := fixture.calls.SaveCall(context.Background(), call); err != nil {
+		t.Fatalf("SaveCall: %v", err)
+	}
+
+	page, err := fixture.calls.SearchCalls(context.Background(), ports.CallSearch{
+		SystemRef:    10001,
+		TalkgroupRef: 1514000,
+		Limit:        10,
+	})
+	if err != nil {
+		t.Fatalf("SearchCalls: %v", err)
+	}
+
+	if len(page.Results) != 1 {
+		t.Fatalf("the search found %d calls, want the one stored", len(page.Results))
+	}
+
+	if page.Results[0].AudioLength != 3500*time.Millisecond {
+		t.Errorf("the summary carries length %v, want the 3.5 seconds stored", page.Results[0].AudioLength)
 	}
 }
 

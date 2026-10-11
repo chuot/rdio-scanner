@@ -192,6 +192,24 @@ func millisOf(instant time.Time) int64 {
 	return instant.UnixMilli()
 }
 
+// durationOf converts the integer the `audioLength` column stores to the length it means.
+// The column counts nanoseconds, the same count the server carries in a `time.Duration`,
+// and the zero it defaults to is the server's own "never measured".
+func durationOf(nanoseconds int64) time.Duration {
+	return time.Duration(nanoseconds)
+}
+
+// nanosecondsOf is the count the `audioLength` column stores for a length: nanoseconds,
+// clamped at zero because a negative length is no length, and the column's default is the
+// same zero the server means by "never measured".
+func nanosecondsOf(length time.Duration) int64 {
+	if length < 0 {
+		return 0
+	}
+
+	return int64(length)
+}
+
 // scopeText is the text a `systems` column carries: the scope as JSON, which is what the legacy
 // server stores — it marshals the scope it decoded out of the configuration payload and writes the
 // result. A scope that was never supplied is stored as `null`, and an empty one as `[]`.

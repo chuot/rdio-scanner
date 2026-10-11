@@ -42,6 +42,7 @@ import (
 
 	"rdio-scanner/internal/app"
 	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/clock"
@@ -150,9 +151,10 @@ func journeyConfigIn(base string) app.Config {
 		// The converter a journey's server is given is the ffmpeg the host installs. Every journey that
 		// reaches the converter turns conversion off, so that what a journey proves is the server and not
 		// what one version of ffmpeg makes of a recording; conversion is compared where ffmpeg is the
-		// subject.
-		Converter: func(dir string) (ports.AudioConverter, string) {
-			return ffmpeg.New(), ""
+		// subject. The prober a journey's server is given measures nothing and says nothing: a journey's
+		// recordings are fixtures, not audio, and the length is proven where ffprobe is the subject.
+		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
+			return ffmpeg.New(), &fakes.Prober{}, ""
 		},
 	}
 }

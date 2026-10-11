@@ -311,6 +311,23 @@ func openLegacyDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
+// migratedLegacyDatabase is a database the legacy server wrote, brought up to the shape
+// this server reads and writes: the startup pass has run over it, which is what every
+// deployment runs before it reads or writes a single row. A repository test that reads a
+// legacy-written database is a test of the deployment after its migration, because a
+// deployment that skipped its migration never reaches the repository at all.
+func migratedLegacyDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db := openLegacyDatabase(t)
+
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
+		t.Fatalf("Migrate over a database written by the legacy server: %v", err)
+	}
+
+	return db
+}
+
 func firstLineOf(statement string) string {
 	if i := strings.Index(statement, "\n"); i >= 0 {
 		return statement[:i]

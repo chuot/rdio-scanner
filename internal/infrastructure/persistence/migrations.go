@@ -113,6 +113,14 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 		return operationError("database", "migrate", err)
 	}
 
+	// The calls table is given the column that says how long each call's recording lasts,
+	// for the same reason the log table got its source column: the schema is the legacy
+	// server's, and the column a legacy-written database arrives with is the zero that
+	// means never measured — no row needs a length the migration cannot know.
+	if err := ensureCallAudioLengthColumn(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
 	// The archive the pass writes left-behind rows into is given the same treatment for the same
 	// reason: it is a table this server owns, and the schema step is not allowed to add tables to a
 	// database the other server wrote. See migration_archive.go.

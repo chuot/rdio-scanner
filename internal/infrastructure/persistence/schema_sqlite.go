@@ -125,6 +125,7 @@ var sqliteSchema = []string{
     "callId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
     "audio" blob NOT NULL,
     "audioFilename" text NOT NULL,
+    "audioLength" integer NOT NULL DEFAULT 0,
     "audioMime" text NOT NULL,
     "siteRef" integer NOT NULL DEFAULT 0,
     "systemId" integer NOT NULL,

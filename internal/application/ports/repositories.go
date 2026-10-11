@@ -95,6 +95,11 @@ type CallSummary struct {
 	SystemRef    uint
 	TalkgroupRef uint
 	Timestamp    time.Time
+
+	// AudioLength is how long the call's recording lasts, as stored; zero is the
+	// server's own "never measured", which is what every call carries until the
+	// length is learned.
+	AudioLength time.Duration
 }
 
 // CallSearchPage is one page of call history.

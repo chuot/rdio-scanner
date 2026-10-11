@@ -446,11 +446,12 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, and the migration archive with its index", len(after)-len(before))
 	}
 
-	// The logs table is the one object allowed to read differently afterwards, and only because it
-	// gained a column. Every other table, index and trigger has to be byte-identical, and the only new
-	// objects are the two indexes the log search runs against and the archive the migration writes into.
+	// The logs table and the calls table are the objects allowed to read differently
+	// afterwards, and only because each gained a column. Every other table, index and trigger
+	// has to be byte-identical, and the only new objects are the two indexes the log search
+	// runs against and the archive the migration writes into.
 	for _, object := range before {
-		if isLogsTable(object) {
+		if isLogsTable(object) || isCallsTable(object) {
 			continue
 		}
 
@@ -462,7 +463,7 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	added := []string{}
 
 	for _, object := range after {
-		if hasString(before, object) || isLogsTable(object) {
+		if hasString(before, object) || isLogsTable(object) || isCallsTable(object) {
 			continue
 		}
 
@@ -2096,6 +2097,13 @@ func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 // they were migrated from are nowhere in it. The startup report names each one, and invents nothing.
 func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
+
+	// The startup pass gives the calls table its audioLength column — a schema change the
+	// pass owns, said once — and this test is about the damage report leaving rows alone.
+	// The snapshot is taken after a first pass, so the comparison is about rows, and the
+	// damage report is read from the pass that follows it, which is the start that finds
+	// the database already in shape and says only the damage.
+	migrateDatabase(t, db)
 
 	before := tableSnapshot(t, db)
 

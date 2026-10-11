@@ -122,6 +122,7 @@ var postgresSchema = []string{
     "callId" bigserial NOT NULL PRIMARY KEY,
     "audio" bytea NOT NULL,
     "audioFilename" text NOT NULL,
+    "audioLength" bigint NOT NULL DEFAULT 0,
     "audioMime" text NOT NULL,
     "siteRef" integer NOT NULL DEFAULT 0,
     "systemId" bigint NOT NULL,

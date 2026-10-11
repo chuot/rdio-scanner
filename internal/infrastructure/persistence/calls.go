@@ -91,12 +91,13 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 	// a call that was being held back has to be armed again for the delay its talkgroup or system
 	// names now. The rest of the two aggregates belongs to the configuration repositories, and a
 	// call fetch has no business loading every talkgroup, site, and unit of a system to answer it.
-	const query = `SELECT c."audio", c."audioFilename", c."audioMime", c."siteRef", c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef", t."label", t."name", s."delay", t."delay" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = ?`
+	const query = `SELECT c."audio", c."audioFilename", c."audioMime", c."audioLength", c."siteRef", c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef", t."label", t."name", s."delay", t."delay" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = ?`
 
 	var (
 		audio          []byte
 		filename       string
 		mime           string
+		audioLength    int64
 		siteRef        int64
 		timestamp      int64
 		systemID       int64
@@ -109,7 +110,7 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 		talkgroupDelay int64
 	)
 
-	err := tx.queryRow(ctx, query, id).Scan(&audio, &filename, &mime, &siteRef, &timestamp, &systemID, &talkgroupID, &systemRef, &talkgroupRef, &talkgroupLabel, &talkgroupName, &systemDelay, &talkgroupDelay)
+	err := tx.queryRow(ctx, query, id).Scan(&audio, &filename, &mime, &audioLength, &siteRef, &timestamp, &systemID, &talkgroupID, &systemRef, &talkgroupRef, &talkgroupLabel, &talkgroupName, &systemDelay, &talkgroupDelay)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// The legacy server does not stop here: it falls through its own no-rows result with
@@ -129,6 +130,7 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 	call.Audio = audio
 	call.AudioFilename = filename
 	call.AudioMime = mime
+	call.AudioLength = durationOf(audioLength)
 	call.SiteRef = uint(siteRef)
 	call.Timestamp = instantOf(timestamp)
 	call.System = domain.System{ID: uint64(systemID), Delay: uint(systemDelay), SystemRef: uint(systemRef)}
@@ -285,21 +287,21 @@ func (calls *Calls) SaveCall(ctx context.Context, call domain.Call) (domain.Call
 		return domain.Call{}, operationError("calls", "writecall", err)
 	}
 
-	const insertCall = `INSERT INTO "calls" ("audio", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, ?, ?, ?, ?, ?, ?)`
+	const insertCall = `INSERT INTO "calls" ("audio", "audioFilename", "audioLength", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp") VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	id := call.ID
 
 	if calls.dialect == DialectPostgresql {
 		query := insertCall + ` RETURNING "callId"`
 
-		err := tx.queryRow(ctx, query, call.Audio, call.AudioFilename, call.AudioMime, call.SiteRef, call.System.ID, call.Talkgroup.ID, millisOf(call.Timestamp)).Scan(&id)
+		err := tx.queryRow(ctx, query, call.Audio, call.AudioFilename, nanosecondsOf(call.AudioLength), call.AudioMime, call.SiteRef, call.System.ID, call.Talkgroup.ID, millisOf(call.Timestamp)).Scan(&id)
 		if err != nil {
 			tx.rollback()
 			return domain.Call{}, statementError("calls", "writecall", err, query)
 		}
 
 	} else {
-		res, err := tx.exec(ctx, insertCall, call.Audio, call.AudioFilename, call.AudioMime, call.SiteRef, call.System.ID, call.Talkgroup.ID, millisOf(call.Timestamp))
+		res, err := tx.exec(ctx, insertCall, call.Audio, call.AudioFilename, nanosecondsOf(call.AudioLength), call.AudioMime, call.SiteRef, call.System.ID, call.Talkgroup.ID, millisOf(call.Timestamp))
 		if err != nil {
 			tx.rollback()
 			return domain.Call{}, statementError("calls", "writecall", err, insertCall)
@@ -447,7 +449,7 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 
 	// The page is the summary the history view needs — identifier, references, instant — never the
 	// call with its audio, which is what a page of 200 would otherwise cost.
-	pageQuery := `SELECT c."callId", c."timestamp", s."systemRef", t."talkgroupRef" ` + from + ` ORDER BY c."timestamp" ` + order + ` LIMIT ? OFFSET ?`
+	pageQuery := `SELECT c."callId", c."timestamp", c."audioLength", s."systemRef", t."talkgroupRef" ` + from + ` ORDER BY c."timestamp" ` + order + ` LIMIT ? OFFSET ?`
 
 	rows, err := calls.query(ctx, pageQuery, append(append([]any{}, args...), search.Limit, search.Offset)...)
 	if err != nil {
@@ -460,11 +462,12 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 		var (
 			id           int64
 			timestamp    int64
+			audioLength  int64
 			systemRef    int64
 			talkgroupRef int64
 		)
 
-		if err := rows.Scan(&id, &timestamp, &systemRef, &talkgroupRef); err != nil {
+		if err := rows.Scan(&id, &timestamp, &audioLength, &systemRef, &talkgroupRef); err != nil {
 			return ports.CallSearchPage{}, statementError("calls", "search", err, pageQuery)
 		}
 
@@ -473,6 +476,7 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 			SystemRef:    uint(systemRef),
 			TalkgroupRef: uint(talkgroupRef),
 			Timestamp:    instantOf(timestamp),
+			AudioLength:  durationOf(audioLength),
 		})
 	}
 
