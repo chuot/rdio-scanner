@@ -189,6 +189,18 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 		var key, value sql.NullString
 
 		if err := rows.Scan(&key, &value); err != nil {
+			// A row whose scan fails is skipped as the legacy skips a damaged row —
+			// unless the read itself failed: a cancelled context is felt at the scan,
+			// and a re-derivation over the rows that happened to survive is options
+			// nobody stored (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				return nil, statementError("options", "read", readErr, optionsSelectQuery)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, statementError("options", "read", ctxErr, optionsSelectQuery)
+			}
+
 			continue
 		}
 
@@ -203,6 +215,14 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 		}
 
 		out = append(out, optionRow{key: key.String, value: decoded})
+	}
+
+	// A read that ended early is not a table with fewer rows (CA-011.1): the
+	// re-derivation applies defaults to every key the read did not reach, and the
+	// server ends up running with options nobody stored. The scan skips a damaged row
+	// the way the legacy does; the read's own failure is the caller's to hear.
+	if err := rows.Err(); err != nil {
+		return nil, statementError("options", "read", err, optionsSelectQuery)
 	}
 
 	return out, nil

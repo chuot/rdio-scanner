@@ -254,6 +254,18 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		)
 
 		if err := rows.Scan(&id, &level, &source, &message, &timestamp); err != nil {
+			// A row whose scan fails is dropped as the legacy drops a damaged row —
+			// unless the read itself failed. A cancelled context is felt at the scan
+			// and not at the iterator, and a short page answered as a success is how
+			// a cancelled search goes unnoticed (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				return ports.LogSearchPage{}, statementError("logs", "search", readErr, rowsQuery)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ports.LogSearchPage{}, statementError("logs", "search", ctxErr, rowsQuery)
+			}
+
 			continue
 		}
 
@@ -284,6 +296,15 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			Source:   logSourceOf(source),
 			Message:  message.String,
 		})
+	}
+
+	// A read that ended early — a cancelled context, a connection lost mid-page —
+	// is a search that did not complete (CA-011.1). The loop above skips a row whose
+	// scan failed, which is what the legacy does for a damaged row; the read's own
+	// failure is not a damaged row, and answering a short page as a success is how a
+	// cancelled read goes unnoticed.
+	if err := rows.Err(); err != nil {
+		return ports.LogSearchPage{}, statementError("logs", "search", err, rowsQuery)
 	}
 
 	return page, nil

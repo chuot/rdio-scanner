@@ -733,12 +733,36 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&systemID, &systemRef); err != nil {
+			// A cancelled read is felt at the scan and not at the iterator: the
+			// preload map must not be built from the rows that happened to
+			// survive (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateTalkgroups", readErr, query)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateTalkgroups", ctxErr, query)
+			}
+
 			continue
 		}
 
 		if systemID.Valid && systemRef.Valid {
 			systems[systemRef.Int64] = systemID.Int64
 		}
+	}
+
+	// The preload is the migration's map of what the server already holds:
+	// a read that ended early leaves the map missing entries, and the rows
+	// built from it point at the wrong identities (CA-011.1).
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return statementError("migration", "migrateTalkgroups", err, query)
 	}
 
 	rows.Close()
@@ -759,10 +783,34 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		var groupID int64
 
 		if err := rows.Scan(&groupID); err != nil {
+			// A cancelled read is felt at the scan and not at the iterator: the
+			// preload map must not be built from the rows that happened to
+			// survive (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateTalkgroups", readErr, query)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateTalkgroups", ctxErr, query)
+			}
+
 			continue
 		}
 
 		groups[groupID] = true
+	}
+
+	// The preload is the migration's map of what the server already holds:
+	// a read that ended early leaves the map missing entries, and the rows
+	// built from it point at the wrong identities (CA-011.1).
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return statementError("migration", "migrateTalkgroups", err, query)
 	}
 
 	rows.Close()
@@ -986,12 +1034,36 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&systemID, &systemRef); err != nil {
+			// A cancelled read is felt at the scan and not at the iterator: the
+			// preload map must not be built from the rows that happened to
+			// survive (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateUnits", readErr, query)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateUnits", ctxErr, query)
+			}
+
 			continue
 		}
 
 		if systemID.Valid && systemRef.Valid {
 			systems[systemRef.Int32] = systemID.Int32
 		}
+	}
+
+	// The preload is the migration's map of what the server already holds:
+	// a read that ended early leaves the map missing entries, and the rows
+	// built from it point at the wrong identities (CA-011.1).
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return statementError("migration", "migrateUnits", err, query)
 	}
 
 	rows.Close()
@@ -1838,6 +1910,21 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 	for rows.Next() {
 		if err := rows.Scan(&systemID, &systemRef, &talkgroupID, &talkgroupRef); err != nil {
+			// A cancelled read is felt at the scan and not at the iterator: the
+			// preload map must not be built from the rows that happened to
+			// survive (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateDirwatches", readErr, query)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateDirwatches", ctxErr, query)
+			}
+
 			continue
 		}
 
@@ -1849,6 +1936,15 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 			talkgroups[systemRef.Int32][talkgroupRef.Int32] = talkgroupID.Int32
 		}
+	}
+
+	// The preload is the migration's map of what the server already holds:
+	// a read that ended early leaves the map missing entries, and the rows
+	// built from it point at the wrong identities (CA-011.1).
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return statementError("migration", "migrateDirwatches", err, query)
 	}
 
 	rows.Close()
@@ -2066,6 +2162,21 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 		)
 
 		if err := rows.Scan(&systemID, &systemRef, &talkgroupID, &talkgroupRef); err != nil {
+			// A cancelled read is felt at the scan and not at the iterator: the
+			// preload map must not be built from the rows that happened to
+			// survive (CA-011.1).
+			if readErr := rows.Err(); readErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateCalls", readErr, query)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				rows.Close()
+
+				return statementError("migration", "migrateCalls", ctxErr, query)
+			}
+
 			continue
 		}
 
@@ -2077,6 +2188,15 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 
 			talkgroups[systemRef.Int32][talkgroupRef.Int32] = talkgroupID.Int32
 		}
+	}
+
+	// The preload is the migration's map of what the server already holds:
+	// a read that ended early leaves the map missing entries, and the rows
+	// built from it point at the wrong identities (CA-011.1).
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return statementError("migration", "migrateCalls", err, query)
 	}
 
 	rows.Close()

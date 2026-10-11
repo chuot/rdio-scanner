@@ -3198,3 +3198,63 @@ func TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce(t *testing.T) {
 		t.Errorf("the second pass changed the options: %d rows, was %d", after, before)
 	}
 }
+
+// TestMigrateReportsAContextCancelledMidPreload (REQ-011, CA-011.2): the talkgroups
+// migration preloads the systems the v6 talkgroups resolve against, and a preload is
+// a read like any other. A read cancelled mid-iteration leaves the map missing
+// entries, and the migrated talkgroups would point at the wrong systems; the pass
+// reports the failure and stops, and a pass that stopped mid-preload has read nothing
+// it may rewrite — the v6 table stays where it is.
+func TestMigrateReportsAContextCancelledMidPreload(t *testing.T) {
+	db := openSchemaDatabase(t)
+
+	defer db.Close()
+
+	// A v6 talkgroups table for the pass to find, with one row.
+	if _, err := db.Exec(`CREATE TABLE "rdioScannerTalkgroups" ("_id" integer primary key autoincrement, "frequency" integer, "groupId" integer not null, "id" integer not null, "label" varchar(255) not null, "led" varchar(255), "name" varchar(255) not null, "order" integer, "systemId" integer not null, "tagId" integer not null)`); err != nil {
+		t.Fatalf("creating the v6 table: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO "rdioScannerTalkgroups" ("frequency", "groupId", "id", "label", "name", "systemId", "tagId") VALUES (856123456, 1, 100, 'Fire Dispatch', 'Fire Dispatch', 1, 1)`); err != nil {
+		t.Fatalf("seeding the v6 row: %v", err)
+	}
+
+	// The preload: two hundred-odd thousand systems, hundreds of milliseconds to
+	// read, filled by doubling — one statement per doubling, every reference
+	// distinct.
+	if _, err := db.Exec(`INSERT INTO "systems" ("systemRef", "label") VALUES (1, 'System 1')`); err != nil {
+		t.Fatalf("seeding the systems: %v", err)
+	}
+
+	for i := 0; i < 18; i++ {
+		if _, err := db.Exec(`INSERT INTO "systems" ("systemRef", "label") SELECT "systemRef" + (SELECT COUNT(*) FROM "systems"), "label" FROM "systems"`); err != nil {
+			t.Fatalf("doubling the systems: %v", err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+
+		cancel()
+	}()
+
+	err := Migrate(ctx, db, DialectSqlite, nil, nil)
+
+	if err == nil {
+		t.Fatal("Migrate = nil for a preload read cancelled mid-iteration, want the pass to report the failure")
+	}
+
+	// The failure the pass reports has to name the preload read it could not
+	// finish. Today the preload swallows the cancelled rows, the map goes on
+	// missing entries, and the first thing to fail is a later write — an
+	// administrator reading that line is pointed at the wrong statement.
+	if !strings.Contains(err.Error(), `SELECT "systemId", "systemRef" FROM "systems"`) {
+		t.Errorf("Migrate reported %v, want it to name the preload read it could not finish", err)
+	}
+
+	if !hasV6Table(t, db, "rdioScannerTalkgroups") {
+		t.Error("the v6 talkgroups table was dropped by a pass that failed mid-preload")
+	}
+}

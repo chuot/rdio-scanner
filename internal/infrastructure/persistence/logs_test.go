@@ -1121,3 +1121,46 @@ func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchLogsReportsAContextCancelledMidIteration (REQ-011, CA-011.1): a log search
+// whose read is cancelled while it is running is a search that did not complete. Today
+// the page loop treats the cancelled read as rows that had nothing to show — the scan
+// failure is skipped as a damaged row — and the administrator is answered a short page
+// with a success, as if the log held exactly that many entries.
+func TestSearchLogsReportsAContextCancelledMidIteration(t *testing.T) {
+	db := openSchemaDatabase(t)
+
+	defer db.Close()
+
+	// Enough entries that the cancellation lands while the page is being read: two
+	// hundred-odd thousand rows take hundreds of milliseconds to scan, the count
+	// and the source counts take milliseconds, and the cancel lands in between.
+	// The table is filled by doubling — one statement per doubling.
+	if _, err := db.Exec(`INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES ('info', 'server', 'entry under the cancelled search', 1791288000000)`); err != nil {
+		t.Fatalf("seeding the log entries: %v", err)
+	}
+
+	for i := 0; i < 18; i++ {
+		if _, err := db.Exec(`INSERT INTO "logs" ("level", "source", "message", "timestamp") SELECT "level", "source", "message", "timestamp" + 1 FROM "logs"`); err != nil {
+			t.Fatalf("doubling the log entries: %v", err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		// The search counts the entries before it reads the page: the cancellation
+		// has to land while the page is being read, not on the count. The count of
+		// this table takes milliseconds; reading the twenty thousand entries the page
+		// was asked for takes hundreds — the cancel lands in between, mid-iteration.
+		time.Sleep(50 * time.Millisecond)
+
+		cancel()
+	}()
+
+	logs := NewLogs(db, DialectSqlite)
+
+	if _, err := logs.SearchLogs(ctx, domain.LogSearch{Limit: 200000, Ascending: true}); err == nil {
+		t.Fatal("SearchLogs = nil for a search cancelled mid-iteration, want the failure of the read it did not finish")
+	}
+}

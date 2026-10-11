@@ -777,3 +777,41 @@ func TestWriteOptionsTwiceLeavesOneRowPerKey(t *testing.T) {
 		t.Errorf("the options table holds %d rows after two saves, want the %d keys the save writes", rows, want)
 	}
 }
+
+// TestReloadOptionsReportsAContextCancelledMidRead (REQ-011, CA-011.1): re-deriving
+// the options reads every stored row. A read cancelled mid-iteration is a read that
+// did not finish; today the fetch loop skips the rows whose scan failed and the
+// re-derivation answers success with defaults where stored values were dropped — the
+// server ends up running with options nobody stored.
+func TestReloadOptionsReportsAContextCancelledMidRead(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
+
+	defer db.Close()
+
+	// Two hundred-odd thousand keys: the read takes hundreds of milliseconds, and
+	// the cancel lands while it is running. The table is filled by doubling — one
+	// statement per doubling, every key distinct.
+	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('probeKey000000', '"x"')`); err != nil {
+		t.Fatalf("seeding the option rows: %v", err)
+	}
+
+	for i := 0; i < 18; i++ {
+		if _, err := db.Exec(`INSERT INTO "options" ("key", "value") SELECT "key" || 'x', "value" FROM "options"`); err != nil {
+			t.Fatalf("doubling the option rows: %v", err)
+		}
+	}
+
+	options := NewOptions(db, DialectSqlite)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+
+		cancel()
+	}()
+
+	if _, err := options.ReloadOptions(ctx); err == nil {
+		t.Fatal("ReloadOptions = nil for a read cancelled mid-iteration, want the failure of the read it did not finish")
+	}
+}
