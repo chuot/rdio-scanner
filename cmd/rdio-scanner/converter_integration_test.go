@@ -138,6 +138,70 @@ func TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven(t *testing.
 	}
 }
 
+// TestTheConversionReportsTheLengthTheConvertedRecordingIs: the running time ffmpeg states
+// while it writes is the length of the file it wrote. The converter's own report and the
+// bundled ffprobe's measurement of that same recording agree, at every conversion level —
+// the length the server stores is the length of the audio the server stores.
+func TestTheConversionReportsTheLengthTheConvertedRecordingIs(t *testing.T) {
+	bundled, ok := bundle.Lookup()
+	if !ok {
+		t.Fatal("this build carries no ffmpeg: run `go run ./cmd/build ffmpeg` before this tier")
+	}
+
+	dir := t.TempDir()
+
+	ffmpegPath, ffprobePath, err := bundled.Materialize(dir)
+	if err != nil {
+		t.Fatalf("the server could not write out the ffmpeg it carries: %v", err)
+	}
+
+	wav := aRecordingFrom(t, dir, "tone.wav")
+
+	for _, level := range []uint{
+		domain.AudioConversionEnabled,
+		domain.AudioConversionEnabledNorm,
+		domain.AudioConversionEnabledLoudNorm,
+	} {
+		converter := converterChoice{Program: ffmpegPath}.converter()
+
+		converted, err := converter.Convert(context.Background(), ports.AudioFile{
+			Filename: "call.wav",
+			Mime:     "audio/wav",
+			Data:     readOrFatal(t, wav),
+		}, level, nil)
+		if err != nil {
+			t.Fatalf("level %d: the bundled ffmpeg refused the recording: %v", level, err)
+		}
+
+		if converted.Duration == 0 {
+			t.Errorf("level %d: the conversion stated no running time, want the length of the file it wrote", level)
+
+			continue
+		}
+
+		m4a := writeRecording(t, dir, fmt.Sprintf("converted-%d.m4a", level), converted.Data)
+
+		want := aProbedDuration(t, ffprobePath, m4a)
+		got := converted.Duration.Seconds()
+
+		// The running time ffmpeg states is the recording it has written; the container
+		// is that plus the AAC encoder's own priming — a 1.000-second tone comes out as a
+		// 1.128-second file. The report is never longer than the file it describes, and
+		// the file is never more than the encoder's padding longer than the report.
+		if got > want {
+			t.Errorf("level %d: the conversion stated %s s, longer than the %s s recording it wrote",
+				level, strconv.FormatFloat(got, 'f', 6, 64), strconv.FormatFloat(want, 'f', 6, 64))
+
+			continue
+		}
+
+		if want-got > 0.2 {
+			t.Errorf("level %d: the conversion stated %s s, the converted recording is %s s — further apart than the AAC encoder's priming can explain",
+				level, strconv.FormatFloat(got, 'f', 6, 64), strconv.FormatFloat(want, 'f', 6, 64))
+		}
+	}
+}
+
 // aRecordingFrom copies one of the tier's fixtures into the directory the tier works in, so that
 // ffprobe is given a file and not a pipe — the form the duration feature will have to use.
 func aRecordingFrom(t *testing.T, dir string, name string) string {
