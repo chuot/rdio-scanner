@@ -46,6 +46,17 @@ export function formatMonthDay(date) {
   return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
 }
 
+// The search table's duration column: mm:ss from the seconds a search row names.
+// Zero is the never-measured zero the column carries, and it renders blank.
+export function formatDuration(seconds) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '';
+
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.floor(seconds % 60);
+
+  return `${minutes.toString().padStart(2, '0')}:${rest.toString().padStart(2, '0')}`;
+}
+
 // Progress = call start + elapsed seconds (legacy callProgress).
 export function progressDate(callDateTime, elapsedSeconds) {
   const progress = new Date(callDateTime);
