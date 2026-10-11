@@ -31,6 +31,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -874,5 +875,63 @@ func TestStoredNegativeAccessValuesReadAsZeroWithAWarning(t *testing.T) {
 
 	if !strings.Contains(warnings[0], "legacy-row") {
 		t.Errorf("the warning says %q, want it to name the access it clamped", warnings[0])
+	}
+}
+
+// TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving (REQ-017, CA-017.3): the save
+// asked the table, one COUNT per submitted row, which rows it was saving — a
+// hundred-row list cost a hundred round trips inside the save's transaction, each
+// one a chance for the busy timeout to end a save an administrator meant to finish.
+// The save asks once, in one statement, which of the submitted identities are
+// stored, and the row outcomes of the save are unchanged by that.
+func TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
+	db, counted := openCountedSchemaDatabase(t)
+
+	for i := 1; i <= 20; i++ {
+		const query = `INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES (?, ?, ?, 0, ?, '"*"')`
+
+		if _, err := db.Exec(query, fmt.Sprintf("code-%02d", i), int64(1893456000+i), fmt.Sprintf("ident-%02d", i), int64(i)); err != nil {
+			t.Fatalf("seeding access %d: %v", i, err)
+		}
+	}
+
+	accesses := NewAccesses(db, DialectSqlite)
+
+	list, err := accesses.AllAccesses(context.Background())
+	if err != nil {
+		t.Fatalf("AllAccesses: %v", err)
+	}
+
+	list[0].Code = "renamed"
+
+	counted.reset()
+
+	if err := accesses.SaveAccesses(context.Background(), list); err != nil {
+		t.Fatalf("SaveAccesses: %v", err)
+	}
+
+	// Row outcomes first: the batching changed nothing about what is stored.
+	var code string
+
+	if err := db.QueryRow(`SELECT "code" FROM "accesses" WHERE "accessId" = 1`).Scan(&code); err != nil {
+		t.Fatalf("reading the renamed access: %v", err)
+	}
+
+	if code != "renamed" {
+		t.Errorf("the stored access reads back as %q, want renamed", code)
+	}
+
+	if got := countRows(t, db, "accesses"); got != 20 {
+		t.Errorf("the accesses table holds %d rows, want the twenty submitted", got)
+	}
+
+	// The statements: the per-row COUNT is gone, and one membership statement
+	// remains.
+	if n := counted.count(`SELECT COUNT(*) FROM "accesses" WHERE "accessId" = ?`); n != 0 {
+		t.Errorf("the save ran %d per-row COUNT statements, want none: a hundred-row list must not cost a hundred round trips", n)
+	}
+
+	if n := counted.count(`SELECT "accessId" FROM "accesses" WHERE "accessId" IN (`); n != 1 {
+		t.Errorf("the save ran %d membership statements, want exactly one", n)
 	}
 }

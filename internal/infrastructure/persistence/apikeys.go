@@ -50,7 +50,6 @@ var _ ports.ApikeyRepository = (*Apikeys)(nil)
 const (
 	apikeySelectQuery    = `SELECT "apikeyId", "disabled", "ident", "key", "order", "systems" FROM "apikeys"`
 	apikeySelectIDsQuery = `SELECT "apikeyId" FROM "apikeys"`
-	apikeyCountQuery     = `SELECT COUNT(*) FROM "apikeys" WHERE "apikeyId" = ?`
 	apikeyInsertQuery    = `INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (?, ?, ?, ?, ?)`
 	apikeyUpdateQuery    = `UPDATE "apikeys" SET "disabled" = ?, "ident" = ?, "key" = ?, "order" = ?, "systems" = ? WHERE "apikeyId" = ?`
 )
@@ -200,6 +199,14 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 		return operationError("apikeys", "write", err)
 	}
 
+	// The identities the submitted list names, collected once (CA-017.3), with the
+	// legacy zero-id short-circuit repaired as described on `Accesses.write`.
+	named := make(map[uint64]struct{}, len(list))
+
+	for _, apikey := range list {
+		named[apikey.ID] = struct{}{}
+	}
+
 	rows, err := tx.query(ctx, apikeySelectIDsQuery)
 	if err != nil {
 		tx.rollback()
@@ -217,7 +224,7 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 			return operationError("apikeys", "write", err)
 		}
 
-		if !apikeyIsNamed(list, uint64(id)) {
+		if _, ok := named[uint64(id)]; !ok {
 			stale = append(stale, uint64(id))
 		}
 	}
@@ -246,16 +253,23 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 		}
 	}
 
+	// Which of the submitted identities are stored, in one statement (CA-017.3),
+	// as in `Accesses.write`.
+	ids := make([]int64, 0, len(list))
+
 	for _, apikey := range list {
-		var count int64
-
 		if apikey.ID > 0 {
-			if err := tx.queryRow(ctx, apikeyCountQuery, int64(apikey.ID)).Scan(&count); err != nil {
-				tx.rollback()
-				return statementError("apikeys", "write", err, apikeyCountQuery)
-			}
+			ids = append(ids, int64(apikey.ID))
 		}
+	}
 
+	stored, err := storedIdentities(ctx, tx, "apikeys", "write", "apikeys", "apikeyId", ids)
+	if err != nil {
+		tx.rollback()
+		return err
+	}
+
+	for _, apikey := range list {
 		values := []any{
 			apikey.Disabled,
 			apikey.Ident,
@@ -264,7 +278,7 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 			scopeText(apikey.Scope),
 		}
 
-		if count == 0 {
+		if _, ok := stored[apikey.ID]; !ok {
 			if _, err := tx.exec(ctx, apikeyInsertQuery, values...); err != nil {
 				tx.rollback()
 				return statementError("apikeys", "write", err, apikeyInsertQuery)
@@ -285,16 +299,4 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 	}
 
 	return nil
-}
-
-// apikeyIsNamed reports whether the submitted list still names a stored credential, with the
-// legacy zero-id short-circuit repaired as described on `accessIsNamed`.
-func apikeyIsNamed(list domain.Apikeys, id uint64) bool {
-	for _, apikey := range list {
-		if apikey.ID == id {
-			return true
-		}
-	}
-
-	return false
 }

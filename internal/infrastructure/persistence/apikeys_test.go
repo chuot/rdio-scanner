@@ -23,6 +23,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -466,5 +467,57 @@ func TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning(t *testing.T) {
 
 	if !strings.Contains(warnings[0], "old-key") {
 		t.Errorf("the warning says %q, want it to name the credential it clamped", warnings[0])
+	}
+}
+
+// TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving (REQ-017, CA-017.3): the
+// credential save asked the table, one COUNT per submitted row, which rows it was
+// saving. It asks once, in one statement, and the row outcomes are unchanged.
+func TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
+	db, counted := openCountedSchemaDatabase(t)
+
+	for i := 1; i <= 20; i++ {
+		const query = `INSERT INTO "apikeys" ("disabled", "ident", "key", "order", "systems") VALUES (0, ?, ?, ?, '"*"')`
+
+		if _, err := db.Exec(query, fmt.Sprintf("ident-%02d", i), fmt.Sprintf("key-%02d", i), int64(i)); err != nil {
+			t.Fatalf("seeding apikey %d: %v", i, err)
+		}
+	}
+
+	apikeys := NewApikeys(db, DialectSqlite)
+
+	list, err := apikeys.AllApikeys(context.Background())
+	if err != nil {
+		t.Fatalf("AllApikeys: %v", err)
+	}
+
+	list[0].Ident = "renamed-key"
+
+	counted.reset()
+
+	if err := apikeys.SaveApikeys(context.Background(), list); err != nil {
+		t.Fatalf("SaveApikeys: %v", err)
+	}
+
+	var ident string
+
+	if err := db.QueryRow(`SELECT "ident" FROM "apikeys" WHERE "apikeyId" = 1`).Scan(&ident); err != nil {
+		t.Fatalf("reading the renamed credential: %v", err)
+	}
+
+	if ident != "renamed-key" {
+		t.Errorf("the stored credential reads back as %q, want renamed-key", ident)
+	}
+
+	if got := countRows(t, db, "apikeys"); got != 20 {
+		t.Errorf("the apikeys table holds %d rows, want the twenty submitted", got)
+	}
+
+	if n := counted.count(`SELECT COUNT(*) FROM "apikeys" WHERE "apikeyId" = ?`); n != 0 {
+		t.Errorf("the save ran %d per-row COUNT statements, want none: a hundred-row list must not cost a hundred round trips", n)
+	}
+
+	if n := counted.count(`SELECT "apikeyId" FROM "apikeys" WHERE "apikeyId" IN (`); n != 1 {
+		t.Errorf("the save ran %d membership statements, want exactly one", n)
 	}
 }

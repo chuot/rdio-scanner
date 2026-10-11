@@ -71,7 +71,6 @@ var _ ports.AccessRepository = (*Accesses)(nil)
 const (
 	accessSelectQuery    = `SELECT "accessId", "code", "expiration", "ident", "limit", "order", "systems" FROM "accesses"`
 	accessSelectIDsQuery = `SELECT "accessId" FROM "accesses"`
-	accessCountQuery     = `SELECT COUNT(*) FROM "accesses" WHERE "accessId" = ?`
 	accessInsertQuery    = `INSERT INTO "accesses" ("code", "expiration", "ident", "limit", "order", "systems") VALUES (?, ?, ?, ?, ?, ?)`
 	accessUpdateQuery    = `UPDATE "accesses" SET "code" = ?, "expiration" = ?, "ident" = ?, "limit" = ?, "order" = ?, "systems" = ? WHERE "accessId" = ?`
 )
@@ -255,6 +254,20 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 		return operationError("accesses", "write", err)
 	}
 
+	// The identities the submitted list names, collected once (CA-017.3): every
+	// stored row is checked against this map, where the legacy server walked the
+	// whole submitted list per stored row.
+	//
+	// The legacy `Accesses.Write` stops its scan at the first submitted access
+	// whose id is zero, so a save that adds a user silently keeps every user the
+	// list removed. This server repairs that rule; see Q33 in
+	// decision-preserved-quirks.md.
+	named := make(map[uint64]struct{}, len(list))
+
+	for _, access := range list {
+		named[access.ID] = struct{}{}
+	}
+
 	rows, err := tx.query(ctx, accessSelectIDsQuery)
 	if err != nil {
 		tx.rollback()
@@ -272,7 +285,7 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 			return operationError("accesses", "write", err)
 		}
 
-		if !accessIsNamed(list, uint64(id)) {
+		if _, ok := named[uint64(id)]; !ok {
 			stale = append(stale, uint64(id))
 		}
 	}
@@ -301,16 +314,24 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 		}
 	}
 
+	// Which of the submitted identities are stored, in one statement (CA-017.3):
+	// the per-row COUNT the legacy server ran cost one round trip per submitted
+	// row, inside the same transaction that holds the table for the whole save.
+	ids := make([]int64, 0, len(list))
+
 	for _, access := range list {
-		var count int64
-
 		if access.ID > 0 {
-			if err := tx.queryRow(ctx, accessCountQuery, int64(access.ID)).Scan(&count); err != nil {
-				tx.rollback()
-				return statementError("accesses", "write", err, accessCountQuery)
-			}
+			ids = append(ids, int64(access.ID))
 		}
+	}
 
+	stored, err := storedIdentities(ctx, tx, "accesses", "write", "accesses", "accessId", ids)
+	if err != nil {
+		tx.rollback()
+		return err
+	}
+
+	for _, access := range list {
 		values := []any{
 			access.Code,
 			int64(access.Expiration),
@@ -320,7 +341,7 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 			scopeText(access.Scope),
 		}
 
-		if count == 0 {
+		if _, ok := stored[access.ID]; !ok {
 			// The identity is never written: the table assigns it, which is how an access
 			// the administrator just added gets its id, and how a submitted id that names no
 			// stored row becomes a new access rather than an edit of a row that is not there.
@@ -344,19 +365,4 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 	}
 
 	return nil
-}
-
-// accessIsNamed reports whether the submitted list still names a stored access.
-//
-// The legacy `Accesses.Write` stops its scan at the first submitted access whose id is zero, so a
-// save that adds a user silently keeps every user the list removed. This server repairs that rule;
-// see Q33 in decision-preserved-quirks.md.
-func accessIsNamed(list domain.Accesses, id uint64) bool {
-	for _, access := range list {
-		if access.ID == id {
-			return true
-		}
-	}
-
-	return false
 }

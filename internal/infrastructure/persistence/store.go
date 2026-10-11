@@ -216,3 +216,51 @@ func parseScope(text string) domain.AccessScope {
 
 	return scope
 }
+
+// storedIdentities asks the table, in one statement, which of the submitted
+// identities it already holds (CA-017.3). The per-row COUNT the legacy server ran
+// inside the save's transaction cost one round trip per submitted row; one IN
+// list costs one. An id of zero is a row the table will assign, so it is not
+// asked about, and a list with no submitted identities costs no statement at all.
+func storedIdentities(ctx context.Context, tx transaction, section, operation, table, idColumn string, ids []int64) (map[uint64]bool, error) {
+	stored := map[uint64]bool{}
+
+	if len(ids) == 0 {
+		return stored, nil
+	}
+
+	marks := make([]string, 0, len(ids))
+	args := make([]any, 0, len(ids))
+
+	for _, id := range ids {
+		marks = append(marks, "?")
+		args = append(args, id)
+	}
+
+	query := `SELECT "` + idColumn + `" FROM "` + table + `" WHERE "` + idColumn + `" IN (` + strings.Join(marks, ", ") + `)`
+
+	rows, err := tx.query(ctx, query, args...)
+	if err != nil {
+		return nil, statementError(section, operation, err, query)
+	}
+
+	for rows.Next() {
+		var id int64
+
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+
+			return nil, operationError(section, operation, err)
+		}
+
+		stored[uint64(id)] = true
+	}
+
+	rows.Close()
+
+	if err := rows.Err(); err != nil {
+		return nil, operationError(section, operation, err)
+	}
+
+	return stored, nil
+}
