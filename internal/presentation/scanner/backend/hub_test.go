@@ -1471,3 +1471,73 @@ func TestAddressAccessAttemptHistoriesAreEvicted(t *testing.T) {
 			"only the second: %v", kept, f.hub.accessAttempts)
 	}
 }
+
+// TestASlowListenerCannotHoldTheHubLockForEveryoneElse (REQ-005, CA-005.1): a listener that
+// cannot keep up holds its own frames, not the server. The livefeed answer is delivered the
+// way every other delivery is — sessions chosen under the lock, frames written outside it —
+// so a stalled connection cannot stop the server from reaching everyone else.
+func TestASlowListenerCannotHoldTheHubLockForEveryoneElse(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	idA, _ := f.dial(t)
+	idB, _ := f.dial(t)
+
+	// Both connections become listeners first: a registered session has no handshake window
+	// closing it, so the stalled one stays exactly that — stalled, not gone.
+	f.register(t, idA)
+	f.register(t, idB)
+
+	f.hub.mutex.Lock()
+	session := f.hub.sessions[idA]
+	f.hub.mutex.Unlock()
+
+	// A frame bigger than any socket buffer: the writer takes the first one and blocks in the
+	// connection, and the queue behind it fills.
+	big := strings.Repeat("x", 8*1024*1024)
+
+fill:
+	for {
+		select {
+		case session.send <- delivery{frame: Message{Command: CommandVersion, Payload: big}}:
+
+		default:
+			break fill
+		}
+	}
+
+	// The livefeed answer to the stalled session must wait for room in its queue — and must
+	// not take the hub, and every other listener's service, down with it.
+	go f.hub.SendLivefeedMap(idA, true)
+
+	reached := make(chan struct{})
+
+	go func() {
+		f.hub.SendVersion(idB, "8.0.0")
+
+		close(reached)
+	}()
+
+	attached := make(chan string, 1)
+
+	go func() {
+		id, _ := f.dial(t)
+
+		attached <- id
+	}()
+
+	select {
+	case <-reached:
+
+	case <-time.After(2 * time.Second):
+		t.Fatal("a stalled listener's full queue held the hub lock: another listener was not " +
+			"reached within 2 seconds")
+	}
+
+	select {
+	case <-attached:
+
+	case <-time.After(2 * time.Second):
+		t.Fatal("a stalled listener's full queue held the hub lock: a new connection was not " +
+			"attached within 2 seconds")
+	}
+}

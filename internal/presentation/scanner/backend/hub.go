@@ -354,11 +354,18 @@ func (hub *Hub) LivefeedWatchesNothing(clientID string) bool {
 
 // SendLivefeedMap answers a listener's live-watch selection with whether anything is now switched on.
 // The answer is the only thing the listener is told, and it is told even when it is no.
+//
+// The session is chosen under the lock and delivered outside it, like every other delivery: the answer
+// waits for room in a slow listener's queue, and it waits there without holding the hub — a listener
+// that cannot keep up must not stop the server from reaching everyone else (REQ-005, CA-005.1).
 func (hub *Hub) SendLivefeedMap(clientID string, watching bool) {
 	hub.mutex.Lock()
-	defer hub.mutex.Unlock()
 
-	if session, ok := hub.sessions[clientID]; ok {
+	session, ok := hub.sessions[clientID]
+
+	hub.mutex.Unlock()
+
+	if ok {
 		hub.deliver(session, delivery{frame: Message{Command: CommandLivefeedMap, Payload: watching}})
 	}
 }
