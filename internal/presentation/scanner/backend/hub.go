@@ -183,7 +183,7 @@ type accessWindow struct {
 }
 
 // Attach takes over one upgraded listener connection and returns the identifier this session is known
-// by. It reports false when the server already has as many listeners as it allows, in which case the
+// by. It reports false when the server already holds as many connections as it allows, in which case the
 // connection is closed and nothing is said on it — a client that is refused because the server is full
 // is refused in silence, which is what today's clients see.
 //
@@ -197,7 +197,11 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	hub.mutex.Lock()
 
-	if uint(len(hub.listens)) >= max {
+	// The gate is on the connections the server is holding, not on the ones that finished
+	// becoming listeners: a client that never answers must not keep the slot open forever
+	// (decision D3). The listeners-count broadcast keeps counting registered listeners, as
+	// the contract fixes it.
+	if uint(len(hub.sessions)) >= max {
 		hub.mutex.Unlock()
 
 		conn.Close()

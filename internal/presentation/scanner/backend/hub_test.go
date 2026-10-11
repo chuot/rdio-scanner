@@ -112,10 +112,11 @@ func TestWhatTheHubReportsIsStampedWithTheServersClock(t *testing.T) {
 	f.assertStamped(t, "a listener left from", hubClockTime)
 }
 
-// The limit on listeners is compared against the listeners the server is counting, and the comparison
-// is `count >= limit`: a server configured to admit one listener answers the first one and closes the
-// second without a word, and a server configured to admit none closes the first. Only listeners the
-// server is counting are against the limit, so connections that never became listeners are not.
+// The limit on listeners is compared against the connections the server is holding, and the
+// comparison is `count >= limit`: a server configured to admit one listener answers the first
+// one and closes the second without a word, and a server configured to admit none closes the
+// first. Every attached connection is against the limit, registered or not (decision D3), so
+// the registered listeners below fill the server's one allowed slot.
 func TestTheServerStopsAdmittingListenersAtItsLimit(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -1539,5 +1540,27 @@ fill:
 	case <-time.After(2 * time.Second):
 		t.Fatal("a stalled listener's full queue held the hub lock: a new connection was not " +
 			"attached within 2 seconds")
+	}
+}
+
+// TestTheServerStopsAdmittingConnectionsThatNeverRegister (REQ-006, CA-006.1, decision D3):
+// the limit is on the connections the server is holding, not on the ones that finished
+// becoming listeners — a limit that a client bypasses by never answering is not a limit. The
+// listeners-count broadcast keeps counting registered listeners, as the contract fixes it.
+func TestTheServerStopsAdmittingConnectionsThatNeverRegister(t *testing.T) {
+	f := newBareFixture(t, Settings{MaxClients: 1})
+
+	first, _ := f.dial(t)
+	if first == "" {
+		t.Fatal("the first connection was refused on a server allowed one")
+	}
+
+	// The first connection never becomes a listener: it is attached, and the server is
+	// holding it. The second must find the server full.
+	second, _ := f.dial(t)
+
+	if second != "" {
+		t.Fatalf("the second connection was admitted (id %q) while the server already holds "+
+			"its one allowed connection: the gate counts registered listeners only", second)
 	}
 }
