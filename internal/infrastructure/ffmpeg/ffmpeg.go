@@ -25,11 +25,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os/exec"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -97,6 +100,40 @@ func NewAt(program string) *Converter {
 // flag columns, then the filter name. The flag columns are three characters in the 4.x releases
 // and two in the 7.x ones — command support left the legend in 7.0 — so the pattern takes both.
 var loudnormFilterLine = regexp.MustCompile(`(?m)^\s*[TSC.]{2,3}\s+loudnorm\s`)
+
+// ffmpegProgressTime matches the running time ffmpeg states in the progress lines it writes
+// to its standard error while it converts: `time=00:00:03.01`. The fraction is a hundredth
+// of a second in the 4.x and 7.x releases; releases that print no fraction are read as a
+// whole second.
+var ffmpegProgressTime = regexp.MustCompile(`time=(\d+):(\d{2}):(\d{2})(?:\.(\d{1,6}))?`)
+
+// statedRunningTime is the length of the recording a program was writing while it printed
+// these progress lines: the last running time it stated is the end of the file it produced.
+// Output naming no running time — a quiet run, a flood that is not progress — names no
+// length, and the caller asks the prober instead of guessing.
+func statedRunningTime(progress string) time.Duration {
+	matches := ffmpegProgressTime.FindAllStringSubmatch(progress, -1)
+	if len(matches) == 0 {
+		return 0
+	}
+
+	match := matches[len(matches)-1]
+
+	hours, _ := strconv.Atoi(match[1])
+	minutes, _ := strconv.Atoi(match[2])
+	seconds, _ := strconv.Atoi(match[3])
+
+	length := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
+
+	if match[4] != "" {
+		// The fraction is a fixed-width count of a fraction of a second: ".01" is a
+		// hundredth and ".010667" is a millionth of a second times 10667.
+		fraction, _ := strconv.Atoi(match[4])
+		length += time.Duration(fraction) * time.Duration(float64(time.Second)/math.Pow(10, float64(len(match[4]))))
+	}
+
+	return length
+}
 
 // hasLoudnorm reports whether the filter list a program printed names the loudnorm filter.
 // The filter list is the ground truth: the legacy read the version string
@@ -192,6 +229,7 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 	return ports.AudioFile{
 		Filename: fmt.Sprintf("%v.m4a", strings.TrimSuffix(in.Filename, path.Ext(in.Filename))),
 		Mime:     "audio/mp4",
+		Duration: statedRunningTime(stderr.String()),
 		Data:     stdout.Bytes(),
 	}, nil
 }

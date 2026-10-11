@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -435,5 +436,107 @@ func TestTheConverterReportsAFailingProgramShortAndQuiet(t *testing.T) {
 	if len(message) > len("ffmpeg: ")+512 {
 		t.Errorf("the failure report = %d bytes, want at most 512 after the prefix: %q",
 			len(message), message[:min(len(message), 80)])
+	}
+}
+
+// aProgramThatConvertsWithProgress writes a program that converts by echoing a fixed body and
+// says the given progress lines on its standard error, the way a real ffmpeg reports the
+// running time of the file it is writing as it writes it.
+func aProgramThatConvertsWithProgress(t *testing.T, progress string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	path := filepath.Join(dir, "ffmpeg")
+	filtersFile := filepath.Join(dir, "filters")
+	progressFile := filepath.Join(dir, "progress")
+
+	if err := os.WriteFile(filtersFile, []byte(filtersWithLoudnorm), 0644); err != nil {
+		t.Fatalf("the test cannot write the filter list: %v", err)
+	}
+
+	if err := os.WriteFile(progressFile, []byte(progress), 0644); err != nil {
+		t.Fatalf("the test cannot write the progress lines: %v", err)
+	}
+
+	script := "#!/bin/sh\n" +
+		"for arg in \"$@\"; do\n" +
+		"  if [ \"$arg\" = \"-filters\" ]; then\n" +
+		"    cat \"" + filtersFile + "\"\n" +
+		"    exit 0\n" +
+		"  fi\n" +
+		"done\n" +
+		"cat > /dev/null\n" +
+		"cat \"" + progressFile + "\" >&2\n" +
+		"printf 'the converted recording'\n"
+
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("the test cannot write the program: %v", err)
+	}
+
+	return path
+}
+
+// The progress lines ffmpeg writes while it convert name the running time of the recording
+// they are writing; the last one is the length of the whole file. The converter reads it off
+// the output it already captures, so a converted call knows its length without a second
+// program ever running.
+func TestTheConverterReportsTheLengthTheProgramStatedLast(t *testing.T) {
+	converter := NewAt(aProgramThatConvertsWithProgress(t,
+		"size=       1kB time=00:00:01.02 bitrate=   6.7kbits/s speed=0.31x\n"+
+			"size=       4kB time=00:00:03.01 bitrate=  10.8kbits/s speed=0.42x\n"+
+			"video:0kB audio:3kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 33.021059%\n",
+	))
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err != nil {
+		t.Fatalf("the converter refused a recording: %v", err)
+	}
+
+	if converted.Duration != 3010*time.Millisecond {
+		t.Errorf("the converted recording is %v long, want the 3.01 seconds the program stated last", converted.Duration)
+	}
+}
+
+// A program that says no running time — a trimmed build, a quiet run, an old release with a
+// bare `time=00:00:03` — is a conversion that names no length, and the converter says so by
+// returning no length rather than guessing one.
+func TestTheConverterReportsNoLengthWhenTheProgramStatedNone(t *testing.T) {
+	converter := NewAt(aProgramThatConvertsWithProgress(t,
+		"video:0kB audio:3kB subtitle:0kB other streams:0kB muxing overhead: 33.0%\n",
+	))
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err != nil {
+		t.Fatalf("the converter refused a recording: %v", err)
+	}
+
+	if converted.Duration != 0 {
+		t.Errorf("the converted recording is %v long, want no length from output naming none", converted.Duration)
+	}
+}
+
+// The running time is read from the progress of a conversion that ran. A conversion that
+// failed keeps the original recording, and the failure transcript — which carries ffmpeg's
+// own progress among its flood — must not become a length for audio the converter did not
+// produce.
+func TestAFailedConversionReportsNoLength(t *testing.T) {
+	converter := NewAt(aProgramThatFailsWith(t,
+		"size=       4kB time=00:00:03.01 bitrate=  10.8kbits/s speed=0.42x\\nError opening output files: Invalid argument\\n",
+	))
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err == nil {
+		t.Fatal("a failing conversion program reported no failure")
+	}
+
+	if converted.Duration != 0 {
+		t.Errorf("the kept recording is %v long, want no length: the converter produced nothing here", converted.Duration)
 	}
 }

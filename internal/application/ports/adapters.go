@@ -28,10 +28,12 @@ import (
 )
 
 // AudioFile is a chunk of audio together with the name and media type it is presented
-// under.
+// under. Duration is how long the audio lasts — the length the adapter that produced the
+// file measured; zero means that adapter cannot say, and the use case asks the prober.
 type AudioFile struct {
 	Filename string
 	Mime     string
+	Duration time.Duration
 	Data     []byte
 }
 
@@ -58,6 +60,15 @@ type AudioMetadata struct {
 // failure visible instead of swallowing it.
 type AudioConverter interface {
 	Convert(ctx context.Context, in AudioFile, mode uint, metadata *AudioMetadata) (AudioFile, error)
+}
+
+// AudioLengthProber reports how long one recording lasts, for the calls the converter
+// could not measure: conversion switched off, no converter installed, a conversion that
+// failed, or a conversion that stated no running time. The audio it is given is the audio
+// the server will store, and an adapter that cannot say — no program installed, a
+// recording the program refuses — reports an error and the call keeps no length.
+type AudioLengthProber interface {
+	Probe(ctx context.Context, in AudioFile) (time.Duration, error)
 }
 
 // DownstreamTarget is one downstream server to re-post a call to.
