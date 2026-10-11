@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -34,6 +35,8 @@ import (
 
 	"github.com/kardianos/service"
 
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/persistence"
 )
@@ -314,4 +317,101 @@ func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
 	if secret != "" {
 		t.Errorf("Secret returned %q beside the failure, want nothing to sign with", secret)
 	}
+}
+
+// TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline (REQ-014, CA-014.2):
+// the socket timeouts bound the socket, not the work — a handler blocked on a
+// database that does not answer holds the request open, and the administrator's
+// browser sits waiting with no answer at all. The deadline gives every request a
+// context that expires, and a request whose work outlives the deadline is answered
+// with a failure the administrator can read.
+func TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline(t *testing.T) {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	handler := withRequestDeadline(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The repository behind this one answers a minute later; the
+		// cancellation the deadline brings is the work's problem to notice,
+		// and today it never arrives.
+		select {
+		case <-time.After(time.Minute):
+		case <-release:
+		}
+	}), 50*time.Millisecond)
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	started := time.Now()
+
+	resp, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	elapsed := time.Since(started)
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d: a request whose work outlives the deadline is answered with a failure", resp.StatusCode, http.StatusServiceUnavailable)
+	}
+
+	if elapsed > 25*time.Second {
+		t.Errorf("the request was held %v, want it answered by 25s: a database that does not answer must not hold an administrator's request open", elapsed)
+	}
+}
+
+// TestTheRequestDeadlineIsTwentyFiveSeconds (REQ-014, CA-014.2): the bound is
+// twenty-five seconds — inside the thirty-second socket timeouts, so the request
+// is answered with a failure the administrator can read, not a socket that goes
+// silent.
+func TestTheRequestDeadlineIsTwentyFiveSeconds(t *testing.T) {
+	if got, want := requestDeadline, 25*time.Second; got != want {
+		t.Errorf("request deadline = %v, want %v: inside the socket timeouts, so the answer is a readable failure", got, want)
+	}
+}
+
+// TestTheHourlyPruningRunsUnderAContextWithADeadline (REQ-014, CA-014.3): the
+// hourly retention pass runs on the server's own schedule with nobody waiting
+// for its answer, and a pass that blocks on a database that does not answer
+// holds the schedule and writes no report. The pass runs under a context with a
+// deadline.
+func TestTheHourlyPruningRunsUnderAContextWithADeadline(t *testing.T) {
+	scheduler := fakes.NewScheduler()
+
+	pruned := &recordedPruning{}
+
+	pruneHourly(scheduler, pruned)
+
+	scheduler.RunDue(time.Hour)
+
+	if pruned.calls != 1 {
+		t.Fatalf("the retention pass ran %d times, want once", pruned.calls)
+	}
+
+	deadline, ok := pruned.ctx.Deadline()
+	if !ok {
+		t.Fatal("the retention pass ran under a context with no deadline, want the five-minute bound: a pass that cannot finish must stop, not hold the schedule forever")
+	}
+
+	if left := deadline.Sub(pruned.at); left <= 0 || left > 5*time.Minute {
+		t.Errorf("the pass had %v of its bound when it started, want a positive bound no longer than 5m", left)
+	}
+}
+
+// recordedPruning is the retention pass as the schedule sees it: it records the
+// context it was run under, which is where the deadline (CA-014.3) is visible.
+type recordedPruning struct {
+	calls int
+	ctx   context.Context
+	at    time.Time
+}
+
+func (pruned *recordedPruning) Handle(ctx context.Context, cmd application.PruneOldCallsCommand) (application.PruneOldCallsResult, error) {
+	pruned.calls++
+	pruned.ctx = ctx
+	pruned.at = time.Now()
+
+	return application.PruneOldCallsResult{}, nil
 }
