@@ -318,7 +318,7 @@ func (calls *Calls) reportUnreadableRequest(r *http.Request, reason error) {
 		Source:   domain.LogSourceAccess,
 		Message: fmt.Sprintf("the call history request to %s from %s could not be read: %v",
 			r.URL.Path, httpaddr.Address(r, calls.trusted), reason),
-	});
+	})
 }
 
 // credential is the administrator session credential the request carries, read the way the

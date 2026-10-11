@@ -404,6 +404,191 @@ func TestTheRequestDeadlineIsTwentyFiveSeconds(t *testing.T) {
 	}
 }
 
+// TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline: the assistant's endpoint rides the
+// server's routes, and the server's bound is the administrator's — 25 seconds, chosen to answer a
+// request blocked on a database before the socket goes silent. Two kinds of work on the assistant's
+// endpoint legitimately outlive that: a composite capability that runs several queries over a full
+// deployment, and the session's own stream, which stays open for the life of the session. A bound
+// chosen for a request that answers in a few seconds cuts both of them off. The routes are therefore
+// hung as two subtrees with two bounds: the assistant's endpoint carries the stream bound, and every
+// other route keeps the request bound.
+//
+// The bounds here are the composition root's own, scaled down by the same factor, so the test watches
+// both of them fire in the time a test has. The numbers themselves are the test below.
+func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
+	release := make(chan struct{})
+
+	var once sync.Once
+
+	unblock := func() { once.Do(func() { close(release) }) }
+
+	t.Cleanup(unblock)
+
+	blocked := func(answer string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			// The repository behind both handlers answers a minute later; the cancellation the
+			// bound brings is the work's problem to notice, and today it never arrives.
+			select {
+			case <-time.After(time.Minute):
+			case <-release:
+			}
+
+			io.WriteString(w, answer)
+		}
+	}
+
+	const (
+		requestBound = 50 * time.Millisecond
+		streamBound  = 500 * time.Millisecond
+	)
+
+	server := httptest.NewServer(withSubtreeDeadlines(
+		blocked("the administrator's answer"),
+		blocked("the assistant's answer"),
+		streamBound,
+		requestBound,
+	))
+
+	defer server.Close()
+
+	// The assistant's endpoint is bounded by the stream bound and not by the request bound: the
+	// request is still working well past the request bound, and is refused only at its own.
+	refused := awaitTheAnswer(t, startTheRequest(server.URL+"/mcp"))
+
+	if refused.status != http.StatusServiceUnavailable {
+		t.Fatalf("the assistant's request was answered %d, want %d: a request whose work outlives the "+
+			"bound it is given is answered with a failure, the way the administrator's is",
+			refused.status, http.StatusServiceUnavailable)
+	}
+
+	if refused.elapsed < 2*requestBound {
+		t.Fatalf("the assistant's request was refused after %v, want it past %v: the assistant's endpoint "+
+			"is bounded by the stream bound, not by the request bound the administrator's routes carry",
+			refused.elapsed, 2*requestBound)
+	}
+
+	if refused.elapsed > 10*streamBound {
+		t.Fatalf("the assistant's request was held %v, want it answered by %v: the stream bound bounds the "+
+			"assistant's work too, and a database that does not answer must not hold an assistant open",
+			refused.elapsed, 10*streamBound)
+	}
+
+	// A request on the assistant's endpoint that outlives the request bound is not what the request
+	// bound is for: it is still working when the administrator's request is refused, and it finishes
+	// with its own answer.
+	assistant := startTheRequest(server.URL + "/mcp")
+
+	administered := awaitTheAnswer(t, startTheRequest(server.URL+"/api/admin/alerts"))
+
+	if administered.status != http.StatusServiceUnavailable {
+		t.Fatalf("the administrator's request was answered %d, want %d: the request bound is the "+
+			"administrator's bound and keeps it", administered.status, http.StatusServiceUnavailable)
+	}
+
+	if administered.elapsed > requestBound+5*time.Second {
+		t.Fatalf("the administrator's request was held %v, want it answered by the request bound of %v",
+			administered.elapsed, requestBound)
+	}
+
+	select {
+	case answered := <-assistant:
+		t.Fatalf("the assistant's request was answered %d after %v, before the request bound fired: it "+
+			"is not bounded by the request bound and must still be working", answered.status, answered.elapsed)
+	default:
+	}
+
+	unblock()
+
+	completed := awaitTheAnswer(t, assistant)
+
+	if completed.status != http.StatusOK {
+		t.Fatalf("the assistant's request was answered %d, want %d: a capability that runs past the "+
+			"request bound completes with its own answer\n%s",
+			completed.status, http.StatusOK, completed.body)
+	}
+
+	if got, want := completed.body, "the assistant's answer"; got != want {
+		t.Errorf("the assistant's request answered %q, want %q", got, want)
+	}
+
+	if completed.elapsed < requestBound {
+		t.Errorf("the assistant's request completed in %v, want it past the request bound of %v: the "+
+			"work that completes is work that outlived the administrator's bound", completed.elapsed, requestBound)
+	}
+}
+
+// TestTheStreamDeadlineIsMateriallyLargerThanTheRequestDeadline: the bound the assistant's endpoint
+// carries is the one its work needs. A composite capability runs several queries, and the session's
+// stream lives for the life of the session; a bound within a few seconds of the administrator's
+// request bound would cut off the very work it was added to allow.
+func TestTheStreamDeadlineIsMateriallyLargerThanTheRequestDeadline(t *testing.T) {
+	if streamDeadline <= 10*requestDeadline {
+		t.Fatalf("the stream bound is %v and the request bound is %v: the assistant's endpoint needs a "+
+			"bound materially larger than the administrator's, not a slightly larger one",
+			streamDeadline, requestDeadline)
+	}
+}
+
+// startTheRequest issues a request and leaves it running: the point of these tests is what a request
+// is doing while another one is being answered.
+func startTheRequest(url string) chan requestAnswer {
+	running := make(chan requestAnswer, 1)
+
+	go func() {
+		started := time.Now()
+
+		resp, err := http.Get(url)
+		if err != nil {
+			running <- requestAnswer{err: err}
+
+			return
+		}
+
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			running <- requestAnswer{err: err}
+
+			return
+		}
+
+		running <- requestAnswer{status: resp.StatusCode, body: string(body), elapsed: time.Since(started)}
+	}()
+
+	return running
+}
+
+// requestAnswer is what one request answered, and how long it took to answer: the elapsed time is
+// what a bound is measured by.
+type requestAnswer struct {
+	status  int
+	body    string
+	elapsed time.Duration
+
+	err error
+}
+
+// awaitTheAnswer waits for a request that is running to answer. The bound under test is a fraction of
+// a second; a minute is the point at which the test says the bound did not fire at all.
+func awaitTheAnswer(t *testing.T, running chan requestAnswer) requestAnswer {
+	t.Helper()
+
+	select {
+	case answered := <-running:
+		if answered.err != nil {
+			t.Fatalf("the request failed: %v", answered.err)
+		}
+
+		return answered
+	case <-time.After(time.Minute):
+		t.Fatal("the request never answered: a bound answers every request it bounds with a failure the " +
+			"caller can read")
+
+		return requestAnswer{}
+	}
+}
+
 // TestTheHourlyPruningRunsUnderAContextWithADeadline: the
 // hourly retention pass runs on the server's own schedule with nobody waiting
 // for its answer, and a pass that blocks on a database that does not answer

@@ -543,19 +543,22 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	callsAPI.Register(mux)
 
-	// The Model Context Protocol surface is hung on the mux only when the operator named it. A
-	// deployment that never asked for it never learns the path exists: the unmatched-path answer an
-	// assistant gets from it is the answer every unmatched path gets.
+	// The Model Context Protocol surface is served only when the operator named it. A deployment
+	// that never asked for it never learns the path exists: the unmatched-path answer an assistant
+	// gets from it is the answer every unmatched path gets.
+	var assistant http.Handler
+
 	if s.mcpSurface != nil {
-		s.mcpSurface.Register(mux)
+		assistant = s.mcpSurface.Handler()
 	}
 
 	serveApplications(mux, listener, scannerfrontend.Embedded(), adminfrontend.Embedded())
 
-	// Every request the server answers carries thedeadline: the
-	// administrator's request is answered with a failure by 25 seconds, not
-	// held open by a database that does not answer.
-	s.routes = withRequestDeadline(mux, requestDeadline)
+	// Every request the server answers carries a deadline: the administrator's request is answered
+	// with a failure by 25 seconds, not held open by a database that does not answer. The
+	// assistant's endpoint carries the stream bound beside it, and not this one: a composite
+	// capability runs several queries, and the session's stream lives for the life of the session.
+	s.routes = withSubtreeDeadlines(mux, assistant, streamDeadline, requestDeadline)
 
 	return nil
 }

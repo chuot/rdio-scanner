@@ -44,14 +44,14 @@ const (
 	// listenerCode is a listener access code, and listenerIdent is the identity it is configured
 	// under. The restricted-server tests seed one access, and the scoped tests name the systems it
 	// grants.
-	listenerCode = "753159"
+	listenerCode  = "753159"
 	listenerIdent = "dispatch-desk"
 )
 
 // The two systems the fixture's history is spread over, named by the references clients use.
 const (
-	systemOneRef   = uint(10001)
-	systemTwoRef   = uint(10002)
+	systemOneRef    = uint(10001)
+	systemTwoRef    = uint(10002)
 	talkgroupOneRef = uint(1514000)
 	talkgroupTwoRef = uint(1515000)
 )
@@ -107,13 +107,13 @@ func (fixture *callsFixture) buildRoutes() http.Handler {
 	mux := http.NewServeMux()
 
 	NewCalls(CallsDeps{
-		Call:     application.NewGetCallQueryHandler(fixture.calls),
-		Clock:    fixture.clock,
-		Logs:     fixture.logs,
-		Resolve:  application.NewResolveAccessQueryHandler(fixture.accesses, fixture.logs, fixture.clock),
-		Search:   application.NewSearchCallsQueryHandler(fixture.calls, fixture.systems, fixture.groups, fixture.tags),
-		Session:  application.NewCheckAdminSessionHandler(fixture.tokens),
-		Trusted:  trustedLocalhostProxy(),
+		Call:    application.NewGetCallQueryHandler(fixture.calls),
+		Clock:   fixture.clock,
+		Logs:    fixture.logs,
+		Resolve: application.NewResolveAccessQueryHandler(fixture.accesses, fixture.logs, fixture.clock),
+		Search:  application.NewSearchCallsQueryHandler(fixture.calls, fixture.systems, fixture.groups, fixture.tags),
+		Session: application.NewCheckAdminSessionHandler(fixture.tokens),
+		Trusted: trustedLocalhostProxy(),
 	}).Register(mux)
 
 	return mux

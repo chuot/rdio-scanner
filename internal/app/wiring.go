@@ -38,6 +38,7 @@ import (
 	"rdio-scanner/internal/infrastructure/dirwatch"
 	"rdio-scanner/internal/infrastructure/tokens"
 	"rdio-scanner/internal/presentation/common/upgrade"
+	mcpbackend "rdio-scanner/internal/presentation/mcp/backend"
 	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
 )
 
@@ -54,6 +55,22 @@ const pruneInterval = time.Hour
 // expires, and the answer to a request whose work outlives it is a failure the
 // administrator can read.
 const requestDeadline = 25 * time.Second
+
+// streamDeadline is the bound on one Model Context Protocol exchange, and it is materially larger
+// than the request bound on purpose.
+//
+// The request bound is the administrator's: a request that answers in a few seconds, bounded so a
+// handler blocked on a database that does not answer is answered with a failure the administrator can
+// read. The assistant's endpoint carries two kinds of work that bound would cut off: a composite
+// capability runs several queries over a deployment with a full history, and the session's own stream
+// stays open for the life of the session. A bound chosen for a request that answers in a few seconds
+// is not the bound for either of them, so the endpoint is hung as its own subtree with its own bound,
+// and every other route keeps the administrator's.
+//
+// It is a bound and not a licence to run for ever: a capability that outlives it is answered with the
+// same failure the administrator's blocked request gets, and each capability carries a bound of its
+// own, well inside this one, so the assistant hears the refusal from the capability it asked for.
+const streamDeadline = 10 * time.Minute
 
 // pruneDeadline bounds the hourly retention pass: the pass runs on
 // the server's own schedule with nobody waiting for its answer, and a pass
@@ -74,7 +91,9 @@ const pruneDeadline = 5 * time.Minute
 // so the deadline answer can be written exactly once: a request that has
 // answered, or has taken over its connection, is left alone when the deadline
 // arrives — those connections live by what their sockets do, not by a request
-// context — and a request that has answered nothing gets the failure.
+// context, and the middleware waits for the handler rather than returning in
+// the middle of a stream it has begun — and a request that has answered
+// nothing gets the failure.
 func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), at)
@@ -113,8 +132,50 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 		if answered.refuseDeadline() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			io.WriteString(w, "the request could not be finished in time")
+
+			return
+		}
+
+		// The handler has begun answering, and what it began is a connection that lives by what
+		// its socket does, not by a request context: a stream it is still writing, a content
+		// endpoint naming its status before its bytes, a socket it has taken over. Returning here
+		// would end a stream mid-sentence — the assistant's session stream, an event stream
+		// carrying a capability's answer — so the deadline waits for the handler to finish, and
+		// the socket's own bounds decide when the connection is given up.
+		<-finished
+
+		if answered.panic != nil {
+			panic(answered.panic)
 		}
 	})
+}
+
+// withSubtreeDeadlines hangs the server's surfaces on the routes the server serves, with each subtree
+// under the bound its work needs: the request bound on every route the server answers, and the stream
+// bound on the Model Context Protocol endpoint alone.
+//
+// The two bounds cannot be nested — a request context takes the earlier of the deadlines put on it, so
+// a bound hung inside the administrator's bound is the administrator's bound, and the assistant's
+// endpoint would be cut off by a bound it was given a larger one to escape. The routes are therefore
+// split into two subtrees, each wrapped once, and the tree that hangs them carries no bound of its
+// own.
+//
+// The endpoint is hung on its exact path and on the subtree below it, so the assistant's address is
+// answered by the surface and not by the web application behind it, whichever form the assistant was
+// given to configure.
+func withSubtreeDeadlines(routes http.Handler, streams http.Handler, streamAt, requestAt time.Duration) http.Handler {
+	tree := http.NewServeMux()
+
+	if streams != nil {
+		bounded := withRequestDeadline(streams, streamAt)
+
+		tree.Handle(mcpbackend.EndpointPath, bounded)
+		tree.Handle(mcpbackend.EndpointPath+"/", bounded)
+	}
+
+	tree.Handle("/", withRequestDeadline(routes, requestAt))
+
+	return tree
 }
 
 // deadlineAnswer is the response writer the deadline middleware hands the
@@ -132,8 +193,8 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 // written its own failure does the handler's late answer get dropped, because
 // by then the request has an answer and two bodies would be one answer too many.
 type deadlineAnswer struct {
-	w       http.ResponseWriter
-	mu      sync.Mutex
+	w        http.ResponseWriter
+	mu       sync.Mutex
 	answered bool // the handler began answering, or took over its connection
 	refused  bool // the deadline answered
 

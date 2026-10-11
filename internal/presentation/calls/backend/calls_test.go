@@ -48,12 +48,12 @@ func TestSearchEndpointAnswersAPageOfCallHistory(t *testing.T) {
 	}
 
 	var answered struct {
-		Count     uint `json:"count"`
+		Count     uint   `json:"count"`
 		DateStart string `json:"dateStart"`
 		DateStop  string `json:"dateStop"`
 		Options   struct {
-			Limit *uint  `json:"limit"`
-			Sort  *int   `json:"sort"`
+			Limit *uint `json:"limit"`
+			Sort  *int  `json:"sort"`
 		} `json:"options"`
 		Results []struct {
 			ID          uint64    `json:"id"`
@@ -539,7 +539,7 @@ func TestSearchEndpointAnswersACallerOutsideTheScopeWithNoRows(t *testing.T) {
 	}
 
 	var answered struct {
-		Count   uint           `json:"count"`
+		Count   uint             `json:"count"`
 		Results []map[string]any `json:"results"`
 	}
 
