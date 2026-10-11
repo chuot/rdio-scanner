@@ -89,42 +89,58 @@ type Deps struct {
 	Docker bool
 }
 
-// Server is the MCP surface: one server object, one set of capabilities, and the HTTP handler that
+// Server is the MCP surface: the two capability sets the two tiers read, and the HTTP handler that
 // carries them.
 //
-// The server object is shared by every session the handler takes on, which is what lets a capability
+// The surface answers one address, and the gate in front of it decides who is asking before the
+// protocol speaks. The tier decides which set of capabilities the caller is handed: an assistant
+// choosing from a catalog half of which refuses it is an assistant that has to learn its own reach by
+// being refused, so the read-only set carries only what a listener's code opens.
+//
+// Each set is one server object shared by every session of its tier, which is what lets a capability
 // tell a connected assistant that the capability list changed.
 type Server struct {
-	mcp     *mcp.Server
-	handler http.Handler
+	readonly *mcp.Server
+	full     *mcp.Server
+	handler  http.Handler
 
 	session *application.CheckAdminSessionHandler
 	resolve *application.ResolveAccessQueryHandler
 	trusted *httpaddr.Trusted
 }
 
-// New builds the surface from the use cases it answers with, and registers its capabilities on it.
+// New builds the surface from the use cases it answers with, and registers its capabilities on the
+// servers of the tiers that reach them.
 func New(deps Deps) *Server {
+	implementation := &mcp.Implementation{
+		Name:    serverName,
+		Version: deps.Version,
+	}
+
 	srv := &Server{
-		mcp: mcp.NewServer(&mcp.Implementation{
-			Name:    serverName,
-			Version: deps.Version,
-		}, nil),
-		session: deps.Session,
-		resolve: deps.Resolve,
-		trusted: deps.Trusted,
+		readonly: mcp.NewServer(implementation, nil),
+		full:     mcp.NewServer(implementation, nil),
+		session:  deps.Session,
+		resolve:  deps.Resolve,
+		trusted:  deps.Trusted,
 	}
 
 	srv.registerCapabilities(deps)
 
-	// The handler hands every request the same server object. The surface is one set of
-	// capabilities for the whole deployment, not a server per connection.
+	// The handler hands each request the server of the tier the gate decided for it. The gate runs
+	// in front of this handler and leaves the caller in the request's context, so the tier is decided
+	// by the credential and not by anything the protocol is asked for.
 	//
 	// The gate sits outside it. The protocol handler is the thing that speaks the protocol, and a
 	// caller the server does not accept never reaches it: a refusal is answered before the surface
 	// says anything about itself.
-	sdk := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv.mcp },
-		&mcp.StreamableHTTPOptions{Logger: deps.Logger})
+	sdk := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		if who, ok := CallerOf(r.Context()); ok && who.Tier == TierFull {
+			return srv.full
+		}
+
+		return srv.readonly
+	}, &mcp.StreamableHTTPOptions{Logger: deps.Logger})
 
 	srv.handler = srv.Gate()(sdk)
 
@@ -149,13 +165,15 @@ func (s *Server) Handler() http.Handler {
 // goodbye to its other connections.
 //
 // The SDK closes a session's own transport when the session is closed, so the surface does not track
-// connections of its own: it asks the server object which sessions it is holding and closes each one.
+// connections of its own: it asks each server object which sessions it is holding and closes each one.
 func (s *Server) CloseSessions(ctx context.Context) error {
 	var first error
 
-	for session := range s.mcp.Sessions() {
-		if err := session.Close(); err != nil && first == nil {
-			first = err
+	for _, target := range []*mcp.Server{s.readonly, s.full} {
+		for session := range target.Sessions() {
+			if err := session.Close(); err != nil && first == nil {
+				first = err
+			}
 		}
 	}
 

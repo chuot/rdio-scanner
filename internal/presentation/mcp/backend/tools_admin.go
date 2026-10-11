@@ -38,8 +38,8 @@ import (
 // administrator's credential, because what they read is the whole deployment.
 
 // registerAdminTools adds the deployment summary, the log search, and the explanation of a line.
-func (s *Server) registerAdminTools(deps Deps) {
-	mcp.AddTool(s.mcp, &mcp.Tool{
+func registerAdminTools(target *mcp.Server, deps Deps) {
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "inspect_system",
 		Title: "What am I administering?",
 		Description: "A summary of this deployment: its version, whether it runs in a container, how " +
@@ -68,7 +68,7 @@ func (s *Server) registerAdminTools(deps Deps) {
 		return nil, summarize(deps, configuration), nil
 	})
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "search_logs",
 		Title: "Search the server's log view",
 		Description: "One page of the server's own log, filtered by severity, subsystem, a substring of " +
@@ -98,7 +98,7 @@ func (s *Server) registerAdminTools(deps Deps) {
 		return nil, logAnswer(page, criteria), nil
 	})
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "explain_error",
 		Title: "Explain one log line by what was said around it",
 		Description: "One line of the log, the lines the same subsystem wrote that day in order on both " +

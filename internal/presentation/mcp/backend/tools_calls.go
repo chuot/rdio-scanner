@@ -54,8 +54,8 @@ func isNotFound(err error) bool {
 // assistant gets and a page a listener at a desk gets come from one rule.
 
 // registerCallTools adds the history search, one call, and the scoped systems projection.
-func (s *Server) registerCallTools(deps Deps) {
-	mcp.AddTool(s.mcp, &mcp.Tool{
+func registerCallTools(target *mcp.Server, deps Deps) {
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "search_calls",
 		Title: "Search the recorded call history",
 		Description: "One page of recorded calls, filtered by system, talkgroup, group label, tag " +
@@ -86,7 +86,7 @@ func (s *Server) registerCallTools(deps Deps) {
 		return nil, pageAnswer(page, criteria), nil
 	})
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "get_call",
 		Title: "Read one recorded call",
 		Description: "Everything one recorded call carries except its recording: the system and " +
@@ -121,7 +121,7 @@ func (s *Server) registerCallTools(deps Deps) {
 		return nil, callAnswer(call), nil
 	})
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "list_systems",
 		Title: "List the systems, talkgroups, sites, and units this caller can name",
 		Description: "The references every other capability asks for: system, talkgroup, site, and " +
@@ -414,6 +414,13 @@ func refused(reason string) *mcp.CallToolResult {
 	result.SetError(fmt.Errorf("%s", reason))
 
 	return result
+}
+
+// newRefusal is a capability's refusal as the protocol reports it. A tool has a failure answer of
+// its own that a client shows as an answer; a resource read has none, so a resource that refuses
+// answers the protocol's error, carrying the same sentence a tool's refusal carries.
+func newRefusal(reason string) error {
+	return fmt.Errorf("%s", reason)
 }
 
 // scopeOf is the scope a caller's view is restricted by, which is nothing at all for a caller

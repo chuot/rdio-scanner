@@ -51,8 +51,8 @@ const (
 
 // registerReadResources adds the two resources the read-only tier reaches. The administrator reads
 // the same two, unscoped, and gains the configuration resources beside them.
-func (s *Server) registerReadResources(deps Deps) {
-	s.mcp.AddResource(&mcp.Resource{
+func registerReadResources(target *mcp.Server, deps Deps) {
+	target.AddResource(&mcp.Resource{
 		URI:      systemsURI,
 		Name:     "systems",
 		Title:    "The systems, talkgroups, sites, and units this caller can name",
@@ -79,7 +79,7 @@ func (s *Server) registerReadResources(deps Deps) {
 		return jsonResource(systemsURI, systemsAnswer(view))
 	})
 
-	s.mcp.AddResourceTemplate(&mcp.ResourceTemplate{
+	target.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: callURITemplate,
 		Name:        "call-history",
 		Title:       "A slice of the recorded call history",

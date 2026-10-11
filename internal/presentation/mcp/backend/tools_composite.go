@@ -37,9 +37,10 @@ import (
 // composed, so an assistant reading the catalog knows what a call reaches and an operator reading
 // the answer knows where each part came from.
 
-// registerCompositeTools adds the health review and the feed diagnosis.
-func (s *Server) registerCompositeTools(deps Deps) {
-	mcp.AddTool(s.mcp, &mcp.Tool{
+// registerHealthReview adds the health review. It reads the whole deployment, so it is registered on
+// the administrator's server alone.
+func registerHealthReview(target *mcp.Server, deps Deps) {
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "analyze_health",
 		Title: "Is this deployment healthy?",
 		Description: "One day of the deployment read as a whole: the warning and error lines counted " +
@@ -111,8 +112,13 @@ func (s *Server) registerCompositeTools(deps Deps) {
 
 		return nil, review(deps, configuration, at, warnings, failures, restarts), nil
 	})
+}
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
+// registerFeedDiagnosis adds the feed diagnosis. Its history question is one a listener's access code
+// answers about its own talkgroups, so it is registered on both servers, and the read-only form names
+// the parts of the deployment the code does not open as unavailable.
+func registerFeedDiagnosis(target *mcp.Server, deps Deps) {
+	mcp.AddTool(target, &mcp.Tool{
 		Name:  "diagnose_feed_problem",
 		Title: "This talkgroup has gone quiet. Why?",
 		Description: "One talkgroup on one system read from every side at once: its last recorded " +

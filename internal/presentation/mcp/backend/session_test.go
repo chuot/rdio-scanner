@@ -43,17 +43,41 @@ func newSession(t *testing.T, restricted bool) *session {
 	return newCallerSession(t, Caller{Tier: TierFull})
 }
 
-// newCallerSession is the surface reached by a caller the gate decided, over the in-memory
-// transport. The caller is put in the context the session runs on, which is the context a
-// capability handler is handed — the same way the HTTP gate hands it to the protocol handler.
+// newCallerSession is the surface reached by a caller the gate decided, over the in-memory transport.
+// The caller's tier decides which capability set the session is connected to — the same choice the
+// HTTP handler makes from the caller the gate left in the request — and the caller is put in the
+// context the session runs on, which is the context a capability handler is handed.
 func newCallerSession(t *testing.T, who Caller) *session {
 	t.Helper()
 
 	bundle := newServer(t, true)
 
+	target := bundle.server.readonly
+	if who.Tier == TierFull {
+		target = bundle.server.full
+	}
+
+	return newSessionOn(t, bundle, target, who)
+}
+
+// newAdministratorSetSession is the administrator's capability set reached by a caller of any tier.
+// The surface hands that set to the administrator's credential alone, so this is the shape the
+// surface has when a capability is registered on the administrator's set and the caller standing in
+// front of it is weaker — the drift the handlers' own credential check is the lock on.
+func newAdministratorSetSession(t *testing.T, who Caller) *session {
+	t.Helper()
+
+	bundle := newServer(t, true)
+
+	return newSessionOn(t, bundle, bundle.server.full, who)
+}
+
+func newSessionOn(t *testing.T, bundle *serverBundle, target *mcp.Server, who Caller) *session {
+	t.Helper()
+
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 
-	serverSession, err := bundle.server.mcp.Connect(
+	serverSession, err := target.Connect(
 		context.WithValue(context.Background(), callerKey{}, who), serverTransport, nil)
 	if err != nil {
 		t.Fatalf("connect the surface to an in-memory session: %v", err)

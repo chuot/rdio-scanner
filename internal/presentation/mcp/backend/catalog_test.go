@@ -102,6 +102,39 @@ func TestEveryRegisteredCapabilityIsInventoried(t *testing.T) {
 	assertSame(t, "resource templates", want.templates, got.templates)
 }
 
+// TestEachTierIsHandedOnlyTheCapabilitiesItsReachOpens is the tier rule as an assistant meets it:
+// the read-only caller's catalog holds the read-only capabilities and nothing else, so it never has
+// to discover its own reach by being refused. The administrator's catalog is the whole inventory,
+// which the test above compares against it.
+func TestEachTierIsHandedOnlyTheCapabilitiesItsReachOpens(t *testing.T) {
+	s := newCallerSession(t, readScoped())
+
+	got := listRegistered(t, s)
+
+	want := registered{tools: []string{}, resources: []string{}, templates: []string{}}
+
+	for _, capability := range capabilityCatalog {
+		if capability.Reach != ReachReadonly {
+			continue
+		}
+
+		switch capability.Kind {
+		case KindTool:
+			want.tools = append(want.tools, capability.Name)
+		case KindResource:
+			want.resources = append(want.resources, capability.Name)
+		case KindTemplate:
+			want.templates = append(want.templates, capability.Name)
+		case KindPrompt:
+			// Prompts are listed by their own request, and are covered by the prompt tests.
+		}
+	}
+
+	assertSame(t, "the read-only tier's tools", want.tools, got.tools)
+	assertSame(t, "the read-only tier's resources", want.resources, got.resources)
+	assertSame(t, "the read-only tier's resource templates", want.templates, got.templates)
+}
+
 func TestEveryInventoriedCapabilityDeclaresWhoAndWhatItDoes(t *testing.T) {
 	for _, capability := range capabilityCatalog {
 		if capability.Name == "" {

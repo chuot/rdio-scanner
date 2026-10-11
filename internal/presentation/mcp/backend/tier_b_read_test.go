@@ -21,7 +21,11 @@
 package backend
 
 import (
+	"context"
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"rdio-scanner/internal/domain"
 )
@@ -103,17 +107,21 @@ func TestInspectSystemSummarizesWhatIsBeingAdministered(t *testing.T) {
 	}
 }
 
-// The administrator's reading capabilities are behind the administrator's credential. An access code
-// opens the read-only tier, and the refusal says what is required without naming what the caller is
-// missing.
+// The administrator's reading capabilities carry their own credential check, and not only the tier
+// routing: a capability registered on the administrator's set refuses a weaker caller standing in
+// front of it, and the refusal says what is required without naming what the caller is missing.
+//
+// This is the shape the surface has when the registration and the caller disagree. The routing is a
+// registration-time fact that can drift as the catalog grows; the check inside the handler is the
+// lock that cannot.
 func TestTheAdministratorsReadingCapabilitiesRefuseAnAccessCodeCaller(t *testing.T) {
-	s := newCallerSession(t, readScoped())
+	s := newAdministratorSetSession(t, readScoped())
 
-	for _, tool := range []string{"inspect_system", "search_logs", "explain_error"} {
-		refused := refusedCall(t, s, tool, map[string]any{"source": "ffmpeg", "text": "conversion", "date": fixtureTime.Format("2006-01-02")})
+	for _, probe := range administratorProbes() {
+		refused := refusedCall(t, s, probe.tool, probe.args)
 
-		if refused == "" {
-			t.Fatalf("%s answered an access-code caller", tool)
+		if !strings.Contains(refused, "administrator") {
+			t.Fatalf("%s refused with %q, which does not say what is required", probe.tool, refused)
 		}
 	}
 }
@@ -123,13 +131,67 @@ func TestTheAdministratorsReadingCapabilitiesRefuseAnAccessCodeCaller(t *testing
 // that is open to the network does not decide on its own that an anonymous caller is an
 // administrator.
 func TestTheAdministratorsReadingCapabilitiesRefuseAnAnonymousCaller(t *testing.T) {
-	s := newCallerSession(t, Caller{Tier: TierReadOnly})
+	s := newAdministratorSetSession(t, Caller{Tier: TierReadOnly})
 
-	for _, tool := range []string{"inspect_system", "search_logs", "explain_error"} {
-		refused := refusedCall(t, s, tool, map[string]any{"source": "ffmpeg", "text": "conversion", "date": fixtureTime.Format("2006-01-02")})
+	for _, probe := range administratorProbes() {
+		refused := refusedCall(t, s, probe.tool, probe.args)
 
-		if refused == "" {
-			t.Fatalf("%s answered a caller carrying no credential", tool)
+		if !strings.Contains(refused, "administrator") {
+			t.Fatalf("%s refused with %q, which does not say what is required", probe.tool, refused)
+		}
+	}
+}
+
+// administratorProbes is each administrator's reading capability with an argument list it accepts:
+// the arguments a capability does not take are refused by its own schema before the capability is
+// reached, and the point of these tests is the credential refusal.
+func administratorProbes() []struct {
+	tool string
+	args map[string]any
+} {
+	day := fixtureTime.Format("2006-01-02")
+
+	return []struct {
+		tool string
+		args map[string]any
+	}{
+		{"inspect_system", map[string]any{}},
+		{"search_logs", map[string]any{"source": "ffmpeg", "text": "conversion", "date": day}},
+		{"explain_error", map[string]any{"source": "ffmpeg", "text": "conversion", "date": day}},
+		{"analyze_health", map[string]any{"date": day}},
+	}
+}
+
+// The read-only tier's catalog names none of the administrator's capabilities. An assistant that has
+// to discover its reach by being refused is an assistant that will spend its turn on calls it cannot
+// make, so the routing hands it the set its credential opens and nothing else.
+func TestTheReadOnlyTiersCatalogNamesNoAdministratorsCapability(t *testing.T) {
+	for _, who := range []Caller{readScoped(), {Tier: TierReadOnly}} {
+		s := newCallerSession(t, who)
+
+		tools, err := s.ListTools(context.Background(), &mcp.ListToolsParams{})
+		if err != nil {
+			t.Fatalf("list the tools: %v", err)
+		}
+
+		for _, tool := range tools.Tools {
+			capability, ok := catalogOf(tool.Name)
+			if !ok {
+				t.Fatalf("%s is in the read-only tier's catalog and not inventoried", tool.Name)
+			}
+
+			if capability.Reach != ReachReadonly {
+				t.Fatalf("the read-only tier's catalog names %s, which the inventory says is an administrator's capability",
+					tool.Name)
+			}
+		}
+
+		for _, name := range []string{"inspect_system", "search_logs", "explain_error", "analyze_health"} {
+			for _, tool := range tools.Tools {
+				if tool.Name == name {
+					t.Fatalf("the read-only tier's catalog names %s", name)
+				}
+			}
 		}
 	}
 }
