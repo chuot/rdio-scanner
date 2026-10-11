@@ -259,6 +259,49 @@ func (s *journeyServer) authorizedRequest(t *testing.T, method, path, token, bod
 	return rec
 }
 
+// codeRequest asks a call history endpoint with a listener access code on the request, which is how
+// a listener-facing journey proves itself. The header is not the administrator's: the two
+// credentials are two principals with two sets of rights, and a journey that mixed them up would
+// prove the wrong thing.
+func (s *journeyServer) codeRequest(method, path, code, body string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("X-Access-Code", code)
+
+	s.server.ServeHTTP(rec, req)
+
+	return rec
+}
+
+// codeRequestFrom asks a call history endpoint with an access code, from an address the journey
+// names: the guess budget is keyed on the address, and a journey that wants to show the budget
+// belongs to one address has to be able to arrive from another one.
+func (s *journeyServer) codeRequestFrom(method, path, code, body, remoteAddr string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("X-Access-Code", code)
+	req.RemoteAddr = remoteAddr + ":52000"
+
+	s.server.ServeHTTP(rec, req)
+
+	return rec
+}
+
+// getRange asks an endpoint for a slice of what it holds, which is how a client resumes a download
+// or seeks a player.
+func (s *journeyServer) getRange(path, rng string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Range", rng)
+
+	s.server.ServeHTTP(rec, req)
+
+	return rec
+}
+
 // getAuthorized asks an administrator endpoint for what it holds with a session on the request.
 func (s *journeyServer) getAuthorized(path, token string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
@@ -422,6 +465,12 @@ type uploadedRecording struct {
 	filename  string
 	audio     []byte
 	at        time.Time
+
+	// audioName is the name the upload gives its recording out loud, which is how an uploader
+	// names the type it posted: the server reads the recording's type from the extension of the
+	// name it is given, and an upload that posts only the file part stores a recording whose type
+	// it never named.
+	audioName string
 }
 
 // uploadRecording posts a recording the way an uploader posts one, and reports how the server answered. The
@@ -453,6 +502,15 @@ func (s *journeyServer) uploadRecording(t *testing.T, upload uploadedRecording) 
 
 	if _, err := part.Write(upload.audio); err != nil {
 		t.Fatalf("writing the recording: %v", err)
+	}
+
+	// The name the upload gives its recording out loud comes after the recording itself, which is
+	// the order that decides which of the two wins: the server reads a field per upload and the
+	// later one writes over what the earlier one wrote.
+	if upload.audioName != "" {
+		if err := writer.WriteField("audioFilename", upload.audioName); err != nil {
+			t.Fatalf("writing the audioFilename field: %v", err)
+		}
 	}
 
 	if err := writer.Close(); err != nil {
