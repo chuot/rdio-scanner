@@ -859,3 +859,49 @@ type bodyCutShortError struct{}
 func (err *bodyCutShortError) Error() string {
 	return "the connection was closed while the body was being read"
 }
+
+// TestCallUploadEndpointRefusesABodyBeyondTheUploadCap (decision D2): the endpoint reads the whole
+// body into memory before it knows anything about the caller, so a cap is the only thing standing
+// between an anonymous POST and the server's memory. The refusal rides the existing read-failure
+// answer — a 417 naming the step that failed — because the frozen contract already has that shape.
+func TestCallUploadEndpointRefusesABodyBeyondTheUploadCap(t *testing.T) {
+	fixture := newUploadFixture()
+
+	fixture.seedUploadSystem()
+	fixture.parser.produces(completeCall())
+
+	big := bytes.Repeat([]byte{0x01}, 33*1024*1024)
+
+	body, contentType := postedBody(t, append(captureUploadFields(uploadOpenKey),
+		uploadField{name: "audio", filename: "big.wav", value: string(big)})...)
+
+	rec := fixture.post("/api/call-upload", contentType, body)
+
+	if rec.Code != http.StatusExpectationFailed {
+		t.Fatalf("upload status = %d, want 417 for a body over the cap: %s", rec.Code, rec.Body.String())
+	}
+
+	if got := rec.Body.String(); !strings.HasPrefix(got, "multipart: ") && !strings.HasPrefix(got, "ioread: ") {
+		t.Errorf("upload answer = %q, want it to name the step that failed", got)
+	}
+}
+
+// The cap must not cost the server its endpoint: a body under it, with a recording of a size real
+// uploads carry, is answered exactly as before.
+func TestCallUploadEndpointAcceptsABodyUnderTheUploadCap(t *testing.T) {
+	fixture := newUploadFixture()
+
+	fixture.seedUploadSystem()
+	fixture.parser.produces(completeCall())
+
+	recording := bytes.Repeat([]byte{0x01}, 1024*1024)
+
+	body, contentType := postedBody(t, append(captureUploadFields(uploadOpenKey),
+		uploadField{name: "audio", filename: "big.wav", value: string(recording)})...)
+
+	rec := fixture.post("/api/call-upload", contentType, body)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("upload status = %d, want 200 for a body under the cap: %s", rec.Code, rec.Body.String())
+	}
+}

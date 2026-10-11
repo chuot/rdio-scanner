@@ -110,6 +110,14 @@ func (upload *Endpoints) Register(mux *http.ServeMux) {
 const (
 	uploadAccepted = "Call imported successfully.\n"
 	uploadDenied   = "Invalid API key for system <nil> talkgroup <nil>.\n"
+
+	// maxUploadBytes is the ceiling on the body an upload endpoint will read. These endpoints read
+	// the whole body into memory before the credential is looked at, so without a ceiling an
+	// anonymous POST is a way to spend the server's memory at will (decision D2). The ceiling is
+	// generous against real recordings — a long call in lossless form — and a body over it fails
+	// through the endpoint's existing read-failure answer, which is the shape the frozen contract
+	// already has.
+	maxUploadBytes = 32 << 20
 )
 
 // CallUpload takes a call an outside program posted as a set of form fields.
@@ -178,7 +186,7 @@ func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkR
 	var (
 		call   = domain.NewCall()
 		key    string
-		reader = multipart.NewReader(r.Body, params["boundary"])
+		reader = multipart.NewReader(http.MaxBytesReader(w, r.Body, maxUploadBytes), params["boundary"])
 	)
 
 	for {
