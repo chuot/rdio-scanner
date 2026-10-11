@@ -1647,3 +1647,20 @@ func TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline(t *testing.T)
 			"together, inside the shutdown window: %s past", elapsed, elapsed.Round(time.Second))
 	}
 }
+
+// TestAConnectionArrivingAfterTheHubClosedIsRefused (REQ-007, CA-007.3): the close ends
+// every session the hub was holding and waits for the goroutines running them. A connection
+// taken over after that is a session added to a hub that has finished, with goroutines
+// started on a WaitGroup the close is already waiting on — the misuse the race detector
+// names as an Add during a Wait. A hub that has closed does not attach anything.
+func TestAConnectionArrivingAfterTheHubClosedIsRefused(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	f.hub.Close(context.Background())
+
+	id, _ := f.dial(t)
+
+	if id != "" {
+		t.Fatalf("a connection was attached (id %q) after the hub closed, want it refused", id)
+	}
+}

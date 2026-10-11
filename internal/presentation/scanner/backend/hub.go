@@ -147,6 +147,12 @@ type Hub struct {
 	// session out of the hub, so nothing else can tell that the entry is still on its way.
 	held sync.WaitGroup
 
+	// closed marks a hub whose close has run: a connection arriving after it is refused,
+	// because the close has already waited for every goroutine the hub had started, and a
+	// session attached after it would start goroutines on a WaitGroup the close is already
+	// waiting on (REQ-007, CA-007.3).
+	closed bool
+
 	// The intervals above are what every hub starts with. They are fields rather than constants used
 	// inline so that this package's own tests can hold a connection to a shorter version of them: a
 	// test that checks a dropped connection has to wait for one, and no server should be able to pick
@@ -212,6 +218,16 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 	max := hub.settings.Settings().MaxClients
 
 	hub.mutex.Lock()
+
+	// A hub whose close has run does not attach anything: the close has already waited for
+	// every goroutine the hub had started (REQ-007, CA-007.3).
+	if hub.closed {
+		hub.mutex.Unlock()
+
+		conn.Close()
+
+		return "", false
+	}
 
 	// The gate is on the connections the server is holding, not on the ones that finished
 	// becoming listeners: a client that never answers must not keep the slot open forever
@@ -474,6 +490,10 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 // administrator socket's goodbyes.
 func (hub *Hub) Close(ctx context.Context) {
 	hub.mutex.Lock()
+
+	// From here on, a connection arriving is refused: the goroutines this close is about
+	// to wait for are all the goroutines the hub will ever have (REQ-007, CA-007.3).
+	hub.closed = true
 
 	sessions := make([]*listener, 0, len(hub.sessions))
 

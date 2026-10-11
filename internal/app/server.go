@@ -117,7 +117,15 @@ type Server struct {
 	ingest *application.IngestCallHandler
 
 	// serving holds the addresses this server is answering on, so that stopping the server stops them.
-	serving []*http.Server
+	//
+	// The list is written by the goroutine that is serving and read by the goroutine that is
+	// stopping — the operator's interrupt can ask for the stop while the addresses are still
+	// being registered — so the list is carried under servingMutex. Building every address
+	// before any goroutine runs (REQ-007, CA-007.3) keeps the registrations themselves in
+	// one goroutine; the mutex is what makes the stop see a complete list, never a
+	// half-built one.
+	serving      []*http.Server
+	servingMutex sync.Mutex
 
 	// listeners, adminSessions, and listenerCounts are the connections the server has taken over and the
 	// report it owes about how many of the first kind there are. Shutting an address down does not wait for
@@ -632,13 +640,24 @@ func (s *Server) stop(ctx context.Context) {
 			s.watches.Stop(shuttingDown)
 		}
 
-		for _, serving := range s.serving {
-			if err := serving.Shutdown(shuttingDown); err != nil {
+		// The list of addresses is read under the lock that registers them: the stop is
+		// often the operator's interrupt asking for it while the addresses are still being
+		// registered, and a stop that reads the list unlocked can miss an address that is
+		// about to be registered and leave it answering after the server has stopped.
+		s.servingMutex.Lock()
+
+		serving := make([]*http.Server, len(s.serving))
+		copy(serving, s.serving)
+
+		s.servingMutex.Unlock()
+
+		for _, server := range serving {
+			if err := server.Shutdown(shuttingDown); err != nil {
 				_ = s.logs.AppendLog(ctx, domain.LogEntry{
 					DateTime: s.clock.Now(),
 					Level:    domain.LogLevelError,
 					Source:   domain.LogSourceServer,
-					Message:  fmt.Sprintf("the server could not stop answering %s: %v", serving.Addr, err),
+					Message:  fmt.Sprintf("the server could not stop answering %s: %v", server.Addr, err),
 				})
 			}
 		}
@@ -718,8 +737,15 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	s.announce(addresses)
 
+	// Both addresses are built and registered with the server before any goroutine runs
+	// (REQ-007, CA-007.3): the list the stop walks to shut the addresses down was being
+	// appended by the serving goroutine and the TLS goroutine at the same moment — a data
+	// race, and a stop racing with the registration could shut down a list that is missing
+	// the TLS address.
+	serving := s.httpServer(fmt.Sprintf("%s:%s", addresses.addr, addresses.port))
+
 	if len(s.config.SslCertFile) > 0 && len(s.config.SslKeyFile) > 0 {
-		go s.listenTLS(addresses, nil)
+		go s.listenTLS(s.tlsServer(addresses, nil), addresses)
 
 	} else if s.config.SslAutoCert != "" {
 		manager := &autocert.Manager{
@@ -728,10 +754,8 @@ func (s *Server) Serve(ctx context.Context) error {
 			HostPolicy: autocert.HostWhitelist(s.config.SslAutoCert),
 		}
 
-		go s.listenTLS(addresses, manager.TLSConfig())
+		go s.listenTLS(s.tlsServer(addresses, manager.TLSConfig()), addresses)
 	}
-
-	serving := s.httpServer(fmt.Sprintf("%s:%s", addresses.addr, addresses.port))
 
 	if err := serving.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
@@ -740,27 +764,46 @@ func (s *Server) Serve(ctx context.Context) error {
 	return nil
 }
 
+// tlsServer builds the https listener, registered with the server the way every address it
+// answers on is registered, before the goroutine that answers it starts.
+func (s *Server) tlsServer(addresses addresses, tlsConfig *tls.Config) *http.Server {
+	server := s.httpServer(fmt.Sprintf("%s:%s", addresses.sslAddr, addresses.sslPort))
+
+	server.TLSConfig = tlsConfig
+
+	return server
+}
+
 // listenTLS answers the https address, in the two ways the legacy server answers it: with a certificate the
 // deployment provided, or with one the server obtains for itself.
 //
-// A listener that cannot start is fatal, which is what the legacy server does: a server that was asked to
-// answer on https and cannot is not a server that should carry on with only http.
-func (s *Server) listenTLS(addresses addresses, tlsConfig *tls.Config) {
+// A listener that cannot start stops the server (REQ-007, CA-007.4): a deployment that asked for https and
+// cannot answer it is not a server that should carry on with only http. The legacy server made this fatal
+// — log.Fatal killed the process with a line on the terminal, nothing in the server's log, and the plain
+// address left answering until the process died. The failure is filed in the server's log, said on the
+// terminal with it, and the server stops the way it stops for its operator's interrupt.
+func (s *Server) listenTLS(serving *http.Server, addresses addresses) {
 	s.announceTLS(addresses)
-
-	server := s.httpServer(fmt.Sprintf("%s:%s", addresses.sslAddr, addresses.sslPort))
-	server.TLSConfig = tlsConfig
 
 	var err error
 
 	if len(s.config.SslCertFile) > 0 && len(s.config.SslKeyFile) > 0 {
-		err = server.ListenAndServeTLS(s.config.GetSslCertFilePath(), s.config.GetSslKeyFilePath())
+		err = serving.ListenAndServeTLS(s.config.GetSslCertFilePath(), s.config.GetSslKeyFilePath())
 	} else {
-		err = server.ListenAndServeTLS("", "")
+		err = serving.ListenAndServeTLS("", "")
 	}
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		_ = s.logs.AppendLog(context.Background(), domain.LogEntry{
+			DateTime: s.clock.Now(),
+			Level:    domain.LogLevelError,
+			Source:   domain.LogSourceServer,
+			Message:  fmt.Sprintf("the server could not answer its https address %s: %v", serving.Addr, err),
+		})
+
+		s.stop(context.Background())
+
+		return
 	}
 }
 
@@ -781,7 +824,9 @@ func (s *Server) httpServer(addr string) *http.Server {
 
 	server.SetKeepAlivesEnabled(true)
 
+	s.servingMutex.Lock()
 	s.serving = append(s.serving, server)
+	s.servingMutex.Unlock()
 
 	return server
 }

@@ -23,11 +23,18 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -2575,4 +2582,226 @@ func writeRecordedDatabase(t *testing.T, statements []string) string {
 	db.Close()
 
 	return path
+}
+
+// aFreePort picks a port the operating system just handed out and gives it back, so a test
+// server can answer on an address no other test is holding.
+func aFreePort(t *testing.T) string {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("finding a free port: %v", err)
+	}
+
+	defer listener.Close()
+
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("reading the free port: %v", err)
+	}
+
+	return port
+}
+
+// aSelfSignedCertificate writes a certificate and key a test server can be pointed at, so a
+// test can ask about the https address without a deployment's certificate.
+func aSelfSignedCertificate(t *testing.T, dir string) (string, string) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generating a TLS key: %v", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "localhost"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		DNSNames:              []string{"localhost"},
+		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1)},
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("signing a TLS certificate: %v", err)
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatalf("reading the TLS key: %v", err)
+	}
+
+	certFile := filepath.Join(dir, "tls.crt")
+	keyFile := filepath.Join(dir, "tls.key")
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	if err := os.WriteFile(certFile, certPEM, 0o600); err != nil {
+		t.Fatalf("writing the TLS certificate: %v", err)
+	}
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatalf("writing the TLS key: %v", err)
+	}
+
+	return certFile, keyFile
+}
+
+// answers reports whether an address is taking connections right now.
+func answers(addr string) bool {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return false
+	}
+
+	conn.Close()
+
+	return true
+}
+
+// waitsForAddress waits until an address is taking connections, and says so when it never is.
+func waitsForAddress(t *testing.T, addr string) bool {
+	t.Helper()
+
+	deadline := time.Now().Add(10 * time.Second)
+
+	for time.Now().Before(deadline) {
+		if answers(addr) {
+			return true
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	return false
+}
+
+// TestStartingAndStoppingATLSServerIsRaceFree (REQ-007, CA-007.3, CA-007.4): the https
+// address is registered with the server by the goroutine that answers it, while the
+// goroutine answering the plain address registers that one at the same moment — the list
+// the stop walks to shut the addresses down is being built by two goroutines at once, which
+// is a data race the race detector names, and a stop that races with a registration can
+// shut down a list that is missing the TLS address. Start and stop must be clean, and the
+// stop must shut down every address the server is answering on, the TLS one included.
+func TestStartingAndStoppingATLSServerIsRaceFree(t *testing.T) {
+	ctx := context.Background()
+
+	for i := 0; i < 8; i++ {
+		base := filepath.Join(t.TempDir(), fmt.Sprintf("run-%d", i))
+
+		if err := os.MkdirAll(base, 0o755); err != nil {
+			t.Fatalf("creating the run folder: %v", err)
+		}
+
+		certFile, keyFile := aSelfSignedCertificate(t, base)
+
+		cfg := testConfigIn(base, io.Discard)
+		cfg.Listen = "127.0.0.1:" + aFreePort(t)
+		cfg.SslListen = "127.0.0.1:" + aFreePort(t)
+		cfg.SslCertFile = certFile
+		cfg.SslKeyFile = keyFile
+
+		srv, err := New(cfg)
+		if err != nil {
+			t.Fatalf("iteration %d, New: %v", i, err)
+		}
+
+		if err := srv.Start(ctx); err != nil {
+			t.Fatalf("iteration %d, start: %v", i, err)
+		}
+
+		serveDone := make(chan error, 1)
+
+		go func() {
+			serveDone <- srv.Serve(ctx)
+		}()
+
+		for _, addr := range []string{cfg.Listen, cfg.SslListen} {
+			if !waitsForAddress(t, addr) {
+				t.Fatalf("iteration %d: the server never answered on %s", i, addr)
+			}
+		}
+
+		srv.stop(ctx)
+
+		select {
+		case err := <-serveDone:
+			if err != nil {
+				t.Fatalf("iteration %d, Serve: %v", i, err)
+			}
+
+		case <-time.After(10 * time.Second):
+			t.Fatalf("iteration %d: Serve did not return after the stop", i)
+		}
+
+		for _, addr := range []string{cfg.Listen, cfg.SslListen} {
+			if answers(addr) {
+				t.Fatalf("iteration %d: %s is still answering after the stop, want every serving address shut down", i, addr)
+			}
+		}
+	}
+}
+
+// TestTheServerStopsWhenItCannotAnswerItsTLSAddress (REQ-007, CA-007.4): a deployment that
+// names a certificate it cannot use asked for https and cannot answer it. Today that
+// failure is fatal: the process dies with a line on the terminal, nothing in the server's
+// log, and the plain address left answering — an operator finds out a live server lost its
+// https only by going looking. The failure is filed in the log and stops the server, the
+// way a failure to answer the plain address is reported.
+func TestTheServerStopsWhenItCannotAnswerItsTLSAddress(t *testing.T) {
+	base := t.TempDir()
+
+	console := &consoleCapture{}
+
+	cfg := testConfigIn(base, console)
+	cfg.Listen = "127.0.0.1:" + aFreePort(t)
+	cfg.SslListen = "127.0.0.1:" + aFreePort(t)
+	cfg.SslCertFile = filepath.Join(base, "missing.crt")
+	cfg.SslKeyFile = filepath.Join(base, "missing.key")
+
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := srv.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	serveDone := make(chan error, 1)
+
+	go func() {
+		serveDone <- srv.Serve(context.Background())
+	}()
+
+	// The server must stop on its own. Today the TLS failure is log.Fatal: the test
+	// process dies here, which is the failure this test is written to prevent.
+	select {
+	case <-serveDone:
+
+	case <-time.After(10 * time.Second):
+		t.Fatal("the server kept running with a TLS address it cannot answer, want it to have stopped")
+	}
+
+	if answers(cfg.Listen) {
+		t.Error("the plain address is still answering after the TLS failure, want the server to have stopped")
+	}
+
+	db := openTestDatabase(t, base)
+
+	if storedLogMentioning(t, db, "https address") == "" {
+		t.Error("the server's log holds no entry about the TLS address it could not answer")
+	}
+
+	if !strings.Contains(console.String(), "https address") {
+		t.Errorf("the terminal holds %q, want the TLS failure said on it too", console.String())
+	}
 }
