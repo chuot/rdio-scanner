@@ -867,7 +867,8 @@ rdio-search-panel .rdio-list td:first-child {
 }
 
 /* Legacy mat-table column flexes: action 48px, date 55px, time 53px (78px in
- * the 12-hour format), system and talkgroup 20% each, name takes the rest. */
+ * the 12-hour format), duration 56px, system and talkgroup 20% each, name
+ * takes the rest. */
 rdio-search-panel .rdio-list th:nth-child(1),
 rdio-search-panel .rdio-list td:nth-child(1) {
   width: 48px;
@@ -886,10 +887,16 @@ rdio-search-panel .rdio-list td:nth-child(3) {
   width: 78px;
 }
 
+/* The duration column fits the mm:ss form the display formats. */
 rdio-search-panel .rdio-list th:nth-child(4),
-rdio-search-panel .rdio-list td:nth-child(4),
+rdio-search-panel .rdio-list td:nth-child(4) {
+  width: 56px;
+}
+
 rdio-search-panel .rdio-list th:nth-child(5),
-rdio-search-panel .rdio-list td:nth-child(5) {
+rdio-search-panel .rdio-list td:nth-child(5),
+rdio-search-panel .rdio-list th:nth-child(6),
+rdio-search-panel .rdio-list td:nth-child(6) {
   width: 20%;
 }
 
