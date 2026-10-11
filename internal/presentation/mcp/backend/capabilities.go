@@ -40,6 +40,7 @@ import (
 // ever reachable before the credential gate that decides who may call it.
 func (s *Server) registerCapabilities(deps Deps) {
 	s.registerVersionResource(deps)
+	s.registerCallTools(deps)
 }
 
 // registerVersionResource publishes the fact an assistant needs before it asks for anything else: which

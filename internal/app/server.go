@@ -507,6 +507,8 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 			Trusted: s.trusted,
 			Config:  application.NewGetConfigHandler(s.repos),
 			Logs:    application.NewSearchLogsHandler(s.logs, s.clock),
+			Call:    application.NewGetCallQueryHandler(calls),
+			Search:  application.NewSearchCallsQueryHandler(calls, systems, groups, tags),
 			Clock:   s.clock,
 		})
 	}

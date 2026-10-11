@@ -53,6 +53,10 @@ const (
 	listenerCode  = "753159"
 	listenerIdent = "dispatch-desk"
 
+	// The two systems the fixture's history is spread over.
+	systemOneRef = uint(10001)
+	systemTwoRef = uint(10002)
+
 	// accessAttemptsMax is the number of access-code attempts one address is allowed before the
 	// server stops looking at what that address presents. It is the administrator login's bound,
 	// restated here so the test that protects it names it.
@@ -101,10 +105,41 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 
 	bundle.resolve = application.NewResolveAccessQueryHandler(bundle.accesses, bundle.logs, bundle.clock)
 
+	// The recorded history the capabilities answer from, spread over two systems so a scoped
+	// caller and an unscoped caller can be told apart by what they get back.
+	bundle.calls = fakes.NewCalls()
+	bundle.calls.Stored = map[uint64]domain.Call{
+		1: fixtureCall(1, systemOneRef, fixtureTime.Add(-3*time.Hour)),
+		2: fixtureCall(2, systemOneRef, fixtureTime.Add(-2*time.Hour)),
+		3: fixtureCall(3, systemTwoRef, fixtureTime.Add(-1*time.Hour)),
+	}
+	bundle.systems = &fakes.Systems{Stored: domain.Systems{
+		{ID: 1, Label: "System", SystemRef: systemOneRef},
+		{ID: 2, Label: "System", SystemRef: systemTwoRef},
+	}}
+	bundle.groups = &fakes.Groups{Stored: domain.Groups{{ID: 1, Label: "Fire"}}}
+	bundle.tags = &fakes.Tags{Stored: domain.Tags{{ID: 3, Label: "Fire Dispatch"}}}
+
 	bundle.server = New(bundle.Deps())
 	bundle.handler = bundle.server.Handler()
 
 	return bundle
+}
+
+// fixtureCall is one recorded call on one system.
+func fixtureCall(id uint64, systemRef uint, at time.Time) domain.Call {
+	call := domain.NewCall()
+
+	call.ID = id
+	call.Audio = []byte("audio-bytes")
+	call.AudioFilename = "call.wav"
+	call.AudioLength = time.Second
+	call.AudioMime = "audio/wav"
+	call.System = domain.System{ID: uint64(systemRef), Label: "System", SystemRef: systemRef}
+	call.Talkgroup = domain.Talkgroup{ID: 1, Label: "Talkgroup", TalkgroupRef: 1514000}
+	call.Timestamp = at
+
+	return call
 }
 
 // Deps is the wiring the composition root does for this surface, with the use cases built over the
@@ -112,15 +147,17 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 func (bundle *serverBundle) Deps() Deps {
 	return Deps{
 		Version: testVersion,
+		Call:    application.NewGetCallQueryHandler(bundle.calls),
+		Search:  application.NewSearchCallsQueryHandler(bundle.calls, bundle.systems, bundle.groups, bundle.tags),
 		Config: application.NewGetConfigHandler(application.ConfigurationRepositories{
 			Accesses:    bundle.accesses,
 			Apikeys:     &fakes.Apikeys{},
 			Dirwatches:  &fakes.Dirwatches{},
 			Downstreams: &fakes.Downstreams{},
-			Groups:      &fakes.Groups{},
+			Groups:      bundle.groups,
 			Options:     &fakes.Options{},
-			Systems:     &fakes.Systems{},
-			Tags:        &fakes.Tags{},
+			Systems:     bundle.systems,
+			Tags:        bundle.tags,
 		}),
 		Logs:    application.NewSearchLogsHandler(bundle.logs, bundle.clock),
 		Resolve: bundle.resolve,

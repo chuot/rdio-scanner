@@ -37,6 +37,10 @@ import (
 // rest of the server answers on, and it is a route of its own.
 const endpointPath = "/mcp"
 
+// serverName is what the surface announces itself as. An assistant reads it, and an operator
+// recognises it in the assistant's tool list beside the other things it was told to reach.
+const serverName = "rdio-scanner"
+
 // Deps is what the MCP surface is built from: the use cases its capabilities call, the credential checks
 // it gates requests with, and the two facts about the deployment it reports.
 //
@@ -73,6 +77,12 @@ type Deps struct {
 	// Clock is the server's clock, for the windows the diagnostics ask for.
 	Clock ports.Clock
 
+	// Call reads one recorded call by its identifier, and Search answers the history search. They
+	// are the same use cases the call history endpoints answer with, so a page an assistant gets
+	// and a page a listener gets come from one rule.
+	Call   *application.GetCallQueryHandler
+	Search *application.SearchCallsQueryHandler
+
 	// Docker is whether the server thinks it is running in a container. The composition root asks the
 	// environment once, because the answer cannot change while the server is running, and hands the
 	// answer here — the same way it hands the administrator's surface.
@@ -97,7 +107,7 @@ type Server struct {
 func New(deps Deps) *Server {
 	srv := &Server{
 		mcp: mcp.NewServer(&mcp.Implementation{
-			Name:    "rdio-scanner",
+			Name:    serverName,
 			Version: deps.Version,
 		}, nil),
 		session: deps.Session,
