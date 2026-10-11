@@ -32,10 +32,28 @@ test('the groups carry the admin-facing names of the surface', () => {
     'Config',
     'Alerts',
     'Logs',
+    'Calls',
     'Password',
     'Users',
     'Capture',
     'Applications',
+  ]);
+});
+
+// FEAT-029: the call history over HTTP. The section shows what the server answers, so the three
+// endpoints the contract names appear as their own group, read between the log view and the
+// password change.
+test('the Calls group names the three call history endpoints', () => {
+  const groups = buildOpenApiGroups(contract);
+
+  const calls = groups.find((group) => group.title === 'Calls');
+
+  assert.ok(calls, 'the view names no Calls group: the call history endpoints land in no group');
+
+  assert.deepEqual(calls.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`).sort(), [
+    'GET /api/calls/{callId}',
+    'GET /api/calls/{callId}/audio',
+    'POST /api/calls/search',
   ]);
 });
 

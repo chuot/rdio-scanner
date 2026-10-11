@@ -118,11 +118,11 @@ function renderBox(group) {
 test('the OpenAPI card renders one box per group, each endpoint naming method, path, and summary', async () => {
   const { boxes } = await openApiCard();
 
-  assert.equal(boxes.length, 8, 'the OpenAPI card does not carry the eight contract groups');
+  assert.equal(boxes.length, 9, 'the OpenAPI card does not carry the nine contract groups');
 
   const titles = boxes.map(boxTitle);
 
-  assert.deepEqual(titles, ['Authentication', 'Config', 'Alerts', 'Logs', 'Password', 'Users', 'Capture', 'Applications']);
+  assert.deepEqual(titles, ['Authentication', 'Config', 'Alerts', 'Logs', 'Calls', 'Password', 'Users', 'Capture', 'Applications']);
 
   const login = rowFor(boxes[0], '/api/admin/login', 'POST');
 
@@ -130,6 +130,23 @@ test('the OpenAPI card renders one box per group, each endpoint naming method, p
   assert.deepEqual(texts(findAll(login, (node) => node.className.startsWith('method '))), ['POST']);
   assert.deepEqual(paths(login), ['/api/admin/login']);
   assert.deepEqual(texts(findAll(login, (node) => node.className === 'summary')), ['Log in and obtain a JWT']);
+});
+
+// FEAT-029: the call history over HTTP. The card shows what the server answers, so the three call
+// endpoints appear in their own box, read between the log view and the password change.
+test('the Calls box renders the three call history endpoints', async () => {
+  const { boxes } = await openApiCard();
+
+  const calls = boxes.find((box) => boxTitle(box) === 'Calls');
+
+  assert.ok(calls, 'the OpenAPI card carries no Calls box');
+
+  assert.deepEqual(paths(calls).sort(), ['/api/calls/search', '/api/calls/{callId}', '/api/calls/{callId}/audio']);
+
+  const search = rowFor(calls, '/api/calls/search', 'POST');
+
+  assert.ok(search, 'the Calls box does not render the search endpoint as a row');
+  assert.deepEqual(texts(findAll(search, (node) => node.className === 'summary')), ['Search the recorded calls']);
 });
 
 test('the OpenAPI card names every endpoint of the contract and nothing else', async () => {

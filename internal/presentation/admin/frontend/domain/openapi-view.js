@@ -21,6 +21,7 @@ const GROUPS = [
   { title: 'Config', icon: 'tune', match: (path) => path.startsWith('/api/admin/config') },
   { title: 'Alerts', icon: 'notifications', match: (path) => path.startsWith('/api/admin/alerts') },
   { title: 'Logs', icon: 'article', match: (path) => path === '/api/admin/logs' },
+  { title: 'Calls', icon: 'radio', match: (path) => path.startsWith('/api/calls') },
   { title: 'Password', icon: 'lock', match: (path) => path === '/api/admin/password' },
   { title: 'Users', icon: 'person', match: (path) => path.startsWith('/api/admin/user-') },
   { title: 'Capture', icon: 'cloud_upload', match: (path) => path === '/api/call-upload' || path === '/api/trunk-recorder-call-upload' },

@@ -3,7 +3,7 @@
   "info": {
     "title": "Rdio Scanner API",
     "version": "8.0.0",
-    "description": "The complete entry-point surface of the Rdio Scanner server: the administrator REST surface (authentication, whole-config access, per-section config endpoints, alerts, logs, password change, access user management), the two call ingestion endpoints, the two static applications, and the two WebSocket surfaces. Admin REST auth: raw JWT in the Authorization header, no Bearer prefix; HTTP 401 on invalid/expired token. The ingestion endpoints authenticate with the key form field. The WebSocket surfaces are documented as components.x-websockets (OpenAPI 3.1 has no native WebSocket construct): the listener protocol on any path, chosen by the Upgrade header, and the administrator configuration socket on /api/admin/config. The listener protocol is reserved for Saubeo Solutions native applications per API_ACCESS_POLICY.md."
+    "description": "The complete entry-point surface of the Rdio Scanner server: the administrator REST surface (authentication, whole-config access, per-section config endpoints, alerts, logs, password change, access user management), the two call ingestion endpoints, the call history endpoints (search, one call, one recording), the two static applications, and the two WebSocket surfaces. Admin REST auth: raw JWT in the Authorization header, no Bearer prefix; HTTP 401 on invalid/expired token. The ingestion endpoints authenticate with the key form field. The WebSocket surfaces are documented as components.x-websockets (OpenAPI 3.1 has no native WebSocket construct): the listener protocol on any path, chosen by the Upgrade header, and the administrator configuration socket on /api/admin/config. The listener protocol is reserved for Saubeo Solutions native applications per API_ACCESS_POLICY.md."
   },
   "servers": [
     {
@@ -915,6 +915,197 @@
         "description": "Remove from the access list the user with the id it names."
       }
     },
+    "/api/calls/search": {
+      "post": {
+        "summary": "Search the recorded calls",
+        "description": "One page of the call history, filtered by system, talkgroup, talkgroup group, talkgroup tag, and day. The paging bounds and the day window are the listener history search’s own: a limit above the ceiling is answered as the ceiling, and a negative offset is answered as the start of the table. The criteria come back as they were asked for, not as this server used them, so a caller can tell which of its filters this server read.",
+        "operationId": "searchCalls",
+        "security": [
+          {
+            "adminJwt": []
+          },
+          {
+            "accessCode": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallsSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One page of call history and the total the filters matched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallsSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Undecodable body"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "A restricted server: no access code, an access code it does not carry, an expired access, or an address that spent its access-code attempts."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
+          },
+          "417": {
+            "description": "History read failure"
+          }
+        }
+      }
+    },
+    "/api/calls/{callId}": {
+      "get": {
+        "summary": "Read one recorded call",
+        "description": "One recorded call in full: system, talkgroup, site, instant, the frequencies it was heard on, the units that spoke, the talkgroups it was patched to, and the name, type, and length of its recording. The recording’s bytes are not here: a metadata question is asked far more often than a recording is listened to, and a metadata answer carrying the recording makes every metadata answer a download. The recording is fetched at the audioUrl this answer names.",
+        "operationId": "getCall",
+        "security": [
+          {
+            "adminJwt": []
+          },
+          {
+            "accessCode": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "description": "The identifier the history row carries.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One recorded call, without its recording.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "A restricted server: the caller proved nothing, and is not told what it is missing."
+          },
+          "404": {
+            "description": "No call carries this identifier, and a call outside the caller’s access is answered exactly the same way."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
+          }
+        }
+      }
+    },
+    "/api/calls/{callId}/audio": {
+      "get": {
+        "summary": "Fetch one recording",
+        "description": "The recording of one call, as the server stored it: the stored bytes, the stored type, and the name the recording was stored under. The recording lives in the database beside its call, so nothing is converted and no path is traversed. A range request is answered as the server answers a range for any other content. The caller’s access is checked before a single byte is read.",
+        "operationId": "getCallAudio",
+        "security": [
+          {
+            "adminJwt": []
+          },
+          {
+            "accessCode": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "description": "The identifier the history row carries.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The recording.",
+            "headers": {
+              "Content-Type": {
+                "description": "The MIME type the recording was stored with."
+              },
+              "Content-Disposition": {
+                "description": "attachment; filename=\"<the name the recording was stored under>\"."
+              },
+              "Content-Length": {
+                "description": "The number of bytes of the recording."
+              },
+              "Accept-Ranges": {
+                "description": "bytes."
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested slice, with the total length named in Content-Range.",
+            "headers": {
+              "Content-Range": {
+                "description": "bytes <start>-<end>/<total>."
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "A restricted server: the caller proved nothing."
+          },
+          "404": {
+            "description": "No call carries this identifier, and a call outside the caller’s access is answered exactly the same way, before any byte of the recording is read."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
+          }
+        }
+      }
+    },
     "/api/call-upload": {
       "post": {
         "summary": "Upload a call as a set of multipart form fields; the apikey credential is the key form field",
@@ -1362,6 +1553,12 @@
         "in": "header",
         "name": "Authorization",
         "description": "Raw JWT from POST /api/admin/login, no Bearer prefix. HS256, no expiry; the server keeps the last 5 issued tokens."
+      },
+      "accessCode": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Access-Code",
+        "description": "A listener access code, the same credential the listener socket asks a restricted server for. Accepted by the call history endpoints only, beside the administrator session. A server with no access list answers these endpoints to an anonymous caller. A code is a credential: the server never files one in its log, and refuses a guessing address once the address spent its attempts."
       }
     },
     "responses": {
@@ -1990,6 +2187,244 @@
         "properties": {
           "passwordNeedChange": {
             "type": "boolean"
+          }
+        }
+      },
+      "CallsSearchRequest": {
+        "type": "object",
+        "description": "The filters a call history search is asked with. Every field is optional; a field this server cannot read is left out of the echo it answers with.",
+        "properties": {
+          "system": {
+            "type": "integer",
+            "description": "Narrow the search to one system, named by the reference clients use."
+          },
+          "talkgroup": {
+            "type": "integer",
+            "description": "With a system, narrow the search to one talkgroup on it."
+          },
+          "group": {
+            "type": "string",
+            "description": "A talkgroup group label: the search keeps the talkgroups it stands for."
+          },
+          "tag": {
+            "type": "string",
+            "description": "A talkgroup tag label: the search keeps the talkgroups it stands for."
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The day the search is bounded to."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Page size. Default 200, ceiling 500; a value outside them is clamped."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Where to resume. A negative value is the start of the table."
+          },
+          "sort": {
+            "type": "integer",
+            "description": "-1 newest first, 1 oldest first."
+          }
+        }
+      },
+      "CallsSearchResponse": {
+        "type": "object",
+        "description": "One page of call history, the bounds the page spans, and the criteria as the caller asked for them.",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "How many calls the filters matched, not how many rows this page carries."
+          },
+          "dateStart": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The instant of the oldest call the page spans."
+          },
+          "dateStop": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The instant of the newest call the page spans."
+          },
+          "options": {
+            "$ref": "#/components/schemas/CallsSearchRequest"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallSummary"
+            }
+          }
+        }
+      },
+      "CallSummary": {
+        "type": "object",
+        "description": "One row of the call history: enough to name a call and ask for it. The recording is not here, and neither are the frequencies, units, and patches a full call carries.",
+        "required": [
+          "id",
+          "system",
+          "talkgroup",
+          "dateTime"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "system": {
+            "type": "integer",
+            "description": "The system reference the call was recorded on."
+          },
+          "talkgroup": {
+            "type": "integer",
+            "description": "The talkgroup reference the call was recorded on."
+          },
+          "dateTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call happened."
+          },
+          "audioLength": {
+            "type": "number",
+            "description": "Length of the recording in seconds to the millisecond, when some source named it."
+          }
+        }
+      },
+      "CallResponse": {
+        "type": "object",
+        "description": "One recorded call. The recording’s bytes are deliberately absent: the name, the type, and the length of the recording are metadata and stay, and the bytes are fetched at audioUrl.",
+        "required": [
+          "id",
+          "dateTime",
+          "audioName",
+          "audioType",
+          "audioUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dateTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the call happened."
+          },
+          "system": {
+            "type": "integer",
+            "description": "The system reference the call was recorded on."
+          },
+          "talkgroup": {
+            "type": "integer",
+            "description": "The talkgroup reference the call was recorded on."
+          },
+          "talkgroupLabel": {
+            "type": "string"
+          },
+          "talkgroupName": {
+            "type": "string"
+          },
+          "site": {
+            "type": "integer",
+            "description": "The site reference the call was recorded on, when the call names one."
+          },
+          "channelType": {
+            "type": "string",
+            "enum": [
+              "trunked",
+              "conventional"
+            ]
+          },
+          "delayed": {
+            "type": "boolean",
+            "description": "The call is being held back by its talkgroup or system delay."
+          },
+          "patches": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "description": "The talkgroup references the call was patched to. A call read out of the history carries null."
+          },
+          "frequencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallFrequency"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallUnit"
+            }
+          },
+          "audioName": {
+            "type": "string",
+            "description": "The name the recording was stored under."
+          },
+          "audioType": {
+            "type": "string",
+            "description": "The MIME type the recording was stored with."
+          },
+          "audioLength": {
+            "type": "number",
+            "description": "Length of the recording in seconds to the millisecond, when some source named it."
+          },
+          "audioUrl": {
+            "type": "string",
+            "description": "Where to fetch the recording: GET /api/calls/{callId}/audio."
+          }
+        }
+      },
+      "CallFrequency": {
+        "type": "object",
+        "description": "One frequency the call was heard on, with what the receiver counted on it.",
+        "required": [
+          "freq",
+          "pos"
+        ],
+        "properties": {
+          "freq": {
+            "type": "integer",
+            "description": "The frequency in hertz."
+          },
+          "pos": {
+            "type": "integer",
+            "description": "The position of this frequency in the call, counting from zero."
+          },
+          "errorCount": {
+            "type": "integer",
+            "description": "How many receiver errors were counted on this frequency."
+          },
+          "spikeCount": {
+            "type": "integer",
+            "description": "How many spikes were counted on this frequency."
+          },
+          "dbm": {
+            "type": "integer",
+            "description": "Signal level in dBm. A level of zero is not carried, and a negative one is not stored."
+          }
+        }
+      },
+      "CallUnit": {
+        "type": "object",
+        "description": "One unit that spoke in the call, named by the reference clients use.",
+        "required": [
+          "src",
+          "pos"
+        ],
+        "properties": {
+          "src": {
+            "type": "integer",
+            "description": "The unit reference."
+          },
+          "pos": {
+            "type": "integer",
+            "description": "The position of this unit in the call, counting from zero."
           }
         }
       }

@@ -121,7 +121,8 @@ test('raw-JWT bearer-less security scheme is declared and applied', () => {
   assert.equal(scheme?.name, 'Authorization');
 
   // login works without a token; the capture endpoints take the apikey form field; the
-  // static applications are public. Everything else carries the admin JWT.
+  // static applications are public; the call history takes a listener access code beside the
+  // admin JWT. Everything else carries the admin JWT.
   const NO_TOKEN = ['/api/admin/login', '/api/call-upload', '/api/trunk-recorder-call-upload'];
   const PUBLIC = ['/', '/admin', '/admin/'];
 
@@ -131,6 +132,14 @@ test('raw-JWT bearer-less security scheme is declared and applied', () => {
 
       if (NO_TOKEN.includes(path) || PUBLIC.includes(path)) {
         assert.deepEqual(operation.security, [], `${method.toUpperCase()} ${path} must declare no security`);
+        continue;
+      }
+
+      if (CALL_PATHS[path]) {
+        // A listener-facing endpoint answers to two principals with two sets of rights, and the
+        // document says so rather than pretending one credential covers both.
+        assert.deepEqual(operation.security, [{ adminJwt: [] }, { accessCode: [] }],
+          `${method.toUpperCase()} ${path} must accept the access code beside the admin JWT`);
         continue;
       }
 
@@ -224,4 +233,139 @@ test('the two static applications and the admin redirect are documented', () => 
   const redirect = doc.paths?.['/admin']?.get?.responses?.['307'];
 
   assert.ok(redirect, 'GET /admin must document the 307 redirect to /admin/');
+});
+
+// FEAT-029: the call history over HTTP. The recorded calls live today on the listener socket, which
+// the access policy reserves; these three endpoints are the same history on the side of the server the
+// policy leaves unrestricted. They are listener-facing, so they answer to a listener access code, and
+// an administrator session opens the whole history through the credential the admin page already
+// presents.
+const CALL_PATHS = {
+  '/api/calls/search': ['post'],
+  '/api/calls/{callId}': ['get'],
+  '/api/calls/{callId}/audio': ['get'],
+};
+
+const CALL_SCHEMAS = ['CallsSearchRequest', 'CallsSearchResponse', 'CallSummary', 'CallResponse', 'CallFrequency', 'CallUnit'];
+
+test('the three call history endpoints are documented with their methods', () => {
+  for (const [path, methods] of Object.entries(CALL_PATHS)) {
+    for (const method of methods) {
+      assert.ok(doc.paths?.[path]?.[method], `missing ${method.toUpperCase()} ${path}`);
+    }
+  }
+});
+
+test('the listener access code is declared as a security scheme', () => {
+  const scheme = doc.components?.securitySchemes?.accessCode;
+
+  assert.ok(scheme, 'components.securitySchemes.accessCode is missing');
+  assert.equal(scheme.type, 'apiKey');
+  assert.equal(scheme.in, 'header');
+  assert.equal(scheme.name, 'X-Access-Code');
+});
+
+test('the call history endpoints accept the access code and the administrator session', () => {
+  for (const [path, methods] of Object.entries(CALL_PATHS)) {
+    for (const method of methods) {
+      const operation = doc.paths?.[path]?.[method];
+
+      assert.ok(operation, `missing ${method.toUpperCase()} ${path}`);
+      assert.deepEqual(operation.security, [{ adminJwt: [] }, { accessCode: [] }],
+        `${method.toUpperCase()} ${path} must accept both credentials`);
+    }
+  }
+});
+
+test('the call history schemas are declared', () => {
+  for (const name of CALL_SCHEMAS) {
+    assert.ok(doc.components?.schemas?.[name], `missing schema ${name}`);
+  }
+});
+
+test('the call search documents its request, its page, and its statuses', () => {
+  const post = doc.paths?.['/api/calls/search']?.post;
+
+  assert.ok(post, 'missing POST /api/calls/search');
+
+  const body = post.requestBody?.content?.['application/json']?.schema;
+
+  assert.equal(body?.$ref, '#/components/schemas/CallsSearchRequest',
+    'the search body must reference CallsSearchRequest');
+
+  const page = post.responses?.['200']?.content?.['application/json']?.schema;
+
+  assert.equal(page?.$ref, '#/components/schemas/CallsSearchResponse',
+    'the search answer must reference CallsSearchResponse');
+
+  const rows = doc.components?.schemas?.CallsSearchResponse?.properties?.results;
+
+  assert.equal(rows?.items?.$ref, '#/components/schemas/CallSummary',
+    'the page rows must reference CallSummary');
+
+  for (const status of ['200', '400', '401', '405', '417']) {
+    assert.ok(post.responses?.[status], `POST /api/calls/search missing response ${status}`);
+  }
+});
+
+test('one call is documented as metadata, with the recording named and not carried', () => {
+  const get = doc.paths?.['/api/calls/{callId}']?.get;
+
+  assert.ok(get, 'missing GET /api/calls/{callId}');
+
+  const param = get.parameters?.find((p) => p.name === 'callId');
+
+  assert.ok(param?.required, 'GET /api/calls/{callId} missing the required callId path parameter');
+
+  const call = get.responses?.['200']?.content?.['application/json']?.schema;
+
+  assert.equal(call?.$ref, '#/components/schemas/CallResponse',
+    'the call answer must reference CallResponse');
+
+  for (const status of ['200', '401', '404', '405']) {
+    assert.ok(get.responses?.[status], `GET /api/calls/{callId} missing response ${status}`);
+  }
+
+  const properties = doc.components?.schemas?.CallResponse?.properties;
+
+  assert.ok(properties, 'CallResponse declares no properties');
+
+  // The recording is its own entry point, so a metadata answer names the recording's bytes and
+  // carries none of them: a metadata question is asked far more often than a recording is listened
+  // to, and a metadata answer carrying the recording makes every metadata answer a download.
+  assert.ok(!('audio' in properties), 'CallResponse must not carry the recording bytes');
+
+  for (const field of ['audioName', 'audioType', 'audioLength', 'audioUrl']) {
+    assert.ok(properties[field], `CallResponse does not document the ${field} field`);
+  }
+
+  const refs = JSON.stringify(doc.components?.schemas?.CallResponse);
+
+  assert.ok(refs.includes('CallFrequency'), 'CallResponse does not reference CallFrequency');
+  assert.ok(refs.includes('CallUnit'), 'CallResponse does not reference CallUnit');
+});
+
+test('the recording is documented as its own entry point, range requests included', () => {
+  const get = doc.paths?.['/api/calls/{callId}/audio']?.get;
+
+  assert.ok(get, 'missing GET /api/calls/{callId}/audio');
+
+  const param = get.parameters?.find((p) => p.name === 'callId');
+
+  assert.ok(param?.required, 'GET /api/calls/{callId}/audio missing the required callId path parameter');
+
+  for (const status of ['200', '206', '401', '404', '405']) {
+    assert.ok(get.responses?.[status], `GET /api/calls/{callId}/audio missing response ${status}`);
+  }
+
+  const recording = get.responses?.['200']?.content;
+
+  assert.ok(recording?.['application/octet-stream'] || recording?.['audio/*'],
+    'the recording answer must document binary audio content');
+
+  // The name the recording was stored under, on the wire, so a client saving it names the file the
+  // server recorded.
+  const disposition = get.responses?.['200']?.headers?.['Content-Disposition'];
+
+  assert.ok(disposition, 'the recording answer must document Content-Disposition');
 });
