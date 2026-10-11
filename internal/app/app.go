@@ -67,7 +67,7 @@ type Config struct {
 	DbPassword string
 
 	// DbTLS, DbSslMode, and DbConnectTimeout are the transport options the
-	// operator opts in to (D12): db_tls for the mysql driver, db_sslmode for
+	// operator opts in to: db_tls for the mysql driver, db_sslmode for
 	// postgres, and a connect timeout for both. Empty — the default — is
 	// today's connection, byte for byte: plaintext, the driver's own timing.
 	DbTLS            string
@@ -75,7 +75,7 @@ type Config struct {
 	DbConnectTimeout string
 
 	// BcryptCost is the bcrypt cost the deployment hashes the administrator
-	// credential at (CA-013.5). The ini option is validated to 10–14 at the
+	// credential at. The ini option is validated to 10–14 at the
 	// composition root; the zero value — a Config built without the option —
 	// means bcrypt's default, the legacy server's cost.
 	BcryptCost int

@@ -42,7 +42,7 @@ func capturedRecordingBytes() []byte {
 	return append(header, []byte("a recording long enough to be a recording, and then some more of it")...)
 }
 
-// TestCallPayloadMatchesTheCapturedCall is the byte-for-byte half of CA-004.1 for a call: the payload
+// TestCallPayloadMatchesTheCapturedCall is the byte-for-byte half of the criterion for a call: the payload
 // the legacy server sent for the upload that names everything an upload can name.
 func TestCallPayloadMatchesTheCapturedCall(t *testing.T) {
 	got := marshal(t, CallPayload{Call: capturedCall()})
@@ -110,7 +110,7 @@ func TestCallPayloadCarriesTheAudioAsByteNumbersUnderABuffer(t *testing.T) {
 }
 
 // A frequency is on the wire only when the call has one, and its signal level only when the level is
-// greater than zero. Quirk Q41: the server stores a level that is zero and drops one that is negative,
+// greater than zero. A preserved quirk: the server stores a level that is zero and drops one that is negative,
 // and then emits only a level above zero — so a level of zero is stored, carried in the database, and
 // never shown to anybody.
 func TestCallPayloadCarriesFrequenciesAndOnlyASignalLevelAboveZero(t *testing.T) {

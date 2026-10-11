@@ -123,7 +123,7 @@ func TestThePinnedWireContractComparesCoresAndNotWholeVersions(t *testing.T) {
 }
 
 // capturedVersionAnswer is the answer a legacy server gave to a version request, recorded byte for
-// byte. It lives in the test that compares against it, which is what REQ-007 asks for: no fixture
+// byte. It lives in the test that compares against it, which is what the requirement asks for: no fixture
 // directory, no manifest, and nothing outside the test that proves it.
 const capturedVersionAnswer = `{"branding":"Capture Dispatch","email":"dispatch@example.com","version":"8.0.0"}`
 

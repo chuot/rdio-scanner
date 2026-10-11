@@ -87,8 +87,8 @@ func (apikey Apikey) Accepts(call Call) bool {
 // matched against a system and a talkgroup the server has resolved, and at the upload boundary nothing
 // about the call has been resolved yet — the server has only the references the upload itself names. The
 // legacy server compares the resolved pair here anyway, which means a credential scoped to particular
-// systems dereferences a system that does not exist yet and the connection ends with no reply at all
-// (Q51, and the fix the owner approved on Q20). Comparing the submitted references is what that
+// systems dereferences a system that does not exist yet and the connection ends with no reply at all,
+// the failure the owner asked to fix. Comparing the submitted references is what that
 // comparison was written to do.
 func (apikeys Apikeys) AcceptsUpload(key string, call Call) bool {
 	apikey, ok := apikeys.ByKey(key)
@@ -105,7 +105,7 @@ type Apikeys []Apikey
 // Validate refuses a credential list that contains a row with no key. A row with no key matches
 // every keyless upload, which turns an empty credential field on the administrator's page into an
 // open door; the rule belongs to the list itself, so every path that takes a submitted list runs
-// into it (decision D3).
+// into it.
 func (apikeys Apikeys) Validate() error {
 	for _, apikey := range apikeys {
 		if len(strings.TrimSpace(apikey.Key)) == 0 {

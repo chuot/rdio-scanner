@@ -56,7 +56,7 @@ type PasswordHasher interface {
 }
 
 // PasswordUpgrader reports whether a stored credential was hashed more cheaply
-// than the deployment is configured to hash now (CA-013.5). The verifier proved
+// than the deployment is configured to hash now. The verifier proved
 // the credential; the upgrade renews the stored form at the configured cost, so
 // a deployment that raised its bcrypt cost does not keep answering logins with
 // the cheap hash. It is a separate port from the verifier and the hasher

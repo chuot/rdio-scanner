@@ -380,7 +380,7 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 	}
 }
 
-// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of Q10: the window the
+// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of a preserved quirk: the window the
 // contract describes is the window the server enforces.
 //
 // The legacy server built its window with `time.Duration(time.Duration.Minutes(10))`, a method
@@ -388,7 +388,7 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 // attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
 // has spent its budget is refused while that window is still open.
 
-// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of Q10: the window the
+// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of a preserved quirk: the window the
 // contract describes is the window the server enforces.
 //
 // The legacy server built its window with `time.Duration(time.Duration.Minutes(10))`, a method
@@ -491,7 +491,7 @@ func TestLoginHandlerCountsAFreshWindowAsAFreshBudget(t *testing.T) {
 	}
 }
 
-// TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount (decision D14) repairs the legacy
+// TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount repairs the legacy
 // global reset: a successful sign-in from address B must not unlock address A, which has spent its
 // budget. The global reset let any successful login — including one an attacker paid for — unlock
 // brute-forcing from every address at once.
@@ -705,8 +705,7 @@ func TestLoginHandlerSixthSessionRetiresTheFirstToken(t *testing.T) {
 	}
 }
 
-// TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost (REQ-013,
-// CA-013.5): the credential is proven, and the stored form is below the cost the
+// TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost: the credential is proven, and the stored form is below the cost the
 // deployment is configured for — the login renews it. A deployment that raised its
 // bcrypt cost must not keep answering logins with the cheap hash forever.
 func TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost(t *testing.T) {
@@ -729,7 +728,7 @@ func TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost(t *
 	}
 }
 
-// TestALoginAtTheConfiguredCostWritesNoNewHash (REQ-013, CA-013.5): the renewal is
+// TestALoginAtTheConfiguredCostWritesNoNewHash: the renewal is
 // an upgrade, not a re-hash on every login — a login whose stored hash is already
 // at the configured cost hashes nothing and writes nothing.
 func TestALoginAtTheConfiguredCostWritesNoNewHash(t *testing.T) {
@@ -748,7 +747,7 @@ func TestALoginAtTheConfiguredCostWritesNoNewHash(t *testing.T) {
 	}
 }
 
-// TestALoginWhoseRenewalFailsIsStillALoginAndSaysTheFailure (REQ-013, CA-013.5):
+// TestALoginWhoseRenewalFailsIsStillALoginAndSaysTheFailure:
 // the credential is proven — the login is a login. A renewal that cannot be
 // written is reported in the server log, not answered to the administrator as a
 // failed login.

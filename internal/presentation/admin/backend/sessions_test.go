@@ -630,8 +630,7 @@ func TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 //
 // The legacy server registers the connection the moment it upgrades and pushes to everything it has
 // registered, so a peer that opens the socket and says nothing receives the whole configuration — every
-// access code, every apikey, and every downstream credential — as soon as anybody saves it. Recorded as
-// quirk Q64 and fixed by the owner's decision: the connection is open, and it is told nothing until it
+// access code, every apikey, and every downstream credential — as soon as anybody saves it. Repaired by the owner's decision: the connection is open, and it is told nothing until it
 // says who it is.
 func TestConfigSocketSendsNothingToAConnectionThatHasNotPresentedACredential(t *testing.T) {
 	fixture := newFixture(t)
@@ -873,7 +872,7 @@ func capturedConfiguration(t *testing.T) domain.Configuration {
 
 	// The capture records every site as belonging to no system at all, because the legacy server's query
 	// for sites never asks for the system a site is on. This server reports the system it is stored under,
-	// which is the approved divergence recorded as Q58, and the comparison states it instead of skipping
+	// which is the approved divergence recorded as a preserved quirk, and the comparison states it instead of skipping
 	// the capture.
 	for i := range configuration.Systems {
 		for j := range configuration.Systems[i].Sites {
@@ -886,11 +885,11 @@ func capturedConfiguration(t *testing.T) domain.Configuration {
 
 // capturedConfigGolden is the captured socket push with the two approved divergences stated on it.
 //
-// The first is Q58: the capture records every site as belonging to no system at all, because the legacy
+// The first is a preserved quirk: the capture records every site as belonging to no system at all, because the legacy
 // server's query for sites never asks for the system a site is on, and this server reports the system a site
 // is stored under.
 //
-// The second is Q60. The captured push carries a display order for every talkgroup, and those numbers exist
+// The second is a preserved quirk. The captured push carries a display order for every talkgroup, and those numbers exist
 // only because computing a listener's configuration sorts the talkgroups the server holds and rewrites each
 // one's order to its new position — on the objects the server itself keeps. The listeners were configured
 // before this push was captured, so the administrator was handed numbers the server had invented. This server
@@ -915,7 +914,7 @@ func capturedConfigGolden(t *testing.T) string {
 	return golden
 }
 
-// TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame (REQ-006, CA-006.2): the
+// TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame: the
 // configuration socket reads frames up to the same fixed size as the listener socket. A
 // bigger frame is not a frame the server can act on, and it is never read as a credential:
 // the connection ends and the frame never reaches the credential check.
@@ -953,7 +952,7 @@ func TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame(t *testing.T) {
 	}
 }
 
-// TestConfigSocketEndsAConnectionThatStopsAnswering (REQ-007, CA-007.1, decision D5): the
+// TestConfigSocketEndsAConnectionThatStopsAnswering: the
 // server asks its administrator connections every so often, and a connection that stops
 // answering is one the server cannot send the configuration to — a half-open peer holds its
 // goroutine and its slot, and a server that is stopping waits on it. The socket ends the
@@ -986,7 +985,7 @@ func TestConfigSocketEndsAConnectionThatStopsAnswering(t *testing.T) {
 // server's own stop gives its shutdown.
 const shutdownWindow = 10 * time.Second
 
-// TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline (REQ-007, CA-007.2):
+// TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline:
 // a server that is stopping closes every administrator connection it is holding, and the close
 // is a write. A peer that stopped reading holds that write for its full deadline, and a close
 // made one connection at a time takes a deadline per stalled connection — a wall of stalled

@@ -114,7 +114,7 @@ func TestMaxAccessAuthAttemptsIsTheLegacyLimit(t *testing.T) {
 }
 
 // TestAccessesByCodeFindsThePresentedCode pins the lookup semantics the constant-time comparison
-// (decision D23's companion in REQ-003) must keep: the access under the presented code is found,
+// must keep: the access under the presented code is found,
 // a code that is not written down is not, and the first access under a shared code is the one
 // handed back.
 func TestAccessesByCodeFindsThePresentedCode(t *testing.T) {

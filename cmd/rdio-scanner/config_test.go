@@ -185,7 +185,7 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// TestConfigSaveCreatesTheIniFileForItsOwnerOnly (REQ-013, CA-013.2): the ini file
+// TestConfigSaveCreatesTheIniFileForItsOwnerOnly: the ini file
 // holds the database password, and on a shared host a world-readable ini hands it
 // to every account on the machine. The save creates it readable and writable by
 // its owner alone.
@@ -202,7 +202,7 @@ func TestConfigSaveCreatesTheIniFileForItsOwnerOnly(t *testing.T) {
 	}
 }
 
-// TestBcryptCostComesFromTheIniFileAndDefaultsToTen (REQ-013, CA-013.5): the cost
+// TestBcryptCostComesFromTheIniFileAndDefaultsToTen: the cost
 // is an ini option; the default is the legacy server's cost, so a deployment that
 // says nothing hashes exactly as it does today.
 func TestBcryptCostComesFromTheIniFileAndDefaultsToTen(t *testing.T) {
@@ -237,7 +237,7 @@ func TestBcryptCostComesFromTheIniFileAndDefaultsToTen(t *testing.T) {
 	}
 }
 
-// TestABcryptCostOutsideTheRangeIsRejected (REQ-013, CA-013.5): the range is the
+// TestABcryptCostOutsideTheRangeIsRejected: the range is the
 // operator's contract — 10 is today's cost, 14 is the ceiling this server will
 // hash at — and a cost outside it is a typo. A server that started with the
 // typo's cost would hash the administrator credential at a cost the operator
@@ -254,7 +254,7 @@ func TestABcryptCostOutsideTheRangeIsRejected(t *testing.T) {
 	}
 }
 
-// TestDatabaseTransportOptionsComeFromTheIniFile (REQ-014, CA-014.1, D12): the
+// TestDatabaseTransportOptionsComeFromTheIniFile: the
 // transport options are ini options the operator opts in to; the defaults say
 // nothing, and a deployment that says nothing connects exactly as it connects
 // today — plaintext, driver's own timing.
@@ -289,7 +289,7 @@ func TestDatabaseTransportOptionsComeFromTheIniFile(t *testing.T) {
 	}
 }
 
-// TestAnUnparseableConnectTimeoutIsRejected (REQ-014, CA-014.1, D12): the connect
+// TestAnUnparseableConnectTimeoutIsRejected: the connect
 // timeout is a duration, and "5" is not one — a server that started with a typo's
 // timeout would connect on a timing the operator never named.
 func TestAnUnparseableConnectTimeoutIsRejected(t *testing.T) {

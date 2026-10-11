@@ -24,7 +24,7 @@ import "testing"
 
 // capturedAnswers are the answers the legacy server put on the wire for the upload endpoints, recorded
 // byte for byte and keyed by the name the test asks for them under. They live in the package that
-// consumes them, which is what REQ-007 asks for: no fixture directory, no manifest, and nothing outside
+// consumes them, which is what the requirement asks for: no fixture directory, no manifest, and nothing outside
 // the test that proves it. The upload endpoints answer with plain text, so the captures are compared as
 // bytes and not decoded.
 var capturedAnswers = map[string]string{

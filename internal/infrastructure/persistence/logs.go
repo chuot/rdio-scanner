@@ -51,7 +51,7 @@ var errUnknownLogSource = errors.New("the log entry names no part of this server
 //
 // `Logs.LogEvent` builds its insert with `fmt.Sprintf` and puts the message in raw, so a message
 // containing a single quote — which is every line that names a failed statement — produces broken
-// SQL, the insert fails, and the error is discarded by every caller. That is Q21, and the
+// SQL, the insert fails, and the error is discarded by every caller. That is a preserved quirk, and the
 // parameterized insert here is its fix: those lines are stored, and the administrator's log view
 // shows them.
 const (
@@ -118,7 +118,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	}
 
 	// The message search is a substring, matched case-insensitively, with the submitted text escaped so
-	// that a % or an _ in what the operator typed matches itself. lower() on both sides is what makes the
+	// that a % or an _ in what the operator typed matches itself. lower on both sides is what makes the
 	// same statement case-insensitive on PostgreSQL, where LIKE is not.
 	if search.HasText() {
 		where = append(where, `lower("message") LIKE ? ESCAPE '!'`)
@@ -187,7 +187,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	}
 
 	// The count is scanned as the 64-bit integer the database answers and
-	// clamped, not cast (CA-020.1): a cast of a negative is the largest count
+	// clamped, not cast: a cast of a negative is the largest count
 	// there is, and on a 32-bit build a plain `int` target truncates in
 	// silence.
 	page.Count = clampNonNegative(count)
@@ -261,7 +261,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			// A row whose scan fails is dropped as the legacy drops a damaged row —
 			// unless the read itself failed. A cancelled context is felt at the scan
 			// and not at the iterator, and a short page answered as a success is how
-			// a cancelled search goes unnoticed (CA-011.1).
+			// a cancelled search goes unnoticed.
 			if readErr := rows.Err(); readErr != nil {
 				return ports.LogSearchPage{}, statementError("logs", "search", readErr, rowsQuery)
 			}
@@ -303,7 +303,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	}
 
 	// A read that ended early — a cancelled context, a connection lost mid-page —
-	// is a search that did not complete (CA-011.1). The loop above skips a row whose
+	// is a search that did not complete. The loop above skips a row whose
 	// scan failed, which is what the legacy does for a damaged row; the read's own
 	// failure is not a damaged row, and answering a short page as a success is how a
 	// cancelled read goes unnoticed.

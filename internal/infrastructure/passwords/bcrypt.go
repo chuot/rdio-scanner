@@ -39,7 +39,7 @@ import (
 type Bcrypt struct {
 	// cost is the bcrypt cost the deployment is configured for. The hash this
 	// adapter writes, and the bar `NeedsUpgrade` measures stored hashes against,
-	// are both set by it (CA-013.5).
+	// are both set by it.
 	cost int
 }
 
@@ -72,7 +72,7 @@ func (hashes *Bcrypt) Matches(ctx context.Context, storedCredential string, subm
 
 // Hash returns the bcrypt hash the server stores for a credential.
 //
-// The cost is the one the deployment is configured for (CA-013.5), whose default
+// The cost is the one the deployment is configured for, whose default
 // is bcrypt's default — the cost the legacy server uses both for the credential it
 // ships with and for every credential its administrator replaces — so the hashes
 // the two servers write are the same shape until an operator raises the cost.
@@ -89,7 +89,7 @@ func (hashes *Bcrypt) Hash(ctx context.Context, credential string) (string, erro
 }
 
 // NeedsUpgrade reports whether a stored credential was hashed more cheaply than
-// the deployment hashes at now (CA-013.5). The cost lives in the hash itself —
+// the deployment hashes at now. The cost lives in the hash itself —
 // bcrypt writes it into the stored form — so the question is answered from the
 // stored value, and a stored value that is not a hash reports no upgrade: there
 // is no cost in it to raise.

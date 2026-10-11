@@ -44,8 +44,7 @@ var _ ports.Scheduler = (*Scheduler)(nil)
 
 // NewScheduler returns a scheduler that runs work on the clock's own timers.
 //
-// report is told the value a panicking piece of scheduled work recovered with
-// (CA-020.1); nil discards it, which is what the tests that do not care about
+// report is told the value a panicking piece of scheduled work recovered with; a nil report discards it, which is what the tests that do not care about
 // the report pass.
 func NewScheduler(report func(problem any)) *Scheduler {
 	if report == nil {
@@ -62,7 +61,7 @@ func NewScheduler(report func(problem any)) *Scheduler {
 // connection's lifetime, which is what the application's rules about a listener that joined and left
 // again assume.
 //
-// The work is run under a recover (CA-020.1): a panic on a timer's goroutine is a panic in a
+// The work is run under a recover: a panic on a timer's goroutine is a panic in a
 // goroutine nobody owns, and a server that loses a debounced listener report, an hourly pruning, or
 // a delayed call to a panic dies by it with no report in its own log. The recovered value is told
 // to the report the scheduler was built with, and the schedule goes on.

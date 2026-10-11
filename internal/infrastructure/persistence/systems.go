@@ -124,7 +124,7 @@ func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, si
 	defer systems.mutex.Unlock()
 
 	// The renumbering below is this save's own work, not a service to the caller:
-	// the submitted slice stays untouched (CA-017.4).
+	// the submitted slice stays untouched.
 	sites = append(domain.Sites{}, sites...)
 
 	for i := range sites {
@@ -155,7 +155,7 @@ func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint6
 	defer systems.mutex.Unlock()
 
 	// The renumbering is this save's own work: the caller's slice stays untouched
-	// (CA-017.4).
+	//.
 	talkgroups = append(domain.Talkgroups{}, talkgroups...)
 
 	for i := range talkgroups {
@@ -184,7 +184,7 @@ func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, un
 	defer systems.mutex.Unlock()
 
 	// The renumbering is this save's own work: the caller's slice stays untouched
-	// (CA-017.4).
+	//.
 	units = append(domain.Units{}, units...)
 
 	for i := range units {
@@ -336,7 +336,7 @@ func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sit
 // memberships aggregated out of `talkgroupGroups` in the same row.
 //
 // The two keys this read has to keep apart are `order` and `talkgroupRef`: the legacy server
-// marshals the display order out under the JSON key `"talkgroup"` (quirk Q4) while the table
+// marshals the display order out under the JSON key `"talkgroup"` while the table
 // column is `"order"`, and the reference clients identify the talkgroup by the column
 // `"talkgroupRef"`. Both are read from the column they are stored in, never from each other.
 func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64) (domain.Talkgroups, error) {
@@ -638,7 +638,7 @@ func writeTalkgroups(ctx context.Context, tx transaction, dialect Dialect, syste
 // tests the submitted group identifiers against `talkgroupGroupId` — the join row's own number
 // rather than the group it names — so removing a membership removed whichever join row happened to
 // be numbered like a group the save kept. This server compares against `groupId`, which is the column
-// the comparison means; see Q34 in decision-preserved-quirks.md.
+// the comparison means;
 func writeTalkgroupGroups(ctx context.Context, tx transaction, talkgroupID uint64, groupIDs []uint64) error {
 	const storedQuery = `SELECT "groupId" FROM "talkgroupGroups" WHERE "talkgroupId" = ?`
 
@@ -766,8 +766,7 @@ func readColumnIDs(ctx context.Context, tx transaction, section, operation, quer
 // `Accesses.Write`, `Apikeys.Write`, `Dirwatches.Write`, and `Downstreams.Write` each stop their
 // scan at the first submitted entry that has no identity yet, so a save that adds something new
 // silently removes nothing. This server repairs that rule for every section, which is the one place
-// where it deliberately behaves unlike the legacy server; see Q33 in
-// decision-preserved-quirks.md, and note that a system or talkgroup deleted by a corrected save
+// where it deliberately behaves unlike the legacy server, and note that a system or talkgroup deleted by a corrected save
 // takes its recorded calls with it through `ON DELETE CASCADE`.
 func droppedIdentifiers(submitted, stored []uint64) []uint64 {
 	out := []uint64{}

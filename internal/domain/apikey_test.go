@@ -65,7 +65,7 @@ func TestApikeyScopeGrantsTheSameWayAsAccess(t *testing.T) {
 	}
 }
 
-// TestApikeysValidateRejectsAnEmptyKey (REQ-004, CA-004.2): a row stored with no key matches every
+// TestApikeysValidateRejectsAnEmptyKey: a row stored with no key matches every
 // keyless upload, which turns an empty credential field in the administrator's page into an open
 // door. The list is refused at apply time, before it can be saved.
 func TestApikeysValidateRejectsAnEmptyKey(t *testing.T) {

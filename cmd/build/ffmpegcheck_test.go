@@ -32,7 +32,7 @@ import (
 // These are component tests of the ffmpeg check: the compiled ffmpeg is run through the argument
 // list the converter actually uses, and what comes back is read the way the server's audio endpoints
 // read it. The commands are answered by a stand-in so that the check itself is what is being tested;
-// the real compiled binaries are run by the build, and recorded in validation.md.
+// the real compiled binaries are run by the build itself, not by these tests.
 
 // anM4A is a converted recording whose first boxes say it is what the server stores.
 func anM4A() []byte {

@@ -24,11 +24,10 @@ import "testing"
 
 // capturedAnswers are the answers the legacy server put on the wire, recorded byte for byte and keyed
 // by the name the test asks for them under. They live in the package that consumes them, which is what
-// REQ-007 asks for: no fixture directory, no manifest, and nothing outside the test that proves it.
+// the requirement asks for: no fixture directory, no manifest, and nothing outside the test that proves it.
 //
 // The captures were taken from a legacy server answering the scenarios this package drives; the
-// divergences this package states against them are recorded as the Q58 entries of
-// decision-parity-verification.md.
+// divergences this package states against them are approved divergences.
 var capturedAnswers = map[string]string{
 	"rest-login.json": `{"passwordNeedChange":true,"token":"<token>"}`,
 	"rest-logout-status.txt": `401

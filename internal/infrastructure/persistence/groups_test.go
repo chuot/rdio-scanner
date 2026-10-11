@@ -28,7 +28,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAllGroupsReadsTheGroupsTheLegacyServerWrote is the groups half of REQ-007: every column the
+// TestAllGroupsReadsTheGroupsTheLegacyServerWrote is the groups half of the requirement: every column the
 // legacy `Groups.Write` stored, read back into the field it belongs to, in the display order the
 // legacy `Groups.Read` sorts into.
 func TestAllGroupsReadsTheGroupsTheLegacyServerWrote(t *testing.T) {
@@ -61,7 +61,7 @@ func TestAllGroupsReadsTheGroupsTheLegacyServerWrote(t *testing.T) {
 	}
 }
 
-// TestAllGroupsIsReadFromTheDatabaseOnce is §9 for this section: the collection the server answers
+// TestAllGroupsIsReadFromTheDatabaseOnce is the configuration-in-effect rule for this section: the collection the server answers
 // with is the one it is running with.
 func TestAllGroupsIsReadFromTheDatabaseOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -212,8 +212,7 @@ func TestSaveGroupsRemovesAStoredGroupTheSubmittedListOmits(t *testing.T) {
 	}
 }
 
-// TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile
-// recorded as Q33 in decision-preserved-quirks.md: `server/group.go` `Groups.Write` tests
+// TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile: `server/group.go` `Groups.Write` tests
 // `group.Id == 0 || group.Id == groupId`, so one submitted group with no identity yet keeps every
 // stored group and a save that adds a group deletes none. This server deletes what the list removed.
 func TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
@@ -248,7 +247,7 @@ func TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne(t *te
 	}
 }
 
-// TestSaveGroupsLeavesTheSubmittedGroupsInEffectWhenTheStoreCannotBeWritten is quirk Q13: the
+// TestSaveGroupsLeavesTheSubmittedGroupsInEffectWhenTheStoreCannotBeWritten is a preserved quirk: the
 // submitted section is what the server runs with even when it could not be stored.
 func TestSaveGroupsLeavesTheSubmittedGroupsInEffectWhenTheStoreCannotBeWritten(t *testing.T) {
 	db := openLegacyDatabase(t)

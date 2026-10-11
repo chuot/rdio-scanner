@@ -5,7 +5,7 @@ package persistence
 // liveMariadbSchema is the v6.6.3 MariaDB schema a deployment leaves behind, as the statements a v6.6.3
 // deployment ran. It is read from `server/database.go` at tag `v6.6.3`, and it is the MariaDB/MySQL branch — the `else` of
 // `if db.Config.DbType == DbTypeSqlite` — of the migration chain that chain replays in order. It lives
-// in the package that consumes it, which is what REQ-007 asks for: no fixture directory, no file outside
+// in the package that consumes it, which is what the requirement asks for: no fixture directory, no file outside
 // the test that proves it.
 
 var liveMariadbSchema = []string{

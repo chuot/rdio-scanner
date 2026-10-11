@@ -66,7 +66,7 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 
 	call, err := readCall(ctx, tx, id)
 	if err != nil {
-		// The legacy server returns here without rolling back, which is quirk Q56: the open
+		// The legacy server returns here without rolling back, which is a preserved quirk: the open
 		// transaction holds the SQLite read lock that blocks writers until the garbage collector
 		// collects it. Pinned by `TestGetCallLeavesTheDatabaseFreeForTheNextWrite`, which fails in
 		// exactly ten seconds — the connection string's `busy_timeout` — if this line is removed.
@@ -429,7 +429,7 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 	countQuery := `SELECT COUNT(*) ` + from
 
 	// The count is scanned as the 64-bit integer the database answers and
-	// clamped, not cast (CA-020.1): `page.Count` is a `uint`, which on a
+	// clamped, not cast: `page.Count` is a `uint`, which on a
 	// 32-bit build is 32 bits wide, and a negative — the shape a signed
 	// column can carry — cast through it is the largest count there is.
 	var count int64

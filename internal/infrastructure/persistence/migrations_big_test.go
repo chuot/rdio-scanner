@@ -1,6 +1,6 @@
 //go:build live
 
-// The large-database timing (REQ-010, CA-010): the migration pass measured on a deployment an operator
+// The large-database timing: the migration pass measured on a deployment an operator
 // would actually wait through, on the file backend and on both real backends.
 //
 // It is its own file, behind the `live` tag and behind `run.sh --big`, for two reasons. It proves nothing
@@ -31,7 +31,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// largeBudget is REQ-010's "a time an operator can wait through" written as a number, so that a
+// largeBudget is the requirement's "a time an operator can wait through" written as a number, so that a
 // regression fails a test instead of being noticed by someone watching a server start. It is deliberately
 // far above what the pass actually takes on this machine: the point is the cliff, not the record.
 const largeBudget = 10 * time.Minute
@@ -91,7 +91,7 @@ func largeDatabaseOnBackend(t *testing.T, dialect Dialect) {
 
 	applyStatements(t, db, liveStatements(dialect))
 
-	// The seeding is timed and reported separately. It is not what REQ-010 asks about, and a number that
+	// The seeding is timed and reported separately. It is not what the requirement asks about, and a number that
 	// mixes "putting a hundred thousand rows into a backend" with "carrying them across" answers neither.
 	seeded := time.Now()
 
@@ -289,7 +289,7 @@ func largeMigrate(t *testing.T, db *sql.DB, dialect Dialect) (time.Duration, []p
 	return time.Since(started), lines
 }
 
-// reportLargeTiming is the record CA-010 asks for: the duration, the size of what was migrated, and the
+// reportLargeTiming is the record the criterion asks for: the duration, the size of what was migrated, and the
 // two facts that make a duration mean anything — that the rows arrived, and that the pass finished what it
 // started rather than stopping partway and leaving a v6 table behind.
 func reportLargeTiming(t *testing.T, dialect Dialect, elapsed time.Duration, wanted int, db *sql.DB, fixture string, lines []progressLine) {
@@ -345,7 +345,7 @@ func reportLargeTiming(t *testing.T, dialect Dialect, elapsed time.Duration, wan
 	}
 
 	if elapsed > largeBudget {
-		t.Errorf("%s took %s, over the %s budget REQ-010 records as a time an operator can wait through", dialect, elapsed.Round(time.Second), largeBudget)
+		t.Errorf("%s took %s, over the %s budget the requirement records as a time an operator can wait through", dialect, elapsed.Round(time.Second), largeBudget)
 	}
 }
 

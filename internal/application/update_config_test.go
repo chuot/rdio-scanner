@@ -356,12 +356,12 @@ func TestUpdateConfigurationStopsAndRestartsTheDirectoryWatchersAroundTheSave(t 
 	}
 }
 
-// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins preserved
-// quirk Q12: stopping the watchers empties what the server watches from, and only naming the
+// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins the preserved quirk
+// that stopping the watchers empties what the server watches from, and only naming the
 // dirwatch section fills it again.
 
-// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins preserved
-// quirk Q12: stopping the watchers empties what the server watches from, and only naming the
+// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins the preserved quirk
+// that stopping the watchers empties what the server watches from, and only naming the
 // dirwatch section fills it again.
 func TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing(t *testing.T) {
 	fixture := newConfigFixture()
@@ -397,13 +397,13 @@ func TestUpdateConfigurationWatchesTheStoredDirectoriesWhenItSavesTheDirwatchSec
 	}
 }
 
-// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins preserved quirk
-// Q13: a dirwatch save that could not be persisted leaves the submitted directories being
+// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins the preserved quirk
+// that a dirwatch save that could not be persisted leaves the submitted directories being
 // watched, because the legacy server restarts its watchers from what it was given and only
 // reads the stored list back when the save succeeded.
 
-// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins preserved quirk
-// Q13: a dirwatch save that could not be persisted leaves the submitted directories being
+// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins the preserved quirk
+// that a dirwatch save that could not be persisted leaves the submitted directories being
 // watched, because the legacy server restarts its watchers from what it was given and only
 // reads the stored list back when the save succeeded.
 func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *testing.T) {
@@ -623,11 +623,11 @@ func TestUpdateConfigurationSectionAnnouncesTheWholeConfigurationForOneSection(t
 	}
 }
 
-// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is CA-007 for the configuration:
+// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is the criterion for the configuration:
 // the save is the operation and the announcement is a report about it. A deployment whose log table is
 // broken must still be able to change its configuration, and the listeners must still be told the new one.
 
-// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is CA-007 for the configuration:
+// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is the criterion for the configuration:
 // the save is the operation and the announcement is a report about it. A deployment whose log table is
 // broken must still be able to change its configuration, and the listeners must still be told the new one.
 func TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten(t *testing.T) {
@@ -658,7 +658,7 @@ func TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten(t *
 	}
 }
 
-// TestUpdateConfigurationSectionRefusesAKeylessApikey (REQ-004, CA-004.2): an apikey row with no
+// TestUpdateConfigurationSectionRefusesAKeylessApikey: an apikey row with no
 // key is refused at apply time — the section save reports the failure, the list is not stored,
 // and the server keeps the credentials it had.
 func TestUpdateConfigurationSectionRefusesAKeylessApikey(t *testing.T) {
@@ -690,7 +690,7 @@ func TestUpdateConfigurationSectionRefusesAKeylessApikey(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigurationSectionRefusesAnUncompilableMask (REQ-008, CA-008.1, decision D7):
+// TestUpdateConfigurationSectionRefusesAnUncompilableMask:
 // a dirwatch payload whose mask does not compile is refused at apply — the section save
 // reports the failure, the list is not stored, and the server keeps the watches it had.
 func TestUpdateConfigurationSectionRefusesAnUncompilableMask(t *testing.T) {
@@ -721,7 +721,7 @@ func TestUpdateConfigurationSectionRefusesAnUncompilableMask(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigurationSectionStoresAWatchWithAValidMask is the other half of CA-008.1:
+// TestUpdateConfigurationSectionStoresAWatchWithAValidMask is the other half of the criterion:
 // a watch carrying a mask that compiles is stored, as it has always been.
 func TestUpdateConfigurationSectionStoresAWatchWithAValidMask(t *testing.T) {
 	fixture := newConfigFixture()

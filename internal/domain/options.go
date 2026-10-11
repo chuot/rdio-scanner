@@ -208,7 +208,7 @@ func (options Options) PruneBefore(now time.Time) time.Time {
 
 // GenerateSecret builds a new signing secret from the legacy alphabet.
 //
-// The picks come from crypto/rand (CA-013.1): math/rand is seeded by the clock, so
+// The picks come from crypto/rand: math/rand is seeded by the clock, so
 // an attacker who knows roughly when the server first started can reproduce the
 // secret that start wrote, and a signing secret is exactly the value an attacker
 // wants — it opens every session. The alphabet and the length are the legacy

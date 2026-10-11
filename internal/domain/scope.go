@@ -25,10 +25,10 @@ package domain
 //
 // Three states are distinct and all three matter:
 //
-//	present=false  no scope was supplied at all; the PIN gate treats the client as
-//	               unauthenticated, and nothing is granted
-//	wildcard       the scope is "*", which grants every system and talkgroup
-//	systems        an explicit list of systems, each with its own talkgroup list
+//	present=false no scope was supplied at all; the PIN gate treats the client as
+//	unauthenticated, and nothing is granted
+//	wildcard the scope is "*", which grants every system and talkgroup
+//	systems an explicit list of systems, each with its own talkgroup list
 type AccessScope struct {
 	Present  bool
 	Wildcard bool
@@ -149,7 +149,7 @@ func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 // It is the mirror of ParseAccessScope, and both are needed because the same shape appears in
 // the stored row and on the wire. A scope that names no systems is an empty list rather than
 // nothing, because "an empty list was supplied" and "nothing was supplied" are the two states
-// Q9 turns on. An entry that named no talkgroups gets no talkgroups key for the same reason:
+// this distinction turns on. An entry that named no talkgroups gets no talkgroups key for the same reason:
 // inventing an empty list would turn a system the listener cannot see into one the listener can.
 func (scope AccessScope) Value() any {
 	if !scope.Present {

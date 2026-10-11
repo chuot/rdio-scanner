@@ -414,7 +414,7 @@ func (admin *Admin) Password(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// A current credential that was not offered at all is a different submission from one that was
-		// offered empty, and the use case decides what each one means (Q14). The endpoint's job is to
+		// offered empty, and the use case decides what each one means. The endpoint's job is to
 		// report which one was submitted.
 		currentCredential, offered := submitted["currentPassword"].(string)
 

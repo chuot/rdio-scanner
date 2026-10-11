@@ -162,7 +162,7 @@ func TestScopedSystemsAreStoredAndAnnouncedAsTheirOwnList(t *testing.T) {
 	}
 }
 
-// TestScopeOfNothingAndScopeOfNothingAtAllAreDifferent is the Q9 distinction carried all the way
+// TestScopeOfNothingAndScopeOfNothingAtAllAreDifferent is the no-scope-versus-empty-scope distinction carried all the way
 // into the stored value: a payload that supplies an empty list is stored as [], a payload that
 // supplies nothing is stored as null.
 func TestScopeOfNothingAndScopeOfNothingAtAllAreDifferent(t *testing.T) {
@@ -217,7 +217,7 @@ func TestScopeValueRoundTripsThroughTheStoredShape(t *testing.T) {
 	}
 }
 
-// TestScopeGrantsReferencesIsWhatAnUploadIsCheckedAgainst pins the Q20 repair: an upload is
+// TestScopeGrantsReferencesIsWhatAnUploadIsCheckedAgainst pins the upload-scope repair: an upload is
 // scoped by the references the upload names, because its aggregates are not resolved yet.
 func TestScopeGrantsReferencesIsWhatAnUploadIsCheckedAgainst(t *testing.T) {
 	scope, _ := ParseAccessScope([]any{

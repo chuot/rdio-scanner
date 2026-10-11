@@ -36,7 +36,7 @@ import (
 
 // maxListEntries is the ceiling on a posted list field — frequencies, units, patches. These
 // lists are read into memory and stored with the call, so an unbounded one is a way for an
-// upload to spend the server's memory and storage at will (decision D2's companion, REQ-015).
+// upload to spend the server's memory and storage at will.
 // A real call carries tens of entries; a list over the cap is truncated, and the truncation is
 // reported to the operator's log by the endpoint that files the upload.
 const maxListEntries = 4096
@@ -332,7 +332,7 @@ func decodeList(data []byte) ([]any, bool) {
 //
 // It is this package's ApplyMultipart reading and nothing new: the same knowledge is what the directory
 // watchers use for the files they read. The method exists because the endpoints are wired with a parser and
-// may not import this package directly (contract-server-ng.md §1), so the composition root hands them this
+// may not import this package directly, by the server's contract, so the composition root hands them this
 // value and the endpoints reach the reading through the seam they declare themselves.
 func (parsers *Parsers) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	return ApplyMultipart(part, data, call)

@@ -29,7 +29,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of CA-004.1 for a
+// TestConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of the criterion for a
 // configuration: what an unrestricted listener is told about a server, as the legacy server told it.
 func TestConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	got := marshal(t, ConfigPayload{Snapshot: captureSnapshot()})

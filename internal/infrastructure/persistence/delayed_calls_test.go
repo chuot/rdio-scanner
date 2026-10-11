@@ -139,7 +139,7 @@ func seedDelayTestCall(t *testing.T, db *sql.DB, talkgroupID uint64, timestamp t
 	return uint64(callID)
 }
 
-// TestAllDelayedReadsTheCallTheLegacyServerStored is the CA-007.1 half for this adapter: the call the
+// TestAllDelayedReadsTheCallTheLegacyServerStored is the the criterion half for this adapter: the call the
 // legacy server put in the delayed table reads back with its identifier and its instant, which the
 // table stores in milliseconds since the epoch.
 func TestAllDelayedReadsTheCallTheLegacyServerStored(t *testing.T) {

@@ -409,7 +409,7 @@ func TestPruneOldCallsCommandAppliesTheRetentionTheConfigurationSetsNow(t *testi
 	}
 }
 
-// TestPruneOldCallsCommandAppliesTheRetentionWhenTheServerLogCannotBeWritten is CA-007 for the retention:
+// TestPruneOldCallsCommandAppliesTheRetentionWhenTheServerLogCannotBeWritten is the criterion for the retention:
 // the administrator's data is what the pruning is for, and the report about it is a report. A deployment
 // whose log table is broken must still discard what has outlived the retention.
 //

@@ -62,7 +62,7 @@ type Forwarder struct {
 
 // NewForwarder builds the forwarder for a server that re-posts its calls to other servers.
 //
-// The client does not follow redirects (decision D9): a downstream that answers 3xx
+// The client does not follow redirects: a downstream that answers 3xx
 // points the upload at an address the administrator did not name, and following it
 // would re-post the recording and the apikey there. The redirect is reported as the
 // failure it is.
@@ -98,7 +98,7 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 		return operationError(err)
 	}
 
-	// The scheme is re-checked here (decision D9, CA-009.1): an address stored by an
+	// The scheme is re-checked here: an address stored by an
 	// older server — before the apply-time rule — is read by this forwarder, and it is
 	// posted to only over http or https.
 	if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
@@ -125,7 +125,7 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		// The answer is read out before the connection is handed back (CA-009.3): a
+		// The answer is read out before the connection is handed back: a
 		// body left unread makes the connection unusable, and every later call to the
 		// same downstream pays for a fresh one.
 		io.Copy(io.Discard, response.Body)
@@ -233,8 +233,8 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 // `Content-Disposition` cannot carry (Go's `escapeFilename` and `escapeQuotes` in
 // `mime/multipart/writer.go`). A filename with a `"` in it arrives at the downstream
 // quoted, not ending the header. This is pinned here, not hidden, because it is a
-// property of the wire format the server does not own and must not pretend to control
-// (CA-020.1): the legacy server forwarded through this same library, so the escaping
+// property of the wire format the server does not own and must not pretend to control:
+// the legacy server forwarded through this same library, so the escaping
 // the two servers put on the wire is byte-identical, and a receiver that parses the
 // header sees the same name from either.
 func (forwarder *Forwarder) writeAudio(writer *multipart.Writer, call domain.Call) error {

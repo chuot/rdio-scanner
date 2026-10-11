@@ -226,7 +226,7 @@ func TestExtractDSDPlusReadsTheSystemForEachTypeItReports(t *testing.T) {
 	}
 }
 
-// TestExtractDSDPlusRefusesANameThatNamesNeitherATalkgroupNorASource is quirk Q37. The talkgroup
+// TestExtractDSDPlusRefusesANameThatNamesNeitherATalkgroupNorASource is a preserved quirk. The talkgroup
 // and the radio are read from the last two pieces of the name, and the legacy reads them
 // unguarded: a name with no underscore has no second-to-last piece, and the legacy takes the
 // whole server down with an index-out-of-range panic when the file arrives while it is running.
@@ -301,7 +301,7 @@ func TestExtractDSDPlusDoesNotNameARadioBeyondItsReference(t *testing.T) {
 	}
 }
 
-// TestExtractDSDPlusWithoutADatedDirectoryRecordsTheCallAtTheYear1 is quirk Q42. The only place
+// TestExtractDSDPlusWithoutADatedDirectoryRecordsTheCallAtTheYear1 is a preserved quirk. The only place
 // the dsd+ grammar reads a moment from is the directory, and the guard that is supposed to
 // refuse a call with no moment asks whether the timestamp is the Unix epoch — which an unset
 // time is not. So a dsd+ watch pointed at a directory that is not named for the day ingests
@@ -708,7 +708,7 @@ func TestExtractTrunkRecorderReportsASidecarItCannotRead(t *testing.T) {
 	}
 }
 
-// TestExtractTrunkRecorderRecordsTheCallAtTheMomentTheSidecarWasRead is quirk Q39: the sidecar's
+// TestExtractTrunkRecorderRecordsTheCallAtTheMomentTheSidecarWasRead is a preserved quirk: the sidecar's
 // recorded instant is read and then replaced with the moment the file was read, by a debug line
 // the legacy server has carried since the field was written. A deployment watching
 // trunk-recorder's output records every call that does not also name `timestamp` as a call that
@@ -825,7 +825,7 @@ func TestExtractTrunkRecorderIgnoresAFileThatIsNotASidecar(t *testing.T) {
 	}
 }
 
-// TestExtractTrunkRecorderNeverReadsAPathWalkingExtension (REQ-008, CA-008.4, decision D8):
+// TestExtractTrunkRecorderNeverReadsAPathWalkingExtension:
 // the recording path a trunk-recorder watch composes from the configured extension walks
 // out of the watched directory when an old server stored a name that is not a name —
 // "x/../../secret.wav" lands two levels up. The parser reads the pair beside the
@@ -882,7 +882,7 @@ func TestExtractTrunkRecorderNeverReadsAPathWalkingExtension(t *testing.T) {
 	}
 }
 
-// TestAMaskNamingOnlyTheUnitLabelMatches (REQ-008, CA-008.5, decision D16): quirk Q40 —
+// TestAMaskNamingOnlyTheUnitLabelMatches: a preserved quirk —
 // a mask naming only #UNITLBL has #UNIT replaced inside it, leaving a literal LBL the
 // filename then has to end with, so the obvious way to write the mask silently matches
 // nothing. The token table applies longest-first, and the label token is replaced whole.
@@ -918,7 +918,7 @@ func TestAMaskNamingOnlyTheUnitLabelMatches(t *testing.T) {
 	}
 }
 
-// TestAMaskNamingTheUnitTokenStandaloneStillMatches is the other half of decision D16:
+// TestAMaskNamingTheUnitTokenStandaloneStillMatches is the other half of the decision:
 // the reordering may not change what a mask that already works matches — the unit token
 // named on its own keeps reading the unit number.
 func TestAMaskNamingTheUnitTokenStandaloneStillMatches(t *testing.T) {

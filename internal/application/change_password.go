@@ -37,8 +37,7 @@ type ChangeAdminPasswordCommand struct {
 	// The distinction is not pedantry: the legacy server compares a credential it was given, and
 	// skips the comparison entirely for a payload that named none. An absent field is therefore
 	// not the same as an empty one — an empty credential is checked and refused, while no
-	// credential at all changes the password without checking anything. Recorded as Q14 in
-	// decision-preserved-quirks.md.
+	// credential at all changes the password without checking anything.
 	CurrentCredential      string
 	CurrentCredentialGiven bool
 
@@ -119,7 +118,7 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 	}
 
 	// Only a credential that was actually offered is compared. A payload that names none skips
-	// the comparison, which is Q14 and is preserved rather than repaired: deciding what "no
+	// the comparison, which is a preserved quirk rather than repaired: deciding what "no
 	// current credential offered" should mean is a decision about the administrator contract.
 	if cmd.CurrentCredentialGiven && !handler.passwords.Matches(ctx, options.AdminPasswordHash, cmd.CurrentCredential) {
 		return handler.reject(ctx, errors.New("current password is invalid"), refused)
@@ -139,9 +138,8 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 
 	// The legacy server reads the options back from what it stored, and that read resets every
 	// option to its default before applying the stored rows. An option stored under a name the
-	// reader does not look for (Q1) therefore comes back as the default: changing the
-	// administrator password quietly restores the 500 ms duplicate-detection window. Recorded as
-	// Q15.
+	// reader does not look for therefore comes back as the default: changing the
+	// administrator password quietly restores the 500 ms duplicate-detection window.
 	reloaded, err := handler.options.ReloadOptions(ctx)
 	if err != nil {
 		return handler.reject(ctx, err, refused)

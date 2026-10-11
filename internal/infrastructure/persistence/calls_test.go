@@ -38,13 +38,13 @@ import (
 // The database written by the legacy server carries two calls, both recorded by its own upload
 // endpoint, recorded as the statements it ran in fixture_test.go):
 //
-//   - call 1, on system reference 10001 / talkgroup reference 1514000, with one frequency, one
-//     source unit, one patch to talkgroup reference 1514001, and site reference 77;
-//   - call 2, on talkgroup reference 1514002, which the legacy delayer put in the `delayed`
-//     table because that talkgroup carries a 90 minute delay.
+// - call 1, on system reference 10001 / talkgroup reference 1514000, with one frequency, one
+// source unit, one patch to talkgroup reference 1514001, and site reference 77;
+// - call 2, on talkgroup reference 1514002, which the legacy delayer put in the `delayed`
+// table because that talkgroup carries a 90 minute delay.
 //
 // The read tests below read those two calls rather than calls this package wrote, which is the
-// half of REQ-007 that says this server opens a database the other server created.
+// half of the requirement that says this server opens a database the other server created.
 const (
 	fixtureCallID        = uint64(1)
 	fixtureDelayedCallID = uint64(2)
@@ -142,7 +142,7 @@ func TestGetCallCarriesTheDelaysThatHoldACallBack(t *testing.T) {
 	}
 }
 
-// TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte is the audio half of REQ-007: a
+// TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte is the audio half of the requirement: a
 // recording written by one server is read back by the other without a byte moving.
 func TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -275,7 +275,7 @@ func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
 // blocks writers, so the next log insert or configuration save waits out the ten-second
 // `busy_timeout` the connection string sets and then fails with `database is locked`. Observed
 // while capturing the wire protocol: a client asking for call id 999999 is answered with nothing,
-// and the listener-count broadcast that follows arrives ten seconds late. Recorded as Q56.
+// and the listener-count broadcast that follows arrives ten seconds late. Recorded as a preserved quirk.
 func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
 	db := openMigratedLegacyDatabase(t)
 
@@ -562,7 +562,7 @@ func TestSaveCallRollsBackTheWholeSaveWhenAChildRowCannotBeStored(t *testing.T) 
 }
 
 // TestSaveCallStoresAnAudioFilenameThatLooksLikeSQLAsItsOwnValue is the parameterization half of
-// REQ-007: the legacy server pasted this value into its statement, so a filename like this one
+// the requirement: the legacy server pasted this value into its statement, so a filename like this one
 // changed what the statement did.
 func TestSaveCallStoresAnAudioFilenameThatLooksLikeSQLAsItsOwnValue(t *testing.T) {
 	fixture := newCallsFixture(t)

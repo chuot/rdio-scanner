@@ -127,7 +127,7 @@ func readGzip(files fs.FS, name string) ([]byte, error) {
 }
 
 // isTheSameProgram reports whether the file on disk is already this program, decided by its
-// sha256 (CA-018.2): a program's identity is its content, not its length, and a file planted at
+// sha256: a program's identity is its content, not its length, and a file planted at
 // the program's path with the bundle program's length is not the bundle's program. The hash is
 // streamed, so verifying a 40 MB program does not pull it into memory.
 //

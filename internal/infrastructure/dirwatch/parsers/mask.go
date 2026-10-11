@@ -41,11 +41,11 @@ type maskToken struct {
 	Pattern string
 }
 
-// maskTokens is the table of mask tokens, applied longest-first (decision D16): a token
+// maskTokens is the table of mask tokens, applied longest-first: a token
 // is replaced the first time its text is found, and a token whose text is the prefix of
 // another one eats the longer token when the shorter one goes first.
 //
-// That is quirk Q40, repaired: a mask naming only `#UNITLBL` — the obvious way to write
+// That is a preserved quirk, repaired: a mask naming only `#UNITLBL` — the obvious way to write
 // it — had `#UNIT` replaced inside the longer token, leaving a literal `LBL` the
 // filename then had to end with, and the mask silently matched nothing. The same ate
 // `#TGHZ` with `#HZ` and `#TGMHZ` with `#MHZ`. A mask naming the shorter token
@@ -93,7 +93,7 @@ type maskPosition struct {
 // MaskWarning reports the mismatch a mask's own regex shows: more captured groups than
 // the tokens it names means the filename's pieces line up with values nobody asked for,
 // and the call built from it reads the wrong pieces. The warning is said when the watch
-// starts, where the operator can read it, not per file in the dark (CA-008.5).
+// starts, where the operator can read it, not per file in the dark.
 func MaskWarning(mask string) string {
 	if len(mask) == 0 {
 		return ""
@@ -114,7 +114,7 @@ func MaskWarning(mask string) string {
 
 	compiled, err := regexp.Compile(remaining)
 	if err != nil {
-		// The mask is refused at apply (decision D7); a mask that cannot compile has
+		// The mask is refused at apply; a mask that cannot compile has
 		// nothing left to say about its groups.
 		return ""
 	}
@@ -325,7 +325,7 @@ func applyMaskFrequencies(values map[string]string, call *domain.Call) {
 // mask means when the same mask named `#SYSLBL` and that name matched a configured system: a
 // site belongs to a system, and there is nowhere to look a site up without one. Otherwise the
 // legacy writes the reference into a metadata field nothing ever reads, so the token is
-// dropped. See quirk Q38.
+// dropped.
 func applyMaskSites(values map[string]string, call *domain.Call) {
 	if value, ok := values["site"]; ok {
 		ref, err := strconv.Atoi(value)

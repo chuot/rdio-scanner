@@ -37,7 +37,7 @@ type Apikeys struct {
 	store store
 
 	// warn is the credential list's way of telling the operator about a stored
-	// value it had to clamp (CA-017.2), wired by the server to its log.
+	// value it had to clamp, wired by the server to its log.
 	warn func(message string)
 
 	mutex  sync.Mutex
@@ -66,7 +66,7 @@ func NewApikeys(db *sql.DB, dialect Dialect) *Apikeys {
 // AllApikeys returns the upload credentials the server is running with.
 func (apikeys *Apikeys) AllApikeys(ctx context.Context) (domain.Apikeys, error) {
 	// The cache answers under the mutex, and the read that fills an empty cache
-	// runs outside it (CA-014.4), as in `Accesses.AllAccesses`.
+	// runs outside it, as in `Accesses.AllAccesses`.
 	apikeys.mutex.Lock()
 
 	if apikeys.loaded {
@@ -98,7 +98,7 @@ func (apikeys *Apikeys) AllApikeys(ctx context.Context) (domain.Apikeys, error) 
 // credentials the server accepts uploads against, with the same order of operations as
 // `SaveAccesses`: replace what is in effect, then store it, then read the stored rows back.
 func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) error {
-	// The assignment takes the mutex; the statements run outside it (CA-014.4),
+	// The assignment takes the mutex; the statements run outside it,
 	// as in `Accesses.SaveAccesses`.
 	apikeys.mutex.Lock()
 	apikeys.live = next.Ordered()
@@ -156,7 +156,7 @@ func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, []string, err
 			return nil, nil, operationError("apikeys", "read", err)
 		}
 
-		// The order column is signed and the field is not (CA-017.2): a stored -3
+		// The order column is signed and the field is not: a stored -3
 		// read as unsigned is the largest display order there is, and the credential
 		// moves to the end of every list the operator sees. Zero is the first order,
 		// and the clamp is said.
@@ -202,14 +202,14 @@ func (apikeys *Apikeys) reportClamps(clamped []string) {
 // The legacy `Write` interpolates `ident` and `key` with no escaping at all — unlike
 // `Accesses.Write`, which escapes them — so a credential named with an apostrophe has always
 // failed the whole save. Parameterizing the statements fixes that, which is the same class of
-// fix Q21 records for the log insert.
+// fix that repairs the log insert.
 func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 	tx, err := apikeys.store.begin(ctx)
 	if err != nil {
 		return operationError("apikeys", "write", err)
 	}
 
-	// The identities the submitted list names, collected once (CA-017.3), with the
+	// The identities the submitted list names, collected once, with the
 	// legacy zero-id short-circuit repaired as described on `Accesses.write`.
 	named := make(map[uint64]struct{}, len(list))
 
@@ -224,7 +224,7 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 	}
 
 	// The cursor closes on the way out of the function, whatever the way out is
-	// (CA-020.1), as in `Accesses`.
+	//, as in `Accesses`.
 	defer rows.Close()
 
 	stale := []uint64{}
@@ -264,7 +264,7 @@ func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 		}
 	}
 
-	// Which of the submitted identities are stored, in one statement (CA-017.3),
+	// Which of the submitted identities are stored, in one statement,
 	// as in `Accesses.write`.
 	ids := make([]int64, 0, len(list))
 

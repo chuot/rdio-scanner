@@ -24,7 +24,7 @@ package persistence
 // statement, for the same reason as sqliteSchema.
 //
 // The differences from the sqlite schema are the ones the legacy server has to make: `bigserial`
-// primaries instead of `integer ... AUTOINCREMENT`, `boolean` instead of `integer(1)`, and `double
+// primaries instead of `integer... AUTOINCREMENT`, `boolean` instead of `integer(1)`, and `double
 // precision` instead of `real`.
 var postgresSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "accesses" (

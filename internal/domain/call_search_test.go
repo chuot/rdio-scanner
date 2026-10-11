@@ -435,7 +435,7 @@ func tagsOf() Tags {
 	return Tags{{ID: 11, Label: "Fire"}}
 }
 
-// TestParseCallSearchClampsThePageParameters (REQ-015, CA-015.1): limit and offset are page
+// TestParseCallSearchClampsThePageParameters: limit and offset are page
 // parameters, and a negative one is not a page. Converting a negative float to uint wraps it into
 // a huge number, which is exactly the "no limit" a hostile client wants, and a huge offset is a
 // scan past the end of the table. Both clamp.

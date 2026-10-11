@@ -34,7 +34,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAllSystemsReadsTheSystemsTheLegacyServerWrote is the REQ-007 half that concerns the systems
+// TestAllSystemsReadsTheSystemsTheLegacyServerWrote is the the requirement half that concerns the systems
 // table: every column the legacy `Systems.Write` stored is read back into the field it belongs to.
 func TestAllSystemsReadsTheSystemsTheLegacyServerWrote(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -310,7 +310,7 @@ func TestAllSystemsReadsEachSystemsSitesAndUnits(t *testing.T) {
 	}
 }
 
-// TestAllSystemsIsReadFromTheDatabaseOnce is the configuration-in-effect half of §9: the catalog is
+// TestAllSystemsIsReadFromTheDatabaseOnce is the configuration-in-effect half of the rule: the catalog is
 // loaded once, and what the server answers with afterwards is what it is running with, not whatever
 // the tables happen to hold.
 func TestAllSystemsIsReadFromTheDatabaseOnce(t *testing.T) {
@@ -582,8 +582,7 @@ func TestSaveSystemsRemovesAStoredSystemTheSubmittedListOmits(t *testing.T) {
 }
 
 // TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne pins the one place where
-// This server deliberately behaves unlike the legacy server, recorded as Q33 in
-// decision-preserved-quirks.md.
+// This server deliberately behaves unlike the legacy server.
 //
 // The legacy `server/system.go` `Systems.Write` tests `system.Id == 0 || system.Id == systemId` for every stored
 // identifier, so the scan stops at the first system that has no identity yet and a save that adds a
@@ -626,9 +625,9 @@ func TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne(t *
 	}
 }
 
-// TestSaveSystemsRemovalTakesTheRecordedCallsWithIt is the consequence the repair carries: calls
-// .systemId is `ON DELETE CASCADE` and foreign_keys is on, so a save that removes a system removes
-// the calls recorded against it. The legacy server hid this behind Q33 — the same save never
+// TestSaveSystemsRemovalTakesTheRecordedCallsWithIt is the consequence the repair carries: the
+// calls table's systemId is `ON DELETE CASCADE` and foreign_keys is on, so a save that removes a system removes
+// the calls recorded against it. The legacy server hid this behind the broken scan — the same save never
 // deleted anything — so this is the risk the owner accepted when choosing to repair the rule.
 func TestSaveSystemsRemovalTakesTheRecordedCallsWithIt(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -708,7 +707,7 @@ func TestSaveSystemsDiscardsTheWholeSystemsSectionWhenATalkgroupIsRejected(t *te
 	}
 }
 
-// TestSaveSystemsLeavesTheSubmittedSystemsInEffectWhenTheSaveFails is quirk Q13: the submitted
+// TestSaveSystemsLeavesTheSubmittedSystemsInEffectWhenTheSaveFails is a preserved quirk: the submitted
 // configuration is what the server runs with even when it could not be stored.
 func TestSaveSystemsLeavesTheSubmittedSystemsInEffectWhenTheSaveFails(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -952,7 +951,7 @@ func TestSaveTalkgroupsDoesNotStoreAGroupMembershipTwice(t *testing.T) {
 }
 
 // TestSaveTalkgroupsRemovesAGroupMembershipTheSubmittedListOmits pins the repaired membership
-// reconcile recorded as Q34 in decision-preserved-quirks.md.
+// reconcile.
 //
 // The legacy `Talkgroups.WriteTx` reads the join rows as `"groupId", "talkgroupGroupId"` and then
 // tests the submitted group identifiers against `talkgroupGroupId` — the join row's own number, not
@@ -1366,7 +1365,7 @@ func TestSaveSystemUnitsReplacesTheUnitsOfOneSystem(t *testing.T) {
 	}
 }
 
-// TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched (REQ-017, CA-017.4): the
+// TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched: the
 // per-system saves renumber the submitted rows' display order and stamp the system
 // identity into them — and they did it to the caller's own slice. A caller that
 // keeps the list it submitted for its own view, or re-sends it, finds its rows

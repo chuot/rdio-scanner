@@ -32,14 +32,14 @@ import (
 // recorded as the statements it ran. legacyRows are the rows it wrote into that schema: its seeds,
 // its configuration save, and the two calls it ingested through its own upload endpoint. They were
 // taken from a database written entirely by the legacy binary, statement by statement, and they live
-// in the package that consumes them, which is what REQ-007 asks for: no fixture directory, no binary
+// in the package that consumes them, which is what the requirement asks for: no fixture directory, no binary
 // database file, and nothing outside the test that proves it.
 //
 // The recorded schema and statements are themselves the rebuild: applying them to an empty database
 // writes the database the fixtures were taken from, and the statements are the pinned record.
 //
 // Applying the schema and then the rows to an empty database gives the persistence tests the thing
-// REQ-007 actually claims — that this code reads a database the other server wrote — instead of
+// the requirement actually claims — that this code reads a database the other server wrote — instead of
 // proving that it reads a database it wrote itself.
 var legacySchema = []string{
 	`CREATE TABLE "accesses" (

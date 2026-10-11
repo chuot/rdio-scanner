@@ -28,7 +28,7 @@ package persistence
 //
 // Every statement is idempotent already — `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT
 // EXISTS` — so applying it over a database the legacy server created changes nothing, which is
-// what REQ-007 asks for and what the test over the recorded legacy schema proves.
+// what the requirement asks for and what the test over the recorded legacy schema proves.
 var sqliteSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "accesses" (
     "accessId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,

@@ -27,7 +27,7 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// TestCallSearchPageMatchesTheCapturedPage is the byte-for-byte half of CA-004.1 for a history page,
+// TestCallSearchPageMatchesTheCapturedPage is the byte-for-byte half of the criterion for a history page,
 // and it is the reason the payload is written as fields in a fixed order instead of as a map: the
 // captured frame carries `count, dateStart, dateStop, options, results` and each row carries
 // `id, system, talkgroup, dateTime`, which is the order the legacy server declares them and not the

@@ -47,7 +47,7 @@ type statementCounter struct {
 
 	// delay is the pause every statement takes on its way through, in
 	// nanoseconds: a test arms it to watch a cache answer while a save is
-	// still walking the database (CA-014.4).
+	// still walking the database.
 	delay atomic.Int64
 }
 

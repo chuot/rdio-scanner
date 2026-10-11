@@ -2,7 +2,7 @@
 
 package persistence
 
-// The live tests are REQ-008: the migration pass proven against a backend that is not a file.
+// The live tests are the requirement: the migration pass proven against a backend that is not a file.
 //
 // They are compiled only under the `live` build tag, and they never skip. With the tag set and a backend
 // not reachable, a test fails naming the host and port it could not reach. A live test that passed
@@ -443,7 +443,7 @@ func TestMigrateLiveOnPostgreSQLMigratesTheDirwatchesItNames(t *testing.T) {
 	liveDirwatches(t, DialectPostgresql)
 }
 
-// liveDirwatches is CA-005: the proof on a backend that is case-sensitive about table names, which is the
+// liveDirwatches is the criterion: the proof on a backend that is case-sensitive about table names, which is the
 // only place the misspelling the dirwatch migration used could ever have been seen. sqlite matches table
 // names whatever their case is, which is why the defect survived every test this repository had.
 //
@@ -487,7 +487,7 @@ func TestMigrateLiveOnPostgreSQLFilesWhatThePassSaid(t *testing.T) {
 	liveFiling(t, DialectPostgresql)
 }
 
-// liveFiling is the half of REQ-008 that REQ-003 asks for on a live backend: every line the pass said
+// liveFiling is the half of the requirement that the requirement asks for on a live backend: every line the pass said
 // about a row it could not carry is stored as a warn entry under the `database` source, and read back
 // through the same search the log view answers with.
 //
@@ -562,7 +562,7 @@ func TestMigrateLiveOnPostgreSQLChangesNothingTwice(t *testing.T) {
 	liveIdempotence(t, DialectPostgresql)
 }
 
-// liveIdempotence is REQ-004 on a live backend: the pass that already ran leaves no v6 table behind, so a
+// liveIdempotence is the requirement on a live backend: the pass that already ran leaves no v6 table behind, so a
 // second run finds nothing to migrate, says nothing, and changes nothing — not a row, not a column of the
 // archive, not an object of the schema.
 func liveIdempotence(t *testing.T, dialect Dialect) {
@@ -654,7 +654,7 @@ func liveDifferences(before, after []string) []string {
 	return differences
 }
 
-// TestMigrateLiveOnMariaDBReportsABackendItCannotReach is the guard CA-008 asks for on the harness itself:
+// TestMigrateLiveOnMariaDBReportsABackendItCannotReach is the guard the criterion asks for on the harness itself:
 // a live test that skipped because its backend was not there would leave a record that says the backend
 // was proven. Pointing one test at a port nothing listens on is how that is caught.
 func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
@@ -680,8 +680,7 @@ func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
 		DialectMariadb, settings.Host, settings.Port)
 }
 
-// TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows (REQ-010, CA-010.2, decision
-// D10): the duplicate-row fixture on the backend that creates the duplicates. MySQL
+// TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows: the duplicate-row fixture on the backend that creates the duplicates. MySQL
 // and MariaDB report an unchanged option update as no changed rows, the save reads
 // that as no row there, and every save writes every key again. The live pass removes
 // the duplicates, last row written wins, and the unique index refuses the next one.

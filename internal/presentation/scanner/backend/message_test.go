@@ -487,7 +487,7 @@ func TestFramingReproducesTheCapturedFrames(t *testing.T) {
 // is a map and comes out sorted. A search result row and a call of the same shape therefore disagree
 // about the order of the same four keys, and a client that compares the bytes of the two sees it.
 //
-// This is what T035 has to reproduce.
+// This is what has to reproduce.
 func TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder(t *testing.T) {
 	frames := capturedFrames("ws-frames-open.json", "listener")
 

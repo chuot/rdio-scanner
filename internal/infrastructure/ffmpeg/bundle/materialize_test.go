@@ -143,7 +143,7 @@ func TestMaterializingABundleNamesItsProgramsAfterTheFfmpegItCarries(t *testing.
 	}
 }
 
-// A windows build runs a program named with .exe, and that is decided by the target the bundle was
+// A windows build runs a program named with.exe, and that is decided by the target the bundle was
 // compiled for rather than by the machine doing the materialising.
 func TestMaterializingAWindowsBundleNamesItsProgramsAsWindowsPrograms(t *testing.T) {
 	bundle := aBundle(t, "windows-amd64", "the ffmpeg", "the ffprobe")
@@ -168,7 +168,7 @@ func TestMaterializingAWindowsBundleNamesItsProgramsAsWindowsPrograms(t *testing
 
 // A server that starts again must not rewrite a program another server may be running out from under
 // it, so a program that is already the right one is left exactly as it is. The right one is decided
-// by content (CA-018.2): the second materialising verifies the sha256, finds the program it wrote,
+// by content: the second materialising verifies the sha256, finds the program it wrote,
 // and touches nothing — the file on disk stays the very file, same modification time and all.
 func TestMaterializingABundleAgainLeavesTheProgramsItAlreadyWrote(t *testing.T) {
 	bundle := aBundle(t, "linux-amd64", "the ffmpeg", "the ffprobe")
@@ -279,7 +279,7 @@ func TestMaterializingABundleReportsTheDirectoryItCannotWriteTo(t *testing.T) {
 	}
 }
 
-// TestAMaterializedProgramThatWasChangedOnDiskIsWrittenAgain (REQ-018, CA-018.2):
+// TestAMaterializedProgramThatWasChangedOnDiskIsWrittenAgain:
 // a program's identity is its content, not its length. A file planted at the
 // program's path with the bundle program's length is not the bundle's program,
 // and the next materialize rewrites it.
@@ -314,7 +314,7 @@ func TestAMaterializedProgramThatWasChangedOnDiskIsWrittenAgain(t *testing.T) {
 	}
 }
 
-// TestAMaterializeRefusesASymlinkAtTheProgramPath (REQ-018, CA-018.2): the data
+// TestAMaterializeRefusesASymlinkAtTheProgramPath: the data
 // directory is a directory an operator's work can touch. A symlink at the
 // program's path is not a program the server wrote, and the server does not
 // write through a link it did not make — it says so, and the file the link

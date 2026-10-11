@@ -177,7 +177,7 @@ func TestOperationErrorNamesTheOperationWithoutInventingAStatement(t *testing.T)
 	}
 }
 
-// TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral (REQ-020, CA-020.1): the
+// TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral: the
 // invariant that makes the scan in bind safe, pinned in its sharpest case. SQL
 // writes a quote inside a literal as a doubled quote — 'it”s' — and the scan
 // reads that doubled pair as the end of one quoted span and the start of the

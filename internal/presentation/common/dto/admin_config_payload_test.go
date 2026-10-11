@@ -28,12 +28,12 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAdminConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of CA-004.1 for the whole
+// TestAdminConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of the criterion for the whole
 // configuration an administrator is shown.
 //
 // The captured configuration says something this server does not: it reports every site as belonging
 // to no system, because the legacy server never reads that column back. This server reports the system
-// the site is on. That is the approved divergence recorded in decision-parity-verification.md, and the
+// the site is on. That is the approved divergence, and the
 // test states it by rewriting the capture rather than by skipping the comparison.
 func TestAdminConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	got := marshal(t, AdminConfigReply{Config: captureConfiguration(), PasswordNeedChange: true})

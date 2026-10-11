@@ -71,7 +71,7 @@ func (tags *Tags) AllTags(ctx context.Context) (domain.Tags, error) {
 }
 
 // SaveTags reconciles the stored tags with the given ones and leaves the reconciled result as what
-// the server runs with, including when the store could not be written at all (quirk Q13).
+// the server runs with, including when the store could not be written at all.
 //
 // Dropping a tag drops the talkgroups that name it: `talkgroups.tagId` references `tags` ON DELETE
 // CASCADE, which is what the legacy server relies on too.

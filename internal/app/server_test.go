@@ -673,8 +673,8 @@ func TestTheFfmpegNoticeIsFiledUnderFfmpeg(t *testing.T) {
 }
 
 // The path the web application is served from answers an ordinary request as the application, and not as a
-// socket. In a checkout the bundle the binary carries has not been built — the target that builds it is
-// T055 — so what the application answers is the 404 it gives for a file it does not have. That is the
+// socket. In a checkout the bundle the binary carries has not been built — the target that builds it
+// is not run there — so what the application answers is the 404 it gives for a file it does not have. That is the
 // application answering: a request handed to the listener endpoint would have been answered as an upgrade,
 // and a request that reached nothing would not have been answered by this path at all.
 // An ordinary path is answered by the web application, the same way the application root is answered: with the
@@ -984,8 +984,8 @@ func (capture *consoleCapture) String() string {
 	return capture.buf.String()
 }
 
-// The HTTP server the legacy server builds throws away everything the HTTP layer itself reports. That is
-// quirk Q52, repaired here: the lines reach the console the operator is reading.
+// The HTTP server the legacy server builds throws away everything the HTTP layer itself reports. That is a
+// preserved quirk, repaired here: the lines reach the console the operator is reading.
 func TestServerReportsWhatTheHttpLayerItselfReports(t *testing.T) {
 	console := &bytes.Buffer{}
 
@@ -1001,7 +1001,7 @@ func TestServerReportsWhatTheHttpLayerItselfReports(t *testing.T) {
 	}
 
 	if serving.ErrorLog == nil {
-		t.Fatalf("the HTTP server was given no logger, which is quirk Q52: everything the HTTP layer reports " +
+		t.Fatalf("the HTTP server was given no logger, which is a preserved quirk: everything the HTTP layer reports " +
 			"about itself is thrown away")
 	}
 
@@ -1225,7 +1225,7 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheMigrationPassFilesWhatItSaid is the migration half of CA-009: the lines an upgrade says while it
+// TestTheMigrationPassFilesWhatItSaid is the migration half of the criterion: the lines an upgrade says while it
 // runs exist only on the terminal today, which is no trace at all for the deployment running as a service
 // and no trace the morning after for anybody else. They are in the log view as well, under the part of the
 // server that wrote them — and they are written *after* the pass has finished carrying the deployment's own
@@ -1249,7 +1249,7 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 	t.Cleanup(func() { srv.stop(context.Background()) })
 
 	// Still said out loud: the pass announces each v6 table it found, and reports what it could not carry
-	// or could not link, exactly as it did before this feature — and, since FEAT-011, the rows it archived.
+	// or could not link, exactly as it did before this feature — and, since the archive exists, the rows it archived.
 	for _, want := range []string{
 		"migrating groups...",
 		"migrating logs...",
@@ -1288,7 +1288,7 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 		}
 	}
 
-	// FEAT-011: every incoherence the pass finds in the deployment is filed the same way, as a problem, in
+	// The archive: every incoherence the pass finds in the deployment is filed the same way, as a problem, in
 	// the order the pass says it. A deployment running as a service has no terminal, and these are the
 	// lines that tell its operator the upgrade left something behind and where to go and look at it.
 	for _, want := range []struct {
@@ -1329,7 +1329,7 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheMigrationFilesTheLogRowsItCarriesAcross is REQ-004 for the deployment that upgrades through this
+// TestTheMigrationFilesTheLogRowsItCarriesAcross is the requirement for the deployment that upgrades through this
 // server instead of through the legacy one. Its history arrives through the migration pass, and a row that
 // arrives with nothing in the source column is a row the operator cannot filter for: the prefix the legacy
 // server wrote is the only thing that says what wrote it, and it has to be read here the same way the
@@ -2287,7 +2287,7 @@ func seedUploadTarget(t *testing.T, db *sql.DB, hold uint, key string) {
 // damagedMigratedStatements is a database a legacy server has already migrated, recorded as the
 // statements the legacy pass ran: the schema, then the rows the pass left damaged in the units and
 // the missing source links. They were taken from a database the legacy binary wrote, statement by
-// statement, and they live in the package that consumes them, which is what REQ-007 asks for: no
+// statement, and they live in the package that consumes them, which is what the requirement asks for: no
 // fixture directory, no binary database file, and nothing outside the test that proves it.
 var damagedMigratedStatements = []string{
 	`CREATE TABLE "callFrequencies" (
@@ -2685,7 +2685,7 @@ func waitsForAddress(t *testing.T, addr string) bool {
 	return false
 }
 
-// TestStartingAndStoppingATLSServerIsRaceFree (REQ-007, CA-007.3, CA-007.4): the https
+// TestStartingAndStoppingATLSServerIsRaceFree: the https
 // address is registered with the server by the goroutine that answers it, while the
 // goroutine answering the plain address registers that one at the same moment — the list
 // the stop walks to shut the addresses down is being built by two goroutines at once, which
@@ -2751,7 +2751,7 @@ func TestStartingAndStoppingATLSServerIsRaceFree(t *testing.T) {
 	}
 }
 
-// TestTheServerStopsWhenItCannotAnswerItsTLSAddress (REQ-007, CA-007.4): a deployment that
+// TestTheServerStopsWhenItCannotAnswerItsTLSAddress: a deployment that
 // names a certificate it cannot use asked for https and cannot answer it. Today that
 // failure is fatal: the process dies with a line on the terminal, nothing in the server's
 // log, and the plain address left answering — an operator finds out a live server lost its
@@ -2807,7 +2807,7 @@ func TestTheServerStopsWhenItCannotAnswerItsTLSAddress(t *testing.T) {
 	}
 }
 
-// TestTheHeldCallCollectorReturnsAfterTheServerStops (REQ-007, CA-007.6): the loop that
+// TestTheHeldCallCollectorReturnsAfterTheServerStops: the loop that
 // carries held calls back into the pipeline reads the delayer's stream, and the delayer
 // closing its holds is the fact that tells that loop the server is going away. A collector
 // left running after the stop is a goroutine blocked on a stream nobody will ever write to
@@ -2826,7 +2826,7 @@ func TestTheHeldCallCollectorReturnsAfterTheServerStops(t *testing.T) {
 	}
 }
 
-// TestTheServerFilesTheClampWarningsTheAccessReadSays (REQ-017, CA-017.2): the
+// TestTheServerFilesTheClampWarningsTheAccessReadSays: the
 // persistence read clamps a stored negative and says the line — the wiring is what
 // makes that line a row in the log view, where the operator of a server running as
 // a service actually looks. A deployment's policy changing in silence is the
@@ -2858,8 +2858,7 @@ func TestTheServerFilesTheClampWarningsTheAccessReadSays(t *testing.T) {
 	}
 }
 
-// TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin (REQ-013,
-// CA-013.5): the ini cost reaches the credential adapter through the wiring, and
+// TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin: the ini cost reaches the credential adapter through the wiring, and
 // a login proven against a hash below it renews the stored hash at the configured
 // cost. The default credential is stored at the legacy cost of 10; a deployment
 // configured for 12 must not keep answering that login with the cheap hash.

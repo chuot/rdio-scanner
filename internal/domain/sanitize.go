@@ -55,7 +55,7 @@ func SanitizeText(s string, limit int) string {
 //
 // This is the one door all of that text passes through on its way to the server's log lines,
 // the administrator's configuration, and the live broadcast, so the ingest use case runs it
-// once at its entry (decision from REQ-016: an upload must not be able to forge a log line
+// once at its entry — an upload must not be able to forge a log line
 // or drive a terminal).
 func (call Call) Sanitized() Call {
 	call.AudioFilename = SanitizeText(call.AudioFilename, MaxLabelLength)

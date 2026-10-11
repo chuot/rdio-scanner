@@ -172,8 +172,7 @@ func completeRecording() domain.Call {
 // in the order they asked, because which fields an endpoint hands to the parser and in what order is the
 // endpoint's own contract.
 //
-// The real parser is not used here because the endpoints may not import the package that holds it
-// (contract-server-ng.md §1); it is wired to them by the composition root, and its reading is proven by
+// The real parser is not used here because the endpoints may not import the package that holds it; it is wired to them by the composition root, and its reading is proven by
 // internal/infrastructure/dirwatch/parsers/multipart_test.go.
 type recordingUploadParser struct {
 	// Fields records every field that was handed to the field reading, in the order it arrived.
@@ -444,7 +443,7 @@ func (fixture *uploadFixture) assertStamped(t *testing.T, fragment string) {
 // A credential scoped to particular systems covers an upload naming one of them. The legacy server cannot
 // answer this case at all: it compares the credential against the call's resolved system, and at this
 // boundary the system has not been resolved, so the comparison dereferences nothing and the connection
-// ends with no reply. Recorded as quirk Q51, and fixed by the owner's decision on Q20.
+// ends with no reply. Recorded as a preserved quirk, and repaired by the owner's decision.
 func TestCallUploadEndpointAcceptsAKeyScopedToTheSystemTheUploadNames(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -760,7 +759,7 @@ func TestTrunkRecorderUploadEndpointRefusesASidecarItCannotRead(t *testing.T) {
 //
 // The legacy server's trunk-recorder endpoint collects the fields into a map and applies them in whatever
 // order Go walks that map in, so an upload naming both a recording and a name for it is answered
-// differently on different runs. Recorded as quirk Q57, and not reproduced: both endpoints here apply the
+// differently on different runs. Recorded as a preserved quirk, and not reproduced: both endpoints here apply the
 // fields as they arrived, which is what the legacy server's own call-upload endpoint does. What a field
 // means, and that a later one overwrites an earlier one, is proven by the parser's own suite in
 // internal/infrastructure/dirwatch/parsers/multipart_test.go.
@@ -865,7 +864,7 @@ func (err *bodyCutShortError) Error() string {
 	return "the connection was closed while the body was being read"
 }
 
-// TestCallUploadEndpointRefusesABodyBeyondTheUploadCap (decision D2): the endpoint reads the whole
+// TestCallUploadEndpointRefusesABodyBeyondTheUploadCap: the endpoint reads the whole
 // body into memory before it knows anything about the caller, so a cap is the only thing standing
 // between an anonymous POST and the server's memory. The refusal rides the existing read-failure
 // answer — a 417 naming the step that failed — because the frozen contract already has that shape.
@@ -911,7 +910,7 @@ func TestCallUploadEndpointAcceptsABodyUnderTheUploadCap(t *testing.T) {
 	}
 }
 
-// TestCallUploadEndpointFilesAnOversizedListTruncation (REQ-015, CA-015.2): the truncation is
+// TestCallUploadEndpointFilesAnOversizedListTruncation: the truncation is
 // the parser's decision, and the endpoint is the one with the operator's log. The upload is
 // still taken — the call is real, just bounded — and the truncation is filed where an
 // administrator reads it.

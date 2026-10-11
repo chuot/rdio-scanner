@@ -39,7 +39,7 @@ import (
 //
 // These endpoints are not behind an administrator session and not behind a listener's access code. What
 // lets an upload through is the credential the upload carries, and what decides it is the credential's
-// scope — which is the thing quirk Q51 made impossible in the legacy server and which the owner asked to
+// scope — which is the thing the legacy server made impossible and which the owner asked to
 // fix.
 //
 // They answer with plain text and not with JSON, because that is what every program posting to them has
@@ -69,7 +69,7 @@ type Deps struct {
 // It is declared by the endpoints that ask for it, rather than being a port of the application layer,
 // because what is being read is the wire format of these endpoints and not a fact about calls: the
 // application layer must not know that an upload is a multipart body, and these endpoints have no business
-// importing the package that implements this (contract-server-ng.md §1). The composition root wires the
+// importing the package that implements this, by the server's contract. The composition root wires the
 // server's ingest parser here, which is the same parser the directory watchers use for the files they read
 // — the trunk-recorder sidecar in particular is read the same way from a watched directory and from an
 // upload.
@@ -115,7 +115,7 @@ const (
 
 	// maxUploadBytes is the ceiling on the body an upload endpoint will read. These endpoints read
 	// the whole body into memory before the credential is looked at, so without a ceiling an
-	// anonymous POST is a way to spend the server's memory at will (decision D2). The ceiling is
+	// anonymous POST is a way to spend the server's memory at will. The ceiling is
 	// generous against real recordings — a long call in lossless form — and a body over it fails
 	// through the endpoint's existing read-failure answer, which is the shape the frozen contract
 	// already has.

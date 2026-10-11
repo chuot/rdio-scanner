@@ -19,6 +19,6 @@
 // See API_ACCESS_POLICY.md for full terms.
 
 // Package spa serves a single-page application out of a file set: embedded files, the
-// text/javascript content type for .js, the SPA fallback rules, and the mount prefix a
+// text/javascript content type for.js, the SPA fallback rules, and the mount prefix a
 // bundle is served under. It owns no embed; the application packages that use it do.
 package spa

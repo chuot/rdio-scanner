@@ -165,11 +165,11 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	}
 
 	// The bcrypt cost is checked here, at the composition root, because a cost
-	// outside 10 to 14 is a typo (CA-013.5): a server that started with the
+	// outside 10 to 14 is a typo: a server that started with the
 	// typo's cost would hash the administrator credential at a cost the
 	// operator never asked for, and the credential on record is the one thing
 	// a typo must not touch.
-	// The connect timeout is a duration (D12): "5" is not one, and a server
+	// The connect timeout is a duration: "5" is not one, and a server
 	// that started with a typo's timeout would connect on a timing the
 	// operator never named.
 	if config.DbConnectTimeout != "" {
@@ -380,7 +380,7 @@ func (config *Config) saveConfig() error {
 	}
 
 	// The ini holds the database password, so it is created readable and writable
-	// by its owner alone (CA-013.2): a world-readable ini on a shared host hands
+	// by its owner alone: a world-readable ini on a shared host hands
 	// that password to every account on the machine.
 	file, err := os.OpenFile(config.GetConfigFilePath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {

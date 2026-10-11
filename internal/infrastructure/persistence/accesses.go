@@ -54,7 +54,7 @@ type Accesses struct {
 	live   domain.Accesses
 
 	// warn is the repository's way of telling the operator about a stored value it
-	// had to clamp (CA-017.2). The server wires it to its log; a repository without
+	// had to clamp. The server wires it to its log; a repository without
 	// it clamps silently, which is what every caller that does not log gets.
 	warn func(message string)
 }
@@ -66,7 +66,7 @@ func (accesses *Accesses) OnWarn(report func(message string)) { accesses.warn = 
 var _ ports.AccessRepository = (*Accesses)(nil)
 
 // The statements are the legacy server's, with the values taken out of them. The legacy
-// `Write` builds its `INSERT`, `UPDATE`, and `DELETE ... IN (...)` with `fmt.Sprintf` and
+// `Write` builds its `INSERT`, `UPDATE`, and `DELETE... IN (...)` with `fmt.Sprintf` and
 // escapes the text it interpolates by hand; here the same statements carry placeholders.
 const (
 	accessSelectQuery    = `SELECT "accessId", "code", "expiration", "ident", "limit", "order", "systems" FROM "accesses"`
@@ -85,7 +85,7 @@ func NewAccesses(db *sql.DB, dialect Dialect) *Accesses {
 // AllAccesses returns the access list the server is running with.
 func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, error) {
 	// The cache answers under the mutex, and the read that fills an empty cache
-	// runs outside it (CA-014.4): the mutex is what the server's own enforcement
+	// runs outside it: the mutex is what the server's own enforcement
 	// reads through every moment of a connection check, and holding it across
 	// the database statements of a read or a save stops those checks for the
 	// length of every statement.
@@ -114,7 +114,7 @@ func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, err
 	accesses.reportClamps(clamped)
 
 	// Ordered is a copy: the list the server enforces with is not the slice every
-	// caller gets to edit (CA-017.1).
+	// caller gets to edit.
 	return list.Ordered(), nil
 }
 
@@ -128,8 +128,8 @@ func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, err
 // the legacy `ConfigHandler` runs after a successful `Write`.
 func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses) error {
 	// A copy, for the same reason as the read path: the submitted slice stays the
-	// caller's to do with as the caller likes (CA-017.1). The assignment takes
-	// the mutex; the statements run outside it (CA-014.4), so the server keeps
+	// caller's to do with as the caller likes. The assignment takes
+	// the mutex; the statements run outside it, so the server keeps
 	// enforcing from the cache while the save walks the database.
 	accesses.mutex.Lock()
 	accesses.live = next.Ordered()
@@ -158,7 +158,7 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 //
 // The legacy server clears its in-memory list before it queries, so a read that fails leaves
 // the server with no accesses at all — and an empty access list is what makes a server
-// unrestricted. Here the value already in effect is left alone, because §9 makes the adapter's
+// unrestricted. Here the value already in effect is left alone, because the configuration-in-effect rule makes the adapter's
 // live list the configuration the server is running with, and silently un-restricting a server
 // on a failed query is not a parity behavior anyone chose.
 func (accesses *Accesses) read(ctx context.Context) (domain.Accesses, []string, error) {
@@ -188,7 +188,7 @@ func (accesses *Accesses) read(ctx context.Context) (domain.Accesses, []string, 
 			return nil, nil, operationError("accesses", "read", err)
 		}
 
-		// The columns are signed and the fields are not (CA-017.2): a stored -1 —
+		// The columns are signed and the fields are not: a stored -1 —
 		// the value a legacy row carries for "no expiration" — read as unsigned is
 		// the largest number of seconds there is, an access that never expires, and
 		// a negative limit or order becomes the largest of each. Zero is the safe
@@ -271,14 +271,13 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 		return operationError("accesses", "write", err)
 	}
 
-	// The identities the submitted list names, collected once (CA-017.3): every
+	// The identities the submitted list names, collected once: every
 	// stored row is checked against this map, where the legacy server walked the
 	// whole submitted list per stored row.
 	//
 	// The legacy `Accesses.Write` stops its scan at the first submitted access
 	// whose id is zero, so a save that adds a user silently keeps every user the
-	// list removed. This server repairs that rule; see Q33 in
-	// decision-preserved-quirks.md.
+	// list removed. This server repairs that rule.
 	named := make(map[uint64]struct{}, len(list))
 
 	for _, access := range list {
@@ -292,7 +291,7 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 	}
 
 	// The cursor closes on the way out of the function, whatever the way out is
-	// (CA-020.1): the manual closes this loop used to have were two of them, and
+	//: the manual closes this loop used to have were two of them, and
 	// a function that gains a third exit keeps the table open.
 	defer rows.Close()
 
@@ -333,7 +332,7 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 		}
 	}
 
-	// Which of the submitted identities are stored, in one statement (CA-017.3):
+	// Which of the submitted identities are stored, in one statement:
 	// the per-row COUNT the legacy server ran cost one round trip per submitted
 	// row, inside the same transaction that holds the table for the whole save.
 	ids := make([]int64, 0, len(list))

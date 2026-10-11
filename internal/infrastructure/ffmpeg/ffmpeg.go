@@ -50,7 +50,7 @@ type Converter struct {
 	available bool
 
 	// loudnorm is whether that program's filter list names the loudnorm filter,
-	// which is what decides whether the two loudness modes get their filters (D17).
+	// which is what decides whether the two loudness modes get their filters.
 	loudnorm bool
 
 	// warned records that the missing converter has already been reported. The legacy
@@ -74,7 +74,7 @@ func New() *Converter {
 // carries inside its own binary and writes out to its data directory before running it.
 //
 // The filters that program has get asked of that program — `ffmpeg -hide_banner -filters` is the
-// probe (D17) — so a bundled ffmpeg and a host ffmpeg are not taken for the same filter list when
+// probe — so a bundled ffmpeg and a host ffmpeg are not taken for the same filter list when
 // they are not.
 func NewAt(program string) *Converter {
 	converter := &Converter{program: program}
@@ -98,8 +98,8 @@ func NewAt(program string) *Converter {
 // and two in the 7.x ones — command support left the legend in 7.0 — so the pattern takes both.
 var loudnormFilterLine = regexp.MustCompile(`(?m)^\s*[TSC.]{2,3}\s+loudnorm\s`)
 
-// hasLoudnorm reports whether the filter list a program printed names the loudnorm filter
-// (D17, CA-018.1). The filter list is the ground truth: the legacy read the version string
+// hasLoudnorm reports whether the filter list a program printed names the loudnorm filter.
+// The filter list is the ground truth: the legacy read the version string
 // instead, and misread 4.10, 10.0, tagged N-builds, and git-builds as releases without the
 // filter they print in their own list.
 func hasLoudnorm(filters string) bool {
@@ -175,7 +175,7 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 		// no failure, so a deployment whose recordings fail to convert sees nothing in its
 		// log. Here it is reported, and the recording is kept either way.
 		//
-		// The report is short and quiet (REQ-016, CA-016.2): a real ffmpeg floods its whole
+		// The report is short and quiet: a real ffmpeg floods its whole
 		// session onto a failure — thousands of bytes, newlines, ANSI colors — and pasted
 		// into the server's log line that flood forges entries and drives the terminal
 		// reading them. The first 512 bytes, control characters replaced, is what the log

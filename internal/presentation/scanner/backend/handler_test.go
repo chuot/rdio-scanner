@@ -707,7 +707,7 @@ func capturedSessionCommands(t *testing.T) []string {
 	return commands[:8]
 }
 
-// TestTheListenerSocketRefusesAWebPageFromAnotherOrigin (REQ-006, CA-006.4, decision D4): a
+// TestTheListenerSocketRefusesAWebPageFromAnotherOrigin: a
 // browser names the page it came from when it opens a WebSocket, and a page from anywhere
 // else opening this socket is a cross-site request that would read every live call and every
 // answer the listener socket carries. A connection with no Origin at all — a native

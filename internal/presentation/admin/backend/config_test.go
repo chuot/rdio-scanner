@@ -366,7 +366,7 @@ func seedCaptures(t *testing.T, fixture *adminFixture) {
 
 	// The capture records every site as belonging to no system at all, because the legacy server's query
 	// for sites never asks for the system a site is on. This server reports the system it is stored under,
-	// which is the approved divergence recorded as Q58 in decision-parity-verification.md, and it is what
+	// which is the approved divergence, and it is what
 	// a read of the stored database produces. The comparison below states the divergence instead of
 	// skipping the capture.
 	for i := range systems {
@@ -567,7 +567,7 @@ func TestLogoutEndpointEndsTheSessionItsCredentialStandsFor(t *testing.T) {
 //
 // The capture says something this server does not: every site is recorded as belonging to no system,
 // because the legacy server's query for sites never asks for that column. This server reports the system
-// the site is stored under, which is the approved divergence recorded as Q58, and the test states it by
+// the site is stored under, which is the approved divergence recorded as a preserved quirk, and the test states it by
 // rewriting the capture rather than by loosening the comparison.
 func TestConfigEndpointAnswersTheCapturedConfiguration(t *testing.T) {
 	fixture := newAdminFixture()

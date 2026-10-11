@@ -53,7 +53,7 @@ func openDownstreamTestDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestAllDownstreamsReadsWhatTheLegacyServerStored is the CA-007.1 half for this adapter: the
+// TestAllDownstreamsReadsWhatTheLegacyServerStored is the the criterion half for this adapter: the
 // downstream the legacy server stored through its own configuration endpoint reads back field for
 // field, including the scope it stored as JSON text.
 func TestAllDownstreamsReadsWhatTheLegacyServerStored(t *testing.T) {
@@ -193,7 +193,7 @@ func TestAllDownstreamsReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack is the CA-007.2 half for this adapter: the
+// TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack is the the criterion half for this adapter: the
 // row this server writes is read by the legacy server's own read statement, scanning into the field
 // types its Downstream has, and the flag lands with the storage class its rows have.
 func TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack(t *testing.T) {
@@ -366,7 +366,7 @@ func TestAllDownstreamsReturnsTheDownstreamsInTheirDisplayOrder(t *testing.T) {
 	}
 }
 
-// TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows is the §9 rule.
+// TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows is the configuration-in-effect rule.
 func TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -401,7 +401,7 @@ func TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows(t *tes
 	}
 }
 
-// TestSaveDownstreamsLeavesTheSubmittedDownstreamsInEffectWhenTheSaveFails is Q13.
+// TestSaveDownstreamsLeavesTheSubmittedDownstreamsInEffectWhenTheSaveFails is a preserved quirk.
 func TestSaveDownstreamsLeavesTheSubmittedDownstreamsInEffectWhenTheSaveFails(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -488,7 +488,7 @@ func TestSaveDownstreamsRemovesTheDownstreamsTheSubmittedListNoLongerNames(t *te
 }
 
 // TestSaveDownstreamsRemovesAStoredDownstreamEvenWhenTheSubmittedListAddsANewOne pins the repaired
-// reconcile recorded as Q33 in decision-preserved-quirks.md.
+// reconcile.
 //
 // `server/downstream.go` `Downstreams.Write` decides whether a stored downstream is still named by
 // scanning the submitted list and stopping at the first entry whose identifier is zero or equal — so
@@ -582,7 +582,7 @@ func TestSaveDownstreamsUpdatesTheDownstreamThatCarriesTheStoredIdentifier(t *te
 	}
 }
 
-// TestSaveDownstreamsStoresAUrlContainingAQuote is the REQ-007 half of this adapter: the values go
+// TestSaveDownstreamsStoresAUrlContainingAQuote is the the requirement half of this adapter: the values go
 // in as parameters, so a URL that names a quote is stored exactly as submitted.
 func TestSaveDownstreamsStoresAUrlContainingAQuote(t *testing.T) {
 	db := openDownstreamTestDatabase(t)

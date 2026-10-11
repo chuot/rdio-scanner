@@ -31,7 +31,7 @@ import (
 // migration pass reads. legacyV6PartialRows are the same rows with two of them carrying text in a
 // column sqlite declared `datetime` or `integer` and does not enforce, which this server cannot read.
 // They were taken from a database written by the legacy binary, statement by statement, and they live
-// in the package that consumes them, which is what REQ-007 asks for: no fixture directory, no binary
+// in the package that consumes them, which is what the requirement asks for: no fixture directory, no binary
 // database file, and nothing outside the test that proves it.
 //
 // The expectations the migration tests state against them were read off the legacy server's own

@@ -37,7 +37,7 @@ type secretSource struct {
 	value string
 
 	// failure is the read failure the seam answers with — what a failed options
-	// read looks like to the token issuer (CA-013.3).
+	// read looks like to the token issuer.
 	failure error
 }
 
@@ -69,7 +69,7 @@ func TestIssueReturnsACredentialThisServerAccepts(t *testing.T) {
 }
 
 // TestIssueClaimsOnlyTheSessionIdentifier pins the claim set: one identifier and the
-// seven-day expiry D11 adds — a session ends here when the server stops holding the
+// seven-day expiry the decision adds — a session ends here when the server stops holding the
 // credential, and the expiry bounds the life of a stolen token the window cannot
 // evict on its own. The other time claims stay out, as the legacy issued none.
 func TestIssueClaimsOnlyTheSessionIdentifier(t *testing.T) {
@@ -104,10 +104,10 @@ func TestIssueClaimsOnlyTheSessionIdentifier(t *testing.T) {
 		t.Error("the credential carries no session identifier")
 	}
 
-	// The seven-day expiry rides with the identifier (D11); the other time claims
+	// The seven-day expiry rides with the identifier; the other time claims
 	// stay out, as the legacy issued none of them.
 	if claims.ExpiresAt == nil {
-		t.Error("the credential carries no expiry, want the seven-day expiry D11 gives it")
+		t.Error("the credential carries no expiry, want the seven-day expiry the decision gives it")
 	}
 
 	if claims.IssuedAt != nil || claims.NotBefore != nil {
@@ -308,7 +308,7 @@ func TestRevokeOnACredentialThisServerDidNotIssueIsNotAFailure(t *testing.T) {
 	}
 }
 
-// TestIssueFailsWhenTheSigningSecretCannotBeRead (REQ-013, CA-013.3): the signing
+// TestIssueFailsWhenTheSigningSecretCannotBeRead: the signing
 // secret is read from the options when a token is made. A read that fails used to
 // answer with the empty string, and the server signed the token with it — the
 // login was reported as a success. The seam reports the failure, Issue fails with
@@ -330,7 +330,7 @@ func TestIssueFailsWhenTheSigningSecretCannotBeRead(t *testing.T) {
 	}
 }
 
-// TestIssueNeverSignsATokenWithAnEmptySecret (REQ-013, CA-013.3): an empty signing
+// TestIssueNeverSignsATokenWithAnEmptySecret: an empty signing
 // secret — what a failed read used to answer with — signs a token whose signature
 // is the HMAC of nothing, and the login is reported as a success. Issue refuses
 // it: a server that holds no signing secret does not issue sessions.
@@ -347,7 +347,7 @@ func TestIssueNeverSignsATokenWithAnEmptySecret(t *testing.T) {
 	}
 }
 
-// TestValidateRefusesWhenTheSigningSecretCannotBeRead (REQ-013, CA-013.3): the
+// TestValidateRefusesWhenTheSigningSecretCannotBeRead: the
 // same seam answers every validation, and a read that fails there must refuse the
 // credential, not verify it against the empty string.
 func TestValidateRefusesWhenTheSigningSecretCannotBeRead(t *testing.T) {
@@ -367,7 +367,7 @@ func TestValidateRefusesWhenTheSigningSecretCannotBeRead(t *testing.T) {
 	}
 }
 
-// TestIssuedTokensCarryASevenDayExpiry (REQ-013, CA-013.4, D11): a token the server
+// TestIssuedTokensCarryASevenDayExpiry: a token the server
 // stops holding is what ends a session here, and that is the primary rule — but a
 // stolen token is today valid until the window evicts it, and a server that keeps
 // issuing never evicts the fifth token on its own. The seven-day expiry bounds the
@@ -398,7 +398,7 @@ func TestIssuedTokensCarryASevenDayExpiry(t *testing.T) {
 	}
 
 	if claims.ExpiresAt == nil {
-		t.Fatal("the issued credential carries no expiry, want the seven-day expiry D11 asks for")
+		t.Fatal("the issued credential carries no expiry, want the seven-day expiry the decision asks for")
 	}
 
 	if got, want := claims.ExpiresAt.UTC(), at.Add(7*24*time.Hour); !got.Equal(want) {
@@ -406,7 +406,7 @@ func TestIssuedTokensCarryASevenDayExpiry(t *testing.T) {
 	}
 }
 
-// TestAnExpiredTokenIsRefusedInsideTheIssuedWindow (REQ-013, CA-013.4, D11): the
+// TestAnExpiredTokenIsRefusedInsideTheIssuedWindow: the
 // window stays the primary rule — a token this server issued and still holds is
 // the token it accepts — and expiry is the bound the window cannot provide: the
 // window never expires a token on its own, only the sixth login does.

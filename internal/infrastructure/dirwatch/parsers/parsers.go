@@ -312,7 +312,7 @@ func (parsers *Parsers) applyDSDPlus(call *domain.Call, filePath string) error {
 
 	// The talkgroup and the source are read from the last two pieces of the name, so a name
 	// with fewer than two pieces has nothing to read them from. The legacy reads them
-	// unguarded and takes the server down with an index-out-of-range panic — see quirk Q37 —
+	// unguarded and takes the server down with an index-out-of-range panic,
 	// so here the name is refused and reported instead, which is the outcome the legacy's
 	// startup walk already produces for the same file.
 	if len(meta) < 2 {
@@ -593,7 +593,6 @@ func (parsers *Parsers) applyTrunkRecorder(call *domain.Call, sidecar []byte) er
 	// file was read, which is a debug line the legacy server has carried since the field was
 	// written. A sidecar that also names `timestamp` — read below, and later in the same
 	// pass — keeps its instant; one that does not is recorded as a call that happened now.
-	// See quirk Q39.
 	if start, ok := m["start_time"].(float64); ok {
 		_ = time.Unix(int64(start), 0)
 
@@ -691,9 +690,8 @@ func hasExtension(filePath, configured, fallback string) bool {
 // sidecar it read.
 //
 // The name composes a filesystem path, so a stored name that is not a plain name — the
-// kind an old server left behind before the apply-time rule (decision D8) — asks for a
-// file outside the watched directory, and it asks for nothing here: the pair is not read
-// (CA-008.4).
+// kind an old server left behind before the apply-time rule — asks for a
+// file outside the watched directory, and it asks for nothing here: the pair is not read.
 func audioExtension(configured string) string {
 	if len(configured) > 0 {
 		if !plainExtensionPattern.MatchString(configured) {

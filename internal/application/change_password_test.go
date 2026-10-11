@@ -123,12 +123,12 @@ func TestChangeAdminPasswordRefusesAnEmptyNewCredentialBeforeCheckingAnything(t 
 	}
 }
 
-// TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered pins preserved
-// quirk Q14: the legacy server compares a credential it was given and skips the comparison
+// TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered pins the preserved quirk
+// that the legacy server compares a credential it was given and skips the comparison
 // entirely for a payload that names none, so an absent field is not the same as an empty one.
 
-// TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered pins preserved
-// quirk Q14: the legacy server compares a credential it was given and skips the comparison
+// TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered pins the preserved quirk
+// that the legacy server compares a credential it was given and skips the comparison
 // entirely for a payload that names none, so an absent field is not the same as an empty one.
 func TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered(t *testing.T) {
 	fixture := newAdminFixture()
@@ -154,10 +154,10 @@ func TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered
 	}
 }
 
-// TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered is the other half of Q14:
+// TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered is the other half of the preserved quirk:
 // an empty credential that was actually offered is compared, and does not match.
 
-// TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered is the other half of Q14:
+// TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered is the other half of the preserved quirk:
 // an empty credential that was actually offered is compared, and does not match.
 func TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered(t *testing.T) {
 	fixture := newAdminFixture()

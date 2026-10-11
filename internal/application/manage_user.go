@@ -59,7 +59,7 @@ const (
 	AccessUserSaveFailed ManageAccessUserOutcome = "failed"
 
 	// AccessUserNotRemoved means the removal matched no access. It is reported separately because
-	// the legacy server answers it as a success with nothing done, and the REST layer (T039) has
+	// the legacy server answers it as a success with nothing done, and the REST layer has
 	// to be able to reproduce that without inventing a status the frozen contract does not have.
 	AccessUserNotRemoved ManageAccessUserOutcome = "not removed"
 )

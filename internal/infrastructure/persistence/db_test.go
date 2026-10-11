@@ -161,8 +161,8 @@ func TestMysqlAndMariadbDataSourcesAreTheLegacyOne(t *testing.T) {
 		t.Errorf("driver = %q, want MariaDB served by the mysql driver, as the legacy server does", driver)
 	}
 
-	// The legacy option set, plus clientFoundRows (decision D10), written the way the
-	// driver itself writes it (CA-014.1): the driver's FormatDSN orders its parameters,
+	// The legacy option set, plus clientFoundRows, written the way the
+	// driver itself writes it: the driver's FormatDSN orders its parameters,
 	// and the set it produces is the legacy set — same user, host, database, sql_mode,
 	// found-rows — with nothing added, so a deployment that opts in to nothing connects
 	// exactly as it connects today.
@@ -206,7 +206,7 @@ func TestPostgresqlDataSourceIsTheLegacyOne(t *testing.T) {
 	}
 }
 
-// TestMysqlAndMariadbDataSourcesCarryClientFoundRows (REQ-010, CA-010.3, decision D10):
+// TestMysqlAndMariadbDataSourcesCarryClientFoundRows:
 // the mysql driver reports changed rows, not found rows, so an option update that
 // writes the same value reports nothing and the save inserts a duplicate row for every
 // key. The data source has to ask for found rows.
@@ -233,8 +233,7 @@ func TestMysqlAndMariadbDataSourcesCarryClientFoundRows(t *testing.T) {
 	}
 }
 
-// TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames (REQ-014, CA-014.1,
-// D12): the operator opts in to TLS and a connect timeout by name; the data source
+// TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames: the operator opts in to TLS and a connect timeout by name; the data source
 // carries them in the form the mysql driver reads them, and a deployment that names
 // nothing carries neither.
 func TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testing.T) {
@@ -287,8 +286,7 @@ func TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testing.T)
 	}
 }
 
-// TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames (REQ-014,
-// CA-014.1, D12): the postgres twin of the same opt-in, in the form pgx reads.
+// TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames: the postgres twin of the same opt-in, in the form pgx reads.
 func TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{
 		Dialect:        DialectPostgresql,
@@ -327,7 +325,7 @@ func TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testi
 	}
 }
 
-// TestSqliteDataSourceEscapesThePathTheOperatorNames (REQ-014, CA-014.1): the
+// TestSqliteDataSourceEscapesThePathTheOperatorNames: the
 // connection string is a URL, and a database path with a space, a `#`, or a `?` in
 // it — the legacy install lives under "Rdio Scanner" — is a path, not a query. The
 // path is escaped, and the driver reads back the path the operator named.
@@ -353,7 +351,7 @@ func TestSqliteDataSourceEscapesThePathTheOperatorNames(t *testing.T) {
 	}
 }
 
-// TestPostgresqlDataSourceEscapesCredentialsTheOperatorNames (REQ-014, CA-014.1):
+// TestPostgresqlDataSourceEscapesCredentialsTheOperatorNames:
 // a password with an `@`, a `/`, or a `%` in it is a password, not a piece of the
 // connection string. The URL form escapes it, and the driver reads back the
 // credential the operator named.

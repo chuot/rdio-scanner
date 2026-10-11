@@ -114,7 +114,7 @@ type Server struct {
 
 	// collectorDone is closed when the loop carrying held calls back into the pipeline has
 	// returned: the delayer closing its stream is what ends that loop, and a server that
-	// has stopped does not leave a collector behind (REQ-007, CA-007.6).
+	// has stopped does not leave a collector behind.
 	collectorDone chan struct{}
 
 	// ingest is the path every recorded call goes through, kept because the calls whose hold has run
@@ -126,7 +126,7 @@ type Server struct {
 	// The list is written by the goroutine that is serving and read by the goroutine that is
 	// stopping — the operator's interrupt can ask for the stop while the addresses are still
 	// being registered — so the list is carried under servingMutex. Building every address
-	// before any goroutine runs (REQ-007, CA-007.3) keeps the registrations themselves in
+	// before any goroutine runs keeps the registrations themselves in
 	// one goroutine; the mutex is what makes the stop see a complete list, never a
 	// half-built one.
 	serving      []*http.Server
@@ -282,7 +282,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	// s.clock was created in newServer, before the migration, because the migration stamps the rows it
 	// archives with the server's clock.
 	// Scheduled work that panics is recovered by the scheduler and said here
-	// (CA-020.1): a debounced listener report, an hourly pruning, or a delayed
+	//: a debounced listener report, an hourly pruning, or a delayed
 	// call that falls over is a failure the operator sees in the log view, not
 	// a server that dies on a goroutine nobody owns.
 	s.scheduler = clock.NewScheduler(func(problem any) {
@@ -294,7 +294,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		})
 	})
 
-	// The clamp lines (CA-017.2): a stored value the read cannot hold — a negative
+	// The clamp lines: a stored value the read cannot hold — a negative
 	// expiration, limit, or order — is clamped to the safe reading, and the row and
 	// its values are filed as a problem in the log view, naming what the server
 	// enforces instead. A deployment's policy changing in silence is the failure
@@ -487,7 +487,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	serveApplications(mux, listener, scannerfrontend.Embedded(), adminfrontend.Embedded())
 
-	// Every request the server answers carries the CA-014.2 deadline: the
+	// Every request the server answers carries thedeadline: the
 	// administrator's request is answered with a failure by 25 seconds, not
 	// held open by a database that does not answer.
 	s.routes = withRequestDeadline(mux, requestDeadline)
@@ -501,7 +501,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 //
 // Three parts of the legacy startup are not here because they are not things this server has. The ingest
 // consumer goroutine is gone: a call is finished before the thing that found it is answered, which is
-// recorded in decision-internal-ports.md §17. The register-and-forget loop is gone: the hub holds its own
+// The register-and-forget loop is gone: the hub holds its own
 // sessions, and the listener-count debouncer is the thing the hub tells when the count of listeners
 // changes. The administrator's socket has nothing to start: it starts when an administrator connects.
 func (s *Server) Start(ctx context.Context) error {
@@ -589,7 +589,7 @@ func (s *Server) Start(ctx context.Context) error {
 // startup finds it.
 //
 // The delayer closing its stream is the loop's own ending: the stream closes with the server's
-// stop, and the loop leaves with it (REQ-007, CA-007.6).
+// stop, and the loop leaves with it.
 func (s *Server) deliverHeldCalls(ctx context.Context) {
 	defer close(s.collectorDone)
 
@@ -788,7 +788,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	s.announce(addresses)
 
 	// Both addresses are built and registered with the server before any goroutine runs
-	// (REQ-007, CA-007.3): the list the stop walks to shut the addresses down was being
+	//: the list the stop walks to shut the addresses down was being
 	// appended by the serving goroutine and the TLS goroutine at the same moment — a data
 	// race, and a stop racing with the registration could shut down a list that is missing
 	// the TLS address.
@@ -827,7 +827,7 @@ func (s *Server) tlsServer(addresses addresses, tlsConfig *tls.Config) *http.Ser
 // listenTLS answers the https address, in the two ways the legacy server answers it: with a certificate the
 // deployment provided, or with one the server obtains for itself.
 //
-// A listener that cannot start stops the server (REQ-007, CA-007.4): a deployment that asked for https and
+// A listener that cannot start stops the server: a deployment that asked for https and
 // cannot answer it is not a server that should carry on with only http. The legacy server made this fatal
 // — log.Fatal killed the process with a line on the terminal, nothing in the server's log, and the plain
 // address left answering until the process died. The failure is filed in the server's log, said on the
@@ -860,8 +860,8 @@ func (s *Server) listenTLS(serving *http.Server, addresses addresses) {
 // httpServer builds one listener.
 //
 // The timeouts are the legacy server's, and so is keeping keep-alives on. What is not the legacy server's
-// is the logger: the legacy server hands the HTTP server a logger that throws everything away, which is
-// quirk Q52 — a recovered panic and its stack, a TLS handshake failure, a broken write, none of it reaching
+// is the logger: the legacy server hands the HTTP server a logger that throws everything away, which is a
+// preserved quirk — a recovered panic and its stack, a TLS handshake failure, a broken write, none of it reaching
 // anybody. This server hands it the console the operator is reading. What the client sees is unchanged.
 func (s *Server) httpServer(addr string) *http.Server {
 	server := &http.Server{
@@ -885,7 +885,7 @@ func (s *Server) httpServer(addr string) *http.Server {
 // handling.
 //
 // The first interrupt asks for the stop, and the stop is the polite way out. A second interrupt is the
-// operator saying the polite way is not working (decision D6): the server says so on the terminal the
+// operator saying the polite way is not working: the server says so on the terminal the
 // operator is reading and ends the process, rather than hanging until the SIGKILL that leaves no trace.
 // The second interrupt is watched for while the stop runs, because a stop that cannot finish is exactly
 // the one that never returns to ask.

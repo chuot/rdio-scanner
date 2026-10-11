@@ -294,7 +294,7 @@ func (payload SystemListPayload) MarshalJSON() ([]byte, error) {
 // A talkgroup's display order is written under the key `talkgroup`. That is not a name this server
 // would choose — the key says talkgroup and holds a number — but it is the key the legacy server
 // writes it under, and the web application has had to correct for it before it can show a talkgroup
-// list in order. Recorded as Q59.
+// list in order. Recorded as a preserved quirk.
 func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 	out := []map[string]any{}
 
@@ -345,7 +345,7 @@ func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 //
 // A site is written as belonging to the system it is stored under. The legacy server writes every site
 // as belonging to no system at all, because the query that reads sites never asks for that column —
-// the approved divergence recorded in decision-parity-verification.md as Q58.
+// an approved divergence.
 func siteEntries(sites domain.Sites) []map[string]any {
 	out := []map[string]any{}
 

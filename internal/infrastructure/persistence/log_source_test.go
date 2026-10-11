@@ -29,7 +29,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// T005: the migration step that owns every change this feature makes to a database that already exists.
+//: the migration step that owns every change this feature makes to a database that already exists.
 //
 // ApplySchema cannot do any of it — every one of its statements is `IF NOT EXISTS`, so on a `logs` table
 // that is already there they change nothing — and it must not try: its contract is that a database the
@@ -308,12 +308,12 @@ func isLogIndex(object string, name string) bool {
 	return strings.HasPrefix(object, "index "+name+" ")
 }
 
-// TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix is CA-004: a row written before the column
+// TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix is the criterion: a row written before the column
 // existed is given a source by reading the prefix its message carries, and a row whose prefix maps to
 // nothing is stored as legacy rather than left blank or guessed at.
 //
 // The messages are the ones the server actually wrote, including the persistence prefixes that reach
-// the log because a caller stored err.Error() with nothing added.
+// the log because a caller stored err.Error with nothing added.
 func TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix(t *testing.T) {
 	cases := []struct {
 		message string
@@ -550,7 +550,7 @@ func openMigratedLegacyDatabase(t *testing.T, tables ...string) *sql.DB {
 	return db
 }
 
-// TestBackfillLogSourcesRunsWhenTheIndexIsMissing (REQ-012, CA-012.2): the shape a
+// TestBackfillLogSourcesRunsWhenTheIndexIsMissing: the shape a
 // crashed pass leaves — the source column is there, the indexes the pass was
 // building when it died are not, and the rows the crashed run never reached sit
 // nameless forever, because the fill used to belong to the run that added the

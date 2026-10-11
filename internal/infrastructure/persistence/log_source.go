@@ -110,7 +110,7 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 	}
 
 	// A missing index is the sign of a pass that died before creating it — and of
-	// a backfill that died halfway (CA-012.2). The fill used to belong to the run
+	// a backfill that died halfway. The fill used to belong to the run
 	// that added the column and to no other, so the rows that run never reached
 	// stayed nameless for good, and the deployment's log view kept showing blank
 	// rows no filter could ever find.

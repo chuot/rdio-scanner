@@ -46,7 +46,7 @@ type Dirwatches struct {
 	mutex sync.Mutex
 
 	// live is the set of watches in effect. After a save that persisted, it is what the table
-	// holds; after one that did not, it is what was submitted (Q13).
+	// holds; after one that did not, it is what was submitted.
 	live domain.Dirwatches
 
 	// liveIsKnown reports whether the live watches have been read yet. The first read is the
@@ -276,8 +276,7 @@ func (dirwatches *Dirwatches) selectObsolete(ctx context.Context, tx transaction
 // dirwatchNamed reports whether the submitted list still names a stored watch.
 //
 // The legacy `Dirwatches.Write` stops its scan at the first submitted watch whose id is zero, so a
-// save that adds a watch silently keeps every watch the list removed. This server repairs that rule;
-// see Q33 in decision-preserved-quirks.md.
+// save that adds a watch silently keeps every watch the list removed. This server repairs that rule.
 func dirwatchNamed(next domain.Dirwatches, id uint64) bool {
 	for _, dirwatch := range next {
 		if dirwatch.ID == id {

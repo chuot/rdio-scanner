@@ -52,7 +52,7 @@ var legacyTables = []string{
 	"units",
 }
 
-// TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt is the CA-007.1 half that concerns
+// TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt is the the criterion half that concerns
 // the schema: this server starts against a database the legacy server created and leaves it alone,
 // so the legacy server can still open it afterwards.
 func TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt(t *testing.T) {
@@ -113,7 +113,7 @@ func TestApplySchemaTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase is the other direction of REQ-007: a
+// TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase is the other direction of the requirement: a
 // database this server creates is one the legacy server can open, so it has to contain every table
 // the legacy server expects, and the index its call history queries are written against.
 func TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase(t *testing.T) {
@@ -265,7 +265,7 @@ func readTableNames(t *testing.T, db *sql.DB) []string {
 	return names
 }
 
-// TestEveryDialectSchemaDeclaresTheLogSourceColumn is the FEAT-010 half of the same guard the table
+// TestEveryDialectSchemaDeclaresTheLogSourceColumn is the log-source half of the same guard the table
 // coverage gives: a log entry names the part of the server that wrote it, and a deployment on the backend
 // whose copy lost the column has a log view that cannot say where its entries came from.
 //

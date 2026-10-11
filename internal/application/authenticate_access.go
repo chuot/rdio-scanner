@@ -30,7 +30,7 @@ import (
 
 // AuthenticateAccessOutcome reports what the server decided about an access code. Each
 // outcome maps to one reply on the listener socket — the access-code prompt, the expiry
-// notice, or the connection-limit notice — and the websocket layer (T037) performs that
+// notice, or the connection-limit notice — and the websocket layer performs that
 // mapping; the outcome itself carries no wire detail.
 type AuthenticateAccessOutcome string
 
@@ -281,8 +281,7 @@ func NewAccessGate(accesses ports.AccessRepository, hub ports.Hub) *AccessGate {
 // server recognises an unauthenticated session. It has a consequence worth naming: an
 // access configured *without* systems stays gated for every command except the access code
 // even after it authenticates, because the gate cannot tell that session apart from an
-// anonymous one. That is preserved legacy behavior, recorded in
-// decision-preserved-quirks.md, and pinned by a test rather than quietly repaired.
+// anonymous one. That is preserved legacy behavior, pinned by a test rather than quietly repaired.
 func (gate *AccessGate) RequiresAccessCode(ctx context.Context, clientID string) (bool, error) {
 	accesses, err := gate.accesses.AllAccesses(ctx)
 	if err != nil {

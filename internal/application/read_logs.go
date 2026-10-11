@@ -33,7 +33,7 @@ import (
 //
 // The criteria arrive already parsed. Reading a date out of a payload, deciding what an
 // unparseable date means, and what an absent limit means is the domain's job
-// (domain.ParseLogSearch, T011); this query is what the caller does once it knows them.
+// (domain.ParseLogSearch); this query is what the caller does once it knows them.
 type SearchLogsQuery struct {
 	Search domain.LogSearch
 }

@@ -121,7 +121,7 @@ func runCommand(config *Config, exePath string, stdout io.Writer) int {
 }
 
 // newCommand builds the mode from what the operator gave it. The credential comes from the environment
-// first, because the way the usage text shows a login is `RDIO_ADMIN_PASSWORD=<password> ./rdio-scanner
+// first, because the way the usage text shows a login is `RDIO_ADMIN_PASSWORD=<password>./rdio-scanner
 // -cmd login`, and a credential in a command line is visible to every other process on the machine.
 func newCommand(config *Config, exePath string, getenv func(string) string, stdout io.Writer) *command {
 	app := filepath.Base(exePath)
@@ -201,7 +201,7 @@ func (cmd *command) do(action string) int {
 	if err != nil {
 		// Every action that could not be done is reported, with the failure as it happened. The legacy
 		// server said nothing at all for five of the seven commands and ended as if the command had
-		// worked, which is Q70 and is repaired rather than preserved: an operator whose script ran a
+		// worked, which is a preserved quirk and is repaired rather than preserved: an operator whose script ran a
 		// command against a server that was not answering is told the command did not happen.
 		fmt.Fprintf(cmd.stdout, "%v\n", err)
 
@@ -350,7 +350,7 @@ func (cmd *command) configGet() error {
 
 	// The file holds the server's whole configuration — signing secret, database
 	// password, administrator hash — so it is created for its owner alone
-	// (CA-013.2), wherever the operator pointed it.
+	//, wherever the operator pointed it.
 	f, err := os.OpenFile(cmd.out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err

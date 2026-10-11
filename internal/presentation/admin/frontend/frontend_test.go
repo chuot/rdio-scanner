@@ -29,7 +29,7 @@ import (
 // TestThePackageCompilesWithAnUnbuiltClient is the compile-time case. The bundle directory is
 // committed with nothing in it but `.gitkeep`, and `//go:embed all:bundle` is the pattern that
 // matches a directory whose only entry is a hidden file. A package that compiles on a fresh
-// checkout is what makes `go build ./...` and `go test ./...` green before any client build has
+// checkout is what makes `go build./...` and `go test./...` green before any client build has
 // run; the embed failing would turn an unbuilt client into a compile error.
 func TestThePackageCompilesWithAnUnbuiltClient(t *testing.T) {
 	if _, err := bundle.ReadFile("bundle/.gitkeep"); err != nil {

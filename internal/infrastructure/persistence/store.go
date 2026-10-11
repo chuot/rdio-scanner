@@ -117,7 +117,7 @@ func (t transaction) rollback() {
 // inside a quoted identifier or a quoted literal is copied verbatim, and no query here puts a
 // placeholder inside a literal in the first place.
 //
-// The invariant the scan relies on, pinned by a test (CA-020.1): SQL writes a quote inside a
+// The invariant the scan relies on, pinned by a test: SQL writes a quote inside a
 // literal as a doubled quote — `”` — and the scan reads a doubled pair as the end of one quoted
 // span and the start of the next. A literal like `'it”s'` is copied whole, a `?` inside it is
 // copied as the literal's own character, and the numbering counts only the placeholders outside
@@ -206,7 +206,7 @@ func scopeText(scope domain.AccessScope) string {
 
 // parseScope reads a `systems` column back. An empty column and a column that is not JSON both
 // mean the same thing they mean in the legacy server: no scope was supplied, which is the state
-// the PIN gate treats as an unauthenticated client (Q9).
+// the PIN gate treats as an unauthenticated client.
 func parseScope(text string) domain.AccessScope {
 	if len(text) == 0 {
 		return domain.AccessScope{}
@@ -224,7 +224,7 @@ func parseScope(text string) domain.AccessScope {
 }
 
 // storedIdentities asks the table, in one statement, which of the submitted
-// identities it already holds (CA-017.3). The per-row COUNT the legacy server ran
+// identities it already holds. The per-row COUNT the legacy server ran
 // inside the save's transaction cost one round trip per submitted row; one IN
 // list costs one. An id of zero is a row the table will assign, so it is not
 // asked about, and a list with no submitted identities costs no statement at all.

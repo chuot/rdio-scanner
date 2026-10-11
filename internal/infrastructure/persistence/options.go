@@ -96,7 +96,7 @@ func (options *Options) StoreInitialCredential(credential string) {
 // startup read: the defaults with the stored rows applied on top.
 func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error) {
 	// The cache answers under the mutex, and the read that fills an empty cache
-	// runs outside it (CA-014.4): the login handler, the retention pass, and the
+	// runs outside it: the login handler, the retention pass, and the
 	// signing secret all read through here, and holding the mutex across the
 	// fetch of the stored rows stops the server's own configuration reads for
 	// the length of every statement.
@@ -130,10 +130,10 @@ func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error)
 // Nothing is read back afterwards, which is what the legacy server does with this one section:
 // `ConfigHandler` does `FromMap` then `Write` and never `Read`, so what the administrator is
 // answered after a save is what they submitted — including the duplicate-detection window the
-// stored rows cannot give back (Q1).
+// stored rows cannot give back.
 func (options *Options) WriteOptions(ctx context.Context, next domain.Options) error {
 	// The submitted options take effect under the mutex; the rows are written
-	// outside it (CA-014.4), as in `Accesses.SaveAccesses`.
+	// outside it, as in `Accesses.SaveAccesses`.
 	options.mutex.Lock()
 	options.live = next
 	options.loaded = true
@@ -149,9 +149,9 @@ func (options *Options) WriteOptions(ctx context.Context, next domain.Options) e
 // ReloadOptions re-derives the options from what is stored and makes that what the server runs
 // with. It is the legacy `Options.Read`, and it is not a no-op: the re-derivation resets the
 // options to their defaults before it applies the stored rows, so an option stored under a name
-// the reader does not look for comes back as the default. Q15 is about exactly this.
+// the reader does not look for comes back as the default. The reload reset is about exactly this.
 func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, error) {
-	// The re-derivation reads the stored rows outside the mutex (CA-014.4);
+	// The re-derivation reads the stored rows outside the mutex;
 	// the options it produces take effect under it.
 	options.mutex.Lock()
 	from := options.live
@@ -212,7 +212,7 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 			// A row whose scan fails is skipped as the legacy skips a damaged row —
 			// unless the read itself failed: a cancelled context is felt at the scan,
 			// and a re-derivation over the rows that happened to survive is options
-			// nobody stored (CA-011.1).
+			// nobody stored.
 			if readErr := rows.Err(); readErr != nil {
 				return nil, statementError("options", "read", readErr, optionsSelectQuery)
 			}
@@ -237,7 +237,7 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 		out = append(out, optionRow{key: key.String, value: decoded})
 	}
 
-	// A read that ended early is not a table with fewer rows (CA-011.1): the
+	// A read that ended early is not a table with fewer rows: the
 	// re-derivation applies defaults to every key the read did not reach, and the
 	// server ends up running with options nobody stored. The scan skips a damaged row
 	// the way the legacy does; the read's own failure is the caller's to hear.
@@ -259,7 +259,7 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 // One value is deliberately not produced here: the legacy reset puts a freshly generated bcrypt
 // hash of the default administrator password in place before the stored rows are applied, so a
 // server whose options table has no `adminPassword` row still accepts the default password. bcrypt
-// belongs to the password adapter (T060) and not to this package, so the reset leaves the
+// belongs to the password adapter and not to this package, so the reset leaves the
 // credential empty and the re-derivation puts in whatever the composition root supplied through
 // StoreInitialCredential.
 func resetOptions(live domain.Options) domain.Options {
@@ -422,7 +422,7 @@ func (options *Options) StoreSecret(ctx context.Context, secret string) error {
 //
 // The legacy helper reported nothing: a failed update was dropped and a failed insert was only printed,
 // so the legacy save answered success for options it never stored. The port contract is the opposite —
-// a failed persist is returned — which is what the fakes' `SaveErr` knob models and §9 requires.
+// a failed persist is returned — which is what the fakes' `SaveErr` knob models and the configuration-in-effect rule requires.
 func setOptionRow(ctx context.Context, tx transaction, operation, key string, value any) error {
 	const section = "options"
 

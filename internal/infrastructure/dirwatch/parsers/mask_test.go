@@ -454,7 +454,7 @@ func TestExtractDefaultClaimsTheNextFreeReferenceForASystemTheConfigurationDoesN
 // TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference is the half of the site tokens
 // that has never worked, and the reason a deployment that configured them sees no site: a site
 // is looked up under a resolved system, and a reference claim resolves only later, in the
-// ingest path. See quirk Q38.
+// ingest path.
 func TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference(t *testing.T) {
 	byRef := domain.NewDirwatch()
 	byRef.Mask = "#SYS-#SITE"
@@ -496,7 +496,7 @@ func TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference(t *testing.T
 	}
 }
 
-// TestExtractDefaultReadsTheUnitLabelTokenWhole is quirk Q40, repaired by decision D16:
+// TestExtractDefaultReadsTheUnitLabelTokenWhole is a preserved quirk, repaired by the decision:
 // the token table applies longest-first, so a mask naming only `#UNITLBL` — the obvious
 // way to write it — has the label token replaced whole. It used to have `#UNIT` replaced
 // inside the longer token, leaving a literal LBL the filename then had to end with, and
@@ -531,7 +531,7 @@ func TestExtractDefaultReadsTheUnitLabelTokenWhole(t *testing.T) {
 // offers, which is one unit and one name however many the filename holds — and that the
 // pairing works when the mask names the unit itself before the label, which is the only way
 // the label token survives the replacement order, as it now does however the mask names
-// the two tokens (decision D16).
+// the two tokens.
 func TestExtractDefaultPairsTheUnitLabelWithTheUnitTheMaskNamed(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNIT-#UNITLBL"

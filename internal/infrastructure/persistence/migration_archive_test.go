@@ -41,14 +41,14 @@ func (c fixedClock) Now() time.Time { return c.at }
 // The migration archive is the table that holds every v6 row the migration pass read and could not
 // carry, so that dropping the v6 table never destroys a row.
 //
-// It lives in the migration pass and not in the dialect schemas for the reason FEAT-010 recorded for
-// the log indexes (decision-where-the-schema-change-lives.md): ApplySchema's statements are the legacy
+// It lives in the migration pass and not in the dialect schemas for the reason the log source feature recorded for
+// the log indexes: ApplySchema's statements are the legacy
 // server's, and TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt requires that applying
 // them to a database the other server wrote changes nothing at all — a new table included. The step
 // that owns the archive runs after the schema and before any v6 table is read, so every database this
 // server starts on gains it, fresh or inherited.
 
-// TestMigrateGivesEveryDatabaseTheMigrationArchive is REQ-001's precondition: the table the pass
+// TestMigrateGivesEveryDatabaseTheMigrationArchive is the requirement's precondition: the table the pass
 // archives into exists on every database the pass runs on — the fresh one it created the schema of,
 // and the one the legacy server wrote and already migrated — with the unique index that makes
 // re-archiving a surviving v6 table hold each row once.
@@ -66,7 +66,7 @@ func TestMigrateGivesEveryDatabaseTheMigrationArchive(t *testing.T) {
 	assertMigrationArchive(t, inherited, "a database the legacy server wrote")
 }
 
-// TestApplySchemaAloneDoesNotCreateTheMigrationArchive is the FEAT-003 half: the schema step is still
+// TestApplySchemaAloneDoesNotCreateTheMigrationArchive is the fresh-schema half: the schema step is still
 // exactly the legacy server's. The archive belongs to the migration pass, which is the one place this
 // server changes a database that already exists.
 func TestApplySchemaAloneDoesNotCreateTheMigrationArchive(t *testing.T) {
@@ -131,7 +131,7 @@ func TestMigrationArchiveIsDeclaredForEveryDialect(t *testing.T) {
 	}
 }
 
-// isMigrationArchiveTable and isMigrationArchiveIndex name the two objects FEAT-011 adds to a
+// isMigrationArchiveTable and isMigrationArchiveIndex name the two objects the archive adds to a
 // database the migration pass runs on, in the shape readSchemaObjects reports them.
 func isMigrationArchiveTable(object string) bool {
 	return strings.HasPrefix(object, "table migrationArchive ")
@@ -141,7 +141,7 @@ func isMigrationArchiveIndex(object string) bool {
 	return strings.HasPrefix(object, "index migration_archive_table_row ")
 }
 
-// TestArchiveRowHoldsTheRowThePassCouldNotCarry is REQ-001's mechanism: the row the pass read but did
+// TestArchiveRowHoldsTheRowThePassCouldNotCarry is the requirement's mechanism: the row the pass read but did
 // not carry is held with its original values, the reason in the language of the system, and the moment
 // the server archived it. Binary columns come back base64-encoded, which is what makes an archived
 // call's audio recoverable from the contents column alone.
@@ -193,7 +193,7 @@ func TestArchiveRowHoldsTheRowThePassCouldNotCarry(t *testing.T) {
 	}
 }
 
-// TestArchivingTheSameRowTwiceHoldsItOnce is the re-run half of REQ-004: a v6 table that survived
+// TestArchivingTheSameRowTwiceHoldsItOnce is the re-run half of the requirement: a v6 table that survived
 // because a row of it could not be read is re-read on every later start, and its already-archived rows
 // archive again as nothing — the first reason stays on record.
 func TestArchivingTheSameRowTwiceHoldsItOnce(t *testing.T) {

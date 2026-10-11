@@ -54,13 +54,13 @@ const (
 	// maxFrameSize is the largest frame the server reads from one listener. A bigger frame
 	// is not something the server can act on — the protocol's frames are small JSON
 	// documents — and reading it is a way to make the server hold a message it will never
-	// use (REQ-006, CA-006.2). The socket ends the connection at the limit.
+	// use. The socket ends the connection at the limit.
 	maxFrameSize = 1 << 20
 
 	// sendBuffer is how many frames may be waiting for one listener before the server stops and waits
 	// for it to catch up. A listener that cannot keep up holds up the delivery that is going to it,
 	// which is what the legacy server does and what a slow client therefore cannot silently cost a
-	// server its calls. The queue is bounded (REQ-006, CA-006.3): the frames waiting for a slow
+	// server its calls. The queue is bounded: the frames waiting for a slow
 	// listener are server memory, and thousands of them per listener is a way to spend it.
 	sendBuffer = 256
 
@@ -70,7 +70,7 @@ const (
 	accessAttemptsWindow = 10 * time.Minute
 
 	// closeWorkers is how many connections the stopping hub says goodbye to at the same
-	// time (REQ-007, CA-007.2), bounded like the administrator socket's goodbyes.
+	// time, bounded like the administrator socket's goodbyes.
 	closeWorkers = 64
 )
 
@@ -150,7 +150,7 @@ type Hub struct {
 	// closed marks a hub whose close has run: a connection arriving after it is refused,
 	// because the close has already waited for every goroutine the hub had started, and a
 	// session attached after it would start goroutines on a WaitGroup the close is already
-	// waiting on (REQ-007, CA-007.3).
+	// waiting on.
 	closed bool
 
 	// The intervals above are what every hub starts with. They are fields rather than constants used
@@ -212,7 +212,7 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	// The read limit is set before the connection is held: a frame bigger than the server
 	// will ever read ends the connection at the socket, and is never read into memory to be
-	// looked at (REQ-006, CA-006.2).
+	// looked at.
 	conn.SetReadLimit(maxFrameSize)
 
 	max := hub.settings.Settings().MaxClients
@@ -220,7 +220,7 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 	hub.mutex.Lock()
 
 	// A hub whose close has run does not attach anything: the close has already waited for
-	// every goroutine the hub had started (REQ-007, CA-007.3).
+	// every goroutine the hub had started.
 	if hub.closed {
 		hub.mutex.Unlock()
 
@@ -231,7 +231,7 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	// The gate is on the connections the server is holding, not on the ones that finished
 	// becoming listeners: a client that never answers must not keep the slot open forever
-	// (decision D3). The listeners-count broadcast keeps counting registered listeners, as
+	//. The listeners-count broadcast keeps counting registered listeners, as
 	// the contract fixes it.
 	if uint(len(hub.sessions)) >= max {
 		hub.mutex.Unlock()
@@ -393,7 +393,7 @@ func (hub *Hub) LivefeedWatchesNothing(clientID string) bool {
 //
 // The session is chosen under the lock and delivered outside it, like every other delivery: the answer
 // waits for room in a slow listener's queue, and it waits there without holding the hub — a listener
-// that cannot keep up must not stop the server from reaching everyone else (REQ-005, CA-005.1).
+// that cannot keep up must not stop the server from reaching everyone else.
 func (hub *Hub) SendLivefeedMap(clientID string, watching bool) {
 	hub.mutex.Lock()
 
@@ -482,7 +482,7 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 // The departure is filed first, while the log can still be written to. The close frame is what ends the
 // connection, and the read loop it unblocks finds nothing left to report: disconnect reports only a session
 // the hub still holds.
-// The close is made session by session in parallel (REQ-007, CA-007.2): the goodbye is a
+// The close is made session by session in parallel: the goodbye is a
 // delivery, and a listener whose writer is stuck in the socket holds that delivery for its
 // full write deadline. Made one session at a time, a wall of stalled listeners takes a
 // deadline per session and blows past the server's own shutdown window — which is how a
@@ -492,7 +492,7 @@ func (hub *Hub) Close(ctx context.Context) {
 	hub.mutex.Lock()
 
 	// From here on, a connection arriving is refused: the goroutines this close is about
-	// to wait for are all the goroutines the hub will ever have (REQ-007, CA-007.3).
+	// to wait for are all the goroutines the hub will ever have.
 	hub.closed = true
 
 	sessions := make([]*listener, 0, len(hub.sessions))

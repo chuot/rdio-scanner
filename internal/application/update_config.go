@@ -177,7 +177,7 @@ type UpdateConfigurationSectionCommand struct {
 
 // ConfigurationPorts are everything a configuration save needs. They are gathered into one
 // value because reading the configuration, saving part of it, and announcing the change all
-// need the same set, and the composition root (T042) builds it once.
+// need the same set, and the composition root builds it once.
 type ConfigurationPorts struct {
 	ConfigurationRepositories
 
@@ -232,7 +232,7 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 
 		return saver.repos.Apikeys.SaveApikeys(ctx, *changes.Apikeys)
 	case DirwatchSection:
-		// Masks and extensions are refused at apply (decision D7, D8), before they can be
+		// Masks and extensions are refused at apply, before they can be
 		// stored: the domain owns the rules, this is the door through which every submitted
 		// watch list passes.
 		if err := changes.Dirwatches.Validate(); err != nil {
@@ -241,7 +241,7 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 
 		return saver.repos.Dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)
 	case DownstreamsSection:
-		// Addresses are refused at apply (decision D9): the forwarder posts recordings
+		// Addresses are refused at apply: the forwarder posts recordings
 		// and the apikey to whatever the administrator typed, and a scheme that is not
 		// http or https never gets stored to be posted to.
 		if err := changes.Downstreams.Validate(); err != nil {
@@ -371,13 +371,13 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 //
 // Two legacy rules make this worth writing down rather than doing the obvious thing:
 //
-//   - Stopping the watchers empties the list the server watches from, and only a save that
-//     names the dirwatch section fills it again. A whole-configuration save that says nothing
-//     about dirwatch therefore leaves the server watching nothing until it restarts, even
-//     though the watched directories are still stored. Recorded as Q12.
-//   - When the section is named, what gets watched is what the store has, because the legacy
-//     server reads back what it saved — except when the save failed, when it keeps watching
-//     what it was given. Recorded as Q13.
+// - Stopping the watchers empties the list the server watches from, and only a save that
+// names the dirwatch section fills it again. A whole-configuration save that says nothing
+// about dirwatch therefore leaves the server watching nothing until it restarts, even
+// though the watched directories are still stored. Recorded as a preserved quirk.
+// - When the section is named, what gets watched is what the store has, because the legacy
+// server reads back what it saved — except when the save failed, when it keeps watching
+// what it was given. Recorded as a preserved quirk.
 func (handler *UpdateConfigurationHandler) watchesToStart(ctx context.Context, changes ConfigurationChanges, saved map[ConfigSection]bool) domain.Dirwatches {
 	if !changes.names(DirwatchSection) {
 		return domain.Dirwatches{}

@@ -148,7 +148,7 @@ func TestLogoutHandlerLeavesOtherAdministratorSessionsRunning(t *testing.T) {
 	}
 }
 
-// TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten is CA-007 for the administrator's
+// TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten is the criterion for the administrator's
 // credential: every one of these use cases writes a log entry as a side effect, and a log view that cannot
 // be written is not allowed to change what the server decided or what it did. A deployment whose log table
 // is broken must still be able to sign in and sign out.
@@ -156,7 +156,7 @@ func TestLogoutHandlerLeavesOtherAdministratorSessionsRunning(t *testing.T) {
 // accepted, and retiring it failed. The session stays open, the caller is told, and until now nothing was
 // written at all — so an administrator reporting "I cannot log out" left nothing to check.
 
-// TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten is CA-007 for the administrator's
+// TestAdminLoginAndLogoutAreUnchangedWhenTheServerLogCannotBeWritten is the criterion for the administrator's
 // credential: every one of these use cases writes a log entry as a side effect, and a log view that cannot
 // be written is not allowed to change what the server decided or what it did. A deployment whose log table
 // is broken must still be able to sign in and sign out.

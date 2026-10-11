@@ -64,21 +64,21 @@ type Settings struct {
 	Name     string
 
 	// TLS is the mysql driver's tls parameter (the db_tls ini option): "true",
-	// "skip-verify", "false", or the name of a registered tls config (D12).
+	// "skip-verify", "false", or the name of a registered tls config.
 	// Empty — the default — connects in plaintext, exactly as deployments
 	// connect today; the operator opts in.
 	TLS string
 
 	// SslMode is the postgres sslmode parameter (the db_sslmode ini option),
 	// in the form pgx reads it: "disable", "require", "verify-ca",
-	// "verify-full", and the rest of the postgres names (D12). Empty — the
+	// "verify-full", and the rest of the postgres names. Empty — the
 	// default — is what the server sends today.
 	SslMode string
 
 	// ConnectTimeout is how long the connection attempt waits (the
 	// db_connect_timeout ini option), in Go's duration form ("5s"). Empty —
 	// the default — leaves the timing to the driver and the operating system,
-	// as it is today (D12).
+	// as it is today.
 	ConnectTimeout string
 }
 
@@ -90,7 +90,7 @@ type Settings struct {
 //
 // Unlike the legacy server, an unusable setting is returned as an error rather than written to
 // the process log and followed by a hard exit. Deciding how a failure to open the database ends
-// the process belongs to the composition root (T042), which is the only place that knows the
+// the process belongs to the composition root, which is the only place that knows the
 // server is starting and not merely being tested.
 func Open(settings Settings) (*sql.DB, error) {
 	driver, dsn, err := dataSourceName(settings)
@@ -132,7 +132,7 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		// `busy_timeout=10000`. It is kept because it works, and because a connection string
 		// that differs from the one the other server writes is a difference someone would have
 		// to explain.
-		// The path is escaped into the URL the driver reads (CA-014.1): the
+		// The path is escaped into the URL the driver reads: the
 		// legacy install lives under "Rdio Scanner", and a path with a space,
 		// a `#`, or a `?` in it is a path, not a query. Escaping is segment by
 		// segment so the separators stay separators, and a plain path escapes
@@ -152,7 +152,7 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		// clientFoundRows is what makes an option update report the row it found rather
 		// than the rows it changed: an update that writes the same value changes nothing,
 		// and the save reads "nothing changed" as "no such row" and inserts a duplicate
-		// for every key (the audit's H13, decision D10).
+		// for every key.
 		source := &mysql.Config{
 			User:   settings.Username,
 			Passwd: settings.Password,
@@ -164,13 +164,13 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 
 			// The driver's own defaults, named so FormatDSN says nothing about
 			// them: the data source carries the legacy option set and nothing
-			// else (CA-014.1).
+			// else.
 			AllowNativePasswords: true,
 			CheckConnLiveness:    true,
 			MaxAllowedPacket:     64 << 20,
 
 			// clientFoundRows is what makes an option update report the row it
-			// found (decision D10); the driver's own field is what carries it.
+			// found; the driver's own field is what carries it.
 			ClientFoundRows: true,
 		}
 
@@ -190,7 +190,7 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		return "mysql", source.FormatDSN(), nil
 
 	case DialectPostgresql:
-		// The URL form escapes the credential (CA-014.1): a password with an
+		// The URL form escapes the credential: a password with an
 		// `@`, a `/`, or a `%` in it is a password, not a piece of the
 		// connection string, and today's plain interpolation hands it to the
 		// parser as structure. With nothing opted in, the URL reads byte-for-byte
@@ -224,7 +224,7 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 
 	default:
 		// The legacy server writes this to the log and exits. Here it is an error, which is
-		// also what fixes Q7: the message is produced from the settings that were given, and
+		// also what fixes the reported failure: the message is produced from the settings that were given, and
 		// not from a configuration that may not be there.
 		return "", "", fmt.Errorf("unknown database type %s", settings.Dialect)
 	}

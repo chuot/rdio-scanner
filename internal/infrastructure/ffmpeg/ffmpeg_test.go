@@ -135,8 +135,7 @@ func TestTheDisabledLevelIsSilentEvenWithoutAConverter(t *testing.T) {
 	}
 }
 
-// TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint (REQ-018,
-// CA-018.1, D17): the loudness filters are decided by the filter list the program
+// TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint: the loudness filters are decided by the filter list the program
 // itself prints — `ffmpeg -hide_banner -filters` — and not by its version string.
 // The captured outputs below are the real filter lists of the releases named: the
 // 4.x releases print three flag columns, the 7.x ones dropped command support and
@@ -325,7 +324,7 @@ func TestTheConverterReportsAProgramItWasGivenThatIsNotThere(t *testing.T) {
 
 // The filter list the given program prints is what decides whether the loudness filters are
 // used, so a bundled ffmpeg and a host ffmpeg are not interchangeable when their filter lists
-// differ (D17).
+// differ.
 func TestTheConverterAsksTheProgramItWasGivenWhichFiltersItHas(t *testing.T) {
 	without := NewAt(aProgramIsGiven(t, filtersWithoutLoudnorm))
 
@@ -373,7 +372,7 @@ func aProgramThatFailsWith(t *testing.T, transcript string) string {
 	return path
 }
 
-// TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce (REQ-018, CA-018.1):
+// TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce:
 // the filter probe is the converter's availability probe. A program that cannot
 // answer it is a converter this server does not have: the recording is kept, the
 // reason is said once, and the silence after it is the legacy's silence.
@@ -410,7 +409,7 @@ func TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce(t *testing.T) 
 	}
 }
 
-// TestTheConverterReportsAFailingProgramShortAndQuiet (REQ-016, CA-016.2): ffmpeg's stderr on
+// TestTheConverterReportsAFailingProgramShortAndQuiet: ffmpeg's stderr on
 // a failure is written into the server's log line. A real ffmpeg floods a whole session —
 // thousands of bytes, newlines, ANSI colors — and pasted into a log line it forges entries
 // and fills the operator's view. The report keeps the first 512 bytes and nothing that can

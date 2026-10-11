@@ -40,7 +40,7 @@ type GetConfigQuery struct{}
 //
 // It returns the configuration itself rather than a projection of it: the administrator's view
 // *is* the configuration, and the shapes the wire carries — the eight-section admin payload,
-// the four-section listener payload, the per-section payloads — belong to the DTO layer (T035),
+// the four-section listener payload, the per-section payloads — belong to the DTO layer,
 // which is where a shape can differ per consumer without the read having to know about it.
 type GetConfigHandler struct {
 	repos ConfigurationRepositories
@@ -58,7 +58,7 @@ func (handler *GetConfigHandler) Handle(ctx context.Context, query GetConfigQuer
 
 // ConfigurationRepositories are the stores that own each section of the configuration. It is
 // exported because reading the configuration, saving part of it, and telling an administrator
-// about a change all need the same set, and the composition root (T042) builds it once.
+// about a change all need the same set, and the composition root builds it once.
 type ConfigurationRepositories struct {
 	Accesses    ports.AccessRepository
 	Apikeys     ports.ApikeyRepository

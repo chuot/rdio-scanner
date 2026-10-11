@@ -53,7 +53,7 @@ func openDirwatchTestDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestAllDirwatchesReadsWhatTheLegacyServerStored is the CA-007.1 half for this adapter: the
+// TestAllDirwatchesReadsWhatTheLegacyServerStored is the the criterion half for this adapter: the
 // directory watch the legacy server stored through its own configuration endpoint reads back
 // field for field.
 func TestAllDirwatchesReadsWhatTheLegacyServerStored(t *testing.T) {
@@ -146,7 +146,7 @@ func TestAllDirwatchesReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack is the CA-007.2 half for this adapter: the
+// TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack is the the criterion half for this adapter: the
 // row this server writes is read by the legacy server's own read statement, scanning into the field
 // types its Dirwatch has, and lands with the same storage class its rows have.
 func TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack(t *testing.T) {
@@ -299,7 +299,7 @@ func TestAllDirwatchesReturnsTheWatchesInTheirDisplayOrder(t *testing.T) {
 	}
 }
 
-// TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows is the §9 rule: the watches
+// TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows is the configuration-in-effect rule: the watches
 // are read from the database once and then held, because what the administrator is shown and what
 // the watchers run on is what the server is running with.
 func TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows(t *testing.T) {
@@ -338,7 +338,7 @@ func TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows(t *test
 	}
 }
 
-// TestSaveDirwatchesLeavesTheSubmittedWatchesInEffectWhenTheSaveFails is Q13: the submitted
+// TestSaveDirwatchesLeavesTheSubmittedWatchesInEffectWhenTheSaveFails is a preserved quirk: the submitted
 // configuration is in effect before anything is stored, so a section that could not be persisted is
 // still what the server runs on.
 func TestSaveDirwatchesLeavesTheSubmittedWatchesInEffectWhenTheSaveFails(t *testing.T) {
@@ -444,7 +444,7 @@ func TestSaveDirwatchesRemovesTheWatchesTheSubmittedListNoLongerNames(t *testing
 }
 
 // TestSaveDirwatchesRemovesAStoredWatchEvenWhenTheSubmittedListAddsANewOne pins the repaired
-// reconcile recorded as Q33 in decision-preserved-quirks.md.
+// reconcile.
 //
 // `server/dirwatch.go` `Dirwatches.Write` decides whether a stored watch is still named by scanning
 // the submitted list and stopping at the first entry whose identifier is zero or equal — so one new,
@@ -563,7 +563,7 @@ func TestSaveDirwatchesGivesANewWatchTheIdentifierTheTableAssignedIt(t *testing.
 	}
 }
 
-// TestSaveDirwatchesStoresADirectoryContainingAQuote is the REQ-007 half of this adapter: the legacy
+// TestSaveDirwatchesStoresADirectoryContainingAQuote is the the requirement half of this adapter: the legacy
 // `Dirwatches.Write` interpolates the directory into the statement with no escaping at all, so a
 // directory naming a quote breaks the statement and the whole save fails. The values go in as
 // parameters here.

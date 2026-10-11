@@ -129,7 +129,7 @@ func TestLivefeedWatchesPatchedTalkgroups(t *testing.T) {
 	}
 }
 
-// TestParseLivefeedRefusesAnOversizedSelection (REQ-006, CA-006.3): the live-watch payload is
+// TestParseLivefeedRefusesAnOversizedSelection: the live-watch payload is
 // a listener's own selection, and a five-thousand-entry one is not a selection — it is a way
 // to spend the server's memory from one frame. The oversized payload is refused: nothing is
 // switched on.

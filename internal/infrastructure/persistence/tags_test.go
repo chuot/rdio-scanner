@@ -28,7 +28,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAllTagsReadsTheTagsTheLegacyServerWrote is the tags half of REQ-007. The trailing space of the
+// TestAllTagsReadsTheTagsTheLegacyServerWrote is the tags half of the requirement. The trailing space of the
 // seeded "Emergency " label is part of the label, and reading it back trimmed would change which
 // talkgroups a search for that label finds.
 func TestAllTagsReadsTheTagsTheLegacyServerWrote(t *testing.T) {
@@ -63,7 +63,7 @@ func TestAllTagsReadsTheTagsTheLegacyServerWrote(t *testing.T) {
 	}
 }
 
-// TestAllTagsIsReadFromTheDatabaseOnce is §9 for this section.
+// TestAllTagsIsReadFromTheDatabaseOnce is the configuration-in-effect rule for this section.
 func TestAllTagsIsReadFromTheDatabaseOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -213,8 +213,7 @@ func TestSaveTagsRemovesAStoredTagAndCascadesTheTalkgroupsThatNameIt(t *testing.
 	}
 }
 
-// TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile
-// recorded as Q33 in decision-preserved-quirks.md: `server/tag.go` `Tags.Write` tests
+// TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile: `server/tag.go` `Tags.Write` tests
 // `tag.Id == 0 || tag.Id == tagId`, so one submitted tag with no identity yet keeps every stored
 // tag. This server deletes what the list removed.
 func TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
@@ -249,7 +248,7 @@ func TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne(t *testin
 	}
 }
 
-// TestSaveTagsLeavesTheSubmittedTagsInEffectWhenTheStoreCannotBeWritten is quirk Q13.
+// TestSaveTagsLeavesTheSubmittedTagsInEffectWhenTheStoreCannotBeWritten is a preserved quirk.
 func TestSaveTagsLeavesTheSubmittedTagsInEffectWhenTheStoreCannotBeWritten(t *testing.T) {
 	db := openLegacyDatabase(t)
 

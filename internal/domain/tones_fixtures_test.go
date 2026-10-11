@@ -23,7 +23,7 @@ package domain
 // alertTables are the tone tables the legacy server wrote, recorded as the values it wrote them with, taken
 // from git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542 and spelled with the same decimal literals the
 // legacy source spells, so the float32 values compared here are the float32 values the legacy server
-// built. They live in the package that consumes them, which is what REQ-007 asks for: no fixture
+// built. They live in the package that consumes them, which is what the requirement asks for: no fixture
 // directory, no manifest, and nothing outside the test that proves it.
 var alertTables = []Oscillator{
 	{Begin: 0, End: 0.05, Frequency: 3000, Kind: "square"},
@@ -66,7 +66,7 @@ var alertTables = []Oscillator{
 // keypadBeepTables are the tone tables the legacy server wrote, recorded as the values it wrote them with, taken
 // from git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542 and spelled with the same decimal literals the
 // legacy source spells, so the float32 values compared here are the float32 values the legacy server
-// built. They live in the package that consumes them, which is what REQ-007 asks for: no fixture
+// built. They live in the package that consumes them, which is what the requirement asks for: no fixture
 // directory, no manifest, and nothing outside the test that proves it.
 var keypadBeepTables = []Oscillator{
 	{Begin: 0, End: 0.05, Frequency: 1200, Kind: "square"},

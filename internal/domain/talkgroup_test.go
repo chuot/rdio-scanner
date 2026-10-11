@@ -32,7 +32,7 @@ func TestTalkgroupApplyMapReadsOrderFromTheOrderKeyOnly(t *testing.T) {
 		t.Errorf("Order = %d, want 7 read from the order key", fromOrder.Order)
 	}
 
-	// Quirk Q4: the legacy server emits the order under "talkgroup" but never reads
+	// A preserved quirk: the legacy server emits the order under "talkgroup" but never reads
 	// it back from that key. Reproduced verbatim.
 	fromTalkgroupKey := Talkgroup{}.ApplyMap(map[string]any{"talkgroupRef": float64(100), "talkgroup": float64(7)})
 

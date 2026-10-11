@@ -50,7 +50,7 @@ import (
 const writeWait = 10 * time.Second
 
 // closeWait bounds the goodbye written on the way out. The close frame is small, and a peer
-// that cannot take it in two seconds is not going to take it in ten (REQ-007, CA-007.2): the
+// that cannot take it in two seconds is not going to take it in ten: the
 // server that is stopping owes every connection a goodbye, not a ten-second patience each.
 const closeWait = 2 * time.Second
 
@@ -62,7 +62,7 @@ const closeWorkers = 64
 // maxFrameSize is the largest frame the socket reads from one administrator connection, the
 // same bound the listener socket puts on its frames: a bigger frame is not something the
 // server can act on, and reading it is a way to make the server hold a message it will never
-// use (REQ-006, CA-006.2). The socket ends the connection at the limit.
+// use. The socket ends the connection at the limit.
 const maxFrameSize = 1 << 20
 
 // upgrader is the socket this endpoint hands over.
@@ -109,7 +109,7 @@ type Sessions struct {
 
 	// pongWait is how long a connection may go without answering before it is given up on, and
 	// pingPeriod is how often the server asks — the same discipline the listener socket holds
-	// its connections to (decision D5). They are fields, not constants, for the same reason the
+	// its connections to. They are fields, not constants, for the same reason the
 	// hub's are: only this package's tests need to pick a shorter one at all.
 	pongWait   time.Duration
 	pingPeriod time.Duration
@@ -136,7 +136,7 @@ type administrator struct {
 	// configuration, and the close that ends the connection when its credential stops being accepted or its
 	// peer goes away. A websocket connection is not something two goroutines may write to at the same time.
 	// The legacy server does not care, and gets away with it only because the map it walks while broadcasting
-	// is being changed by another goroutine at the same time anyway (quirk Q65).
+	// is being changed by another goroutine at the same time anyway.
 	writing sync.Mutex
 
 	// quit is closed when the read loop ends, telling the goroutine that keeps asking this
@@ -190,7 +190,7 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// The read limit is set before the connection is held: a frame bigger than the server
 	// will ever read ends the connection at the socket, and is never read into memory to be
-	// looked at — not even as a credential (REQ-006, CA-006.2).
+	// looked at — not even as a credential.
 	conn.SetReadLimit(maxFrameSize)
 
 	admin := sessions.join(conn, httpaddr.Address(r, sessions.trusted))
@@ -213,8 +213,7 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // The legacy server pushes to everything it has registered, including a connection that has presented
 // nothing at all, which means a peer that opens this socket and stays silent is handed every access code,
-// every apikey, and every downstream credential as soon as anybody saves a configuration. Recorded as quirk
-// Q64, and fixed by the owner's decision: a connection is open before it is trusted, and it is told nothing
+// every apikey, and every downstream credential as soon as anybody saves a configuration. Repaired by the owner's decision: a connection is open before it is trusted, and it is told nothing
 // until it says who it is.
 func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, configuration domain.Configuration) {
 	body, err := json.Marshal(dto.AdminConfigPayload{
@@ -262,7 +261,7 @@ func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, config
 // says anything.
 func (sessions *Sessions) listen(admin *administrator) {
 	// An administrator connection is held to the same interval a listener connection is
-	// (decision D5): the server asks every so often, and a connection that stops answering
+	//: the server asks every so often, and a connection that stops answering
 	// is one the server cannot send the configuration to — a half-open peer holds its
 	// goroutine, its slot, and the server that is stopping and waits on it. The hosted web
 	// app answers pings automatically; a native administrator client must answer them too.
@@ -411,7 +410,7 @@ func (sessions *Sessions) leave(admin *administrator) {
 // The connections are taken out of the set first, so the read loop each one unblocks has nothing left to
 // report: a departure is said by the half that ended the connection, once.
 //
-// The goodbyes are made together (REQ-007, CA-007.2): each one is a write, and a peer that stopped
+// The goodbyes are made together: each one is a write, and a peer that stopped
 // reading holds its write for the full close deadline. Made one connection at a time, a wall of stalled
 // sockets takes a deadline per connection and blows past the server's own shutdown window — which is
 // how a stopping server ends up needing the kill signal.

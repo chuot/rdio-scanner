@@ -291,7 +291,7 @@ func (manager *recordedServiceLogger) String() string {
 	return out
 }
 
-// TestTheOptionsSecretReportsAReadFailure (REQ-013, CA-013.3): the signing secret
+// TestTheOptionsSecretReportsAReadFailure: the signing secret
 // is read from the options when a token is made, and today a read that fails
 // answers with the empty string — the server then signs a session token with an
 // empty key and reports the login as a success, telling the operator nothing. The
@@ -319,7 +319,7 @@ func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
 	}
 }
 
-// TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline (REQ-014, CA-014.2):
+// TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline:
 // the socket timeouts bound the socket, not the work — a handler blocked on a
 // database that does not answer holds the request open, and the administrator's
 // browser sits waiting with no answer at all. The deadline gives every request a
@@ -362,7 +362,7 @@ func TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline(t *testing.T
 	}
 }
 
-// TestTheRequestDeadlineIsTwentyFiveSeconds (REQ-014, CA-014.2): the bound is
+// TestTheRequestDeadlineIsTwentyFiveSeconds: the bound is
 // twenty-five seconds — inside the thirty-second socket timeouts, so the request
 // is answered with a failure the administrator can read, not a socket that goes
 // silent.
@@ -372,7 +372,7 @@ func TestTheRequestDeadlineIsTwentyFiveSeconds(t *testing.T) {
 	}
 }
 
-// TestTheHourlyPruningRunsUnderAContextWithADeadline (REQ-014, CA-014.3): the
+// TestTheHourlyPruningRunsUnderAContextWithADeadline: the
 // hourly retention pass runs on the server's own schedule with nobody waiting
 // for its answer, and a pass that blocks on a database that does not answer
 // holds the schedule and writes no report. The pass runs under a context with a
@@ -401,7 +401,7 @@ func TestTheHourlyPruningRunsUnderAContextWithADeadline(t *testing.T) {
 }
 
 // recordedPruning is the retention pass as the schedule sees it: it records the
-// context it was run under, which is where the deadline (CA-014.3) is visible.
+// context it was run under, which is where the deadline is visible.
 type recordedPruning struct {
 	calls int
 	ctx   context.Context

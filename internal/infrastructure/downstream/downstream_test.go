@@ -463,7 +463,7 @@ func TestForwardReportsTheCallInstantTheWayTheUploadEndpointReadsIt(t *testing.T
 	}
 }
 
-// TestForwardMarshalsFrequenciesAndUnitsWithTheLegacyFieldNames pins Q36: the sender writes
+// TestForwardMarshalsFrequenciesAndUnitsWithTheLegacyFieldNames pins the legacy field names: the sender writes
 // the Go field names of its own structs, and the receiving upload endpoint reads `dbm`,
 // `errorCount`, `freq`, `pos`, `spikeCount`, `id`, `label`, and `offset`. A forwarded call
 // therefore arrives with its quality measurements and its units dropped.
@@ -598,7 +598,7 @@ func containsName(names []string, name string) bool {
 	return false
 }
 
-// TestForwardRefusesAnAddressThatIsNotAnHttpAddress (REQ-009, CA-009.1, decision D9):
+// TestForwardRefusesAnAddressThatIsNotAnHttpAddress:
 // the forwarder re-checks the scheme at forward time, because an address stored by an
 // older server is read by this one. The refusal names the address and the schemes it
 // must be, and costs the addressed server nothing.
@@ -636,8 +636,7 @@ func TestForwardRefusesAnAddressThatIsNotAnHttpAddress(t *testing.T) {
 	}
 }
 
-// TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody (REQ-009, CA-009.2,
-// decision D9): a downstream that answers 301 points the upload somewhere else, and
+// TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody: a downstream that answers 301 points the upload somewhere else, and
 // today the client follows it — the recording and the apikey are re-posted to whatever
 // address the redirect names. The redirect is a failure the log names, and the body is
 // handed to nobody else.
@@ -685,7 +684,7 @@ func TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody(t *testing.T) 
 	}
 }
 
-// TestForwardDrainsTheBodyOfARefusedUpload (REQ-009, CA-009.3): a refused upload's
+// TestForwardDrainsTheBodyOfARefusedUpload: a refused upload's
 // body is read out before the connection is handed back. A body left unread makes the
 // connection unusable, and every later call to the same downstream pays for a fresh
 // connection — a deployment with a refusing downstream turns its call log into a

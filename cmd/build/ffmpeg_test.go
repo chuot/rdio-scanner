@@ -447,7 +447,7 @@ func hasArg(args []string, want string) bool {
 }
 
 // carries reports whether a command line names something anywhere in it, which is how a build argument
-// is checked: the container is named inside --build-arg base=... .
+// is checked: the container is named inside --build-arg base=....
 func carries(args []string, want string) bool {
 	for _, arg := range args {
 		if strings.Contains(arg, want) {

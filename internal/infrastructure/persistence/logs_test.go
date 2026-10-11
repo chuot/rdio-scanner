@@ -30,7 +30,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAppendLogStoresAMessageContainingSingleQuotes is Q21, the one defect this task is allowed to
+// TestAppendLogStoresAMessageContainingSingleQuotes is a preserved quirk, the one defect this task is allowed to
 // fix.
 //
 // The legacy `server/log.go` `LogEvent` interpolates the message into its `INSERT` with `fmt.Sprintf`, so a
@@ -68,7 +68,7 @@ func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
 }
 
 // TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase runs the same fix over a
-// database the legacy server wrote, which is the case REQ-007 is about: the log view a deployment
+// database the legacy server wrote, which is the case the requirement is about: the log view a deployment
 // already has, and the line that has never been able to appear in it.
 func TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase(t *testing.T) {
 	db := openMigratedLegacyDatabase(t)
@@ -680,7 +680,7 @@ func TestSearchLogsWithNothingToReportLeavesTheSpanUnset(t *testing.T) {
 	}
 }
 
-// T008: the log table stores which part of the server wrote an entry, and the log view can be filtered by
+// The log table stores which part of the server wrote an entry, and the log view can be filtered by
 // it and by a substring of the message.
 func TestAppendLogStoresTheSourceAndTheSearchReadsItBack(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "logs")
@@ -1122,7 +1122,7 @@ func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
 	}
 }
 
-// TestSearchLogsReportsAContextCancelledMidIteration (REQ-011, CA-011.1): a log search
+// TestSearchLogsReportsAContextCancelledMidIteration: a log search
 // whose read is cancelled while it is running is a search that did not complete. Today
 // the page loop treats the cancelled read as rows that had nothing to show — the scan
 // failure is skipped as a damaged row — and the administrator is answered a short page

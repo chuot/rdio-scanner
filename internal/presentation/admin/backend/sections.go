@@ -54,13 +54,13 @@ func (body unreadableBody) Error() string {
 //
 // The order of the first three decisions is the legacy order and it is what a client sees:
 //
-//   - A request that arrives as a websocket upgrade is refused. The whole-configuration path is where an
-//     administrator's socket is opened, and a section path that accepted one would answer a socket with a
-//     list.
-//   - A section this server does not have is refused before the credential is looked at. The endpoint does
-//     not know what it would be protecting, and an administrator's page that asks for a section that does
-//     not exist is told which of its assumptions is wrong.
-//   - A credential the server does not accept is refused before the method is looked at.
+// - A request that arrives as a websocket upgrade is refused. The whole-configuration path is where an
+// administrator's socket is opened, and a section path that accepted one would answer a socket with a
+// list.
+// - A section this server does not have is refused before the credential is looked at. The endpoint does
+// not know what it would be protecting, and an administrator's page that asks for a section that does
+// not exist is told which of its assumptions is wrong.
+// - A credential the server does not accept is refused before the method is looked at.
 func (admin *Admin) Section(w http.ResponseWriter, r *http.Request) {
 	if upgrade.Wanted(r) {
 		w.WriteHeader(http.StatusMethodNotAllowed)

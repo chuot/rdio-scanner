@@ -252,7 +252,7 @@ func TestSaveApikeysRemovesTheStoredCredentialTheSubmittedListDrops(t *testing.T
 }
 
 // TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne pins the same repaired
-// reconcile as the accesses one, recorded as Q33 in decision-preserved-quirks.md:
+// reconcile as the accesses one:
 // The legacy `server/apikey.go` `Apikeys.Write` stops its "is this stored row still named?" loop at the first
 // submitted credential with no identity, so a save that adds one credential deletes none.
 func TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
@@ -396,8 +396,7 @@ func readApikeyScopeText(t *testing.T, db *sql.DB, id uint64) string {
 	return text
 }
 
-// TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy (REQ-017,
-// CA-017.1): the credential list the server enforces with is the slice AllApikeys
+// TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy: the credential list the server enforces with is the slice AllApikeys
 // hands out, not a copy of it. A caller that edits what it was handed — a sort, a
 // trim, a field — edits the enforced list, and the next AllApikeys answers from it.
 // The cache must hand out a copy.
@@ -422,7 +421,7 @@ func TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t 
 	}
 }
 
-// TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning (REQ-017, CA-017.2): the
+// TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning: the
 // order column is signed and the list reads it into an unsigned field; a stored
 // -3 becomes the largest display order there is, and the credential moves to the
 // end of every list the operator sees. The read clamps it to zero and says so.
@@ -471,7 +470,7 @@ func TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning(t *testing.T) {
 	}
 }
 
-// TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving (REQ-017, CA-017.3): the
+// TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving: the
 // credential save asked the table, one COUNT per submitted row, which rows it was
 // saving. It asks once, in one statement, and the row outcomes are unchanged.
 func TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
@@ -523,8 +522,7 @@ func TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 	}
 }
 
-// TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase (REQ-014,
-// CA-014.4): the credential twin of the access cache — the listener check that
+// TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase: the credential twin of the access cache — the listener check that
 // reads a credential answers from the cache, and today a save's mutex holds the
 // cache across every statement the save runs.
 func TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {

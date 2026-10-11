@@ -212,7 +212,7 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 	}
 
 	// The credential is proven, so the stored hash is renewed at the cost the
-	// deployment is configured for (CA-013.5): a deployment that raised its
+	// deployment is configured for: a deployment that raised its
 	// bcrypt cost renews a stored hash the next time the credential is proven,
 	// and the stored form stops being the cheap one. The renewal is not the
 	// login — a login whose renewal failed is still a login, and the failure is
@@ -287,7 +287,7 @@ func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt 
 // forgetAttempt clears the attempt history of the address that just signed in.
 //
 // The legacy server cleared every address's history on any success, which let one successful login —
-// including one an attacker paid for — unlock brute-forcing from every address at once. Decision D14
+// including one an attacker paid for — unlock brute-forcing from every address at once. The decision
 // repairs that: the budget belongs to the address that spent it, and only that address gets it back.
 //
 // It runs only after a session has been started: a login that failed on the way out leaves the

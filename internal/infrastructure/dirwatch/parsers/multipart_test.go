@@ -33,7 +33,7 @@ import (
 )
 
 // The call-upload endpoints declare the reading they need themselves, because they may not import this
-// package (contract-server-ng.md §1) and the composition root is what wires it to them. The shape is
+// package, by the server's contract, and the composition root is what wires it to them. The shape is
 // asserted here so that a change to this parser is caught by this suite rather than by a build of the
 // composition root.
 var _ interface {
@@ -376,7 +376,7 @@ func TestApplyMultipartFrequenciesReadEveryQualityMeasurementAndReplaceTheList(t
 
 	// The signal level is the one measurement the parser refuses to store as the upload
 	// named it: a level is negative in the unit the recording tools report it in, and the
-	// parser only stores a level that is not. See quirk Q41.
+	// parser only stores a level that is not.
 	if first.Dbm != 0 {
 		t.Errorf("the first frequency's signal level is %d, want the negative level the upload named to be left at zero", first.Dbm)
 	}
@@ -490,7 +490,7 @@ func TestApplyMultipartUnknownFieldIsReadAsNothing(t *testing.T) {
 //
 // This is the legacy server's own behaviour for its call-upload endpoint. Its trunk-recorder endpoint
 // collects the fields into a map and applies them in whatever order Go walks that map in, so the same upload
-// is read differently on different runs — quirk Q57, and not reproduced: both endpoints apply the fields as
+// is read differently on different runs — a preserved quirk, and not reproduced: both endpoints apply the fields as
 // they arrived.
 func TestApplyMultipartAppliesFieldsInTheOrderTheyArrived(t *testing.T) {
 	call := domain.NewCall()
@@ -540,7 +540,7 @@ func TestApplyMultipartSystemLabelTakesTheDashRecordingToolsWrite(t *testing.T) 
 }
 
 // A timestamp of zero is the one moment this guard refuses. A submission that names no moment at all is
-// accepted and recorded at the year 1, which is quirk Q42 and is preserved; an upload that explicitly says
+// accepted and recorded at the year 1, which is a preserved quirk and is preserved; an upload that explicitly says
 // the epoch is the case the guard was written for, and it does catch it.
 func TestApplyMultipartTimestampOfZeroIsTheMomentTheServerRefuses(t *testing.T) {
 	const recording = "a recording long enough to be a recording, and then some more of it"
@@ -563,7 +563,7 @@ func TestApplyMultipartTimestampOfZeroIsTheMomentTheServerRefuses(t *testing.T) 
 	)
 
 	if err := unstamped.IsValid(); err != nil {
-		t.Errorf("a call naming no moment reports %v, want it accepted: quirk Q42 is preserved", err)
+		t.Errorf("a call naming no moment reports %v, want it accepted: the preserved quirk stands", err)
 	}
 
 	if unstamped.Timestamp.Year() != 1 {
@@ -598,7 +598,7 @@ func postListField(t *testing.T, name string, list []any) (domain.Call, string) 
 	return ApplyMultipart(part, data, domain.NewCall())
 }
 
-// TestApplyMultipartTruncatesOversizedLists (REQ-015, CA-015.2): the list fields are read into
+// TestApplyMultipartTruncatesOversizedLists: the list fields are read into
 // server memory and stored with the call, so a five-thousand-entry list is not a recording — it
 // is a way to spend the server's memory from an upload. The decode keeps the first
 // maxListEntries entries and says out loud, in a warning the endpoint files, that it truncated.

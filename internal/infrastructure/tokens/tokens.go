@@ -46,14 +46,14 @@ const windowSize = 5
 // this process did not issue it.
 var ErrNotIssued = errors.New("token was not issued by this server")
 
-// ErrExpired reports a credential whose seven-day life has run out (D11): this
+// ErrExpired reports a credential whose seven-day life has run out: this
 // server issued it and its window may still hold it, and the token is refused
 // beside that. The window is the primary rule — it never ages a token on its
 // own, only the sixth login does — and the expiry bounds the blast radius the
 // window cannot.
 var ErrExpired = errors.New("token has expired")
 
-// tokenLifetime is the life D11 gives an issued credential.
+// tokenLifetime is the life the decision gives an issued credential.
 const tokenLifetime = 7 * 24 * time.Hour
 
 // Secrets is the signing secret, read every time it is needed rather than once when the
@@ -67,7 +67,7 @@ const tokenLifetime = 7 * 24 * time.Hour
 // appears to keep its sessions alive.
 type Secrets interface {
 	// Secret answers the signing secret in effect. A read that fails is reported,
-	// not answered with the empty string (CA-013.3): an empty key signs tokens
+	// not answered with the empty string: an empty key signs tokens
 	// every server accepts as signature-valid text, and a login that "worked"
 	// against no secret is the failure this seam must make audible.
 	Secret() (string, error)
@@ -76,7 +76,7 @@ type Secrets interface {
 // Tokens issues and checks the administrator session tokens.
 //
 // A token is a signed credential whose claim is the session identifier, with the
-// seven-day expiry D11 adds, and what makes it valid is that this process issued it:
+// seven-day expiry the decision adds, and what makes it valid is that this process issued it:
 // nothing is persisted, so a restart retires every session the administrator had, and
 // a token that worked before the restart is refused after it.
 type Tokens struct {
@@ -112,7 +112,7 @@ func (tokens *Tokens) Issue(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("tokens.issue: %w", err)
 	}
 
-	// The secret is read first and the failure reported (CA-013.3): signing with
+	// The secret is read first and the failure reported: signing with
 	// the empty string — what a failed read used to answer with — makes a token
 	// whose signature is the HMAC of nothing, and the login is reported as a
 	// success against no secret at all.
@@ -126,7 +126,7 @@ func (tokens *Tokens) Issue(ctx context.Context) (string, error) {
 	}
 
 	// The session identifier is the claim, and the seven-day expiry rides with it
-	// (D11): a token the server stops holding is what ends a session here — that
+	//: a token the server stops holding is what ends a session here — that
 	// stays the primary rule — and the expiry bounds the life of a stolen token
 	// the window cannot evict on its own.
 	credential, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
@@ -184,7 +184,7 @@ func (tokens *Tokens) Validate(ctx context.Context, token string) error {
 		return fmt.Errorf("tokens.validate: token is not valid")
 	}
 
-	// The expiry is measured on this server's clock (D11): a credential with no
+	// The expiry is measured on this server's clock: a credential with no
 	// expiry claim is not one this server issued, and one whose claim has run out
 	// is refused even while the window still holds it.
 	if claims.ExpiresAt == nil || claims.ExpiresAt.Time.Before(tokens.now()) {
@@ -222,7 +222,7 @@ func (tokens *Tokens) wasIssued(token string) bool {
 	tokens.mu.Lock()
 	defer tokens.mu.Unlock()
 
-	// The compare is constant-time (CA-013.4): the window membership is checked
+	// The compare is constant-time: the window membership is checked
 	// against tokens an attacker is guessing, and a compare that fails earlier on
 	// a prefix is a channel for learning a token one character at a time.
 	for _, issued := range tokens.issued {

@@ -423,8 +423,7 @@ func wantGone(t *testing.T, path string) {
 	t.Errorf("%s is still there (%v), want it deleted", filepath.Base(path), err)
 }
 
-// TestARecordingAlreadyInTheDirectoryIsIngestedOnlyByAWatchThatDeletesAfterIngesting is quirk
-// Q49: the first pass over a watched directory reads the recordings that were already there only
+// TestARecordingAlreadyInTheDirectoryIsIngestedOnlyByAWatchThatDeletesAfterIngesting is a preserved quirk: the first pass over a watched directory reads the recordings that were already there only
 // when the watch is one that deletes after ingesting. A watch that keeps its files starts, the
 // files are there, and nothing arrives — because nothing changed.
 func TestARecordingAlreadyInTheDirectoryIsIngestedOnlyByAWatchThatDeletesAfterIngesting(t *testing.T) {
@@ -617,7 +616,7 @@ func TestADirectoryThatAppearsInsideAWatchedDirectoryIsWatchedToo(t *testing.T) 
 
 	// The directory has to be subscribed to before anything is written into it, and that
 	// happens when the notification for its arrival is processed. A recording written into a
-	// directory that appeared at the same moment is missed, which is quirk Q50.
+	// directory that appeared at the same moment is missed, which is a preserved quirk.
 	time.Sleep(500 * time.Millisecond)
 
 	putRecording(t, day, recordedFile)
@@ -942,8 +941,7 @@ func TestTheWatchDelayNeverFallsBelowTheTwoSecondFloor(t *testing.T) {
 	}
 }
 
-// TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn (REQ-008, CA-008.1, decision
-// D7): the read a settle timer runs when a file's window runs out has no guard — a parser
+// TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn: the read a settle timer runs when a file's window runs out has no guard — a parser
 // or ingest path that panics there takes the whole process down from the server's own
 // clock, in a goroutine nobody started and nobody can see. The panic is caught and
 // reported, naming the recording and the panic's own text, and the watch stays alive: the
@@ -951,7 +949,7 @@ func TestTheWatchDelayNeverFallsBelowTheTwoSecondFloor(t *testing.T) {
 //
 // The watch keeps its files, which is what leaves the settle timer as the only reader: a
 // watch that keeps its recordings never reads what was in the directory when the server
-// started (quirk Q49). A probe recording is ingested first, which is the test's own proof
+// started. A probe recording is ingested first, which is the test's own proof
 // that the subscription is live and the settle path is the one being read.
 func TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn(t *testing.T) {
 	t.Parallel()
@@ -1145,7 +1143,7 @@ func putProbeUntilIngested(t *testing.T, watched *watchedDirectory, sink *blocki
 	t.Fatal("the watch never ingested the probe, want the settle path to read it")
 }
 
-// TestEventsKeepArmingWhileARecordingIsBeingIngested (REQ-008, CA-008.2): the watch must
+// TestEventsKeepArmingWhileARecordingIsBeingIngested: the watch must
 // keep taking in new recordings while it is handing one over. Today the settle read holds
 // the watch's mutex through the whole ingest, and the event loop's arming of the next
 // file waits behind it — a slow ingest stops the watch.
@@ -1205,7 +1203,7 @@ func TestEventsKeepArmingWhileARecordingIsBeingIngested(t *testing.T) {
 	}
 }
 
-// TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce (REQ-008, CA-008.3): the
+// TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce: the
 // startup pass over a watched directory and the settle timer read the same files, and
 // today nothing claims a file while it is being read — a recording tool that writes the
 // file again while the startup pass is halfway through it gets the same recording
@@ -1248,7 +1246,7 @@ func TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce(t *testing.T) {
 	sink.noEventWithin(t, settleWait)
 }
 
-// TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress (REQ-008, CA-008.2): a
+// TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress: a
 // configuration save brackets the watchers by stopping them, and it may not wait for a
 // recording that is halfway through being handed over. Today the settle read holds the
 // watch's mutex through the ingest and the stop waits behind it.
@@ -1299,7 +1297,7 @@ func TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress(t *testing.T) {
 	}
 }
 
-// TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched (REQ-008, CA-008.4): a
+// TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched: a
 // symlink to a directory inside a watched tree is registered today — the watch follows
 // the link and reads recordings written into the directory it points at, which is
 // recordings from anywhere the link reaches. A linked directory is not a directory the
@@ -1329,7 +1327,7 @@ func TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched(t *testing.T) {
 	watched.calls.nothingArrivesWithin(t, settleWait+settleWait)
 }
 
-// TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart (REQ-008, CA-008.5): a mask
+// TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart: a mask
 // carrying literal parentheses captures groups nobody named, and the filename's pieces
 // then line up with the wrong values. The mismatch is said when the watch starts, where
 // the operator can read it, not per file in the dark.
@@ -1351,7 +1349,7 @@ func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
 	}
 }
 
-// TestARecordingMovedIntoAWatchedDirectoryIsIngested (REQ-008, CA-008.6): a recording
+// TestARecordingMovedIntoAWatchedDirectoryIsIngested: a recording
 // tool that finishes by moving the file into the watched directory — the shape of
 // mv /staging/x.wav /watched/x.wav on one filesystem — arrives as a rename whose name
 // is there. inotify says MOVED_TO, fsnotify sets both the create and the rename bits,
@@ -1387,7 +1385,7 @@ func TestARecordingMovedIntoAWatchedDirectoryIsIngested(t *testing.T) {
 	}
 }
 
-// TestARenameEventNamingAFileThatIsThereReArmsIt (REQ-008, CA-008.6): the watch's own
+// TestARenameEventNamingAFileThatIsThereReArmsIt: the watch's own
 // reading of a rename event. The backends that report a moved-in file as a rename hand
 // over an event whose name is there, and today the watch ignores every rename event:
 // the recording sits in the watched directory and is never read. The file here is

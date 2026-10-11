@@ -1109,7 +1109,7 @@ observing:
 	}
 }
 
-// TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten is CA-007 for the ingest path: the
+// TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten is the criterion for the ingest path: the
 // call is the thing the server exists to store, and the line it writes about the call is a report. A log
 // view that cannot be written must not lose a recording, must not stop it reaching a listener, and must not
 // stop it reaching the downstream servers.
@@ -1663,7 +1663,7 @@ func TestIngestCallDoesNotWaitForADownstreamThatTakesItsTime(t *testing.T) {
 	close(fixture.forwarder.Release)
 }
 
-// TestIngestCallSanitizesSuppliedTextIntoSingleLogLines (REQ-016, CA-016.1): a label an
+// TestIngestCallSanitizesSuppliedTextIntoSingleLogLines: a label an
 // upload supplies with a newline in it is a way to write a second line into the server's log
 // view — the forged line reads like the server's own. The ingested call's text arrives as one
 // line per decision, the stored labels carry no control characters, and the log view holds
@@ -1717,7 +1717,7 @@ func TestIngestCallSanitizesSuppliedTextIntoSingleLogLines(t *testing.T) {
 	}
 }
 
-// TestIngestCallDeliveryDoesNotSerializeTheNextIngest (REQ-005, CA-005.2, decision D24): the
+// TestIngestCallDeliveryDoesNotSerializeTheNextIngest: the
 // delivery is the part of ingest a listener can stall — a listener that cannot keep up waits in
 // its own queue. The store, the log, and the duplicate decision are the server's own work, and
 // the next call the server ingests must not be serialized behind one slow listener: the ingest
@@ -1798,7 +1798,7 @@ func TestIngestCallDeliveryDoesNotSerializeTheNextIngest(t *testing.T) {
 	close(stall.Release)
 }
 
-// TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce (REQ-009, decision D9):
+// TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce:
 // a burst of ingested calls must not turn into an unbounded flood of posts to the
 // downstream servers. The server caps how many calls it posts at the same time; the
 // rest queue behind it.

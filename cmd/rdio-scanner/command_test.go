@@ -370,7 +370,7 @@ func TestACommandThatNeedsASessionSaysItIsNotLoggedIn(t *testing.T) {
 	}
 }
 
-// TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported is the repaired half of Q70. The legacy server
+// TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported is the repaired half of a preserved quirk. The legacy server
 // reported a request it could not make for two of the seven commands and said nothing at all for the other
 // five — no message, and the exit code of a command that worked — so a script that ran a command while the
 // server was down was told the command had happened. Every action now names the failure and ends as a
@@ -421,7 +421,7 @@ func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	}
 }
 
-// TestALoginAgainstAServerThatIsNotAnsweringIsReported is the half of Q70 the legacy server already got
+// TestALoginAgainstAServerThatIsNotAnsweringIsReported is the half of the login-reporting quirk the legacy server already got
 // right: login and logout report a request they could not make, and a script that cannot log in is told so.
 func TestALoginAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	dead := anAddressNothingAnswersOn(t)
@@ -734,7 +734,7 @@ func TestTheUsageTextNamesTheLoginTheOperatorRuns(t *testing.T) {
 	}
 }
 
-// TestTheCommandModeCreatesTheConfigurationFileForItsOwnerOnly (REQ-013, CA-013.2):
+// TestTheCommandModeCreatesTheConfigurationFileForItsOwnerOnly:
 // config-get writes the server's whole configuration — the signing secret, the
 // database password, the administrator hash — to a file the operator names. The
 // file is created readable and writable by its owner alone, so the secrets do not

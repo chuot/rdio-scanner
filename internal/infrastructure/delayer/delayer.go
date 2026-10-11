@@ -82,7 +82,7 @@ type Delayer struct {
 
 	// sending counts the delivers in flight, so Close knows the last one has landed and can
 	// close the stream its collector reads — telling that collector, by the stream ending,
-	// that the server is going away (REQ-007, CA-007.6).
+	// that the server is going away.
 	sending sync.WaitGroup
 }
 
@@ -187,7 +187,7 @@ func (delayer *Delayer) Restore(ctx context.Context) error {
 //
 // The order is what makes closing the stream safe: the wake-up goes out first, the delivers in
 // flight land and are counted out, and only then, with no sender left, is the stream closed —
-// the collector's own exit signal (REQ-007, CA-007.6).
+// the collector's own exit signal.
 func (delayer *Delayer) Close() {
 	delayer.mutex.Lock()
 

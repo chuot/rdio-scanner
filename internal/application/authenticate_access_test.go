@@ -276,7 +276,7 @@ func TestAuthenticateAccessKeepsTheAttemptsWhenACodeIsRefused(t *testing.T) {
 	}
 }
 
-// TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions (decision D23): the
+// TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions: the
 // per-session counter alone is bypassable by reconnecting — a tool that guesses codes can open a
 // fresh session for every guess and never spend any session's budget. The attempts of one address
 // are counted across its sessions, in a window that ages like the login budget.
@@ -541,7 +541,7 @@ func TestAccessGateDoesNotGateAnUnrestrictedServer(t *testing.T) {
 // TestAccessGateKeepsGatingAnAccessThatNamesNoSystems pins a preserved legacy behavior: the
 // gate recognises an unauthenticated session by the absence of a scope, so an access
 // configured without systems stays gated for every command except the access code even
-// after it authenticates. Recorded in decision-preserved-quirks.md.
+// after it authenticates.
 func TestAccessGateKeepsGatingAnAccessThatNamesNoSystems(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
@@ -566,7 +566,7 @@ func TestAccessGateKeepsGatingAnAccessThatNamesNoSystems(t *testing.T) {
 	}
 }
 
-// TestAuthenticateAccessRefusesACodeWhenTheServerLogCannotBeWritten is CA-007 for listener access: the
+// TestAuthenticateAccessRefusesACodeWhenTheServerLogCannotBeWritten is the criterion for listener access: the
 // warning about a refused code is a report, and the refusal is the decision. A deployment whose log table is
 // broken must still refuse a code it does not know, must still ask the session again, and must still grant a
 // code it does know.

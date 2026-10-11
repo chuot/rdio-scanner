@@ -128,7 +128,7 @@ func TestJavaScriptIsServedAsTextJavaScriptWithoutACharset(t *testing.T) {
 	}
 
 	// No charset, exactly: Go's mime table answers text/javascript; charset=utf-8 for
-	// .js, and the legacy server hardcodes the extensionless form because of that
+	//.js, and the legacy server hardcodes the extensionless form because of that
 	// (https://github.com/golang/go/issues/32350).
 	if ct, _ := wireContentType(header); ct != "text/javascript" {
 		t.Errorf("Content-Type = %q, want text/javascript with no charset", ct)
@@ -256,7 +256,7 @@ func TestMissingRouteServesTheApplicationShell(t *testing.T) {
 // same bytes served as bundle/index.html.
 //
 // The shell here is plain text rather than HTML on purpose. With a real HTML shell the
-// sniffed type and the mime table's type for .html happen to be the same string, and
+// sniffed type and the mime table's type for.html happen to be the same string, and
 // the difference would be invisible on the wire.
 func TestFallbackContentTypeComesFromTheBodyNotTheExtension(t *testing.T) {
 	files := fstest.MapFS{

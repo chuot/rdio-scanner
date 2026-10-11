@@ -31,7 +31,7 @@ import (
 	"testing"
 )
 
-// One archive per release target. What it carries is the release-archive contract FEAT-013 set: the
+// One archive per release target. What it carries is the release-archive contract this command carries: the
 // binary, the documentation as the files it is written in, the images those files reference, and the
 // ffmpeg licence when the target carries an ffmpeg.
 

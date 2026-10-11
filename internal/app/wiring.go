@@ -46,7 +46,7 @@ import (
 // the administrator makes takes effect on the next hour.
 const pruneInterval = time.Hour
 
-// requestDeadline is the CA-014.2 bound on one request. It sits inside
+// requestDeadline is thebound on one request. It sits inside
 // httpTimeout, the socket bound: the socket timeouts fire when the socket goes
 // silent, and a handler blocked on a database that does not answer is a request
 // held open with the socket quietly connected — the administrator's browser
@@ -55,7 +55,7 @@ const pruneInterval = time.Hour
 // administrator can read.
 const requestDeadline = 25 * time.Second
 
-// pruneDeadline bounds the hourly retention pass (CA-014.3): the pass runs on
+// pruneDeadline bounds the hourly retention pass: the pass runs on
 // the server's own schedule with nobody waiting for its answer, and a pass
 // blocked on a database that does not answer would hold the schedule and write
 // no report. Five minutes is long enough for the pass on a full deployment and
@@ -333,7 +333,7 @@ func settingsOf(options domain.Options, restricted bool) scannerbackend.Settings
 //
 // The secret is read when a token is made rather than remembered, because the options are the
 // configuration in effect and a re-derivation can replace the secret. An options read that fails is
-// reported, not answered with the empty string (CA-013.3): Issue fails beside it, and a token that
+// reported, not answered with the empty string: Issue fails beside it, and a token that
 // cannot be signed is a login the administrator is told failed — which is the answer the legacy server
 // gives when its own signing fails.
 type optionsSecrets struct {
@@ -345,7 +345,7 @@ var _ tokens.Secrets = optionsSecrets{}
 func (secrets optionsSecrets) Secret() (string, error) {
 	options, err := secrets.options.ReadOptions(context.Background())
 	if err != nil {
-		// The failure is reported, not answered with the empty string (CA-013.3):
+		// The failure is reported, not answered with the empty string:
 		// Issue fails beside it, and the login handler's existing failure report is
 		// the one log entry the operator reads.
 		return "", fmt.Errorf("tokens: reading the signing secret: %w", err)
@@ -452,7 +452,7 @@ func pruneHourly(scheduler ports.Scheduler, prune pruneRunner) *hourlyPruning {
 
 // pruneRunner is the retention pass as the schedule sees it: the schedule runs
 // the pass and nothing else, and the seam is what lets a test record the
-// context the pass ran under — where the deadline (CA-014.3) is visible.
+// context the pass ran under — where the deadline is visible.
 type pruneRunner interface {
 	Handle(ctx context.Context, cmd application.PruneOldCallsCommand) (application.PruneOldCallsResult, error)
 }
@@ -474,7 +474,7 @@ var _ ports.Timer = (*hourlyPruning)(nil)
 // next puts the next pruning on the scheduler, unless the schedule has been ended.
 func (schedule *hourlyPruning) next() {
 	timer := schedule.scheduler.Schedule(pruneInterval, func() {
-		// The pass runs under the deadline (CA-014.3): a pass blocked on a
+		// The pass runs under the deadline: a pass blocked on a
 		// database that does not answer stops at its bound, and the next hour
 		// always arrives.
 		//

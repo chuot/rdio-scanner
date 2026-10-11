@@ -148,7 +148,7 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 		}
 
 		// A mask whose regex captures more groups than it names tokens lines the
-		// filename's pieces up with the wrong values (CA-008.5): said when the watch
+		// filename's pieces up with the wrong values: said when the watch
 		// starts, where the operator can read it, once, not per file.
 		if warning := parsers.MaskWarning(dirwatch.Mask); warning != "" {
 			watchers.log(ctx, domain.LogLevelWarn, warning)
@@ -194,7 +194,7 @@ func watchDelay(dirwatch domain.Dirwatch) time.Duration {
 // isDirectory is what the legacy asks of every path an event names, and asks the same way:
 // a path that cannot be read is not a directory. It asks with Lstat, so a symlink to a
 // directory is not a directory: the server watches the tree it was told to watch, not
-// whatever a link inside it reaches (CA-008.4).
+// whatever a link inside it reaches.
 func isDirectory(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -217,7 +217,7 @@ type watch struct {
 
 	// mutex guards dirs, timers, and inFlight. It is not held while a file is read and
 	// ingested: the legacy held it that long, which made a slow ingest stop the event
-	// loop's arming and a configuration save's stop (CA-008.2); the single-flight claim
+	// loop's arming and a configuration save's stop; the single-flight claim
 	// in inFlight is what keeps one recording from being ingested twice when the tool
 	// that wrote it produces a create event and then a write event for the same file.
 	mutex  sync.Mutex
@@ -226,9 +226,9 @@ type watch struct {
 
 	// inFlight names the files whose read is running right now. The startup pass and the
 	// settle timer read the same files, and a file being read by one is not read by the
-	// other (CA-008.3); the claim is taken and released around the read, outside the
+	// other; the claim is taken and released around the read, outside the
 	// mutex, so the event loop's arming never waits on a recording being handed over
-	// (CA-008.2) and a configuration save's stop never waits on one either.
+	// and a configuration save's stop never waits on one either.
 	inFlight map[string]bool
 }
 
@@ -264,7 +264,7 @@ func (w *watch) loop(ctx context.Context) {
 		// A panic here ends this watch. The legacy logs it, stops every pending timer, and
 		// starts the watch again — which fails, because the watcher is still registered, and
 		// the failure is discarded, leaving the watch registered and deaf until the server
-		// restarts. That is quirk Q43, and the outcome here is the same one: nothing more is
+		// restarts. That is a preserved quirk, and the outcome here is the same one: nothing more is
 		// ingested from this directory.
 		if recovered := recover(); recovered != nil {
 			if err, ok := recovered.(error); ok {
@@ -303,7 +303,7 @@ func (w *watch) loop(ctx context.Context) {
 func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
 	// The ops are tested by bit, not by exact value: a file moved in from another
 	// directory on the same filesystem arrives as MOVED_TO, which carries the create
-	// and the rename bits together, and an exact-match switch sees neither (CA-008.6).
+	// and the rename bits together, and an exact-match switch sees neither.
 	switch {
 	case event.Op&fsnotify.Create == fsnotify.Create:
 		if isDirectory(event.Name) {
@@ -343,7 +343,7 @@ func (w *watch) handle(ctx context.Context, event fsnotify.Event) {
 
 	case event.Op&fsnotify.Rename == fsnotify.Rename:
 		// A rename whose name is there is a file that moved in — the shape the backends
-		// that report moves as renames hand over, and the recording arrived (CA-008.6).
+		// that report moves as renames hand over, and the recording arrived.
 		// A rename whose name is not there is a file that moved out, which is what the
 		// legacy ignores and this keeps ignoring: the watch reads files that are there.
 		if _, err := os.Lstat(event.Name); err == nil {
@@ -371,7 +371,7 @@ func (w *watch) arm(ctx context.Context, path string) {
 
 // settle is what a settle timer runs when a file's window runs out.
 //
-// The guard is the point (CA-008.1, decision D7): this callback runs on the server's own
+// The guard is the point: this callback runs on the server's own
 // clock, in a goroutine the runtime started and nobody can see, and the legacy server had
 // no recovery here — a parser that panicked on a mask took the whole process down from a
 // timer, which is how an uncompilable mask stored by the old server crashes a server run
@@ -396,7 +396,7 @@ func (w *watch) settle(ctx context.Context, path string) {
 	delete(w.timers, path)
 
 	// A file the startup pass is reading is not read by this timer, and a file this
-	// timer is reading is not read by the startup pass (CA-008.3).
+	// timer is reading is not read by the startup pass.
 	if w.inFlight[path] {
 		w.mutex.Unlock()
 
@@ -455,7 +455,7 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 		}
 
 		// A symlink is skipped, not followed and not read: the server watches the tree
-		// it was told to watch, and a link names a file somewhere else (CA-008.4).
+		// it was told to watch, and a link names a file somewhere else.
 		if entry.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
@@ -470,7 +470,7 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 
 		// A recording that was already there is read only by a watch that deletes after
 		// ingesting. A watch that keeps its files never reads what was in the directory when
-		// the server started, which is quirk Q49: the files are there, the watch is running,
+		// the server started, which is a preserved quirk: the files are there, the watch is running,
 		// and nothing arrives, because nothing changed.
 		if w.dirwatch.DeleteAfter {
 			w.readClaimed(ctx, path)
@@ -485,8 +485,8 @@ func (w *watch) readWhatIsAlreadyThere(ctx context.Context) {
 // readClaimed reads a recording the startup pass found, claiming it the way the settle
 // timer claims its files: a recording the startup pass is handing over is not read again
 // by a settle timer firing over the same file while the tool that wrote it is still at
-// work (CA-008.3), and the claim is held outside the mutex so the event loop keeps
-// arming through it (CA-008.2).
+// work, and the claim is held outside the mutex so the event loop keeps
+// arming through it.
 func (w *watch) readClaimed(ctx context.Context, path string) {
 	w.mutex.Lock()
 
@@ -537,7 +537,7 @@ func (w *watch) register(ctx context.Context, path string) {
 	w.dirs[path] = true
 
 	// A directory the subscription cannot be opened for is remembered as watched and is
-	// not watched. That stays (decision D15, quirk Q48): the recordings in that directory
+	// not watched. That stays: the recordings in that directory
 	// are never read, and marking it watched is what the legacy does. The repair is the
 	// line the administrator's log was silent about — a warning, naming the directory and
 	// the reason the subscription failed.

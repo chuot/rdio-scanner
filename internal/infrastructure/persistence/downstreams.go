@@ -41,7 +41,7 @@ type Downstreams struct {
 	mutex sync.Mutex
 
 	// live is the list in effect: what was read at startup, what a save submitted when the save
-	// could not be persisted (Q13), and what the table holds when it could.
+	// could not be persisted, and what the table holds when it could.
 	live domain.Downstreams
 
 	// liveIsKnown reports whether the live list has been read yet.
@@ -247,7 +247,7 @@ func (downstreams *Downstreams) selectObsolete(ctx context.Context, tx transacti
 //
 // The legacy `Downstreams.Write` stops its scan at the first submitted downstream whose id is zero,
 // so a save that adds a downstream silently keeps every downstream the list removed. This server
-// repairs that rule; see Q33 in decision-preserved-quirks.md.
+// repairs that rule;
 func downstreamNamed(next domain.Downstreams, id uint64) bool {
 	for _, downstream := range next {
 		if downstream.ID == id {

@@ -128,7 +128,7 @@ func NewHandler(deps Deps) *Handler {
 // Any path answers a websocket request, because that is what today's clients ask for: they open a
 // connection on the page they are on, and a server that only answers one path loses them.
 //
-// The origin is checked the way the socket library checks it (decision D4): a connection that names no
+// The origin is checked the way the socket library checks it: a connection that names no
 // origin — a native application, which is not a browser and sends no such header — passes, as the
 // native applications on phones depend; a browser connection passes only from the very address the page
 // was served from, because a page from anywhere else opening this socket is a cross-site request that

@@ -37,7 +37,7 @@ type PasswordVerifier struct {
 	Asked []CredentialComparison
 
 	// Upgrade makes the verifier report that the stored credential was hashed
-	// below the cost the deployment is configured for (CA-013.5).
+	// below the cost the deployment is configured for.
 	Upgrade bool
 }
 

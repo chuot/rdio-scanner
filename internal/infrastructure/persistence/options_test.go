@@ -121,7 +121,7 @@ func TestReadOptionsAnswersFromTheLoadedValueRatherThanFromTheDatabase(t *testin
 	}
 }
 
-// TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow is Q1 proven against a database the
+// TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow is a preserved quirk proven against a database the
 // legacy server wrote.
 //
 // The legacy fixture stores the window as 750 under `duplicateDetectionTimeFrame`. The option is
@@ -153,7 +153,7 @@ func TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow(t *testing.T) 
 // The legacy `Read` accepts a stored secret only at its full length and generates a fresh random
 // one otherwise — and a legacy database stores the empty string. The regenerated secret is never
 // written back, so the secret that signs administrator tokens is not the one on record.
-// TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable is the repaired half of Q66: the reader no
+// TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable is the repaired half of a preserved quirk: the reader no
 // longer invents a secret. A stored secret the server cannot sign with leaves the options without one,
 // and the stored row stays where it was — putting a usable secret on record is the startup use case's
 // job, not the reader's.
@@ -261,7 +261,7 @@ func TestStoreSecretPutsTheSigningSecretOnRecord(t *testing.T) {
 	}
 }
 
-// TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith pins §9 for this section:
+// TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith pins the configuration-in-effect rule for this section:
 // a save replaces what the server runs with, and nothing is read back. The duplicate window is the
 // domain constant, so a save cannot move it, and the retired window key is no longer stored.
 func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *testing.T) {
@@ -344,7 +344,7 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 	}
 }
 
-// TestWriteOptionsStoresTheAudioConversionMode is the repaired half of Q53.
+// TestWriteOptionsStoresTheAudioConversionMode is the repaired half of a preserved quirk.
 //
 // The legacy `Options.Write` stored sixteen keys and `Options.Read` looked for a stored
 // `audioConversion` row among them, so the conversion mode the administrator chose applied until the
@@ -393,7 +393,7 @@ func TestWriteOptionsStoresTheAudioConversionMode(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsResetsTheOptionsTheLegacyServerResets is the Q15 half that is not Q1: the
+// TestReloadOptionsResetsTheOptionsTheLegacyServerResets is the reload-reset half that is not the missing-key default: the
 // re-derivation starts from the defaults and only the stored rows pull the values back up.
 func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
@@ -548,8 +548,8 @@ func TestReloadOptionsReportsTheNeedToChangeFromTheStoredRow(t *testing.T) {
 //
 // The legacy `Read` puts a freshly generated bcrypt hash of the default administrator password in
 // place before it applies the stored rows, so a server whose options table has no `adminPassword`
-// row still accepts the default password. bcrypt belongs to the password adapter (T060) and not to
-// this package, so this server leaves the credential empty and the composition root (T042) has to
+// row still accepts the default password. bcrypt belongs to the password adapter and not to
+// this package, so this server leaves the credential empty and the composition root has to
 // store the initial one. Every database the legacy server wrote has the row, including the
 // fixture, so this only shows on a database with no options at all.
 func TestReloadOptionsLeavesNoCredentialOnRecordWhenNoneIsStored(t *testing.T) {
@@ -748,10 +748,10 @@ func countOptionRows(t *testing.T, db *sql.DB) int {
 	return rows
 }
 
-// TestWriteOptionsTwiceLeavesOneRowPerKey (REQ-010, CA-010.1, decision D10): saving the
+// TestWriteOptionsTwiceLeavesOneRowPerKey: saving the
 // configuration is an update of the stored rows, not a fresh copy of them. On MySQL the
 // update reports no changed rows when the value is unchanged, the insert fires for
-// every key, and the table ends up with two rows per key — the audit's H13. On every
+// every key, and the table ends up with two rows per key — the failure this repair removes. On every
 // dialect the table holds exactly one row per key after two saves.
 func TestWriteOptionsTwiceLeavesOneRowPerKey(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
@@ -778,7 +778,7 @@ func TestWriteOptionsTwiceLeavesOneRowPerKey(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsReportsAContextCancelledMidRead (REQ-011, CA-011.1): re-deriving
+// TestReloadOptionsReportsAContextCancelledMidRead: re-deriving
 // the options reads every stored row. A read cancelled mid-iteration is a read that
 // did not finish; today the fetch loop skips the rows whose scan failed and the
 // re-derivation answers success with defaults where stored values were dropped — the
@@ -816,8 +816,7 @@ func TestReloadOptionsReportsAContextCancelledMidRead(t *testing.T) {
 	}
 }
 
-// TestReadOptionsAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase (REQ-014,
-// CA-014.4): the options cache answers the server's own reads — the login
+// TestReadOptionsAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase: the options cache answers the server's own reads — the login
 // handler, the retention pass, the signing secret — and today a configuration
 // save holds the cache's mutex across the thirteen rows it writes. The cache
 // answers while the save is in flight.

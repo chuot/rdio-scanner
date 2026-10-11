@@ -72,7 +72,7 @@ func (groups *Groups) AllGroups(ctx context.Context) (domain.Groups, error) {
 }
 
 // SaveGroups reconciles the stored groups with the given ones and leaves the reconciled result as
-// what the server runs with, including when the store could not be written at all (quirk Q13).
+// what the server runs with, including when the store could not be written at all.
 func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error {
 	groups.mutex.Lock()
 	defer groups.mutex.Unlock()

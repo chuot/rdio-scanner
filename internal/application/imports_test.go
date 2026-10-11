@@ -29,7 +29,7 @@ import (
 	"testing"
 )
 
-// TestApplicationImportsInwardOnly enforces CA-003.2 on every run of the suite: the
+// TestApplicationImportsInwardOnly enforces the criterion on every run of the suite: the
 // application layer may use the domain, its own ports, and the standard library, but
 // never infrastructure, presentation, or a third-party module.
 func TestApplicationImportsInwardOnly(t *testing.T) {

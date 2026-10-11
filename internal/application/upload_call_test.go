@@ -171,7 +171,7 @@ func TestUploadCallHandlerRefusesADisabledCredential(t *testing.T) {
 // A credential that names the system the upload names covers it. This is the case the legacy server
 // cannot answer at all: it compares the credential against the call's resolved system and talkgroup, and
 // at this boundary neither has been resolved, so a scoped credential dereferences nothing and the
-// connection ends with no reply. Recorded as quirk Q51, and fixed by the owner's decision on Q20.
+// connection ends with no reply. Recorded as a preserved quirk, and repaired by the owner's decision.
 func TestUploadCallHandlerChecksTheReferencesTheUploadNames(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -260,7 +260,7 @@ func TestUploadCallHandlerReportsWhatASubmissionIsMissing(t *testing.T) {
 		}, cause: "no audio"},
 		{name: "no moment", call: func() domain.Call {
 			// The moment the server was told to record is the epoch itself. A submission that names no
-			// moment at all is a different thing and is accepted, which is quirk Q42.
+			// moment at all is a different thing and is accepted, which is a preserved quirk.
 			call := uploadedCall()
 			call.Timestamp = time.Unix(0, 0)
 
@@ -380,7 +380,7 @@ func TestUploadCallHandlerDeliversTheUploadedCallToTheListenersWatchingIt(t *tes
 	}
 }
 
-// TestUploadCallHandlerRefusesAKeylessUpload (REQ-004, CA-004.2): a row stored with no key —
+// TestUploadCallHandlerRefusesAKeylessUpload: a row stored with no key —
 // saved by an older server, before the apply-time rule — must not answer a keyless upload. The
 // upload endpoint's answer to no credential is the same refusal it gives a credential it does not
 // know.

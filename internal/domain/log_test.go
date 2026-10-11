@@ -189,7 +189,7 @@ func TestLogSearchLimitConstants(t *testing.T) {
 	}
 }
 
-// T001: the source vocabulary is the operator's names for the parts of the server, and it is closed.
+// The source vocabulary is the operator's names for the parts of the server, and it is closed.
 // A name outside it is not a filter that matches nothing — it is a caller asking for a subsystem this
 // server does not have, and it has to be refused rather than answered with an empty log view.
 func TestKnownLogSourcesAreTheDeclaredVocabulary(t *testing.T) {
@@ -326,7 +326,7 @@ func TestLogEntryCarriesItsSource(t *testing.T) {
 	}
 }
 
-// T003: the two new criteria. They follow the rule the existing ones follow — a criterion that is not
+// The two new search criteria. They follow the rule the existing ones follow — a criterion that is not
 // submitted is not applied — with one exception the log view depends on: a source that is not a name in
 // the vocabulary is reported, so the endpoint can refuse it instead of showing an empty log.
 func TestLogSearchHasNoSourceAndNoTextWhenNoneIsSubmitted(t *testing.T) {
@@ -412,7 +412,7 @@ func TestLogSearchKeepsReadingTheCriteriaItAlreadyRead(t *testing.T) {
 	}
 }
 
-// TestParseLogSearchClampsThePageParameters (REQ-015, CA-015.1): the log view's page parameters
+// TestParseLogSearchClampsThePageParameters: the log view's page parameters
 // clamp the same way the call search's do — a negative limit is not "no limit", and a huge
 // offset is not a scan past the end of the log.
 func TestParseLogSearchClampsThePageParameters(t *testing.T) {

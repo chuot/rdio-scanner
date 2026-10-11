@@ -63,7 +63,7 @@ func TestDirwatchApplyMapReadsTheTypeKey(t *testing.T) {
 		t.Errorf("Kind = %q, want %q read from the type key", dirwatch.Kind, DirwatchTypeDSDPlus)
 	}
 
-	// The delay submitted here is under the day-long ceiling (CA-008.6) so that this test
+	// The delay submitted here is under the day-long ceiling so that this test
 	// can keep asking the question it asks: that every submitted field is carried through.
 	// The clamp itself is the test next to this one.
 	if dirwatch.ID != 2 || dirwatch.Delay != 500 || dirwatch.DeleteAfter || !dirwatch.Disabled ||
@@ -128,7 +128,7 @@ func TestDirwatchesEnabledSkipsTheUnwatchable(t *testing.T) {
 	}
 }
 
-// TestDirwatchesValidateRefusesAnUncompilableMask (REQ-008, CA-008.1, decision D7): a mask
+// TestDirwatchesValidateRefusesAnUncompilableMask: a mask
 // that does not compile is stored today and crashes the server from a timer goroutine on the
 // next matching file — a panic with no recovery on the server's own clock. The list refuses
 // it at apply, where an administrator can be told, not in the dark of a timer.
@@ -155,7 +155,7 @@ func TestDirwatchesValidateAcceptsAListWithRealMasks(t *testing.T) {
 	}
 }
 
-// TestDirwatchDelayOverTheDayIsClamped (REQ-008, CA-008.6): the legacy minute counter wraps
+// TestDirwatchDelayOverTheDayIsClamped: the legacy minute counter wraps
 // silently at its ceiling, and a watch naming a week's hold is a watch nobody configured.
 // A delay over one day is clamped to one day at apply.
 func TestDirwatchDelayOverTheDayIsClamped(t *testing.T) {
@@ -173,7 +173,7 @@ func TestDirwatchDelayOverTheDayIsClamped(t *testing.T) {
 	}
 }
 
-// TestDirwatchesValidateRefusesAPathWalkingExtension (REQ-008, CA-008.4, decision D8): the
+// TestDirwatchesValidateRefusesAPathWalkingExtension: the
 // extension composes filesystem paths, so a name carrying a slash, a backslash, a dot, or
 // ".." is refused at apply.
 func TestDirwatchesValidateRefusesAPathWalkingExtension(t *testing.T) {

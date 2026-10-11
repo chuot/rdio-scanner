@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestSanitizeTextReplacesControlCharacters (REQ-016, CA-016.1): text an upload supplies
+// TestSanitizeTextReplacesControlCharacters: text an upload supplies
 // becomes a log line, a label, and a broadcast. A newline in it is a second forged log line,
 // a tab is a forged column, and an escape is a command to the terminal reading the log. Every
 // one of them becomes a space; the visible text survives.

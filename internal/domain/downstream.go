@@ -85,7 +85,7 @@ func (downstream Downstream) Forwards() bool {
 // Downstreams is the server's list of downstream servers.
 type Downstreams []Downstream
 
-// Validate reports the first reason the list cannot be stored (decision D9, CA-009.1):
+// Validate reports the first reason the list cannot be stored:
 // the forwarder posts recordings and the apikey to the address the administrator
 // typed, so an address that is not http or https is refused at apply — it is an
 // address the server must not post to over some other protocol, and a redirect or a

@@ -29,7 +29,7 @@ import (
 	"testing"
 )
 
-// TestDomainImportsStandardLibraryOnly enforces CA-003.1 on every run of the suite,
+// TestDomainImportsStandardLibraryOnly enforces the criterion on every run of the suite,
 // so the layer boundary cannot regress unnoticed.
 func TestDomainImportsStandardLibraryOnly(t *testing.T) {
 	const module = "rdio-scanner"
@@ -66,13 +66,13 @@ func TestDomainImportsStandardLibraryOnly(t *testing.T) {
 	}
 }
 
-// TestTheDomainPackageImportsNoMathRand (REQ-013, CA-013.1): the signing secret is
+// TestTheDomainPackageImportsNoMathRand: the signing secret is
 // the value every session token is signed with, and math/rand is a clock-seeded
 // sequence — an attacker who knows roughly when the server first started can
 // reproduce the secret that start wrote, and a signing secret is exactly the value
 // an attacker wants: it opens every session. The domain builds that secret, so the
 // domain takes crypto/rand and not math/rand, and this is the vet-level check
-// CA-013.1 asks for, said as a test so the suite runs it on every go test.
+// the criterion asks for, said as a test so the suite runs it on every go test.
 func TestTheDomainPackageImportsNoMathRand(t *testing.T) {
 	fset := token.NewFileSet()
 

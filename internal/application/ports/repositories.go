@@ -181,7 +181,7 @@ type OptionsRepository interface {
 	// runs with. The legacy server does this in exactly one place — after changing the
 	// administrator password — and it is not a no-op: re-deriving resets every option to its
 	// default and then applies the stored rows, so an option stored under a name the reader does
-	// not look for (Q1) comes back as the default.
+	// not look for comes back as the default.
 	ReloadOptions(ctx context.Context) (domain.Options, error)
 }
 

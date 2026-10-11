@@ -85,7 +85,7 @@ func TestSchedulerIgnoresACancelOfWorkThatAlreadyRan(t *testing.T) {
 	}
 }
 
-// TestScheduledWorkThatPanicsIsRecoveredAndReported (REQ-020, CA-020.1): scheduled
+// TestScheduledWorkThatPanicsIsRecoveredAndReported: scheduled
 // work runs on the timer's own goroutine, and today a panic there is a panic in a
 // goroutine nobody owns — the whole server goes down with no report in its own log.
 // The scheduler recovers the panic and tells the report it was built with.

@@ -130,7 +130,7 @@ func TestDownstreamsApplyListAndOrder(t *testing.T) {
 	}
 }
 
-// TestDownstreamsValidateRefusesANonHttpAddress (REQ-009, CA-009.1, decision D9): the
+// TestDownstreamsValidateRefusesANonHttpAddress: the
 // forwarder posts recordings and the apikey to an address the administrator typed. An
 // address that is not http or https — ftp://, gopher://, a name that is not an address
 // at all — is refused at apply, before it can be stored and read by the forwarder. An

@@ -69,7 +69,7 @@ func (payload CallPayload) MarshalJSON() ([]byte, error) {
 				"spikeCount": frequency.Spikes,
 			}
 
-			// Quirk Q41: a signal level of zero is stored and a negative one is not stored at all,
+			// A preserved quirk: a signal level of zero is stored and a negative one is not stored at all,
 			// and this is where the stored zero is dropped again. A level the server kept is a level
 			// nobody ever sees.
 			if frequency.Dbm > 0 {

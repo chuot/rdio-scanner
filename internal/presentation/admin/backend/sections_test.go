@@ -472,7 +472,7 @@ func TestSectionEndpointAnswersTheCapturedSections(t *testing.T) {
 
 		// The capture records every site as belonging to no system, because the legacy server's query for
 		// sites never asks for that column. This server reports the system the site is stored under, which
-		// is the approved divergence recorded as Q58 in decision-parity-verification.md.
+		// is the approved divergence.
 		if capture.section == "systems" {
 			want = replaceExactly(t, want, `"systemId":0`, `"systemId":1`, 2)
 		}

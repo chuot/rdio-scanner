@@ -121,8 +121,8 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 	}
 
 	// The options table is given its one-row-per-key rule before any step writes
-	// option rows: the duplicates a MySQL deployment's saves left behind (the audit's
-	// H13) are removed, and the unique index that refuses them from then on is created
+	// option rows: the duplicates a MySQL deployment's saves left behind are removed, and the
+	// unique index that refuses them from then on is created
 	// over the deduplicated table, not over the duplicates.
 	if err := ensureOptionsKeyIndex(ctx, s); err != nil {
 		return operationError("database", "migrate", err)
@@ -166,7 +166,7 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 // failure an operator cannot trace to a statement is a failure they cannot fix.
 //
 // It used to have a call site that handed it a nil error, because the legacy migration it mirrored did:
-// the legacy error formatter called `Error()` on that nil and took the server down, where this rendered it
+// the legacy error formatter called `Error` on that nil and took the server down, where this rendered it
 // as `%!s(<nil>)` and carried on. The repaired calls migration reports only failures it actually has, so
 // no call site hands it a nil error.
 func reportFailure(progress Progress, part, section, operation string, err error, query string) {
@@ -713,7 +713,7 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 // The v6 talkgroup names its system by the v6 system's `id` — its radio-system reference — and
 // the migration resolves that against the `systems` table the systems migration has already
 // filled. A talkgroup whose system is not in that table used to be skipped without a word and
-// dropped with the v6 table; since FEAT-011 it is archived with the reason and the reason is said
+// dropped with the v6 table; since the archive exists it is archived with the reason and the reason is said
 // at warn level.
 //
 // Its group is resolved the same way, because the group link is a foreign key in this server's
@@ -755,7 +755,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		if err := rows.Scan(&systemID, &systemRef); err != nil {
 			// A cancelled read is felt at the scan and not at the iterator: the
 			// preload map must not be built from the rows that happened to
-			// survive (CA-011.1).
+			// survive.
 			if readErr := rows.Err(); readErr != nil {
 				rows.Close()
 
@@ -778,7 +778,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 	// The preload is the migration's map of what the server already holds:
 	// a read that ended early leaves the map missing entries, and the rows
-	// built from it point at the wrong identities (CA-011.1).
+	// built from it point at the wrong identities.
 	if err := rows.Err(); err != nil {
 		rows.Close()
 
@@ -805,7 +805,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 		if err := rows.Scan(&groupID); err != nil {
 			// A cancelled read is felt at the scan and not at the iterator: the
 			// preload map must not be built from the rows that happened to
-			// survive (CA-011.1).
+			// survive.
 			if readErr := rows.Err(); readErr != nil {
 				rows.Close()
 
@@ -826,7 +826,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 	// The preload is the migration's map of what the server already holds:
 	// a read that ended early leaves the map missing entries, and the rows
-	// built from it point at the wrong identities (CA-011.1).
+	// built from it point at the wrong identities.
 	if err := rows.Err(); err != nil {
 		rows.Close()
 
@@ -1027,7 +1027,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 //
 // The v6 unit names its system by the v6 system's `id`, resolved the same way the talkgroups
 // migration resolves it, so a unit whose system is not in the `systems` table used to be skipped
-// without a word and dropped with the v6 table; since FEAT-011 it is archived with the reason and
+// without a word and dropped with the v6 table; since the archive exists it is archived with the reason and
 // the reason is said at warn level.
 func migrateUnits(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateUnits", "units"
@@ -1061,7 +1061,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 		if err := rows.Scan(&systemID, &systemRef); err != nil {
 			// A cancelled read is felt at the scan and not at the iterator: the
 			// preload map must not be built from the rows that happened to
-			// survive (CA-011.1).
+			// survive.
 			if readErr := rows.Err(); readErr != nil {
 				rows.Close()
 
@@ -1084,7 +1084,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 
 	// The preload is the migration's map of what the server already holds:
 	// a read that ended early leaves the map missing entries, and the rows
-	// built from it point at the wrong identities (CA-011.1).
+	// built from it point at the wrong identities.
 	if err := rows.Err(); err != nil {
 		rows.Close()
 
@@ -1180,7 +1180,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 
 		// The v6 `id` column is the radio's own number, and it is what `callUnits.unitRef` and the call
 		// migration's unit lookup go looking for. The legacy insert named `unit.Id` — the identity
-		// `NewUnit()` never gave the unit — in this position instead, so every migrated unit landed with
+		// `NewUnit` never gave the unit — in this position instead, so every migrated unit landed with
 		// `unitRef` 0 and the number its row was read for was thrown away. Repaired rather than
 		// preserved.
 		if carried, err := alreadyCarried(ctx, tx, "units", "unitId", unitID.Int64); err != nil {
@@ -1224,7 +1224,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 // The v6 configuration table is a key/value table whose `options` row holds the whole options
 // section as one JSON blob. The migration unpacks a fixed list of names out of that blob, in the
 // order the legacy source lists them, and only when the value has the type the legacy source
-// expects; anything else the blob holds is not carried, and since FEAT-011 the config row is archived
+// expects; anything else the blob holds is not carried, and since the archive exists the config row is archived
 // whole with every such value named. Every other row of the v6 table is copied across as it stands,
 // which is how the persisted `secret` survives.
 //
@@ -1235,7 +1235,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 //
 // The save updates a key's row and inserts only when no row carries the key, and on
 // MySQL the update of an unchanged value reports no changed rows, the insert fires, and
-// every save duplicates every key (the audit's H13, decision D10) — the effective
+// every save duplicates every key — the effective
 // values become whichever duplicate the reader happens to reach. The duplicates a
 // deployment already has are removed first, keeping the last row written for each key,
 // which is the value the server has been running with; the unique index is what
@@ -1276,7 +1276,7 @@ func ensureOptionsKeyIndex(ctx context.Context, s store) error {
 	return nil
 }
 
-// tableExists asks the database's own catalog whether a table is there (CA-012.1).
+// tableExists asks the database's own catalog whether a table is there.
 //
 // The v6 gates used to answer this by running `SELECT COUNT(*) FROM <table>` and
 // reading every failure as "not there": a locked database, an expired context, a
@@ -1615,7 +1615,7 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 // other migration its failure is returned rather than printed — the legacy server stops there,
 // with the v6 tables the later migrations would have consumed still in place.
 //
-// The rows are archived before the drop (CA-012.3). The deployment's migration history is what
+// The rows are archived before the drop. The deployment's migration history is what
 // this table holds, it is exactly what the drop takes away, and an archive that exists so that
 // no row leaves a migration without a record should not let the smallest of them — the record
 // of the migrations themselves — go without one.
@@ -1715,7 +1715,7 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 //
 // The v6 log timestamp is a datetime; the v7 one is Unix milliseconds, which is what every
 // timestamp in this schema is. A row with no timestamp, no level, or no message is not carried — and
-// since FEAT-011 it is archived with the reason and the reason is said, where the legacy migration
+// since the archive exists it is archived with the reason and the reason is said, where the legacy migration
 // skipped it silently.
 //
 // The rows it carries are filed afterwards. They were written by a server that had no source column, and
@@ -1865,7 +1865,7 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 }
 
 // migrateDownstreams mirrors `migrateDownstreams` in `server/migrations.go`.
-// A downstream with no apikey, no scope, or no url is not carried — and since FEAT-011 it is archived
+// A downstream with no apikey, no scope, or no url is not carried — and since the archive exists it is archived
 // with the reason and the reason is said, where the legacy migration skipped it silently: those three
 // columns are the whole row's meaning.
 func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
@@ -2034,7 +2034,7 @@ const v6DirwatchesTable = "rdioScannerDirWatches"
 // stayed invisible. A backend that does not match them case-insensitively — MySQL and MariaDB on a
 // case-sensitive filesystem, which is the normal case — failed the probe, and its v6 dirwatches were
 // neither migrated nor dropped, on that start or on any later one: the one table the migration skipped
-// quietly, which is the shape FEAT-011 exists to make impossible. It is proved by
+// quietly, which is the shape the archive exists to make impossible. It is proved by
 // `TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated` and by the live MariaDB run.
 func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
@@ -2066,7 +2066,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 		if err := rows.Scan(&systemID, &systemRef, &talkgroupID, &talkgroupRef); err != nil {
 			// A cancelled read is felt at the scan and not at the iterator: the
 			// preload map must not be built from the rows that happened to
-			// survive (CA-011.1).
+			// survive.
 			if readErr := rows.Err(); readErr != nil {
 				rows.Close()
 
@@ -2094,7 +2094,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 	// The preload is the migration's map of what the server already holds:
 	// a read that ended early leaves the map missing entries, and the rows
-	// built from it point at the wrong identities (CA-011.1).
+	// built from it point at the wrong identities.
 	if err := rows.Err(); err != nil {
 		rows.Close()
 
@@ -2277,7 +2277,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 //
 // A call is migrated only when its audio, its timestamp, and both of its aggregate references
 // resolve against the tables the earlier migrations filled; anything that does not resolve used to be
-// skipped without a word and dropped with the v6 table, and since FEAT-011 is archived with its audio
+// skipped without a word and dropped with the v6 table, and since the archive exists it is archived with its audio
 // and the reason is said. The v6 call has no site, so the migrated call is stored with site reference
 // 0, as the legacy migration stores it.
 //
@@ -2323,7 +2323,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 		if err := rows.Scan(&systemID, &systemRef, &talkgroupID, &talkgroupRef); err != nil {
 			// A cancelled read is felt at the scan and not at the iterator: the
 			// preload map must not be built from the rows that happened to
-			// survive (CA-011.1).
+			// survive.
 			if readErr := rows.Err(); readErr != nil {
 				rows.Close()
 
@@ -2351,7 +2351,7 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 
 	// The preload is the migration's map of what the server already holds:
 	// a read that ended early leaves the map missing entries, and the rows
-	// built from it point at the wrong identities (CA-011.1).
+	// built from it point at the wrong identities.
 	if err := rows.Err(); err != nil {
 		rows.Close()
 

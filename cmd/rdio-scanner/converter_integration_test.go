@@ -24,7 +24,7 @@
 // server writes out of it, and the converter that runs them. Nothing below it can reach that seam, and
 // it is compiled only when asked for:
 //
-//	go test -tags integration ./cmd/rdio-scanner/
+//	go test -tags integration./cmd/rdio-scanner/
 //
 // It fails when the bundle is absent instead of skipping, which is why it is a tier and not a test.
 

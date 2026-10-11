@@ -115,7 +115,7 @@ func TestWhatTheHubReportsIsStampedWithTheServersClock(t *testing.T) {
 // The limit on listeners is compared against the connections the server is holding, and the
 // comparison is `count >= limit`: a server configured to admit one listener answers the first
 // one and closes the second without a word, and a server configured to admit none closes the
-// first. Every attached connection is against the limit, registered or not (decision D3), so
+// first. Every attached connection is against the limit, registered or not, so
 // the registered listeners below fill the server's one allowed slot.
 func TestTheServerStopsAdmittingListenersAtItsLimit(t *testing.T) {
 	for _, tc := range []struct {
@@ -1097,7 +1097,7 @@ func (f *fixture) logAt(t *testing.T, at int) string {
 // and not the wall clock of the machine the test is running on.
 //
 // The server has one clock, injected into every writer, so that the entries in the log view can be put in
-// order against each other. A writer that stamps `time.Now()` instead is a writer whose entries cannot be
+// order against each other. A writer that stamps `time.Now` instead is a writer whose entries cannot be
 // lined up with the rest of the log on a machine whose clock is wrong — which is the situation an operator
 // is reading the log view because of.
 func (f *fixture) assertStamped(t *testing.T, fragment string, instant time.Time) {
@@ -1473,7 +1473,7 @@ func TestAddressAccessAttemptHistoriesAreEvicted(t *testing.T) {
 	}
 }
 
-// TestASlowListenerCannotHoldTheHubLockForEveryoneElse (REQ-005, CA-005.1): a listener that
+// TestASlowListenerCannotHoldTheHubLockForEveryoneElse: a listener that
 // cannot keep up holds its own frames, not the server. The livefeed answer is delivered the
 // way every other delivery is — sessions chosen under the lock, frames written outside it —
 // so a stalled connection cannot stop the server from reaching everyone else.
@@ -1543,7 +1543,7 @@ fill:
 	}
 }
 
-// TestTheServerStopsAdmittingConnectionsThatNeverRegister (REQ-006, CA-006.1, decision D3):
+// TestTheServerStopsAdmittingConnectionsThatNeverRegister:
 // the limit is on the connections the server is holding, not on the ones that finished
 // becoming listeners — a limit that a client bypasses by never answering is not a limit. The
 // listeners-count broadcast keeps counting registered listeners, as the contract fixes it.
@@ -1565,7 +1565,7 @@ func TestTheServerStopsAdmittingConnectionsThatNeverRegister(t *testing.T) {
 	}
 }
 
-// TestAFrameBiggerThanTheServerReadsEndsTheSession (REQ-006, CA-006.2): the server reads a
+// TestAFrameBiggerThanTheServerReadsEndsTheSession: the server reads a
 // frame up to a fixed size. A bigger frame is not something the server can act on — it is a
 // way to make the server hold a message it will never use — and the connection ends.
 func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
@@ -1585,7 +1585,7 @@ func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
 	f.expectClosed(t)
 }
 
-// TestTheSendQueueIsBounded (REQ-006, CA-006.3): the frames waiting for one listener are
+// TestTheSendQueueIsBounded: the frames waiting for one listener are
 // server memory, and a queue of thousands of frames per listener is a way for a handful of
 // slow listeners to spend it. The queue is 256 slots.
 func TestTheSendQueueIsBounded(t *testing.T) {
@@ -1602,7 +1602,7 @@ func TestTheSendQueueIsBounded(t *testing.T) {
 	}
 }
 
-// TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline (REQ-007, CA-007.2): the
+// TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline: the
 // server that is stopping ends every listener with the protocol's own goodbye, and that
 // goodbye is a delivery. A listener whose writer is stuck in the socket holds that delivery
 // for its full write deadline, and a close made one session at a time takes a deadline per
@@ -1651,7 +1651,7 @@ func TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline(t *testing.T)
 	}
 }
 
-// TestAConnectionArrivingAfterTheHubClosedIsRefused (REQ-007, CA-007.3): the close ends
+// TestAConnectionArrivingAfterTheHubClosedIsRefused: the close ends
 // every session the hub was holding and waits for the goroutines running them. A connection
 // taken over after that is a session added to a hub that has finished, with goroutines
 // started on a WaitGroup the close is already waiting on — the misuse the race detector

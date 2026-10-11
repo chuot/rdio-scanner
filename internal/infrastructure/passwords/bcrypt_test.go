@@ -176,7 +176,7 @@ func TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte(t
 	}
 }
 
-// TestHashUsesTheConfiguredCost (REQ-013, CA-013.5): the deployment's bcrypt cost
+// TestHashUsesTheConfiguredCost: the deployment's bcrypt cost
 // drives the hash the server writes. The legacy server hashed at 10 and this
 // server defaults to 10, so the default keeps the hashes the two servers write
 // identical; an operator who raises the cost gets hashes at the raised cost.
@@ -193,8 +193,7 @@ func TestHashUsesTheConfiguredCost(t *testing.T) {
 	}
 }
 
-// TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost (REQ-013,
-// CA-013.5): a deployment that raises its cost keeps answering logins with the
+// TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost: a deployment that raises its cost keeps answering logins with the
 // cheap stored hash until the credential is proven and renewed. The upgrade
 // question is asked of the stored form and answered from it — the cost lives in
 // the hash, so nothing outside the adapter has to know bcrypt to ask it.

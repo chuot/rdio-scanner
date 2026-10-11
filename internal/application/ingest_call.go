@@ -145,7 +145,7 @@ func NewIngestCallHandler(
 
 // Handle resolves, filters, stores, and delivers one ingested call.
 //
-// The delivery is made after the ingest lock is released (decision D24): the store, the log,
+// The delivery is made after the ingest lock is released: the store, the log,
 // and the duplicate decision are the server's own work and run under the lock, while the
 // delivery is the part a listener can stall — a listener that cannot keep up waits in its own
 // delivery, and the next call the server ingests is not serialized behind it.
@@ -512,7 +512,7 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 // is why its context is detached from that cycle's cancellation. What bounds it instead is
 // the forwarder's own timeout.
 // forwardSlots caps how many calls the server posts to its downstreams at the same
-// time (decision D9): a burst of ingested calls — a directory drained at startup, a
+// time: a burst of ingested calls — a directory drained at startup, a
 // flood of uploads — must not turn into an unbounded flood of posts on the receiving
 // servers. The posts queue behind the eight in flight.
 var forwardSlots = make(chan struct{}, 8)

@@ -369,7 +369,7 @@ func TestSaveAccessesRemovesTheStoredAccessTheSubmittedListDrops(t *testing.T) {
 }
 
 // TestSaveAccessesRemovesAStoredAccessEvenWhenTheSubmittedListNamesANewOne pins the repaired
-// reconcile recorded as Q33 in decision-preserved-quirks.md.
+// reconcile.
 //
 // The legacy `server/access.go` `Accesses.Write` decides whether a stored row is still wanted by walking the
 // submitted list and returning at the first access with no identity — the loop that answers "is this
@@ -513,7 +513,7 @@ func TestSaveAccessesWritesTheScopeBackAsTheTextTheLegacyServerStored(t *testing
 	}
 }
 
-// TestSaveAccessesKeepsTheDifferenceBetweenNoScopeAndAnEmptyOne pins Q9: a scope that was never
+// TestSaveAccessesKeepsTheDifferenceBetweenNoScopeAndAnEmptyOne pins the scope distinction: a scope that was never
 // supplied and a scope that names nothing are two different states, and the table stores them as
 // two different texts.
 func TestSaveAccessesKeepsTheDifferenceBetweenNoScopeAndAnEmptyOne(t *testing.T) {
@@ -724,8 +724,7 @@ func TestSaveAccessesReportsTheLegacyFailureShapeOfAWriteThatCannotStart(t *test
 	}
 }
 
-// TestSaveAccessesKeepsTheSubmittedAccessesInEffectWhenTheStoreRejectsTheWrite pins §9 of
-// decision-internal-ports.md, which is the legacy server's own order of operations: the submitted
+// TestSaveAccessesKeepsTheSubmittedAccessesInEffectWhenTheStoreRejectsTheWrite pins the legacy server's own order of operations: the submitted
 // list becomes what the server enforces before anything is written, and a write that fails does not
 // take the new configuration back out again.
 func TestSaveAccessesKeepsTheSubmittedAccessesInEffectWhenTheStoreRejectsTheWrite(t *testing.T) {
@@ -798,8 +797,7 @@ func identsOf(list domain.Accesses) []string {
 	return idents
 }
 
-// TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy (REQ-017,
-// CA-017.1): AllAccesses answers from the loaded list, and it hands that list
+// TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy: AllAccesses answers from the loaded list, and it hands that list
 // straight to the caller. A caller that sorts, trims, or edits the slice it was
 // handed is editing the list the server enforces with — the next AllAccesses
 // answers from the very same slice, and the server goes on enforcing what some
@@ -826,7 +824,7 @@ func TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t
 	}
 }
 
-// TestStoredNegativeAccessValuesReadAsZeroWithAWarning (REQ-017, CA-017.2): the
+// TestStoredNegativeAccessValuesReadAsZeroWithAWarning: the
 // expiration, limit, and order columns are signed, and the list reads them into
 // unsigned fields. A stored -1 — the value a legacy row carries for "no
 // expiration" — becomes the largest number of seconds there is: an access that
@@ -878,7 +876,7 @@ func TestStoredNegativeAccessValuesReadAsZeroWithAWarning(t *testing.T) {
 	}
 }
 
-// TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving (REQ-017, CA-017.3): the save
+// TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving: the save
 // asked the table, one COUNT per submitted row, which rows it was saving — a
 // hundred-row list cost a hundred round trips inside the save's transaction, each
 // one a chance for the busy timeout to end a save an administrator meant to finish.
@@ -936,8 +934,7 @@ func TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 	}
 }
 
-// TestAllAccessesAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase (REQ-014,
-// CA-014.4): the access list the server enforces is read from the cache, and
+// TestAllAccessesAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase: the access list the server enforces is read from the cache, and
 // today the cache's mutex is held across every statement of a save — an
 // administrator's slow save stops the listener checks that are answering from
 // the cached list a moment ago. The cache answers while the save is in flight.

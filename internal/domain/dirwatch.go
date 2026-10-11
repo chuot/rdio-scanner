@@ -83,7 +83,7 @@ func (dirwatch Dirwatch) ApplyMap(m map[string]any) Dirwatch {
 	if v, ok := m["delay"].(float64); ok {
 		dirwatch.Delay = uint(v)
 
-		// A hold over a day is clamped (CA-008.6): the legacy minute counter wraps
+		// A hold over a day is clamped: the legacy minute counter wraps
 		// silently at its ceiling, and a watch naming a week is a watch nobody configured.
 		if dirwatch.Delay > maxDirwatchDelayMinutes {
 			dirwatch.Delay = maxDirwatchDelayMinutes
@@ -147,18 +147,18 @@ func (dirwatch Dirwatch) Watches() bool {
 type Dirwatches []Dirwatch
 
 // maxDirwatchDelayMinutes is the longest hold a watch can name: one day. A delay over it is
-// clamped at apply (CA-008.6): the legacy server's minute counter wraps silently at the
+// clamped at apply: the legacy server's minute counter wraps silently at the
 // ceiling, and a watch that names a week is a watch whose files arrive on a schedule nobody
 // configured.
 const maxDirwatchDelayMinutes = 24 * 60
 
-// extensionPattern is what a file extension may be: letters and digits, one to ten of them
-// (decision D8). The extension composes filesystem paths, so a name carrying a slash, a
+// extensionPattern is what a file extension may be: letters and digits, one to ten of them.
+// The extension composes filesystem paths, so a name carrying a slash, a
 // backslash, a dot, or ".." is not an extension — it is a path walk wearing one.
 var extensionPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,10}$`)
 
-// Validate refuses a watch list carrying a mask that does not compile (decision D7) or an
-// extension that is not a file extension (decision D8).
+// Validate refuses a watch list carrying a mask that does not compile or an
+// extension that is not a file extension.
 //
 // An uncompilable mask is stored today and crashes the server from a timer goroutine on the
 // next matching file — a panic with no recovery, on the server's own clock, in a build whose

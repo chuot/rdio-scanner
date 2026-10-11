@@ -25,7 +25,7 @@ import "strconv"
 // maxLivefeedEntries is the ceiling on a submitted live-watch selection: the talkgroup
 // entries across all the systems it names. A real selection is tens of entries; a map
 // over the cap is a way to spend the server's memory from one frame, and it is refused
-// whole (REQ-006, CA-006.3).
+// whole.
 const maxLivefeedEntries = 4096
 
 // Livefeed is one listener's live-watch selection: which talkgroups on which systems
@@ -57,7 +57,7 @@ func ParseLivefeed(value any) Livefeed {
 	}
 
 	// The payload is a listener's own selection, and a map over the cap is not a selection:
-	// it is a way to spend the server's memory from one frame (REQ-006, CA-006.3). The whole
+	// it is a way to spend the server's memory from one frame. The whole
 	// payload is refused — nothing is switched on — because a half-read selection is a
 	// selection the listener did not make.
 	entries := 0
