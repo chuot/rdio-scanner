@@ -489,10 +489,14 @@ func TestLoginHandlerCountsAFreshWindowAsAFreshBudget(t *testing.T) {
 	}
 }
 
-func TestSuccessfulLoginClearsEveryAddressesAttemptCount(t *testing.T) {
+// TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount (decision D14) repairs the legacy
+// global reset: a successful sign-in from address B must not unlock address A, which has spent its
+// budget. The global reset let any successful login — including one an attacker paid for — unlock
+// brute-forcing from every address at once.
+func TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount(t *testing.T) {
 	fixture := newLoginFixture()
 
-	for attempt := 1; attempt <= 3; attempt++ {
+	for attempt := 1; attempt <= 4; attempt++ {
 		if _, err := fixture.attempt("wrong credential"); err != nil {
 			t.Fatalf("login attempt %d: %v", attempt, err)
 		}
@@ -504,11 +508,37 @@ func TestSuccessfulLoginClearsEveryAddressesAttemptCount(t *testing.T) {
 
 	result, err := fixture.attempt(adminCredential)
 	if err != nil {
-		t.Fatalf("login after another address signed in: %v", err)
+		t.Fatalf("login from the locked-out address: %v", err)
 	}
 
-	if result.Outcome != AdminLoginAccepted {
-		t.Errorf("outcome = %q, want a successful login to clear the attempt counts, as the legacy server does", result.Outcome)
+	if result.Outcome != AdminLoginAttemptLimit {
+		t.Errorf("outcome = %q, want the locked-out address to stay locked out after another address signed in", result.Outcome)
+	}
+}
+
+// TestLoginAttemptsAgeOutOfTheMap bounds the attempt bookkeeping: a history whose window has passed
+// is dropped from the map, not kept, so a server facing keys that rotate faster than the window —
+// the spoofed forwarding addresses of a brute-force tool — does not grow its memory with every
+// address it ever saw.
+func TestLoginAttemptsAgeOutOfTheMap(t *testing.T) {
+	fixture := newLoginFixture()
+
+	if _, err := fixture.attemptFrom("198.51.100.1", "wrong credential"); err != nil {
+		t.Fatalf("login attempt: %v", err)
+	}
+
+	fixture.clock.At = loginTime.Add(loginAttemptsWindow + time.Minute)
+
+	if _, err := fixture.attemptFrom("198.51.100.2", "wrong credential"); err != nil {
+		t.Fatalf("login attempt: %v", err)
+	}
+
+	fixture.login.mutex.Lock()
+	defer fixture.login.mutex.Unlock()
+
+	if len(fixture.login.attempts) != 1 {
+		t.Errorf("attempt histories = %d, want the aged history of 198.51.100.1 evicted, leaving only "+
+			"198.51.100.2: %v", len(fixture.login.attempts), fixture.login.attempts)
 	}
 }
 

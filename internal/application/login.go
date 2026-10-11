@@ -101,10 +101,9 @@ type AdminLoginResult struct {
 // AdminLoginCommand asks the server to start an administrator session for the credential
 // somebody submitted.
 type AdminLoginCommand struct {
-	// RemoteAddr is the address the attempt is counted against. The legacy server names the
-	// first X-Forwarded-For entry with its port stripped, or the connection's own address
-	// with its port stripped; the REST layer resolves that before building the command,
-	// because it is the only layer that sees the request.
+	// RemoteAddr is the address the attempt is counted against. The REST layer resolves it from the
+	// request — the address of the connection, or the forwarding entry when the peer is a proxy the
+	// operator named — because it is the only layer that sees the request.
 	RemoteAddr string
 
 	// Credential is what the administrator submitted. A payload without a password, or one
@@ -213,7 +212,7 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 		return AdminLoginResult{Outcome: AdminLoginFailed}, err
 	}
 
-	handler.forgetAttempts()
+	handler.forgetAttempt(cmd.RemoteAddr)
 
 	return AdminLoginResult{
 		Outcome: AdminLoginAccepted,
@@ -248,26 +247,32 @@ func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt 
 	attempt.Count++
 	attempt.Date = handler.clock.Now()
 
+	// Histories whose window has passed are dropped. A budget measured over a window has nothing to
+	// say about an address that has been quiet for longer than the window, and a map that only ever
+	// grows is a memory an attacker fills with the spoofed keys of a brute-force tool: the entries
+	// that can no longer spend a budget must not be kept just to be remembered.
+	for address, history := range handler.attempts {
+		if address != remoteAddr && handler.clock.Now().Sub(history.Date) > loginAttemptsWindow {
+			delete(handler.attempts, address)
+		}
+	}
+
 	return attempt
 }
 
-// forgetAttempts clears every address's attempt history.
+// forgetAttempt clears the attempt history of the address that just signed in.
 //
-// That is the legacy behavior, kept deliberately: the legacy server compares each history's age
-// against its zero window on the success path only, so any successful login clears the count for
-// every address, including one that was locked out. Repairing the window without repairing this
-// would leave the documented limit true for an address nobody else signs in for; repairing this one
-// too is a separate decision, recorded as a residual risk.
+// The legacy server cleared every address's history on any success, which let one successful login —
+// including one an attacker paid for — unlock brute-forcing from every address at once. Decision D14
+// repairs that: the budget belongs to the address that spent it, and only that address gets it back.
 //
-// It runs only after a session has been started: a login that failed on the way out leaves
-// the counts where they were.
-func (handler *AdminLoginHandler) forgetAttempts() {
+// It runs only after a session has been started: a login that failed on the way out leaves the
+// counts where they were.
+func (handler *AdminLoginHandler) forgetAttempt(remoteAddr string) {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 
-	for remoteAddr := range handler.attempts {
-		delete(handler.attempts, remoteAddr)
-	}
+	delete(handler.attempts, remoteAddr)
 }
 
 // reportFailure records a step of a sign-in the server could not carry out, and the failure's own text.
