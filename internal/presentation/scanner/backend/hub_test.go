@@ -1564,3 +1564,20 @@ func TestTheServerStopsAdmittingConnectionsThatNeverRegister(t *testing.T) {
 			"its one allowed connection: the gate counts registered listeners only", second)
 	}
 }
+
+// TestAFrameBiggerThanTheServerReadsEndsTheSession (REQ-006, CA-006.2): the server reads a
+// frame up to a fixed size. A bigger frame is not something the server can act on — it is a
+// way to make the server hold a message it will never use — and the connection ends.
+func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
+	f := newFixture(t, openSettings)
+
+	f.register(t, f.id)
+
+	big := make([]byte, 2*1024*1024)
+
+	if err := f.client.WriteMessage(websocket.TextMessage, big); err != nil {
+		t.Fatalf("writing the oversized frame: %v", err)
+	}
+
+	f.expectClosed(t)
+}

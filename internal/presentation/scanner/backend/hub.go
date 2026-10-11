@@ -51,6 +51,12 @@ const (
 	// writeWait is how long the server waits for one frame to leave.
 	writeWait = 10 * time.Second
 
+	// maxFrameSize is the largest frame the server reads from one listener. A bigger frame
+	// is not something the server can act on — the protocol's frames are small JSON
+	// documents — and reading it is a way to make the server hold a message it will never
+	// use (REQ-006, CA-006.2). The socket ends the connection at the limit.
+	maxFrameSize = 1 << 20
+
 	// sendBuffer is how many frames may be waiting for one listener before the server stops and waits
 	// for it to catch up. A listener that cannot keep up holds up the delivery that is going to it,
 	// which is what the legacy server does and what a slow client therefore cannot silently cost a
@@ -192,6 +198,11 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 	if conn == nil {
 		return "", false
 	}
+
+	// The read limit is set before the connection is held: a frame bigger than the server
+	// will ever read ends the connection at the socket, and is never read into memory to be
+	// looked at (REQ-006, CA-006.2).
+	conn.SetReadLimit(maxFrameSize)
 
 	max := hub.settings.Settings().MaxClients
 

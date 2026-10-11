@@ -49,6 +49,12 @@ import (
 // written to, and it is far longer than a real client takes.
 const writeWait = 10 * time.Second
 
+// maxFrameSize is the largest frame the socket reads from one administrator connection, the
+// same bound the listener socket puts on its frames: a bigger frame is not something the
+// server can act on, and reading it is a way to make the server hold a message it will never
+// use (REQ-006, CA-006.2). The socket ends the connection at the limit.
+const maxFrameSize = 1 << 20
+
 // upgrader is the socket this endpoint hands over.
 //
 // It is left at its zero value because that is what the legacy server uses here, and the zero value is not
@@ -157,6 +163,11 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// server's log.
 		return
 	}
+
+	// The read limit is set before the connection is held: a frame bigger than the server
+	// will ever read ends the connection at the socket, and is never read into memory to be
+	// looked at — not even as a credential (REQ-006, CA-006.2).
+	conn.SetReadLimit(maxFrameSize)
 
 	admin := sessions.join(conn, httpaddr.Address(r, sessions.trusted))
 

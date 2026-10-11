@@ -913,3 +913,38 @@ func capturedConfigGolden(t *testing.T) string {
 
 	return golden
 }
+
+// TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame (REQ-006, CA-006.2): the
+// configuration socket reads frames up to the same fixed size as the listener socket. A
+// bigger frame is not a frame the server can act on, and it is never read as a credential:
+// the connection ends and the frame never reaches the credential check.
+func TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame(t *testing.T) {
+	fixture := newFixture(t)
+
+	conn := fixture.open(t)
+
+	fixture.present(t, conn, socketToken)
+	fixture.awaitCredential(t, 1)
+
+	big := make([]byte, 2*1024*1024)
+
+	if err := conn.WriteMessage(websocket.TextMessage, big); err != nil {
+		t.Fatalf("writing the oversized frame: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("the configuration socket kept the connection open on an oversized frame, " +
+			"want the server to have ended it")
+	}
+
+	fixture.awaitGone(t, 0)
+
+	for _, entry := range fixture.logs.Recorded() {
+		if strings.Contains(entry.Message, "presented a session token") {
+			t.Errorf("the oversized frame was read and treated as a credential: %q — the "+
+				"socket must refuse the frame itself, not judge its contents", entry.Message)
+		}
+	}
+}
