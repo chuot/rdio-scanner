@@ -65,3 +65,41 @@ func TestDomainImportsStandardLibraryOnly(t *testing.T) {
 		t.Fatalf("walking the domain package: %v", err)
 	}
 }
+
+// TestTheDomainPackageImportsNoMathRand (REQ-013, CA-013.1): the signing secret is
+// the value every session token is signed with, and math/rand is a clock-seeded
+// sequence — an attacker who knows roughly when the server first started can
+// reproduce the secret that start wrote, and a signing secret is exactly the value
+// an attacker wants: it opens every session. The domain builds that secret, so the
+// domain takes crypto/rand and not math/rand, and this is the vet-level check
+// CA-013.1 asks for, said as a test so the suite runs it on every go test.
+func TestTheDomainPackageImportsNoMathRand(t *testing.T) {
+	fset := token.NewFileSet()
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		file, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if err != nil {
+			return err
+		}
+
+		for _, imp := range file.Imports {
+			if imported := strings.Trim(imp.Path.Value, `"`); imported == "math/rand" {
+				t.Errorf("%s imports %s; the domain builds the signing secret, and a clock-seeded sequence is reproducible by anyone who knows roughly when the server started", path, imported)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("walking the domain package: %v", err)
+	}
+}

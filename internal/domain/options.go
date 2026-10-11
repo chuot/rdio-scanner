@@ -21,7 +21,8 @@
 package domain
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"time"
 )
 
@@ -206,12 +207,30 @@ func (options Options) PruneBefore(now time.Time) time.Time {
 }
 
 // GenerateSecret builds a new signing secret from the legacy alphabet.
+//
+// The picks come from crypto/rand (CA-013.1): math/rand is seeded by the clock, so
+// an attacker who knows roughly when the server first started can reproduce the
+// secret that start wrote, and a signing secret is exactly the value an attacker
+// wants — it opens every session. The alphabet and the length are the legacy
+// server's, unchanged.
+//
+// A read that fails is the operating system's entropy pool failing. The standard
+// library's own crypto/rand.Read answers that by panicking, and this follows it:
+// a server that cannot make a signing secret must not fall back to a weak one, and
+// it must not do so in silence.
 func GenerateSecret(n int) string {
 	secret := make([]rune, n)
 	alphabet := []rune(secretAlphabet)
 
+	span := big.NewInt(int64(len(alphabet)))
+
 	for i := range secret {
-		secret[i] = alphabet[rand.Intn(len(alphabet))]
+		pick, err := rand.Int(rand.Reader, span)
+		if err != nil {
+			panic("domain: generating the signing secret: " + err.Error())
+		}
+
+		secret[i] = alphabet[pick.Int64()]
 	}
 
 	return string(secret)
