@@ -335,20 +335,45 @@ func (w *watch) arm(ctx context.Context, path string) {
 	}
 
 	w.timers[path] = time.AfterFunc(w.delay, func() {
-		w.mutex.Lock()
-		defer w.mutex.Unlock()
-
-		delete(w.timers, path)
-
-		// The file has to still be there. A recording tool that writes into a watched
-		// directory and moves the finished recording elsewhere, or another application that
-		// cleans the directory up, costs nothing and ingests nothing.
-		if _, err := os.Stat(path); err != nil {
-			return
-		}
-
-		w.ingest(ctx, path)
+		w.settle(ctx, path)
 	})
+}
+
+// settle is what a settle timer runs when a file's window runs out.
+//
+// The guard is the point (CA-008.1, decision D7): this callback runs on the server's own
+// clock, in a goroutine the runtime started and nobody can see, and the legacy server had
+// no recovery here — a parser that panicked on a mask took the whole process down from a
+// timer, which is how an uncompilable mask stored by the old server crashes a server run
+// with it. The panic is caught and reported, naming the recording and the panic's own
+// text, and the watch stays alive: the subscription and the event loop never touched what
+// one file's read did.
+func (w *watch) settle(ctx context.Context, path string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			text := fmt.Sprintf("%v", recovered)
+
+			if err, ok := recovered.(error); ok {
+				text = err.Error()
+			}
+
+			w.log(ctx, domain.LogLevelError, fmt.Sprintf("the recording %s could not be ingested: %s", path, text))
+		}
+	}()
+
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	delete(w.timers, path)
+
+	// The file has to still be there. A recording tool that writes into a watched
+	// directory and moves the finished recording elsewhere, or another application that
+	// cleans the directory up, costs nothing and ingests nothing.
+	if _, err := os.Stat(path); err != nil {
+		return
+	}
+
+	w.ingest(ctx, path)
 }
 
 // readWhatIsAlreadyThere registers the directory's sub-directories and reads the recordings that

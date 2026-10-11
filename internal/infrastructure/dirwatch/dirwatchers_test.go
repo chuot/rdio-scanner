@@ -922,3 +922,89 @@ func TestTheWatchDelayNeverFallsBelowTheTwoSecondFloor(t *testing.T) {
 		})
 	}
 }
+
+// TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn (REQ-008, CA-008.1, decision
+// D7): the read a settle timer runs when a file's window runs out has no guard — a parser
+// or ingest path that panics there takes the whole process down from the server's own
+// clock, in a goroutine nobody started and nobody can see. The panic is caught and
+// reported, naming the recording and the panic's own text, and the watch stays alive: the
+// recordings that arrive after it are ingested.
+//
+// The watch keeps its files, which is what leaves the settle timer as the only reader: a
+// watch that keeps its recordings never reads what was in the directory when the server
+// started (quirk Q49). A probe recording is ingested first, which is the test's own proof
+// that the subscription is live and the settle path is the one being read.
+func TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	sink := newIngestRecorder()
+
+	watched := watchingOverWith(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.DeleteAfter = false
+
+		return watch
+	}, sink)
+
+	putRecordingUntilIngested(t, watched, "10001-1514000-1111-20261006-110000.wav")
+
+	// From here the ingest path panics at the first call it is handed. Today the panic is
+	// unrecovered in the settle timer's goroutine and the test process dies here — that
+	// death is the failure this test is written to prevent.
+	sink.panics = errors.New("the ingest path was not prepared for this recording")
+
+	putRecording(t, directory, recordedFile)
+
+	watched.calls.nothingArrivesWithin(t, settleWait)
+
+	lines := watched.reportedAfterStarting()
+
+	if len(lines) != 1 {
+		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the settled read was not completed", lines)
+	}
+
+	if !strings.Contains(lines[0], recordedFile) || !strings.Contains(lines[0], "the ingest path was not prepared for this recording") {
+		t.Errorf("the watch wrote %q, want the recording it was reading and the panic's own text", lines[0])
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "could not be ingested") {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
+	}
+
+	// The watch is alive: the panic was one file's read, not the watch's end.
+	sink.panics = nil
+
+	putRecording(t, directory, "10002-1514001-6790-20261006-120100.wav")
+
+	call := watched.calls.next(t, settleWait+settleWait)
+
+	if call.AudioFilename != "10002-1514001-6790-20261006-120100.wav" {
+		t.Errorf("the watch ingested %q after the panic, want the recording that arrived after it", call.AudioFilename)
+	}
+}
+
+// putRecordingUntilIngested keeps presenting a probe recording to the watch until the
+// settle path reads it. The subscription is only live once the startup pass has
+// registered the directory, and a file written before that is a file no event names;
+// every re-write is a fresh Write event for a watch that has begun listening.
+func putRecordingUntilIngested(t *testing.T, watched *watchedDirectory, name string) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+
+	for time.Now().Before(deadline) {
+		putRecording(t, watched.directory, name)
+
+		select {
+		case <-watched.calls.arrived:
+			return
+
+		case <-time.After(settleWait):
+		}
+	}
+
+	t.Fatalf("the watch never ingested the probe %q, want the settle path to read it", name)
+
+	return
+}
