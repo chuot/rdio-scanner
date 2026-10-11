@@ -833,6 +833,12 @@ func (s *Server) httpServer(addr string) *http.Server {
 
 // waitForInterrupt stops the server when the operator interrupts it, which is the legacy server's SIGINT
 // handling.
+//
+// The first interrupt asks for the stop, and the stop is the polite way out. A second interrupt is the
+// operator saying the polite way is not working (decision D6): the server says so on the terminal the
+// operator is reading and ends the process, rather than hanging until the SIGKILL that leaves no trace.
+// The second interrupt is watched for while the stop runs, because a stop that cannot finish is exactly
+// the one that never returns to ask.
 func (s *Server) waitForInterrupt() {
 	signals := make(chan os.Signal, 8)
 
@@ -841,7 +847,25 @@ func (s *Server) waitForInterrupt() {
 	go func() {
 		<-signals
 
-		s.stop(context.Background())
+		stopped := make(chan struct{})
+
+		go func() {
+			s.stop(context.Background())
+
+			close(stopped)
+		}()
+
+		select {
+		case <-stopped:
+			// The stop finished on its own: the serving path returns the process to its
+			// caller, and the watcher has nothing left to watch.
+			return
+
+		case <-signals:
+			fmt.Fprintln(s.console, "warning server: the server cannot stop, ending the process on the second interrupt")
+
+			os.Exit(1)
+		}
 	}()
 }
 
