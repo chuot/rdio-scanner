@@ -64,6 +64,12 @@ func (call Call) Sanitized() Call {
 	call.Meta.TalkgroupName = SanitizeText(call.Meta.TalkgroupName, MaxLabelLength)
 	call.Meta.TalkgroupTag = SanitizeText(call.Meta.TalkgroupTag, MaxLabelLength)
 
+	// A length is a number from outside the server too, and a negative duration is not a
+	// length: it clamps to the zero that means the server never measured one.
+	if call.AudioLength < 0 {
+		call.AudioLength = 0
+	}
+
 	groups := make([]string, 0, len(call.Meta.TalkgroupGroup))
 
 	for _, group := range call.Meta.TalkgroupGroup {

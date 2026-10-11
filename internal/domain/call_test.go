@@ -309,3 +309,31 @@ func TestCallFrequencyAndUnitCarryTheirOwnValues(t *testing.T) {
 		t.Errorf("patches = %v, want the submitted talkgroup reference", call.PatchTalkgroupRefs)
 	}
 }
+
+// A call arrives without knowing how long its recording is: the length is something the server
+// learns later, from the program that converts the audio or the program that probes it, and a
+// call it never learned says so by carrying no length.
+func TestNewCallKnowsNoAudioLength(t *testing.T) {
+	call := NewCall()
+
+	if call.AudioLength != 0 {
+		t.Errorf("AudioLength = %v, want a new call to know no length", call.AudioLength)
+	}
+}
+
+// The length is a fact the server learns, not a fact a call needs: a call whose length was
+// never measured is as valid as one whose length is known.
+func TestCallIsValidNeverRejectsAnUnknownAudioLength(t *testing.T) {
+	unknown := validCall()
+
+	if err := unknown.IsValid(); err != nil {
+		t.Errorf("IsValid = %v, want a call with no known length to be valid", err)
+	}
+
+	known := validCall()
+	known.AudioLength = 3500 * time.Millisecond
+
+	if err := known.IsValid(); err != nil {
+		t.Errorf("IsValid = %v, want a call with a known length to be valid", err)
+	}
+}

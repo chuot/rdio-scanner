@@ -3,6 +3,7 @@ package domain
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestSanitizeTextReplacesControlCharacters: text an upload supplies
@@ -82,5 +83,27 @@ func TestCallSanitizedMakesEverySuppliedTextSafe(t *testing.T) {
 
 	if call.AudioFilename != "a.wav\nforged line" {
 		t.Error("Sanitized must leave the call it was given alone")
+	}
+}
+
+// The length a source supplied is a number from outside the server: a negative duration is not
+// a length, and the one door the outside values pass through clamps it to the unknown the
+// server uses for "never measured".
+func TestCallSanitizedClampsASuppliedNegativeAudioLength(t *testing.T) {
+	call := NewCall()
+	call.AudioLength = -2500 * time.Millisecond
+
+	if got := call.Sanitized().AudioLength; got != 0 {
+		t.Errorf("AudioLength = %v, want a negative length from outside clamped to no length", got)
+	}
+}
+
+// The clamp takes the negative and leaves the length the server itself measured alone.
+func TestCallSanitizedKeepsAKnownAudioLength(t *testing.T) {
+	call := NewCall()
+	call.AudioLength = 3500 * time.Millisecond
+
+	if got := call.Sanitized().AudioLength; got != 3500*time.Millisecond {
+		t.Errorf("AudioLength = %v, want the measured length kept", got)
 	}
 }

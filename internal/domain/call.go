@@ -52,10 +52,15 @@ type CallUnit struct {
 // Call is a recorded transmission: the aggregate root that owns the audio, the
 // frequencies and units heard in it, the talkgroups it was patched to, and the system
 // and talkgroup it belongs to.
+//
+// AudioLength is how long the recording lasts — the length the server learned from the
+// uploader's own count, from the conversion, or from probing the audio, in that order.
+// Zero says the server never learned it; a call with no known length is a complete call.
 type Call struct {
 	ID                 uint64
 	Audio              []byte
 	AudioFilename      string
+	AudioLength        time.Duration
 	AudioMime          string
 	Delayed            bool
 	Frequencies        []CallFrequency
