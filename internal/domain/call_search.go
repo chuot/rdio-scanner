@@ -21,16 +21,39 @@
 package domain
 
 import (
-	"math"
 	"time"
 )
 
 // Call-history paging: how many calls a search returns when the listener does not ask,
-// and the most it will ever return.
+// the most it will ever return, and the furthest page it will ever resume from.
 const (
 	DefaultCallSearchLimit = uint(200)
 	MaxCallSearchLimit     = uint(500)
+
+	// MaxSearchOffset is the largest page position any search will resume from. A JSON
+	// number above what uint can hold, converted as the legacy server converts it, is not
+	// a large number — it is whatever the conversion lands on, and a hostile client picks
+	// that on purpose. The bound is the largest value the paging SQL can carry.
+	MaxSearchOffset = uint(1<<31 - 1)
 )
+
+// clampPage reads one submitted page parameter. A negative value — which a uint conversion
+// wraps into a huge one, and which a hostile client uses to mean "no limit" — becomes the
+// floor; a value above the ceiling becomes the ceiling; a value between them keeps its
+// integer part, which is what the legacy conversion did to the numbers that were sane. An
+// explicit zero is left alone: for a limit it is the documented legacy answer of no rows,
+// and for an offset it is the start of the table.
+func clampPage(v float64, floor uint, ceiling uint) uint {
+	if v < 0 {
+		return floor
+	}
+
+	if v > float64(ceiling) {
+		return ceiling
+	}
+
+	return uint(v)
+}
 
 // CallSearch is the criteria a listener submits with a call-history request.
 type CallSearch struct {
@@ -60,13 +83,13 @@ func ParseCallSearch(m map[string]any) CallSearch {
 	}
 
 	if v, ok := m["limit"].(float64); ok {
-		search.Limit = uint(math.Min(float64(MaxCallSearchLimit), v))
+		search.Limit = clampPage(v, 1, MaxCallSearchLimit)
 	} else {
 		search.Limit = DefaultCallSearchLimit
 	}
 
 	if v, ok := m["offset"].(float64); ok {
-		search.Offset = uint(v)
+		search.Offset = clampPage(v, 0, MaxSearchOffset)
 	}
 
 	if v, ok := m["sort"].(float64); ok {

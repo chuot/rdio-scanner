@@ -411,3 +411,32 @@ func TestLogSearchKeepsReadingTheCriteriaItAlreadyRead(t *testing.T) {
 		t.Errorf("source/text = %q/%q, want ingest/1514000", search.Source, search.Text)
 	}
 }
+
+// TestParseLogSearchClampsThePageParameters (REQ-015, CA-015.1): the log view's page parameters
+// clamp the same way the call search's do — a negative limit is not "no limit", and a huge
+// offset is not a scan past the end of the log.
+func TestParseLogSearchClampsThePageParameters(t *testing.T) {
+	tests := []struct {
+		name       string
+		limit      float64
+		offset     float64
+		wantLimit  uint
+		wantOffset uint
+	}{
+		{"negative limit", -5, 0, 1, 0},
+		{"zero limit", 0, 0, 0, 0},
+		{"huge limit", 1e18, 0, MaxLogSearchLimit, 0},
+		{"negative offset", 100, -1, 100, 0},
+		{"huge offset", 100, 1e18, 100, MaxSearchOffset},
+		{"ordinary page", 50, 200, 50, 200},
+	}
+
+	for _, tc := range tests {
+		search := ParseLogSearch(map[string]any{"limit": tc.limit, "offset": tc.offset})
+
+		if search.Limit != tc.wantLimit || search.Offset != tc.wantOffset {
+			t.Errorf("%s: limit = %d offset = %d, want limit = %d offset = %d",
+				tc.name, search.Limit, search.Offset, tc.wantLimit, tc.wantOffset)
+		}
+	}
+}

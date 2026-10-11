@@ -21,7 +21,6 @@
 package domain
 
 import (
-	"math"
 	"time"
 )
 
@@ -222,11 +221,11 @@ func ParseLogSearch(m map[string]any) LogSearch {
 	}
 
 	if v, ok := m["limit"].(float64); ok {
-		search.Limit = uint(math.Min(float64(MaxLogSearchLimit), v))
+		search.Limit = clampPage(v, 1, MaxLogSearchLimit)
 	}
 
 	if v, ok := m["offset"].(float64); ok {
-		search.Offset = uint(v)
+		search.Offset = clampPage(v, 0, MaxSearchOffset)
 	}
 
 	if v, ok := m["sort"].(float64); ok {
