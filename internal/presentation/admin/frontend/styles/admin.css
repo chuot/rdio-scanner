@@ -705,8 +705,11 @@ rdio-admin .rdio-admin-card.tools details.rdio-admin-row form {
 
 /* --- openapi section ------------------------------------------------------------------ */
 
-/* The boxes the OpenAPI section renders from the contract: method chip, path, and
-   the operation summary. They are read, never clicked. */
+/* The boxes the OpenAPI section renders from the contract. Each endpoint is a
+   detail row: the summary line is the table of contents (method chip, path, and
+   the operation summary), and it opens on the description, the parameters, the
+   request body fields, and the response codes the contract states. The rows are
+   closed by default. They are read, never clicked. */
 
 rdio-admin .rdio-admin-openapi-box {
   background: rgba(255, 255, 255, 0.04);
@@ -735,18 +738,144 @@ rdio-admin .rdio-admin-openapi-box .group-label {
   margin: var(--rdio-space-2) 0 2px;
 }
 
-rdio-admin .rdio-admin-openapi-box ul {
-  list-style: none;
+rdio-admin .rdio-admin-openapi-box .endpoint-list {
   margin: 0 0 6px;
+}
+
+/* The row: the summary line, then the detail the contract states. */
+
+rdio-admin .rdio-admin-openapi-box details.endpoint {
+  border: 1px solid transparent;
+  border-radius: var(--rdio-radius-row);
+}
+
+rdio-admin .rdio-admin-openapi-box details.endpoint[open] {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--rdio-border);
+  margin: 2px 0 6px;
+}
+
+rdio-admin .rdio-admin-openapi-box details.endpoint > summary {
+  align-items: baseline;
+  cursor: pointer;
+  display: flex;
+  gap: var(--rdio-space-2);
+  list-style: none;
+  padding: 3px var(--rdio-space-2);
+  user-select: none;
+}
+
+rdio-admin .rdio-admin-openapi-box details.endpoint > summary::-webkit-details-marker {
+  display: none;
+}
+
+rdio-admin .rdio-admin-openapi-box details.endpoint > summary::after {
+  color: rgba(255, 255, 255, 0.5);
+  content: "\25BE";
+}
+
+rdio-admin .rdio-admin-openapi-box details.endpoint[open] > summary::after {
+  content: "\25B4";
+}
+
+/* The path is the widest piece of the summary line and carries no spaces to break
+   at: on a narrow viewport it breaks anywhere, so the line never pushes the card
+   past the screen. */
+
+rdio-admin .rdio-admin-openapi-box .endpoint-path {
+  overflow-wrap: anywhere;
+}
+
+rdio-admin .rdio-admin-openapi-box .param-name,
+rdio-admin .rdio-admin-openapi-box .field-name {
+  overflow-wrap: anywhere;
+}
+
+rdio-admin .rdio-admin-openapi-box .endpoint-detail {
+  border-top: 1px solid var(--rdio-border);
+  padding: var(--rdio-space-2) var(--rdio-space-3) var(--rdio-space-3);
+}
+
+rdio-admin .rdio-admin-openapi-box .endpoint-description {
+  margin: 0 0 var(--rdio-space-2);
+}
+
+/* The blocks inside a row: parameters, request body, responses. */
+
+rdio-admin .rdio-admin-openapi-box .detail-block {
+  margin: 0 0 var(--rdio-space-3);
+}
+
+rdio-admin .rdio-admin-openapi-box .detail-block:last-child {
+  margin-bottom: 0;
+}
+
+rdio-admin .rdio-admin-openapi-box .detail-label {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+rdio-admin .rdio-admin-openapi-box .detail-block ul {
+  list-style: none;
+  margin: 0;
   padding: 0;
 }
 
-rdio-admin .rdio-admin-openapi-box li {
+rdio-admin .rdio-admin-openapi-box .detail-item {
   align-items: baseline;
   display: flex;
-  gap: var(--rdio-space-2);
+  flex-wrap: wrap;
+  gap: 2px var(--rdio-space-2);
   margin: 2px 0;
 }
+
+rdio-admin .rdio-admin-openapi-box .body-meta {
+  font-family: var(--rdio-mono);
+  font-size: 12px;
+  margin: 0 0 4px;
+}
+
+rdio-admin .rdio-admin-openapi-box .param-in,
+rdio-admin .rdio-admin-openapi-box .param-type,
+rdio-admin .rdio-admin-openapi-box .param-values,
+rdio-admin .rdio-admin-openapi-box .field-type {
+  color: rgba(255, 255, 255, 0.65);
+  font-family: var(--rdio-mono);
+  font-size: 12px;
+}
+
+rdio-admin .rdio-admin-openapi-box .param-required {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+}
+
+rdio-admin .rdio-admin-openapi-box .param-description,
+rdio-admin .rdio-admin-openapi-box .field-description,
+rdio-admin .rdio-admin-openapi-box .response-description {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+}
+
+rdio-admin .rdio-admin-openapi-box .param-description,
+rdio-admin .rdio-admin-openapi-box .field-description {
+  flex-basis: 100%;
+}
+
+/* A required field is marked on its name: the capture forms carry many, and the
+   administrator reads which ones the server insists on. */
+
+rdio-admin .rdio-admin-openapi-box .field-name[data-required]::after {
+  color: var(--rdio-warn);
+  content: " *";
+}
+
+/* The method chip carries the colour: reads in the accent, writes in the primary,
+   removals in the warning. The administrator sees what a row does before opening
+   it, and no new colour enters the theme. */
 
 rdio-admin .rdio-admin-openapi-box .method {
   color: rgba(255, 255, 255, 0.65);
@@ -757,8 +886,21 @@ rdio-admin .rdio-admin-openapi-box .method {
   text-align: right;
 }
 
+rdio-admin .rdio-admin-openapi-box .method.get {
+  color: var(--rdio-accent);
+}
+
 rdio-admin .rdio-admin-openapi-box .method.delete {
   color: var(--rdio-warn);
+}
+
+rdio-admin .rdio-admin-openapi-box .method.patch,
+rdio-admin .rdio-admin-openapi-box .method.post,
+rdio-admin .rdio-admin-openapi-box .method.put {
+  background: var(--rdio-primary);
+  border-radius: 3px;
+  color: var(--rdio-foreground);
+  padding: 1px 5px;
 }
 
 rdio-admin .rdio-admin-openapi-box code {
@@ -769,9 +911,17 @@ rdio-admin .rdio-admin-openapi-box code {
   padding: 2px 6px;
 }
 
+rdio-admin .rdio-admin-openapi-box .response-code {
+  font-size: 12px;
+  min-width: 34px;
+  text-align: center;
+}
+
 rdio-admin .rdio-admin-openapi-box .summary {
   color: rgba(255, 255, 255, 0.65);
+  flex: 1 1 160px;
   font-size: 13px;
+  min-width: 0;
 }
 
 /* --- systems-selection dialog tree ----------------------------------------------------- */
