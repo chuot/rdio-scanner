@@ -74,6 +74,8 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 		return nil
 	}
 
+	needsBackfill := false
+
 	if !hasColumn(columns, "source") {
 		statement := logSourceColumnSqlite
 
@@ -89,13 +91,7 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 			return statementError("migration", "ensureLogSource", err, statement)
 		}
 
-		// The backfill belongs to the run that added the column and to no other run. A deployment's log is
-		// read and filtered for months, and re-deciding on every start what an old entry meant is not
-		// something an operator can rely on — least of all when the operator, or a legacy server sharing
-		// the database, has already re-filed a row by hand.
-		if err := backfillLogSources(ctx, s); err != nil {
-			return err
-		}
+		needsBackfill = true
 	}
 
 	bySource := logSourceIndexBySource
@@ -104,13 +100,47 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 		bySource = logSourceIndexBySourceServer
 	}
 
-	for _, index := range []struct {
+	indexes := []struct {
 		name      string
 		statement string
 	}{
 		{"logs_source_idx", bySource},
 		{"logs_time_idx", logSourceIndexByTimestamp},
-	} {
+	}
+
+	// A missing index is the sign of a pass that died before creating it — and of
+	// a backfill that died halfway (CA-012.2). The fill used to belong to the run
+	// that added the column and to no other, so the rows that run never reached
+	// stayed nameless for good, and the deployment's log view kept showing blank
+	// rows no filter could ever find.
+	//
+	// The fill belongs to the run that adds the column and to the runs that find
+	// the indexes missing, and to no other run. A deployment's log is read and
+	// filtered for months, and re-deciding on every start what an old entry meant
+	// is not something an operator can rely on — least of all when the operator,
+	// or a legacy server sharing the database, has already re-filed a row by hand.
+	// A row that already names a source keeps it, which is what makes running the
+	// fill again over a complete log change nothing.
+	missing := false
+
+	for _, index := range indexes {
+		created, err := hasLogIndex(ctx, s, index.name)
+		if err != nil {
+			return operationError("migration", "ensureLogSource", err)
+		}
+
+		if !created {
+			missing = true
+		}
+	}
+
+	if needsBackfill || missing {
+		if err := backfillLogSources(ctx, s); err != nil {
+			return err
+		}
+	}
+
+	for _, index := range indexes {
 		created, err := hasLogIndex(ctx, s, index.name)
 		if err != nil {
 			return operationError("migration", "ensureLogSource", err)

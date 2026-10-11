@@ -549,3 +549,67 @@ func openMigratedLegacyDatabase(t *testing.T, tables ...string) *sql.DB {
 
 	return db
 }
+
+// TestBackfillLogSourcesRunsWhenTheIndexIsMissing (REQ-012, CA-012.2): the shape a
+// crashed pass leaves — the source column is there, the indexes the pass was
+// building when it died are not, and the rows the crashed run never reached sit
+// nameless forever, because the fill used to belong to the run that added the
+// column and to no other. The missing index is the sign; the fill runs again, and
+// the rows that already name a source keep it.
+func TestBackfillLogSourcesRunsWhenTheIndexIsMissing(t *testing.T) {
+	db := openLegacyDatabaseWithout(t, "logs")
+
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`, "info", "database.open: unable to open database file", int64(1760000000000)); err != nil {
+		t.Fatalf("storing the first entry: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`, "info", "dirwatch.walkdir: permission denied", int64(1760000000001)); err != nil {
+		t.Fatalf("storing the second entry: %v", err)
+	}
+
+	// The crashed run: the column is added, the fill starts, and the pass dies
+	// before its indexes — one row left nameless, no indexes.
+	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("the crashed run: %v", err)
+	}
+
+	if _, err := db.Exec(`UPDATE "logs" SET "source" = '' WHERE "message" = 'dirwatch.walkdir: permission denied'`); err != nil {
+		t.Fatalf("leaving the second entry nameless: %v", err)
+	}
+
+	for _, index := range []string{"logs_source_idx", "logs_time_idx"} {
+		if _, err := db.Exec(`DROP INDEX "` + index + `"`); err != nil {
+			t.Fatalf("dropping the index the crashed run never finished: %v", err)
+		}
+	}
+
+	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("the start after the crash: %v", err)
+	}
+
+	var source string
+
+	if err := db.QueryRow(`SELECT "source" FROM "logs" WHERE "message" = 'dirwatch.walkdir: permission denied'`).Scan(&source); err != nil {
+		t.Fatalf("reading the nameless entry: %v", err)
+	}
+
+	if source != string(domain.LogSourceDirwatch) {
+		t.Errorf("the row the crashed pass never filled is filed under %q, want dirwatch: the missing index is the sign the fill runs again", source)
+	}
+
+	if err := db.QueryRow(`SELECT "source" FROM "logs" WHERE "message" = 'database.open: unable to open database file'`).Scan(&source); err != nil {
+		t.Fatalf("reading the filled entry: %v", err)
+	}
+
+	if source != string(domain.LogSourceDatabase) {
+		t.Errorf("the row that already named its source was re-filed as %q, want database left alone", source)
+	}
+
+	for _, index := range []string{"logs_source_idx", "logs_time_idx"} {
+		if !hasString(logIndexes(t, db), index) {
+			t.Errorf("the logs table has indexes %v, want %s among them", logIndexes(t, db), index)
+		}
+	}
+}
