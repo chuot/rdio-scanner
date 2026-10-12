@@ -53,6 +53,37 @@ type ffmpegState struct {
 	podmanIsThere  bool
 	sourceIsCached bool
 	bundleIsCached bool
+
+	// nativeTools is the host's own build tools, resolved: the program name mapped to where it was found,
+	// and no entry for a program that is not there. Only a compile that runs on the target's own platform
+	// uses it, and it is read before the plan is made so that a host missing a compiler is told which one
+	// before a minute of work finds it out.
+	nativeTools map[string]string
+}
+
+// host is the platform the machine running the build is on, named the way the release names a platform:
+// the pair a supplied target carries runs on one platform alone, and the question the build asks of it is
+// whether the machine standing in front of the build is that platform.
+type host struct {
+	goos   string
+	goarch string
+}
+
+// thisMachine is the platform the build is running on.
+func thisMachine() host {
+	return host{goos: runtime.GOOS, goarch: runtime.GOARCH}
+}
+
+// isTheHostOf says whether this machine is the platform one target's pair runs on.
+//
+// It is the rule that decides what a supplied target means for a run. The pair is compiled with the
+// platform's own compiler, against the platform's own libraries, and a compile of it written on any other
+// machine is a binary that platform refuses to run: the build that is standing on the target's platform
+// compiles the pair, and every other machine adopts what was dropped or skips the target.
+func (h host) isTheHostOf(target string) bool {
+	tr, found := targetFor(target)
+
+	return found && h.goos == tr.goos && h.goarch == tr.goarch
 }
 
 // ffmpegPaths are the places the ffmpeg phase keeps its pieces. Everything under the build directory
@@ -94,6 +125,11 @@ type ffmpegPlan struct {
 	// Skipped says this target has nothing to build and produces nothing: the pair the manifest says is
 	// supplied was not dropped. A release run skips it and ships the rest.
 	Skipped bool
+
+	// Native says this plan compiles the pair on the machine running the build, because that machine is
+	// the platform the pair runs on. It is the answer to the operator who asked for the ffmpeg of the
+	// machine they are standing on, and it is never a skip: the compile is what that run asked for.
+	Native bool
 
 	// Check is the ffmpeg check the build adopted a supplied pair on, and is empty for a target this
 	// build compiles. The licence text the release archive carries names the check that ran.
@@ -208,7 +244,12 @@ func ffmpegTarget(o options) string {
 // compile an ffmpeg for at all, and the phase says so and builds nothing. A target the manifest does
 // have a record for is a promise, and a build that cannot keep it says so instead of quietly producing a
 // server that will do without.
-func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState) (ffmpegPlan, error) {
+//
+// The machine is the platform the build is running on, and it is part of the decision because three of
+// the targets are compiled on the platform their pair runs on: on that platform the build has the source,
+// the digest, the recipe, the flags, and the check, and compiling the pair there is what the operator
+// asked for. On every other platform the pair is something the build is handed.
+func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState, machine host) (ffmpegPlan, error) {
 	target := ffmpegTarget(o)
 
 	record, covered := manifest.Targets[target]
@@ -219,7 +260,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	paths := ffmpegPathsFor(repo, manifest, target)
 
 	if record.Produced == suppliedProduction {
-		return planSuppliedFFmpeg(repo, manifest, target, record, paths, state)
+		return planSuppliedFFmpeg(repo, manifest, target, record, paths, state, machine)
 	}
 
 	source := ffmpegSource{Path: paths.source, URL: manifest.Source.URL}
@@ -350,16 +391,25 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 // bundle directory for this build to adopt.
 const suppliedProduction = "supplied"
 
-// planSuppliedFFmpeg decides what the ffmpeg phase does with a pair this build cannot compile.
+// planSuppliedFFmpeg decides what the ffmpeg phase does with a pair this build compiles in a container
+// nowhere.
 //
-// The build never runs a supplied pair. The evidence it can gather is the digest the manifest pins, the
-// shape the target's own linker writes, and the proof the ffmpeg check recorded on that platform, and all
-// three have to agree with the pair in front of the build before any of it is written.
+// The pair is compiled on the platform it runs on, and two machines can produce it. The maintainer's own
+// build does, and drops the pair in the bundle directory for this build to adopt; the build standing on
+// that same platform does it itself, with the source, digest, recipe, flags, and check the manifest
+// already carries. A pair the maintainer dropped wins over the compile every time: the drop is the pair
+// its proof was recorded for, and compiling over it would throw away the evidence the release adopts on.
 //
-// A target with nothing dropped for it is not a failure. The three pairs are built on three machines the
-// release machine does not control, and a release run that stopped for the one it does not have would ship
-// nothing at all, including the five archives it could have shipped. It is reported, and skipped.
-func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState) (ffmpegPlan, error) {
+// The build never runs a supplied pair it was handed. The evidence it can gather is the digest the
+// manifest pins, the shape the target's own linker writes, and the proof the ffmpeg check recorded on
+// that platform, and all three have to agree with the pair in front of the build before any of it is
+// written.
+//
+// A target with nothing dropped for it, on a machine that is not its platform, is not a failure. The
+// three pairs are built on machines the release machine does not control, and a release run that stopped
+// for the one it does not have would ship nothing at all, including the five archives it could have
+// shipped. It is reported, and skipped.
+func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	// The cache key is the pinned pair, so a warm cache is the cache of the pair the manifest names, and
 	// the drop is not needed again: it has already been consumed out of this directory.
 	if state.bundleIsCached {
@@ -373,6 +423,13 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 	drop := suppliedDropFor(paths, target)
 
 	if !aFileIsThere(drop["ffmpeg"]) && !aFileIsThere(drop["ffprobe"]) {
+		// Nothing was dropped, and this machine is the platform the pair runs on: the compile is what
+		// only it can do, and it is what the operator asked for when they asked for the ffmpeg of the
+		// machine they are on.
+		if machine.isTheHostOf(target) {
+			return planNativeFFmpeg(repo, manifest, target, record, paths, state)
+		}
+
 		return ffmpegPlan{
 			Target: target,
 			Says: "the ffmpeg for " + target + " was not supplied: drop ffmpeg and ffprobe in " + paths.bundle +
@@ -422,6 +479,145 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 		Paths:  paths,
 		Check:  check,
 	}, nil
+}
+
+// planNativeFFmpeg decides what the compile of a supplied pair looks like when the build is standing on
+// the platform that pair runs on.
+//
+// It is the same trimmed build the container targets make, from the same source the manifest pins, with
+// the same recipe, and with the record's flags reaching configure the way they do there. What it does not
+// have is a container: the host's own compiler, linker, stripper, make program, and signer are the
+// toolchain, and the pair comes out of it as the platform's own binary — which is the whole reason the
+// pair is compiled there and not shipped from a cross-compiler.
+//
+// Stripping comes before signing, and the order is not a style: strip rewrites the binary, and a signature
+// computed over the bytes strip removed is a signature macOS refuses to run.
+func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState) (ffmpegPlan, error) {
+	if err := checkNativeToolchain(record, target, state); err != nil {
+		return ffmpegPlan{}, err
+	}
+
+	work := filepath.Join(paths.scratch, sourceDir(manifest))
+
+	source := ffmpegSource{Path: paths.source, URL: manifest.Source.URL, Fetch: !state.sourceIsCached}
+
+	plan := ffmpegPlan{
+		Target: target,
+		Native: true,
+		Source: source,
+		Paths:  paths,
+	}
+
+	plan.Steps = append(plan.Steps, step{
+		label:  "unpack",
+		result: work,
+		dir:    repo,
+		name:   "tar",
+		args:   []string{"-xJf", paths.source, "-C", paths.scratch},
+	})
+
+	configure := []string{filepath.Join(work, "configure")}
+
+	configure = append(configure, manifest.Recipe...)
+
+	if len(record.CFlags) > 0 {
+		configure = append(configure, "--extra-cflags="+strings.Join(record.CFlags, " "))
+	}
+
+	if len(record.LDFlags) > 0 {
+		configure = append(configure, "--extra-ldflags="+strings.Join(record.LDFlags, " "))
+	}
+
+	plan.Steps = append(plan.Steps, step{
+		label:  "configure",
+		result: "the trimmed build for " + target,
+		dir:    repo,
+		name:   configure[0],
+		args:   configure[1:],
+	})
+
+	plan.Steps = append(plan.Steps, step{
+		label:  "make",
+		result: "ffmpeg and ffprobe for " + target,
+		dir:    work,
+		name:   makeProgram(record),
+		args:   []string{"-j", strconv.Itoa(runtime.NumCPU())},
+	})
+
+	plan.Steps = append(plan.Steps, step{
+		label:  "strip",
+		result: "the symbols taken out of ffmpeg and ffprobe",
+		dir:    work,
+		name:   "strip",
+		args:   []string{"ffmpeg", "ffprobe"},
+	})
+
+	if strings.HasPrefix(target, "macos-") {
+		// macOS refuses to run an unsigned binary out of a downloaded archive, and the ad-hoc signature
+		// is what the pair carries: it needs no developer identity, and it is the signature the pair the
+		// server embeds has to have to start.
+		plan.Steps = append(plan.Steps, step{
+			label:  "sign",
+			result: "the ad-hoc signature ffmpeg and ffprobe run under",
+			dir:    work,
+			name:   "codesign",
+			args:   []string{"-s", "-", "ffmpeg", "ffprobe"},
+		})
+	}
+
+	return plan, nil
+}
+
+// makeProgram is the make program a compile of this target runs. A record naming none runs make; the
+// FreeBSD record names gmake, because ffmpeg's build asks for GNU make and FreeBSD's base make is not it.
+func makeProgram(record bundle.Target) string {
+	if record.Make == "" {
+		return "make"
+	}
+
+	return record.Make
+}
+
+// nativeProgramsAre the programs a compile on the target's own platform runs: the archive reader, a C
+// compiler, the stripper, and the make program the record names, plus the signer on a macOS target, where
+// the pair has to carry a signature to run.
+func nativeProgramsAre(record bundle.Target, target string) []string {
+	programs := []string{"tar", "cc", "strip", makeProgram(record)}
+
+	if strings.HasPrefix(target, "macos-") {
+		programs = append(programs, "codesign")
+	}
+
+	return programs
+}
+
+// checkNativeToolchain is the host's own build tools, asked before a step runs.
+//
+// A machine missing one of them cannot start the compile, and finding that out from configure's output,
+// after the source was fetched and unpacked, is a minute of work spent to learn what could have been said
+// at once. The refusal names the program and where it comes from on that platform.
+func checkNativeToolchain(record bundle.Target, target string, state ffmpegState) error {
+	for _, name := range nativeProgramsAre(record, target) {
+		if state.nativeTools[name] == "" {
+			return fmt.Errorf("compiling the ffmpeg for %s needs %s, which this machine does not have: %s",
+				target, name, whereTheToolComesFrom(name, target))
+		}
+	}
+
+	return nil
+}
+
+// whereTheToolComesFrom is what installs one build tool on the platform the target runs on.
+func whereTheToolComesFrom(name string, target string) string {
+	if strings.HasPrefix(target, "freebsd-") {
+		if name == "gmake" {
+			return "pkg install gmake installs it, and ffmpeg's build asks for GNU make where FreeBSD's base make is not it"
+		}
+
+		return "it is in the FreeBSD base system"
+	}
+
+	return "the Xcode Command Line Tools carry it"
 }
 
 // suppliedDropFor is where the maintainer's pair sits before this build adopts it.
@@ -610,19 +806,39 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	record, covered := manifest.Targets[target]
 
+	// The tools of a compile that runs on the target's own platform are resolved the way podman is, and
+	// for the same reason: the plan is made from what this machine has, and a host missing one of them is
+	// told which one before the source is fetched.
+	nativeTools := map[string]string{}
+
+	if covered && record.Produced == suppliedProduction {
+		for _, name := range nativeProgramsAre(record, target) {
+			where, err := t.resolve(name)
+
+			if err == nil && where != "" {
+				nativeTools[name] = where
+			}
+		}
+	}
+
 	state := ffmpegState{
 		podmanIsThere:  err == nil && podman != "",
 		sourceIsCached: aFileIsThere(paths.source),
 		bundleIsCached: covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz")),
+		nativeTools:    nativeTools,
 	}
 
-	plan, err := planFFmpeg(o, t.repo, manifest, state)
+	plan, err := planFFmpeg(o, t.repo, manifest, state, thisMachine())
 	if err != nil {
 		return false, err
 	}
 
 	if plan.Says != "" {
 		fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Says)
+	}
+
+	if plan.Native {
+		return false, fmt.Errorf("the ffmpeg for %s is compiled on this machine, and this build does not run that compile yet", target)
 	}
 
 	if record.Produced == suppliedProduction {

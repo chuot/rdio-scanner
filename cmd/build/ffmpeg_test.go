@@ -86,7 +86,7 @@ func TestTheBuildCompilesAnFfmpegForTheTargetItIsAskedFor(t *testing.T) {
 
 	// The target an operator did not name is the one this tool is running on, which is what makes a
 	// developer's plain build carry an ffmpeg too.
-	plan, err := planFFmpeg(options{}, "/repo", bundle.ReadManifest(), anUncompiledTree())
+	plan, err := planFFmpeg(options{}, "/repo", bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused the target it is running on: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestTheBuildRefusesATargetItCannotName(t *testing.T) {
 // is not a failure the build has to fight: it says there is nothing to compile and does nothing.
 func TestATargetTheManifestHasNoRecordForProducesNothing(t *testing.T) {
 	for _, target := range []string{"netbsd-amd64", "openbsd-amd64"} {
-		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree())
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 		if err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
@@ -137,7 +137,7 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 	manifest := bundle.ReadManifest()
 	record := manifest.Targets["linux-arm64"]
 
-	plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", manifest, anUncompiledTree())
+	plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused linux-arm64: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // A Windows build has no ffmpeg make target: the rule is %$(PROGSSUF)$(EXESUF), and make ffmpeg
 // fails with "No rule to make target". Plain make builds both programs.
 func TestTheFfmpegBuildRunsPlainMakeForAWindowsTarget(t *testing.T) {
-	plan, err := planFFmpeg(options{target: "windows-amd64"}, "/repo", bundle.ReadManifest(), anUncompiledTree())
+	plan, err := planFFmpeg(options{target: "windows-amd64"}, "/repo", bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused windows-amd64: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestTheFfmpegBuildRunsPlainMakeForAWindowsTarget(t *testing.T) {
 // A covered target is a promise: the build does not quietly produce a server that will have to do
 // without an ffmpeg.
 func TestTheBuildRefusesToCompileAnFfmpegItHasNoToolchainFor(t *testing.T) {
-	_, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(), ffmpegState{})
+	_, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(), ffmpegState{}, theReleaseHost)
 	if err == nil {
 		t.Fatal("the build reported no problem compiling linux-arm64 without a container engine")
 	}
@@ -346,6 +346,7 @@ func TestAFfmpegAlreadyCompiledForTheSameRecipeIsNotCompiledAgain(t *testing.T) 
 		"/repo",
 		bundle.ReadManifest(),
 		ffmpegState{podmanIsThere: true, bundleIsCached: true},
+		theReleaseHost,
 	)
 	if err != nil {
 		t.Fatalf("the build refused linux-arm64: %v", err)
@@ -363,7 +364,7 @@ func TestAFfmpegAlreadyCompiledForTheSameRecipeIsNotCompiledAgain(t *testing.T) 
 // The source is fetched once and kept, because a release tarball that is already there does not have
 // to be downloaded again.
 func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
-	plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(), anUncompiledTree())
+	plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused linux-arm64: %v", err)
 	}
@@ -381,6 +382,7 @@ func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
 		"/repo",
 		bundle.ReadManifest(),
 		ffmpegState{podmanIsThere: true, sourceIsCached: true, bundleIsCached: true},
+		theReleaseHost,
 	)
 	if err != nil {
 		t.Fatalf("the build refused linux-arm64: %v", err)
@@ -574,7 +576,7 @@ func TestASuppliedTargetWhosePairWasNotDroppedProducesNothing(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		manifest := aManifestPinning(target, theFFmpegDigest, theFFProbeDigest)
 
-		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, anUncompiledTree())
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, anUncompiledTree(), theReleaseHost)
 		if err != nil {
 			t.Errorf("%s: a pair that was simply not dropped failed the run: %v", target, err)
 			continue
@@ -606,7 +608,7 @@ func TestTheBuildRefusesASuppliedPairTheManifestDoesNotPin(t *testing.T) {
 
 	aSuppliedPairWith(t, repo, "macos-arm64", aSuppliedProgramBytes("macos-arm64"), aSuppliedProgramBytes("macos-arm64"))
 
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, bundle.ReadManifest(), anUncompiledTree())
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 	if err == nil {
 		t.Fatal("the build adopted a pair the manifest does not pin")
 	}
@@ -625,7 +627,7 @@ func TestTheBuildRefusesASuppliedPairThatIsNotThePinnedOne(t *testing.T) {
 
 	pinned := aManifestPinning("macos-arm64", strings.Repeat("7", 64), strings.Repeat("8", 64))
 
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, pinned, anUncompiledTree())
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, pinned, anUncompiledTree(), theReleaseHost)
 	if err == nil {
 		t.Fatal("the build adopted a pair that is not the pair the manifest pins")
 	}
@@ -652,7 +654,7 @@ func TestTheBuildRefusesASuppliedPairThatIsNotTheProgramItsTargetRuns(t *testing
 
 	manifest := aSuppliedPairWith(t, repo, "macos-arm64", machOBytes(unsigned), aSuppliedProgramBytes("macos-arm64"))
 
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree())
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err == nil {
 		t.Fatal("the build adopted an unsigned program for macos-arm64")
 	}
@@ -673,7 +675,7 @@ func TestTheBuildRefusesASuppliedPairNobodyProvedOnItsOwnPlatform(t *testing.T) 
 		t.Fatalf("removing the proof: %v", err)
 	}
 
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree())
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err == nil {
 		t.Fatal("the build adopted a pair with no ffmpeg check recorded for it")
 	}
@@ -690,7 +692,7 @@ func TestTheBuildAdoptsTheSuppliedPairItPinsAndItsCheckProved(t *testing.T) {
 
 	manifest, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
 
-	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree())
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused the pair it pins and its check proved: %v", err)
 	}
@@ -725,7 +727,7 @@ func TestASuppliedPairAlreadyInCacheIsNotAdoptedAgain(t *testing.T) {
 		t.Fatalf("adopting the pair: %v", err)
 	}
 
-	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, ffmpegState{bundleIsCached: true})
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, ffmpegState{bundleIsCached: true}, theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused a cached supplied pair: %v", err)
 	}
@@ -885,4 +887,297 @@ func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *tes
 	if got := ffmpegTarget(options{}); got != want {
 		t.Errorf("with no target named the ffmpeg phase builds for %q, want the release target %q of this %s-%s machine", got, want, runtime.GOOS, runtime.GOARCH)
 	}
+}
+
+// The machine a supplied pair is compiled on is the machine that runs it, and the build can be standing on
+// it: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are on, and the
+// repository in front of them names the source, its digest, the recipe, the flags that floor sets, the make
+// program that build needs, and the check that proves the result. The compile is what that run asked for,
+// and it is what only that machine can do.
+func TestTheSuppliedTargetOnItsOwnHostCompilesItsPair(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		manifest := bundle.ReadManifest()
+
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, aNativeTree(target), aMachineForTarget(target))
+		if err != nil {
+			t.Errorf("%s: the build refused to compile the pair on the host that is the target: %v", target, err)
+			continue
+		}
+
+		if !plan.Native {
+			t.Errorf("%s: the plan does not compile the pair on the host that is the target", target)
+			continue
+		}
+
+		if plan.Skipped {
+			t.Errorf("%s: the plan skips the target whose pair it can compile, and the operator on that host is told to drop a pair they are standing on", target)
+		}
+
+		want := []string{"unpack", "configure", "make", "strip"}
+		if strings.HasPrefix(target, "macos-") {
+			// Stripping rewrites the binary, so the signature goes on after it: a signature over the
+			// bytes strip removed is a signature macOS refuses to run.
+			want = append(want, "sign")
+		}
+
+		if got := stepLabels(plan.Steps); !sameWords(got, want) {
+			t.Errorf("%s: the compile runs %v, want %v", target, got, want)
+		}
+
+		for _, s := range plan.Steps {
+			if s.name == "podman" {
+				t.Errorf("%s: the compile of a pair built on this host runs a container: %v", target, s.args)
+			}
+		}
+
+		if !plan.Source.Fetch {
+			t.Errorf("%s: the compile plans no source to fetch", target)
+		}
+
+		if plan.Source.URL != manifest.Source.URL {
+			t.Errorf("%s: the compile fetches %s, want the source the manifest pins, %s", target, plan.Source.URL, manifest.Source.URL)
+		}
+
+		configure := stepFor(plan.Steps, "configure")
+
+		if configure.name == "" {
+			t.Fatalf("%s: the compile plans no configure", target)
+		}
+
+		for _, flag := range manifest.Recipe {
+			if !carries(configure.args, flag) {
+				t.Errorf("%s: the configure does not carry the manifest's %s", target, flag)
+			}
+		}
+
+		record := manifest.Targets[target]
+
+		if len(record.CFlags) > 0 && !carries(configure.args, "--extra-cflags="+strings.Join(record.CFlags, " ")) {
+			t.Errorf("%s: the configure does not add the record's cflags %v to the source: %v", target, record.CFlags, configure.args)
+		}
+
+		if len(record.LDFlags) > 0 && !carries(configure.args, "--extra-ldflags="+strings.Join(record.LDFlags, " ")) {
+			t.Errorf("%s: the configure does not add the record's ldflags %v to the source: %v", target, record.LDFlags, configure.args)
+		}
+
+		if carries(configure.args, "--enable-cross-compile") {
+			t.Errorf("%s: the compile cross-compiles on the machine the pair runs on", target)
+		}
+
+		make := stepFor(plan.Steps, "make")
+
+		if want := aMakeProgramFor(target); make.name != want {
+			t.Errorf("%s: the compile runs %s, want %s: the record names the make program its host needs", target, make.name, want)
+		}
+
+		strip := stepFor(plan.Steps, "strip")
+
+		if !carries(strip.args, "ffmpeg") || !carries(strip.args, "ffprobe") {
+			t.Errorf("%s: the compile strips %v", target, strip.args)
+		}
+
+		if sign := stepFor(plan.Steps, "sign"); sign.name != "" {
+			if !carries(sign.args, "codesign") && sign.name != "codesign" {
+				t.Errorf("%s: the sign step is %s %v", target, sign.name, sign.args)
+			}
+
+			if stepIndex(plan.Steps, "strip") > stepIndex(plan.Steps, "sign") {
+				t.Errorf("%s: the pair is signed before it is stripped, and the signature is over bytes strip rewrote", target)
+			}
+		}
+	}
+}
+
+// The compile is what the target's own host does. A machine outside it compiles nothing, and says what
+// FEAT-033 says: the pair is not supplied, where to drop it, what proves it, and what pins it.
+func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(target), theReleaseHost)
+		if err != nil {
+			t.Errorf("%s: a machine that is not the target's host failed the run: %v", target, err)
+			continue
+		}
+
+		if plan.Native {
+			t.Errorf("%s: the build compiled a %s pair on a machine that cannot run it", target, target)
+		}
+
+		if !plan.Skipped {
+			t.Errorf("%s: the build does not skip a target whose pair it cannot produce", target)
+		}
+
+		if len(plan.Steps) != 0 {
+			t.Errorf("%s: the build has %d steps for a target it is not standing on", target, len(plan.Steps))
+		}
+	}
+}
+
+// A pair the maintainer dropped is adopted on its own host exactly as it is adopted anywhere else: the
+// compile is what the build does when there is nothing to adopt, not a replacement for the drop.
+func TestASuppliedPairDroppedOnItsOwnHostIsAdoptedAndNotCompiled(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest, _, _ := aSuppliedPair(t, repo, "macos-arm64")
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
+	if err != nil {
+		t.Fatalf("the build refused the pair dropped for it: %v", err)
+	}
+
+	if plan.Native {
+		t.Error("the build compiled a pair when a pair is sitting in the directory it embeds")
+	}
+
+	if plan.Check.Target != "macos-arm64" {
+		t.Errorf("the plan adopts nothing: %+v", plan.Check)
+	}
+}
+
+// A pair the cache holds is reused on its own host, and nothing is compiled over it: the cache key is the
+// pinned pair, so a warm cache is the pair the manifest names.
+func TestASuppliedPairInCacheIsReusedOnItsOwnHost(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest, _, _ := aSuppliedPair(t, repo, "macos-arm64")
+
+	state := aNativeTree("macos-arm64")
+	state.bundleIsCached = true
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, state, aMachineForTarget("macos-arm64"))
+	if err != nil {
+		t.Fatalf("the build refused a cached pair: %v", err)
+	}
+
+	if plan.Native {
+		t.Error("the build compiles a pair the cache already holds")
+	}
+
+	if len(plan.Steps) != 0 {
+		t.Errorf("the build has %d steps for a pair it already has", len(plan.Steps))
+	}
+}
+
+// The host's own build tools are what a native compile runs, and a program that is not there is a build
+// that cannot start: the operator is told which program, and what installs it, before a minute of work is
+// spent finding out.
+func TestTheNativeCompileRefusesAHostWithNoToolchain(t *testing.T) {
+	for _, missing := range []string{"tar", "cc", "strip", "make", "codesign"} {
+		repo := t.TempDir()
+
+		state := aNativeTree("macos-arm64")
+		delete(state.nativeTools, missing)
+
+		_, err := planFFmpeg(options{target: "macos-arm64"}, repo, bundle.ReadManifest(), state, aMachineForTarget("macos-arm64"))
+		if err == nil {
+			t.Errorf("the build planned a compile on a host with no %s", missing)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("the refusal %q does not name the %s that is missing", err.Error(), missing)
+		}
+	}
+
+	// FreeBSD's record names gmake, and that is the program its host has to have: a host with make and no
+	// gmake cannot build ffmpeg, because BSD make will not build it.
+	state := aNativeTree("freebsd-amd64")
+	delete(state.nativeTools, "gmake")
+
+	_, err := planFFmpeg(options{target: "freebsd-amd64"}, t.TempDir(), bundle.ReadManifest(), state, aMachineForTarget("freebsd-amd64"))
+	if err == nil {
+		t.Fatal("the build planned a FreeBSD compile on a host with no gmake")
+	}
+
+	if !strings.Contains(err.Error(), "gmake") {
+		t.Errorf("the refusal %q does not name the gmake that is missing", err.Error())
+	}
+}
+
+func aMachineForTarget(target string) host {
+	tr, ok := targetFor(target)
+	if !ok {
+		panic("no release target " + target)
+	}
+
+	return host{goos: tr.goos, goarch: tr.goarch}
+}
+
+// theReleaseHost is the machine that produces the releases: Linux, and no host a supplied pair runs on.
+var theReleaseHost = host{goos: "linux", goarch: "amd64"}
+
+// aNativeTree is a tree with nothing compiled in it, and the host's own build tools in front of it.
+func aNativeTree(target string) ffmpegState {
+	state := anUncompiledTree()
+	state.nativeTools = aToolchainFor(target)
+
+	return state
+}
+
+func aToolchainFor(target string) map[string]string {
+	programs := []string{"tar", "cc", "strip", aMakeProgramFor(target)}
+
+	if strings.HasPrefix(target, "macos-") {
+		programs = append(programs, "codesign")
+	}
+
+	tools := map[string]string{}
+
+	for _, name := range programs {
+		tools[name] = "/usr/bin/" + name
+	}
+
+	return tools
+}
+
+func aMakeProgramFor(target string) string {
+	record, ok := bundle.ReadManifest().Targets[target]
+	if !ok || record.Make == "" {
+		return "make"
+	}
+
+	return record.Make
+}
+
+func stepFor(steps []step, label string) step {
+	for _, s := range steps {
+		if s.label == label {
+			return s
+		}
+	}
+
+	return step{}
+}
+
+func stepIndex(steps []step, label string) int {
+	for i, s := range steps {
+		if s.label == label {
+			return i
+		}
+	}
+
+	return -1
+}
+
+func stepLabels(steps []step) []string {
+	labels := []string{}
+
+	for _, s := range steps {
+		labels = append(labels, s.label)
+	}
+
+	return labels
+}
+
+func sameWords(got []string, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+
+	return true
 }
