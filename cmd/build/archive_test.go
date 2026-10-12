@@ -26,17 +26,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
 
-// One archive per release target. What it carries is the release-archive contract this command carries: the
-// binary, the documentation as the files it is written in, the images those files reference, and the
-// ffmpeg licence when the target carries an ffmpeg.
+// One archive per release target. What it carries is the release-archive contract this command carries:
+// the program, the administrator guide that operates it, and the licence of the ffmpeg the build embeds.
+//
+// The guide carries its own pictures, its own stylesheet, and its own mark, so the archive carries no
+// pictures and needs no network for the reader to read it. It carries no markdown: the guide absorbed
+// the pages the archive used to carry, and a markdown file beside the guide is a document the guide
+// already says.
 
-// The archive's name is the name the platform document's transcript tells the reader to download, so a
-// release that writes a file the document does not name is a release a reader cannot follow.
+// The archive's name is the name the guide's installation chapter tells the reader to download, so a
+// release that writes a file the guide does not name is a release a reader cannot follow.
 func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing.T) {
 	got := archivePath("linux-amd64", "8.0.0+g19042cd")
 
@@ -47,21 +50,16 @@ func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing
 	}
 }
 
-// The archive carries the documentation as the files it is written in, at the names the repository
-// writes them at. A reader who extracts the archive gets the same folder layout the repository has, so
-// the relative paths the sources wrote resolve inside the archive.
-func TestTheArchiveCarriesTheDocumentationAsTheFilesItIsWrittenIn(t *testing.T) {
+// The archive is the program and the one document that operates it, at the names the repository writes
+// them at: a reader who extracts the archive finds the guide at the path the guide itself states, and
+// finds the ffmpeg licence under the name a reader looks for.
+func TestTheArchiveCarriesTheProgramTheGuideAndTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	repo := t.TempDir()
 
 	target := releaseTargets[4].targetWord()
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "![two](./images/two.png?raw=true)")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
-	writeRepoFile(t, repo, "docs/images/two.png", "the second picture")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4])
@@ -71,17 +69,12 @@ func TestTheArchiveCarriesTheDocumentationAsTheFilesItIsWrittenIn(t *testing.T) 
 
 	want := []string{
 		"rdio-scanner",
-		"CHANGELOG.md",
-		"docs/platforms/linux.md",
-		"docs/webapp.md",
-		"docs/faq.md",
-		"docs/images/one.png",
-		"docs/images/two.png",
-		"FFMPEG.md",
+		"docs/admin-guide.html",
+		"FFMPEG.txt",
 	}
 
 	if len(files) != len(want) {
-		t.Fatalf("the archive carries %d files, want %d", len(files), len(want))
+		t.Fatalf("the archive carries %d files, want %d: %v", len(files), len(want), fileNames(files))
 	}
 
 	for i, name := range want {
@@ -90,74 +83,26 @@ func TestTheArchiveCarriesTheDocumentationAsTheFilesItIsWrittenIn(t *testing.T) 
 		}
 	}
 
-	if string(files[7].body) != "the licence" {
-		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase wrote", files[7].body)
+	if string(files[2].body) != "the licence" {
+		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase wrote", files[2].body)
 	}
 }
 
-// The platform documents say `../images` and the scanner webapp guide says `./images`, and both reach the same
-// folder. An image is resolved against the directory of the document it is written in, so an archive
-// that resolved every path against the repository root would carry the scanner webapp guide's pictures twice
-// and none of the platform page's.
-func TestTheImagesAreResolvedAgainstTheDocumentEachIsWrittenIn(t *testing.T) {
+// A release archive carries no markdown file. The change log, the platform pages, the scanner webapp
+// guide, and the FAQ are the project's own documents and stay in the repository; the guide the archive
+// carries absorbed what an administrator needs from them, so a markdown file in the archive is a
+// document the reader is told to open and does not have.
+func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	repo := t.TempDir()
 
 	target := releaseTargets[4].targetWord()
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "![two](./images/two.png?raw=true)")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
-	writeRepoFile(t, repo, "docs/images/two.png", "the second picture")
-	writeArchiveLicence(t, repo, target, "the licence")
-
-	files, err := archiveFiles(repo, releaseTargets[4])
-	if err != nil {
-		t.Fatalf("archiveFiles: %v", err)
-	}
-
-	for _, want := range []struct {
-		name string
-		body string
-	}{
-		{"docs/images/one.png", "the first picture"},
-		{"docs/images/two.png", "the second picture"},
-	} {
-		found := false
-
-		for _, f := range files {
-			if f.name == want.name {
-				found = true
-
-				if string(f.body) != want.body {
-					t.Errorf("the archive carries %q as %q, want the picture the document points at", f.name, f.body)
-				}
-			}
-		}
-
-		if !found {
-			t.Errorf("the archive does not carry %s, which the documentation points at", want.name)
-		}
-	}
-}
-
-// The archive carries the images the documentation references, and no image it does not. A folder of
-// pictures copied wholesale puts files in every archive that no document asks for.
-func TestTheArchiveCarriesNoImageTheDocumentationDoesNotReference(t *testing.T) {
-	repo := t.TempDir()
-
-	target := releaseTargets[4].targetWord()
-
-	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "![two](./images/two.png?raw=true)")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
-	writeRepoFile(t, repo, "docs/images/two.png", "the second picture")
-	writeRepoFile(t, repo, "docs/images/unused.png", "a picture no document points at")
+	writeRepoFile(t, repo, "docs/platforms/linux.md", "the platform page")
+	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4])
@@ -166,32 +111,108 @@ func TestTheArchiveCarriesNoImageTheDocumentationDoesNotReference(t *testing.T) 
 	}
 
 	for _, f := range files {
-		if f.name == "docs/images/unused.png" {
-			t.Errorf("the archive carries %s, which no document references", f.name)
+		if strings.HasSuffix(f.name, ".md") {
+			t.Errorf("the archive carries %s, a markdown file", f.name)
 		}
 	}
 }
 
-// An image the documentation points at that is not in the tree is a broken document, and a release that
-// quietly left it out is a release that shipped a broken document.
-func TestAnImageTheDocumentationPointsAtThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
+// The guide is read where nothing else is: an extracted archive on a machine with no network. The copy
+// in the archive is the file the repository has, pictures and all, so the reader who opens it offline
+// gets every picture it shows.
+func TestTheGuideInTheArchiveCarriesEveryPictureInsideItself(t *testing.T) {
+	repo := t.TempDir()
+
+	target := releaseTargets[4].targetWord()
+
+	guide := `<figure data-shot="section-systems"><img src="data:image/png;base64,aW1hZ2U=" alt="The Systems section."><figcaption>The Systems section.</figcaption></figure>`
+
+	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
+	writeRepoFile(t, repo, "docs/admin-guide.html", guide)
+	writeArchiveLicence(t, repo, target, "the licence")
+
+	files, err := archiveFiles(repo, releaseTargets[4])
+	if err != nil {
+		t.Fatalf("archiveFiles: %v", err)
+	}
+
+	for _, f := range files {
+		if f.name != "docs/admin-guide.html" {
+			continue
+		}
+
+		if !strings.Contains(string(f.body), `src="data:image/png;base64,`) {
+			t.Errorf("the guide in the archive carries no picture inside itself: %q", f.body)
+		}
+
+		if strings.Contains(string(f.body), "?raw=true") {
+			t.Errorf("the guide in the archive asks for %q, which no folder on disk is named", "?raw=true")
+		}
+	}
+}
+
+// The guide is the repository's own document, written by hand. The release carries it as it is written:
+// a tool that rewrote the guide on the way into the archive would be a tool that published a document
+// nobody read.
+func TestTheGuideInTheArchiveIsTheGuideTheRepositoryHas(t *testing.T) {
+	real, err := repositoryRoot()
+	if err != nil {
+		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
+	}
+
+	repo := t.TempDir()
+
+	target := releaseTargets[4].targetWord()
+
+	body, err := os.ReadFile(filepath.Join(real, "docs", "admin-guide.html"))
+	if err != nil {
+		t.Fatalf("the release has no guide to carry: %v", err)
+	}
+
+	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
+	writeRepoFile(t, repo, "docs/admin-guide.html", string(body))
+	writeArchiveLicence(t, repo, target, "the ffmpeg licence")
+
+	files, err := archiveFiles(repo, releaseTargets[4])
+	if err != nil {
+		t.Fatalf("archiveFiles: %v", err)
+	}
+
+	carried := false
+
+	for _, f := range files {
+		if f.name != "docs/admin-guide.html" {
+			continue
+		}
+
+		carried = true
+
+		if string(f.body) != string(body) {
+			t.Errorf("the guide in the archive is not the guide the repository has: %d bytes carried of %d written", len(f.body), len(body))
+		}
+	}
+
+	if !carried {
+		t.Errorf("the archive does not carry the guide")
+	}
+}
+
+// A release without the guide is a release whose reader has the program and nothing that operates it.
+func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
 	repo := t.TempDir()
 
 	target := releaseTargets[4].targetWord()
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![gone](../images/gone.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
+	writeArchiveLicence(t, repo, target, "the licence")
 
 	_, err := archiveFiles(repo, releaseTargets[4])
 	if err == nil {
-		t.Fatal("the release accepted a document pointing at a picture that is not in the tree")
+		t.Fatal("the release accepted an archive with no guide")
 	}
 
-	if !strings.Contains(err.Error(), "docs/images/gone.png") {
-		t.Errorf("the failure %q does not name the picture the document points at", err.Error())
+	if !strings.Contains(err.Error(), "docs/admin-guide.html") {
+		t.Errorf("the failure %q does not name the guide the release cannot carry", err.Error())
 	}
 }
 
@@ -201,10 +222,7 @@ func TestAnUncoveredTargetCarriesNoFfmpegLicence(t *testing.T) {
 	repo := t.TempDir()
 
 	writeArchiveSource(t, repo, "macos-arm64", "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/macos.md", "the macos page")
-	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, "macos-arm64", "a licence that should not be in the archive")
 
 	files, err := archiveFiles(repo, releaseTargets[6])
@@ -213,13 +231,34 @@ func TestAnUncoveredTargetCarriesNoFfmpegLicence(t *testing.T) {
 	}
 
 	for _, f := range files {
-		if f.name == "FFMPEG.md" {
-			t.Errorf("the archive for macos-arm64 carries the ffmpeg licence, and no ffmpeg is compiled for it")
+		if strings.HasPrefix(f.name, "FFMPEG") {
+			t.Errorf("the archive for macos-arm64 carries %s, and no ffmpeg is compiled for it", f.name)
 		}
 	}
 
-	if len(files) != 5 {
-		t.Errorf("the archive carries %d files, want the binary and the four documentation sources", len(files))
+	if len(files) != 2 {
+		t.Errorf("the archive carries %d files, want the program and the guide: %v", len(files), fileNames(files))
+	}
+}
+
+// A target whose ffmpeg the build compiles has the licence the ffmpeg phase wrote. A release that
+// quietly left it out is a release that shipped the terms of a component it embedded with none of the
+// terms.
+func TestAMissingFfmpegLicenceStopsTheRelease(t *testing.T) {
+	repo := t.TempDir()
+
+	target := releaseTargets[4].targetWord()
+
+	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+
+	_, err := archiveFiles(repo, releaseTargets[4])
+	if err == nil {
+		t.Fatal("the release accepted an ffmpeg with no licence to carry")
+	}
+
+	if !strings.Contains(err.Error(), "ffmpeg licence") {
+		t.Errorf("the failure %q does not name the ffmpeg licence the release cannot carry", err.Error())
 	}
 }
 
@@ -229,10 +268,7 @@ func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) 
 	repo := t.TempDir()
 
 	writeArchiveSource(t, repo, "windows-amd64", "rdio-scanner.exe", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/windows.md", "the windows page")
-	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, "windows-amd64", "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[7])
@@ -253,11 +289,7 @@ func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 	target := releaseTargets[4].targetWord()
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4])
@@ -265,7 +297,7 @@ func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 		t.Fatalf("archiveFiles: %v", err)
 	}
 
-	path := filepath.Join(repo, "rdio-scanner-linux-amd64-v8.0.0.zip")
+	path := filepath.Join(repo, "rdio-scanner-linux-arm64-v8.0.0.zip")
 
 	if err := writeArchive(path, files); err != nil {
 		t.Fatalf("writeArchive: %v", err)
@@ -303,12 +335,7 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 	target := releaseTargets[4].targetWord()
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "![two](./images/two.png?raw=true)")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
-	writeRepoFile(t, repo, "docs/images/two.png", "the second picture")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4])
@@ -316,7 +343,7 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 		t.Fatalf("archiveFiles: %v", err)
 	}
 
-	path := filepath.Join(repo, "rdio-scanner-linux-amd64-v8.0.0.zip")
+	path := filepath.Join(repo, "rdio-scanner-linux-arm64-v8.0.0.zip")
 
 	if err := writeArchive(path, files); err != nil {
 		t.Fatalf("writeArchive: %v", err)
@@ -358,13 +385,8 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 
 	want := []string{
 		"rdio-scanner",
-		"CHANGELOG.md",
-		"docs/platforms/linux.md",
-		"docs/webapp.md",
-		"docs/faq.md",
-		"docs/images/one.png",
-		"docs/images/two.png",
-		"FFMPEG.md",
+		"docs/admin-guide.html",
+		"FFMPEG.txt",
 	}
 
 	if strings.Join(names, " ") != strings.Join(want, " ") {
@@ -372,167 +394,15 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 	}
 }
 
-// The archive carries every picture the real documentation points at. The references are read from the
-// sources themselves, so the test asks the question a reader asks after extracting the archive: does
-// every image in the documents I opened resolve to a file I have.
-func TestTheArchiveCarriesEveryImageTheRealDocumentationReferences(t *testing.T) {
-	real, err := repositoryRoot()
-	if err != nil {
-		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
-	}
-
-	tr := releaseTargets[4]
-
-	sources := []string{
-		"CHANGELOG.md",
-		"docs/platforms/" + tr.name + ".md",
-		"docs/webapp.md",
-		"docs/faq.md",
-	}
-
-	// The references the documents wrote, resolved against the directory of the document each is in.
-	// This is the reader's arithmetic, not the tool's, so a renderer that resolved paths the other way
-	// fails here.
-	referenced := map[string]bool{}
-
-	for _, name := range sources {
-		text, err := os.ReadFile(filepath.Join(real, name))
-		if err != nil {
-			t.Fatalf("the release has no %s: %v", name, err)
-		}
-
-		for _, ref := range imageReferences(string(text)) {
-			referenced[filepath.Clean(filepath.Join(filepath.Dir(name), ref))] = true
-		}
-	}
-
-	// The test builds the repository it asserts against, as every other test in this file does: the
-	// documentation as it is written, the pictures that documentation points at, and a binary. The
-	// subject here is the documentation, so the binary is bytes and no build has to have run. Copying
-	// each picture is the check that the documentation points at a file the repository has; a reference
-	// to a file that is not in the repository fails here.
-	repo := t.TempDir()
-
-	for _, name := range sources {
-		copyArchiveSource(t, real, repo, name)
-	}
-
-	for path := range referenced {
-		copyArchiveSource(t, real, repo, path)
-	}
-
-	// The target carries an ffmpeg, so the archive carries the licence the ffmpeg phase wrote from the
-	// manifest. The licence is a build artifact, not a file the repository keeps, so the test writes it
-	// as it writes the binary: the test is about the documentation, and the licence is bytes the archive
-	// carries.
-	writeRepoFile(t, repo, filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), "LICENCE.md"), "the ffmpeg licence")
-
-	writeArchiveSource(t, repo, tr.targetWord(), "rdio-scanner", "the binary")
-
-	files, err := archiveFiles(repo, tr)
-	if err != nil {
-		t.Fatalf("archiveFiles: %v", err)
-	}
-
-	carried := map[string]bool{}
+// fileNames is what an archive carries, in the order it carries it, for a failure that has to say so.
+func fileNames(files []archiveFile) []string {
+	names := []string{}
 
 	for _, f := range files {
-		carried[f.name] = true
+		names = append(names, f.name)
 	}
 
-	for _, name := range sources {
-		if !carried[name] {
-			t.Errorf("the archive does not carry %s, which is the documentation as it is written", name)
-		}
-	}
-
-	for path := range referenced {
-		if !carried[path] {
-			t.Errorf("the archive does not carry %s, which the documentation points at", path)
-		}
-	}
-
-	// Every picture the real documentation points at is written with GitHub's raw suffix, so the
-	// archive's copy of each source has to be written without it. A reader who extracts the archive and
-	// opens a document in a local editor gets a page whose every picture is broken if the suffix
-	// survives.
-	for _, f := range files {
-		if strings.HasSuffix(f.name, ".md") && strings.Contains(string(f.body), "?raw=true") {
-			t.Errorf("the archive carries %s with %q, which no folder on disk is named", f.name, "?raw=true")
-		}
-	}
-
-	if len(referenced) != 33 {
-		t.Errorf("the documentation points at %d pictures, want the 33 the sources reference", len(referenced))
-	}
-}
-
-// `?raw=true` is the query GitHub uses to serve a raw file, and on disk it is part of the file name. A
-// reader who extracts the archive and opens a document in a local editor gets a page whose every picture
-// is broken, because the path the document asks for is a path no folder has. The archive carries the
-// sources with the suffix removed, so the path the reader's editor resolves is the path the archive
-// filled. The repository's own files are not touched: the change is in the bytes written into the
-// archive.
-func TestTheArchiveCarriesTheImagesWhereTheReadersEditorCanFindThem(t *testing.T) {
-	repo := t.TempDir()
-
-	target := releaseTargets[4].targetWord()
-
-	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "![two](./images/two.png?raw=true)")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
-	writeRepoFile(t, repo, "docs/images/two.png", "the second picture")
-	writeArchiveLicence(t, repo, target, "the licence")
-
-	files, err := archiveFiles(repo, releaseTargets[4])
-	if err != nil {
-		t.Fatalf("archiveFiles: %v", err)
-	}
-
-	for _, name := range []string{"docs/platforms/linux.md", "docs/webapp.md"} {
-		for _, f := range files {
-			if f.name != name {
-				continue
-			}
-
-			if strings.Contains(string(f.body), "?raw=true") {
-				t.Errorf("the archive carries %s with %q, which no folder on disk is named", name, "?raw=true")
-			}
-
-			if !strings.Contains(string(f.body), "](../images/one.png)") && !strings.Contains(string(f.body), "](./images/two.png)") {
-				t.Errorf("the archive carries %s without the path the picture it filled is at: %q", name, f.body)
-			}
-		}
-	}
-
-	// The repository's own file is not rewritten: the change is in the archive, not in the tree.
-	body, err := os.ReadFile(filepath.Join(repo, "docs/platforms/linux.md"))
-	if err != nil {
-		t.Fatalf("reading the source: %v", err)
-	}
-
-	if !strings.Contains(string(body), "?raw=true") {
-		t.Errorf("the tool rewrote %s in the tree, and the tree is not the archive", "docs/platforms/linux.md")
-	}
-}
-
-// imageReferences is the picture path a markdown image reference names, with the suffix a GitHub raw
-// link carries stripped. A reference that names an address is not a file.
-func imageReferences(text string) []string {
-	var refs []string
-
-	for _, m := range regexp.MustCompile(`!\[[^]]*\]\(([^)]+)\)`).FindAllStringSubmatch(text, -1) {
-		if strings.Contains(m[1], "://") {
-			continue
-		}
-
-		refs = append(refs, strings.TrimSuffix(m[1], "?raw=true"))
-	}
-
-	return refs
+	return names
 }
 
 // writeArchiveSource puts one file a release archive carries into the tree, in the directory the release
@@ -551,22 +421,7 @@ func writeArchiveSource(t *testing.T, repo string, target string, name string, c
 	}
 }
 
-// copyArchiveSource copies one file the real repository has into the tree the test asserts against, at
-// the name the repository writes it at. A file the documentation points at that the repository does not
-// have fails here, which is the reader's question: does every image in the documents resolve to a file
-// in the archive.
-func copyArchiveSource(t *testing.T, real string, repo string, path string) {
-	t.Helper()
-
-	body, err := os.ReadFile(filepath.Join(real, path))
-	if err != nil {
-		t.Fatalf("the real repository has no %s, which the documentation points at: %v", path, err)
-	}
-
-	writeRepoFile(t, repo, path, string(body))
-}
-
-// writeRepoFile puts a documentation file into a tree at the name the repository writes it at.
+// writeRepoFile puts a file into a tree at the name the repository writes it at.
 func writeRepoFile(t *testing.T, repo string, path string, contents string) {
 	t.Helper()
 
@@ -582,7 +437,8 @@ func writeRepoFile(t *testing.T, repo string, path string, contents string) {
 }
 
 // writeArchiveLicence puts the licence the ffmpeg phase writes into the bundle directory the server
-// embeds.
+// embeds. The phase writes it from the manifest the ffmpeg build records; the archive carries it under
+// the name a reader looks for, which is not the name the bundle directory uses.
 func writeArchiveLicence(t *testing.T, repo string, target string, contents string) {
 	t.Helper()
 
