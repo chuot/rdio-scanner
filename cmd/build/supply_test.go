@@ -26,8 +26,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
 // These are unit tests of the shape rules a supplied ffmpeg pair is adopted under. The build cannot run
@@ -725,6 +728,59 @@ func TestTheProofOfAMacOSTargetIsRecordedByAMacOSHostOfEitherArchitecture(t *tes
 
 		if err == nil {
 			t.Errorf("%s: the build adopted a pair proved on %s, a host that cannot run the pair", tc.name, tc.host)
+		}
+	}
+}
+
+// The proof is the pair's own execution. A host that cannot execute the pair it is asked to prove — an
+// Intel Mac holding the arm64 pair, this Linux host holding a macOS pair — has no proof to record, and it is
+// not refused by a guess about what the host has installed: the pair is run, the operating system answers,
+// and the build's answer names the host that can prove the pair, the command that proves it, and the
+// directory the pair is sitting in. Nothing is recorded and nothing is pinned: a proof of a pair the host
+// cannot run is a proof of nothing, and the release would have no way to tell it from a pair that converts.
+//
+// The pair here is the fixture shape FEAT-033's shape rules adopt, so the shape rules let it through to the
+// run, and the run is where this host answers.
+func TestAHostThatCannotRunThePairIsToldWhichHostCanProveIt(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		repo := t.TempDir()
+
+		paths := ffmpegPathsFor(repo, bundle.Manifest{FFmpeg: "9.0.2"}, target)
+
+		if err := os.MkdirAll(paths.bundle, 0755); err != nil {
+			t.Fatalf("%s: making the bundle directory: %v", target, err)
+		}
+
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			if err := os.WriteFile(suppliedDropFor(paths, target)[name], aSuppliedProgramBytes(target), 0755); err != nil {
+				t.Fatalf("%s: writing the %s: %v", target, name, err)
+			}
+		}
+
+		tl := tool{repo: repo}
+
+		_, err := tl.proveSuppliedPair(target, paths, io.Discard)
+
+		if err == nil {
+			t.Fatalf("%s: the proof recorded a pair this %s host cannot execute", target, runtime.GOOS)
+		}
+
+		for _, want := range []string{
+			target,
+			"go run ./cmd/build ffmpeg-check " + target,
+			"a " + target + " host",
+			paths.bundle,
+			// The operating system's own refusal, carried out of the run: the pair never started, and the
+			// reason is the answer the operator needs.
+			"fork/exec",
+		} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: the failure %q does not name %q", target, err.Error(), want)
+			}
+		}
+
+		if _, err := os.Stat(theCheckFile(repo, target)); err == nil {
+			t.Errorf("%s: the run recorded a proof for a pair it could not run", target)
 		}
 	}
 }

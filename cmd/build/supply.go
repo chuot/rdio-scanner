@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -511,6 +512,23 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 	return err
 }
 
+// thePairTheHostCannotRun is what a host is told when the pair it is asked to prove does not run on it.
+//
+// The proof is the pair's own execution, so a host that cannot execute the pair has no proof to record, and
+// the answer it gets names the host that can, the command that proves the pair there, and the directory the
+// pair is sitting in. The pair does not move and the operator carries nothing: the proof is recorded where
+// the pair runs, and the proof file names the host that recorded it.
+//
+// The operating system's own refusal is carried inside it. This build does not ask the host what it has
+// installed and does not guess at what it can execute: an Intel Mac holding the arm64 pair, and a Linux host
+// holding a macOS pair, are answered by the programs not starting.
+func thePairTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
+	return fmt.Errorf("the %s pair does not run on this machine (%s): %w\n"+
+		"the proof is the pair's own execution, so it is recorded by a host that runs it: "+
+		"run go run ./cmd/build ffmpeg-check %s on a %s host, and the pair is in %s",
+		target, releaseTargetWordFor(machine.goos, machine.goarch), err, target, target, paths.bundle)
+}
+
 // proveSuppliedPair proves the pair sitting in one target's bundle directory, on the machine that runs it,
 // and records what it saw.
 //
@@ -548,12 +566,12 @@ func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writ
 
 	version, err := theProgramVersion(run, programs.FFmpeg)
 	if err != nil {
-		return anFfmpegCheck{}, err
+		return anFfmpegCheck{}, thePairTheHostCannotRun(target, paths, t.theMachine(), err)
 	}
 
 	report, err := ffmpegCheck(run, programs, work)
 	if err != nil {
-		return anFfmpegCheck{}, err
+		return anFfmpegCheck{}, thePairTheHostCannotRun(target, paths, t.theMachine(), err)
 	}
 
 	digests := map[string]string{}
@@ -619,6 +637,11 @@ func theProgramVersion(run command, program []string) (string, error) {
 // It is the shape the check runs a compiled pair through a container in, used for a pair this machine can
 // run: the ffmpeg check for a supplied pair runs on the pair's own platform, so nothing stands between the
 // check and the programs.
+//
+// A program that ran and answered badly answers with its own words, which is what the check reads. A
+// program that never started has no words of its own: the operating system refused to start it, and that
+// refusal is the whole answer, so it is carried out and not thrown away. It is the answer a host gives that
+// was handed a pair of the other macOS architecture.
 func onThisMachine() command {
 	return func(argv []string, stdin []byte) ([]byte, error) {
 		out := bytes.NewBuffer([]byte(nil))
@@ -630,7 +653,13 @@ func onThisMachine() command {
 		cmd.Stderr = errout
 
 		if err := cmd.Run(); err != nil {
-			return nil, fmt.Errorf("%s", strings.TrimSpace(errout.String()))
+			var exit *exec.ExitError
+
+			if errors.As(err, &exit) {
+				return nil, fmt.Errorf("%s", strings.TrimSpace(errout.String()))
+			}
+
+			return nil, fmt.Errorf("%w", err)
 		}
 
 		return out.Bytes(), nil

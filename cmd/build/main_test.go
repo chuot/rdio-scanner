@@ -993,39 +993,60 @@ func TestTheNativeRunCompilesProvesPinsAdoptsAndPublishes(t *testing.T) {
 // A pair the proof refused is not pinned, not cached, and not published. The manifest is the file the
 // release reads, and a run that wrote a pin before the pair was proved would be a run that adopted on its
 // own promise.
+//
+// The same is true of the pair a host compiled for the other macOS architecture: the compile runs on that
+// host, the proof is the pair's own execution, and when the host cannot execute what it compiled, the run
+// stops at the proof with the pair sitting in the bundle directory for the other Mac to prove. The manifest
+// it started with is the manifest it leaves.
 func TestTheNativeRunLeavesTheManifestAloneWhenTheProofFails(t *testing.T) {
-	tl, out, seen, repo := aNativeRun(t, "macos-arm64", "prove")
+	for _, tc := range []struct {
+		name    string
+		machine host
+	}{
+		{name: "the target's own host", machine: host{goos: "darwin", goarch: "arm64"}},
+		{name: "the host of the other macOS architecture", machine: host{goos: "darwin", goarch: "amd64"}},
+	} {
+		tl, out, seen, repo := aNativeRunOn(t, "macos-arm64", "prove", tc.machine)
 
-	original := theManifestFile(t, repo)
+		original := theManifestFile(t, repo)
 
-	_, err := tl.runFFmpeg(options{target: "macos-arm64"}, out)
-	if err == nil {
-		t.Fatal("the run published a pair its proof refused")
-	}
-
-	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
-	if err != nil {
-		t.Fatalf("the manifest is not there to read: %v", err)
-	}
-
-	if !bytes.Equal(body, original) {
-		t.Error("the run wrote a pin into the manifest for a pair the proof refused")
-	}
-
-	if !sameWords(seen.ran, []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}) {
-		t.Errorf("the run did %v, and the proof is what refused the pair", seen.ran)
-	}
-
-	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "macos-arm64")
-
-	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
-		if aFileIsThere(paths.cachedProgram(name)) {
-			t.Errorf("the pair the proof refused is in the cache as %s", name)
+		_, err := tl.runFFmpeg(options{target: "macos-arm64"}, out)
+		if err == nil {
+			t.Fatalf("%s: the run published a pair its proof refused", tc.name)
 		}
-	}
 
-	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
-		t.Error("the licence text names a pair the proof refused")
+		body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+		if err != nil {
+			t.Fatalf("%s: the manifest is not there to read: %v", tc.name, err)
+		}
+
+		if !bytes.Equal(body, original) {
+			t.Errorf("%s: the run wrote a pin into the manifest for a pair the proof refused", tc.name)
+		}
+
+		if !sameWords(seen.ran, []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}) {
+			t.Errorf("%s: the run did %v, and the proof is what refused the pair", tc.name, seen.ran)
+		}
+
+		paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "macos-arm64")
+
+		for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+			if aFileIsThere(paths.cachedProgram(name)) {
+				t.Errorf("%s: the pair the proof refused is in the cache as %s", tc.name, name)
+			}
+		}
+
+		if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+			t.Errorf("%s: the licence text names a pair the proof refused", tc.name)
+		}
+
+		// The pair the refused proof left behind is where the host that can run it looks for it, which is
+		// what the proof's failure names.
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			if !aFileIsThere(suppliedDropFor(paths, "macos-arm64")[name]) {
+				t.Errorf("%s: the %s the compile produced is not in %s for the other Mac to prove", tc.name, name, paths.bundle)
+			}
+		}
 	}
 }
 
