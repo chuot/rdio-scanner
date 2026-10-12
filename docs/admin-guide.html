@@ -469,6 +469,39 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
     </p>
   </aside>
 
+  <h3>What's new since version 6.6.3</h3>
+
+  <p>
+    Version 7 was assembled and never published, so an administrator coming from version 6.6.3 sees version
+    7 and version 8 at once. This is the short list of what changed since that release, with the chapter that
+    operates it. The project's change log is the full history, release by release; what is here is what
+    changes your work.
+  </p>
+
+  <table>
+    <caption>The changes since version 6.6.3, by what they touch</caption>
+    <thead><tr><th scope="col">Area</th><th scope="col">What changed</th><th scope="col">Chapter</th></tr></thead>
+    <tbody>
+      <tr><td>The log</td><td>Every entry names the part of the server that wrote it, and the log view filters on it. Messages no longer begin with the name of the internal function that wrote them. The view gained a subsystem filter, a text search, the clickable counts strip, and auto-refresh. Retention says what it removed, and says when it could not run. Lines that only ever went to the console are in the log now.</td><td><a href="#ch-14-logs">14</a></td></tr>
+      <tr><td>The database</td><td>A new schema, and four dialects: SQLite, MariaDB, MySQL, and PostgreSQL. The first start on a version 6.6.3 database migrates it in place, announces each table, and copies what it cannot carry into the migration archive instead of throwing it away.</td><td><a href="#ch-07-database">7</a>, <a href="#ch-24-upgrading-and-migrating">24</a></td></tr>
+      <tr><td>The administration interface</td><td>Rebuilt. Sections are edited as a working copy and written with the save bar; the conflict banner appears when another session saved the same section; the systems-and-talkgroups dialog scopes a credential; the OpenAPI section reads the contract the server publishes; the Tools section exports and imports the configuration, and imports a talkgroup or unit list per system.</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-15-tools">15</a></td></tr>
+      <tr><td>Talkgroups, groups, and tags</td><td>A talkgroup belongs to many groups, which is why the tag toggle is gone. System and talkgroup types name the radio standard, and the AFS systems option is gone, replaced by the Provoice type. Alert tones and LED colours are set at group, tag, system, and talkgroup level, with the group winning. Calls are delayed per system and per talkgroup.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a>, <a href="#ch-12-groups-and-tags">12</a></td></tr>
+      <tr><td>Duplicate detection</td><td>Detection is built on the new schema, and the window is fixed: two calls on the same system, talkgroup, and site within half a second are one call.</td><td><a href="#ch-13-options">13</a></td></tr>
+      <tr><td>Getting audio in</td><td>The mask gained the unit label token, so a recorder that names the radio that transmitted names the unit the listener sees.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>Interfaces and APIs</td><td>The API was renewed with the older calls clients use kept working. The call history endpoints accept a listener's access code beside an administrator's session. The Model Context Protocol endpoint lets an assistant read a deployment, and write to it when it presents the administrator's credential.</td><td><a href="#ch-16-rest-api">16</a>, <a href="#ch-17-mcp-server">17</a></td></tr>
+      <tr><td>The release</td><td>The archive carries this guide as its operating documentation, with the ffmpeg licence as plain text beside the program.</td><td><a href="#ch-04-installation">4</a></td></tr>
+    </tbody>
+  </table>
+
+  <aside class="caution">
+    <p>
+      Back up the configuration and the database before updating. The migration rewrites the database in
+      place and removes an old table only once every row in it has been carried or archived, and every open
+      administrator session ends on the first start of the new server.
+      <a href="#ch-24-upgrading-and-migrating">Chapter 24</a> is the path, start to finish.
+    </p>
+  </aside>
+
   <h3>What this guide does not cover</h3>
 
   <p>

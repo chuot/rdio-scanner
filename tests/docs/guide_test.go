@@ -84,7 +84,7 @@ var guideChapters = []string{
 }
 
 // The attributes that pull a resource into the page to render it. A navigation link is not one of them:
-// a guide that points a reader at the web app guide is doing its job, a guide that points the browser at
+// a guide that points a reader at the scanner webapp guide is doing its job, a guide that points the browser at
 // a stylesheet it does not carry is not.
 var subresourcePattern = regexp.MustCompile(`(?i)<(img|link|script|style|source|video|audio|iframe|object|embed|input|track|picture|use|image)\b[^>]*>`)
 
@@ -225,4 +225,69 @@ func firstKey(m map[string]bool) string {
 	}
 
 	return ""
+}
+
+// chapterOf returns one chapter's body: the text from its heading to the end of the section that carries
+// it, which is the part of the document a reader lands on when they jump to that chapter.
+func chapterOf(t *testing.T, body string, id string) string {
+	t.Helper()
+
+	start := strings.Index(body, `id="`+id+`"`)
+	if start < 0 {
+		t.Fatalf("the guide does not carry the chapter %q", id)
+	}
+
+	end := strings.Index(body[start:], "</section>")
+	if end < 0 {
+		t.Fatalf("the chapter %q does not end", id)
+	}
+
+	return body[start : start+end]
+}
+
+// The opening chapter tells an administrator coming from the last published release what they are walking
+// into: the changes, each one operable from a chapter of this guide, and the cost of the update. A list of
+// changes whose links land nowhere is a list the reader cannot act on, and a change summary that hides that
+// the database is rewritten in place is the summary that causes the lost deployment.
+func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
+	body := guidePath(t)
+
+	chapter := chapterOf(t, body, "ch-01-overview")
+
+	start := strings.Index(chapter, "What&#39;s new since version 6.6.3")
+	if start < 0 {
+		start = strings.Index(chapter, "What's new since version 6.6.3")
+	}
+
+	if start < 0 {
+		t.Fatalf("the opening chapter does not carry the changes since version 6.6.3")
+	}
+
+	section := chapter[start:]
+
+	links := regexp.MustCompile(`(?i)href="([^"]+)"`).FindAllStringSubmatch(section, -1)
+
+	if len(links) < 5 {
+		t.Fatalf("the changes since version 6.6.3 name %d chapters, want the changes to be operable", len(links))
+	}
+
+	for _, m := range links {
+		href := m[1]
+
+		if !strings.HasPrefix(href, "#") {
+			t.Errorf("the changes since version 6.6.3 point at %q, outside the document", href)
+
+			continue
+		}
+
+		if !strings.Contains(body, `id="`+strings.TrimPrefix(href, "#")+`"`) {
+			t.Errorf("the changes since version 6.6.3 point at %q, which the document does not carry", href)
+		}
+	}
+
+	for _, cost := range []string{"Back up", "migrates it in place", "session"} {
+		if !strings.Contains(section, cost) {
+			t.Errorf("the changes since version 6.6.3 do not name the update's cost: %q is missing", cost)
+		}
+	}
 }
