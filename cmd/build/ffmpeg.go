@@ -1038,7 +1038,8 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 			return false, err
 		}
 
-		fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
+		fmt.Fprintf(stdout, "%-7s %d conversions, %d codecs, %s s to %s s\n", "check", report.Conversions,
+			len(report.Codecs.Audio),
 			strconv.FormatFloat(report.Shortest, 'f', 6, 64),
 			strconv.FormatFloat(report.Longest, 'f', 6, 64),
 		)

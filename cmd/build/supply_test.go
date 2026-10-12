@@ -526,6 +526,52 @@ func TestTheBuildRefusesAPairTheFfmpegCheckDidNotProve(t *testing.T) {
 	}
 }
 
+// The proof is the evidence a supplied pair is adopted on, and the host that compiled the pair is the
+// only machine that can record it. A proof naming video codecs is that host telling the release it
+// compiled a program this project does not ship; a proof recorded by a build that never asked what the
+// pair registers is the proof of a pair nobody looked at.
+func TestTheBuildRefusesAProofThatNamesVideoCodecs(t *testing.T) {
+	repo := t.TempDir()
+
+	record := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+	record.Codecs = codecRegistry{Audio: []string{"aac"}, Video: []string{"h264", "mpeg4"}}
+
+	if err := writeFfmpegCheck(repo, record); err != nil {
+		t.Fatalf("writeFfmpegCheck: %v", err)
+	}
+
+	_, err := readFfmpegCheck(repo, "macos-arm64", theFFmpegDigest, theFFProbeDigest)
+	if err == nil {
+		t.Fatal("the build adopted a pair whose proof names video codecs")
+	}
+
+	for _, want := range []string{"h264", "mpeg4"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the failure %q does not name the video codec %s the proof recorded", err.Error(), want)
+		}
+	}
+}
+
+func TestTheBuildRefusesAProofThatNamesNoCodecs(t *testing.T) {
+	repo := t.TempDir()
+
+	record := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+	record.Codecs = codecRegistry{}
+
+	if err := writeFfmpegCheck(repo, record); err != nil {
+		t.Fatalf("writeFfmpegCheck: %v", err)
+	}
+
+	_, err := readFfmpegCheck(repo, "macos-arm64", theFFmpegDigest, theFFProbeDigest)
+	if err == nil {
+		t.Fatal("the build adopted a pair whose proof names no codecs")
+	}
+
+	if !strings.Contains(err.Error(), "ffmpeg-check") {
+		t.Errorf("the failure %q does not name the command that records what the pair registers", err.Error())
+	}
+}
+
 // The check proves the pair a maintainer drops. A target this build compiles an ffmpeg for is proved by
 // the compile itself, inside the container that can run it, and a check pointed at it would be looking for
 // a raw pair that directory has never held.
@@ -589,6 +635,7 @@ func aCheckFor(target string, ffmpegDigest string, ffprobeDigest string) anFfmpe
 		FFProbe: ffprobeDigest,
 		Version: "ffmpeg version 9.0.2 Copyright (c) 2000-2025 the FFmpeg developers",
 		Checked: "2026-10-12T09:00:00Z",
+		Codecs:  codecRegistry{Audio: theAudioCodecNames},
 		Conversions: []production{
 			{Input: "wav", Mode: "plain", Bytes: 7675, Duration: "2.128000"},
 			{Input: "wav", Mode: "norm", Bytes: 12251, Duration: "3.010667"},

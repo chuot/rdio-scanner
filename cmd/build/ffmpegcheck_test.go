@@ -46,6 +46,11 @@ type aStandIn struct {
 	runs     []string
 	duration map[string]string
 	tags     map[string]map[string]string
+
+	// codecs are the registry lines the program answers its codec probe with. A stand-in that does
+	// not override them is a working build: the audio codecs the converter asks of ffmpeg, and
+	// nothing that decodes or encodes video.
+	codecs []string
 }
 
 func (s *aStandIn) run(argv []string, stdin []byte) ([]byte, error) {
@@ -58,6 +63,15 @@ func (s *aStandIn) run(argv []string, stdin []byte) ([]byte, error) {
 		}})
 
 		return body, err
+	}
+
+	if namesTheCodecProbe(argv) {
+		lines := s.codecs
+		if lines == nil {
+			lines = theAudioCodecLines
+		}
+
+		return aCodecRegistry(lines...), nil
 	}
 
 	return anM4A(), nil
@@ -151,11 +165,19 @@ func TestTheFFMPEGCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(
 
 	ran := stand.asked("/ffmpeg-9.0.2/ffmpeg")
 
-	if len(ran) != 6 {
-		t.Fatalf("the check ran the compiled ffmpeg %d times, want the three conversion levels from a WAV and from an MP3", len(ran))
+	// The check runs the compiled program seven times: six conversions, and one question about what the
+	// program registers.
+	conversions, registry := splitTheCodecProbe(ran)
+
+	if len(conversions) != 6 {
+		t.Fatalf("the check ran the compiled ffmpeg %d times, want the three conversion levels from a WAV and from an MP3", len(conversions))
 	}
 
-	for _, argv := range ran {
+	if len(registry) != 1 {
+		t.Fatalf("the check asked the compiled ffmpeg what it registers %d times, want once", len(registry))
+	}
+
+	for _, argv := range conversions {
 		for _, want := range []string{"-i -", "-c:a aac", "-b:a 32k", "-movflags frag_keyframe+empty_moov", "-f ipod -"} {
 			if !strings.Contains(argv, want) {
 				t.Errorf("the check ran %s, which does not carry %s", argv, want)
@@ -174,6 +196,27 @@ func TestTheFFMPEGCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(
 	if !wasRun(ran, "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11") {
 		t.Error("the check never ran the recording the loudness-target level asks for")
 	}
+
+	// The question about what the program registers is asked of that program, quietly, and asks for
+	// nothing else: it is the program's own list, read the way the operator reads it.
+	if !wasRun(registry, "-hide_banner -codecs") {
+		t.Errorf("the check asked what the program registers with %s", strings.Join(registry, " and "))
+	}
+}
+
+// splitTheCodecProbe takes the runs of one program apart into the conversions and the question about
+// what the program registers.
+func splitTheCodecProbe(runs []string) (conversions []string, registry []string) {
+	for _, run := range runs {
+		if strings.Contains(run, "-codecs") {
+			registry = append(registry, run)
+			continue
+		}
+
+		conversions = append(conversions, run)
+	}
+
+	return conversions, registry
 }
 
 // A trimmed build that left out something the converter needs is exactly what this check exists to
@@ -253,6 +296,10 @@ func TestTheFFMPEGCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 			return body, err
 		}
 
+		if namesTheCodecProbe(argv) {
+			return aCodecRegistry(theAudioCodecLines...), nil
+		}
+
 		return anM4A(), nil
 	}
 
@@ -298,6 +345,149 @@ func TestTheFFMPEGCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join("assets", "tone.mp3")); err != nil {
 		t.Error("the check has no MP3 recording to feed ffmpeg")
 	}
+}
+
+// theAudioCodecLines are what a working build's ffmpeg answers its codec probe with: the PCM and MP3
+// decoders the converter demuxes and decodes, and the AAC encoder it writes the recording with. The
+// last line is a codec descriptor — every ffmpeg carries those, and a program that registers no video
+// decoder and no video encoder is audio-only with that line in its list.
+var theAudioCodecLines = []string{
+	"D.A..S pcm_s16le            PCM signed 16-bit little-endian",
+	"D.A..S pcm_s16be            PCM signed 16-bit big-endian",
+	"D.A..S pcm_s24le            PCM signed 24-bit little-endian",
+	"D.A..S pcm_f32le            PCM 32-bit floating point little-endian",
+	"D.A..S pcm_mulaw            PCM mu-law",
+	"D.A..S pcm_alaw             PCM A-law",
+	"D.A.L. mp3float             MP3 (MPEG audio layer 3)",
+	"D.A.L. mp3                  MP3 (MPEG audio layer 3)",
+	".EA.L. aac                  AAC (Advanced Audio Coding)",
+	" ..VI.S 012v                Uncompressed 4:2:2 10-bit",
+}
+
+// theAudioCodecNames are the codecs the lines above register, in the order the program names them.
+var theAudioCodecNames = []string{
+	"pcm_s16le", "pcm_s16be", "pcm_s24le", "pcm_f32le", "pcm_mulaw", "pcm_alaw",
+	"mp3float", "mp3", "aac",
+}
+
+// aCodecRegistry is the answer ffmpeg gives `-codecs`: the legend, the separator, and the lines it is
+// given. The legend and the separator are the ones the pinned release prints, so the check reads the
+// answer the way the program prints it.
+func aCodecRegistry(lines ...string) []byte {
+	body := "Codecs:\n" +
+		" D..... = Decoding supported\n" +
+		" .E.... = Encoding supported\n" +
+		" ..V... = Video codec\n" +
+		" ..A... = Audio codec\n" +
+		" ..S... = Subtitle codec\n" +
+		" ..D... = Data codec\n" +
+		" ..T... = Attachment codec\n" +
+		" ...I.. = Intra frame-only codec\n" +
+		" ....L. = Lossy compression\n" +
+		" .....S = Lossless compression\n" +
+		" -------\n"
+
+	for _, line := range lines {
+		body += line + "\n"
+	}
+
+	return []byte(body)
+}
+
+// namesTheCodecProbe reports whether a command asks the program what it registers.
+func namesTheCodecProbe(argv []string) bool {
+	for _, arg := range argv {
+		if arg == "-codecs" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// The ffmpeg this project ships is compiled for audio: the recipe says --disable-everything and enables
+// audio components only. A pair that registers a video decoder or encoder is not that program, and the
+// check is the gate every pair passes through — the compiled pair inside the container that can run it,
+// and a supplied pair on the host that is its target.
+func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
+	stand := &aStandIn{codecs: []string{
+		"D.A.L. mp3                  MP3 (MPEG audio layer 3)",
+		"DEVIL. h264                 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+		"DEVIL. mpeg4                MPEG-4 part 2 (MPEG4) / ISO 14496-2",
+	}}
+
+	_, err := anFFMPEGCheck(t, stand.run)
+	if err == nil {
+		t.Fatal("the ffmpeg check accepted a program that registers video codecs")
+	}
+
+	for _, want := range []string{"h264", "mpeg4"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the failure %q does not name the video codec %s it found", err.Error(), want)
+		}
+	}
+
+	// The question is asked of the compiled program, inside the container the check runs it in: the
+	// refusal is about the pair the build is about to ship, and not about the machine the build stands on.
+	if !wasRun(stand.asked("/work/ffmpeg-9.0.2/ffmpeg"), "-codecs") {
+		t.Error("the check asked the machine it stands on what it registers, and not the compiled pair")
+	}
+}
+
+// The check asks the program what it registers, once, on the program it is proving: the compiled pair
+// answers inside its conformance container, and a supplied pair answers on the host that compiled it.
+func TestTheFFMPEGCheckAsksTheProgramWhatItRegisters(t *testing.T) {
+	stand := &aStandIn{}
+
+	if _, err := anFFMPEGCheck(t, stand.run); err != nil {
+		t.Fatalf("the ffmpeg check refused a working ffmpeg: %v", err)
+	}
+
+	asked := 0
+
+	for _, run := range stand.asked("/ffmpeg-9.0.2/ffmpeg") {
+		if strings.Contains(run, "-codecs") {
+			asked++
+		}
+	}
+
+	if asked != 1 {
+		t.Errorf("the check asked the program what it registers %d times, want once", asked)
+	}
+}
+
+// The proof records the codecs the pair registers, so the proof file says what the program is and not
+// only what it converted. The codec descriptors every ffmpeg carries are not codecs the program
+// registers: they decode and encode nothing.
+func TestTheFFMPEGCheckRecordsTheCodecsTheProgramRegisters(t *testing.T) {
+	report, err := anFFMPEGCheck(t, (&aStandIn{}).run)
+	if err != nil {
+		t.Fatalf("the ffmpeg check refused a working ffmpeg: %v", err)
+	}
+
+	if len(report.Codecs.Audio) != len(theAudioCodecNames) {
+		t.Errorf("the check recorded %v as the codecs the program registers, want %v", report.Codecs.Audio, theAudioCodecNames)
+	}
+
+	for _, want := range theAudioCodecNames {
+		if !aCodecNamed(report.Codecs.Audio, want) {
+			t.Errorf("the check does not record the %s the converter decodes and encodes with", want)
+		}
+	}
+
+	if len(report.Codecs.Video) != 0 {
+		t.Errorf("the check recorded video codecs %v for a program that registers none", report.Codecs.Video)
+	}
+}
+
+func aCodecNamed(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+
+	return false
 }
 
 func wasRun(runs []string, want string) bool {

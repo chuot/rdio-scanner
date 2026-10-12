@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"rdio-scanner/internal/application/ports"
@@ -117,10 +118,23 @@ type checkReport struct {
 	Shortest    float64
 	Longest     float64
 
+	// Codecs is what the program registers: the codecs it can decode and encode. The check is the one
+	// gate every pair passes through, so this is where the pair is proved to be the audio-only program
+	// the recipe says it is.
+	Codecs codecRegistry
+
 	// Productions is what each conversion produced, in the order the check ran them. The build prints
 	// the shortest and the longest of them; the proof a supplied pair is adopted on records every one,
 	// because that proof is the only evidence anybody has that a pair the build cannot run converts.
 	Productions []production
+}
+
+// codecRegistry is what a compiled ffmpeg registers: the codecs it can decode and encode, named. A
+// program that registers a video codec is not the program this project ships, and a program that
+// registers audio codecs is what the converter's argument list asks of it.
+type codecRegistry struct {
+	Audio []string `json:"audio"`
+	Video []string `json:"video"`
 }
 
 // production is one converted recording: what went in, which level of the converter made it, how big
@@ -193,7 +207,134 @@ func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkRepo
 		}
 	}
 
+	// The conversions prove the pair does the job. What the pair *is* is the other half of the promise,
+	// and it is asked here, on the machine that can run it, because this is the gate every pair passes
+	// through: the compiled pair inside the container that can run it, and a supplied pair on the host
+	// that compiled it.
+	codecs, err := theCodecsTheProgramRegisters(execute, programs)
+	if err != nil {
+		return report, err
+	}
+
+	if len(codecs.Video) > 0 {
+		return report, fmt.Errorf(
+			"the compiled ffmpeg registers video codecs: %s. This project ships an ffmpeg compiled for audio, and the recipe that produces it is internal/infrastructure/ffmpeg/bundle/manifest.json, which enables no video component",
+			strings.Join(codecs.Video, ", "),
+		)
+	}
+
+	report.Codecs = codecs
+
 	return report, nil
+}
+
+// theCodecsTheProgramRegisters asks the program what it registers. `ffmpeg -codecs` prints its legend,
+// a separator, and one line per codec: six flag columns — decoding, encoding, the type, intra-only,
+// lossy, lossless — and then the codec's name.
+//
+// A line with neither the decoding nor the encoding column set is a codec descriptor: the format-layer
+// metadata every ffmpeg carries, which decodes and encodes nothing. It is not a codec the program
+// registers, and it is not what the audio-only promise is about.
+func theCodecsTheProgramRegisters(execute command, programs checkPrograms) (codecRegistry, error) {
+	body, err := execute(starts(programs.FFmpeg, "-hide_banner", "-codecs"), nil)
+	if err != nil {
+		return codecRegistry{}, fmt.Errorf("the compiled ffmpeg would not say what it registers: %w", err)
+	}
+
+	codecs := codecRegistry{}
+	named := map[string]bool{}
+	listed := false
+
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.TrimSpace(line) == "-------" {
+			listed = true
+			continue
+		}
+
+		if !listed {
+			continue
+		}
+
+		flags, name, ok := aCodecLine(line)
+		if !ok {
+			continue
+		}
+
+		// A codec the program can neither decode nor encode is a descriptor, and registers nothing.
+		if flags[0] != 'D' && flags[1] != 'E' {
+			continue
+		}
+
+		if named[name] {
+			continue
+		}
+
+		named[name] = true
+
+		switch flags[2] {
+		case 'V':
+			codecs.Video = append(codecs.Video, name)
+		case 'A':
+			codecs.Audio = append(codecs.Audio, name)
+		}
+	}
+
+	if !listed {
+		return codecRegistry{}, fmt.Errorf(
+			"the compiled ffmpeg answered its codec probe with something that is not the codec list: %s",
+			firstLineOf(body),
+		)
+	}
+
+	if len(codecs.Audio) == 0 && len(codecs.Video) == 0 {
+		return codecRegistry{}, fmt.Errorf(
+			"the compiled ffmpeg answered its codec probe naming no codec it can decode or encode",
+		)
+	}
+
+	return codecs, nil
+}
+
+// codecFlagColumns is how many columns ffmpeg prints before every codec: decoding, encoding, the type,
+// intra-only, lossy, lossless. codecFlagAlphabet is the character each of those columns can hold.
+const (
+	codecFlagColumns  = 6
+	codecFlagAlphabet = "D.EVASTIL"
+)
+
+// aCodecLine reads one line of the codec list: the six flag columns and the codec's name. The legend
+// lines name one flag column and carry an `=` where a codec name would be, so they are not codec
+// lines, and a line whose flags are not flags is not one either.
+func aCodecLine(line string) (flags string, name string, ok bool) {
+	fields := strings.Fields(line)
+
+	if len(fields) < 2 || len(fields[0]) != codecFlagColumns {
+		return "", "", false
+	}
+
+	for _, flag := range fields[0] {
+		if !strings.Contains(codecFlagAlphabet, string(flag)) {
+			return "", "", false
+		}
+	}
+
+	if fields[1] == "=" {
+		return "", "", false
+	}
+
+	return fields[0], fields[1], true
+}
+
+// firstLineOf is the first line of what a program printed, which is what a refusal quotes when the
+// answer is not the answer the check asked for.
+func firstLineOf(body []byte) string {
+	line, _, _ := strings.Cut(string(body), "\n")
+
+	if trimmed := strings.TrimSpace(line); trimmed != "" {
+		return trimmed
+	}
+
+	return "(nothing)"
 }
 
 // theCheckConfirms the converted recording is the recording the server would have stored: the tags are

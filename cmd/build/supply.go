@@ -325,13 +325,14 @@ func nameOfMachine(machine uint16) string {
 // It lives in the build's transient tree, not in the bundle directory: the bundle directory is what a
 // server binary embeds, and a proof is the build's own business.
 type anFfmpegCheck struct {
-	Target      string       `json:"target"`
-	Host        string       `json:"host"`
-	FFmpeg      string       `json:"ffmpeg"`
-	FFProbe     string       `json:"ffprobe"`
-	Version     string       `json:"version"`
-	Checked     string       `json:"checked"`
-	Conversions []production `json:"conversions"`
+	Target      string        `json:"target"`
+	Host        string        `json:"host"`
+	FFmpeg      string        `json:"ffmpeg"`
+	FFProbe     string        `json:"ffprobe"`
+	Version     string        `json:"version"`
+	Checked     string        `json:"checked"`
+	Codecs      codecRegistry `json:"codecs"`
+	Conversions []production  `json:"conversions"`
 }
 
 func ffmpegCheckFile(repo string, target string) string {
@@ -386,6 +387,21 @@ func readFfmpegCheck(repo string, target string, ffmpegDigest string, ffprobeDig
 
 	if len(check.Conversions) == 0 {
 		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s names no conversions: the proof is the six conversions the check ran", target)
+	}
+
+	// The proof is recorded by the host that compiled the pair, and it is recorded by the build that
+	// asks the pair what it registers. A proof from a build that never asked is the proof of a pair
+	// nobody looked at, and a proof naming video codecs is that host telling the release it compiled a
+	// program this project does not ship.
+	if len(check.Codecs.Audio) == 0 {
+		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s names no codecs: run go run ./cmd/build ffmpeg-check %s again, which asks the pair what it registers", target, target)
+	}
+
+	if len(check.Codecs.Video) > 0 {
+		return anFfmpegCheck{}, fmt.Errorf(
+			"the ffmpeg check recorded for %s names video codecs: %s. This project ships an ffmpeg compiled for audio, and the recipe that produces it is internal/infrastructure/ffmpeg/bundle/manifest.json, which enables no video component",
+			target, strings.Join(check.Codecs.Video, ", "),
+		)
 	}
 
 	return check, nil
@@ -539,6 +555,7 @@ func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writ
 		FFProbe:     digests["ffprobe"],
 		Version:     version,
 		Checked:     time.Now().UTC().Format(time.RFC3339),
+		Codecs:      report.Codecs,
 		Conversions: report.Productions,
 	}
 
@@ -546,7 +563,8 @@ func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writ
 		return anFfmpegCheck{}, err
 	}
 
-	fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
+	fmt.Fprintf(stdout, "%-7s %d conversions, %d codecs, %s s to %s s\n", "check", report.Conversions,
+		len(report.Codecs.Audio),
 		strconv.FormatFloat(report.Shortest, 'f', 6, 64),
 		strconv.FormatFloat(report.Longest, 'f', 6, 64),
 	)

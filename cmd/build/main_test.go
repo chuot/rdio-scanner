@@ -860,6 +860,14 @@ func aNativeRun(t *testing.T, target string, failAt string) (*tool, *bytes.Buffe
 				return anFfmpegCheck{}, errors.New("the proof said no")
 			}
 
+			// The proof's own gate: the pair the compile produced registers a video codec, which is the
+			// program this project does not ship, said by the host that compiled it.
+			if failAt == "codecs" {
+				return anFfmpegCheck{}, errors.New(
+					"the compiled ffmpeg registers video codecs: h264, mpeg4. This project ships an ffmpeg compiled for audio, and the recipe that produces it is internal/infrastructure/ffmpeg/bundle/manifest.json, which enables no video component",
+				)
+			}
+
 			digests := map[string]string{}
 
 			for _, name := range []string{"ffmpeg", "ffprobe"} {
@@ -1008,6 +1016,52 @@ func TestTheNativeRunLeavesTheManifestAloneWhenTheProofFails(t *testing.T) {
 
 	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
 		t.Error("the licence text names a pair the proof refused")
+	}
+}
+
+// The proof is the gate every pair passes through, and the compile on the target's own host proves the pair
+// it just compiled with the same code the ffmpeg check uses: two gates would be two standards. A pair that
+// registers a video codec is refused on the host that compiled it, and the release adopts nothing from it —
+// no pin, no cache entry, no licence text, no archive.
+func TestTheNativeRunRefusesAPairThatRegistersVideoCodecs(t *testing.T) {
+	tl, out, seen, repo := aNativeRun(t, "macos-arm64", "codecs")
+
+	original := theManifestFile(t, repo)
+
+	_, err := tl.runFFmpeg(options{target: "macos-arm64"}, out)
+	if err == nil {
+		t.Fatal("the run adopted a pair that registers video codecs")
+	}
+
+	for _, want := range []string{"h264", "mpeg4"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the failure %q does not name the video codec %s the pair registers", err.Error(), want)
+		}
+	}
+
+	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+	if err != nil {
+		t.Fatalf("the manifest is not there to read: %v", err)
+	}
+
+	if !bytes.Equal(body, original) {
+		t.Error("the run pinned a pair that registers video codecs into the file the release reads")
+	}
+
+	if !sameWords(seen.ran, []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}) {
+		t.Errorf("the run did %v, and the codec probe is what refused the pair", seen.ran)
+	}
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "macos-arm64")
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		if aFileIsThere(paths.cachedProgram(name)) {
+			t.Errorf("the pair that registers video codecs is in the cache as %s", name)
+		}
+	}
+
+	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+		t.Error("the licence text names a pair that registers video codecs")
 	}
 }
 
