@@ -22,10 +22,12 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -65,10 +67,10 @@ const (
 	machOHeaderSize = 32
 
 	elfMagic        = "\x7fELF"
-	elf64Class      = 2 // EI_CLASS: 64-bit
-	elfFreeBSDOSABI = 9 // EI_OSABI: ELFOSABI_FREEBSD
+	elf64Class      = 2  // EI_CLASS: 64-bit
+	elfFreeBSDOSABI = 9  // EI_OSABI: ELFOSABI_FREEBSD
 	elfX8664Machine = 62 // e_machine: EM_X86_64
-	elfInterpSeg    = 3 // PT_INTERP: a program interpreter, which a static binary has no use for
+	elfInterpSeg    = 3  // PT_INTERP: a program interpreter, which a static binary has no use for
 
 	elfHeaderSize        = 64
 	elfProgramHeaderSize = 56
@@ -303,4 +305,141 @@ func nameOfMachine(machine uint16) string {
 	}
 
 	return fmt.Sprintf("0x%x", machine)
+}
+
+// The ffmpeg check is the gate this project already trusts, and for a supplied pair it is also the only
+// evidence it can have: the build cannot run a Mach-O or a FreeBSD program, so the check has to run on
+// the pair's own platform and leave a record the build can read.
+//
+// The record is specific so it cannot be reused: it names the target it ran for, both programs by
+// digest, the machine it ran on, and the six conversions it proved. A proof recorded for a pair the build
+// has since replaced is not a proof of that pair, and a proof recorded on a machine that is not the
+// target's is a proof of a program the release does not ship.
+//
+// It lives in the build's transient tree, not in the bundle directory: the bundle directory is what a
+// server binary embeds, and a proof is the build's own business.
+type anFfmpegCheck struct {
+	Target      string        `json:"target"`
+	Host        string        `json:"host"`
+	FFmpeg      string        `json:"ffmpeg"`
+	FFProbe     string        `json:"ffprobe"`
+	Version     string        `json:"version"`
+	Checked     string        `json:"checked"`
+	Conversions []aConversion `json:"conversions"`
+}
+
+// aConversion is one recording the check converted, with what ffprobe said about the result.
+type aConversion struct {
+	Input    string `json:"input"`
+	Mode     string `json:"mode"`
+	Bytes    int    `json:"bytes"`
+	Duration string `json:"duration"`
+}
+
+func ffmpegCheckFile(repo string, target string) string {
+	return filepath.Join(repo, ".build", "ffmpeg", "checks", target+".json")
+}
+
+// writeFfmpegCheck records the proof the check produced, named for the target it ran for.
+func writeFfmpegCheck(repo string, check anFfmpegCheck) error {
+	body, err := json.MarshalIndent(check, "", "  ")
+	if err != nil {
+		return fmt.Errorf("the ffmpeg check for %s cannot be recorded: %w", check.Target, err)
+	}
+
+	dir := filepath.Join(repo, ".build", "ffmpeg", "checks")
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("the ffmpeg check for %s cannot be recorded: %w", check.Target, err)
+	}
+
+	if err := os.WriteFile(ffmpegCheckFile(repo, check.Target), append(body, '\n'), 0644); err != nil {
+		return fmt.Errorf("the ffmpeg check for %s cannot be recorded: %w", check.Target, err)
+	}
+
+	return nil
+}
+
+// readFfmpegCheck reads the proof recorded for one target and requires it to be the proof of the pair the
+// build is adopting.
+func readFfmpegCheck(repo string, target string, ffmpegDigest string, ffprobeDigest string) (anFfmpegCheck, error) {
+	body, err := os.ReadFile(ffmpegCheckFile(repo, target))
+	if err != nil {
+		return anFfmpegCheck{}, fmt.Errorf("%s: %s", missingCheckFor(target), strings.Join(theChecksRecorded(repo), ", "))
+	}
+
+	var check anFfmpegCheck
+
+	if err := json.Unmarshal(body, &check); err != nil {
+		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s is not readable: %s: %v", target, ffmpegCheckFile(repo, target), err)
+	}
+
+	if check.Target != target {
+		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s names %s: a proof is evidence for the target it ran on and nothing else", target, check.Target)
+	}
+
+	if check.FFmpeg != ffmpegDigest || check.FFProbe != ffprobeDigest {
+		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s names the pair %s / %s and the pair here is %s / %s: the proof has to be recorded for the pair whose digest is adopted", target, check.FFmpeg, check.FFProbe, ffmpegDigest, ffprobeDigest)
+	}
+
+	if goos, _, _ := strings.Cut(check.Host, "-"); goos != serverGoos(target) {
+		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s ran on %s: run go run ./cmd/build ffmpeg-check %s on a %s host, where the pair runs", target, check.Host, target, target)
+	}
+
+	if len(check.Conversions) == 0 {
+		return anFfmpegCheck{}, fmt.Errorf("the ffmpeg check recorded for %s names no conversions: the proof is the six conversions the check ran", target)
+	}
+
+	return check, nil
+}
+
+// checkFfmpegCheckHost reports whether this machine is the host the ffmpeg check has to run on.
+//
+// The check runs the pair, so it runs where the pair runs. A check that quietly accepted a target it
+// cannot execute would leave a proof of nothing, and the build would have no way to tell that from a
+// pair that converts.
+func checkFfmpegCheckHost(target string) error {
+	tr, ok := targetFor(target)
+	if !ok {
+		return fmt.Errorf("%s is not a release target this project ships", target)
+	}
+
+	if tr.goos == runtime.GOOS && tr.goarch == runtime.GOARCH {
+		return nil
+	}
+
+	return fmt.Errorf("the ffmpeg check runs the pair, so it runs where the pair runs: run go run ./cmd/build ffmpeg-check %s on a %s host, and this machine is %s", target, target, runtimeTarget())
+}
+
+// missingCheckFor is what an operator is told when a supplied target has no proof, and the command that
+// produces one.
+func missingCheckFor(target string) string {
+	return fmt.Sprintf("the ffmpeg check was never run for %s: run go run ./cmd/build ffmpeg-check %s on a %s host, and carry the proof it writes to %s", target, target, target, ".build/ffmpeg/checks/"+target+".json")
+}
+
+// theChecksRecorded names the proofs that are in the tree, so a build handed the proof of the other
+// architecture says which proof it was handed.
+func theChecksRecorded(repo string) []string {
+	entries, err := os.ReadDir(filepath.Join(repo, ".build", "ffmpeg", "checks"))
+	if err != nil {
+		return []string{"no ffmpeg check has been recorded for any target"}
+	}
+
+	recorded := []string{}
+
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if filepath.Ext(name) != ".json" {
+			continue
+		}
+
+		recorded = append(recorded, "the proof recorded for "+strings.TrimSuffix(name, ".json"))
+	}
+
+	if len(recorded) == 0 {
+		return []string{"no ffmpeg check has been recorded for any target"}
+	}
+
+	return recorded
 }

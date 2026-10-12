@@ -394,6 +394,182 @@ func aStaticFreeBSDProgram(t *testing.T) aFreeBSDProgram {
 	}
 }
 
+// The proof is the only evidence a supplied pair converts audio: the build cannot run it. So the proof
+// names the pair it ran, the target it ran for, and the machine it ran on, and a proof that does not match
+// the pair being adopted is not a proof at all.
+func TestTheFfmpegCheckProofNamesThePairItRan(t *testing.T) {
+	repo := t.TempDir()
+
+	ffmpegDigest := strings.Repeat("a", 64)
+	ffprobeDigest := strings.Repeat("b", 64)
+
+	record := aCheckFor("macos-arm64", ffmpegDigest, ffprobeDigest)
+
+	if err := writeFfmpegCheck(repo, record); err != nil {
+		t.Fatalf("writeFfmpegCheck: %v", err)
+	}
+
+	got, err := readFfmpegCheck(repo, "macos-arm64", ffmpegDigest, ffprobeDigest)
+	if err != nil {
+		t.Fatalf("the proof the check recorded for its own pair was refused: %v", err)
+	}
+
+	if got.Target != "macos-arm64" {
+		t.Errorf("the proof names %s, want macos-arm64", got.Target)
+	}
+
+	if got.Host != record.Host {
+		t.Errorf("the proof names the host %s, want %s", got.Host, record.Host)
+	}
+
+	if got.FFmpeg != ffmpegDigest || got.FFProbe != ffprobeDigest {
+		t.Errorf("the proof names the pair %s / %s, want the digests it was recorded with", got.FFmpeg, got.FFProbe)
+	}
+
+	if len(got.Conversions) != 6 {
+		t.Errorf("the proof records %d conversions, want the six the check runs: %+v", len(got.Conversions), got.Conversions)
+	}
+
+	if got.Checked == "" || got.Version == "" {
+		t.Errorf("the proof names no ffmpeg version %q and no check time %q", got.Version, got.Checked)
+	}
+}
+
+// A proof is only worth what it proves about the pair in front of the build. A proof for another pair,
+// another target, another platform, or none at all, is a pair the build ships without evidence that it
+// converts anything, which is the promise the compiled targets do not make.
+func TestTheBuildRefusesAPairTheFfmpegCheckDidNotProve(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		record func(repo string)
+		rule   string
+	}{
+		{
+			name:   "no proof at all",
+			record: func(repo string) {},
+			rule:   "ffmpeg-check",
+		},
+		{
+			name: "a proof recorded for the other macOS architecture",
+			record: func(repo string) {
+				writeFfmpegCheck(repo, aCheckFor("macos-amd64", theFFmpegDigest, theFFProbeDigest))
+			},
+			rule: "macos-amd64",
+		},
+		{
+			name: "a proof recorded for a pair that has since been rebuilt",
+			record: func(repo string) {
+				writeFfmpegCheck(repo, aCheckFor("macos-arm64", strings.Repeat("9", 64), theFFProbeDigest))
+			},
+			rule: "digest",
+		},
+		{
+			name: "a proof that is not readable",
+			record: func(repo string) {
+				if err := os.MkdirAll(filepath.Dir(theCheckFile(repo, "macos-arm64")), 0755); err != nil {
+					t.Fatalf("making the checks directory: %v", err)
+				}
+
+				if err := os.WriteFile(theCheckFile(repo, "macos-arm64"), []byte("the maintainer says it works"), 0644); err != nil {
+					t.Fatalf("writing the proof: %v", err)
+				}
+			},
+			rule: "check",
+		},
+		{
+			name: "a proof recorded on another platform",
+			record: func(repo string) {
+				record := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+				record.Host = "linux-amd64"
+
+				writeFfmpegCheck(repo, record)
+			},
+			rule: "host",
+		},
+	} {
+		repo := t.TempDir()
+		tc.record(repo)
+
+		_, err := readFfmpegCheck(repo, "macos-arm64", theFFmpegDigest, theFFProbeDigest)
+		if err == nil {
+			t.Errorf("%s: the build adopted a pair with %s", tc.name, tc.name)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.rule) {
+			t.Errorf("%s: the failure %q does not name the %s it is missing", tc.name, err.Error(), tc.rule)
+		}
+	}
+}
+
+// The check runs the pair, so it runs where the pair runs. Asked for a target this machine is not, it
+// names the machine to run it on: a check that quietly skipped the pair it cannot execute would be a
+// proof of nothing, and the build would have no way to tell.
+func TestTheFfmpegCheckRefusesAHostThatIsNotItsTargets(t *testing.T) {
+	if err := checkFfmpegCheckHost("linux-amd64"); err != nil {
+		t.Errorf("the check refused the host it is standing on: %v", err)
+	}
+
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		err := checkFfmpegCheckHost(target)
+		if err == nil {
+			t.Errorf("the check accepted %s on a machine that is not a %s host", target, target)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), target) {
+			t.Errorf("the failure %q does not name the %s host to run it on", err.Error(), target)
+		}
+	}
+}
+
+// theCheckFile is where the proof for one target is kept, and theFFmpegDigest and theFFProbeDigest are
+// the pair a test is adopting, so a test can change one of them and say which one the proof named.
+func theCheckFile(repo string, target string) string {
+	return filepath.Join(repo, ".build", "ffmpeg", "checks", target+".json")
+}
+
+const (
+	theFFmpegDigest  = "1111111111111111111111111111111111111111111111111111111111111111"
+	theFFProbeDigest = "2222222222222222222222222222222222222222222222222222222222222222"
+)
+
+func aCheckFor(target string, ffmpegDigest string, ffprobeDigest string) anFfmpegCheck {
+	return anFfmpegCheck{
+		Target:  target,
+		Host:    aHostForTarget(target),
+		FFmpeg:  ffmpegDigest,
+		FFProbe: ffprobeDigest,
+		Version: "ffmpeg version 9.0.2 Copyright (c) 2000-2025 the FFmpeg developers",
+		Checked: "2026-10-12T09:00:00Z",
+		Conversions: []aConversion{
+			{Input: "wav", Mode: "plain", Bytes: 7675, Duration: "2.128000"},
+			{Input: "wav", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
+			{Input: "wav", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
+			{Input: "mp3", Mode: "plain", Bytes: 7756, Duration: "2.128000"},
+			{Input: "mp3", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
+			{Input: "mp3", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
+		},
+	}
+}
+
+func aHostForTarget(target string) string {
+	goos := "linux"
+
+	switch {
+	case strings.HasPrefix(target, "macos-"):
+		goos = "darwin"
+	case strings.HasPrefix(target, "freebsd-"):
+		goos = "freebsd"
+	case strings.HasPrefix(target, "windows-"):
+		goos = "windows"
+	}
+
+	goarch := strings.SplitN(target, "-", 2)[1]
+
+	return goos + "-" + goarch
+}
+
 // FreeBSD is the release target this project ships whose pair is built on FreeBSD itself, and the bundle's
 // rule for it is the rule the Linux targets have: the program the server writes out and runs needs
 // nothing installed on the host.
