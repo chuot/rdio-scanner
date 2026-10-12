@@ -28,19 +28,25 @@ import (
 // These are unit tests of the rule that decides whether a target carries a bundle. They are given a
 // directory they can see completely, so they say nothing about which target this machine happens to be.
 
+// A directory holding both programs is a bundle, whatever the way those programs came to be: the pair this
+// build compiles, and the pair the maintainer drops for a macOS or FreeBSD target, end up in the same
+// shape, and the server materializes both the same way.
 func TestARecordedTargetCarriesABundle(t *testing.T) {
-	files := fstest.MapFS{
-		"linux-arm64/ffmpeg.gz":  {Data: []byte("ffmpeg")},
-		"linux-arm64/ffprobe.gz": {Data: []byte("ffprobe")},
-	}
+	for _, dir := range []string{"linux-arm64", "macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		files := fstest.MapFS{
+			dir + "/ffmpeg.gz":  {Data: []byte("ffmpeg")},
+			dir + "/ffprobe.gz": {Data: []byte("ffprobe")},
+		}
 
-	found, ok := lookup(files, "linux-arm64")
-	if !ok {
-		t.Fatal("a target that carries both programs has no bundle")
-	}
+		found, ok := lookup(files, dir)
+		if !ok {
+			t.Errorf("%s holds both programs and has no bundle", dir)
+			continue
+		}
 
-	if found.Dir != "linux-arm64" {
-		t.Errorf("the bundle is for %s, want linux-arm64", found.Dir)
+		if found.Dir != dir {
+			t.Errorf("the bundle is for %s, want %s", found.Dir, dir)
+		}
 	}
 }
 
