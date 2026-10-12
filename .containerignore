@@ -7,6 +7,12 @@ dist/
 data-dev/
 testdata/
 
+# the build's own scratch: the ffmpeg source tarball, the container contexts it compiles in, the compiled
+# pairs it caches, and the pair and the proof the maintainer drops for a target this build compiles no
+# ffmpeg for. The server embeds the gzipped pair from
+# internal/infrastructure/ffmpeg/bundle/<target>/, which is copied; nothing the image runs with is in here.
+.build/
+
 # the client is built by `go run ./cmd/build client` before the image is built. The server embeds the
 # built bundles from internal/presentation/scanner/frontend/bundle/ and
 # internal/presentation/admin/frontend/bundle/, which are copied. The sources sit in the same folders as

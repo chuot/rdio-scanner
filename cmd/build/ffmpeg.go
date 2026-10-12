@@ -198,10 +198,10 @@ func ffmpegTarget(o options) string {
 
 // planFFmpeg decides what the ffmpeg phase does for one target.
 //
-// A target the manifest has no record for is not a failure: macOS and FreeBSD are release targets this
-// project ships with the ffmpeg their host installs, and the release matrix asks for them the same way
-// it asks for the covered ones. A target the manifest does have a record for is a promise, and a build
-// that cannot keep it says so instead of quietly producing a server that will do without.
+// A target the manifest has no record for is not a failure: it is a platform this project does not
+// compile an ffmpeg for at all, and the phase says so and builds nothing. A target the manifest does
+// have a record for is a promise, and a build that cannot keep it says so instead of quietly producing a
+// server that will do without.
 func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState) (ffmpegPlan, error) {
 	target := ffmpegTarget(o)
 

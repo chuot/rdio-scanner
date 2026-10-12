@@ -347,11 +347,11 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	s.logs = &loggedEvents{logs: logs, echo: echo}
 
 	// The ffmpeg this server converts with is the one compiled for the architecture this binary was
-	// built for, written out of the binary into the server's own folder. A server whose target carries
-	// none — macOS, FreeBSD, and a developer's plain go build — converts with the ffmpeg its host
-	// installs instead, which is what those deployments have always done. The ffprobe that measures
-	// the lengths of the recordings that conversion did not report travels the same decision: the
-	// pair the server carries, or the pair its host installs.
+	// built for, written out of the binary into the server's own folder. A server whose bundle produced
+	// nothing — a developer's plain go build, and a target whose pair was never built for it — converts
+	// with the ffmpeg its host installs instead, which is what those deployments have always done. The
+	// ffprobe that measures the lengths of the recordings that conversion did not report travels the same
+	// decision: the pair the server carries, or the pair its host installs.
 	converter, prober, notice := s.config.Converter(s.config.GetFFmpegDirPath())
 
 	s.converterNotice = notice

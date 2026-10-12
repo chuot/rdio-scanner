@@ -26,7 +26,9 @@ import (
 )
 
 // theHostFFmpeg is the ffmpeg a deployment installs for itself, which is what a server runs when its
-// own target carries none: macOS, FreeBSD, and every plain `go build` a developer runs.
+// own bundle produced nothing: a plain `go build` a developer runs, and a target whose pair was never
+// built for it. Every release archive carries its own pair, so a release deployment never takes this
+// branch.
 const theHostFFmpeg = "ffmpeg"
 
 // theHostFFprobe is the ffprobe that same deployment installs, measured the same way: the server

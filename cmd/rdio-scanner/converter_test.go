@@ -125,8 +125,9 @@ func TestTheServerConvertsWithTheFfmpegItCarriesInsideItsOwnBinary(t *testing.T)
 	}
 }
 
-// macOS, FreeBSD, and every plain go build a developer runs carry no ffmpeg of their own, and those
-// deployments convert with the ffmpeg their host installs, which is what they have always done.
+// A server whose bundle produced nothing — a plain go build a developer runs, and a target whose pair
+// was never built for it — converts with the ffmpeg its host installs, which is what those deployments
+// have always done.
 func TestAServerWhoseTargetCarriesNoFfmpegConvertsWithTheOneItsHostInstalls(t *testing.T) {
 	choice := theConverter("", "", "")
 

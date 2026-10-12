@@ -833,3 +833,52 @@ func TestTheGuideIsSmallEnoughToCarry(t *testing.T) {
 		t.Errorf("the guide measures %d bytes, over the %d byte budget", info.Size(), budget)
 	}
 }
+
+// The release matrix table is what an administrator reads to decide what a deployment runs, and the column
+// that says whether the archive carries its own ffmpeg is the reason a deployment installs nothing. Every
+// target this project releases carries one inside the program, and the guide has to say so for every row:
+// the pair this project's build compiles for the Linux and Windows targets, and the pair compiled on the
+// target's own platform and adopted by the release for the macOS and FreeBSD ones.
+func TestTheReleaseMatrixSaysEveryArchiveCarriesItsOwnFfmpeg(t *testing.T) {
+	const caption = "The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program; the macOS and FreeBSD pairs are compiled on the platform each target runs on, and the build adopts them into the release."
+
+	body := guidePath(t)
+
+	rows := regexp.MustCompile(`(?is)<tr><td>([^<]+)</td><td>([^<]+)</td><td><code>rdio-scanner-([a-z0-9-]+)-v[^<]*</code></td><td>([^<]+)</td></tr>`).
+		FindAllStringSubmatch(tableWithCaption(t, chapterOf(t, body, "ch-03-requirements"), caption), -1)
+
+	targets := releasedTargets(t)
+
+	if len(rows) != len(targets) {
+		t.Fatalf("the release matrix table carries %d rows, want the %d platforms this project releases", len(rows), len(targets))
+	}
+
+	for _, m := range rows {
+		word := m[3]
+
+		if _, recorded := targets[word]; !recorded {
+			t.Errorf("the release matrix table carries %s, which the manifest has no record for", word)
+		}
+
+		if strings.TrimSpace(m[4]) != "Yes" {
+			t.Errorf("the release matrix table says the %s archive carries %q where its own ffmpeg is asked about, want Yes", word, strings.TrimSpace(m[4]))
+		}
+	}
+}
+
+// releasedTargets is the target set the manifest records, which is the list the guide's table transcribes.
+func releasedTargets(t *testing.T) map[string]json.RawMessage {
+	t.Helper()
+
+	var manifest struct {
+		Targets map[string]json.RawMessage `json:"targets"`
+	}
+
+	body := repoFile(t, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+
+	if err := json.Unmarshal([]byte(body), &manifest); err != nil {
+		t.Fatalf("the manifest is not readable as json: %v", err)
+	}
+
+	return manifest.Targets
+}

@@ -253,7 +253,9 @@ func parseArgs(args []string) (options, error) {
 // system and a Go architecture, joined the way go names them. A word that does not fit is a mistake in
 // the command line, and refusing it here is cheaper than a build that goes the wrong way.
 //
-// A platform this project compiles no ffmpeg for still fits, and the ffmpeg phase says so.
+// A word the release matrix has no place for still fits this grammar, and the phase asked to build for
+// it says what it can do for that platform: the ffmpeg phase names the target it compiles nothing for,
+// and the release run refuses it as a platform this project does not release.
 func isTarget(word string) bool {
 	goos, goarch, found := strings.Cut(word, "-")
 	if !found {

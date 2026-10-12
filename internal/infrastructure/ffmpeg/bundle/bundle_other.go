@@ -26,9 +26,11 @@ import (
 	"io/fs"
 )
 
-// A target this project ships no ffmpeg for carries none, whatever is sitting in the bundle directories:
-// the platforms outside the release matrix, and every architecture of a release target whose pair this
-// build carries no way to embed.
+// A target outside the release matrix carries no ffmpeg at all, whatever is sitting in the bundle
+// directories: the architectures this project does not release, and every architecture of a release target
+// this build has no way to embed. A target this project does release carries the pair its own directory
+// holds, and a supplied target whose directory holds only the placeholder carries none, which the lookup
+// reports.
 func target() (fs.FS, string) {
 	return nil, ""
 }

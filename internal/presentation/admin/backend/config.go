@@ -628,8 +628,7 @@ func (admin *Admin) submittedConfiguration(ctx context.Context, submitted map[st
 // The legacy server already holds them and does not read anything here. This server's settings are the
 // ones its options store holds, and the sanctioned way to ask for them is the configuration read, which
 // reads the other sections as well. That is an extra read the legacy server does not do, and it is the
-// cost of not reaching into a store this package has no business reaching into; it is recorded as a
-// deviation in implementation.md.
+// price of not reaching into a store this package has no business reaching into.
 func (admin *Admin) currentOptions(ctx context.Context) (domain.Options, error) {
 	configuration, err := admin.config.Handle(ctx, application.GetConfigQuery{})
 	if err != nil {
