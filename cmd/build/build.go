@@ -63,7 +63,12 @@ type tool struct {
 	// ffmpeg produces the ffmpeg a server binary built here is going to carry. It is not one external
 	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
 	// through the converter's own argument list, and puts it where the server embeds it.
-	ffmpeg func(options, io.Writer) error
+	//
+	// It reports the target it has nothing to produce for: the three targets whose pair is compiled on
+	// their own platform are built by the maintainer, and a release run asked for one of them with
+	// nothing dropped for it has no ffmpeg to embed. That is not a failure, and the run that was asked
+	// for the whole matrix ships the archives whose ffmpeg it can produce.
+	ffmpeg func(options, io.Writer) (bool, error)
 
 	// checkFFmpeg proves the pair the maintainer dropped for one target, on the platform that target
 	// runs on, and records what it saw. It is not an external command and it builds nothing.
@@ -146,8 +151,17 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	// The ffmpeg is produced before the server is compiled, because the server embeds it: a server built
 	// before the ffmpeg its target carries exists is a server that quietly ships without one.
 	if o.buildsFFmpeg() {
-		if err := t.ffmpeg(o, stdout); err != nil {
+		skipped, err := t.ffmpeg(o, stdout)
+		if err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", subFFmpeg, err))
+		}
+
+		// The pair this target carries is compiled on its own platform and was not dropped for it, and
+		// the message the ffmpeg phase printed says where to drop it and what proves it. A server
+		// compiled now embeds no ffmpeg and converts with whatever the host happens to have, which is
+		// not what this target releases, so the run ends here, successfully, and compiles no binary.
+		if skipped {
+			return 0
 		}
 	}
 
@@ -201,24 +215,29 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 	return nil
 }
 
-// runDist builds the release for the targets the run was asked for: the whole matrix, or the one the
-// operator named. Each target's ffmpeg is produced before the server that embeds it, for the same
-// reason a single run produces its ffmpeg first.
+// runDist builds the release for the targets the run was asked for: the platform it is standing on, the
+// whole matrix when the whole matrix was asked for, or the one target the operator named. Each target's
+// ffmpeg is produced before the server that embeds it, for the same reason a single run produces its
+// ffmpeg first.
 //
 // A target whose ffmpeg fails ends the run and names the target it stopped at. A half matrix is not a
 // release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
 // to embed.
+//
+// A target whose pair is compiled on its own platform and was not dropped for it is not a failure, and
+// does not stop the targets after it: that pair is built by hand on a machine the release machine does
+// not control, and a run that stopped for it would ship nothing at all.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
-	// The target the operator named is kept apart from the target each iteration is building for. A
-	// loop that wrote the target it is building into the target the run was asked for would skip every
-	// target after the first.
-	requested := o.target
+	// The list is decided once, before any of it runs, so that a run asked for the machine it is
+	// standing on is refused before a single application is built, and not after the first archive.
+	targets, err := distTargets(o, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return fail(stdout, err)
+	}
 
-	for _, tr := range releaseTargets {
-		if requested != "" && requested != tr.targetWord() {
-			continue
-		}
-
+	for _, tr := range targets {
+		// The target each iteration is building for is written into the options the server step and the
+		// archive path are read from, because each target's binary is a different file.
 		o.target = tr.targetWord()
 
 		// The matrix writes one binary per target, so the default path is decided again for each one. A
@@ -227,8 +246,16 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			o.output = defaultOutputPath(o.target)
 		}
 
-		if err := t.ffmpeg(o, stdout); err != nil {
+		skipped, err := t.ffmpeg(o, stdout)
+		if err != nil {
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
+		}
+
+		// The message the ffmpeg phase printed for this target says where to drop the pair, what proves
+		// it, and what pins it. The run carries on to the targets whose ffmpeg it can produce, and ends
+		// successfully with the archives it wrote.
+		if skipped {
+			continue
 		}
 
 		// The binary for this target is current when it is newer than every file it is built from, and

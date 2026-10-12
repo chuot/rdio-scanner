@@ -20,7 +20,10 @@
 
 package main
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // releaseTarget is one platform the release matrix builds for.
 //
@@ -66,6 +69,41 @@ func targetFor(word string) (releaseTarget, bool) {
 	}
 
 	return releaseTarget{}, false
+}
+
+// distTargets is the list of platforms one release run walks, decided before any of it runs: the target
+// the operator named, every platform the matrix releases when the whole matrix was asked for, and the
+// release target of the machine running the run when neither was.
+//
+// The machine is asked by the operating system go builds for and the architecture it builds for, which
+// are not the words the release is named by: a machine running darwin is a macos release target, and the
+// archive it builds carries the macos name.
+//
+// A machine the project releases nothing for is refused naming the flag that asks for the matrix. A
+// release run that built nothing at all is not what a release run is for, and an operator standing on a
+// machine outside the matrix is building a release, not trying a build.
+func distTargets(o options, goos string, goarch string) ([]releaseTarget, error) {
+	if o.target != "" {
+		tr, found := targetFor(o.target)
+
+		if !found {
+			return nil, fmt.Errorf("%s is not a platform this project releases, so no archive is built for it", o.target)
+		}
+
+		return []releaseTarget{tr}, nil
+	}
+
+	if o.all {
+		return releaseTargets, nil
+	}
+
+	for _, tr := range releaseTargets {
+		if tr.goos == goos && tr.goarch == goarch {
+			return []releaseTarget{tr}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("this machine is %s-%s, which is no platform this project releases: build every platform this project releases with go run ./cmd/build dist --all", goos, goarch)
 }
 
 // serverGoos is the operating system go builds a target word for. A word the matrix has no place for is

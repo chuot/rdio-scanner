@@ -23,9 +23,12 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
 // The tool's whole job is to run the right commands in the right order with the resolved version in
@@ -64,10 +67,10 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 
 		// The ffmpeg phase is not one external command, so the stand-in records that it ran rather than
 		// what it ran. What it does is tested in ffmpeg_test.go.
-		ffmpeg: func(o options, stdout io.Writer) error {
+		ffmpeg: func(o options, stdout io.Writer) (bool, error) {
 			ran = append(ran, step{label: subFFmpeg, result: o.target})
 
-			return nil
+			return false, nil
 		},
 
 		// The ffmpeg check is not an external command either: it runs the pair through the converters
@@ -299,13 +302,14 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 	}
 }
 
-// A release run builds the applications once, because the bundles are the same for every target, and
-// then each target's ffmpeg before the server that embeds it. The order is the same reason a single run
-// has it: a server built before the ffmpeg its target carries exists is a server that ships without one.
+// A release run asked for the whole matrix builds the applications once, because the bundles are the same
+// for every target, and then each target's ffmpeg before the server that embeds it. The order is the same
+// reason a single run has it: a server built before the ffmpeg its target carries exists is a server that
+// ships without one.
 func TestADistRunBuildsTheApplicationsOnceAndThenEachTarget(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
-	if code := tl.run([]string{"dist"}, io.Discard); code != 0 {
+	if code := tl.run([]string{"dist", "--all"}, io.Discard); code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
@@ -356,21 +360,22 @@ func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
 
 // A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
 // after it are not built: a half matrix is not a release, and a run that carried on would leave an
-// archive directory with a server in it and no ffmpeg to embed.
+// archive directory with a server in it and no ffmpeg to embed. This is the promise the compiled targets
+// keep, and it is not the way a supplied pair that was never dropped is treated.
 func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	tl.ffmpeg = func(o options, stdout io.Writer) error {
+	tl.ffmpeg = func(o options, stdout io.Writer) (bool, error) {
 		if o.target == "linux-arm" {
-			return errors.New("the ffmpeg for linux-arm said no")
+			return false, errors.New("the ffmpeg for linux-arm said no")
 		}
 
 		*ran = append(*ran, step{label: subFFmpeg, result: o.target})
 
-		return nil
+		return false, nil
 	}
 
-	if code := tl.run([]string{"dist"}, out); code != 1 {
+	if code := tl.run([]string{"dist", "--all"}, out); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
 
@@ -399,6 +404,121 @@ func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("the run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
+
+// A release run that named no target and asked for no matrix builds the archive for the platform it is
+// standing on: the run a developer does to try what they just built is one archive, not eight cross-builds.
+func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"dist"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg " + runtimeTarget(),
+		"server " + defaultOutputPath(runtimeTarget()),
+		"archive " + archivePath(runtimeTarget(), "8.0.0"),
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the release run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
+
+// skipsSuppliedPairs makes the stand-in answer the way the ffmpeg phase answers for a target whose pair
+// the maintainer never dropped: the message names the target, the directory to drop the pair in, and the
+// command that proves it, and the target is reported as skipped.
+func skipsSuppliedPairs(tl *tool, ran *[]step) {
+	tl.ffmpeg = func(o options, stdout io.Writer) (bool, error) {
+		record, found := bundle.ReadManifest().Targets[o.target]
+
+		if found && record.Produced == suppliedProduction {
+			fmt.Fprintf(stdout, "%-7s the ffmpeg for %s was not supplied: drop ffmpeg and ffprobe in internal/infrastructure/ffmpeg/bundle/%s, prove them with go run ./cmd/build ffmpeg-check %s\n",
+				subFFmpeg, o.target, o.target, o.target)
+
+			return true, nil
+		}
+
+		*ran = append(*ran, step{label: subFFmpeg, result: o.target})
+
+		return false, nil
+	}
+}
+
+// A supplied pair that was not dropped is not a failure. The three pairs are built on three machines the
+// release machine does not control, and a run that stopped for the one it does not have would ship nothing
+// at all — not the five archives it could have shipped, and not the two it was told to build. The run says
+// which target it skipped and what would have made it buildable, ships the rest, and ends successfully.
+func TestADistRunSkipsASuppliedTargetWhosePairWasNotDropped(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	skipsSuppliedPairs(tl, ran)
+
+	if code := tl.run([]string{"dist", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0: a release run missing one supplied pair ships the rest", code)
+	}
+
+	for _, target := range []string{"freebsd-amd64", "macos-amd64", "macos-arm64"} {
+		for _, want := range []string{
+			"the ffmpeg for " + target + " was not supplied",
+			"internal/infrastructure/ffmpeg/bundle/" + target,
+			"ffmpeg-check " + target,
+		} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("the run's output does not say %q, which is what tells the operator how to make %s buildable", want, target)
+			}
+		}
+	}
+
+	archives := 0
+
+	for _, s := range *ran {
+		if s.label == subArchive {
+			archives++
+		}
+
+		for _, target := range []string{"freebsd-amd64", "macos-amd64", "macos-arm64"} {
+			if strings.Contains(s.result, target) {
+				t.Errorf("%s ran for %s, a target the release run skipped", s.label, s.result)
+			}
+		}
+	}
+
+	if archives != 5 {
+		t.Errorf("the run wrote %d archives, want the five of the targets this build compiles an ffmpeg for", archives)
+	}
+}
+
+// A release run asked for one supplied target with nothing dropped for it warns, skips, and writes no
+// archive: an archive whose server carries no ffmpeg is the thing the bundle exists to prevent, and the
+// operator is told what would have made it buildable.
+func TestADistRunForASuppliedTargetWithNoPairProducesNoArchive(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	skipsSuppliedPairs(tl, ran)
+
+	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	for _, s := range *ran {
+		if s.label == subArchive || s.label == subServer {
+			t.Errorf("%s ran for %s, a target whose pair was never supplied", s.label, s.result)
+		}
+	}
+
+	if !strings.Contains(out.String(), "macos-arm64") {
+		t.Errorf("the run's output %q does not name the target it skipped", out.String())
 	}
 }
 

@@ -65,6 +65,11 @@ type options struct {
 	// from one machine. An empty one is the target this tool is running on.
 	target string
 
+	// all says the operator asked for the whole release matrix. A release run that does not ask for it
+	// builds the platform it is standing on: the archive a developer builds to try what they built is
+	// the one their own machine runs, and the eight-target matrix is a release, which is a deliberate act.
+	all bool
+
 	// installClients is decided by the tool looking at the tree, not by the operator: a first run
 	// on a fresh clone has no esbuild to build with.
 	installClients bool
@@ -147,6 +152,31 @@ func parseArgs(args []string) (options, error) {
 
 			o.output = args[i]
 			o.outputNamed = true
+
+		case "--all":
+			// The whole matrix is a release, and a release is a deliberate act, so the flag that asks
+			// for it belongs to the release run and to nothing else: a client run, a clean run, and a
+			// container image are all one machine's business, and have no matrix to walk.
+			if o.sub != subDist {
+				if o.sub == "" {
+					return options{}, fmt.Errorf("--all is the release matrix, and a run that names no command builds this machine's whole tree: go run ./cmd/build dist --all builds every platform this project releases")
+				}
+
+				return options{}, fmt.Errorf("--all is the release matrix, and %s is not it: go run ./cmd/build dist --all builds every platform this project releases", o.sub)
+			}
+
+			// The flag names every platform and a target names one, and the two are not one request.
+			// The check is made looking forward as well as behind, so that the refusal names the
+			// command line the operator typed and not the order the words happened to arrive in.
+			if o.target != "" {
+				return options{}, fmt.Errorf("--all builds every platform this project releases, and %s is one of them: name one target or --all, not both", o.target)
+			}
+
+			if i+1 < len(args) && isTarget(args[i+1]) {
+				return options{}, fmt.Errorf("--all builds every platform this project releases, and %s is one of them: name one target or --all, not both", args[i+1])
+			}
+
+			o.all = true
 
 		case subClient, subScanner, subAdmin, subFFmpeg, subFFmpegCheck, subServer, subVersion, subDist, subClean, subContainer:
 			if o.sub != "" {

@@ -588,7 +588,12 @@ func fetchSource(src ffmpegSource) error {
 }
 
 // runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
-func (t tool) runFFmpeg(o options, stdout io.Writer) error {
+//
+// It reports the targets it has nothing to produce for: the three whose pair is compiled on its own
+// platform. A target of that kind with nothing dropped for it is skipped, and the caller decides what a
+// skipped target means for the run — the release run ships the archives it can ship, and a run that
+// compiles one binary compiles none.
+func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
 	podman, err := t.resolve("podman")
@@ -607,7 +612,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 
 	plan, err := planFFmpeg(o, t.repo, manifest, state)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if plan.Says != "" {
@@ -620,24 +625,24 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 
 	if len(plan.Steps) > 0 {
 		if err := prepareFFmpeg(plan.Paths); err != nil {
-			return err
+			return false, err
 		}
 
 		if plan.Source.Fetch {
 			fmt.Fprintf(stdout, "%-7s %s\n", "fetch", plan.Source.URL)
 
 			if err := fetchSource(plan.Source); err != nil {
-				return err
+				return false, err
 			}
 		}
 
 		if err := checkSource(plan.Source.Path, manifest); err != nil {
-			return err
+			return false, err
 		}
 
 		for _, s := range plan.Steps {
 			if err := t.execute(s); err != nil {
-				return fmt.Errorf("%s: %w", s.label, err)
+				return false, fmt.Errorf("%s: %w", s.label, err)
 			}
 
 			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
@@ -645,7 +650,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 
 		report, err := t.runFFMPEGCheck(podman, plan, manifest, record, target)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
@@ -654,7 +659,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 		)
 
 		if err := gzipCompiled(plan.Paths, manifest, target); err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -662,43 +667,42 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) error {
 	// release archive carries do not depend on whether the cache was warm.
 	if covered {
 		if err := publishFFmpeg(plan.Paths, manifest, target, ffmpegLicence(manifest, target)); err != nil {
-			return err
+			return false, err
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
 	}
 
-	return nil
+	return false, nil
 }
 
 // runSuppliedFFmpeg does the work of a target this build compiles no ffmpeg for: nothing to fetch, nothing
 // to compile, nothing to run, and no container to build.
 //
-// A target whose pair was not dropped is skipped, and that is the whole of it: the message the plan
-// printed says where to drop the pair, what proves it, and what pins it. The release run goes on and
-// ships the archives it can ship.
-func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) error {
+// A target whose pair was not dropped is reported as skipped, and that is the whole of it: the message the
+// plan printed says where to drop the pair, what proves it, and what pins it.
+func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Skipped {
-		return nil
+		return true, nil
 	}
 
 	// A warm cache is the pinned pair, and the drop has already been consumed out of the directory:
 	// there is nothing to adopt, and publishing from the cache is what makes the archive.
 	if plan.Check.Target == target {
 		if err := adoptSuppliedFFmpeg(plan.Paths, target); err != nil {
-			return err
+			return false, err
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", "adopt", plan.Paths.cached)
 	}
 
 	if err := publishFFmpeg(plan.Paths, manifest, target, suppliedFFMpegLicence(manifest, target, plan.Check)); err != nil {
-		return err
+		return false, err
 	}
 
 	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
 
-	return nil
+	return false, nil
 }
 
 // prepareFFmpeg makes the directories the phase writes into. The scratch directory is emptied by the

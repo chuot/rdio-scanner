@@ -215,6 +215,63 @@ func TestTheFfmpegCheckNamesTheTargetItProves(t *testing.T) {
 	}
 }
 
+// A release run builds the platform it is standing on: the archive a developer builds to try the build is
+// the one their own machine runs, and the eight-target matrix is a release, which is a deliberate act.
+// Asking for the matrix and naming one target at the same time is a command line whose two halves ask for
+// different numbers of archives.
+func TestDistBuildsThePlatformItIsRunOnUnlessTheWholeMatrixIsAskedFor(t *testing.T) {
+	o, err := parseArgs([]string{"dist"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	if o.all {
+		t.Error("dist alone asks for the whole matrix, and the machine running it is one platform")
+	}
+
+	if o.target != "" {
+		t.Errorf("dist alone names %s, and the machine running it decides the target", o.target)
+	}
+
+	o, err = parseArgs([]string{"dist", "--all"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	if !o.all {
+		t.Error("dist --all does not ask for the whole matrix")
+	}
+
+	o, err = parseArgs([]string{"dist", "linux-arm64"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	if o.all {
+		t.Error("dist linux-arm64 asks for the whole matrix, and one target was named")
+	}
+
+	if o.target != "linux-arm64" {
+		t.Errorf("dist builds %s, want linux-arm64", o.target)
+	}
+
+	for _, args := range [][]string{
+		{"dist", "--all", "linux-arm64"},
+		{"dist", "linux-arm64", "--all"},
+		{"--all"},
+		{"ffmpeg", "--all"},
+		{"server", "--all"},
+		{"client", "--all"},
+		{"container", "--all"},
+		{"clean", "--all"},
+		{"version", "--all"},
+	} {
+		if _, err := parseArgs(args); err == nil {
+			t.Errorf("%v is a command line this tool honours, and it is not one", args)
+		}
+	}
+}
+
 // The ffmpeg is the one thing this tool builds for a platform the operator names. The platform has to
 // be the word right after it, so that a target left lying at the end of a command line is refused
 // instead of quietly building something else.

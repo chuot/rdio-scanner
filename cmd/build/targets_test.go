@@ -204,7 +204,7 @@ func TestADistRunBuildsTheTargetItIsAskedFor(t *testing.T) {
 	}
 
 	if o.target != "" {
-		t.Errorf("a dist run that named no target builds for %q, want the whole matrix", o.target)
+		t.Errorf("a dist run that named no target names %s, and the machine running it decides the target", o.target)
 	}
 
 	o, err = parseArgs([]string{"dist", "linux-arm64"})
@@ -215,6 +215,69 @@ func TestADistRunBuildsTheTargetItIsAskedFor(t *testing.T) {
 	if o.target != "linux-arm64" {
 		t.Errorf("the dist run builds for %q, want linux-arm64", o.target)
 	}
+}
+
+// The list a release run walks is decided once, before any of it runs: the target the operator named,
+// every platform the matrix releases when the whole matrix was asked for, and the release target of the
+// machine running it when neither was. A machine the project releases nothing for is refused naming the
+// flag that asks for the matrix, because building nothing at all is not what a release run is for.
+func TestTheDistTargetListIsTheNamedTargetTheMatrixOrTheMachine(t *testing.T) {
+	named, err := distTargets(options{target: "windows-amd64"}, "linux", "arm64")
+	if err != nil {
+		t.Fatalf("distTargets: %v", err)
+	}
+
+	if len(named) != 1 || named[0].targetWord() != "windows-amd64" {
+		t.Errorf("dist windows-amd64 walks %v, want windows-amd64 alone", targetWords(named))
+	}
+
+	matrix, err := distTargets(options{all: true}, "linux", "arm64")
+	if err != nil {
+		t.Fatalf("distTargets: %v", err)
+	}
+
+	if len(matrix) != len(releaseTargets) {
+		t.Errorf("dist --all walks %d targets, want the whole matrix of %d", len(matrix), len(releaseTargets))
+	}
+
+	machine, err := distTargets(options{}, "linux", "arm64")
+	if err != nil {
+		t.Fatalf("distTargets: %v", err)
+	}
+
+	if len(machine) != 1 || machine[0].targetWord() != "linux-arm64" {
+		t.Errorf("dist walks %v, want the release target of the machine running it", targetWords(machine))
+	}
+
+	// The macOS name is not the operating system go builds it for: a machine running darwin is a
+	// macos release target, and the archive it builds is named for macos.
+	apple, err := distTargets(options{}, "darwin", "arm64")
+	if err != nil {
+		t.Fatalf("distTargets: %v", err)
+	}
+
+	if len(apple) != 1 || apple[0].targetWord() != "macos-arm64" {
+		t.Errorf("on darwin-arm64, dist walks %v, want macos-arm64", targetWords(apple))
+	}
+
+	_, err = distTargets(options{}, "plan9", "riscv")
+	if err == nil {
+		t.Fatal("dist accepted a machine this project releases nothing for, and built nothing at all")
+	}
+
+	if !strings.Contains(err.Error(), "--all") {
+		t.Errorf("the refusal %q does not name the flag that asks for the matrix", err.Error())
+	}
+}
+
+func targetWords(targets []releaseTarget) []string {
+	words := []string{}
+
+	for _, tr := range targets {
+		words = append(words, tr.targetWord())
+	}
+
+	return words
 }
 
 // A target outside the matrix is a mistake in the command line, and refusing it here names the target
