@@ -687,12 +687,15 @@ footer.site .signoff {
 
   <p>
     Every release carries the ffmpeg the audio conversion uses, embedded in the binary, so conversion works
-    with nothing to install. The Linux and Windows archives carry the pair this project's build compiles, in
-    a container, from the source release its manifest pins. The macOS and FreeBSD archives carry a pair
-    compiled on the platform each target runs on, and on that platform this build compiles it on the machine
-    that is the target: one command there, <code>go run ./cmd/build ffmpeg</code>, compiles the pair, proves
-    it, pins it in the manifest, and adopts it into the release. A pair built by hand is adopted the same
-    way — dropped in the target's bundle directory, proved there with
+    with nothing to install. The pair is compiled for audio: the recipe disables every component and enables
+    the audio demuxers, decoders, encoder, muxers and filters this server converts with, and the pipe, fd and
+    file protocols a recording arrives and leaves on, so no video codec, decoder, or encoder, and no network
+    protocol, is compiled into it. The Linux and Windows archives carry the pair this project's build
+    compiles, in a container, from the source release its manifest pins. The macOS and FreeBSD archives carry
+    a pair compiled on the platform each target runs on, and on that platform this build compiles it on the
+    machine that is the target: one command there, <code>go run ./cmd/build ffmpeg</code>, compiles the pair,
+    proves it, pins it in the manifest, and adopts it into the release. A pair built by hand is adopted the
+    same way — dropped in the target's bundle directory, proved there with
     <code>go run ./cmd/build ffmpeg-check &lt;target&gt;</code>, and pinned with the digests it prints —
     and the build adopts a supplied pair on the digest the manifest pins, on the shape of the two programs,
     and on the proof its ffmpeg check left on that platform. The <code>FFMPEG.txt</code> beside the program
@@ -893,11 +896,13 @@ go run ./cmd/build container  # the container image, locally</code></pre>
   </p>
 
   <p>
-    Every one of the eight builds carries its own ffmpeg. The build compiles the five Linux and Windows
-    pairs itself, in a container, from the source release its manifest pins. The macOS and FreeBSD pairs
-    are compiled on the platform each target runs on, and on that platform the build compiles them itself:
-    <code>go run ./cmd/build ffmpeg</code> there compiles the pair, proves it, pins it, and adopts it, and
-    the archive you build on that machine carries it. The machine that produces the releases runs neither
+    Every one of the eight builds carries its own ffmpeg, compiled for audio: the recipe the build tells
+    the source disables every component and enables the audio components this server converts with, and the
+    proof that pair passes through refuses a pair that registers a video codec. The build compiles the five
+    Linux and Windows pairs itself, in a container, from the source release its manifest pins. The macOS and
+    FreeBSD pairs are compiled on the platform each target runs on, and on that platform the build compiles
+    them itself: <code>go run ./cmd/build ffmpeg</code> there compiles the pair, proves it, pins it, and
+    adopts it, and the archive you build on that machine carries it. The machine that produces the releases runs neither
     program, so a release run there skips those targets and ships the five archives it can ship, saying
     what would have made the rest buildable. A pair you build by hand is adopted too: drop ffmpeg and
     ffprobe in the target's bundle directory, prove them there with
@@ -3335,9 +3340,9 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   <p>
     The macOS archive is <code>rdio-scanner-macos-amd64-v&lt;version&gt;.zip</code> for an Intel machine
     and <code>rdio-scanner-macos-arm64-v&lt;version&gt;.zip</code> for an Apple one. Both carry their own
-    <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled on a macOS machine for the
-    architecture they run on, so nothing has to be installed on the host for recordings to convert. A
-    macOS pair is compiled with macOS's own compiler and linker, so this build compiles it on the machine
+    <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio on a macOS machine
+    for the architecture they run on, so nothing has to be installed on the host for recordings to convert.
+    A macOS pair is compiled with macOS's own compiler and linker, so this build compiles it on the machine
     that is the target: <code>go run ./cmd/build ffmpeg</code> on that Mac compiles the pair, proves it,
     pins it, and adopts it. The machine that produces the releases runs neither program, which is why a
     release run there skips these targets and ships the five archives it can ship. The archive's
@@ -3368,11 +3373,11 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
 
   <p>
     The FreeBSD archive is <code>rdio-scanner-freebsd-amd64-v&lt;version&gt;.zip</code>. The FreeBSD build
-    carries its own <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled on a FreeBSD
-    machine, so nothing has to be installed on the host for recordings to convert. This build compiles it
-    on the machine that is the target — <code>go run ./cmd/build ffmpeg</code> on that box, running
-    <code>gmake</code> because ffmpeg's build asks for GNU make and FreeBSD's base make is not it — and
-    the archive's <code>FFMPEG.txt</code> names the host that compiled it, the digests the release pins,
+    carries its own <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio on
+    a FreeBSD machine, so nothing has to be installed on the host for recordings to convert. This build
+    compiles it on the machine that is the target — <code>go run ./cmd/build ffmpeg</code> on that box,
+    running <code>gmake</code> because ffmpeg's build asks for GNU make and FreeBSD's base make is not it —
+    and the archive's <code>FFMPEG.txt</code> names the host that compiled it, the digests the release pins,
     and the date the build's ffmpeg check ran.
   </p>
 
@@ -3845,11 +3850,11 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     <li>
       <strong>The conversion mode.</strong> The four modes decide what the server does to an incoming
       recording. A mode that converts with ffmpeg needs ffmpeg: every release build carries it inside the
-      program, the five Linux and Windows pairs compiled by this project's build in a container, and the
-      macOS and FreeBSD pairs compiled by this build on the machines that are their targets, with the one
-      command chapter 4 lists. A program built with plain <code>go build</code> carries none. A deployment
-      whose converter is missing says so on the console at startup, and the notice is worth
-      reading on every new release.
+      program, compiled for audio, the five Linux and Windows pairs compiled by this project's build in a
+      container, and the macOS and FreeBSD pairs compiled by this build on the machines that are their
+      targets, with the one command chapter 4 lists. A program built with plain <code>go build</code>
+      carries none. A deployment whose converter is missing says so on the console at startup, and the
+      notice is worth reading on every new release.
     </li>
     <li>
       <strong>The format the recorder writes.</strong> The server converts what it can; a recorder writing
@@ -3988,10 +3993,10 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <p>
     You do not, for the deployment. Every release build carries its own <code>ffmpeg</code> and
-    <code>ffprobe</code> inside the program: the Windows amd64 build, the Linux builds for 386, ARM, ARM64
-    and amd64, and the macOS and FreeBSD builds, whose pairs this build compiles on those platforms with
-    the one command <code>go run ./cmd/build ffmpeg</code> and adopts into the release. The container image
-    is built from the linux-amd64 bundle. Install ffmpeg on the host only
+    <code>ffprobe</code> inside the program, compiled for audio: the Windows amd64 build, the Linux builds
+    for 386, ARM, ARM64 and amd64, and the macOS and FreeBSD builds, whose pairs this build compiles on
+    those platforms with the one command <code>go run ./cmd/build ffmpeg</code> and adopts into the release.
+    The container image is built from the linux-amd64 bundle. Install ffmpeg on the host only
     for a program you built yourself with plain <code>go build</code>, which carries none, and read the
     notice the server prints at startup, which is the program telling you which converter it found.
     <a href="#ch-03-requirements">Chapter 3</a> is the requirements chapter.
@@ -4271,15 +4276,17 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <p>
     Every release build carries <code>ffmpeg</code> and <code>ffprobe</code> inside the program, and the
     archive carries <code>FFMPEG.txt</code> beside it: the licence terms of the components the build embeds,
-    and what the pair is. For the Linux and Windows builds it names the source release, the digest, the
-    configure recipe and the command that produced it, all reproducible from this project's own repository.
-    For the macOS and FreeBSD builds it names the host that compiled it — this build, on the machine that
-    is the target, running the same trimmed build from the same source release the manifest pins, or a pair
-    the project's maintainer compiled there and this build adopted — the two program digests the release
-    pins, and the date the build's ffmpeg check ran for that pair on that platform. A deployment that
-    installs ffmpeg on the host — which a release deployment has no reason to do, and a program you built
-    yourself with plain <code>go build</code> is the one case that needs it — takes the licence the package
-    it installs carries.
+    and what the pair is. It says the pair is compiled for audio — no video codec, decoder, or encoder, and
+    no network protocol is compiled into it — and for a pair the build adopted, it names the codecs the
+    proof recorded on the host that compiled that pair. For the Linux and Windows builds it names the source
+    release, the digest, the configure recipe and the command that produced it, all reproducible from this
+    project's own repository. For the macOS and FreeBSD builds it names the host that compiled it — this
+    build, on the machine that is the target, running the same trimmed build from the same source release
+    the manifest pins, or a pair the project's maintainer compiled there and this build adopted — the two
+    program digests the release pins, and the date the build's ffmpeg check ran for that pair on that
+    platform. A deployment that installs ffmpeg on the host — which a release deployment has no reason to
+    do, and a program you built yourself with plain <code>go build</code> is the one case that needs it —
+    takes the licence the package it installs carries.
   </p>
 
   <h3>Support</h3>

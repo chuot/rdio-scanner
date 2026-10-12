@@ -900,6 +900,71 @@ func words(body string) string {
 // What the guide has to stop doing is listing the compile's own steps as the operator's ritual, because
 // the build runs them, and a guide that tells an operator to run them invites a pair the release adopts
 // on nothing.
+// The pair every release carries is compiled for audio: the recipe disables every component and enables
+// the audio components the converter asks of ffmpeg, and the build's proof refuses a pair that registers
+// a video codec. An operator decides what to install, and what to do when a conversion fails, from
+// chapters that say what the program they are installing carries, so the statement is pinned where they
+// read it: the requirements chapter, the installation chapter, the service sections, the troubleshooting
+// entry, the FAQ answer, and the licence appendix.
+func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
+	body := guidePath(t)
+
+	places := []struct {
+		chapter string
+		need    []string
+	}{
+		{
+			chapter: "ch-03-requirements",
+			need: []string{
+				"compiled for audio",
+				"no video codec, decoder, or encoder, and no network protocol",
+			},
+		},
+		{
+			chapter: "ch-04-installation",
+			need: []string{
+				"compiled for audio",
+				"refuses a pair that registers a video codec",
+			},
+		},
+		{
+			chapter: "ch-21-running-as-a-service",
+			need: []string{
+				"compiled for audio",
+			},
+		},
+		{
+			chapter: "ch-25-troubleshooting",
+			need: []string{
+				"compiled for audio",
+			},
+		},
+		{
+			chapter: "ch-26-faq",
+			need: []string{
+				"compiled for audio",
+			},
+		},
+		{
+			chapter: "ch-27-reference",
+			need: []string{
+				"no video codec, decoder, or encoder, and no network protocol",
+				"the codecs the proof recorded",
+			},
+		},
+	}
+
+	for _, p := range places {
+		text := words(chapterOf(t, body, p.chapter))
+
+		for _, want := range p.need {
+			if !strings.Contains(text, want) {
+				t.Errorf("the guide's chapter %q never says %q", p.chapter, want)
+			}
+		}
+	}
+}
+
 func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.T) {
 	body := guidePath(t)
 
