@@ -72,6 +72,25 @@ func targetFor(word string) (releaseTarget, bool) {
 	return releaseTarget{}, false
 }
 
+// releaseTargetWordFor is the release target a machine belongs to, named the way the release names it.
+//
+// The two names are not one word: go builds a macOS binary for darwin, and the release is named macos, so
+// a machine named by the name go builds it for asks the manifest about a target this project has no record
+// for. The matrix is what says which release target a machine is.
+//
+// A machine the matrix has no entry for keeps the two words joined the way go names them: a hand-named
+// target is built for the platform its own name names, and the phase asked to build for it says what it
+// can do there.
+func releaseTargetWordFor(goos string, goarch string) string {
+	for _, tr := range releaseTargets {
+		if tr.goos == goos && tr.goarch == goarch {
+			return tr.targetWord()
+		}
+	}
+
+	return goos + "-" + goarch
+}
+
 // distTargets is the list of platforms one release run walks, decided before any of it runs: the target
 // the operator named, every platform the matrix releases when the whole matrix was asked for, and the
 // release target of the machine running the run when neither was.
@@ -98,10 +117,10 @@ func distTargets(o options, goos string, goarch string) ([]releaseTarget, error)
 		return releaseTargets, nil
 	}
 
-	for _, tr := range releaseTargets {
-		if tr.goos == goos && tr.goarch == goarch {
-			return []releaseTarget{tr}, nil
-		}
+	word := releaseTargetWordFor(goos, goarch)
+
+	if tr, found := targetFor(word); found {
+		return []releaseTarget{tr}, nil
 	}
 
 	return nil, fmt.Errorf("this machine is %s-%s, which is no platform this project releases: build every platform this project releases with go run ./cmd/build dist --all", goos, goarch)

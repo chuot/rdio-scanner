@@ -40,9 +40,12 @@ import (
 )
 
 // runtimeTarget is the target this build is running on, which is the target an operator who named none
-// is building for.
+// is building for. It is named by the release target the machine belongs to, because the manifest, the
+// output path, and the messages an operator reads all name the target by the name the release uses: the
+// operator on the Mac that a macOS pair is built on is asked about macos-arm64, the target the manifest
+// records, and not about the name go builds a macOS binary for.
 func runtimeTarget() string {
-	return runtime.GOOS + "-" + runtime.GOARCH
+	return releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
 }
 
 // ffmpegState is what the tree already has, read before anything is decided.

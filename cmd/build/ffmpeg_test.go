@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -871,4 +872,17 @@ func readGzip(path string) ([]byte, error) {
 	defer reader.Close()
 
 	return io.ReadAll(reader)
+}
+
+// The target an operator who named none is building for is the release target this machine belongs to,
+// named the way the release names it. On a Mac that is macos-arm64, the target the manifest records, and
+// not the darwin-arm64 name go builds for: a phase that named the machine by go's word asked the manifest
+// about a target this project has no record for, and answered with the uncovered-target message on the
+// very machine the supplied pair is built on.
+func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *testing.T) {
+	want := releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
+
+	if got := ffmpegTarget(options{}); got != want {
+		t.Errorf("with no target named the ffmpeg phase builds for %q, want the release target %q of this %s-%s machine", got, want, runtime.GOOS, runtime.GOARCH)
+	}
 }

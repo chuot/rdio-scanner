@@ -297,3 +297,30 @@ func TestADistRunAskedForATargetOutsideTheMatrixIsRefused(t *testing.T) {
 		t.Fatal("a dist run for the word linux was accepted, want a refusal")
 	}
 }
+
+// The machine running the build is named by the release target it belongs to, because the manifest, the
+// output path, and every message an operator reads name the target by the name the release uses. The name
+// go builds a macOS binary for is darwin, and the release is named macos: a machine named by go's word
+// asks the manifest about a target this project has no record for, and the operator standing on the Mac
+// that the pair is built on is told that no ffmpeg is compiled for a platform they are standing on.
+//
+// A machine the matrix has no entry for keeps the name go gives it: a hand-named target is built for the
+// platform its own name names, and the phase asked to build for it says what it can do there.
+func TestTheMachineIsNamedByTheReleaseTargetItBelongsTo(t *testing.T) {
+	for _, machine := range []struct{ goos, goarch, word string }{
+		{"freebsd", "amd64", "freebsd-amd64"},
+		{"linux", "386", "linux-386"},
+		{"linux", "amd64", "linux-amd64"},
+		{"linux", "arm", "linux-arm"},
+		{"linux", "arm64", "linux-arm64"},
+		{"darwin", "amd64", "macos-amd64"},
+		{"darwin", "arm64", "macos-arm64"},
+		{"windows", "amd64", "windows-amd64"},
+		{"linux", "riscv64", "linux-riscv64"},
+		{"plan9", "riscv", "plan9-riscv"},
+	} {
+		if got := releaseTargetWordFor(machine.goos, machine.goarch); got != machine.word {
+			t.Errorf("a machine running %s on %s is named %q, want %q", machine.goos, machine.goarch, got, machine.word)
+		}
+	}
+}
