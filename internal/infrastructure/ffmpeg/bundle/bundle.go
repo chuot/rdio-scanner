@@ -20,10 +20,11 @@
 
 // Package bundle is the ffmpeg this server carries inside its own binary.
 //
-// A server built for a covered target carries the ffmpeg compiled for that target, so a deployment
-// needs nothing installed on the host it runs on. A server built for a target this project does not
-// compile an ffmpeg for — macOS, FreeBSD, and every plain `go build` a developer runs — carries none,
-// and the server falls back to the ffmpeg its host provides.
+// A server built for a target whose ffmpeg this build compiles carries the pair compiled for that
+// target, so a deployment needs nothing installed on the host it runs on. A server built for a target
+// whose pair the maintainer supplies carries the pair that was dropped for it, for the same effect. A
+// server built for a target whose pair was never supplied, and for every plain `go build` a developer
+// runs, carries none, and the server falls back to the ffmpeg its host provides.
 //
 // Which target a binary carries is decided by its build tags, in the bundle_<target>.go files: each
 // one embeds exactly one target's directory, so a linux-arm64 binary carries the linux-arm64 pair and
@@ -62,11 +63,20 @@ type Source struct {
 	SHA256 string `json:"sha256"`
 }
 
-// Target is how one architecture's ffmpeg is produced: the container that holds its toolchain, the
-// packages to install in it, and the configure arguments that make the compile cross to it.
+// Target is how one architecture's ffmpeg comes to be.
 //
-// A target with no record in the manifest is an uncovered target: the build compiles no ffmpeg for it
-// and the server that runs on it uses the host's.
+// A record with no `produced` names a toolchain: the container that holds it, the packages to install in
+// it, and the configure arguments that make the compile cross to it. This build compiles that target's
+// ffmpeg and runs the pair it produced through the ffmpeg check.
+//
+// A record with `produced` saying `supplied` names no toolchain at all, and carries the digest of each
+// program of the pair the maintainer compiled on the platform the target runs on. Such a record carries no
+// container, no packages, no cross arguments, no flags, and no check environment: the machine that
+// produces the releases has none of those for it, and asking for one would be a build that fails for
+// wanting a toolchain it was never going to have.
+//
+// A target with no record in the manifest is an uncovered target: the build compiles no ffmpeg for it,
+// adopts nothing for it, and the server that runs on it uses the host's.
 type Target struct {
 	Container string   `json:"container"`
 	Packages  []string `json:"packages"`
@@ -78,6 +88,17 @@ type Target struct {
 	// that compiled it: a cross-compiled binary needs an interpreter, and a Windows program needs an
 	// operating system.
 	Conformance Conformance `json:"conformance"`
+
+	// Produced says how this target's ffmpeg comes to be. Empty is the ordinary case: this build compiles
+	// it. "supplied" is the pair the maintainer compiled on the target's own platform and dropped where
+	// this build finds it.
+	Produced string `json:"produced"`
+
+	// Programs is the digest of each program of a supplied pair: the sha256 of the ffmpeg and of the
+	// ffprobe, which is the only thing this build can check a pair it cannot run against. An empty digest
+	// is a pair that has not been pinned yet, and nothing is adopted for that target. A compiled target
+	// pins nothing, because it produced its own pair and can run it.
+	Programs map[string]string `json:"programs"`
 }
 
 // Conformance is the environment the build runs the compiled ffmpeg in to prove it can do the job: the

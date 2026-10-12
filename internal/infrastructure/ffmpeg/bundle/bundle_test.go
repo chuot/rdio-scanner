@@ -50,8 +50,8 @@ func TestATargetWithNoRecordCarriesNoBundle(t *testing.T) {
 		"linux-amd64/ffprobe.gz": {Data: []byte("ffprobe")},
 	}
 
-	if _, ok := lookup(files, "freebsd-amd64"); ok {
-		t.Fatal("freebsd-amd64 has no directory in the bundle and still reported one")
+	if _, ok := lookup(files, "netbsd-amd64"); ok {
+		t.Fatal("netbsd-amd64 has no directory in the bundle and still reported one")
 	}
 }
 
@@ -79,7 +79,7 @@ func TestABundleMissingOneOfItsTwoProgramsCarriesNoBundle(t *testing.T) {
 	}
 }
 
-func TestTheManifestNamesThePinnedFfmpegAndTheCoveredTargets(t *testing.T) {
+func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 	manifest := ReadManifest()
 
 	if manifest.FFmpeg != "9.0.2" {
@@ -110,10 +110,56 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCoveredTargets(t *testing.T) {
 		if len(record.Packages) == 0 {
 			t.Errorf("%s has no toolchain packages", target)
 		}
-	}
 
-	if _, ok := manifest.Targets["macos-arm64"]; ok {
-		t.Error("macos-arm64 is an uncovered target and the manifest has a record for it")
+		if record.Produced != "" {
+			t.Errorf("%s is compiled by this build and says it is produced by %q", target, record.Produced)
+		}
+
+		if len(record.Programs) != 0 {
+			t.Errorf("%s is compiled from source and pins the digests of programs it did not produce: %v", target, record.Programs)
+		}
+	}
+}
+
+// The three targets this build compiles no ffmpeg for are the ones the maintainer compiles on the platform
+// each one runs on. The manifest records such a pair by the digest of each program, and records no
+// toolchain and no check environment for it, because the machine that produces the releases has neither.
+//
+// A digest left unpinned is the ordinary state of a target whose pair has not been built yet: the build
+// says so and ships nothing for it, and never adopts a pair it cannot name.
+func TestTheManifestRecordsTheSuppliedTargetsByDigest(t *testing.T) {
+	manifest := ReadManifest()
+
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		record, ok := manifest.Targets[target]
+		if !ok {
+			t.Errorf("the manifest has no record for %s, so its release archive carries no ffmpeg of its own", target)
+			continue
+		}
+
+		if record.Produced != "supplied" {
+			t.Errorf("%s is produced by %q, want supplied", target, record.Produced)
+		}
+
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			digest, ok := record.Programs[name]
+			if !ok {
+				t.Errorf("%s records no %s digest, so the build has nothing to adopt the pair against", target, name)
+				continue
+			}
+
+			if len(digest) != 0 && len(digest) != 64 {
+				t.Errorf("%s records the %s digest %q, want a sha256 or nothing pinned", target, name, digest)
+			}
+		}
+
+		if record.Container != "" || len(record.Packages) > 0 || len(record.Cross) > 0 || len(record.CFlags) > 0 || len(record.LDFlags) > 0 {
+			t.Errorf("%s is supplied and still records a toolchain: container %q, packages %v, cross %v", target, record.Container, record.Packages, record.Cross)
+		}
+
+		if record.Conformance.Container != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
+			t.Errorf("%s is supplied and still records a check environment: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
+		}
 	}
 }
 

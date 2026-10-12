@@ -154,6 +154,27 @@
           "wine"
         ]
       }
+    },
+    "macos-amd64": {
+      "produced": "supplied",
+      "programs": {
+        "ffmpeg": "",
+        "ffprobe": ""
+      }
+    },
+    "macos-arm64": {
+      "produced": "supplied",
+      "programs": {
+        "ffmpeg": "",
+        "ffprobe": ""
+      }
+    },
+    "freebsd-amd64": {
+      "produced": "supplied",
+      "programs": {
+        "ffmpeg": "",
+        "ffprobe": ""
+      }
     }
   }
 }

@@ -216,28 +216,46 @@ func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
 	}
 }
 
-// A target this project ships with the ffmpeg its host installs has no licence to carry, because there
-// is no ffmpeg inside its binary.
-func TestAnUncoveredTargetCarriesNoFfmpegLicence(t *testing.T) {
-	repo := t.TempDir()
+// Every release target carries an ffmpeg inside its binary, so every release archive carries the licence
+// of the one it carries: the five this build compiles, and the three whose pair the maintainer compiled
+// on the platform the target runs on. An archive that quietly left the licence out shipped the terms of a
+// component it embedded with none of the terms.
+func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
+	for _, tr := range releaseTargets {
+		target := tr.targetWord()
 
-	writeArchiveSource(t, repo, "macos-arm64", "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
-	writeArchiveLicence(t, repo, "macos-arm64", "a licence that should not be in the archive")
+		repo := t.TempDir()
 
-	files, err := archiveFiles(repo, releaseTargets[6])
-	if err != nil {
-		t.Fatalf("archiveFiles: %v", err)
-	}
+		writeArchiveSource(t, repo, target, "rdio-scanner"+programSuffix(target), "the binary")
+		writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+		writeArchiveLicence(t, repo, target, "the licence of the ffmpeg "+target+" carries")
 
-	for _, f := range files {
-		if strings.HasPrefix(f.name, "FFMPEG") {
-			t.Errorf("the archive for macos-arm64 carries %s, and no ffmpeg is compiled for it", f.name)
+		files, err := archiveFiles(repo, tr)
+		if err != nil {
+			t.Fatalf("%s: archiveFiles: %v", target, err)
 		}
-	}
 
-	if len(files) != 2 {
-		t.Errorf("the archive carries %d files, want the program and the guide: %v", len(files), fileNames(files))
+		names := fileNames(files)
+
+		if len(names) != 3 {
+			t.Fatalf("%s: the archive carries %d files, want the program, the guide and the licence: %v", target, len(names), names)
+		}
+
+		found := false
+
+		for _, f := range files {
+			if f.name == "FFMPEG.txt" {
+				found = true
+
+				if !strings.Contains(string(f.body), target) {
+					t.Errorf("%s: the licence in the archive does not name the target it is the licence of: %s", target, f.body)
+				}
+			}
+		}
+
+		if !found {
+			t.Errorf("%s: the archive carries no FFMPEG.txt: %v", target, names)
+		}
 	}
 }
 

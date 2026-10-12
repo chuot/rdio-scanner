@@ -109,17 +109,17 @@ func TestTheBuildRefusesATargetItCannotName(t *testing.T) {
 	}
 }
 
-// macOS and FreeBSD are release targets this project ships without a bundled ffmpeg, and the release
-// matrix asks for them the same way it asks for the covered ones. They pass through.
-func TestATargetThisProjectCompilesNoFfmpegForProducesNothing(t *testing.T) {
-	for _, target := range []string{"macos-arm64", "freebsd-amd64"} {
+// A target the manifest has no record for is not a release target this project ships, and asking for it
+// is not a failure the build has to fight: it says there is nothing to compile and does nothing.
+func TestATargetTheManifestHasNoRecordForProducesNothing(t *testing.T) {
+	for _, target := range []string{"netbsd-amd64", "openbsd-amd64"} {
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree())
 		if err != nil {
 			t.Fatalf("%s: %v", target, err)
 		}
 
 		if len(plan.Steps) != 0 {
-			t.Errorf("%s is an uncovered target and the build still has %d steps for it", target, len(plan.Steps))
+			t.Errorf("%s has no manifest record and the build still has %d steps for it", target, len(plan.Steps))
 		}
 
 		if plan.Says == "" {

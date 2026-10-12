@@ -153,28 +153,42 @@ func serviceChapterHeadings(guide string) []string {
 	return headings
 }
 
-// Which targets carry an ffmpeg is answered by the manifest, not by a second list. The three this
-// project ships with the ffmpeg their host installs have no record, and the build says so.
+// Which targets carry an ffmpeg is answered by the manifest, not by a second list. Every release target
+// has a record: five records name the toolchain this build compiles the pair in, and three name a pair the
+// maintainer compiles on the platform the target runs on and pins by digest.
 func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
-	covered := []string{}
+	compiled := []string{}
+	supplied := []string{}
+
 	for _, tr := range releaseTargets {
-		if _, ok := manifest.Targets[tr.targetWord()]; ok {
-			covered = append(covered, tr.targetWord())
+		record, ok := manifest.Targets[tr.targetWord()]
+		if !ok {
+			t.Errorf("the release matrix ships %s and the manifest has no record for it", tr.targetWord())
+			continue
+		}
+
+		switch record.Produced {
+		case "":
+			compiled = append(compiled, tr.targetWord())
+		case "supplied":
+			supplied = append(supplied, tr.targetWord())
+		default:
+			t.Errorf("%s says it is produced by %q, which is not a way this project produces an ffmpeg", tr.targetWord(), record.Produced)
 		}
 	}
 
-	want := []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"}
+	wantCompiled := []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"}
 
-	if strings.Join(covered, " ") != strings.Join(want, " ") {
-		t.Errorf("the targets with a manifest record are %v, want %v", covered, want)
+	if strings.Join(compiled, " ") != strings.Join(wantCompiled, " ") {
+		t.Errorf("the targets this build compiles an ffmpeg for are %v, want %v", compiled, wantCompiled)
 	}
 
-	for _, word := range []string{"freebsd-amd64", "macos-amd64", "macos-arm64"} {
-		if _, ok := manifest.Targets[word]; ok {
-			t.Errorf("%s has a manifest record, and this project ships it with the ffmpeg its host installs", word)
-		}
+	wantSupplied := []string{"freebsd-amd64", "macos-amd64", "macos-arm64"}
+
+	if strings.Join(supplied, " ") != strings.Join(wantSupplied, " ") {
+		t.Errorf("the targets whose ffmpeg is compiled on their own platform are %v, want %v", supplied, wantSupplied)
 	}
 }
 
