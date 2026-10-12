@@ -1408,7 +1408,7 @@ func theAudioOnlyPosture(recipe []string) string {
 		return ""
 	}
 
-	return "This program is compiled for audio: " + strings.Join(posture, "; ") + ".\n\n"
+	return "\nThis program is compiled for audio: " + strings.Join(posture, "; ") + ".\n\n"
 }
 
 // theRecipeCarries reports whether the recipe tells the build one switch.
