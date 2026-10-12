@@ -11,7 +11,7 @@ Your os distribution may have all of the following prerequisites available in it
 - latest version of git ([here](https://git-scm.com/downloads))
 - latest long-term support version of Node.js ([here](https://nodejs.org/en/))
 - latest version of Go ([here](https://go.dev/dl/))
-- latest version of podman ([here](https://podman.io/)), for building the container image and for compiling the ffmpeg of the five targets this build compiles one for. The macOS and FreeBSD pairs are compiled on their own platforms, by hand, and need no podman here
+- latest version of podman ([here](https://podman.io/)), for building the container image and for compiling the ffmpeg of the five targets this build compiles in a container. The macOS and FreeBSD pairs are compiled by this build on the machine that is the target, and that machine needs a C compiler, `strip`, and the make program its record names — `gmake` on FreeBSD, where ffmpeg's build asks for GNU make and the base make is not it — and needs no podman
 
 ## Compile the app
 
@@ -41,7 +41,7 @@ The server binary carries both bundles. One executable serves the scanner webapp
 
 ## The ffmpeg the server carries
 
-A server compiled for any of the eight release targets carries its own `ffmpeg` and `ffprobe` inside its own binary, and converts audio with nothing installed on the host. Five of them — `linux-386`, `linux-amd64`, `linux-arm`, `linux-arm64` and `windows-amd64` — are compiled by this build, in a container, from the source the manifest pins. The other three — `macos-amd64`, `macos-arm64` and `freebsd-amd64` — are compiled by the project's maintainer, on the platform each one runs on, and this build adopts the pair into the bundle its server embeds.
+A server compiled for any of the eight release targets carries its own `ffmpeg` and `ffprobe` inside its own binary, and converts audio with nothing installed on the host. Five of them — `linux-386`, `linux-amd64`, `linux-arm`, `linux-arm64` and `windows-amd64` — are compiled by this build, in a container, from the source the manifest pins. The other three — `macos-amd64`, `macos-arm64` and `freebsd-amd64` — are compiled on the platform each one runs on, and on that platform this build compiles them itself: the same source release, the same recipe, the host's own compiler and linker, and the same check. One command there compiles the pair, proves it, pins it in the manifest, and adopts it into the bundle its server embeds.
 
         go run ./cmd/build ffmpeg                    # the target this machine is
         go run ./cmd/build ffmpeg linux-arm64        # another target, which is how the release matrix cross-builds
@@ -51,23 +51,27 @@ The version, the source, the configure recipe and the toolchain of every target 
 
 What it fetches and compiles is build output: `.build/ffmpeg` holds the source tarball and the compiled pair, and `internal/infrastructure/ffmpeg/bundle/<target>` holds the gzipped pair the binary embeds. Deleting either costs a rebuild and nothing else. A second build whose ffmpeg version, target and recipe are unchanged compiles nothing again.
 
-### The pair the maintainer builds
+### The pair compiled on its own host
 
-A macOS ffmpeg and a FreeBSD ffmpeg are compiled on a Mac and on a FreeBSD machine: the machine that produces the releases runs neither program. The pair is built there, by hand, from the same source release and the same configure recipe the manifest pins, and then travels as three files — `ffmpeg`, `ffprobe`, and the proof the build's own check recorded.
+A macOS ffmpeg and a FreeBSD ffmpeg are compiled on a Mac and on a FreeBSD machine: the machine that produces the releases runs neither program, so a release run there compiles the five it can, skips these three, and says what would have made the rest buildable. On the Mac, and on the FreeBSD box, the build does this compile itself:
 
-        go run ./cmd/build ffmpeg-check macos-arm64   # on a macOS arm64 host, with ffmpeg and ffprobe in the bundle directory
+        go run ./cmd/build ffmpeg   # on the machine that is the target: macos-amd64, macos-arm64, freebsd-amd64
 
-The check is the gate a compiled pair goes through — the converter's own argument list, the recordings the server stores, the lengths the filters ask for, the tags the server writes — with the host as the container. It refuses a pair that is not the program its target runs: the wrong architecture, a fat Mach-O, a Mach-O with no code signature, a Mach-O linking a library the host has to install, a Linux-branded ELF, a FreeBSD program with a program interpreter. It writes the proof to `.build/ffmpeg/checks/<target>.json` and prints the sha256 of the two programs.
+It fetches the same source release the manifest pins, checks it against the pinned digest, unpacks it, runs the same trimmed configure recipe with the record's flags, runs the make program the record names, strips the two programs, and on macOS signs them ad-hoc after the strip, because strip rewrites the bytes the signature is computed over. There is no container and no cross-compile: the host's own compiler and linker produce the pair, which is the whole reason the pair is compiled there and not shipped from a cross-compiler.
 
-Those two digests are what goes into that target's record in `manifest.json`, under `programs`. The build adopts a pair on three things and nothing else: the digests the manifest pins, the shape of the two programs, and the proof naming that target and those digests. A pair with no proof, a proof naming other digests, and a pair that is not the pinned one are each refused, naming what is missing.
+The run then proves the pair it produced with the same gate the `ffmpeg-check` command records — the converter's own argument list, the recordings the server stores, the lengths the filters ask for, the tags the server writes — and refuses the pair it just compiled if it is not the program its target runs: the wrong architecture, a fat Mach-O, a Mach-O with no code signature, a Mach-O linking a library the host has to install, a Linux-branded ELF, a FreeBSD program with a program interpreter. The proof goes to `.build/ffmpeg/checks/<target>.json`.
 
-Adoption gzips the pair into the build's cache, publishes `ffmpeg.gz`, `ffprobe.gz` and `LICENCE.md` into the bundle directory, and removes the raw pair from it, so no server binary carries an uncompressed program. The drop is consumed by the run that adopts it, and the next run finds the pair in the cache and asks for no drop.
+Then it writes the two sha256 digests the proof recorded into that target's record in `manifest.json`, under `programs`, and prints them. The manifest is the only tracked file the build writes, and it writes them as a splice into the file's own bytes, so the diff is the two lines carrying the digests and nothing else; a record that already pinned a pair prints the digest it replaces. Commit that change: the pins are the release's promise about a pair the release machine cannot run.
 
-A supplied target with nothing dropped for it is not a failure. The build says so, names the directory to drop the pair in, the command that proves it, and the manifest field to fill, and builds no server and no archive for that target. In a matrix run the other archives are written and the run ends successfully.
+Then it gzips the pair into the build's cache, publishes `ffmpeg.gz`, `ffprobe.gz` and `LICENCE.md` into the bundle directory, and removes the raw pair from it, so no server binary carries an uncompressed program. `go run ./cmd/build dist` on that host writes the archive that carries it, and the next run finds the pair in the cache and compiles nothing.
+
+A pair built by hand is adopted the same way, and the adoption is the same gate: drop `ffmpeg` and `ffprobe` in `internal/infrastructure/ffmpeg/bundle/<target>`, prove them with `go run ./cmd/build ffmpeg-check <target>` on that host, and commit the two digests it prints into that target's record. The build adopts a pair on three things and nothing else: the digests the manifest pins, the shape of the two programs, and the proof naming that target and those digests. A pair with no proof, a proof naming other digests, and a pair that is not the pinned one are each refused, naming what is missing. A pair you dropped wins over the compile every time: it is the pair its proof was recorded for, and the build never compiles over it.
+
+A supplied target with nothing dropped for it, on a machine that is not its platform, is not a failure. The build says so, names the directory to drop the pair in, the command that proves it, and the manifest field to fill, and builds no server and no archive for that target. In a matrix run the other archives are written and the run ends successfully.
 
 A server built with plain `go build`, without the tool, carries no ffmpeg at all: it converts with the ffmpeg its host installs, and says so once at startup when it cannot find one.
 
-The licence the ffmpeg is under, the release it comes from, and the recipe it was built with are written next to the bundle and travel into every release archive as `FFMPEG.txt` — the notice naming the recipe, the source digest and the command that produced the pair for the five this build compiles, and the notice saying the release build adopted the maintainer's pair, on the pinned digest and on the proof the check left, for the other three.
+The licence the ffmpeg is under, the release it comes from, and the recipe it was built with are written next to the bundle and travel into every release archive as `FFMPEG.txt` — the notice naming the recipe, the source digest and the command that produced the pair for the five this build compiles in a container, and the notice naming the host that compiled it, the two program digests the release pins, and the date the build's ffmpeg check ran for it there, for the other three.
 
 ## Say what version you are building
 
@@ -107,7 +111,7 @@ When finished, you will find the precompiled versions for various platforms in t
         rdio-scanner-macos-arm64-v8.0.0.zip
         rdio-scanner-windows-amd64-v8.0.0.zip
 
-Each archive holds the server binary for its platform and the administrator guide: one self-contained HTML file, pictures inside it, readable offline from the extracted folder. Every archive also carries the ffmpeg licence as plain text under the name `FFMPEG.txt`: the five targets this build compiles an ffmpeg for carry the notice naming the recipe, the source digest and the command that produced the pair, and the three whose pair the maintainer compiled on the target's own platform carry the notice saying the release build adopted that pair, with both program digests and the date the build's ffmpeg check ran for it there.
+Each archive holds the server binary for its platform and the administrator guide: one self-contained HTML file, pictures inside it, readable offline from the extracted folder. Every archive also carries the ffmpeg licence as plain text under the name `FFMPEG.txt`: the five targets this build compiles an ffmpeg for carry the notice naming the recipe, the source digest and the command that produced the pair, and the three whose pair this build compiled on the machine that is the target carry the notice naming that host, both program digests, and the date the build's ffmpeg check ran for it there.
 
 The tool stamps nothing. The version reaches the binary through the linker flag and the bundles through the environment. The version literals the documentation carries — in `COMPILING.md`, `README.md`, and the administrator guide — are edited by hand at release.
 

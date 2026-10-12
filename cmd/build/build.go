@@ -67,9 +67,10 @@ type tool struct {
 	// through the converter's own argument list, and puts it where the server embeds it.
 	//
 	// It reports the target it has nothing to produce for: the three targets whose pair is compiled on
-	// their own platform are built by the maintainer, and a release run asked for one of them with
-	// nothing dropped for it has no ffmpeg to embed. That is not a failure, and the run that was asked
-	// for the whole matrix ships the archives whose ffmpeg it can produce.
+	// their own platform are compiled there, by a build standing on that machine, and a release run
+	// asked for one of them on a machine that is not that platform, with nothing dropped for it, has no
+	// ffmpeg to embed. That is not a failure, and the run that was asked for the whole matrix ships the
+	// archives whose ffmpeg it can produce.
 	ffmpeg func(options, io.Writer) (bool, error)
 
 	// checkFFmpeg proves the pair the maintainer dropped for one target, on the platform that target
@@ -274,9 +275,9 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 // release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
 // to embed.
 //
-// A target whose pair is compiled on its own platform and was not dropped for it is not a failure, and
-// does not stop the targets after it: that pair is built by hand on a machine the release machine does
-// not control, and a run that stopped for it would ship nothing at all.
+// A target whose pair is compiled on its own platform is not compiled, and not dropped for it, by the
+// machine running a matrix run: that pair is produced on a machine the release machine does not control,
+// and a run that stopped for it would ship nothing at all. It is skipped, and the run ships the rest.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
 	// The list is decided once, before any of it runs, so that a run asked for the machine it is
 	// standing on is refused before a single application is built, and not after the first archive.

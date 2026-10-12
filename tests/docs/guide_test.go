@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -881,4 +882,92 @@ func releasedTargets(t *testing.T) map[string]json.RawMessage {
 	}
 
 	return manifest.Targets
+}
+
+// words leaves the words a chapter carries, with the tags and the line wrapping taken out: the phrases
+// the tests pin are the phrases a reader reads, and the guide's source wraps them across lines.
+func words(body string) string {
+	return strings.Join(strings.Fields(stripTags(body)), " ")
+}
+
+// The macOS and FreeBSD pair is compiled by the build on the machine that is the target, with the one
+// command the operator already knows, and the guide is where an operator reads that. The statement is
+// pinned in the places the ritual is written — the chapter that says what an archive carries, the chapter
+// that lists the commands, the per-platform sections of the service chapter, and the licence appendix —
+// because a reader who finds the old ritual in one of them follows the old ritual.
+//
+// The hand route stays: a pair built by hand is dropped, proved, and pinned, and the build adopts it.
+// What the guide has to stop doing is listing the compile's own steps as the operator's ritual, because
+// the build runs them, and a guide that tells an operator to run them invites a pair the release adopts
+// on nothing.
+func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.T) {
+	body := guidePath(t)
+
+	places := []struct {
+		chapter string
+		need    []string
+	}{
+		{
+			chapter: "ch-03-requirements",
+			need: []string{
+				"compiled by this build on the machine that is the target",
+				"this build compiles it on the machine that is the target",
+			},
+		},
+		{
+			chapter: "ch-04-installation",
+			need: []string{
+				"go run ./cmd/build ffmpeg",
+				"compiles the pair, proves it, pins it, and adopts it",
+				"drop ffmpeg and ffprobe",
+			},
+		},
+		{
+			chapter: "ch-21-running-as-a-service",
+			need: []string{
+				"this build compiles it on the machine that is the target",
+			},
+		},
+		{
+			chapter: "ch-27-reference",
+			need: []string{
+				"names the host that compiled it",
+			},
+		},
+	}
+
+	for _, p := range places {
+		text := words(chapterOf(t, body, p.chapter))
+
+		for _, want := range p.need {
+			if !strings.Contains(text, want) {
+				t.Errorf("the guide's chapter %q never says %q", p.chapter, want)
+			}
+		}
+	}
+
+	// The command is the whole of the ritual, so it stands on its own line in the list of commands,
+	// where an operator reads the commands from.
+	var lines []string
+
+	for _, block := range regexp.MustCompile(`(?is)<pre><code>(.*?)</code></pre>`).FindAllStringSubmatch(chapterOf(t, body, "ch-04-installation"), -1) {
+		for _, line := range strings.Split(block[1], "\n") {
+			if i := strings.Index(line, "#"); i >= 0 {
+				line = line[:i]
+			}
+
+			lines = append(lines, strings.TrimSpace(line))
+		}
+	}
+
+	if !slices.Contains(lines, "go run ./cmd/build ffmpeg") {
+		t.Errorf("the guide's commands are %v, and none of them is the one command that produces the ffmpeg of the platform you are on", lines)
+	}
+
+	// The compile's own steps belong to the build.
+	for _, step := range []string{"./configure", "make -j", "codesign -s -", "tar -xJf", "strip ffmpeg"} {
+		if strings.Contains(words(chapterOf(t, body, "ch-04-installation")), step) {
+			t.Errorf("the guide's chapter 4 tells the operator to run %s, which is the build's step to run", step)
+		}
+	}
 }

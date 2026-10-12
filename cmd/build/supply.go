@@ -442,16 +442,16 @@ func theChecksRecorded(repo string) []string {
 	return recorded
 }
 
-// runFFmpegCheck proves the pair the maintainer dropped for one target, on the platform that target runs
-// on, and writes down what it saw.
+// runFFmpegCheck proves the pair dropped for one target, on the platform that target runs on, and writes
+// down what it saw.
 //
 // The gate is the one a compiled pair goes through: the converter's own argument list, the recordings the
 // server stores, the lengths the filters ask for, the tags the server writes. Here the pair is the pair
 // sitting in the bundle directory, and this machine is the container.
 //
-// The record it leaves is the only evidence a supplied pair has, because the machine that produces the
+// The record it leaves is the evidence a pair built by hand has, because the machine that produces the
 // releases cannot run it: the release build adopts the pair on the digest the manifest pins and on this
-// record, and on nothing else.
+// record, and on nothing else. The compile of a supplied pair proves its own pair through the same code.
 func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 	target := ffmpegTarget(o)
 
@@ -461,13 +461,13 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 
 	manifest := bundle.ReadManifest()
 
-	// The check proves the pair a maintainer drops. A target this build compiles an ffmpeg for is proved
-	// by the compile itself, inside the container that can run it, and a check pointed at that target
-	// would be looking for a raw pair its bundle directory has never held.
+	// The check proves a pair that was dropped. A target this build compiles in a container is proved by
+	// the compile itself, inside the container that can run it, and a check pointed at that target would
+	// be looking for a raw pair its bundle directory has never held.
 	record, found := manifest.Targets[target]
 
 	if !found || record.Produced != suppliedProduction {
-		return fmt.Errorf("the ffmpeg check proves the pair a maintainer drops for a target this build compiles no ffmpeg for: %s is compiled here, and go run ./cmd/build ffmpeg %s runs this same check on it inside the container that can run it",
+		return fmt.Errorf("the ffmpeg check proves a pair dropped for a target this build compiles in a container: %s is compiled here, and go run ./cmd/build ffmpeg %s runs this same check on it inside the container that can run it",
 			target, target)
 	}
 
@@ -483,10 +483,10 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 // FreeBSD program all start on the machine that built them, and a check that ran them would pass them and
 // record a proof of a pair no deployment can run.
 //
-// The record is the only evidence a supplied pair has, and the digests printed here are what the manifest
-// pins. The ffmpeg check command proves a pair the maintainer dropped with this, and the compile of a
-// supplied pair proves the pair it just produced with this same code: two gates would be two standards, and
-// a release adopting on the weaker one is not visible from outside the build.
+// The record is the evidence a pair built by hand has, and the digests printed here are what the manifest
+// pins. The ffmpeg check command proves a dropped pair with this, and the compile of a supplied pair
+// proves the pair it just produced with this same code: two gates would be two standards, and a release
+// adopting on the weaker one is not visible from outside the build.
 func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writer) (anFfmpegCheck, error) {
 	drop := suppliedDropFor(paths, target)
 

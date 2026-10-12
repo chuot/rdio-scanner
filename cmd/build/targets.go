@@ -45,8 +45,9 @@ func (t releaseTarget) targetWord() string {
 // releaseTargets is the matrix: the platforms a release archive is built for.
 //
 // Which of them carry an ffmpeg, and how the pair they carry came to be, is not in this list. The
-// manifest answers that: the five this build compiles in a container, and the three whose pair the
-// maintainer compiles on the platform the target runs on and this build adopts. The matrix is a product
+// manifest answers that: the five this build compiles in a container, and the three whose pair is
+// compiled on the platform the target runs on — by this build standing on that machine, or by the
+// maintainer — and adopted from there. The matrix is a product
 // decision about what gets released; the manifest is a build decision about what gets compiled, and they
 // are not the same list.
 var releaseTargets = []releaseTarget{

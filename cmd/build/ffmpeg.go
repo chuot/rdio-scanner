@@ -119,8 +119,8 @@ type ffmpegPlan struct {
 	Says string
 
 	// Steps are the external commands that produce the bundle, and are empty when nothing has to be
-	// compiled: an uncovered target, a bundle that is already there, or a pair adopted from what the
-	// maintainer dropped.
+	// compiled: an uncovered target, a bundle that is already there, or a pair adopted from what was
+	// dropped for it.
 	Steps []step
 
 	// Skipped says this target has nothing to build and produces nothing: the pair the manifest says is
@@ -387,9 +387,10 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	return plan, nil
 }
 
-// suppliedProduction is the manifest's way of saying that this build compiles no ffmpeg for a target: the
-// pair is compiled on the platform the target runs on, by the project's own maintainer, and dropped in the
-// bundle directory for this build to adopt.
+// suppliedProduction is the manifest's way of saying that this build compiles the pair for a target where
+// the target runs, and not in a container: the machine that is the target compiles it with its own
+// toolchain, and every other machine adopts the pair that host produced — the pair this build compiled
+// there, or a pair the maintainer built by hand and dropped for it to adopt.
 const suppliedProduction = "supplied"
 
 // planSuppliedFFmpeg decides what the ffmpeg phase does with a pair this build compiles in a container
@@ -621,7 +622,8 @@ func whereTheToolComesFrom(name string, target string) string {
 	return "the Xcode Command Line Tools carry it"
 }
 
-// suppliedDropFor is where the maintainer's pair sits before this build adopts it.
+// suppliedDropFor is where a pair built by hand sits before this build adopts it, and where a pair this
+// build compiled on its own host is put so the adoption can consume it.
 func suppliedDropFor(paths ffmpegPaths, target string) map[string]string {
 	drop := map[string]string{}
 
@@ -956,9 +958,10 @@ func fetchSource(src ffmpegSource) error {
 // runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
 //
 // It reports the targets it has nothing to produce for: the three whose pair is compiled on its own
-// platform. A target of that kind with nothing dropped for it is skipped, and the caller decides what a
-// skipped target means for the run — the release run ships the archives it can ship, and a run that
-// compiles one binary compiles none.
+// platform, on a machine this build is not standing on, with nothing dropped for it. Such a target is
+// skipped, and the caller decides what a skipped target means for the run — the release run ships the
+// archives it can ship, and a run that compiles one binary compiles none. On the machine that is the
+// target, the same phase compiles the pair, and that is not a skip.
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
@@ -1058,11 +1061,18 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	return false, nil
 }
 
-// runSuppliedFFmpeg does the work of a target this build compiles no ffmpeg for: nothing to fetch, nothing
-// to compile, nothing to run, and no container to build.
+// runSuppliedFFmpeg does the work of a supplied pair this build was handed: the pair already in the
+// cache, the pair dropped in the bundle directory, and the target with neither.
 //
-// A target whose pair was not dropped is reported as skipped, and that is the whole of it: the message the
-// plan printed says where to drop the pair, what proves it, and what pins it.
+// Nothing here fetches, compiles, runs, or builds a container. The compile of a supplied pair is the
+// machine that is the target's to do, and runNativeFFmpeg carries it there; what is left is the evidence
+// a pair arrives with — the digest the manifest pins, the shape the target's own linker writes, and the
+// proof the ffmpeg check recorded — and the adoption that consumes the pair into the cache and publishes
+// it into the bundle.
+//
+// A target whose pair was not dropped, on a machine that is not its platform, is reported as skipped, and
+// that is the whole of it: the message the plan printed says where to drop the pair, what proves it, and
+// what pins it.
 func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Skipped {
 		return true, nil
@@ -1372,19 +1382,20 @@ func ffmpegLicence(manifest bundle.Manifest, target string) string {
 	return text.String()
 }
 
-// suppliedFFMpegLicence is what a release archive carries about a pair this build did not compile.
+// suppliedFFMpegLicence is what a release archive carries about a pair adopted from the host the target
+// runs on.
 //
 // A compiled pair is reproducible from this repository, so its notice points at the manifest and the
-// command. A supplied pair is not: it was built by the project's maintainer, on the platform the target
-// runs on, and the only record of it this repository holds is the digest the manifest pins and the proof
-// the ffmpeg check left on that platform. The notice names those, and says plainly that the release build
-// adopted the pair rather than produced it.
+// command. A supplied pair is not reproducible on the machine that produces the releases: it is compiled
+// where the target runs, by a build standing on that machine, and the record this repository holds of it
+// is the digest the manifest pins and the proof the ffmpeg check left there. The notice names those, and
+// says plainly that the release build adopted the pair rather than produced it.
 func suppliedFFMpegLicence(manifest bundle.Manifest, target string, check anFfmpegCheck) string {
 	var text strings.Builder
 
 	text.WriteString("# The ffmpeg this server carries\n\n")
 	text.WriteString(fmt.Sprintf(
-		"This build of rdio-scanner carries ffmpeg %s and ffprobe %s inside its own binary, compiled for %s\nby the project's maintainer on %s, the platform that target runs on. It converts audio with\nnothing installed on the host.\n\n",
+		"This build of rdio-scanner carries ffmpeg %s and ffprobe %s inside its own binary, compiled for %s\non %s, the platform that target runs on. It converts audio with nothing installed on the host.\n\n",
 		manifest.FFmpeg, manifest.FFmpeg, target, check.Host,
 	))
 
@@ -1407,16 +1418,16 @@ func suppliedFFMpegLicence(manifest bundle.Manifest, target string, check anFfmp
 
 	if check.Target == target {
 		text.WriteString(fmt.Sprintf(
-			"\nThis pair was not compiled by the release build: the machine that produces the releases cannot run a\n%s program. It adopted the pair the maintainer built, after checking it against the digest recorded\nin internal/infrastructure/ffmpeg/bundle/manifest.json, and on the evidence of the build's ffmpeg check,\nwhich ran for it on %s on %s and converted %d recordings.\n",
-			target, check.Host, check.Checked, len(check.Conversions),
+			"\nThis pair was compiled on %s, the machine that is the target: the machine that produces the\nreleases runs no %s program, so a pair of this shape is compiled where the target runs. The release\nbuild adopted it after checking it against the digest recorded in\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and on the evidence of the build's ffmpeg check,\nwhich ran for it on %s on %s and converted %d recordings.\n",
+			check.Host, target, check.Host, check.Checked, len(check.Conversions),
 		))
 
 		return text.String()
 	}
 
 	text.WriteString(fmt.Sprintf(
-		"\nThis pair was not compiled by the release build: the machine that produces the releases cannot run a\n%s program. It adopted the pair the maintainer built, on the evidence of the build's ffmpeg check\nrecorded for it on its own platform, and the digest above is that evidence.\n",
-		target,
+		"\nThis pair was compiled on the machine that is the target, %s: the machine that produces the\nreleases runs no %s program, so a pair of this shape is compiled where the target runs. The release\nbuild adopted it on the digest above, and on the evidence of the build's ffmpeg check recorded for it\non its own platform.\n",
+		target, target,
 	))
 
 	return text.String()

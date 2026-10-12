@@ -55,9 +55,9 @@ const guideSource = "docs/admin-guide.html"
 //
 // Every target the release matrix ships carries an ffmpeg inside its binary, so every one of these
 // archives carries a licence: the five this build compiles carry the notice naming the recipe, the source
-// digest and the command that produced the pair, and the three whose pair the maintainer compiled on the
-// platform the target runs on carry the notice saying the release build adopted that pair, on the digest
-// the manifest pins and on the proof the build's ffmpeg check left on that platform. The licence is the
+// digest and the command that produced the pair, and the three whose pair was compiled on the platform the
+// target runs on carry the notice naming the host that compiled it, on the digest the manifest pins and on
+// the proof the build's ffmpeg check left on that platform. The licence is the
 // text the ffmpeg phase wrote from the manifest, and the archive carries it under the name a reader looks
 // for, not the name the bundle directory uses.
 //

@@ -27,9 +27,10 @@ import (
 	"io/fs"
 )
 
-// The bundle for freebsd-amd64. This build compiles nothing for that target: the pair is compiled on the
-// platform it runs on and dropped in this directory, and the build gzips it here. On a fresh clone, and
-// on a release run where the pair was never dropped, the directory holds only its placeholder, which
+// The bundle for freebsd-amd64. This build compiles the pair for that target on the machine that is the target, and
+// adopts it from there: the pair is compiled where it runs, dropped in this directory, and gzipped
+// here. On a fresh clone, and on a release run on a machine that is not that platform with nothing
+// dropped for it, the directory holds only its placeholder, which
 // //go:embed all: matches, so a plain go build compiles and the lookup reports no bundle.
 //
 //go:embed all:freebsd-amd64

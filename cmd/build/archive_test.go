@@ -321,8 +321,8 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 		"ffmpeg is free software",
 		"Lesser General Public License version 2.1",
 		manifest.Source.URL,
-		"compiled for macos-arm64\nby the project's maintainer on macos-arm64",
-		"This pair was not compiled by the release build",
+		"compiled for macos-arm64\non macos-arm64",
+		"This pair was compiled on macos-arm64",
 		"which ran for it on macos-arm64 on 2026-10-09T12:00:00Z and converted 1 recordings",
 	} {
 		if !strings.Contains(carried, want) {

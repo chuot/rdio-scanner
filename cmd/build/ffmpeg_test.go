@@ -812,9 +812,9 @@ func TestASuppliedPairIsAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
 	}
 }
 
-// The licence a supplied archive carries says what that ffmpeg is, and does not claim this build compiled
-// it: the pair was compiled by the maintainer, on the platform the target runs on, and the only evidence
-// of it is the digest the manifest pins and the check that ran there.
+// The licence a supplied archive carries says what that ffmpeg is, and says where it was compiled: on the
+// host the target runs on, which is the one place a pair of that shape is compiled, and adopted by the
+// release build on the digest the manifest pins and the proof the check left there.
 func TestTheBuildSaysWhatASuppliedFfmpegIsAndUnderWhatLicence(t *testing.T) {
 	manifest := aManifestPinning("macos-arm64", theFFmpegDigest, theFFProbeDigest)
 
@@ -830,7 +830,8 @@ func TestTheBuildSaysWhatASuppliedFfmpegIsAndUnderWhatLicence(t *testing.T) {
 		manifest.Recipe[0],
 		theFFmpegDigest,
 		theFFProbeDigest,
-		"maintainer",
+		"compiled on",
+		"adopted",
 		"macos-arm64",
 		check.Host,
 		check.Checked,

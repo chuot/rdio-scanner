@@ -22,8 +22,9 @@
 //
 // A server built for a target whose ffmpeg this build compiles carries the pair compiled for that
 // target, so a deployment needs nothing installed on the host it runs on. A server built for a target
-// whose pair the maintainer supplies carries the pair that was dropped for it, for the same effect. A
-// server built for a target whose pair was never supplied, and for every plain `go build` a developer
+// whose pair is compiled where the target runs carries the pair that compile produced — the pair this
+// build compiled on the machine that is the target, or the pair dropped for it — for the same effect. A
+// server built for a target whose pair never arrived, and for every plain `go build` a developer
 // runs, carries none, and the server falls back to the ffmpeg its host provides.
 //
 // Which target a binary carries is decided by its build tags, in the bundle_<target>.go files: each
@@ -94,8 +95,9 @@ type Target struct {
 	Conformance Conformance `json:"conformance"`
 
 	// Produced says how this target's ffmpeg comes to be. Empty is the ordinary case: this build compiles
-	// it. "supplied" is the pair the maintainer compiled on the target's own platform and dropped where
-	// this build finds it.
+	// it, in a container. "supplied" is the pair compiled on the target's own platform — by this build
+	// standing on that machine, or by the maintainer and dropped where this build finds it — and adopted
+	// from there.
 	Produced string `json:"produced"`
 
 	// Programs is the digest of each program of a supplied pair: the sha256 of the ffmpeg and of the
