@@ -21,14 +21,20 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
+
+	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
 // The shape rules a supplied ffmpeg pair is adopted under.
@@ -319,21 +325,13 @@ func nameOfMachine(machine uint16) string {
 // It lives in the build's transient tree, not in the bundle directory: the bundle directory is what a
 // server binary embeds, and a proof is the build's own business.
 type anFfmpegCheck struct {
-	Target      string        `json:"target"`
-	Host        string        `json:"host"`
-	FFmpeg      string        `json:"ffmpeg"`
-	FFProbe     string        `json:"ffprobe"`
-	Version     string        `json:"version"`
-	Checked     string        `json:"checked"`
-	Conversions []aConversion `json:"conversions"`
-}
-
-// aConversion is one recording the check converted, with what ffprobe said about the result.
-type aConversion struct {
-	Input    string `json:"input"`
-	Mode     string `json:"mode"`
-	Bytes    int    `json:"bytes"`
-	Duration string `json:"duration"`
+	Target      string       `json:"target"`
+	Host        string       `json:"host"`
+	FFmpeg      string       `json:"ffmpeg"`
+	FFProbe     string       `json:"ffprobe"`
+	Version     string       `json:"version"`
+	Checked     string       `json:"checked"`
+	Conversions []production `json:"conversions"`
 }
 
 func ffmpegCheckFile(repo string, target string) string {
@@ -442,4 +440,149 @@ func theChecksRecorded(repo string) []string {
 	}
 
 	return recorded
+}
+
+// runFFmpegCheck proves the pair the maintainer dropped for one target, on the platform that target runs
+// on, and writes down what it saw.
+//
+// The gate is the one a compiled pair goes through: the converter's own argument list, the recordings the
+// server stores, the lengths the filters ask for, the tags the server writes. Here the pair is the pair
+// sitting in the bundle directory, and this machine is the container.
+//
+// The record it leaves is the only evidence a supplied pair has, because the machine that produces the
+// releases cannot run it: the release build adopts the pair on the digest the manifest pins and on this
+// record, and on nothing else.
+func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
+	target := ffmpegTarget(o)
+
+	if err := checkFfmpegCheckHost(target); err != nil {
+		return err
+	}
+
+	manifest := bundle.ReadManifest()
+
+	// The check proves the pair a maintainer drops. A target this build compiles an ffmpeg for is proved
+	// by the compile itself, inside the container that can run it, and a check pointed at that target
+	// would be looking for a raw pair its bundle directory has never held.
+	record, found := manifest.Targets[target]
+
+	if !found || record.Produced != suppliedProduction {
+		return fmt.Errorf("the ffmpeg check proves the pair a maintainer drops for a target this build compiles no ffmpeg for: %s is compiled here, and go run ./cmd/build ffmpeg %s runs this same check on it inside the container that can run it",
+			target, target)
+	}
+
+	paths := ffmpegPathsFor(t.repo, manifest, target)
+	drop := suppliedDropFor(paths, target)
+
+	// The pair is checked before it is run: a Homebrew bottle, an unsigned program, and a dynamically
+	// linked FreeBSD program all start on the machine that built them, and the check would pass them and
+	// record a proof of a pair no deployment can run.
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		if !aFileIsThere(drop[name]) {
+			return fmt.Errorf("there is no %s in %s to check: build the pair on a %s host, drop ffmpeg and ffprobe in %s, and run this again",
+				name, paths.bundle, target, paths.bundle)
+		}
+
+		if err := checkSuppliedProgram(drop[name], target); err != nil {
+			return err
+		}
+	}
+
+	work := filepath.Join(t.repo, ".build", "ffmpeg", "checks", target)
+
+	if err := os.MkdirAll(work, 0755); err != nil {
+		return fmt.Errorf("the build cannot prepare %s: %w", work, err)
+	}
+
+	programs := checkPrograms{FFmpeg: []string{drop["ffmpeg"]}, FFProbe: []string{drop["ffprobe"]}, Work: work}
+
+	run := onThisMachine()
+
+	version, err := theProgramVersion(run, programs.FFmpeg)
+	if err != nil {
+		return err
+	}
+
+	report, err := ffmpegCheck(run, programs, work)
+	if err != nil {
+		return err
+	}
+
+	digests := map[string]string{}
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		body, err := os.ReadFile(drop[name])
+		if err != nil {
+			return fmt.Errorf("the supplied %s for %s cannot be read: %w", name, target, err)
+		}
+
+		digests[name] = sha256Of(body)
+	}
+
+	check := anFfmpegCheck{
+		Target:      target,
+		Host:        runtime.GOOS + "-" + runtime.GOARCH,
+		FFmpeg:      digests["ffmpeg"],
+		FFProbe:     digests["ffprobe"],
+		Version:     version,
+		Checked:     time.Now().UTC().Format(time.RFC3339),
+		Conversions: report.Productions,
+	}
+
+	if err := writeFfmpegCheck(t.repo, check); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
+		strconv.FormatFloat(report.Shortest, 'f', 6, 64),
+		strconv.FormatFloat(report.Longest, 'f', 6, 64),
+	)
+
+	// The digests are what the manifest has to pin, printed here so the operator copies the pair's own
+	// digests and not the ones a rebuild produced.
+	fmt.Fprintf(stdout, "%-7s ffmpeg  sha256 %s\n", "digest", check.FFmpeg)
+	fmt.Fprintf(stdout, "%-7s ffprobe sha256 %s\n", "digest", check.FFProbe)
+	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpegCheck, ffmpegCheckFile(t.repo, target))
+
+	return nil
+}
+
+// theProgramVersion is the first line the program says about itself, which is the release the proof
+// records: the manifest pins one release, and a pair built from another is a pair this release does not
+// ship.
+func theProgramVersion(run command, program []string) (string, error) {
+	body, err := run(starts(program, "-version"), nil)
+	if err != nil {
+		return "", fmt.Errorf("the pair cannot say what it is: %s -version: %w", program[0], err)
+	}
+
+	line, _, _ := strings.Cut(strings.TrimSpace(string(body)), "\n")
+	if line == "" {
+		return "", fmt.Errorf("the pair says nothing about what it is: %s -version printed nothing", program[0])
+	}
+
+	return line, nil
+}
+
+// onThisMachine runs one program here, hands it a recording on its input, and hands back what it wrote.
+//
+// It is the shape the check runs a compiled pair through a container in, used for a pair this machine can
+// run: the ffmpeg check for a supplied pair runs on the pair's own platform, so nothing stands between the
+// check and the programs.
+func onThisMachine() command {
+	return func(argv []string, stdin []byte) ([]byte, error) {
+		out := bytes.NewBuffer([]byte(nil))
+		errout := bytes.NewBuffer([]byte(nil))
+
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Stdin = bytes.NewReader(stdin)
+		cmd.Stdout = out
+		cmd.Stderr = errout
+
+		if err := cmd.Run(); err != nil {
+			return nil, fmt.Errorf("%s", strings.TrimSpace(errout.String()))
+		}
+
+		return out.Bytes(), nil
+	}
 }

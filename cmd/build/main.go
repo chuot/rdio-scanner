@@ -50,6 +50,7 @@ func main() {
 	}
 
 	t.ffmpeg = t.runFFmpeg
+	t.checkFFmpeg = t.runFFmpegCheck
 
 	os.Exit(t.run(os.Args[1:], os.Stdout))
 }

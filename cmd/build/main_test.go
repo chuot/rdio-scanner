@@ -70,6 +70,18 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 			return nil
 		},
 
+		// The ffmpeg check is not an external command either: it runs the pair through the converters
+		// and records what it saw. What it does is tested in supply_test.go.
+		checkFFmpeg: func(o options, stdout io.Writer) error {
+			if failAt == subFFmpegCheck {
+				return errors.New("the ffmpeg check for " + o.target + " said no")
+			}
+
+			ran = append(ran, step{label: subFFmpegCheck, result: o.target})
+
+			return nil
+		},
+
 		// The archive is not an external command. The stand-in records that it was written, and what it
 		// does is tested in archive_test.go. The archive reads what the release wrote into the tree, so
 		// the run's order is what is under test here.
@@ -153,6 +165,46 @@ func TestEachSubcommandRunsOnlyTheStepsItNames(t *testing.T) {
 		if strings.Join(got, " ") != strings.Join(c.want, " ") {
 			t.Errorf("%v ran %v, want %v", c.args, got, c.want)
 		}
+	}
+}
+
+// The check proves a pair and writes down what it saw. It builds no web application, no server, and no
+// archive: the machine it runs on is a Mac or a FreeBSD box, and the person running it is proving
+// programs that already exist.
+func TestTheFfmpegCheckRunsOnlyTheCheck(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"ffmpeg-check", "macos-arm64"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+
+	for _, s := range *ran {
+		got = append(got, s.label)
+	}
+
+	if strings.Join(got, " ") != subFFmpegCheck {
+		t.Errorf("the check ran %v, want only %s", got, subFFmpegCheck)
+	}
+}
+
+// A pair that fails the check is not recorded, and the run says so by failing: the proof is the only
+// evidence a supplied pair converts audio, and a check that ran, failed, and exited successfully would
+// leave the release build adopting a pair nobody proved.
+func TestAFailingFfmpegCheckEndsTheRun(t *testing.T) {
+	tl, out, ran := fakeRun(released, subFFmpegCheck)
+
+	if code := tl.run([]string{"ffmpeg-check", "macos-arm64"}, out); code == 0 {
+		t.Errorf("exit code = %d, want a failure", code)
+	}
+
+	if !strings.Contains(out.String(), "macos-arm64") {
+		t.Errorf("the failure %q does not name the target whose pair was refused", out.String())
+	}
+
+	for _, s := range *ran {
+		t.Errorf("%s ran after the check failed", s.label)
 	}
 }
 

@@ -185,6 +185,36 @@ func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
 	}
 }
 
+// The check proves the pair the maintainer dropped for one target, on the platform that target runs on.
+// The target is the whole point of the command, so a command line without it is refused: a check that
+// defaulted to the machine it happens to stand on would prove a pair the release does not ship.
+func TestTheFfmpegCheckNamesTheTargetItProves(t *testing.T) {
+	o, err := parseArgs([]string{"ffmpeg-check", "macos-arm64"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	if o.sub != subFFmpegCheck {
+		t.Errorf("the command is %q, want %s", o.sub, subFFmpegCheck)
+	}
+
+	if o.target != "macos-arm64" {
+		t.Errorf("the check proves %s, want macos-arm64", o.target)
+	}
+
+	for _, args := range [][]string{
+		{"ffmpeg-check"},
+		{"ffmpeg-check", "macos"},
+		{"ffmpeg-check", "macos-arm64", "linux-arm64"},
+		{"ffmpeg-check", "netbsd-amd64"},
+		{"ffmpeg-check", "dist"},
+	} {
+		if _, err := parseArgs(args); err == nil {
+			t.Errorf("%v is a command line this tool honours, and it is not one", args)
+		}
+	}
+}
+
 // The ffmpeg is the one thing this tool builds for a platform the operator names. The platform has to
 // be the word right after it, so that a target left lying at the end of a command line is refused
 // instead of quietly building something else.

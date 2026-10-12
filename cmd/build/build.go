@@ -64,13 +64,17 @@ type tool struct {
 	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
 	// through the converter's own argument list, and puts it where the server embeds it.
 	ffmpeg func(options, io.Writer) error
+
+	// checkFFmpeg proves the pair the maintainer dropped for one target, on the platform that target
+	// runs on, and records what it saw. It is not an external command and it builds nothing.
+	checkFFmpeg func(options, io.Writer) error
 }
 
 // run resolves the version, says what it resolved and why, and then runs the steps that build it.
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|ffmpeg-check goos-goarch|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
 		return 2
 	}
 
@@ -106,6 +110,17 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 		for _, path := range removed {
 			fmt.Fprintf(stdout, "%-7s %s\n", subClean, path)
+		}
+
+		return 0
+	}
+
+	// The ffmpeg check proves a pair this build cannot run, on the platform that pair runs on, and
+	// writes down what it saw. It builds nothing: the machine it runs on is a Mac or a FreeBSD box, and
+	// the programs it proves already exist.
+	if o.sub == subFFmpegCheck {
+		if err := t.checkFFmpeg(o, stdout); err != nil {
+			return fail(stdout, fmt.Errorf("%s: %w", subFFmpegCheck, err))
 		}
 
 		return 0

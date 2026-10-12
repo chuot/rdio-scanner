@@ -116,6 +116,20 @@ type checkReport struct {
 	Conversions int
 	Shortest    float64
 	Longest     float64
+
+	// Productions is what each conversion produced, in the order the check ran them. The build prints
+	// the shortest and the longest of them; the proof a supplied pair is adopted on records every one,
+	// because that proof is the only evidence anybody has that a pair the build cannot run converts.
+	Productions []production
+}
+
+// production is one converted recording: what went in, which level of the converter made it, how big
+// the server's recording came out, and how long the bundled ffprobe says it is.
+type production struct {
+	Input    string `json:"input"`
+	Mode     string `json:"mode"`
+	Bytes    int    `json:"bytes"`
+	Duration string `json:"duration"`
 }
 
 // ffmpegCheck runs a compiled ffmpeg through the argument list the converter actually uses, and
@@ -161,6 +175,13 @@ func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkRepo
 			}
 
 			report.Conversions++
+
+			report.Productions = append(report.Productions, production{
+				Input:    in.Name,
+				Mode:     level.Name,
+				Bytes:    len(converted),
+				Duration: format.Duration,
+			})
 
 			if duration < report.Shortest {
 				report.Shortest = duration

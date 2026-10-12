@@ -31,15 +31,16 @@ import (
 // The subcommands the tool knows. An empty one is the whole pipeline: both applications, then the
 // ffmpeg the server carries, then the server that carries both.
 const (
-	subClient    = "client"
-	subScanner   = "scanner"
-	subAdmin     = "admin"
-	subFFmpeg    = "ffmpeg"
-	subServer    = "server"
-	subVersion   = "version"
-	subDist      = "dist"
-	subClean     = "clean"
-	subContainer = "container"
+	subClient      = "client"
+	subScanner     = "scanner"
+	subAdmin       = "admin"
+	subFFmpeg      = "ffmpeg"
+	subFFmpegCheck = "ffmpeg-check"
+	subServer      = "server"
+	subVersion     = "version"
+	subDist        = "dist"
+	subClean       = "clean"
+	subContainer   = "container"
 )
 
 // The container image is linux-amd64, because that is the architecture the Containerfile's guard checks
@@ -147,7 +148,7 @@ func parseArgs(args []string) (options, error) {
 			o.output = args[i]
 			o.outputNamed = true
 
-		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer:
+		case subClient, subScanner, subAdmin, subFFmpeg, subFFmpegCheck, subServer, subVersion, subDist, subClean, subContainer:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
 			}
@@ -174,11 +175,12 @@ func parseArgs(args []string) (options, error) {
 				continue
 			}
 
-			// The ffmpeg phase and the release matrix are the two things this tool builds for a platform
-			// the operator names, because that is how the release matrix cross-builds from one machine.
-			// The platform has to be the word right after it, so that a target left lying at the end of a
-			// command line is refused instead of quietly building something else.
-			if (arg == subFFmpeg || arg == subDist) && i+1 < len(args) && isTarget(args[i+1]) {
+			// The ffmpeg phase, the release matrix, and the ffmpeg check are the three things this tool
+			// works on for a platform the operator names, because that is how the release matrix
+			// cross-builds from one machine. The platform has to be the word right after it, so that a
+			// target left lying at the end of a command line is refused instead of quietly building
+			// something else.
+			if (arg == subFFmpeg || arg == subDist || arg == subFFmpegCheck) && i+1 < len(args) && isTarget(args[i+1]) {
 				i++
 
 				o.target = args[i]
@@ -186,8 +188,13 @@ func parseArgs(args []string) (options, error) {
 				// The ffmpeg phase compiles for any platform the manifest can answer for, and says so
 				// when it has no record. The matrix is a product decision: a target outside it is a
 				// platform this project does not release, and building one is not what was asked for.
-				if arg == subDist {
+				// The check proves the pair a release carries, so it proves a released platform.
+				if arg == subDist || arg == subFFmpegCheck {
 					if _, found := targetFor(o.target); !found {
+						if arg == subFFmpegCheck {
+							return options{}, fmt.Errorf("%s is not a platform this project releases, so no pair is checked for it", o.target)
+						}
+
 						return options{}, fmt.Errorf("%s is not a platform this project releases, so no archive is built for it", o.target)
 					}
 				}
@@ -196,6 +203,13 @@ func parseArgs(args []string) (options, error) {
 		default:
 			return options{}, fmt.Errorf("%s is not something this tool builds or a flag it knows", arg)
 		}
+	}
+
+	// The check proves the pair of one target, on the platform that target runs on. It has no default:
+	// a check that fell back to the machine it happens to stand on would prove a pair the release does
+	// not ship, and record it as though it had.
+	if o.sub == subFFmpegCheck && o.target == "" {
+		return options{}, fmt.Errorf("the ffmpeg check proves the pair of one target: go run ./cmd/build %s <goos-goarch>", subFFmpegCheck)
 	}
 
 	if !o.outputNamed {

@@ -22,6 +22,7 @@ package main
 
 import (
 	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -524,6 +525,22 @@ func TestTheBuildRefusesAPairTheFfmpegCheckDidNotProve(t *testing.T) {
 	}
 }
 
+// The check proves the pair a maintainer drops. A target this build compiles an ffmpeg for is proved by
+// the compile itself, inside the container that can run it, and a check pointed at it would be looking for
+// a raw pair that directory has never held.
+func TestTheFfmpegCheckRefusesATargetThisBuildCompilesAnFfmpegFor(t *testing.T) {
+	tl := tool{repo: t.TempDir()}
+
+	err := tl.runFFmpegCheck(options{target: "linux-amd64"}, io.Discard)
+	if err == nil {
+		t.Fatal("the check accepted a target whose pair this build compiles in a container")
+	}
+
+	if !strings.Contains(err.Error(), "linux-amd64") || !strings.Contains(err.Error(), "go run ./cmd/build ffmpeg linux-amd64") {
+		t.Errorf("the failure %q does not name the target and the command that proves it", err.Error())
+	}
+}
+
 // The check runs the pair, so it runs where the pair runs. Asked for a target this machine is not, it
 // names the machine to run it on: a check that quietly skipped the pair it cannot execute would be a
 // proof of nothing, and the build would have no way to tell.
@@ -542,6 +559,13 @@ func TestTheFfmpegCheckRefusesAHostThatIsNotItsTargets(t *testing.T) {
 		if !strings.Contains(err.Error(), target) {
 			t.Errorf("the failure %q does not name the %s host to run it on", err.Error(), target)
 		}
+	}
+
+	// A platform outside the release matrix has no pair to prove, and the check is the proof of a pair.
+	if err := checkFfmpegCheckHost("netbsd-amd64"); err == nil {
+		t.Error("the check accepted a platform this project releases no archive for")
+	} else if !strings.Contains(err.Error(), "netbsd-amd64") {
+		t.Errorf("the failure %q does not name the platform it refused", err.Error())
 	}
 }
 
@@ -564,7 +588,7 @@ func aCheckFor(target string, ffmpegDigest string, ffprobeDigest string) anFfmpe
 		FFProbe: ffprobeDigest,
 		Version: "ffmpeg version 9.0.2 Copyright (c) 2000-2025 the FFmpeg developers",
 		Checked: "2026-10-12T09:00:00Z",
-		Conversions: []aConversion{
+		Conversions: []production{
 			{Input: "wav", Mode: "plain", Bytes: 7675, Duration: "2.128000"},
 			{Input: "wav", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
 			{Input: "wav", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
