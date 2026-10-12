@@ -143,10 +143,10 @@ func sourceDir(manifest bundle.Manifest) string {
 // that check: without it, a manifest whose pinned source was changed would quietly reuse what the old
 // source compiled.
 //
-// A target whose pair is compiled on its own platform has no toolchain to key on, so its key is the pair:
-// the way it is produced and the digest of each program. A pair rebuilt on that platform is a new cache
-// entry, and a compiled record keys on the compile's inputs alone, so a manifest gaining these fields
-// does not invalidate a warm cache.
+// A target whose pair is compiled on its own platform has no container to key on, so its key adds the way
+// it is produced, the make program that build names, and the digest of each program. A pair rebuilt on that
+// platform is a new cache entry, and a compiled record keys on the compile's container inputs alone, so a
+// manifest gaining these fields does not invalidate a warm cache.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
@@ -166,8 +166,11 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		strings.Join(record.Conformance.Run, " "),
 	}
 
+	// The fields a target compiled on its own platform has are the way it is produced, the make program
+	// that build ran, and the digest of each program it produced. A compiled target keys on the
+	// container's inputs alone, so a manifest gaining these fields does not invalidate a warm cache.
 	if record.Produced != "" {
-		parts = append(parts, record.Produced, record.Programs["ffmpeg"], record.Programs["ffprobe"])
+		parts = append(parts, record.Produced, record.Make, record.Programs["ffmpeg"], record.Programs["ffprobe"])
 	}
 
 	return sha256Of([]byte(strings.Join(parts, "\n")))

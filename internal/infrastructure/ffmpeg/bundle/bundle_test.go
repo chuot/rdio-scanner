@@ -21,6 +21,7 @@
 package bundle
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -172,12 +173,52 @@ func TestTheManifestRecordsTheSuppliedTargetsByDigest(t *testing.T) {
 			}
 		}
 
-		if record.Container != "" || len(record.Packages) > 0 || len(record.Cross) > 0 || len(record.CFlags) > 0 || len(record.LDFlags) > 0 {
+		if record.Container != "" || len(record.Packages) > 0 || len(record.Cross) > 0 {
 			t.Errorf("%s is supplied and still records a toolchain: container %q, packages %v, cross %v", target, record.Container, record.Packages, record.Cross)
 		}
 
 		if record.Conformance.Container != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
 			t.Errorf("%s is supplied and still records a check environment: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
+		}
+	}
+}
+
+// A supplied pair is compiled on the platform the target runs on, and the manifest is where that compile is
+// written down: the flags that set the floor the binary declares and link it the way the target needs, and
+// the make program the build runs. ffmpeg's own documentation refuses BSD make, so the FreeBSD record names
+// gmake; the macOS records name none, because the Command Line Tools carry make.
+func TestTheSuppliedRecordsNameTheCompileTheirHostRuns(t *testing.T) {
+	manifest := ReadManifest()
+
+	type native struct {
+		cflags  []string
+		ldflags []string
+		make    string
+	}
+
+	want := map[string]native{
+		"freebsd-amd64": {ldflags: []string{"-static"}, make: "gmake"},
+		"macos-amd64":   {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
+		"macos-arm64":   {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
+	}
+
+	for target, w := range want {
+		record, ok := manifest.Targets[target]
+		if !ok {
+			t.Errorf("the manifest has no record for %s", target)
+			continue
+		}
+
+		if got := strings.Join(record.CFlags, " "); got != strings.Join(w.cflags, " ") {
+			t.Errorf("%s compiles with the cflags %v, want %v", target, record.CFlags, w.cflags)
+		}
+
+		if got := strings.Join(record.LDFlags, " "); got != strings.Join(w.ldflags, " ") {
+			t.Errorf("%s links with the ldflags %v, want %v", target, record.LDFlags, w.ldflags)
+		}
+
+		if record.Make != w.make {
+			t.Errorf("%s runs %s as its make program, want %q", target, record.Make, w.make)
 		}
 	}
 }

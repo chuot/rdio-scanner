@@ -69,11 +69,11 @@ type Source struct {
 // it, and the configure arguments that make the compile cross to it. This build compiles that target's
 // ffmpeg and runs the pair it produced through the ffmpeg check.
 //
-// A record with `produced` saying `supplied` names no toolchain at all, and carries the digest of each
-// program of the pair the maintainer compiled on the platform the target runs on. Such a record carries no
-// container, no packages, no cross arguments, no flags, and no check environment: the machine that
-// produces the releases has none of those for it, and asking for one would be a build that fails for
-// wanting a toolchain it was never going to have.
+// A record with `produced` saying `supplied` names no container, no packages, no cross arguments, and no
+// check environment: the machine that produces the releases has none of those for it, and asking for one
+// would be a build that fails for wanting a toolchain it was never going to have. What it does name is the
+// compile that runs on the platform the target runs on — `cflags` and `ldflags` are the extra configure
+// flags that compile adds, and `make` is the make program it runs.
 //
 // A target with no record in the manifest is an uncovered target: the build compiles no ffmpeg for it,
 // adopts nothing for it, and the server that runs on it uses the host's.
@@ -83,6 +83,10 @@ type Target struct {
 	Cross     []string `json:"cross"`
 	CFlags    []string `json:"cflags"`
 	LDFlags   []string `json:"ldflags"`
+
+	// Make is the make program a compile of this target runs. Empty is `make`. FreeBSD's base make is not
+	// GNU make and ffmpeg's build asks for GNU make, so the FreeBSD record names `gmake`.
+	Make string `json:"make"`
 
 	// Conformance is how the compiled program is run to be checked, which is not always the container
 	// that compiled it: a cross-compiled binary needs an interpreter, and a Windows program needs an
