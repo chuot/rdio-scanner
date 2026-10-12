@@ -53,9 +53,17 @@ const guideSource = "docs/admin-guide.html"
 // archiveFiles reads what a target's archive carries: the program, the guide that operates it, and the
 // licence of the ffmpeg the build embeds.
 //
-// The licence is the text the ffmpeg phase wrote from the manifest, and the archive carries it under the
-// name a reader looks for, not the name the bundle directory uses. A target this project ships with the
-// ffmpeg its host installs has no ffmpeg inside its binary, so it has no licence to carry.
+// Every target the release matrix ships carries an ffmpeg inside its binary, so every one of these
+// archives carries a licence: the five this build compiles carry the notice naming the recipe, the source
+// digest and the command that produced the pair, and the three whose pair the maintainer compiled on the
+// platform the target runs on carry the notice saying the release build adopted that pair, on the digest
+// the manifest pins and on the proof the build's ffmpeg check left on that platform. The licence is the
+// text the ffmpeg phase wrote from the manifest, and the archive carries it under the name a reader looks
+// for, not the name the bundle directory uses.
+//
+// A target the manifest has no record for carries no licence, because it carries no ffmpeg: that is a
+// hand-named target outside the matrix, which is what a developer builds to try something this project
+// does not release.
 //
 // The archive's layout is the repository's own layout, so the path the guide states for itself resolves
 // inside the archive. The tool renders nothing, converts nothing, inlines nothing, and rewrites nothing:

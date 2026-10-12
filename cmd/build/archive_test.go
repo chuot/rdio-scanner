@@ -28,6 +28,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
 // One archive per release target. What it carries is the release-archive contract this command carries:
@@ -255,6 +257,76 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 
 		if !found {
 			t.Errorf("%s: the archive carries no FFMPEG.txt: %v", target, names)
+		}
+	}
+}
+
+// A supplied target's archive says what the ffmpeg inside its binary is, in the text the ffmpeg phase
+// writes for a pair it adopted and did not compile: the licence terms, the source release the manifest
+// pins, the configure recipe, the two programs by digest, that the project's maintainer compiled the pair
+// on the platform the target runs on, and that the build's ffmpeg check ran for it there, on the date the
+// proof recorded. The archive carries that text under the name a reader looks for, and carries no
+// markdown file beside it.
+func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
+	repo := t.TempDir()
+
+	tr, found := targetFor("macos-arm64")
+	if !found {
+		t.Fatal("the release matrix has no macos-arm64, the target this test is about")
+	}
+
+	manifest := bundle.ReadManifest()
+
+	check := anFfmpegCheck{
+		Target:      "macos-arm64",
+		Host:        "macos-arm64",
+		FFmpeg:      strings.Repeat("a", 64),
+		FFProbe:     strings.Repeat("b", 64),
+		Version:     "ffmpeg version 7.1",
+		Checked:     "2026-10-09T12:00:00Z",
+		Conversions: []production{{Input: "0s", Mode: "plain", Bytes: 1024, Duration: "3.500000"}},
+	}
+
+	licence := suppliedFFMpegLicence(manifest, "macos-arm64", check)
+
+	writeArchiveSource(t, repo, "macos-arm64", "rdio-scanner", "the binary")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
+	writeArchiveLicence(t, repo, "macos-arm64", licence)
+
+	files, err := archiveFiles(repo, tr)
+	if err != nil {
+		t.Fatalf("archiveFiles: %v", err)
+	}
+
+	names := fileNames(files)
+
+	if strings.Join(names, " ") != strings.Join([]string{"rdio-scanner", "docs/admin-guide.html", "FFMPEG.txt"}, " ") {
+		t.Fatalf("the archive carries %v, want the program, the guide and the licence", names)
+	}
+
+	for _, f := range files {
+		if strings.HasSuffix(f.name, ".md") {
+			t.Errorf("the archive carries %s, a markdown file", f.name)
+		}
+	}
+
+	carried := string(files[2].body)
+
+	if carried != licence {
+		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase writes for a supplied pair", carried)
+	}
+
+	for _, want := range []string{
+		"ffmpeg is free software",
+		"Lesser General Public License version 2.1",
+		manifest.Source.URL,
+		"compiled for macos-arm64\nby the project's maintainer on macos-arm64",
+		"This pair was not compiled by the release build",
+		"which ran for it on macos-arm64 on 2026-10-09T12:00:00Z and converted 1 recordings",
+	} {
+		if !strings.Contains(carried, want) {
+			t.Errorf("the licence in the archive does not say %q:\n%s", want, carried)
 		}
 	}
 }
