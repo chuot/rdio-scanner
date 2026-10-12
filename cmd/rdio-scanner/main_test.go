@@ -89,6 +89,52 @@ func TestTheBundleWarningNamesEveryUnbuiltApplication(t *testing.T) {
 	}
 }
 
+// TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor: the command line parses a configuration, and
+// the server is built from a second one — the composition root's own shape. The two are joined by one
+// function, and a switch the command layer parses and that function does not carry across is a switch
+// the operator typed and the server never heard: the flag is accepted, the ini line is honoured by the
+// file's own reader, `-config_save` writes the line, and the deployment runs without the endpoint, with
+// nothing said about the switch it was given.
+//
+// The switches named here are the ones with a server behaviour behind them that no file path and no
+// address can stand in for: the Model Context Protocol endpoint, and the proxy addresses whose
+// X-Forwarded-For the server honors.
+func TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-mcp_server", "-trusted_proxies", "10.0.0.0/8, 127.0.0.1")
+
+	served := serverConfig(cfg, io.Discard, nil)
+
+	if !served.McpServer {
+		t.Fatalf("the server's configuration says McpServer = %v, want true: -mcp_server was typed by the "+
+			"operator and the server is built from this configuration, so the endpoint is not served on a "+
+			"deployment that asked for it", served.McpServer)
+	}
+
+	if served.TrustedProxies != cfg.TrustedProxies {
+		t.Fatalf("the server's configuration carries %q for the proxy addresses, want %q: -trusted_proxies "+
+			"was typed by the operator and the server is built from this configuration, so the login budget "+
+			"and the access warnings keep naming a proxied request by the proxy's address",
+			served.TrustedProxies, cfg.TrustedProxies)
+	}
+
+	// The switches are opt-in, and the way they are opt-in has to survive the handoff: a copy that
+	// turns the default into something else would serve an endpoint no operator asked for.
+	plain, _ := newTestConfig(t)
+
+	quiet := serverConfig(plain, io.Discard, nil)
+
+	if quiet.McpServer {
+		t.Errorf("the server's configuration says McpServer = %v for a deployment that asked for nothing, "+
+			"want off: the surface is opt-in at every entry point", quiet.McpServer)
+	}
+
+	if quiet.TrustedProxies != "" {
+		t.Errorf("the server's configuration carries %q for the proxy addresses of a deployment that named "+
+			"none, want nothing: a default proxy list would trust addresses the operator never named",
+			quiet.TrustedProxies)
+	}
+}
+
 // The -admin_password mode is a one-shot: it stores the credential, says so in the log view, and stops
 // without starting a server.
 func TestAdminPasswordModeStoresTheCredentialAndStops(t *testing.T) {

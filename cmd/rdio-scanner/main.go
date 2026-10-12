@@ -191,9 +191,17 @@ func serverConfig(config *Config, out io.Writer, echo app.LogEcho) app.Config {
 		SslCertFile: config.SslCertFile,
 		SslKeyFile:  config.SslKeyFile,
 		SslListen:   config.SslListen,
-		Version:     Version,
-		Out:         out,
-		Echo:        echo,
+
+		// The two switches the operator opts in to, carried across by hand and not by the fields
+		// that share a name. A switch the command layer parses and this function does not carry is
+		// a switch the server never hears: the flag is accepted, the ini line is read, `-config_save`
+		// writes it, and the deployment runs as if it had never been typed.
+		TrustedProxies: config.TrustedProxies,
+		McpServer:      config.McpServer,
+
+		Version: Version,
+		Out:     out,
+		Echo:    echo,
 		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
 			ffmpegPath, ffprobePath, failure := bundledFFmpeg(dir)
 			choice := theConverter(ffmpegPath, ffprobePath, failure)
