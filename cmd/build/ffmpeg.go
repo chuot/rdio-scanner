@@ -590,10 +590,12 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 	// program of an architecture this host may not execute, and the compiler's own architecture flag in
 	// the compiler and linker flags. On the target's own host the compiler's default is the target's
 	// architecture, and none of the three is named.
+	compilerArch := theCompilerArchitectureTheHostMustProduce(target, machine)
+
 	cflags := append([]string{}, record.CFlags...)
 	ldflags := append([]string{}, record.LDFlags...)
 
-	if compilerArch := theCompilerArchitectureTheHostMustProduce(target, machine); compilerArch != "" {
+	if compilerArch != "" {
 		configure = append(configure, "--arch="+theFFmpegArchitectureOf(target), "--enable-cross-compile")
 
 		cflags = append(cflags, "-arch "+compilerArch)
@@ -1052,6 +1054,8 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	target := ffmpegTarget(o)
 
+	machine := t.machine()
+
 	paths := ffmpegPathsFor(t.repo, manifest, target)
 
 	record, covered := manifest.Targets[target]
@@ -1078,7 +1082,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		nativeTools:    nativeTools,
 	}
 
-	plan, err := planFFmpeg(o, t.repo, manifest, state, t.machine())
+	plan, err := planFFmpeg(o, t.repo, manifest, state, machine)
 	if err != nil {
 		return false, err
 	}

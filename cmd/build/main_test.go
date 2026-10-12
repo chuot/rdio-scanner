@@ -759,7 +759,17 @@ type whatRan struct {
 	pins     map[string]string
 }
 
+// aNativeRun is the build standing on the machine that is the target.
 func aNativeRun(t *testing.T, target string, failAt string) (*tool, *bytes.Buffer, *whatRan, string) {
+	t.Helper()
+
+	return aNativeRunOn(t, target, failAt, aMachineForTarget(target))
+}
+
+// aNativeRunOn is the build standing on a host of a chosen architecture. The machine that is the target is
+// the one that compiles its own pair; a compile across the two macOS architectures stands the host of the
+// other architecture in front of the same harness.
+func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*tool, *bytes.Buffer, *whatRan, string) {
 	t.Helper()
 
 	repo := t.TempDir()
@@ -783,7 +793,7 @@ func aNativeRun(t *testing.T, target string, failAt string) (*tool, *bytes.Buffe
 
 		// The harness is the build standing on the host the pair is compiled on, which is the one
 		// fact that makes the plan compile the pair instead of skipping the target.
-		machine: func() host { return aMachineForTarget(target) },
+		machine: func() host { return theHost },
 
 		source: func(src ffmpegSource, manifest bundle.Manifest) error {
 			seen.ran = append(seen.ran, "source")
