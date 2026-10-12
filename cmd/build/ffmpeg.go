@@ -1054,7 +1054,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	target := ffmpegTarget(o)
 
-	machine := t.machine()
+	machine := t.theMachine()
 
 	paths := ffmpegPathsFor(t.repo, manifest, target)
 

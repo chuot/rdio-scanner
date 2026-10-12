@@ -96,6 +96,16 @@ type tool struct {
 	machine func() host
 }
 
+// theMachine is the platform the build is standing on. A tool assembled without it — a test that asks one
+// phase and names no machine — stands on this one, which is the answer the field would give.
+func (t tool) theMachine() host {
+	if t.machine == nil {
+		return thisMachine()
+	}
+
+	return t.machine()
+}
+
 // newTool is the tool the build command runs with: the tree it works in, and every part the phases ask
 // of it.
 //

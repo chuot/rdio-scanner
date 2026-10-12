@@ -418,22 +418,30 @@ func readFfmpegCheck(repo string, target string, ffmpegDigest string, ffprobeDig
 	return check, nil
 }
 
-// checkFfmpegCheckHost reports whether this machine is the host the ffmpeg check has to run on.
+// checkFfmpegCheckHost reports whether a machine is a host the ffmpeg check has to run on.
 //
 // The check runs the pair, so it runs where the pair runs. A check that quietly accepted a target it
-// cannot execute would leave a proof of nothing, and the build would have no way to tell that from a
-// pair that converts.
-func checkFfmpegCheckHost(target string) error {
+// cannot execute would leave a proof of nothing, and the build would have no way to tell that from a pair
+// that converts.
+//
+// The rule is the operating system, and not the architecture inside it. A macOS pair is proved on a macOS
+// host of either architecture: an Apple Silicon Mac executes an Intel program through Rosetta 2, and the
+// proof it records is the proof of the program the Intel machine runs. The proof file keeps naming the host
+// that recorded it, which is what says which machine proved the pair. A host that cannot execute the pair it
+// is asked to prove — an Intel Mac holding the arm64 pair — is answered by the operating system when the
+// pair is run, and not by a guess about what the host has installed.
+func checkFfmpegCheckHost(target string, machine host) error {
 	tr, ok := targetFor(target)
 	if !ok {
 		return fmt.Errorf("%s is not a release target this project ships", target)
 	}
 
-	if tr.goos == runtime.GOOS && tr.goarch == runtime.GOARCH {
+	if machine.goos == tr.goos {
 		return nil
 	}
 
-	return fmt.Errorf("the ffmpeg check runs the pair, so it runs where the pair runs: run go run ./cmd/build ffmpeg-check %s on a %s host, and this machine is %s", target, target, runtimeTarget())
+	return fmt.Errorf("the ffmpeg check runs the pair, so it runs where the pair runs: run go run ./cmd/build ffmpeg-check %s on a %s host, and this machine is %s",
+		target, target, releaseTargetWordFor(machine.goos, machine.goarch))
 }
 
 // missingCheckFor is what an operator is told when a supplied target has no proof, and the command that
@@ -482,7 +490,7 @@ func theChecksRecorded(repo string) []string {
 func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 	target := ffmpegTarget(o)
 
-	if err := checkFfmpegCheckHost(target); err != nil {
+	if err := checkFfmpegCheckHost(target, t.theMachine()); err != nil {
 		return err
 	}
 

@@ -685,6 +685,50 @@ func TestTheBuildRefusesAPairTheFfmpegCheckDidNotProve(t *testing.T) {
 	}
 }
 
+// The proof of a macOS pair is valid from a macOS host of either architecture, and the proof file keeps
+// naming the host that recorded it. An Apple Silicon Mac proving the Intel pair through Rosetta 2 records
+// the proof of the program the Intel machine runs, and the release record says which machine proved it. A
+// proof from a host of another operating system is the proof of a pair that host cannot run at all.
+func TestTheProofOfAMacOSTargetIsRecordedByAMacOSHostOfEitherArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		name, host string
+		adopted    bool
+	}{
+		{name: "the other macOS architecture", host: "darwin-arm64", adopted: true},
+		{name: "the target's own architecture", host: "darwin-amd64", adopted: true},
+		{name: "a Linux host", host: "linux-amd64", adopted: false},
+		{name: "a FreeBSD host", host: "freebsd-amd64", adopted: false},
+		{name: "a Windows host", host: "windows-amd64", adopted: false},
+	} {
+		repo := t.TempDir()
+
+		record := aCheckFor("macos-amd64", theFFmpegDigest, theFFProbeDigest)
+		record.Host = tc.host
+
+		if err := writeFfmpegCheck(repo, record); err != nil {
+			t.Fatalf("%s: writeFfmpegCheck: %v", tc.name, err)
+		}
+
+		got, err := readFfmpegCheck(repo, "macos-amd64", theFFmpegDigest, theFFProbeDigest)
+
+		if tc.adopted {
+			if err != nil {
+				t.Errorf("%s: the build refused a proof of macos-amd64 recorded on %s: %v", tc.name, tc.host, err)
+			}
+
+			if got.Host != tc.host {
+				t.Errorf("%s: the proof adopted names the host %s, want %s: the proof file says which machine proved the pair", tc.name, got.Host, tc.host)
+			}
+
+			continue
+		}
+
+		if err == nil {
+			t.Errorf("%s: the build adopted a pair proved on %s, a host that cannot run the pair", tc.name, tc.host)
+		}
+	}
+}
+
 // The proof is the evidence a supplied pair is adopted on, and the host that compiled the pair is the
 // only machine that can record it. A proof naming video codecs is that host telling the release it
 // compiled a program this project does not ship; a proof recorded by a build that never asked what the
@@ -751,12 +795,12 @@ func TestTheFfmpegCheckRefusesATargetThisBuildCompilesAnFfmpegFor(t *testing.T) 
 // names the machine to run it on: a check that quietly skipped the pair it cannot execute would be a
 // proof of nothing, and the build would have no way to tell.
 func TestTheFfmpegCheckRefusesAHostThatIsNotItsTargets(t *testing.T) {
-	if err := checkFfmpegCheckHost("linux-amd64"); err != nil {
+	if err := checkFfmpegCheckHost("linux-amd64", thisMachine()); err != nil {
 		t.Errorf("the check refused the host it is standing on: %v", err)
 	}
 
 	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
-		err := checkFfmpegCheckHost(target)
+		err := checkFfmpegCheckHost(target, thisMachine())
 		if err == nil {
 			t.Errorf("the check accepted %s on a machine that is not a %s host", target, target)
 			continue
@@ -768,10 +812,58 @@ func TestTheFfmpegCheckRefusesAHostThatIsNotItsTargets(t *testing.T) {
 	}
 
 	// A platform outside the release matrix has no pair to prove, and the check is the proof of a pair.
-	if err := checkFfmpegCheckHost("netbsd-amd64"); err == nil {
+	if err := checkFfmpegCheckHost("netbsd-amd64", thisMachine()); err == nil {
 		t.Error("the check accepted a platform this project releases no archive for")
 	} else if !strings.Contains(err.Error(), "netbsd-amd64") {
 		t.Errorf("the failure %q does not name the platform it refused", err.Error())
+	}
+}
+
+// The rule the check enforces is the operating system, not the architecture inside it. A macOS pair is
+// proved on a macOS host of either architecture: an Apple Silicon Mac executes an Intel program through
+// Rosetta 2, and the proof is the pair's own execution, so the proof an Apple Silicon Mac records for the
+// Intel pair is the proof of the program the Intel machine runs. The proof file keeps naming the host that
+// recorded it, which is what says which machine proved the pair.
+//
+// A host that cannot execute the pair it is asked to prove is not this rule's business: the pair is run,
+// and the operating system answers. FreeBSD is one architecture in this release, and its pair is proved on
+// FreeBSD.
+func TestTheFfmpegCheckOfAMacOSTargetRunsOnEitherMacOSArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		target  string
+		machine host
+		runs    bool
+	}{
+		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "arm64"}, runs: true},
+		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "amd64"}, runs: true},
+		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "amd64"}, runs: true},
+		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "arm64"}, runs: true},
+		{target: "freebsd-amd64", machine: host{goos: "freebsd", goarch: "amd64"}, runs: true},
+		{target: "linux-amd64", machine: host{goos: "linux", goarch: "amd64"}, runs: true},
+		{target: "macos-amd64", machine: host{goos: "linux", goarch: "amd64"}, runs: false},
+		{target: "macos-arm64", machine: host{goos: "freebsd", goarch: "amd64"}, runs: false},
+		{target: "freebsd-amd64", machine: host{goos: "darwin", goarch: "arm64"}, runs: false},
+		{target: "freebsd-amd64", machine: host{goos: "linux", goarch: "amd64"}, runs: false},
+	} {
+		err := checkFfmpegCheckHost(tc.target, tc.machine)
+
+		if tc.runs {
+			if err == nil {
+				continue
+			}
+
+			t.Errorf("%s on a %s/%s host: the check refused a host that runs the pair: %v", tc.target, tc.machine.goos, tc.machine.goarch, err)
+			continue
+		}
+
+		if err == nil {
+			t.Errorf("%s on a %s/%s host: the check accepted a host of another operating system, which cannot run the pair at all", tc.target, tc.machine.goos, tc.machine.goarch)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.target) {
+			t.Errorf("the failure %q does not name the %s host to run it on", err.Error(), tc.target)
+		}
 	}
 }
 
