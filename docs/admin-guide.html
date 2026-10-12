@@ -565,8 +565,10 @@ footer.site .signoff {
     </li>
     <li>
       <strong>The upload endpoints</strong> — a recorder posts the audio and its metadata to
-      <code>POST /api/call-upload</code>, or posts trunk-recorder's JSON sidecar to
-      <code>POST /api/trunk-recorder-call-upload</code>, presenting an API key. See
+      <code>POST /api/call-upload</code>, the endpoint that takes the call's fields as form fields, or
+      posts trunk-recorder's JSON sidecar to <code>POST /api/trunk-recorder-call-upload</code>, the older
+      endpoint that reads the sidecar as a document, marked deprecated in
+      <a href="#ch-10-getting-audio-in">chapter 10</a> and on its way out. Both present an API key. See
       <a href="#ch-16-rest-api">The HTTP REST API</a>.
     </li>
   </ul>
@@ -1680,9 +1682,27 @@ bcrypt_cost = 12</code></pre>
     <thead><tr><th scope="col">Endpoint</th><th scope="col">What it takes</th><th scope="col">Use it for</th></tr></thead>
     <tbody>
       <tr><td><code>POST /api/call-upload</code></td><td>A multipart body: the credential in the <code>key</code> field, the recording in the <code>audio</code> field, and the metadata in the fields below</td><td>A recorder, a script, or an integration that names the call's fields itself</td></tr>
-      <tr><td><code>POST /api/trunk-recorder-call-upload</code></td><td>A multipart body: <code>key</code>, the recording in <code>audio</code>, and Trunk Recorder's JSON sidecar in <code>meta</code></td><td>Trunk Recorder, on a host the server cannot watch</td></tr>
+      <tr><td><code>POST /api/trunk-recorder-call-upload</code></td><td>A multipart body: <code>key</code>, the recording in <code>audio</code>, and Trunk Recorder's JSON sidecar in <code>meta</code></td><td><strong>Deprecated.</strong> Trunk Recorder on a host the server cannot watch, until it posts to the endpoint above</td></tr>
     </tbody>
   </table>
+
+  <aside class="caution">
+    <p>
+      <strong>The trunk-recorder endpoint is deprecated in favor of <code>/api/call-upload</code>, and a
+      future release will remove it.</strong> It exists because Trunk Recorder posts a JSON sidecar beside
+      the recording and that endpoint reads the sidecar as a document; the general endpoint reads form
+      fields, and a call it takes is the same call. Moving a recorder means reading the sidecar and posting
+      what is in it as the fields below — <code>system</code>, <code>talkgroup</code>,
+      <code>frequency</code>, <code>site</code>, <code>timestamp</code>, <code>audio</code>, and the rest —
+      beside the <code>key</code>. A <code>meta</code> part posted to the general endpoint is not read as a
+      sidecar: it is one more form field, and the call arrives without what was in it.
+    </p>
+    <p>
+      Nothing else about the upload changes: the same key, the same plain-text answers, the same ingest.
+      Plan the move while the endpoint is answering, and do not let a recorder you no longer run be the one
+      that finds out it is gone.
+    </p>
+  </aside>
 
   <table>
     <caption>The fields <code>/api/call-upload</code> reads</caption>
@@ -1755,6 +1775,28 @@ rm -f ${basename}.*</code></pre>
     the server are on the same host, watch the capture directory instead — a dirwatch needs no key, no
     script, and no network.
   </p>
+
+  <aside class="note">
+    <p>
+      This script posts to the deprecated endpoint. The same call goes to <code>/api/call-upload</code> as
+      form fields, with the values the sidecar carries named for what they are:
+    </p>
+
+    <pre><code>curl -sS http://127.0.0.1:3000/api/call-upload \
+     -F "key=${apikey}" \
+     -F "audio=@${basename}.wav;type=audio/wav" \
+     -F "system=${1:-0}" \
+     -F "talkgroup=${talkgroup}" \
+     -F "frequency=${frequency}" \
+     -F "site=${site}" \
+     -F "timestamp=${timestamp}"</code></pre>
+
+    <p>
+      The sidecar's own names are the field names above, so the move is reading the JSON and naming the
+      fields, not translating the call. The fields the general endpoint reads are listed above, and the
+      endpoint answers the same two lines either way.
+    </p>
+  </aside>
 
   <h3>RTLSDR-Airband</h3>
 
@@ -2533,7 +2575,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td><code>GET /api/calls/{callId}</code></td><td>session or access code</td><td>One recorded call.</td></tr>
       <tr><td><code>GET /api/calls/{callId}/audio</code></td><td>session or access code</td><td>One recording.</td></tr>
       <tr><td><code>POST /api/call-upload</code></td><td>the <code>key</code> field</td><td>Uploads a call as multipart form fields.</td></tr>
-      <tr><td><code>POST /api/trunk-recorder-call-upload</code></td><td>the <code>key</code> field</td><td>Uploads a trunk-recorder call: the JSON sidecar in <code>meta</code>, the recording in <code>audio</code>.</td></tr>
+      <tr><td><code>POST /api/trunk-recorder-call-upload</code></td><td>the <code>key</code> field</td><td><strong>Deprecated.</strong> Uploads a trunk-recorder call: the JSON sidecar in <code>meta</code>, the recording in <code>audio</code>. A future release removes it; post the same call to <code>/api/call-upload</code> as form fields.</td></tr>
       <tr><td><code>GET /</code></td><td>nothing</td><td>The scanner webapp.</td></tr>
       <tr><td><code>GET /admin</code></td><td>nothing</td><td>Redirects to <code>/admin/</code>, so the interface's relative addresses resolve inside its own subtree.</td></tr>
       <tr><td><code>GET /admin/</code></td><td>nothing</td><td>The administration interface.</td></tr>
@@ -3317,22 +3359,523 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
 
 <section>
   <h2 id="ch-22-security-hardening">22 · Security hardening</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    A deployment holds four things worth protecting: the administrator's credential, the secret that signs
+    its sessions, the credentials that let audio in, and the credentials that let people listen. The server
+    has one model for each, and the hardening is knowing what each one is, and what it costs to leave it
+    as it shipped.
+  </p>
+
+  <h3>The credentials and what they are</h3>
+
+  <table>
+    <caption>The four credentials a deployment holds</caption>
+    <thead><tr><th scope="col">Credential</th><th scope="col">What it opens</th><th scope="col">Where it lives</th></tr></thead>
+    <tbody>
+      <tr><td>The administrator password</td><td>Everything: the configuration, the log, the access codes, the ingest keys, the password itself</td><td>Hashed with bcrypt in the database. The cost is <code>-bcrypt_cost</code>, 10 to 14, default 10.</td></tr>
+      <tr><td>The signing secret</td><td>The power to mint administrator sessions</td><td>In the database's options. Generated on a start that found none; a secret found too short to be safe is replaced.</td></tr>
+      <tr><td>An ingest API key</td><td>One path: posting a call to an upload endpoint</td><td>In the configuration, listed in the API Keys section.</td></tr>
+      <tr><td>A listener access code</td><td>The calls its scope covers, for as long as it is valid, up to its limit</td><td>In the configuration, listed in the Access section.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The session token is not a credential you store: it is a signature the server makes with its secret,
+    and the server keeps the last five it issued. Signing in ends the sessions older than the five, and a
+    server that changes its secret ends every session opened before the change — which is why the console
+    says it out loud on the start that does it, and why restoring a database from a backup ends the
+    sessions opened on the deployment you restored over.
+  </p>
+
+  <h3>The checklist</h3>
+
+  <table>
+    <caption>Hardening, in the order it pays</caption>
+    <thead><tr><th scope="col">Do this</th><th scope="col">Because</th><th scope="col">Chapter</th></tr></thead>
+    <tbody>
+      <tr><td>Change the administrator password on the first day</td><td>The shipped password is published, and the interface tells you that you are still using it in the todos banner.</td><td><a href="#ch-15-tools">15</a></td></tr>
+      <tr><td>Raise the bcrypt cost to 12 or more on a machine that can afford the milliseconds</td><td>The cost is the price of guessing the password offline. It applies to the next password you store, not to the one already stored.</td><td><a href="#ch-06-flags-and-ini">6</a></td></tr>
+      <tr><td>Answer over TLS, directly or through a proxy</td><td>The login sends a password, and the session token is the credential itself after that. On a network you do not own, plain http hands both to anyone listening.</td><td><a href="#ch-19-tls">19</a>, <a href="#ch-20-reverse-proxies">20</a></td></tr>
+      <tr><td>Name your proxy in <code>-trusted_proxies</code></td><td>Behind an unnamed proxy, every login arrives from the proxy's address, and the login lockout counts per address: one user's three guesses lock out everyone behind that proxy.</td><td><a href="#ch-20-reverse-proxies">20</a></td></tr>
+      <tr><td>Give every access code a scope, an expiry, and a limit</td><td>An access code with no scope is every call on the deployment. An access code with no expiry is a credential you cannot stop handing out.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
+      <tr><td>Set the retention days</td><td>A deployment that keeps every call and every log entry forever keeps a recording of every transmission it has ever heard, on a disk that fills.</td><td><a href="#ch-13-options">13</a>, <a href="#ch-14-logs">14</a></td></tr>
+      <tr><td>Keep the base directory readable by the deployment's account and by nobody who matters</td><td>The ini file, the database, the recordings, and the autocert cache are all in it. The database holds the password hash, the secret, the ingest keys, and the access codes.</td><td><a href="#ch-05-first-run">5</a></td></tr>
+      <tr><td>Do not put credentials in a command line you type on a shared machine</td><td>A command-line argument is visible to every other process on the machine. The client reads the password from the environment first for this reason.</td><td><a href="#ch-18-command-line-client">18</a></td></tr>
+      <tr><td>Treat an administrator session token as a credential when you hand it to an assistant</td><td>The assistant surface writes when it presents that token: it can add an access code, replace a section, change the password.</td><td><a href="#ch-17-mcp-server">17</a></td></tr>
+      <tr><td>Back up the base directory before you update, and before you migrate</td><td>The migration rewrites the database in place.</td><td><a href="#ch-23-backup-and-restore">23</a>, <a href="#ch-24-upgrading-and-migrating">24</a></td></tr>
+    </tbody>
+  </table>
+
+  <h3>The limits the server already runs</h3>
+
+  <table>
+    <caption>What the server refuses, and how</caption>
+    <thead><tr><th scope="col">Limit</th><th scope="col">Value</th><th scope="col">What it looks like from outside</th></tr></thead>
+    <tbody>
+      <tr><td>Administrator logins per address</td><td>Three in a ten-minute window</td><td>The address is refused for the rest of the window. The answer is an empty <code>401</code>, with no hint of how many attempts are left. The lockout is one warning in the log, under <em>Login</em>, per window.</td></tr>
+      <tr><td>Access attempts</td><td>Five per session, and five per address</td><td>A listener who has used the five is refused, and a listener whose fifth attempt arrives while they are locked out is refused as locked out — a valid code included.</td></tr>
+      <tr><td>Simultaneous listeners</td><td><code>MaxClients</code>, default 200, and per access code</td><td>The connection is refused in silence: the server does not tell the caller why.</td></tr>
+      <tr><td>Session tokens kept</td><td>The last five issued</td><td>A sixth login ends the oldest session.</td></tr>
+      <tr><td>Every refusal</td><td>—</td><td>An empty body and a status, on every entry point, so a script never learns which credential it was missing.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What the server does not do</h3>
+
+  <p>
+    Knowing the shape of the model is knowing where the work is yours:
+  </p>
+
+  <ul>
+    <li><strong>One administrator.</strong> There is no second administrator account, no roles, no
+    per-section permissions. Anyone with the password can do everything, so the password is the secret of
+    the deployment, and the people who do not need it do not have it.</li>
+    <li><strong>No second factor.</strong> The password is the credential. TLS, a proxy that is not
+    reachable from the internet, and a password nobody guesses are the controls.</li>
+    <li><strong>No address allowlist.</strong> The server answers whoever connects. Restricting who
+    reaches the deployment is the firewall's and the proxy's job.</li>
+    <li><strong>No rate limit on the upload endpoints.</strong> An ingest key is a key: anyone holding it
+    posts calls. Rotate a key you think is loose, and watch the log under <em>Ingest</em>.</li>
+    <li><strong>No audit trail beyond the log.</strong> The log is the record: configuration changes,
+    logins, refusals, lockouts, retention, migrations, the assistant surface's writes. It is filed by
+    subsystem, and it is pruned by the retention setting — so a deployment that needs the record keeps the
+    retention days long enough to hold it.</li>
+  </ul>
+
+  <aside class="note">
+    <p>
+      Nothing in the log is a credential. The server files addresses, subsystems, and outcomes, and never a
+      password, a token, an ingest key, or an access code. That is what makes the log view safe to read
+      aloud on a support call, and safe to keep.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-23-backup-and-restore">23 · Backup and restore</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    A deployment is a program and a folder. The program is in the release archive and can be downloaded
+    again; the folder cannot. Back up the folder, and the deployment is backed up.
+  </p>
+
+  <h3>What is in the folder</h3>
+
+  <table>
+    <caption>The files a deployment writes in its base directory</caption>
+    <thead><tr><th scope="col">File</th><th scope="col">What it holds</th><th scope="col">Back it up</th></tr></thead>
+    <tbody>
+      <tr><td><code>rdio-scanner.db</code></td><td>Everything the deployment knows: the systems, sites, talkgroups, units, groups, tags, options, access codes, ingest keys, downstreams, watched directories, the log, and <strong>the recordings themselves</strong> — each call's audio is stored in the call's row.</td><td>Yes. This is the deployment.</td></tr>
+      <tr><td><code>rdio-scanner.ini</code></td><td>The flags you saved: the listening address, the database settings, TLS, trusted proxies, the bcrypt cost, the assistant surface.</td><td>Yes. It is small, and it is the part you typed.</td></tr>
+      <tr><td><code>autocert/</code></td><td>The certificates obtained from Let's Encrypt and their keys.</td><td>Yes, or be ready to obtain them again.</td></tr>
+      <tr><td>The token file the client writes</td><td>The session token <code>-cmd</code> logs in with.</td><td>Not worth backing up. It is a live credential, and it is re-made by logging in.</td></tr>
+      <tr><td>The program, and the ffmpeg it carries</td><td>The code, and the converters compiled for its target.</td><td>No. The release archive has them.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The recordings are in the database, which is the fact that makes a backup of a deployment one file
+    rather than a tree: a call's audio travels with the call, so a database restored on a new machine
+    plays its whole history, and a database restored without its recordings is a history of calls that
+    play nothing.
+  </p>
+
+  <h3>Backing up</h3>
+
+  <p>
+    On the deployment's own database file, stop the server first. The server keeps the database open, and a
+    file copied while a program is writing it is a file that may not be a database.
+  </p>
+
+  <pre><code>$ sudo ./rdio-scanner -service stop
+$ cp rdio-scanner.db /backup/rdio-scanner-$(date +%F).db
+$ cp rdio-scanner.ini /backup/rdio-scanner-$(date +%F).ini</code></pre>
+
+  <p>
+    On a server database, use the database's own tool, and the same settings the server uses:
+  </p>
+
+  <pre><code>$ mysqldump --single-transaction -h 10.0.0.5 -u rdio -p rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql
+$ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql</code></pre>
+
+  <p>
+    Back it up before you update, before you migrate, and before a retention change that will delete
+    history. A deployment that records continuously is a deployment whose newest hour is the part a
+    crash takes; a deployment that keeps a week of calls is a deployment whose history is worth a nightly
+    copy.
+  </p>
+
+  <aside class="note">
+    <p>
+      The Tools section's export writes the configuration as one JSON file. It is a record of the
+      configuration — the sections as the server has them — and it is not a backup: it carries no calls, no
+      recordings, no log. It is what you send a second deployment, and what you attach when you ask for
+      help. <a href="#ch-15-tools">Chapter 15</a> is the section's own chapter.
+    </p>
+  </aside>
+
+  <h3>Restoring</h3>
+
+  <ol>
+    <li>
+      <strong>Install the program</strong> you are restoring to, in the folder the deployment will live in,
+      and put the ini file there. A deployment restored with the flags it was running with is the same
+      deployment; a deployment restored with defaults answers on 3000 with a SQLite database in a folder
+      you did not mean.
+    </li>
+    <li>
+      <strong>Put the database where the configuration points.</strong> The same name, the same path, the
+      same dialect. A SQLite file named <code>rdio-scanner.db</code> in the base directory is the default;
+      a server database is loaded with the database's own tool, into the name the ini file names.
+    </li>
+    <li>
+      <strong>Start the server.</strong> It applies the schema to the database it finds, which on a
+      restored database is a pass that finds nothing to change, and says so in the log under
+      <em>Database</em>.
+    </li>
+    <li>
+      <strong>Expect every administrator session to be ended.</strong> The signing secret is in the
+      database you restored, and it is not the secret the deployment you restored over was signing with.
+      Log in again; the interface tells you the sessions it ended.
+    </li>
+  </ol>
+
+  <p>
+    Then check the deployment as a listener: a call from the restored history plays, the systems are the
+    ones you had, the access codes are the ones you issued, and the watched directories are watching the
+    folders they were watching.
+  </p>
+
+  <aside class="caution">
+    <p>
+      A backup you have never restored is a file you hope is a backup. Restore one onto a second machine,
+      or onto a folder beside the deployment with a different <code>-db_file</code>, and start the server
+      on it. The restore is the test, and it takes minutes.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-24-upgrading-and-migrating">24 · Upgrading and migrating</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Updating the program is four steps. Migrating an older database is the first start of the new program
+    doing it for you, announcing itself in the log, and archiving what it cannot carry instead of throwing
+    it away.
+  </p>
+
+  <aside class="caution">
+    <p>
+      Back up the base directory before you update. The migration rewrites the database in place, on the
+      first start, with no second copy and no undo. <a href="#ch-23-backup-and-restore">Chapter 23</a> is
+      the backup, and it takes a minute.
+    </p>
+  </aside>
+
+  <h3>The update</h3>
+
+  <ol>
+    <li>Stop the server. A database the server has open is a database you are about to rewrite.</li>
+    <li>Back up the database and the ini file.</li>
+    <li>
+      Replace the program with the new release, in the same folder. The service is registered with the
+      path, so replacing the file in place keeps the service working; a folder moved is a service pointing
+      at a program that is no longer there.
+    </li>
+    <li>Start the server, and read what it says on the console and in the log.</li>
+  </ol>
+
+  <p>
+    The first start of a new server on a database it has already migrated changes nothing: every step of
+    the pass probes what it is about to do, finds it done, and says nothing. The pass is safe to run
+    twice, which is what makes a start after a failed start an ordinary start.
+  </p>
+
+  <h3>What the first start does to a version 6 database</h3>
+
+  <p>
+    The migration pass applies the new schema, repairs four things the new server needs that the old
+    database does not have, and then moves the thirteen tables, in the order that order requires:
+    groups, tags, systems, talkgroups, units, options, meta, logs, downstreams, watched directories,
+    calls, ingest keys, access codes. The order is load-bearing: the talkgroup, unit, dirwatch, and call
+    migrations resolve their references against the tables the earlier migrations have already filled, and
+    the same pass run in another order migrates a different database.
+  </p>
+
+  <table>
+    <caption>The four repairs, and why each one is needed</caption>
+    <thead><tr><th scope="col">Repair</th><th scope="col">What it gives the database</th></tr></thead>
+    <tbody>
+      <tr><td>The log's subsystem column</td><td>The column naming the part of the server that wrote each entry, and the indexes the log search is written against. The entries the old server wrote are filed by what their text says.</td></tr>
+      <tr><td>The call's recording length</td><td>The column saying how long each recording lasts. Rows the migration cannot measure are left as never measured, and are filled when the call is played.</td></tr>
+      <tr><td>The migration archive</td><td>The table left-behind rows are written into, so dropping an old table never destroys a row quietly.</td></tr>
+      <tr><td>The options key rule</td><td>The duplicates an old MySQL deployment's saves left behind are removed, and the index that refuses duplicates is created over the deduplicated table.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Each old table the pass finds is announced in the log under <em>Database</em> — <code>migrating
+    groups...</code> and its eleven siblings — and a database the new server created itself, or a version 7
+    database already migrated, is left exactly as it was, with nothing said.
+  </p>
+
+  <p>
+    A row the pass cannot carry does not stop the pass: the row is archived, the reason is written with it,
+    and the migration continues. An old table is dropped only once every row in it has been carried or
+    archived, so a table that survived because one row of it could not be read is read again on the next
+    start, and its already-archived rows archive as nothing.
+  </p>
+
+  <p>
+    One class of rows the old server lost is carried by this one. The old migration wrote some of its text
+    into its statements by escaping quotes and left the system blacklist, the system and talkgroup colours,
+    the log level, the watched directory type, and the call audio type unescaped, so a single quote in one
+    of those columns made its insert a syntax error and the row was lost. Those rows migrate here, as
+    bound parameters.
+  </p>
+
+  <h3>The migration archive</h3>
+
+  <p>
+    The archive is a table in the deployment's database, named <code>migrationArchive</code>. Each row is
+    one row the pass read and could not carry: the table it came from, its identifier there, the reason,
+    its contents as JSON, and the moment it was archived.
+  </p>
+
+  <pre><code>SELECT "tableName", "rowId", "reason", "archivedAt", "contents"
+  FROM "migrationArchive"
+ ORDER BY "tableName", "rowId";</code></pre>
+
+  <p>
+    Read it after the first start. A deployment whose archive is empty migrated completely; a deployment
+    with rows in it has history the new schema does not hold, and the reason column says why — a reference
+    that resolved to nothing, a row the old server had left damaged. What you do with them is your
+    decision: re-enter the configuration the archive names, or leave the row as a record.
+  </p>
+
+  <h3>From the version 5 program</h3>
+
+  <p>
+    The version 5 server was a different program, and there is no upgrade path from it: the version 6
+    server replaced it. What carries over is the database, and the way to move it is a copy.
+  </p>
+
+  <ol>
+    <li>Stop the version 5 server.</li>
+    <li>
+      Copy its <code>database.sqlite</code> into the folder the new program lives in, and rename the copy
+      to <code>rdio-scanner.db</code>, the name the new server opens by default.
+    </li>
+    <li>
+      Start the new program. It migrates the copy: the version 6 tables it finds are moved by the pass
+      above, and the version 5 rows the version 6 server had already moved are simply the version 6
+      tables the pass reads.
+    </li>
+    <li>
+      On MySQL or MariaDB, do not copy a file. Back the database up, and start the new program pointed at
+      the same database with the <code>-db_*</code> flags — host, port, name, user, password, and
+      <code>-db_type</code> naming the dialect. The pass runs against it in place.
+    </li>
+  </ol>
+
+  <p>
+    The version 5 program is the Node-era program, and going back to it means restoring the database from
+    before the copy and running the release you came from. That is the reason the copy is a copy: the
+    migration writes into the file you gave it.
+  </p>
+
+  <h3>After the first start</h3>
+
+  <ul>
+    <li>
+      <strong>Every administrator session is ended.</strong> The start that migrates is a start that
+      checked the signing secret, and a secret made or replaced ends the sessions signed with the old one.
+      Log in again.
+    </li>
+    <li>
+      <strong>Read the log under <em>Database</em>.</strong> The migration's notices, the rows it
+      archived, and the units the old server left damaged are all there, filed by the pass that made them.
+      <a href="#ch-14-logs">Chapter 14</a> is how to filter to one subsystem.
+    </li>
+    <li>
+      <strong>Check the todos banner.</strong> A migration that carried your configuration clears the
+      banner it had; a banner that names something missing after a migration is a configuration the
+      archive holds, not a bug in the banner.
+    </li>
+    <li>
+      <strong>Play a call from before the update.</strong> It is the shortest test of the recordings, the
+      talkgroup references, and the audio converter the new build carries.
+    </li>
+  </ul>
+
+  <aside class="note">
+    <p>
+      Two servers on one database is not an update in progress. The migration is a pass that drops old
+      tables when it is done, and a second server starting on the same database while it runs is a server
+      reading tables that are being moved. Stop the old server before the new one starts, and on a
+      container, the volume is the folder: one deployment, one volume.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-25-troubleshooting">25 · Troubleshooting</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Start from what you see, not from what you suspect. Every symptom below has a place to look first, a
+    log subsystem that names it, and a control that fixes it.
+  </p>
+
+  <table>
+    <caption>Symptom to place</caption>
+    <thead><tr><th scope="col">You see</th><th scope="col">Look here first</th><th scope="col">Chapter</th></tr></thead>
+    <tbody>
+      <tr><td>A talkgroup that used to report is silent</td><td>The log, filtered to the subsystem that receives the audio, over the day it went quiet</td><td><a href="#ch-14-logs">14</a></td></tr>
+      <tr><td>Calls arrive and play nothing</td><td>The conversion mode, and whether this build carries the converter</td><td><a href="#ch-13-options">13</a>, <a href="#ch-03-requirements">3</a></td></tr>
+      <tr><td>The login is refused</td><td>The log under <em>Login</em>, and the ten-minute window</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-22-security-hardening">22</a></td></tr>
+      <tr><td>A recorder's upload is refused</td><td>The line the server answered, and the log under <em>Ingest</em></td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>The webapp connects and hears nothing</td><td>The proxy's upgrade headers, the access code, the listener cap</td><td><a href="#ch-20-reverse-proxies">20</a>, <a href="#ch-09-access-and-api-keys">9</a></td></tr>
+      <tr><td>A downstream deployment gets nothing</td><td>The log under <em>Downstream</em>, and the answer the other server gave</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>The log is full of one message</td><td>The subsystem filter, and the count strip</td><td><a href="#ch-14-logs">14</a></td></tr>
+      <tr><td>The save bar will not save, or the conflict banner is up</td><td>What the banner says, and the other session that saved</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
+    </tbody>
+  </table>
+
+  <h3>A talkgroup that used to report is silent</h3>
+
+  <ol>
+    <li>
+      <strong>Open the log, filtered to the receiving subsystem, on the day it went quiet.</strong> A
+      watched directory that stopped finding files says so; a recorder posting to the upload endpoints says
+      so when its key stops working. The subsystem filter is the control that makes this one question, not
+      a scroll.
+    </li>
+    <li>
+      <strong>Is the recorder still writing?</strong> A recorder that stopped writing writes nothing to
+      the server, and the server cannot report a file that never arrived. Look at the recorder's own
+      output.
+    </li>
+    <li>
+      <strong>Did the identifiers change?</strong> A watched directory names a talkgroup by the
+      identifiers in the file name, resolved against the system. A recorder that changes its talkgroup
+      numbering creates talkgroups you did not ask for when auto populate is on, and drops calls when it is
+      off. The log names the system and talkgroup each call resolved to.
+    </li>
+    <li>
+      <strong>Is the talkgroup in your scope?</strong> An access code scoped to some systems shows you
+      those systems. Silence on a talkgroup you cannot see is a scope, not a fault.
+    </li>
+    <li>
+      <strong>Is the call delayed?</strong> A system delay or a talkgroup delay holds a call out of the
+      live stream for that long. It arrives in the history, and it arrives late.
+    </li>
+  </ol>
+
+  <h3>Calls arrive and play nothing</h3>
+
+  <ul>
+    <li>
+      <strong>The conversion mode.</strong> The four modes decide what the server does to an incoming
+      recording. A mode that converts with ffmpeg needs ffmpeg: the Linux and Windows amd64 builds carry
+      it inside the program, and the macOS, FreeBSD, and other Linux builds use the one the host installs.
+      A deployment whose converter is missing says so on the console at startup, and the notice is worth
+      reading on every new release.
+    </li>
+    <li>
+      <strong>The format the recorder writes.</strong> The server converts what it can; a recorder writing
+      a format the converter refuses produces a call with a row and no playable audio. Play one on the
+      server's own interface before you chase the network.
+    </li>
+    <li>
+      <strong>The recording length.</strong> Rows migrated from an older database carry no measured
+      length, and a call whose length was never measured is a call the interface shows without a duration.
+      The recording plays; the number is what is missing.
+    </li>
+  </ul>
+
+  <h3>The login is refused</h3>
+
+  <ul>
+    <li>
+      <strong>Three guesses in ten minutes lock the address out</strong>, and the refusal is an empty
+      <code>401</code> that says nothing about the window. The log under <em>Login</em> carries one warning
+      per lockout, naming the address. Behind a proxy, the address is the proxy's — name the proxy in
+      <code>-trusted_proxies</code> and the lockout counts the machine that guessed.
+    </li>
+    <li>
+      <strong>A token that stopped working is a secret that changed.</strong> The server keeps the last
+      five tokens it issued, and a start that made or replaced the signing secret ends every session opened
+      before it. The console says it, and the log files it.
+    </li>
+    <li>
+      <strong>A password you no longer have is changed with the program, on the machine</strong>, with
+      <code>-admin_password</code>. It writes the credential into the deployment's database and stops
+      without starting a server.
+    </li>
+  </ul>
+
+  <h3>A recorder's upload is refused</h3>
+
+  <p>
+    The upload endpoints answer in plain text, and the line they answer with is the diagnosis:
+  </p>
+
+  <table>
+    <caption>The answers the upload endpoints give</caption>
+    <thead><tr><th scope="col">The recorder was told</th><th scope="col">What it means</th></tr></thead>
+    <tbody>
+      <tr><td><code>Call imported successfully.</code></td><td>The call is in the database. If the listener does not show it, the problem is downstream of the ingest: scope, delay, or the connection.</td></tr>
+      <tr><td><code>Invalid API key for system &lt;nil&gt; talkgroup &lt;nil&gt;.</code> with <code>401</code></td><td>The key is not in the configuration, or it is scoped to a system and talkgroup the posting does not match. The API Keys section is where the key and its scope are.</td></tr>
+      <tr><td>A line of text answering <code>405</code></td><td>The recorder posted with a method the endpoint does not take. The log files it, because a recorder doing it is a standing misconfiguration.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    A call that arrives and vanishes is usually the duplicate window: two calls on the same system,
+    talkgroup, and site within half a second are one call, and the second is dropped. A recorder posting
+    the same transmission twice posts it once.
+  </p>
+
+  <h3>The webapp connects and hears nothing</h3>
+
+  <ol>
+    <li>
+      <strong>The proxy.</strong> A proxy that drops the upgrade headers answers the page and refuses the
+      connection, and the page sits quiet. The four proxy lines in
+      <a href="#ch-20-reverse-proxies">chapter 20</a> are the requirement.
+    </li>
+    <li>
+      <strong>The access code.</strong> A server with an access list asks for a code, and a listener
+      without one, or with one whose scope does not cover the talkgroup, sees nothing. Five attempts per
+      session and per address, and the fifth is refused as locked out — a valid code included.
+    </li>
+    <li>
+      <strong>The cap.</strong> <code>MaxClients</code> caps the connections the server takes, and a
+      connection over the cap is refused in silence. The listeners count on the main screen is the number
+      to look at before you look anywhere else.
+    </li>
+  </ol>
+
+  <h3>The log is full of one message</h3>
+
+  <p>
+    Filter to the subsystem, read the counts strip, and read the message's own words: the messages this
+    server writes name what happened and what it did about it. A message that repeats every hour is a
+    scheduled pass failing, and a message that repeats on every call is a reference that does not resolve.
+    Retention is the control that keeps the log the size you chose; the pass says what it removed, and says
+    when it could not run.
+  </p>
+
+  <h3>The interface will not save</h3>
+
+  <p>
+    The save bar writes the working copy you have been editing. The conflict banner says another session
+    saved that section while you were editing it: the server has one saved configuration, and it will not
+    let a save overwrite what it has. Read the section as the server has it now, make your changes in it
+    again, and save. Two people editing one section at the same time is the situation the banner is for,
+    and the banner is the interface telling you before your work is written over, not after.
+  </p>
 </section>
 
 <section>

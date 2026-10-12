@@ -245,6 +245,46 @@ func chapterOf(t *testing.T, body string, id string) string {
 	return body[start : start+end]
 }
 
+// A recorder configured once posts to the endpoint it was told about, and keeps posting there for years.
+// A guide that names the superseded endpoint without saying it is superseded is the guide that keeps the
+// deployment on it. The marking has to be in the chapter the reader is in, not in a chapter they skipped.
+func TestTheGuideMarksTheSupersededUploadEndpoint(t *testing.T) {
+	body := guidePath(t)
+
+	// The facts are asserted on the document's text, with the line breaks the source is written with
+	// collapsed: a sentence the reader reads as one sentence is one sentence, wherever the author broke it.
+	text := strings.Join(strings.Fields(body), " ")
+
+	for _, fact := range []string{
+		"Deprecated",
+		"/api/call-upload",
+		"a future release will remove it",
+		"is not read as a sidecar",
+	} {
+		if !strings.Contains(text, fact) {
+			t.Errorf("the guide does not state %q", fact)
+		}
+	}
+
+	chapters := regexp.MustCompile(`(?is)<h2 id="(ch-[0-9]{2}-[a-z0-9-]+)">.*?</section>`).FindAllString(body, -1)
+
+	for _, chapter := range chapters {
+		if !strings.Contains(chapter, "trunk-recorder-call-upload") {
+			continue
+		}
+
+		id := strings.Trim(regexp.MustCompile(`id="(ch-[0-9]{2}-[a-z0-9-]+)"`).FindString(chapter), `"`)
+
+		if !strings.Contains(strings.ToLower(chapter), "deprecat") {
+			t.Errorf("the chapter %s names the trunk-recorder upload endpoint without marking it deprecated", id)
+		}
+
+		if !strings.Contains(chapter, "/api/call-upload") {
+			t.Errorf("the chapter %s marks the endpoint deprecated without naming the one that replaces it", id)
+		}
+	}
+}
+
 // The guide is a document the project hands to an administrator, and it closes the way the project hands
 // it over: the sign-off is the last thing the reader meets, inside the file, so a copy of the guide carries
 // it too.
