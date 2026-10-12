@@ -55,22 +55,22 @@ func TestTheLogViewOffersEverySubsystemTheServerHas(t *testing.T) {
 }
 
 // TestTheLogDocumentationNamesEverySubsystemTheServerHas is the same pin on the other copy of the
-// vocabulary: the operator's page. The document is where an operator learns that `dirwatch` is the thing to
-// ask for when recordings stop arriving, so a subsystem the server writes and the document does not name is a
-// subsystem nobody can look for.
+// vocabulary: the operator's page, now the administrator's guide the release archive carries. The guide
+// is where an operator learns that `dirwatch` is the thing to ask for when recordings stop arriving, so
+// a subsystem the server writes and the guide does not name is a subsystem nobody can look for.
 func TestTheLogDocumentationNamesEverySubsystemTheServerHas(t *testing.T) {
-	const path = "../../docs/admin-logs.md"
+	const path = "../../docs/admin-guide.html"
 
 	b, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("%s is missing: %v\nthe page that tells an operator which subsystem to filter on", path, err)
+		t.Fatalf("%s is missing: %v\nthe guide the archive carries is where an operator learns which subsystem to filter on", path, err)
 	}
 
 	document := string(b)
 
 	for _, source := range domain.KnownLogSources() {
-		if !strings.Contains(document, "`"+string(source)+"`") {
-			t.Errorf("%s is not named in %s\nan operator cannot filter on a subsystem the documentation never "+
+		if !strings.Contains(document, "<code>"+string(source)+"</code>") {
+			t.Errorf("%s is not named in %s\nan operator cannot filter on a subsystem the guide never "+
 				"mentions, and the log view offers it", source, path)
 		}
 	}

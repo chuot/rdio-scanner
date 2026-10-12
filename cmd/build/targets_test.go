@@ -58,20 +58,34 @@ func TestTheReleaseMatrixIsTheEightPlatformsThisProjectShips(t *testing.T) {
 		t.Errorf("the release matrix is %v, want %v", got, want)
 	}
 
-	// The platform page a target's archive carries is named by the target's own name, so the one platform
-	// whose release name is not a go operating system still gets the page its readers are told to
-	// download. A matrix that named a page the repository does not have ships an archive with no
-	// instructions in it.
+	// The operating instructions an administrator reads are in the guide the archive carries: the service
+	// chapter carries a sub-section named for each system the release matrix ships. A matrix that named a
+	// system the guide has no sub-section for ships an archive whose only document says nothing about the
+	// system the reader is installing on.
 	repo, err := repositoryRoot()
 	if err != nil {
 		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
 	}
 
-	for _, tr := range releaseTargets {
-		page := "docs/platforms/" + tr.name + ".md"
+	guide, err := os.ReadFile(filepath.Join(repo, "docs/admin-guide.html"))
+	if err != nil {
+		t.Fatalf("docs/admin-guide.html is missing: %v\nthe archive carries it, and its service chapter is where each system's instructions live", err)
+	}
 
-		if _, err := os.Stat(filepath.Join(repo, page)); err != nil {
-			t.Errorf("%s carries %s, which the repository does not have", tr.targetWord(), page)
+	headings := serviceChapterHeadings(string(guide))
+
+	for _, tr := range releaseTargets {
+		found := false
+
+		for _, heading := range headings {
+			if strings.EqualFold(heading, tr.name) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Errorf("the guide's service chapter has no sub-section named %q for %s, and the archive for that system carries the guide as its only instructions", tr.name, tr.targetWord())
 		}
 	}
 
@@ -100,6 +114,43 @@ func TestTheReleaseMatrixIsTheEightPlatformsThisProjectShips(t *testing.T) {
 	if !strings.Contains(s.result, "macos-arm64") {
 		t.Errorf("the server for macos-arm64 is written to %q, which is not the macos archive directory", s.result)
 	}
+}
+
+// serviceChapterHeadings lists the subsection titles of the guide's service chapter: the h3 headings
+// between the chapter's own heading and the next chapter. The release matrix names the systems the
+// guide has to carry instructions for, and these headings are where the guide says so.
+func serviceChapterHeadings(guide string) []string {
+	const chapter = `id="ch-21-running-as-a-service"`
+
+	start := strings.Index(guide, chapter)
+	if start < 0 {
+		return nil
+	}
+
+	rest := guide[start:]
+	if end := strings.Index(rest, "<h2 "); end >= 0 {
+		rest = rest[:end]
+	}
+
+	headings := []string{}
+	for {
+		i := strings.Index(rest, "<h3>")
+		if i < 0 {
+			break
+		}
+
+		rest = rest[i+len("<h3>"):]
+
+		j := strings.Index(rest, "</h3>")
+		if j < 0 {
+			break
+		}
+
+		headings = append(headings, strings.TrimSpace(rest[:j]))
+		rest = rest[j+len("</h3>"):]
+	}
+
+	return headings
 }
 
 // Which targets carry an ffmpeg is answered by the manifest, not by a second list. The three this

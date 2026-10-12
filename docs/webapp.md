@@ -4,11 +4,9 @@
 
 The main [Rdio Scanner](https://github.com/chuot/rdio-scanner) screen as three sections, the LED area, the display area and the controls area.
 
-![scanner webapp main screen](./images/webapp-main.png?raw=true)\
 
 ### LED Area
 
-![LED area](./images/webapp-led.png?raw=true)\
 
 The LED is illuminated when there is active audio and it blinks if audio is paused.
 
@@ -16,7 +14,6 @@ The color is _green_ by default, but can be customized by the system or by the t
 
 ### Display Area
 
-![display Area](./images/webapp-display.png?raw=true)\
 
 - First row
   - **09:26** - Current time
@@ -42,67 +39,61 @@ The color is _green_ by default, but can be customized by the system or by the t
 
 ### Control area
 
-![control Area](./images/webapp-controls.png?raw=true)\
 
 | Button                                                              | Description                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![LIVE FEED](./images/webapp-control-livefeed-partial.png?raw=true) | When active, incoming audio will be played according to the active systems/talkgroups on the **SELECT TG** panel. The LED can also be _yellow_ if playing audio from the archive while **LIVE FEED** is inactive, this is called **playback mode**. Disabling **LIVE FEED** will also stop any playing audio and will clear the listening queue.         |
-| ![HOLD SYS](./images/webapp-control-holdsys.png?raw=true)           | Temporarily maintain the current system in live feed mode.                                                                                                                                                                                                                                                                                               |
-| ![HOLD TG](./images/webapp-control-holdtg.png?raw=true)             | Temporarily maintain the current talkgroup in live feed mode.                                                                                                                                                                                                                                                                                            |
-| ![REPLAY LAST](./images/webapp-control-replay.png?raw=true)         | Replay the current audio from the beginning or the previous one if there is none active. Press repeatedly to replay items displayed in the history section. For example, press three times to replay the third history item.                                                                                                                             |
-| ![SKIP NEXT](./images/webapp-control-skip.png?raw=true)             | Stop the audio currently playing and play the next one in the listening queue. This is useful when playing boring or encrypted sound.                                                                                                                                                                                                                    |
-| ![AVOID](./images/webapp-control-avoid.png?raw=true)                | Activate and deactivate the talkgroup from the current or previous audio. Pressing the **AVOID** button multiple times when on the same call will go through **AVOID** -> **AVOID 30M** -> **AVOID 60M** -> **AVOID 120M** where the last ones will be AVOID for a specific number of minutes.                                                           |
-| ![SEARCH CALL](./images/webapp-control-search.png?raw=true)         | Display the archived audio panel.                                                                                                                                                                                                                                                                                                                        |
-| ![PAUSE](./images/webapp-control-pause.png?raw=true)                | Stop playing queue audio. Useful if you have to answer the phone without losing what's queued up for playing.                                                                                                                                                                                                                                            |
-| ![SELECT TG](./images/webapp-control-select.png?raw=true)           | Display the systems/talkgroups selection panel where you decide which audio you want to listen to in _LIVE FEED_ mode, not in playback mode.                                                                                                                                                                                                             |
+| **LIVE FEED** | When active, incoming audio will be played according to the active systems/talkgroups on the **SELECT TG** panel. The LED can also be _yellow_ if playing audio from the archive while **LIVE FEED** is inactive, this is called **playback mode**. Disabling **LIVE FEED** will also stop any playing audio and will clear the listening queue.         |
+| **HOLD SYS**           | Temporarily maintain the current system in live feed mode.                                                                                                                                                                                                                                                                                               |
+| **HOLD TG**             | Temporarily maintain the current talkgroup in live feed mode.                                                                                                                                                                                                                                                                                            |
+| **REPLAY LAST**         | Replay the current audio from the beginning or the previous one if there is none active. Press repeatedly to replay items displayed in the history section. For example, press three times to replay the third history item.                                                                                                                             |
+| **SKIP NEXT**             | Stop the audio currently playing and play the next one in the listening queue. This is useful when playing boring or encrypted sound.                                                                                                                                                                                                                    |
+| **AVOID**                | Activate and deactivate the talkgroup from the current or previous audio. Pressing the **AVOID** button multiple times when on the same call will go through **AVOID** -> **AVOID 30M** -> **AVOID 60M** -> **AVOID 120M** where the last ones will be AVOID for a specific number of minutes.                                                           |
+| **SEARCH CALL**         | Display the archived audio panel.                                                                                                                                                                                                                                                                                                                        |
+| **PAUSE**                | Stop playing queue audio. Useful if you have to answer the phone without losing what's queued up for playing.                                                                                                                                                                                                                                            |
+| **SELECT TG**           | Display the systems/talkgroups selection panel where you decide which audio you want to listen to in _LIVE FEED_ mode, not in playback mode.                                                                                                                                                                                                             |
 
 ## Select panel
 
-![select panel](./images/webapp-select.png?raw=true)\
 
 Here you select which systems/talkgroups/groups you want to listen to while in _LIVE FEED_ mode.  Note that the selection panel has no effect if you play calls from the search panel.
 
 ### Groups section
 
-![groups section](./images/webapp-select-groups.png?raw=true)\
 
 The first section concerns group selection. This section can be disabled from the configuration file, but is active by default. Each button has three states:
 
 | Button                                                        | State                                                                                                                                                                              |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![ON](./images/webapp-select-group-on.png?raw=true)           | All talkgroups, from any systems, that correspond to this group are actives. If you press it while it is active, it will make these talkgroups inactives.                          |
-| ![OFF](./images/webapp-select-group-off.png?raw=true)         | All talkgroups, from any systems, that correspond to this group are inactives. If you press it while it is inactive, it will make these talkgroups actives.                        |
-| ![PARTIAL](./images/webapp-select-group-partial.png?raw=true) | Some talkgroups, from any systems, that correspond to this group are actives and some are inactives. If you press it while it is active, it will make all these talkgroups active. |
-| ![ALL OFF](./images/webapp-select-all-off.png?raw=true)       | Make every groups inactives, thereby disabling all talkgroups.                                                                                                                     |
-| ![ALL ON](./images/webapp-select-all-on.png?raw=true)         | Make every groups active, thereby enabling all talkgroups.                                                                                                                         |
+| **ON**           | All talkgroups, from any systems, that correspond to this group are actives. If you press it while it is active, it will make these talkgroups inactives.                          |
+| **OFF**         | All talkgroups, from any systems, that correspond to this group are inactives. If you press it while it is inactive, it will make these talkgroups actives.                        |
+| **PARTIAL** | Some talkgroups, from any systems, that correspond to this group are actives and some are inactives. If you press it while it is active, it will make all these talkgroups active. |
+| **ALL OFF**       | Make every groups inactives, thereby disabling all talkgroups.                                                                                                                     |
+| **ALL ON**         | Make every groups active, thereby enabling all talkgroups.                                                                                                                         |
 
 ### Systems section
 
-![systems section](./images/webapp-select-system.png?raw=true)\
 
 This is much like the group section, but for each system. There is also just two states for each button:
 
 | Button                                                  | State                                                                                                                                                                                                               |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![ON](./images/webapp-select-system-on.png?raw=true)    | The talkgroup from this system is active. If you press it while it is active, it will make the talkgroup inactive.                                                                                                  |
-| ![OFF](./images/webapp-select-system-off.png?raw=true)  | The talkgroup from this system is inactive. If you press it while it is inactive, it will make the talkgroup active. Note that if the LED is flashing, it means that the talkgroup is avoided for a limited period. |
-| ![ALL OFF](./images/webapp-select-all-off.png?raw=true) | Make inactive every talkgroups from this system.                                                                                                                                                                    |
-| ![ALL ON](./images/webapp-select-all-on.png?raw=true)   | Make active every talkgroups from this system.                                                                                                                                                                      |
+| **ON**    | The talkgroup from this system is active. If you press it while it is active, it will make the talkgroup inactive.                                                                                                  |
+| **OFF**  | The talkgroup from this system is inactive. If you press it while it is inactive, it will make the talkgroup active. Note that if the LED is flashing, it means that the talkgroup is avoided for a limited period. |
+| **ALL OFF** | Make inactive every talkgroups from this system.                                                                                                                                                                    |
+| **ALL ON**   | Make active every talkgroups from this system.                                                                                                                                                                      |
 
 ## Search panel
 
-![search panel](./images/webapp-search.png?raw=true)\
 
 ### List section
 
-![search list](./images/webapp-search-list.png?raw=true)\
 
 This section presents the list of archived audio files stored in the database. Depending on the _LIVE FEED_ mode you are at, the replay function behaves differently:
 
 | Mode                                                                        | Function                                                                                                                                                                                                                                                                                                                   |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![LIVE FEED ON](./images/webapp-control-livefeed-on.png?raw=true)           | while **LIVE FEED** is active, press the **PLAY** button to play this audio file. If another audio file is playing, it will be stopped and the one you just selected will be played instead. After playback finishes, the listening queue will resume as normal.                                                           |
-| ![LIVE FEED PARTIAL](./images/webapp-control-livefeed-partial.png?raw=true) | This is the **playback mode** which can be activated only if **LIVE FEED** is inactive. Press the **PLAY** button to play this audio file. After playback is finishes, the next audio file from in list is played. While the audio is playing, pressing the **STOP** button will cancel the playback mode.                 |
+| **LIVE FEED ON**           | while **LIVE FEED** is active, press the **PLAY** button to play this audio file. If another audio file is playing, it will be stopped and the one you just selected will be played instead. After playback finishes, the listening queue will resume as normal.                                                           |
+| **LIVE FEED PARTIAL** | This is the **playback mode** which can be activated only if **LIVE FEED** is inactive. Press the **PLAY** button to play this audio file. After playback is finishes, the next audio file from in list is played. While the audio is playing, pressing the **STOP** button will cancel the playback mode.                 |
 
 At the bottom left of this section is the toggle switch which allows you to toggle between play buttons and download buttons. The later ones allows you to download locally the audio file.
 
@@ -112,7 +103,6 @@ At the bottom right of this section is the _paginator_ to browse the whole datab
 
 ### Filters section
 
-![filters section](./images/webapp-search-filters.png?raw=true)\
 
 This is the section where you filter the archived audio to a specific date, system, talkgroup, groups and tags. You can also change the sort order.
 

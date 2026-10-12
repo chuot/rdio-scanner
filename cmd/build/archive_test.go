@@ -88,10 +88,10 @@ func TestTheArchiveCarriesTheProgramTheGuideAndTheLicenceOfTheFfmpegItCarries(t 
 	}
 }
 
-// A release archive carries no markdown file. The change log, the platform pages, the scanner webapp
-// guide, and the FAQ are the project's own documents and stay in the repository; the guide the archive
-// carries absorbed what an administrator needs from them, so a markdown file in the archive is a
-// document the reader is told to open and does not have.
+// A release archive carries no markdown file. The change log and the scanner webapp guide are the
+// project's own documents and stay in the repository; the guide the archive carries absorbed what an
+// administrator needs from the rest of them, so a markdown file in the archive is a document the
+// reader is told to open and does not have.
 func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	repo := t.TempDir()
 
