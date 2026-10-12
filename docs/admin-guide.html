@@ -471,8 +471,9 @@ footer.site .signoff {
   <aside class="note">
     <span class="label">How the name is said</span>
     <p>
-      <em>Rdio</em> is <em>Radio</em> spelled the way the project spells it: the name is pronounced
-      <strong>Radio Scanner</strong> and written <strong>Rdio Scanner</strong>.
+      The name is written <strong>Rdio Scanner</strong> and said <strong>Raydio Scanner</strong>:
+      <em>Rdio</em> is pronounced <em>Ray-dio</em>, the way the project says it, and spelled the way the
+      project spells it.
     </p>
   </aside>
 
@@ -2785,17 +2786,533 @@ $ ./rdio-scanner -cmd user-add +ident "Dispatch desk" +code 7F2K9Q +systems 1000
 
 <section>
   <h2 id="ch-19-tls">19 · TLS and HTTPS</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The server answers https by itself, in two ways: with a certificate you provide, or with one it obtains
+    from Let's Encrypt. Both are flags, both are saved in the ini file, and both name the address the https
+    listener answers on.
+  </p>
+
+  <h3>Your own certificate</h3>
+
+  <p>
+    Point the server at a PEM-formatted certificate and its key, and name the address to answer on:
+  </p>
+
+  <pre><code>./rdio-scanner -listen :80 -ssl_listen :443 \
+    -ssl_cert_file mycert.crt -ssl_key_file mykey.key</code></pre>
+
+  <p>
+    The certificate and the key are a pair: the server starts the https listener only when
+    <strong>both</strong> are named, and a key that does not match the certificate is one of the ways this
+    chapter's failure looks. When your certificate comes from an authority that signs it with an
+    intermediate certificate, append the intermediate's contents to the certificate file, in the order the
+    authority gave them to you. The server reads one file, not two.
+  </p>
+
+  <h3>A certificate from Let's Encrypt</h3>
+
+  <p>
+    Name a domain and the server takes care of the certificate, the key, and the renewal:
+  </p>
+
+  <pre><code>./rdio-scanner -listen :80 -ssl_listen :443 -ssl_auto_cert radio.example.org</code></pre>
+
+  <ul>
+    <li>
+      <strong>The domain must point at this machine.</strong> The authority verifies the name by reaching
+      back to it, so an address record that points elsewhere, or a machine behind a router that does not
+      forward the port, fails the request.
+    </li>
+    <li>
+      <strong>The https port must be reachable from the internet.</strong> The certificate is obtained over
+      that port. The project's guidance is to have 80 and 443 both open, and the domain pointing at the
+      server.
+    </li>
+    <li>
+      <strong>One domain per server.</strong> The name you give is the only name the server will obtain a
+      certificate for; a second host name on the same deployment is refused by the server's own policy.
+    </li>
+    <li>
+      <strong>The certificates live in the base directory</strong>, in an <code>autocert</code> folder
+      beside the database. Keep them: they are the deployment's credentials, and a base directory that is
+      thrown away on upgrade throws the certificate away with it, to be obtained again.
+    </li>
+  </ul>
+
+  <p>
+    The server accepts the authority's terms of service on your behalf, which is what makes the whole
+    exchange automatic: no request, no renewal, no restart.
+  </p>
+
+  <h3>The address the https listener answers on</h3>
+
+  <p>
+    <code>-ssl_listen</code> takes an address and a port, the same form as <code>-listen</code>. Name it
+    with a port. A server configured with <code>-ssl_listen</code> and no port has always answered on
+    <strong>3000</strong>, not 443, and this server keeps that behavior rather than moving existing
+    deployments: <code>-ssl_listen :443</code> is what you type.
+  </p>
+
+  <p>
+    Ports below 1024 need root privileges on Linux, macOS, and FreeBSD. Run the server as root, give the
+    container the capability to bind them, or answer on a high port and put a proxy in front of it —
+    <a href="#ch-20-reverse-proxies">chapter 20</a>.
+  </p>
+
+  <h3>Both addresses answer</h3>
+
+  <p>
+    Starting a server with TLS does not shut the plain address down: it answers http and https at the same
+    time, and the console says so:
+  </p>
+
+  <pre><code>Rdio Scanner v8.0.0
+----------------------------------
+server started
+main interface at http://radio.example.org
+main interface at https://radio.example.org
+admin interface at https://radio.example.org/admin</code></pre>
+
+  <p>
+    There is no redirect from http to https. A deployment that must answer only https says so at the
+    boundary: bind the plain address to the machine itself with
+    <code>-listen 127.0.0.1:3000</code> and let the proxy terminate TLS, or answer http on a port you do
+    not open in the firewall.
+  </p>
+
+  <h3>When the https listener cannot start</h3>
+
+  <p>
+    A server that asked for https and cannot answer it does not carry on as a plain http server. The
+    failure is written to the log under the <em>Server</em> subsystem, said on the console beside it, and
+    the server shuts down the way it shuts down for an interrupt: the plain address stops with it, and the
+    database closes.
+  </p>
+
+  <p>The causes are the usual ones, and the log line names the address it could not answer:</p>
+
+  <table>
+    <caption>What stops an https listener, and what it says</caption>
+    <thead><tr><th scope="col">Cause</th><th scope="col">What you see</th></tr></thead>
+    <tbody>
+      <tr><td>The certificate file is missing, unreadable, or not PEM</td><td>The server stops at startup, and the log's <em>Server</em> entry carries the reason the listener gave.</td></tr>
+      <tr><td>The key does not match the certificate</td><td>Same: the server stops, and the reason is in the log entry.</td></tr>
+      <tr><td>The port is already taken</td><td>The server stops. Find the process holding the port, or name a different one.</td></tr>
+      <tr><td>The authority cannot reach the domain</td><td>The listener starts and the certificate request fails. The failure appears on the console as a TLS error, and the browser is served a certificate the authority did not issue.</td></tr>
+    </tbody>
+  </table>
+
+  <aside class="note">
+    <p>
+      TLS handshake failures and other HTTP server complaints go to the console, not to the log view: the
+      server hands its listeners a writer, not a logger, so a deployment running under a service manager
+      finds them in the manager's own record —
+      <a href="#ch-21-running-as-a-service">journalctl, the Windows event log</a>.
+    </p>
+  </aside>
+
+  <aside class="caution">
+    <p>
+      This server does not create a certificate. The flag that generated a self-signed certificate is
+      gone, and a deployment that names it is told the flag is not recognized. Use your own certificate,
+      Let's Encrypt, or a proxy that terminates TLS.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-20-reverse-proxies">20 · Reverse proxies and trusted proxies</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    A deployment that answers on the standard ports, shares a machine with other sites, or needs a
+    certificate a proxy holds, runs behind a proxy. Two things must survive the proxy: the connection a
+    listener holds open, and the address the server is supposed to believe.
+  </p>
+
+  <h3>nginx</h3>
+
+  <p>
+    The configuration below is the one the project carries as its nginx example, with the site's own root
+    left in place. The server is reached as an upstream on its own port, and the location that carries it
+    strips the site's prefix off the address before forwarding.
+  </p>
+
+  <pre><code>map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream rdio-scanner {
+    server 127.0.0.1:3000;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    # listen 443 ssl default_server;
+    # ssl_certificate     /etc/ssl/certs/site.pem;
+    # ssl_certificate_key /etc/ssl/private/site.key;
+
+    server_name _;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location /rdio-scanner/ {
+        rewrite ^/rdio-scanner/(.*)$ /$1 break;
+        proxy_pass http://rdio-scanner;
+    }
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}</code></pre>
+
+  <p>
+    The four lines at the bottom of the <code>server</code> block are the whole of it. HTTP/1.1, the
+    <code>Upgrade</code> header, and a <code>Connection</code> header that says <code>upgrade</code> when
+    the client asked for an upgrade and <code>close</code> when it did not — that is what lets the listener
+    connection through. A proxy that drops the upgrade answers the page and refuses the connection, and the
+    webapp sits there with no calls.
+  </p>
+
+  <h3>Apache</h3>
+
+  <p>
+    Apache does the same job with <code>mod_proxy</code>, <code>mod_proxy_http</code>, and
+    <code>mod_proxy_wstunnel</code> enabled. The project's Apache example is a stub: it says what it is for
+    and leaves the file to you. This is the shape it is describing.
+  </p>
+
+  <pre><code>LoadModule proxy_module modules/mod_proxy.so
+LoadModule proxy_http_module modules/mod_proxy_http.so
+LoadModule proxy_wstunnel_module modules/mod_proxy_wstunnel.so
+
+&lt;VirtualHost *:80&gt;
+    ServerName radio.example.org
+
+    ProxyPreserveHost On
+    ProxyPass /rdio-scanner/ http://127.0.0.1:3000/
+    ProxyPassReverse /rdio-scanner/ http://127.0.0.1:3000/
+
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule ^/rdio-scanner/(.*) ws://127.0.0.1:3000/$1 [P,L]
+&lt;/VirtualHost&gt;</code></pre>
+
+  <p>
+    <code>ProxyPreserveHost On</code> forwards the host name the browser asked for, which is what a
+    deployment answering several names needs. The rewrite rule sends an upgrade request to the tunnel
+    handler; without it, Apache forwards the upgrade as an ordinary request and the connection is not made.
+  </p>
+
+  <h3>What a proxy must not do</h3>
+
+  <table>
+    <caption>Proxy settings that break a deployment</caption>
+    <thead><tr><th scope="col">Setting</th><th scope="col">What it does to the deployment</th></tr></thead>
+    <tbody>
+      <tr><td>Buffering left on</td><td>The proxy collects the audio and the call stream instead of passing them, and listeners hear calls arrive in blocks. Turn it off for the location: <code>proxy_buffering off;</code>, <code>ProxyEnableForwarding</code>-style buffering directives, whichever your proxy uses.</td></tr>
+      <tr><td>A short read timeout</td><td>A listener connection is open for as long as the listener is listening. The server bounds one *request* at 30 seconds and keeps keep-alives on; a proxy that closes an idle connection at 60 seconds drops every listener on the deployment once a minute. Set the read and send timeouts on that location to hours, not minutes.</td></tr>
+      <tr><td>The upgrade headers dropped</td><td>The page loads, the connection is refused, and nothing plays. The four proxy lines above are the requirement, not an optimization.</td></tr>
+      <tr><td>The host header rewritten</td><td>A deployment that answers several names, or a certificate obtained for one name, stops matching what the browser asked for. Forward the host as the browser sent it.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Proxying under a prefix</h3>
+
+  <p>
+    Both examples serve the deployment under <code>/rdio-scanner/</code> and strip that prefix before
+    forwarding, so the server sees the address it was written to answer. Two consequences are worth knowing
+    before you point a listener at a proxied deployment:
+  </p>
+
+  <ul>
+    <li>
+      The address a listener connects to is the proxied address, prefix included:
+      <code>wss://radio.example.org/rdio-scanner/</code>. The upgrade header is what decides whether a
+      request for that address is a page or a listener, and the proxy must pass it.
+    </li>
+    <li>
+      <code>/admin</code> answers a redirect that adds the trailing slash, so the administration
+      interface's relative addresses resolve inside its own subtree. A proxy that rewrites the prefix must
+      let that redirect through, and a client that follows it must keep the prefix.
+    </li>
+  </ul>
+
+  <h3>Trusted proxies</h3>
+
+  <p>
+    Behind a proxy, every connection arrives from the proxy's address. That is a problem the server can
+    only fix with your help, because the address the server is given is the machine that forwarded the
+    request, and the server's limits are counted per address:
+  </p>
+
+  <ul>
+    <li>Three failed logins from one address lock that address out for ten minutes. Behind an unnamed
+    proxy, one user's three guesses lock out everyone behind that proxy.</li>
+    <li>A listener's access attempts are capped per session and per address, and the log names the address
+    the attempt came from.</li>
+    <li>Every log entry that names an address — a refused credential, a login, an ingest — names the
+    machine that forwarded the request.</li>
+  </ul>
+
+  <p>
+    <code>-trusted_proxies</code> names the proxies whose forwarding header the server believes: a
+    comma-separated list of addresses and CIDR prefixes, <code>127.0.0.1</code>,
+    <code>10.0.0.0/8</code>, <code>::1</code>. When the connection arrives from one of them, the server
+    reads the leftmost usable address out of <code>X-Forwarded-For</code> and uses that as the address of
+    the client — so the lockout counts the machine that guessed, and the log names it.
+  </p>
+
+  <pre><code>listen = :3000
+trusted_proxies = 127.0.0.1, 10.0.0.0/8</code></pre>
+
+  <aside class="caution">
+    <p>
+      A trusted proxy is a machine you are telling the server to believe, and the header it forwards is
+      written by whoever is on the other side of it. Name the proxy's own address, and nothing broader: a
+      prefix that covers the internet is a list of addresses whose logins, access attempts, and log entries
+      the server will attribute to whoever types the header.
+    </p>
+  </aside>
+
+  <h3>Embedding the listener interface in a page</h3>
+
+  <p>
+    The project carries a starter page that puts the listener interface in a frame beside your own text:
+    an <code>iframe</code> sized for a phone, a stylesheet that keeps it centered and responsive, and room
+    for the instructions your listeners need. It is a page you serve yourself, and the only setting in it
+    is the address of the deployment.
+  </p>
+
+  <pre><code>&lt;iframe src="https://radio.example.org" width="410" height="608"&gt;&lt;/iframe&gt;</code></pre>
+
+  <p>
+    Put the frame on the same host name the deployment answers on, so the browser treats the page and the
+    interface as one site and the listener connection is not blocked as a third-party connection. Serve it
+    over the same scheme as the deployment: a page on https asking for a deployment on http is refused by
+    the browser before the connection is made.
+  </p>
+
+  <p>
+    The frame carries the listener interface. The administration interface is not for embedding: it is the
+    machine room, and it is opened by the people who run it.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-21-running-as-a-service">21 · Running as a service</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    A deployment you have to start by hand is a deployment that is down while you are asleep. The program
+    installs and controls itself as a service on Linux, Windows, macOS, and FreeBSD, and the same five
+    words do it on every one of them.
+  </p>
+
+  <h3>The service mode</h3>
+
+  <table>
+    <caption>The <code>-service</code> actions</caption>
+    <thead><tr><th scope="col">Action</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>install</code></td><td>Registers the service with the operating system's service manager, and writes into the service's own configuration the command the manager runs it with.</td></tr>
+      <tr><td><code>uninstall</code></td><td>Removes the service from the manager. Your configuration, your database, and your recordings stay where they are.</td></tr>
+      <tr><td><code>start</code>, <code>stop</code>, <code>restart</code></td><td>Ask the manager to do it. The command is a client of the manager: it asks, reports, and ends.</td></tr>
+      <tr><td><code>run</code></td><td>The action the manager starts the service with. It is written into the service configuration at install time; you do not type it.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Installing and controlling the service needs the privileges the manager asks for: root on Linux,
+    macOS, and FreeBSD, an elevated command prompt on Windows. The service runs as the account that
+    installed it, which is normally the system's most privileged account, so the deployment's folder must
+    be a folder you are content for that account to write in.
+  </p>
+
+  <p>
+    The service is registered under the name <code>rdio-scanner</code>, and on FreeBSD under
+    <code>rdioscanner</code>, because that manager does not accept a name with a hyphen in it. Its display
+    name is <em>Rdio Scanner</em> and its description is <em>The perfect software-defined radio
+    companion</em>, which is what you see in the manager's own tools.
+  </p>
+
+  <p>
+    Stopping the service is the same shutdown as pressing the keys in a terminal: the server is told to
+    stop, closes its addresses, and closes the database. A control the manager refuses ends with a
+    non-zero status and no explanation, which is what a script needs and all a script gets.
+  </p>
+
+  <p>
+    A service has no terminal, so the console lines the server prints — the addresses it answers on, the
+    ffmpeg notice, the TLS failures — go to the manager's record, not to a window. The log view is where
+    the deployment's own messages are, and
+    <a href="#ch-14-logs">chapter 14</a> is how to read it.
+  </p>
+
+  <h3>Linux</h3>
+
+  <p>
+    The archive for a Linux deployment is <code>rdio-scanner-linux-amd64-v&lt;version&gt;.zip</code>, and
+    the builds for 386, ARM, and ARM64 are the same archive with the target named in its place. The Linux
+    builds carry their own <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for
+    the architecture they run on, so nothing has to be installed on the host for recordings to convert.
+  </p>
+
+  <pre><code>$ mkdir rdio-scanner &amp;&amp; cd rdio-scanner
+$ unzip ~/Downloads/rdio-scanner-linux-amd64-v8.0.0.zip
+$ sudo ./rdio-scanner -service install
+$ sudo ./rdio-scanner -service start</code></pre>
+
+  <p>
+    The install writes a systemd unit at <code>/etc/systemd/system/rdio-scanner.service</code> that runs
+    the program with <code>-service run</code>. From then on the manager owns the process:
+  </p>
+
+  <pre><code>$ sudo systemctl status rdio-scanner
+$ sudo journalctl -u rdio-scanner -f
+$ sudo systemctl restart rdio-scanner</code></pre>
+
+  <p>
+    The server's console lines are in the journal. The deployment's own record is in the log view, and a
+    line you read in the journal that the log view does not carry is a line the server printed before it
+    had a database to write to.
+  </p>
+
+  <p>
+    Open the port the deployment answers on. With <code>ufw</code>:
+  </p>
+
+  <pre><code>$ sudo ufw allow 3000/tcp</code></pre>
+
+  <p>
+    A server answering on 80 and 443 needs those ports open, and a server answering them must be run by a
+    privileged account, which a service installed as root is. A container that must answer them is given
+    the capability to bind them, and
+    <a href="#ch-04-installation">chapter 4</a> is the container's own chapter.
+  </p>
+
+  <h3>Windows</h3>
+
+  <p>
+    The Windows archive is <code>rdio-scanner-windows-amd64-v&lt;version&gt;.zip</code> and carries the
+    program as <code>rdio-scanner.exe</code>, with <code>ffmpeg</code> and <code>ffprobe</code> inside it.
+    Run the install from a command prompt opened as Administrator, in the folder you extracted the archive
+    into — the service is registered with the path it was installed from, and moving the folder afterwards
+    leaves the service pointing at a program that is no longer there.
+  </p>
+
+  <pre><code>C:\rdio-scanner&gt; rdio-scanner.exe -service install
+C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
+
+  <p>
+    The service appears in the Services console as <em>Rdio Scanner</em>, started manually by default: set
+    its startup type to <em>Automatic</em> if you want it to come up with the machine. The manager's own
+    tools work on it as they work on any service — <code>sc query rdio-scanner</code>,
+    <code>net start rdio-scanner</code>, and the same two commands with <code>stop</code>.
+  </p>
+
+  <p>
+    Windows does not let a program answer the standard ports the way a privileged Unix account does, and
+    its firewall asks once per program. Allow <code>rdio-scanner.exe</code> through Windows Defender
+    Firewall on the private network the machine sits on, and open the port on the public network if
+    listeners reach the deployment from outside:
+  </p>
+
+  <pre><code>C:\rdio-scanner&gt; netsh advfirewall firewall add rule name="Rdio Scanner" dir=in action=allow program="C:\rdio-scanner\rdio-scanner.exe" enable=yes</code></pre>
+
+  <p>
+    A Windows deployment that answers 80 and 443 behind a proxy is the arrangement
+    <a href="#ch-20-reverse-proxies">chapter 20</a> describes; a deployment that answers them directly
+    needs the certificate chapter 19 describes.
+  </p>
+
+  <h3>macOS</h3>
+
+  <p>
+    The macOS archive is <code>rdio-scanner-macos-amd64-v&lt;version&gt;.zip</code> for an Intel machine
+    and <code>rdio-scanner-macos-arm64-v&lt;version&gt;.zip</code> for an Apple one. The macOS builds do
+    not carry ffmpeg inside the program, so a macOS deployment that converts audio installs ffmpeg
+    separately — see <a href="#ch-03-requirements">requirements</a>.
+  </p>
+
+  <pre><code>% sudo ./rdio-scanner -service install
+% sudo ./rdio-scanner -service start</code></pre>
+
+  <p>
+    The install writes a launchd property list at
+    <code>/Library/LaunchDaemons/rdio-scanner.plist</code>, and the daemon is registered with the name
+    <code>rdio-scanner</code>. The manager's own commands work on it:
+  </p>
+
+  <pre><code>% sudo launchctl list | grep rdio
+% sudo launchctl stop rdio-scanner</code></pre>
+
+  <p>
+    macOS asks you to allow the program when it first accepts incoming connections; answer
+    <em>Allow</em>, and answer it again when the program is replaced by a new version, because the
+    allowance belongs to the program you allowed. A deployment behind a proxy on the same machine needs no
+    allowance for the port the proxy connects to.
+  </p>
+
+  <h3>FreeBSD</h3>
+
+  <p>
+    The FreeBSD archive is <code>rdio-scanner-freebsd-amd64-v&lt;version&gt;.zip</code>. The FreeBSD build
+    does not carry ffmpeg inside the program; install ffmpeg from the packages, and the server finds it on
+    the path.
+  </p>
+
+  <pre><code># ./rdio-scanner -service install
+# ./rdio-scanner -service start</code></pre>
+
+  <p>
+    The install writes a service script at <code>/usr/local/etc/rc.d/rdioscanner</code>, and the service is
+    known to the system as <code>rdioscanner</code> — the hyphenated name is what that manager rejects,
+    which is why FreeBSD is the one system whose service is spelled differently.
+  </p>
+
+  <pre><code># service rdioscanner status
+# service rdioscanner restart</code></pre>
+
+  <p>
+    Open the port in the packet filter. With <code>pf</code>, a rule passing the deployment's port on the
+    external interface, reloaded, is the whole firewall step; a deployment behind a proxy on the same host
+    needs the rule only for the address the proxy answers on.
+  </p>
+
+  <h3>What the service changes about the deployment</h3>
+
+  <ul>
+    <li>
+      <strong>The base directory is the folder the installed path lives in.</strong> The configuration, the
+      database, the recordings, and the migration archive are written there. A folder on a mount that is
+      not mounted at boot is a deployment that starts with a new database beside the one you meant it to
+      open.
+    </li>
+    <li>
+      <strong>The service starts before you are logged in, and as the account that installed it.</strong> A
+      deployment whose base directory is inside a user's home folder is a deployment a privileged account
+      writes into that home. Give the deployment a folder of its own.
+    </li>
+    <li>
+      <strong>The timezone is the machine's.</strong> A server whose machine is set to the wrong zone
+      writes a log and a call history in the wrong hours, and the log view's dates follow it. Set the
+      machine's time zone, not the server's.
+    </li>
+    <li>
+      <strong>Updating the program is a stop, a replace, and a start.</strong> The service configuration
+      points at the path, so replacing the file in place keeps the service working. Back up first —
+      <a href="#ch-23-backup-and-restore">chapter 23</a> — and expect the first start to migrate the
+      database, <a href="#ch-24-upgrading-and-migrating">chapter 24</a>.
+    </li>
+  </ul>
 </section>
 
 <section>
