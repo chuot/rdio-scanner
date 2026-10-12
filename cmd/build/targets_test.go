@@ -306,6 +306,41 @@ func TestADistRunAskedForATargetOutsideTheMatrixIsRefused(t *testing.T) {
 //
 // A machine the matrix has no entry for keeps the name go gives it: a hand-named target is built for the
 // platform its own name names, and the phase asked to build for it says what it can do there.
+// go builds a macOS binary for darwin, and the release names the same machine macos. A person naming the
+// target their own machine is types the word go gave it, and the release word is what the manifest records,
+// what the archive is named for, and what the guide uses. The word typed is resolved to the release word
+// where the run reads it, so every phase downstream sees one name; a word the matrix has no target for
+// keeps the words it was typed with, and the phase asked to build for it says what it can do there.
+func TestTheWordGoNamesAMachineByIsTheReleaseWord(t *testing.T) {
+	for _, typed := range []struct{ word, release string }{
+		{"darwin-amd64", "macos-amd64"},
+		{"darwin-arm64", "macos-arm64"},
+		{"macos-amd64", "macos-amd64"},
+		{"macos-arm64", "macos-arm64"},
+		{"freebsd-amd64", "freebsd-amd64"},
+		{"linux-amd64", "linux-amd64"},
+		{"windows-amd64", "windows-amd64"},
+		{"darwin-riscv64", "darwin-riscv64"},
+		{"plan9-riscv", "plan9-riscv"},
+	} {
+		if got := theReleaseWordTheRunBuildsFor(typed.word); got != typed.release {
+			t.Errorf("a run asked for %q builds for %q, want %q", typed.word, got, typed.release)
+		}
+	}
+
+	for _, word := range []string{"darwin-amd64", "darwin-arm64"} {
+		tr, found := targetFor(word)
+		if !found {
+			t.Errorf("%s names no release target, and the manifest records the macOS target the same machine runs", word)
+			continue
+		}
+
+		if !strings.HasPrefix(tr.targetWord(), "macos-") {
+			t.Errorf("%s resolves to %s: a macOS machine's release target is the macOS word", word, tr.targetWord())
+		}
+	}
+}
+
 func TestTheMachineIsNamedByTheReleaseTargetItBelongsTo(t *testing.T) {
 	for _, machine := range []struct{ goos, goarch, word string }{
 		{"freebsd", "amd64", "freebsd-amd64"},

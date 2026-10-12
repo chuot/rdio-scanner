@@ -213,7 +213,10 @@ func parseArgs(args []string) (options, error) {
 			if (arg == subFFmpeg || arg == subDist || arg == subFFmpegCheck) && i+1 < len(args) && isTarget(args[i+1]) {
 				i++
 
-				o.target = args[i]
+				// The word the operator typed is resolved to the release word here, once, so the manifest
+				// lookup, the archive's name, the check's proof, and every message the run prints all use
+				// the one name the release is built under.
+				o.target = theReleaseWordTheRunBuildsFor(args[i])
 
 				// The ffmpeg phase compiles for any platform the manifest can answer for, and says so
 				// when it has no record. The matrix is a product decision: a target outside it is a

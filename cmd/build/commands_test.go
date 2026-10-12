@@ -215,6 +215,34 @@ func TestTheFfmpegCheckNamesTheTargetItProves(t *testing.T) {
 	}
 }
 
+// A person naming the target their machine is types the two words go names that machine by. The release
+// word is what the manifest records and what the archive is named for, so the word typed is resolved to
+// the release word here, where the run reads it, and every phase after this one works with one name.
+func TestTheTargetACommandNamesIsTheReleaseWordTheRunBuildsFor(t *testing.T) {
+	for _, tc := range []struct {
+		args   []string
+		target string
+	}{
+		{args: []string{"ffmpeg", "darwin-arm64"}, target: "macos-arm64"},
+		{args: []string{"ffmpeg", "darwin-amd64"}, target: "macos-amd64"},
+		{args: []string{"dist", "darwin-arm64"}, target: "macos-arm64"},
+		{args: []string{"ffmpeg-check", "darwin-amd64"}, target: "macos-amd64"},
+		{args: []string{"ffmpeg", "macos-arm64"}, target: "macos-arm64"},
+		{args: []string{"ffmpeg", "linux-amd64"}, target: "linux-amd64"},
+		{args: []string{"ffmpeg", "freebsd-amd64"}, target: "freebsd-amd64"},
+	} {
+		o, err := parseArgs(tc.args)
+		if err != nil {
+			t.Errorf("%v: the command was refused: %v", tc.args, err)
+			continue
+		}
+
+		if o.target != tc.target {
+			t.Errorf("%v names the target %q, want the release word %q", tc.args, o.target, tc.target)
+		}
+	}
+}
+
 // A release run builds the platform it is standing on: the archive a developer builds to try the build is
 // the one their own machine runs, and the eight-target matrix is a release, which is a deliberate act.
 // Asking for the matrix and naming one target at the same time is a command line whose two halves ask for

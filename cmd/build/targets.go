@@ -64,6 +64,12 @@ var releaseTargets = []releaseTarget{
 // targetFor resolves the word the operator named to the release target it names. A word outside the
 // matrix is not a target this project releases, and a release run asked for one is refused.
 func targetFor(word string) (releaseTarget, bool) {
+	// The same machine, named two ways. go builds a macOS binary for darwin, the release names the same
+	// machine macos, and a person naming the target their machine is types the word go gave it.
+	if goos, goarch, found := strings.Cut(word, "-"); found && goos == "darwin" {
+		word = "macos-" + goarch
+	}
+
 	for _, t := range releaseTargets {
 		if t.targetWord() == word {
 			return t, true
@@ -71,6 +77,21 @@ func targetFor(word string) (releaseTarget, bool) {
 	}
 
 	return releaseTarget{}, false
+}
+
+// theReleaseWordTheRunBuildsFor is the release word a target word names. The release word is what the
+// manifest records, what the archive is named for, and what the guide uses, so a target named by go's word
+// for a machine is resolved here, where the run reads it, and every phase downstream works with one name.
+//
+// A word the matrix has no target for keeps the words it was typed with: the ffmpeg phase names the target
+// it compiles nothing for, and the release run refuses it as a platform this project does not release.
+func theReleaseWordTheRunBuildsFor(word string) string {
+	tr, found := targetFor(word)
+	if !found {
+		return word
+	}
+
+	return tr.targetWord()
 }
 
 // releaseTargetWordFor is the release target a machine belongs to, named the way the release names it.

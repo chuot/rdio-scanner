@@ -1124,6 +1124,29 @@ func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 	}
 }
 
+// A run asked for the machine it is standing on, in the words go names that machine by, compiles the pair
+// of the release target that machine is: the alias is a spelling, and the phase that compiles sees the
+// target, not the spelling.
+func TestTheFFmpegPhaseAskedForTheWordGoNamesTheMachineByPlansTheReleaseTarget(t *testing.T) {
+	o, err := parseArgs([]string{"ffmpeg", "darwin-arm64"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	plan, err := planFFmpeg(o, t.TempDir(), bundle.ReadManifest(), aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
+	if err != nil {
+		t.Fatalf("the build refused to compile the pair of the machine it is standing on: %v", err)
+	}
+
+	if plan.Target != "macos-arm64" {
+		t.Errorf("the plan is for %s, want macos-arm64", plan.Target)
+	}
+
+	if !plan.Native {
+		t.Errorf("the plan for %s compiles nothing on the machine that is that target", plan.Target)
+	}
+}
+
 // argAfter is the argument a command names after a flag, which is how a test reads where a step is
 // pointed at.
 func argAfter(args []string, flag string) string {
