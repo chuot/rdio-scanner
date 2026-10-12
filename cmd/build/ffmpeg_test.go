@@ -1124,6 +1124,175 @@ func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 	}
 }
 
+// The two macOS architectures ship one toolchain: the Command Line Tools' clang produces x86_64 on an
+// Apple Silicon Mac and arm64 on an Intel Mac, the macOS SDK carries the libraries of both, and codesign
+// signs a program of either architecture on either machine. A FreeBSD pair is statically linked against
+// FreeBSD's own libc, which is the pair's whole point, so a host of another operating system has nothing
+// to link it against and compiles nothing.
+func TestAMacOSHostCompilesTheOtherArchitecturesPair(t *testing.T) {
+	for _, tc := range []struct {
+		target  string
+		machine host
+	}{
+		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "arm64"}},
+		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "amd64"}},
+	} {
+		plan, err := planFFmpeg(options{target: tc.target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(tc.target), tc.machine)
+		if err != nil {
+			t.Errorf("%s on a %s host: the build refused to compile the pair: %v", tc.target, tc.machine.goarch, err)
+			continue
+		}
+
+		if !plan.Native {
+			t.Errorf("%s on a %s host: the build compiled nothing, and one macOS toolchain produces both architectures", tc.target, tc.machine.goarch)
+		}
+	}
+
+	for _, machine := range []host{
+		{goos: "darwin", goarch: "arm64"},
+		{goos: "linux", goarch: "amd64"},
+		{goos: "windows", goarch: "amd64"},
+	} {
+		plan, err := planFFmpeg(options{target: "freebsd-amd64"}, t.TempDir(), bundle.ReadManifest(), aNativeTree("freebsd-amd64"), machine)
+		if err != nil {
+			t.Errorf("freebsd-amd64 on a %s host: %v", machine.goarch, err)
+			continue
+		}
+
+		if plan.Native {
+			t.Errorf("freebsd-amd64 on a %s host: the build compiled a FreeBSD pair on a machine that is not FreeBSD, and the pair is FreeBSD's own libc", machine.goarch)
+		}
+
+		if !plan.Skipped {
+			t.Errorf("freebsd-amd64 on a %s host: the run promises an ffmpeg for a target it has no pair for", machine.goarch)
+		}
+	}
+}
+
+// The cache entry of a supplied target is keyed by the pair the manifest pins. The pair a host compiled for
+// the other macOS architecture is a pair with digests of its own — the compiler was told to produce that
+// architecture — so it is not the entry of the pair the target's own host compiled, and the two never share
+// an entry. The machine that computes the key is not part of it: the release machine adopting a pinned pair
+// and the Mac that compiled that pair look for the same entry of the same manifest, which is what makes a
+// warm cache mean one thing to every machine that reads it.
+func TestTheCacheEntryOfAPairCompiledAcrossTheArchitecturesIsTheEntryOfItsOwnPair(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	unpinned := cacheKey(manifest, "macos-amd64")
+
+	onItsOwnHost := bundle.ReadManifest()
+	onItsOwnHost.Targets["macos-amd64"] = aPinnedPair(manifest.Targets["macos-amd64"], "the pair the Intel Mac compiled", "its ffprobe")
+
+	fromTheOtherMac := bundle.ReadManifest()
+	fromTheOtherMac.Targets["macos-amd64"] = aPinnedPair(manifest.Targets["macos-amd64"], "the pair the Apple Silicon Mac compiled for it", "its ffprobe")
+
+	if cacheKey(onItsOwnHost, "macos-amd64") == unpinned {
+		t.Error("a manifest pinning a pair computes the entry of a manifest pinning nothing: the pair a host compiled is published from the entry of no pair")
+	}
+
+	if cacheKey(onItsOwnHost, "macos-amd64") == cacheKey(fromTheOtherMac, "macos-amd64") {
+		t.Error("two pinned pairs share one cache entry: the digests a compile pins are the pair's own identity, and the two are different programs")
+	}
+
+	repo := t.TempDir()
+
+	warm := ffmpegState{bundleIsCached: true}
+
+	onIntel, err := planFFmpeg(options{target: "macos-amd64"}, repo, onItsOwnHost, warm, aMachineForTarget("macos-amd64"))
+	if err != nil {
+		t.Fatalf("the Intel host refused to reuse the pinned pair: %v", err)
+	}
+
+	onAppleSilicon, err := planFFmpeg(options{target: "macos-amd64"}, repo, onItsOwnHost, warm, host{goos: "darwin", goarch: "arm64"})
+	if err != nil {
+		t.Fatalf("the Apple Silicon host refused to reuse the pinned pair: %v", err)
+	}
+
+	if onIntel.Paths.cached != onAppleSilicon.Paths.cached {
+		t.Errorf("the two hosts look for the pinned pair in different entries: %s and %s", onIntel.Paths.cached, onAppleSilicon.Paths.cached)
+	}
+}
+
+// aPinnedPair is a target record with the two program digests a compile writes.
+func aPinnedPair(record bundle.Target, ffmpeg string, ffprobe string) bundle.Target {
+	record.Programs = map[string]string{
+		"ffmpeg":  sha256Of([]byte(ffmpeg)),
+		"ffprobe": sha256Of([]byte(ffprobe)),
+	}
+
+	return record
+}
+
+// A compile across the two macOS architectures names the architecture it is building for: ffmpeg's own
+// architecture switch, the switch that tells configure not to run a test program of an architecture the
+// host may not execute, and clang's -arch in the compiler and linker flags, beside the flags the manifest
+// record names. A compile on the target's own host names none of them, because there the host's own
+// architecture is the target's and the compiler's default is the right answer.
+func TestACompileAcrossTheTwoArchitecturesNamesTheTargetArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		target     string
+		machine    host
+		ffmpegArch string
+		clangArch  string
+	}{
+		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "arm64"}, ffmpegArch: "x86_64", clangArch: "x86_64"},
+		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "amd64"}, ffmpegArch: "aarch64", clangArch: "arm64"},
+	} {
+		plan, err := planFFmpeg(options{target: tc.target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(tc.target), tc.machine)
+		if err != nil {
+			t.Errorf("%s on a %s host: %v", tc.target, tc.machine.goarch, err)
+			continue
+		}
+
+		configure := stepFor(plan.Steps, "configure")
+
+		for _, want := range []string{"--arch=" + tc.ffmpegArch, "--enable-cross-compile"} {
+			if !carries(configure.args, want) {
+				t.Errorf("%s compiled on a %s host: configure does not name %s", tc.target, tc.machine.goarch, want)
+			}
+		}
+
+		for _, prefix := range []string{"--extra-cflags=", "--extra-ldflags="} {
+			flags := theFlagNamed(configure.args, prefix)
+
+			if !strings.Contains(flags, "-arch "+tc.clangArch) {
+				t.Errorf("%s compiled on a %s host: %s does not name -arch %s: the compiler's default is the host's architecture", tc.target, tc.machine.goarch, prefix, tc.clangArch)
+			}
+
+			if !strings.Contains(flags, "-mmacosx-version-min=11.0") {
+				t.Errorf("%s compiled on a %s host: %s drops the flag the manifest record names: %q", tc.target, tc.machine.goarch, prefix, flags)
+			}
+		}
+	}
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, t.TempDir(), bundle.ReadManifest(), aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
+	if err != nil {
+		t.Fatalf("the build refused to compile the pair of the machine it is standing on: %v", err)
+	}
+
+	own := stepFor(plan.Steps, "configure")
+
+	if carries(own.args, "--enable-cross-compile") || carries(own.args, "--arch=") {
+		t.Errorf("a compile on the target's own host names a cross-compile: %v", own.args)
+	}
+
+	if carries(own.args, "-arch ") {
+		t.Errorf("a compile on the target's own host names -arch, asking the compiler for the architecture it is standing on: %v", own.args)
+	}
+}
+
+// theFlagNamed is the value of one flag-bearing argument, which is how a test reads what a step was told
+// to pass.
+func theFlagNamed(args []string, prefix string) string {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, prefix) {
+			return arg
+		}
+	}
+
+	return ""
+}
+
 // A run asked for the machine it is standing on, in the words go names that machine by, compiles the pair
 // of the release target that machine is: the alias is a spelling, and the phase that compiles sees the
 // target, not the spelling.

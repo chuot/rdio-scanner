@@ -87,6 +87,68 @@ func (h host) isTheHostOf(target string) bool {
 	return found && h.goos == tr.goos && h.goarch == tr.goarch
 }
 
+// canCompile says whether this machine can produce the pair of one target: the operating system is the
+// target's, and the architecture is the target's, or the other architecture macOS ships.
+//
+// Apple ships one toolchain that produces both macOS architectures: the Command Line Tools' clang takes
+// -arch x86_64 on an Apple Silicon Mac and -arch arm64 on an Intel Mac, the macOS SDK carries the
+// libraries of both, and codesign signs a program of either architecture on either machine. A FreeBSD
+// pair is statically linked against FreeBSD's own libc, which is the pair's whole point, and a host of
+// another operating system does not have it.
+func (h host) canCompile(target string) bool {
+	tr, found := targetFor(target)
+	if !found || h.goos != tr.goos {
+		return false
+	}
+
+	if h.goarch == tr.goarch {
+		return true
+	}
+
+	return h.goos == "darwin" && aMacOSReleaseTarget(h.goarch) && aMacOSReleaseTarget(tr.goarch)
+}
+
+// aMacOSReleaseTarget reports whether the release matrix ships a macOS platform for this architecture,
+// which is the list the two architectures a Mac can be are read from.
+func aMacOSReleaseTarget(goarch string) bool {
+	for _, tr := range releaseTargets {
+		if tr.goos == "darwin" && tr.goarch == goarch {
+			return true
+		}
+	}
+
+	return false
+}
+
+// theFFmpegArchitectureOf is the architecture of a target, named the way ffmpeg names architectures:
+// x86_64 and aarch64.
+func theFFmpegArchitectureOf(target string) string {
+	tr, found := targetFor(target)
+
+	if found && tr.goarch == "arm64" {
+		return "aarch64"
+	}
+
+	return "x86_64"
+}
+
+// theCompilerArchitectureTheHostMustProduce is the architecture the compiler has to be told to produce,
+// named the way the macOS compiler names it, when the host running the compile is not of the target's
+// architecture. An empty answer is the compile on the target's own host, where the compiler's own default
+// is the target's architecture and naming it would be the build guessing at a toolchain's defaults.
+func theCompilerArchitectureTheHostMustProduce(target string, machine host) string {
+	tr, found := targetFor(target)
+	if !found || machine.goarch == tr.goarch {
+		return ""
+	}
+
+	if tr.goarch == "arm64" {
+		return "arm64"
+	}
+
+	return "x86_64"
+}
+
 // ffmpegPaths are the places the ffmpeg phase keeps its pieces. Everything under the build directory
 // is disposable: deleting it costs a rebuild and nothing else.
 type ffmpegPaths struct {
@@ -425,11 +487,12 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 	drop := suppliedDropFor(paths, target)
 
 	if !aFileIsThere(drop["ffmpeg"]) && !aFileIsThere(drop["ffprobe"]) {
-		// Nothing was dropped, and this machine is the platform the pair runs on: the compile is what
-		// only it can do, and it is what the operator asked for when they asked for the ffmpeg of the
-		// machine they are on.
-		if machine.isTheHostOf(target) {
-			return planNativeFFmpeg(repo, manifest, target, record, paths, state)
+		// Nothing was dropped, and this machine can produce the pair: the compile is what only a host of
+		// the target's own operating system can do, and it is what the operator asked for when they asked
+		// for the ffmpeg of the machine they are on. A macOS host of the other architecture is such a
+		// host, because one macOS toolchain produces both architectures.
+		if machine.canCompile(target) {
+			return planNativeFFmpeg(repo, manifest, target, record, paths, state, machine)
 		}
 
 		return ffmpegPlan{
@@ -494,7 +557,7 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 //
 // Stripping comes before signing, and the order is not a style: strip rewrites the binary, and a signature
 // computed over the bytes strip removed is a signature macOS refuses to run.
-func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState) (ffmpegPlan, error) {
+func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	if err := checkNativeToolchain(record, target, state); err != nil {
 		return ffmpegPlan{}, err
 	}
@@ -522,12 +585,27 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 
 	configure = append(configure, manifest.Recipe...)
 
-	if len(record.CFlags) > 0 {
-		configure = append(configure, "--extra-cflags="+strings.Join(record.CFlags, " "))
+	// A compile across the two macOS architectures names the architecture it is building for in three
+	// places: ffmpeg's own architecture switch, the switch that keeps configure from running a test
+	// program of an architecture this host may not execute, and the compiler's own architecture flag in
+	// the compiler and linker flags. On the target's own host the compiler's default is the target's
+	// architecture, and none of the three is named.
+	cflags := append([]string{}, record.CFlags...)
+	ldflags := append([]string{}, record.LDFlags...)
+
+	if compilerArch := theCompilerArchitectureTheHostMustProduce(target, machine); compilerArch != "" {
+		configure = append(configure, "--arch="+theFFmpegArchitectureOf(target), "--enable-cross-compile")
+
+		cflags = append(cflags, "-arch "+compilerArch)
+		ldflags = append(ldflags, "-arch "+compilerArch)
 	}
 
-	if len(record.LDFlags) > 0 {
-		configure = append(configure, "--extra-ldflags="+strings.Join(record.LDFlags, " "))
+	if len(cflags) > 0 {
+		configure = append(configure, "--extra-cflags="+strings.Join(cflags, " "))
+	}
+
+	if len(ldflags) > 0 {
+		configure = append(configure, "--extra-ldflags="+strings.Join(ldflags, " "))
 	}
 
 	// The configure writes its build files into the directory it is run from — the config.mak the
