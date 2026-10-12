@@ -18,10 +18,9 @@
  */
 
 /*
- * Hand-written service worker replacing the legacy Angular ngsw
- * (decision-pwa-custom-sw.md). The build script injects the precache
- * manifest below; a rebuild changes sw.js bytes, which is what triggers
- * the update flow.
+ * Hand-written service worker replacing the legacy Angular ngsw. The build
+ * script injects the precache manifest below; a rebuild changes sw.js bytes,
+ * which is what triggers the update flow.
  */
 
 /* @precache-manifest */

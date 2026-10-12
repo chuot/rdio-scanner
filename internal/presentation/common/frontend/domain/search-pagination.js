@@ -11,8 +11,7 @@ export function needsRefetch(windowStart, currentServerOffset, serverPage) {
 
 // Legacy quirk fixed: results.slice(from % limit, to % limit + 1) returns an
 // empty window when the client window wraps the server page boundary; the
-// intended wrap-around concatenation is implemented here (deviation recorded
-// in decision-legacy-bug-fixes.md).
+// intended wrap-around concatenation is implemented here.
 export function clientSlice(results, windowStart, windowEnd, serverPage, clientPage) {
   const from = windowStart % serverPage;
   const to = windowEnd % serverPage + 1;

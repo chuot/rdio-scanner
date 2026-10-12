@@ -1,4 +1,4 @@
-// Playback exhaustion goes live (T024, CA-015): when the playback list runs
+// Playback exhaustion goes live: when the playback list runs
 // out, the refreshed list is checked once more and the listener returns to the
 // live feed. The retired playback-goes-live option is gone; exhaustion always
 // starts the live feed.

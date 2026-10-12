@@ -8,8 +8,7 @@ export function holdSystemMap(map, call) {
   for (const [sys, tgMap] of Object.entries(map)) {
     // Intended legacy semantics: a fully inactive current system is switched
     // on as a whole. (Legacy bug: `every((tg) => !this.livefeedMap[sys][tg])`
-    // tests object truthiness, so allOn was always false. Deviation recorded
-    // in decision-legacy-bug-fixes.md.)
+    // tests object truthiness, so allOn was always false.)
     const allOff = Object.values(tgMap).every((lfm) => lfm.active !== true);
 
     held[sys] = {};

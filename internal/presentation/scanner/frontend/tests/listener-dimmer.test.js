@@ -1,4 +1,4 @@
-// The dimmer (T023, CA-011): the display lights when a call arrives or the
+// The dimmer: the display lights when a call arrives or the
 // listener presses a control, and dims again 5000 ms after that. The delay is
 // the domain constant DIMMER_DELAY_MS; no administrator option controls it.
 // The fake clock makes the timer observable without waiting for real time.

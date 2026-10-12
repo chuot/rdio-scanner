@@ -1,4 +1,4 @@
-// Shared UI primitives (T022): keyboard-operable custom elements replacing
+// Shared UI primitives: keyboard-operable custom elements replacing
 // Angular Material. All are plain custom elements with Light DOM.
 
 class RdioSnackbar extends HTMLElement {

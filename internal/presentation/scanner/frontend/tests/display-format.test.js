@@ -1,4 +1,4 @@
-// The locale hour cycle (T022, CA-010): the browser locale decides whether the
+// The locale hour cycle: the browser locale decides whether the
 // clock is 12-hour or 24-hour; no administrator option controls it any more.
 
 import test from 'node:test';

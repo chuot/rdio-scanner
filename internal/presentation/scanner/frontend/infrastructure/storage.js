@@ -1,4 +1,4 @@
-// Scanner storage adapter: exact legacy keys (data-model.md §5).
+// Scanner storage adapter: exact legacy keys.
 // localStorage: rdio-scanner (legacy livefeed fallback), rdio-scanner-lfm-<id>,
 // rdio-scanner-pin (handled by domain/pin against `local`).
 

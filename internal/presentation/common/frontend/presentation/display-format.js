@@ -18,7 +18,7 @@ export function isAfsSystem(call) {
   return call.systemData?.type === 'provoice' || call.talkgroupData?.type === 'provoice';
 }
 
-// The clock format is the browser locale's hour cycle (FEAT-016, CA-010): a
+// The clock format is the browser locale's hour cycle: a
 // 12-hour locale gets the AM/PM suffix, a 24-hour locale gets 24-hour time. No
 // administrator option controls it any more. The locale argument exists for
 // tests with fixed locales; the browser default is used when it is absent.

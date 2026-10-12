@@ -16,7 +16,7 @@ export function clearQueue() {
 // Keeps calls whose talkgroup — or one of its patches — is active.
 // Deviation from legacy: patches are resolved across all systems because
 // talkgroupRefs are globally unique (legacy looked only in the call's own
-// system and missed cross-system patches — decision-legacy-bug-fixes.md).
+// system and missed cross-system patches).
 export function filterActive(queue, livefeedMap) {
   const isActive = (sys, tg) => livefeedMap?.[sys]?.[tg]?.active === true;
 

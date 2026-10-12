@@ -1,7 +1,7 @@
 // Listener config normalization and admin config round-trip.
 // Mirrors the CFG handler and transformCall of legacy rdio-scanner.service.ts,
 // and the admin config read/save semantics of admin.service.ts.
-// The retired options (FEAT-016) — 12-hour time format, dimmer delay,
+// The retired options — 12-hour time format, dimmer delay,
 // playback-goes-live — are not part of the listener state any more.
 
 export function normalizeListenerConfig(raw) {
@@ -83,8 +83,8 @@ export function serializeAdminConfig(config) {
   return saved;
 }
 
-// Admin config sections exposed as individual REST endpoints
-// (REQ-019, decision-admin-section-api.md).
+// Admin config sections exposed as individual REST endpoints: each section is
+// read and saved on its own, not as the legacy whole-form swap.
 export const ADMIN_CONFIG_SECTIONS = [
   'access',
   'apikeys',
@@ -104,8 +104,8 @@ export function createSectionWorkingCopy(section, baseline) {
   return structuredClone(baseline ?? null);
 }
 
-// The three levels of one system the administrator saves on its own
-// (FEAT-016): sites, talkgroups, units.
+// The three levels of one system the administrator saves on its own:
+// sites, talkgroups, units.
 export const SYSTEM_SUB_LEVELS = ['sites', 'talkgroups', 'units'];
 
 // Per-level working copy: the talkgroups level carries the same order-key

@@ -42,7 +42,7 @@ describe('domain/config — listener config normalization', () => {
         assert.equal(config.showListenersCount, true);
         assert.equal(config.systems.length, 1);
 
-        // The retired options (FEAT-016) never reach the listener state.
+        // The retired options never reach the listener state.
         assert.equal(config.dimmerDelay, undefined);
         assert.equal(config.playbackGoesLive, undefined);
         assert.equal(config.time12hFormat, undefined);
