@@ -27,7 +27,7 @@ import (
 
 // capturedRuns are the runs a dirwatch server left behind, recorded table by table as the legacy server
 // wrote them and keyed by the name the test asks for them under. They live in the package that consumes
-// them, which is what REQ-007 asks for: no fixture directory, no manifest, and nothing outside the test
+// them: no fixture directory, no manifest, and nothing outside the test
 // that proves it.
 //
 // The runs were captured from a legacy server with its time zone set to UTC, which is the time zone every

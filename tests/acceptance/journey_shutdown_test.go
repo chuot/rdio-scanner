@@ -82,7 +82,7 @@ func TestTheFirstInterruptStopsTheServerCleanly(t *testing.T) {
 	}
 }
 
-// TestASecondInterruptEndsAServerThatCannotStop (REQ-007, CA-007.5, decision D6): the stop
+// TestASecondInterruptEndsAServerThatCannotStop: the stop
 // is the polite way out, and a stop that cannot finish — a log write the database will not
 // take, a goroutine that never returns — leaves the operator holding a running server with
 // no answer. Today the second interrupt is ignored and the third is SIGKILL, with no trace

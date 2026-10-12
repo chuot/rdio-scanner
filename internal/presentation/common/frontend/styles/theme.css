@@ -18,7 +18,7 @@
  */
 
 /*
- * Global theme (T049, REQ-013): self-hosted fonts only — the @font-face
+ * Global theme: self-hosted fonts only — the @font-face
  * sources mirror the legacy roboto-fonts.scss / material-icons.scss but
  * point at the local assets/fonts/ copies. No third-party font requests.
  */
@@ -189,7 +189,7 @@ body {
 }
 
 /*
- * Shared UI primitives (T022 elements): snackbar, dialog, buttons, form
+ * Shared UI primitives: snackbar, dialog, buttons, form
  * fields, select, toggle, paginator. Page-specific looks (beveled listener
  * buttons, admin cards) live in rdio.css / admin.css.
  */

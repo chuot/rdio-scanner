@@ -37,7 +37,7 @@ import { openDialog } from '../../common/frontend/presentation/ui/primitives.js'
 import { getAppContext } from './application/context.js';
 
 /*
- * PWA update prompt (decision-pwa-custom-sw.md §3): a waiting service
+ * PWA update prompt: a waiting service
  * worker posts AppUpdateAvailable; the dialog reproduces the legacy
  * AppUpdateComponent text and Yes applies the update before reloading
  * (SwUpdate.activateUpdate() equivalent).

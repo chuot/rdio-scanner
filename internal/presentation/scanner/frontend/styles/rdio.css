@@ -18,7 +18,7 @@
  */
 
 /*
- * Listener page styles (T050, REQ-013/REQ-014): the legacy beveled rdio
+ * Listener page styles: the legacy beveled rdio
  * buttons with LED pseudo-elements and blink animations, the 8-color status
  * LED, the LCD display with idle/dimmed state and history table, the
  * select/search side panels, and the help/promo snackbar contents.
@@ -232,7 +232,7 @@ rdio-select-panel .rdio-button-mini:active {
   transform-origin: bottom center;
 }
 
-/* REQ-014: unlike the legacy client, keyboard focus stays visible. */
+/* Unlike the legacy client, keyboard focus stays visible. */
 rdio-controls .rdio-button:focus-visible,
 rdio-select-panel .rdio-button:focus-visible,
 rdio-select-panel .rdio-button-mini:focus-visible,
@@ -831,8 +831,7 @@ rdio-search-panel .rdio-list table {
 
 /* Legacy mat-table cells: a 52px row, the 1px row outline on the cell, and the
  * light theme's text. The baseline's table reaches its boxes with flex rows and
- * flex-basis columns; this one is a real table, which is the same picture by a
- * different route (decision-parity-dispositions.md D-19). */
+ * flex-basis columns; this one is a real table, which draws the same picture. */
 rdio-search-panel .rdio-list tr {
   background-color: white;
   box-sizing: border-box;
@@ -879,7 +878,7 @@ rdio-search-panel .rdio-list td:nth-child(2) {
   width: 55px;
 }
 
-/* The clock is the browser locale's hour cycle (FEAT-016): the column is wide
+/* The clock is the browser locale's hour cycle: the column is wide
    enough for the 12-hour form, which is the wider of the two. */
 
 rdio-search-panel .rdio-list th:nth-child(3),

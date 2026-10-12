@@ -29,7 +29,7 @@ RUN mkdir -p /app/data && \
     adduser -D -u 10001 rdio && \
     chown rdio:rdio /app/data
 
-# The server runs as this uid, not as root (CA-019.1): it reads and deletes the
+# The server runs as this uid, not as root: it reads and deletes the
 # directories its administrator configures and writes its data directory, and
 # root buys it nothing it uses. The default listen address is 3000, which any
 # user can bind; an operator who points ssl_listen at 443 binds a privileged

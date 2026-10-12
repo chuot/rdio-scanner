@@ -18,7 +18,7 @@
  */
 
 /*
- * Admin page styles (T051, REQ-013/REQ-014, CA-014.1): a simpler admin look
+ * Admin page styles: a simpler admin look
  * replacing the legacy Material accordion — sidebar shell, section cards with
  * bordered rows, sticky save bars, striped tables. Everything is scoped under
  * the admin elements / admin-specific classes so the shared primitives in

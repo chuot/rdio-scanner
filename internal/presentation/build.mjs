@@ -231,7 +231,7 @@ if ('serviceWorker' in navigator) {
 
 /**
  * Emit the service worker with the generated precache manifest injected as a
- * constant (decision-pwa-custom-sw.md §4). The source lives with the other
+ * constant. The source lives with the other
  * infrastructure modules; the name it is written under is the one the built
  * page registers, and it stays unhashed.
  */
