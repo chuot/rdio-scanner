@@ -21,9 +21,12 @@
 package docs
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -34,8 +37,8 @@ import (
 // carries every chapter the reader is promised — so a guide that quietly reaches out to the network, or
 // that loses a chapter on the way, fails the suite instead of failing the reader.
 
-// guidePath is the guide the tests read: the file the reader opens, in the documentation folder.
-func guidePath(t *testing.T) string {
+// guideFile is the guide the tests read: the file the reader opens, in the documentation folder.
+func guideFile(t *testing.T) string {
 	t.Helper()
 
 	path, err := filepath.Abs(filepath.Join("..", "..", "docs", "admin-guide.html"))
@@ -43,12 +46,57 @@ func guidePath(t *testing.T) string {
 		t.Fatalf("the guide path does not resolve: %v", err)
 	}
 
-	body, err := os.ReadFile(path)
+	return path
+}
+
+func guidePath(t *testing.T) string {
+	t.Helper()
+
+	body, err := os.ReadFile(guideFile(t))
 	if err != nil {
-		t.Fatalf("the guide is not readable at %s: %v", path, err)
+		t.Fatalf("the guide is not readable at %s: %v", guideFile(t), err)
 	}
 
 	return string(body)
+}
+
+// repoFile reads a file of the repository the guide documents. The guide's tables are transcriptions of
+// the server's own flag set and of the contract the server publishes, so the tests read what those
+// transcriptions are made from and compare it with the tables the reader sees.
+func repoFile(t *testing.T, parts ...string) string {
+	t.Helper()
+
+	path, err := filepath.Abs(filepath.Join(append([]string{"..", ".."}, parts...)...))
+	if err != nil {
+		t.Fatalf("%s does not resolve: %v", filepath.Join(parts...), err)
+	}
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("%s is not readable: %v", filepath.Join(parts...), err)
+	}
+
+	return string(body)
+}
+
+// stripTags leaves the words a table cell carries, which is what a reader reads.
+func stripTags(cell string) string {
+	return strings.TrimSpace(regexp.MustCompile(`(?is)<[^>]*>`).ReplaceAllString(cell, " "))
+}
+
+// tableWithCaption returns the table the reader sees under a caption.
+func tableWithCaption(t *testing.T, body, caption string) string {
+	t.Helper()
+
+	for _, table := range regexp.MustCompile(`(?is)<table\b.*?</table>`).FindAllString(body, -1) {
+		if strings.Contains(table, "<caption>"+caption+"</caption>") {
+			return table
+		}
+	}
+
+	t.Fatalf("the guide has no table captioned %q", caption)
+
+	return ""
 }
 
 // The chapters the guide is written to, in the order a reader works through them: install, run,
@@ -245,6 +293,42 @@ func chapterOf(t *testing.T, body string, id string) string {
 	return body[start : start+end]
 }
 
+// The guide is the project's own document, and the reader meets the project's mark in its header before
+// they meet a word of prose. A header whose mark is a file the reader does not have is a header that shows
+// a broken frame offline, which is the one condition the guide is written to survive.
+func TestTheGuideShowsTheMark(t *testing.T) {
+	body := guidePath(t)
+
+	header := regexp.MustCompile(`(?is)<header\b[^>]*class="site"[^>]*>(.*?)</header>`).FindStringSubmatch(body)
+	if len(header) < 2 {
+		t.Fatalf("the guide has no header to carry the mark")
+	}
+
+	mark := regexp.MustCompile(`(?is)<img\b[^>]*>`).FindStringSubmatch(header[1])
+	if len(mark) < 1 {
+		t.Fatalf("the guide's header carries no picture beside the application's name")
+	}
+
+	tag := mark[0]
+
+	if !strings.Contains(tag, "data-logo") {
+		t.Errorf("the header's picture is not the mark slot: %s", tag)
+	}
+
+	if !strings.Contains(tag, `src="data:image/png;base64,`) {
+		t.Errorf("the header's mark is not carried inside the document: %s", strings.TrimSuffix(tag[:60], ">"))
+	}
+
+	if !regexp.MustCompile(`(?is)\balt="[^"]+"`).MatchString(tag) {
+		t.Errorf("the header's mark carries no description of what it shows")
+	}
+
+	title := regexp.MustCompile(`(?is)<h1\b[^>]*>(.*?)</h1>`).FindStringSubmatch(header[1])
+	if len(title) < 2 || !strings.Contains(regexp.MustCompile(`(?is)<[^>]*>`).ReplaceAllString(title[1], ""), "Rdio Scanner") {
+		t.Errorf("the header's name is not the application's name")
+	}
+}
+
 // A recorder configured once posts to the endpoint it was told about, and keeps posting there for years.
 // A guide that names the superseded endpoint without saying it is superseded is the guide that keeps the
 // deployment on it. The marking has to be in the chapter the reader is in, not in a chapter they skipped.
@@ -355,5 +439,397 @@ func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
 		if !strings.Contains(section, cost) {
 			t.Errorf("the changes since version 6.6.3 do not name the update's cost: %q is missing", cost)
 		}
+	}
+}
+
+// serverFlag is one flag the composition root registers, with the default expression the source writes.
+type serverFlag struct {
+	name string
+	expr string
+}
+
+// serverFlags reads the flag set the server builds at its composition root. The guide's flag tables are
+// transcriptions of that set, so the set is what the tables are checked against.
+func serverFlags(t *testing.T) []serverFlag {
+	source := repoFile(t, "cmd", "rdio-scanner", "config.go")
+
+	var flags []serverFlag
+
+	for _, m := range regexp.MustCompile(`fs\.(?:String|Bool|Uint|Int|StringVar|BoolVar|UintVar|IntVar)\(\s*(?:&[A-Za-z0-9_.]+,\s*)?"([a-z_]+)",\s*([^,]+),`).FindAllStringSubmatch(source, -1) {
+		flags = append(flags, serverFlag{name: m[1], expr: strings.TrimSpace(m[2])})
+	}
+
+	if len(flags) < 20 {
+		t.Fatalf("the composition root registers %d flags: the flag set is not readable from it", len(flags))
+	}
+
+	return flags
+}
+
+// packageConstants collects the constants the composition root's own packages write, so a flag whose
+// default is named by a constant is read as the value the server starts with.
+func packageConstants(t *testing.T) map[string]string {
+	consts := map[string]string{}
+
+	for _, source := range []string{
+		repoFile(t, "cmd", "rdio-scanner", "config.go"),
+		repoFile(t, "internal", "app", "app.go"),
+	} {
+		for _, block := range regexp.MustCompile(`(?s)const\s*\((.*?)\n\)`).FindAllStringSubmatch(source, -1) {
+			for _, line := range strings.Split(block[1], "\n") {
+				m := regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*(?:string\s+)?=\s*(.+)$`).FindStringSubmatch(strings.TrimSpace(line))
+				if len(m) == 3 {
+					consts[m[1]] = strings.TrimSpace(m[2])
+				}
+			}
+		}
+	}
+
+	return consts
+}
+
+// resolveDefault reads a default expression as the value the server starts with. A default the
+// composition root works out at start-up has no literal to read, and says so.
+func resolveDefault(expr string, consts map[string]string, depth int) (string, bool) {
+	if depth > 6 {
+		return "", false
+	}
+
+	expr = strings.TrimSpace(expr)
+
+	for _, wrapper := range []string{"uint(", "int("} {
+		if strings.HasPrefix(expr, wrapper) && strings.HasSuffix(expr, ")") {
+			return resolveDefault(expr[len(wrapper):len(expr)-1], consts, depth+1)
+		}
+	}
+
+	if expr == "false" || expr == "true" {
+		return expr, true
+	}
+
+	if strings.HasPrefix(expr, `"`) {
+		value, err := strconv.Unquote(expr)
+		if err != nil {
+			return "", false
+		}
+
+		return value, true
+	}
+
+	if expr != "" && strings.Trim(expr, "0123456789") == "" {
+		return expr, true
+	}
+
+	if i := strings.LastIndex(expr, "."); i >= 0 && !strings.ContainsAny(expr[:i], " \t()") {
+		return resolveDefault(expr[i+1:], consts, depth+1)
+	}
+
+	if next, ok := consts[expr]; ok {
+		return resolveDefault(next, consts, depth+1)
+	}
+
+	return "", false
+}
+
+// computedDefaults are the flags whose default the composition root works out at start-up instead of
+// writing as a literal. The guide states the outcome, and the outcome is what its cell has to name.
+var computedDefaults = map[string]string{
+	"base_dir": "~/Rdio Scanner",
+}
+
+// defaultIsStated reports whether the guide's cell states the default the server starts with. An unset
+// default is stated as none, as the em dash the appendix uses, or as the driver's own answer; a switch
+// left off is stated as off or false.
+func defaultIsStated(name, cell, expr string, consts map[string]string) bool {
+	value, literal := resolveDefault(expr, consts, 0)
+
+	if !literal {
+		outcome, ok := computedDefaults[name]
+
+		return ok && strings.Contains(cell, outcome)
+	}
+
+	switch value {
+	case "":
+		return strings.Contains(cell, "none") || strings.Contains(cell, "—") || strings.Contains(cell, "the driver's")
+	case "false":
+		return strings.Contains(cell, "false") || strings.Contains(cell, "off")
+	case "true":
+		return strings.Contains(cell, "true")
+	}
+
+	return strings.Contains(cell, value)
+}
+
+// The chapters a reader looks the server's flags up in: the chapter that operates them, and the appendix
+// that lists them. A chapter may split the set across tables — the modes the same command line selects
+// are not the settings the server runs with — so every table in the chapter carrying a default is read.
+var guideFlagChapters = []string{
+	"ch-06-flags-and-ini",
+	"ch-27-reference",
+}
+
+// tabulatedFlags collects the flags a chapter's tables state a default for, keyed by the flag name
+// without its dash.
+func tabulatedFlags(t *testing.T, body, chapter string) map[string]string {
+	t.Helper()
+
+	rows := map[string]string{}
+
+	for _, table := range regexp.MustCompile(`(?is)<table\b.*?</table>`).FindAllString(chapterOf(t, body, chapter), -1) {
+		for _, m := range regexp.MustCompile(`(?is)<tr><td><code>(-([a-z_]+))[^<]*</code></td><td class="default">(.*?)</td>`).FindAllStringSubmatch(table, -1) {
+			rows[m[2]] = stripTags(m[3])
+		}
+	}
+
+	if len(rows) == 0 {
+		t.Fatalf("the guide's chapter %q tabulates no flag default", chapter)
+	}
+
+	return rows
+}
+
+// A flag the guide tabulates that the server does not accept is a flag an administrator types and the
+// server refuses. A default the guide states wrongly is a setting the administrator believes they have.
+// Both tables are checked, because a reader looks the flags up in the appendix as often as they read
+// them in the chapter.
+func TestTheFlagsTheGuideTabulatesAreTheFlagsTheServerAccepts(t *testing.T) {
+	body := guidePath(t)
+
+	flags := serverFlags(t)
+	consts := packageConstants(t)
+
+	accepted := map[string]bool{}
+
+	for _, flag := range flags {
+		accepted[flag.name] = true
+	}
+
+	for _, chapter := range guideFlagChapters {
+		rows := tabulatedFlags(t, body, chapter)
+
+		for _, flag := range flags {
+			cell, ok := rows[flag.name]
+			if !ok {
+				t.Errorf("the guide's chapter %q does not tabulate the -%s flag the server accepts", chapter, flag.name)
+
+				continue
+			}
+
+			value, literal := resolveDefault(flag.expr, consts, 0)
+			if !literal {
+				value = "worked out at start-up"
+			}
+
+			if !defaultIsStated(flag.name, cell, flag.expr, consts) {
+				t.Errorf("the guide's chapter %q states the -%s default as %q, the server starts with %s", chapter, flag.name, cell, value)
+			}
+		}
+
+		for name := range rows {
+			if !accepted[name] {
+				t.Errorf("the guide's chapter %q tabulates -%s, which the server does not accept", chapter, name)
+			}
+		}
+	}
+}
+
+// The HTTP methods the contract publishes as operations. The contract's websocket entries are the
+// listener's channel, not endpoints a client calls.
+var httpMethods = map[string]bool{
+	"get": true, "post": true, "put": true, "delete": true, "patch": true, "head": true, "options": true,
+}
+
+// The word the guide uses for each credential the contract names.
+var credentialWords = map[string]string{
+	"adminJwt":   "session",
+	"accessCode": "access code",
+}
+
+// publishedEndpoints reads the endpoints the contract publishes with the credential each takes, and the
+// header each credential is presented in.
+func publishedEndpoints(t *testing.T) (map[string][]string, map[string]string) {
+	var contract struct {
+		Security   []map[string][]string                 `json:"security"`
+		Paths      map[string]map[string]json.RawMessage `json:"paths"`
+		Components struct {
+			SecuritySchemes map[string]struct {
+				In   string `json:"in"`
+				Name string `json:"name"`
+			} `json:"securitySchemes"`
+		} `json:"components"`
+	}
+
+	if err := json.Unmarshal([]byte(repoFile(t, "docs", "openapi.json")), &contract); err != nil {
+		t.Fatalf("the published contract does not read: %v", err)
+	}
+
+	endpoints := map[string][]string{}
+
+	for path, operations := range contract.Paths {
+		for method, raw := range operations {
+			if !httpMethods[strings.ToLower(method)] {
+				continue
+			}
+
+			var operation struct {
+				Security *[]map[string][]string `json:"security"`
+			}
+
+			if err := json.Unmarshal(raw, &operation); err != nil {
+				t.Fatalf("the contract's %s %s does not read: %v", strings.ToUpper(method), path, err)
+			}
+
+			requirements := operation.Security
+			if requirements == nil {
+				requirements = &contract.Security
+			}
+
+			names := []string{}
+
+			for _, requirement := range *requirements {
+				for name := range requirement {
+					names = append(names, name)
+				}
+			}
+
+			sort.Strings(names)
+
+			endpoints[strings.ToUpper(method)+" "+path] = names
+		}
+	}
+
+	headers := map[string]string{}
+
+	for scheme, schemeDetails := range contract.Components.SecuritySchemes {
+		if schemeDetails.In == "header" {
+			headers[scheme] = schemeDetails.Name
+		}
+	}
+
+	return endpoints, headers
+}
+
+// The endpoint table is the list an administrator drives a deployment from. A path the guide carries that
+// the contract does not publish is a call that fails; a published endpoint the guide leaves out is the
+// endpoint nobody uses. The credential each endpoint takes is the difference between a script that
+// authenticates and a script that is refused.
+func TestTheEndpointsTheGuideTabulatesAreTheEndpointsTheContractPublishes(t *testing.T) {
+	body := guidePath(t)
+
+	endpoints, headers := publishedEndpoints(t)
+
+	chapter := chapterOf(t, body, "ch-16-rest-api")
+
+	rows := map[string]string{}
+
+	for _, m := range regexp.MustCompile(`(?is)<tr><td><code>([A-Z]+) ([^<]+)</code></td><td>(.*?)</td>`).FindAllStringSubmatch(tableWithCaption(t, chapter, "The endpoints the server answers"), -1) {
+		rows[m[1]+" "+m[2]] = stripTags(m[3])
+	}
+
+	for key, schemes := range endpoints {
+		cell, ok := rows[key]
+		if !ok {
+			t.Errorf("the guide's endpoint table does not carry %s, which the contract publishes", key)
+
+			continue
+		}
+
+		if len(schemes) == 0 {
+			if !strings.Contains(cell, "nothing") && !strings.Contains(cell, "key") {
+				t.Errorf("the guide's endpoint table says %s takes %q, the contract publishes it with no credential", key, cell)
+			}
+
+			continue
+		}
+
+		for _, scheme := range schemes {
+			word, ok := credentialWords[scheme]
+			if !ok {
+				t.Fatalf("the contract names the %s credential, which the guide's vocabulary does not know", scheme)
+			}
+
+			if !strings.Contains(strings.ToLower(cell), word) {
+				t.Errorf("the guide's endpoint table says %s takes %q, the contract publishes it with the %s credential", key, cell, scheme)
+			}
+		}
+	}
+
+	for key := range rows {
+		if _, ok := endpoints[key]; !ok {
+			t.Errorf("the guide's endpoint table carries %s, which the contract does not publish", key)
+		}
+	}
+
+	credential := tableWithCaption(t, chapter, "How each credential is presented")
+
+	for scheme, header := range headers {
+		if !strings.Contains(credential, header) {
+			t.Errorf("the guide does not say the %s credential is presented in the %s header", scheme, header)
+		}
+	}
+}
+
+// The guide is read where nothing else is: an extracted archive, a mail attachment, a machine with no
+// network. A link that leaves the document is a page that renders empty there, and a document the guide
+// names that the reader does not have is the instruction the reader cannot follow. The scanner webapp's
+// guide is the one document the guide names, and it names it as the out-of-scope pointer.
+func TestNothingInTheGuidePointsOutsideItself(t *testing.T) {
+	body := guidePath(t)
+
+	anchors := map[string]bool{}
+
+	for _, m := range regexp.MustCompile(`(?is)\bid="([^"]+)"`).FindAllStringSubmatch(body, -1) {
+		anchors[m[1]] = true
+	}
+
+	links := 0
+
+	for _, m := range regexp.MustCompile(`(?is)href="([^"]*)"`).FindAllStringSubmatch(body, -1) {
+		links++
+
+		href := m[1]
+
+		if !strings.HasPrefix(href, "#") {
+			t.Errorf("the guide links to %q, which leaves the document", href)
+
+			continue
+		}
+
+		if !anchors[strings.TrimPrefix(href, "#")] {
+			t.Errorf("the guide links to %q, which the document does not carry", href)
+		}
+	}
+
+	if links < 100 {
+		t.Errorf("the guide carries %d links: the contents aid and the cross-references are not all there", links)
+	}
+
+	prose := regexp.MustCompile(`(?is)<[^>]*>`).ReplaceAllString(body, " ")
+
+	for _, name := range regexp.MustCompile(`[A-Za-z0-9_\-./]+\.(?:md|html)\b`).FindAllString(prose, -1) {
+		switch name {
+		case "webapp.md", "docs/webapp.md", "admin-guide.html", "docs/admin-guide.html":
+			continue
+		}
+
+		t.Errorf("the guide names %q, a document the reader does not have beside the guide", name)
+	}
+}
+
+// The size budget the guide is written to: one file a reader carries. The measurement is recorded on
+// every run, so the number the guide promises is the number the file has.
+func TestTheGuideIsSmallEnoughToCarry(t *testing.T) {
+	const budget = 6 << 20
+
+	info, err := os.Stat(guideFile(t))
+	if err != nil {
+		t.Fatalf("the guide is not readable: %v", err)
+	}
+
+	t.Logf("the guide measures %d bytes of %d allowed", info.Size(), budget)
+
+	if info.Size() > budget {
+		t.Errorf("the guide measures %d bytes, over the %d byte budget", info.Size(), budget)
 	}
 }
