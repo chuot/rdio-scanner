@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"os"
@@ -719,4 +720,97 @@ func TestTheBuildRefusesAFreeBSDProgramOfTheOtherWidthAndArchitecture(t *testing
 			t.Errorf("%s: the failure %q does not name the %s rule", tc.name, err.Error(), tc.rule)
 		}
 	}
+}
+
+// The manifest is the file the release machine reads, and the build writing a pin into it is the one
+// write the build makes to a tracked file. The record it changes is the one record of the target the pair
+// was compiled for: every other byte of the file is what the operator committed, including the shape the
+// file is written in, because the operator reads this file and commits what they read of it.
+func TestPinningASuppliedPairWritesOnlyThatTargetsRecord(t *testing.T) {
+	repo := t.TempDir()
+
+	original := theManifestFile(t, repo)
+
+	check := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+
+	var out bytes.Buffer
+
+	manifest, err := pinSuppliedPair(repo, "macos-arm64", check, &out)
+	if err != nil {
+		t.Fatalf("the build could not pin the pair it proved: %v", err)
+	}
+
+	record := manifest.Targets["macos-arm64"]
+
+	if record.Programs["ffmpeg"] != theFFmpegDigest || record.Programs["ffprobe"] != theFFProbeDigest {
+		t.Errorf("the manifest the build returns pins %v", record.Programs)
+	}
+
+	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+	if err != nil {
+		t.Fatalf("the manifest the build pinned is not there to read: %v", err)
+	}
+
+	if mode, err := os.Stat(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")); err != nil || mode.Mode().Perm() != 0644 {
+		t.Errorf("the manifest is written mode %v, want 0644: the build writes a tracked file, and its mode is part of it", mode.Mode().Perm())
+	}
+
+	// The file is compared line by line, because the rule is about the bytes around the pins: a manifest
+	// rewritten by a JSON encoder loses the order its records were written in and the shape of its
+	// indentation, and the operator's next diff is the whole file.
+	got := strings.Split(string(body), "\n")
+	want := strings.Split(string(original), "\n")
+
+	if len(got) != len(want) {
+		t.Fatalf("the pinned manifest has %d lines and the file it was written into has %d: the pins were not written into the file, they replaced it", len(got), len(want))
+	}
+
+	differing := []string{}
+
+	for i := range want {
+		if got[i] != want[i] {
+			differing = append(differing, got[i])
+		}
+	}
+
+	if len(differing) != 2 {
+		t.Fatalf("the pinned manifest differs from the file it was written into in %d lines (%v), want the two lines carrying the digests", len(differing), differing)
+	}
+
+	for _, line := range differing {
+		if !strings.Contains(line, theFFmpegDigest) && !strings.Contains(line, theFFProbeDigest) {
+			t.Errorf("the line %q changed and carries neither digest", line)
+		}
+	}
+
+	says := out.String()
+
+	for _, want := range []string{"macos-arm64", theFFmpegDigest, theFFProbeDigest} {
+		if !strings.Contains(says, want) {
+			t.Errorf("the run prints %q nowhere, and the operator copies the pins from what it prints", says)
+		}
+	}
+}
+
+// theManifestFile is the manifest this repository tracks, copied into a tree the build may write a pin
+// into. The test works on the file as it is written, because the rule is which bytes of it move.
+func theManifestFile(t *testing.T, repo string) []byte {
+	t.Helper()
+
+	body, err := os.ReadFile(filepath.Join("..", "..", "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+	if err != nil {
+		t.Fatalf("the manifest this repository tracks cannot be read: %v", err)
+	}
+
+	dir := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle")
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("the tree cannot hold a manifest: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), body, 0644); err != nil {
+		t.Fatalf("the manifest cannot be put where the build writes its pin: %v", err)
+	}
+
+	return body
 }

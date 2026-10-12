@@ -25,6 +25,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -658,6 +659,169 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string) error {
 		if err := os.Remove(drop); err != nil {
 			return fmt.Errorf("the build cannot take the supplied %s out of %s: %w", name, paths.bundle, err)
 		}
+	}
+
+	return nil
+}
+
+// pinSuppliedPair writes the digests a proof recorded into the manifest, in the one record of the target
+// the pair was compiled for, and returns the manifest as it now reads.
+//
+// The manifest is a tracked file, and the only tracked file this build writes. It is written as a splice
+// of the two digest values into the file's own bytes, and not as the manifest re-encoded: a JSON encoder
+// writes map entries in its own order with its own indentation, so re-encoding the file would rewrite
+// every record in it, and the diff the operator commits would be the whole file with one true change
+// buried in it.
+//
+// The write is atomic, because the file being changed is the file the next release run reads.
+//
+// What it prints is what the operator commits. A record that already pinned a pair prints the digest it
+// replaces, because a pair rebuilt on its own host replaces the pins the run before wrote, and a manifest
+// whose pins were written by hand is a manifest whose pins move silently.
+func pinSuppliedPair(repo string, target string, check anFfmpegCheck, stdout io.Writer) (bundle.Manifest, error) {
+	path := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return bundle.Manifest{}, fmt.Errorf("the manifest the build pins the supplied pair in cannot be read: %w", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return bundle.Manifest{}, fmt.Errorf("the manifest the build pins the supplied pair in cannot be read: %w", err)
+	}
+
+	digests := map[string]string{"ffmpeg": check.FFmpeg, "ffprobe": check.FFProbe}
+
+	pinned := body
+	replaced := map[string]string{}
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		where, previous, err := splicePin(pinned, target, name, digests[name])
+		if err != nil {
+			return bundle.Manifest{}, err
+		}
+
+		pinned, replaced[name] = where, previous
+	}
+
+	if err := writeManifestFile(path, pinned, info.Mode().Perm()); err != nil {
+		return bundle.Manifest{}, err
+	}
+
+	var manifest bundle.Manifest
+
+	if err := json.Unmarshal(pinned, &manifest); err != nil {
+		return bundle.Manifest{}, fmt.Errorf("the manifest the build pinned is not readable: %w", err)
+	}
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		if replaced[name] != "" {
+			fmt.Fprintf(stdout, "%-7s %s %s %s replaces %s\n", "pin", "manifest.json", target, name, replaced[name])
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s %s %s sha256 %s\n", "pin", "manifest.json", target, name, digests[name])
+	}
+
+	return manifest, nil
+}
+
+// splicePin replaces one program's digest inside one target's record and returns the file's bytes with it
+// written, along with the digest that was there.
+//
+// The splice is cut to that one record: the search for the record's end stops at the next record key, so
+// a program name appearing anywhere else in the file is not what gets written.
+func splicePin(body []byte, target string, name string, digest string) ([]byte, string, error) {
+	start := bytes.Index(body, []byte(`"`+target+`": {`))
+	if start < 0 {
+		return nil, "", fmt.Errorf("the manifest has no record for %s to pin the pair in", target)
+	}
+
+	// The record ends where its own braces close. Searching for the next key is not enough, because the
+	// record's own programs key is a key with a brace after it, and stopping there is stopping inside the
+	// record the pin is written into.
+	end := len(body)
+
+	depth := 0
+	opened := false
+
+	for at := start + len(`"`+target+`"`); at < len(body); at++ {
+		if body[at] == '{' {
+			depth++
+			opened = true
+		} else if body[at] == '}' {
+			depth--
+
+			if opened && depth == 0 {
+				end = at
+				break
+			}
+		}
+	}
+
+	programs := bytes.Index(body[start:end], []byte(`"programs"`))
+	if programs < 0 {
+		return nil, "", fmt.Errorf("the manifest's record for %s has no programs to pin the pair in", target)
+	}
+
+	from := start + programs
+
+	key := []byte(`"` + name + `": "`)
+
+	value := bytes.Index(body[from:end], key)
+	if value < 0 {
+		return nil, "", fmt.Errorf("the manifest's record for %s has no %s digest to pin", target, name)
+	}
+
+	value = from + value + len(key)
+
+	closing := bytes.Index(body[value:end], []byte(`"`))
+	if closing < 0 {
+		return nil, "", fmt.Errorf("the manifest's %s digest for %s is not a value it can be written into", name, target)
+	}
+
+	pinned := append([]byte{}, body[:value]...)
+	pinned = append(pinned, []byte(digest)...)
+	pinned = append(pinned, body[value+closing:]...)
+
+	return pinned, string(body[value : value+closing]), nil
+}
+
+// writeManifestFile replaces the manifest with the bytes the build pinned, through a temporary file in
+// the same directory: the file the next release run reads is never left half written, and its mode is
+// part of the file the operator tracks.
+func writeManifestFile(path string, body []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "manifest.json.*")
+	if err != nil {
+		return fmt.Errorf("the build cannot prepare to write the manifest it pins: %w", err)
+	}
+
+	name := tmp.Name()
+
+	if _, err := tmp.Write(body); err != nil {
+		tmp.Close()
+		os.Remove(name)
+
+		return fmt.Errorf("the build cannot write the manifest it pins: %w", err)
+	}
+
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		os.Remove(name)
+
+		return fmt.Errorf("the build cannot write the manifest it pins: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+
+		return fmt.Errorf("the build cannot write the manifest it pins: %w", err)
+	}
+
+	if err := os.Rename(name, path); err != nil {
+		os.Remove(name)
+
+		return fmt.Errorf("the build cannot put the manifest it pinned where the release reads it: %w", err)
 	}
 
 	return nil
