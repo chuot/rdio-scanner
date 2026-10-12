@@ -383,8 +383,8 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
     <p class="meta">
       Version 8.0.0. This guide covers the Rdio Scanner server and its administration interface:
       installing it, meeting its requirements, configuring every feature it offers, driving its APIs,
-      and operating it day to day. The listener web app and the native mobile applications are not
-      covered here; the web app guide documents the listener web app.
+      and operating it day to day. The scanner webapp and the native mobile applications are not covered
+      here. The guide links to nothing outside itself: every cross-reference is a chapter of this guide.
     </p>
   </div>
 </header>
@@ -461,48 +461,44 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
     guide is about the server and the administration interface.
   </p>
 
+  <aside class="note">
+    <span class="label">How the name is said</span>
+    <p>
+      <em>Rdio</em> is <em>Radio</em> spelled the way the project spells it: the name is pronounced
+      <strong>Radio Scanner</strong> and written <strong>Rdio Scanner</strong>.
+    </p>
+  </aside>
+
   <h3>What this guide does not cover</h3>
 
   <p>
-    The listener web app — the page a listener opens on the main address, with its talkgroup list, its
-    call history, and its player — is documented in <a href="./webapp.md">the web app guide</a>. The native
-    mobile applications are Saubeo Solutions' own clients. Neither is covered here, and no screenshot in
-    this guide shows a listener screen. Where a chapter needs to say something about what a listener sees,
-    it says it from the server's side: the option that changes it, the credential that unlocks it, the
-    endpoint that serves it.
+    The <strong>scanner webapp</strong> — the application a listener opens on the main address, with its
+    talkgroup list, its call history, its player, and its live feed — is not covered here. It is a separate
+    application with its own guide, the scanner webapp's guide kept beside this one in the project's
+    documentation. The native mobile applications are Saubeo Solutions' own clients, and they are not
+    covered either. No screenshot in this guide shows a scanner webapp screen. Where a chapter needs to say
+    something about what a listener sees, it says it from the server's side: the option that changes it,
+    the credential that unlocks it, the endpoint that serves it.
   </p>
 
-  <h3>How the documentation is arranged</h3>
+  <h3>One document, no loose ends</h3>
 
   <p>
     This guide is the path from nothing to a working deployment, and it is written to be read in order once
-    and consulted afterwards. The other documents in the repository stay the authorities for their own
-    subjects, and this guide links to them instead of duplicating them:
+    and consulted afterwards. It is complete on its own terms: the operating detail for Linux, Windows,
+    macOS, and FreeBSD is in <a href="#ch-21-running-as-a-service">chapter 21</a>; the container image, its
+    volume, and its user are in <a href="#ch-04-installation">chapter 4</a>; the log's subsystems and what
+    each one reports are in <a href="#ch-14-logs">chapter 14</a>; the licence and the API access position
+    are in <a href="#ch-27-reference">chapter 27</a>. Nothing in this guide asks you to open another file:
+    every cross-reference is a chapter of this guide.
   </p>
-
-  <table>
-    <caption>The documents this guide links to, and what each one is for</caption>
-    <thead><tr><th scope="col">Document</th><th scope="col">What it is for</th></tr></thead>
-    <tbody>
-      <tr><td><a href="./platforms/linux.md">Linux</a>, <a href="./platforms/windows.md">Windows</a>, <a href="./platforms/macos.md">macOS</a>, <a href="./platforms/freebsd.md">FreeBSD</a></td><td>The platform page for the system you installed on: its service mode, its paths, its per-system notes.</td></tr>
-      <tr><td><a href="./webapp.md">Web app guide</a></td><td>The listener web app, which this guide excludes.</td></tr>
-      <tr><td><a href="./admin-logs.md">Log guide</a></td><td>The log in detail: its subsystems, its levels, what each subsystem reports.</td></tr>
-      <tr><td><a href="./docker/README.md">Container guide</a></td><td>The container image: how to run it, the volume, the user it runs as.</td></tr>
-      <tr><td><a href="./openapi.json">OpenAPI contract</a></td><td>The machine-readable contract of every endpoint the server answers.</td></tr>
-      <tr><td><a href="./faq.md">FAQ</a></td><td>Short answers to the questions people actually ask.</td></tr>
-      <tr><td><a href="./update-from-v5.md">Upgrade guide</a></td><td>Moving a version 5 deployment onto the rewritten server.</td></tr>
-      <tr><td><a href="../COMPILING.md">Compiling</a></td><td>Building the server, the archives, and the container image yourself.</td></tr>
-      <tr><td><a href="../API_ACCESS_POLICY.md">API access policy</a></td><td>What is free to use, and what needs a licence.</td></tr>
-    </tbody>
-  </table>
 
   <aside class="note">
     <span class="label">Reading this guide offline</span>
     <p>
       This file carries its own stylesheet and its own pictures. It opens from an extracted release
       archive, a mail attachment, or a USB stick with no network, and it prints with a page break at each
-      chapter. Its links to the other documents resolve inside the extracted archive, whose layout is the
-      repository's.
+      chapter. It links to nothing outside itself, so there is nothing to fail to load.
     </p>
   </aside>
 </section>
@@ -559,7 +555,8 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
     <li>
       <strong>Listeners</strong> read the call history and the recordings over the HTTP REST API, and follow
       live calls over the server's real-time channel. The REST API is free to use for any purpose; the
-      real-time channel is proprietary, as <a href="../API_ACCESS_POLICY.md">the access policy</a> states.
+      real-time channel is proprietary, reserved for Saubeo Solutions and its native applications, as
+      <a href="#ch-27-reference">chapter 27</a> states.
     </li>
     <li>
       <strong>Downstreams</strong> forward calls to another Rdio Scanner deployment, presenting an API key
@@ -652,8 +649,9 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
   </table>
 
   <p>
-    Worked recorder configurations are in <a href="./examples/trunk-recorder/">docs/examples/trunk-recorder</a>
-    and <a href="./examples/rtlsdr-airband/">docs/examples/rtlsdr-airband</a>.
+    Worked recorder configurations, as the recorder's own configuration files, are in the repository and
+    in the archive under <code>docs/examples/trunk-recorder</code> and
+    <code>docs/examples/rtlsdr-airband</code>.
   </p>
 
   <h3>Machines</h3>
@@ -682,7 +680,10 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
     <li>A C toolchain, only if you build the bundled ffmpeg yourself.</li>
   </ul>
 
-  <p>The whole procedure is in <a href="../COMPILING.md">Compiling</a>.</p>
+  <p>
+    The build tool needs no configuration: it reads the release matrix, the version, and the ffmpeg bundle
+    recipe from the repository. What it builds, and in what order, is what the four commands above say.
+  </p>
 </section>
 
 <section>
@@ -697,23 +698,20 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
 
   <p>
     Download the archive for your platform and architecture from the releases page, and extract it where
-    the server will live. An archive carries the binary and the documentation that goes with it:
+    the server will live. An archive carries the program and the one document that operates it:
   </p>
 
   <ul>
     <li>the <code>rdio-scanner</code> executable for your platform;</li>
-    <li><code>CHANGELOG.md</code>;</li>
-    <li>the platform page for the archive's own system, under <code>docs/platforms/</code>;</li>
     <li>this guide, at <code>docs/admin-guide.html</code>;</li>
-    <li>the web app guide and the FAQ, under <code>docs/</code>;</li>
-    <li>the pictures those documents point at, under <code>docs/images/</code>;</li>
-    <li><code>FFMPEG.md</code>, on the platforms that carry their own ffmpeg.</li>
+    <li><code>FFMPEG.txt</code>, the licence of the bundled ffmpeg, on the platforms that carry their own
+      ffmpeg.</li>
   </ul>
 
   <p>
-    The archive's layout is the repository's, so the relative links between those documents resolve inside
-    the extracted folder. Put the folder somewhere the server can write: the server writes its database,
-    its configuration file, and its state into the folder it was started from.
+    The guide carries its own stylesheet and its own pictures, so an extracted archive needs nothing from
+    the network and nothing from the repository. Put the folder somewhere the server can write: the server
+    writes its database, its configuration file, and its state into the folder it was started from.
   </p>
 
   <pre><code>cd /opt
@@ -722,10 +720,9 @@ cd rdio-scanner-linux-amd64-v8.0.0
 ./rdio-scanner</code></pre>
 
   <p>
-    The per-system details — paths, the service mode, the firewall — are on the platform page for the
-    system you installed on: <a href="./platforms/linux.md">Linux</a>,
-    <a href="./platforms/windows.md">Windows</a>, <a href="./platforms/macos.md">macOS</a>,
-    <a href="./platforms/freebsd.md">FreeBSD</a>.
+    The per-system detail — where the server lives on that system, its service commands, its firewall, and
+    what its archive contains — is in <a href="#ch-21-running-as-a-service">chapter 21</a>, one
+    sub-section for each of Linux, Windows, macOS, and FreeBSD.
   </p>
 
   <h3>From the container image</h3>
@@ -753,13 +750,35 @@ docker run --detach --name rdio-scanner \
   </p>
 
   <p>
-    The documented compose file, the volume layout, the user, and the port mapping are in the
-    <a href="./docker/README.md">container guide</a>. Two things an administrator running the container
-    should know: the directory-watcher section is removed from the administration navigation when the
-    server's environment names the container, because a watched directory inside a container is a
-    container path and not yours; and the container's data directory is <code>/app/data</code>, so the
-    database file you back up is the one inside the mount.
+    The compose file the project documents is the same run command written as a service:
   </p>
+
+  <pre><code>services:
+  rdio-scanner:
+    image: chuot/rdio-scanner:latest
+    container_name: rdio-scanner
+    environment:
+      - TZ=America/Toronto
+    ports:
+      - "3000:3000"
+    restart: always
+    user: "1000:1000"
+    volumes:
+      - ./data:/app/data</code></pre>
+
+  <p>
+    Two things an administrator running the container should know. The directory-watcher section is
+    removed from the administration navigation when the server's environment names the container, because a
+    watched directory inside a container is a container path and not yours — mount the recorder's folder
+    into the container and watch the mount. And the container's data directory is <code>/app/data</code>,
+    so the database file you back up is the one inside the mount:
+    <a href="#ch-23-backup-and-restore">Backup and restore</a>.
+  </p>
+
+  <figure data-shot="docker-compose-up">
+    <img alt="The container's own log: the server names the address it answers on from inside the container, and the data directory it serves is the mount point.">
+    <figcaption>The container image built from this repository, started with the data volume and the port the documented compose file maps: the server names the address it answers on from inside the container, and the data directory it serves is the mount point.</figcaption>
+  </figure>
 
   <h3>From source</h3>
 
@@ -774,8 +793,26 @@ go run ./cmd/build container  # the container image, locally</code></pre>
 
   <p>
     <code>server</code> builds the web applications first, so the binary carries them and serves them with
-    no separate web server. <code>dist</code> writes the archives for every platform in the release matrix.
-    The details, including the ffmpeg bundle, are in <a href="../COMPILING.md">Compiling</a>.
+    no separate web server. <code>dist</code> writes the archives for every platform in the release matrix:
+    FreeBSD on amd64, Linux on 386, amd64, arm, and arm64, macOS on amd64 and arm64, and Windows on amd64.
+    <code>container</code> builds the container image on the machine you run it on, for the architecture of
+    that machine.
+  </p>
+
+  <p>
+    Five of the eight builds carry their own ffmpeg: the four Linux builds and the Windows build. The macOS
+    and FreeBSD builds do not — they use the ffmpeg their host installs, so a deployment on those platforms
+    installs ffmpeg itself. The build compiles a target's ffmpeg from the project's own recipe before it
+    compiles the server that embeds it, so a server built before its ffmpeg exists is not a server that
+    ships without one. The licence of the ffmpeg a release carries travels in that release, beside this
+    guide.
+  </p>
+
+  <p>
+    The build tool takes the release name and an output path: <code>--pre</code> names a pre-release suffix
+    carried in the version line the server reports, and <code>-o</code> sends the output somewhere other
+    than <code>dist/</code>. <code>go run ./cmd/build version</code> prints the version the server will
+    report, and <code>clean</code> takes the build's output away.
   </p>
 </section>
 
@@ -840,7 +877,7 @@ go run ./cmd/build container  # the container image, locally</code></pre>
     <caption>The items the banner lists on a fresh deployment</caption>
     <thead><tr><th scope="col">Level</th><th scope="col">Item</th><th scope="col">Cleared by</th></tr></thead>
     <tbody>
-      <tr><td>Warning</td><td>You are using the default admin password, please change it from the tools / admin password menu.</td><td><a href="#ch-12-administration-interface">Tools ▸ Change password</a></td></tr>
+      <tr><td>Warning</td><td>You are using the default admin password, please change it from the tools / admin password menu.</td><td><a href="#ch-08-administration-interface">Tools ▸ Change password</a></td></tr>
       <tr><td>Info</td><td>No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.</td><td>The Systems section, or the <em>Auto populate</em> option</td></tr>
       <tr><td>Info</td><td>No apikeys or dirwatch defined. Set at least one to allow ingesting audio files.</td><td>The API Keys section or the Dirwatch section</td></tr>
     </tbody>
@@ -878,8 +915,10 @@ go run ./cmd/build container  # the container image, locally</code></pre>
 ./rdio-scanner          # reads /opt/rdio-scanner/rdio-scanner.ini</code></pre>
 
   <p>
-    Command line flags win over the file. The file is plain INI, one flag per line, and it is the file to
-    keep with your backup — it is the deployment's own shape, in text.
+    The file is plain INI, one <code>key = value</code> per line, and it is the file to keep with your
+    backup — it is the deployment's own shape, in text. Read
+    <a href="#ch-06-flags-and-ini">the next chapter</a> for which keys the file carries, and for the
+    precedence the server applies between the file and the command line.
   </p>
 
   <figure data-shot="todos-seeded">
@@ -890,47 +929,1404 @@ go run ./cmd/build container  # the container image, locally</code></pre>
 
 <section>
   <h2 id="ch-06-flags-and-ini">6 · Command line flags and the ini file</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Flags decide the addresses the server answers on, the database it opens, and the TLS it serves. They
+    are read once, at start-up, and <code>-config_save</code> writes them to a file so you stop typing
+    them.
+  </p>
+
+  <h3>The flags</h3>
+
+  <p>
+    The table is the server's own flag set, transcribed from the composition root. Defaults are what the
+    server uses when the flag is not given.
+  </p>
+
+  <table class="flags">
+    <caption>Every flag the server accepts</caption>
+    <thead><tr><th scope="col">Flag</th><th scope="col">Default</th><th scope="col">What it decides</th></tr></thead>
+    <tbody>
+      <tr><td><code>-admin_password</code></td><td class="default">none</td><td>Hash and store this password for the administrator, then continue. The one flag that changes the credential from the command line.</td></tr>
+      <tr><td><code>-base_dir</code></td><td class="default">the executable's folder, else <code>~/Rdio Scanner</code></td><td>Where the database file, the configuration file, and the server's state are written. Must be writable.</td></tr>
+      <tr><td><code>-bcrypt_cost</code></td><td class="default"><code>10</code></td><td>The bcrypt cost the administrator credential is hashed at, 10 to 14. A cost outside that range is refused at start-up.</td></tr>
+      <tr><td><code>-config</code></td><td class="default"><code>rdio-scanner.ini</code></td><td>The name of the configuration file, read from the base directory.</td></tr>
+      <tr><td><code>-db_connect_timeout</code></td><td class="default">none</td><td>How long the server waits for the database to answer, as a Go duration such as <code>5s</code>.</td></tr>
+      <tr><td><code>-db_file</code></td><td class="default"><code>rdio-scanner.db</code></td><td>The SQLite database file, in the base directory.</td></tr>
+      <tr><td><code>-db_host</code></td><td class="default"><code>localhost</code></td><td>The database host, for MariaDB, MySQL, and PostgreSQL.</td></tr>
+      <tr><td><code>-db_name</code></td><td class="default">none</td><td>The database name, for MariaDB, MySQL, and PostgreSQL.</td></tr>
+      <tr><td><code>-db_pass</code></td><td class="default">none</td><td>The database password.</td></tr>
+      <tr><td><code>-db_port</code></td><td class="default"><code>3306</code>, <code>5432</code> for PostgreSQL</td><td>The database host port.</td></tr>
+      <tr><td><code>-db_sslmode</code></td><td class="default">none</td><td>The PostgreSQL SSL mode, one of the PostgreSQL names such as <code>disable</code>, <code>require</code>, <code>verify-full</code>.</td></tr>
+      <tr><td><code>-db_tls</code></td><td class="default">none</td><td>The MySQL and MariaDB TLS setting: <code>true</code>, <code>false</code>, <code>skip-verify</code>, or a registered TLS configuration name.</td></tr>
+      <tr><td><code>-db_type</code></td><td class="default"><code>sqlite</code></td><td>The database backend: <code>sqlite</code>, <code>mariadb</code>, <code>mysql</code>, or <code>postgresql</code>. Anything else is refused at start-up.</td></tr>
+      <tr><td><code>-db_user</code></td><td class="default">none</td><td>The database user name.</td></tr>
+      <tr><td><code>-listen</code></td><td class="default"><code>:3000</code></td><td>The address the server answers on. <code>:3000</code> listens on every address; <code>127.0.0.1:3000</code> listens on one.</td></tr>
+      <tr><td><code>-mcp_server</code></td><td class="default"><code>false</code></td><td>Serve the Model Context Protocol endpoint. See <a href="#ch-17-mcp-server">the MCP server</a>.</td></tr>
+      <tr><td><code>-ssl_auto_cert</code></td><td class="default">none</td><td>A domain name to get a Let's Encrypt certificate for, automatically. Needs ports 80 and 443 reachable.</td></tr>
+      <tr><td><code>-ssl_cert_file</code></td><td class="default">none</td><td>A PEM certificate to serve TLS with.</td></tr>
+      <tr><td><code>-ssl_key_file</code></td><td class="default">none</td><td>The PEM key that matches that certificate.</td></tr>
+      <tr><td><code>-ssl_listen</code></td><td class="default">none</td><td>The address TLS is served on. Without it, TLS is served on the plain listening address when a certificate is configured.</td></tr>
+      <tr><td><code>-trusted_proxies</code></td><td class="default">none</td><td>Comma-separated proxy addresses, CIDR or bare, whose <code>X-Forwarded-For</code> the server believes. See <a href="#ch-20-reverse-proxies">Reverse proxies</a>.</td></tr>
+    </tbody>
+  </table>
+
+  <table class="flags">
+    <caption>The modes the same command line selects</caption>
+    <thead><tr><th scope="col">Flag</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>-cmd</code></td><td class="default">none</td><td>Drive a server that is already running: log in, read and write the configuration, change the credential, add and remove listener accesses. It is a client of the public administration endpoints. See <a href="#ch-18-command-line-client">the command line client</a>.</td></tr>
+      <tr><td><code>-config_save</code></td><td class="default"><code>false</code></td><td>Write the configuration file and stop.</td></tr>
+      <tr><td><code>-service</code></td><td class="default">none</td><td>Run under the operating system's service manager: <code>install</code>, <code>uninstall</code>, <code>start</code>, <code>stop</code>, <code>restart</code>, and <code>run</code> as the service's own command. See <a href="#ch-21-running-as-a-service">Running as a service</a>.</td></tr>
+      <tr><td><code>-version</code></td><td class="default"><code>false</code></td><td>Print the version and stop.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    <code>-h</code> prints this list. The platform pages print it too, and where a platform page and this
+    table disagree, this table is the one the running server answers to.
+  </p>
+
+  <h3>The ini file, and which value wins</h3>
+
+  <p>
+    The server parses the command line, then reads <code>rdio-scanner.ini</code> from the base directory
+    and overlays it. The file is plain INI, no section header, one key per line:
+  </p>
+
+  <pre><code>db_type = postgresql
+db_host = db.internal
+db_name = rdioscanner
+db_user = rdio
+db_pass = &lt;the password&gt;
+db_sslmode = require
+listen = :3000
+ssl_auto_cert = scanner.example.org
+trusted_proxies = 127.0.0.1, 10.0.0.0/8
+mcp_server = true
+bcrypt_cost = 12</code></pre>
+
+  <p>The keys the file can carry are:</p>
+
+  <p class="keys">
+    <code>bcrypt_cost</code>, <code>db_connect_timeout</code>, <code>db_file</code>,
+    <code>db_host</code>, <code>db_name</code>, <code>db_pass</code>, <code>db_port</code>,
+    <code>db_sslmode</code>, <code>db_tls</code>, <code>db_type</code>, <code>db_user</code>,
+    <code>listen</code>, <code>mcp_server</code>, <code>ssl_auto_cert</code>,
+    <code>ssl_cert_file</code>, <code>ssl_key_file</code>, <code>ssl_listen</code>,
+    <code>trusted_proxies</code>
+  </p>
+
+  <p>
+    The precedence is the detail that surprises people, so it is stated plainly: <strong>for a key the
+    file names, the file wins</strong>; a key the file does not name leaves the command line's value
+    alone. A missing or unreadable file leaves every flag as you typed it. <code>-base_dir</code>,
+    <code>-config</code>, <code>-admin_password</code>, <code>-cmd</code>, <code>-service</code>, and
+    <code>-version</code> are never read from the file: the base directory and the file name are how the
+    server finds the file at all, and the rest are ways of running the program, not settings it runs with.
+  </p>
+
+  <p>
+    <code>-config_save</code> writes the file from the flags as parsed on that command line, prints
+    <code>rdio-scanner.ini file created</code>, and stops. It writes the database keys for the backend you
+    chose: a SQLite deployment writes <code>db_file</code> and <code>db_type</code>; a server-side backend
+    writes host, name, user, password, TLS, SSL mode, connect timeout, port, and type. Because the file
+    then outranks the command line, the usual path is: start once with the flags you want, add
+    <code>-config_save</code>, and start the server with no flags at all.
+  </p>
+
+  <aside class="note">
+    <span class="label">The file holds secrets</span>
+    <p>
+      The database password is in that file, in plain text. Restrict it — <code>chmod 600
+      rdio-scanner.ini</code> — and give the base directory to the user the server runs as and to nobody
+      else. The administration password is not in the file: it is hashed in the database.
+    </p>
+  </aside>
+
+  <h3>What the server refuses at start-up</h3>
+
+  <p>Each of these stops the start, with the reason on the console, before a port is opened:</p>
+
+  <ul>
+    <li>a base directory the server cannot write;</li>
+    <li>a <code>-db_type</code> outside the four supported backends;</li>
+    <li>a <code>-bcrypt_cost</code> outside 10 to 14 — a cost typo would hash the administrator credential at a cost you never asked for, and the credential on record is the one thing a typo must not touch;</li>
+    <li>a <code>-db_connect_timeout</code> that is not a duration.</li>
+  </ul>
+
+  <p>
+    A TLS listener that cannot start is the start-up failure that does not stop the server: the plain
+    address keeps serving, and the log says the TLS listener failed. See
+    <a href="#ch-19-tls">TLS and HTTPS</a>.
+  </p>
+
+  <h3>Environment variables</h3>
+
+  <table>
+    <caption>The variables the server reads</caption>
+    <thead><tr><th scope="col">Variable</th><th scope="col">Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>DOCKER</code></td><td>Set by the container image. It marks the deployment as containerised: the directory-watcher section is removed from the administration navigation, because a watched directory inside a container is a container path and not yours.</td></tr>
+      <tr><td><code>TZ</code></td><td>The timezone the server's clock uses — log timestamps, and the day boundaries pruning works against. Set it explicitly on a container; the container's default is not your timezone.</td></tr>
+      <tr><td><code>RDIO_ADMIN_PASSWORD</code></td><td>The password <code>-cmd login</code> reads, so a script can log in without putting the credential in a command line the process list shows.</td></tr>
+    </tbody>
+  </table>
 </section>
 
 <section>
   <h2 id="ch-07-database">7 · The database</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The server keeps its configuration, its recordings, and its log in one database. The choice of backend
+    is a flag, the schema is the server's own, and an older database is migrated on the first start.
+  </p>
+
+  <h3>Backends</h3>
+
+  <table>
+    <caption>The backends the server answers to</caption>
+    <thead><tr><th scope="col">Backend</th><th scope="col">Needs</th><th scope="col">Flags that name it</th></tr></thead>
+    <tbody>
+      <tr><td><code>sqlite</code> (default)</td><td>Nothing. One file in the base directory.</td><td><code>-db_file</code></td></tr>
+      <tr><td><code>mariadb</code></td><td>A MariaDB server you run and a database with a user.</td><td><code>-db_host</code>, <code>-db_port</code>, <code>-db_name</code>, <code>-db_user</code>, <code>-db_pass</code>, <code>-db_tls</code></td></tr>
+      <tr><td><code>mysql</code></td><td>A MySQL server, the same way.</td><td>the same, with <code>-db_tls</code></td></tr>
+      <tr><td><code>postgresql</code></td><td>A PostgreSQL server.</td><td>the same, with <code>-db_sslmode</code> in place of <code>-db_tls</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    SQLite is the right answer for a single deployment: the whole server is one file, the server opens it
+    with no network hop, and a backup is a copy. The server-side backends are the answer when the
+    deployment shares the data with other systems, when the database is on its own host, or when your
+    site's rules say the database must be a server. The port default is <code>3306</code>, and
+    <code>5432</code> when the type is PostgreSQL.
+  </p>
+
+  <p>
+    The server opens the database at start-up and refuses to start when it cannot reach it. A database
+    that goes away while the server runs is reported in the log under the <em>database</em> subsystem, and
+    the server recovers when the database comes back.
+  </p>
+
+  <h3>What is stored</h3>
+
+  <table>
+    <caption>What the server keeps in the database</caption>
+    <thead><tr><th scope="col">Stored</th><th scope="col">What it is</th></tr></thead>
+    <tbody>
+      <tr><td>Systems, sites, talkgroups, units</td><td>The hierarchy a listener browses, and the identities the ingest resolves a call against.</td></tr>
+      <tr><td>Groups, tags, talkgroup groups</td><td>The ways a listener and an access code select talkgroups across systems.</td></tr>
+      <tr><td>Accesses</td><td>The listener access codes: identity, the systems and talkgroups they reach, the expiry.</td></tr>
+      <tr><td>API keys</td><td>The keys a recorder posts calls with, and a downstream presents, each scoped to systems and talkgroups.</td></tr>
+      <tr><td>Dirwatches</td><td>The directories the server watches, their recorder type, and their mask.</td></tr>
+      <tr><td>Downstreams</td><td>The other deployments calls are forwarded to, with the address and the key.</td></tr>
+      <tr><td>Calls</td><td>Every ingested transmission: its identity, its start and duration, its metadata, and its audio, stored in the database with the row.</td></tr>
+      <tr><td>Call frequencies, call patches, call units</td><td>The per-call detail a recorder reports: the frequency the call ran on, the talkgroups a patch involved, the units that took part.</td></tr>
+      <tr><td>Delayed</td><td>The calls the downstream delivery is holding before sending them.</td></tr>
+      <tr><td>Logs</td><td>The server's own log, read in the Logs section.</td></tr>
+      <tr><td>Options</td><td>The options, the signing secret, and the administrator credential's hash.</td></tr>
+      <tr><td>Migration archive</td><td>The rows a migration read and could not carry, with the reason. See <a href="#ch-24-upgrading-and-migrating">Upgrading and migrating</a>.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The recordings are rows, not files. The base directory holds the database and the configuration file;
+    the audio is inside the database, which is why a deployment is one file to back up, and why the
+    database grows with your retention.
+  </p>
+
+  <h3>Retention</h3>
+
+  <p>
+    The retention pass deletes the calls and the log entries older than the <em>Prune days</em> option,
+    calls first and the log after, and files what it removed under the <em>prune</em> subsystem:
+    <code>retention pass removed 1 234 calls and 5 678 log entries</code>. Setting the option to
+    <code>0</code> disables the pass, and the deployment keeps everything it has ever ingested.
+  </p>
+
+  <p>
+    The pass runs on the server's own schedule, against the server's clock, so the timezone matters on a
+    deployment where the day boundary is meaningful. Pruning is not a backup: it is the opposite of one.
+    Set the retention only after you have the backup you want.
+  </p>
+
+  <h3>When an older database is opened</h3>
+
+  <p>
+    A database written by an older server is migrated on the first start of this one: the schema is
+    brought forward, the groups and tags the legacy server kept in the options are made into their own
+    rows, and the log table is rebuilt. The rows the migration read and could not carry into the new shape
+    are written to the <em>migration archive</em> with the table and row they came from, the reason, and
+    the moment they were archived. Nothing is silently dropped.
+  </p>
+
+  <p>
+    The pass is re-run on the next start, and rows already archived archive as nothing rather than
+    colliding, so a migration that stopped partway continues. Chapter 24 is the path for a version 5
+    deployment, and what to check after a migration.
+  </p>
+
+  <h3>Keeping it healthy</h3>
+
+  <ul>
+    <li>Back up the database file while the server is not writing to it, or take the backup from the database server's own tools. See <a href="#ch-23-backup-and-restore">Backup and restore</a>.</li>
+    <li>Give the server-side backends a database user with the narrowest grant that lets the server work: the database, its tables, and nothing else.</li>
+    <li>Watch the <em>database</em> subsystem in the log. Connection failures, statements that failed, and the migration's own lines are filed there.</li>
+    <li>Do not edit the tables by hand. The administration interface is the path the server expects, and a hand-edited row is a row the server will read as its own.</li>
+  </ul>
 </section>
 
 <section>
   <h2 id="ch-08-administration-interface">8 · The administration interface</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The interface at <code>/admin/</code> is where a deployment is configured. It is one page served by
+    the server, it edits the configuration through the running server, and it shows you what the server
+    is doing while you work.
+  </p>
+
+  <h3>Logging in, and what a session is</h3>
+
+  <figure data-shot="admin-login">
+    <img alt="The administration login screen: the password field, the sign-in button, and the server's version line.">
+    <figcaption>The login screen. The server ships with the password <code>rdio-scanner</code>, and the banner after login tells you to change it.</figcaption>
+  </figure>
+
+  <p>
+    The login sends the password to the server and the server answers a session token. The browser keeps
+    that token for the session, and every request the interface makes carries it. The token is signed with
+    the server's signing secret and has no expiry of its own: the server keeps the last five tokens it
+    issued, so signing in four times ends the sessions older than that, and a server that generates a new
+    secret ends every session that was open before it.
+  </p>
+
+  <p>
+    Three failed logins from one address lock that address out for ten minutes. The server answers a
+    refused login with the same message it answers a wrong password with — it never says how many attempts
+    are left — and files the lockout in the log as <em>too many login attempts from</em> the address.
+    Behind a reverse proxy, the address the server sees is the proxy's own unless you name the proxy as a
+    trusted proxy: see <a href="#ch-20-reverse-proxies">Reverse proxies</a>.
+  </p>
+
+  <h3>The navigation</h3>
+
+  <p>
+    The navigation lists the sections in alphabetical order, because an administrator looking for a
+    section knows where to scan. On a narrow viewport the navigation sits above the content and the
+    sections are a row of icons.
+  </p>
+
+  <table>
+    <caption>The sections, and what each one configures</caption>
+    <thead><tr><th scope="col">Section</th><th scope="col">What it carries</th><th scope="col">Chapter</th></tr></thead>
+    <tbody>
+      <tr><td>Access</td><td>Listener access codes: who may listen, to which systems and talkgroups, until when.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
+      <tr><td>API Keys</td><td>The keys a recorder posts calls with, and a downstream presents.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
+      <tr><td>Dirwatch</td><td>The directories the server watches for a recorder's files. Removed from the navigation when the server's environment names the container.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>Downstreams</td><td>The other deployments calls are forwarded to.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>Groups</td><td>Groups of talkgroups, the way a listener selects many talkgroups at once.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
+      <tr><td>Logs</td><td>The server's own log, filtered and paged.</td><td><a href="#ch-14-logs">14</a></td></tr>
+      <tr><td>OpenAPI</td><td>Every endpoint the server answers, read from the contract the server publishes.</td><td><a href="#ch-16-rest-api">16</a></td></tr>
+      <tr><td>Options</td><td>The server's behaviour options.</td><td><a href="#ch-13-options">13</a></td></tr>
+      <tr><td>Sites</td><td>The sites of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Systems</td><td>The systems, and inside each one its sites, talkgroups, and units.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Tags</td><td>Tags, the labels a listener filters by.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
+      <tr><td>Talkgroups</td><td>The talkgroups of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Tools</td><td>Export and import the configuration, import talkgroups and units from CSV, change the password.</td><td><a href="#ch-15-tools">15</a></td></tr>
+      <tr><td>Units</td><td>The units of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Sites, Talkgroups, and Units are the sub-sections of the system you have selected in Systems: they
+    carry the system's name at their head, and their rows belong to that system.
+  </p>
+
+  <h3>Rows, the save bar, and the conflict banner</h3>
+
+  <p>
+    Each section is a list of rows, and a row is collapsible: collapsed it shows the row's identity,
+    expanded it shows every field it carries. Add a row with the section's add control, delete it with the
+    row's own delete button. Nothing is written while you type.
+  </p>
+
+  <p>
+    The save bar at the bottom of a section is what writes your work. It is enabled when the section has
+    unsaved changes and they are valid, and it says what is unsaved. <strong>Save</strong> sends the
+    section to the running server; <strong>Discard</strong> throws the unsaved work away and reloads the
+    section as the server has it.
+  </p>
+
+  <p>
+    Two sessions editing the same section is the case the conflict banner is for. When another session
+    saved the section while you were editing it, the banner appears above the list with
+    <strong>Reload from server</strong> and <strong>Discard</strong>: reload takes the server's current
+    version and lets you re-apply your change on top of it, and discarding your work is the honest way out
+    of a collision you did not want. Saving over another administrator's work is what the banner exists to
+    stop.
+  </p>
+
+  <figure data-shot="save-bar-dirty">
+    <img alt="A section with unsaved changes: the conflict banner with Reload from server and Discard at the top, and the save bar at the bottom with Save and Discard.">
+    <figcaption>Unsaved changes in the Systems section, with the conflict banner above the list: another session saved while this one was editing.</figcaption>
+  </figure>
+
+  <p>
+    A save is a write to the running server, and the server tells every other open administration session
+    that the configuration changed, over the connection the interface holds open for exactly that. The
+    server files <em>the configuration changed</em> in the log. No restart is involved: the sections are
+    live. The flags are not — see <a href="#ch-06-flags-and-ini">the flags chapter</a>.
+  </p>
+
+  <h3>The systems-and-talkgroups dialog</h3>
+
+  <p>
+    Access codes and API keys are scoped to systems and talkgroups, and Downstreams are scoped the same
+    way for what they send. The control that picks the scope opens the same dialog in all three sections:
+    the systems, each with its talkgroups, with a control per system and per talkgroup, and the groups and
+    tags named where they apply.
+  </p>
+
+  <figure data-shot="dialog-systems-selection">
+    <img alt="The systems-and-talkgroups selection dialog: systems listed with their talkgroups, each with a selection control, and the groups and tags listed with their labels.">
+    <figcaption>The scope dialog as the Access, API Keys, and Downstreams sections open it. Open it after the Groups and Tags sections have been opened in the same session, so the groups and tags are named by their labels.</figcaption>
+  </figure>
+
+  <h3>What the interface tells you</h3>
+
+  <ul>
+    <li>The <strong>banner</strong> at the top of the page lists what the deployment is missing, and clears itself as you clear the items. It is on <a href="#ch-05-first-run">the first run</a>.</li>
+    <li>A <strong>snackbar</strong> confirms what just happened — a save, an export, a password change — at the bottom of the page.</li>
+    <li>The <strong>Logs</strong> section is the server's own account of what it did, and it is where a problem is diagnosed. It is on <a href="#ch-14-logs">the log chapter</a>.</li>
+    <li>The <strong>OpenAPI</strong> section is the endpoint list the server publishes, with the authentication each endpoint takes.</li>
+  </ul>
+
+  <figure data-shot="narrow-section-options">
+    <img alt="The Options section at a phone-width viewport: the navigation as a row of icons above the content, and the option controls stacked.">
+    <figcaption>The Options section at 420 CSS pixels: the navigation moves above the content, and the controls stack. The interface is usable from a phone in front of a rack.</figcaption>
+  </figure>
+
+  <h3>The container changes one thing</h3>
+
+  <p>
+    When the server's environment names the container, the <strong>Dirwatch</strong> section is not in the
+    navigation. A watched directory inside a container is a container path, and the recorder writing it is
+    outside the container: the section would invite you to configure a path the server cannot see. Run the
+    container with the recorder's folder mounted, and watch the mount. <a href="#ch-04-installation">The
+    container installation</a> is the place that sets this up.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-09-access-and-api-keys">9 · Access codes and API keys</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Two credentials leave a deployment: the <strong>access code</strong> a listener presents to hear the
+    audio, and the <strong>API key</strong> a capture box presents to deliver it. They are separate lists,
+    they are scoped the same way, and they are checked at different moments — one when a listener connects,
+    the other when a recording arrives.
+  </p>
+
+  <table>
+    <caption>The two credentials, and where each one is presented</caption>
+    <thead><tr><th scope="col">Credential</th><th scope="col">Who holds it</th><th scope="col">Presented at</th><th scope="col">Unlocks</th></tr></thead>
+    <tbody>
+      <tr><td>Access code</td><td>A listener</td><td>The listener application's access code prompt, and the <code>X-Access-Code</code> header on the call history endpoints</td><td>The live feed, and the recorded calls inside its scope</td></tr>
+      <tr><td>API key</td><td>A recorder, a capture box, another Rdio Scanner deployment</td><td>The <code>key</code> field of an upload, and the <em>API key</em> field of a downstream, which is the key that deployment's server accepts</td><td>The right to post calls, inside its scope</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Access codes</h3>
+
+  <p>
+    An access code is a listener's permission to watch the server. The row carries the code itself, a name
+    the log and the interface show, the moment the code stops working, how many listeners may use it at the
+    same time, and the systems and talkgroups it unlocks.
+  </p>
+
+  <table>
+    <caption>The access code row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Code</td><td>The credential. Required. The field is masked; the eye button next to it reveals it so an administrator can read it out to someone over the phone.</td></tr>
+      <tr><td>Ident</td><td>The name the log and the interface show for this code. It is what a log entry about an expired or locked code names.</td></tr>
+      <tr><td>Expiration</td><td>A date and time. Leave it empty and the code never expires. Once the moment has passed, the code is refused and the listener is told its access has expired.</td></tr>
+      <tr><td>Limit</td><td>How many listeners may hold this code at the same time. <code>0</code> or empty means no cap. A listener arriving at the cap is refused and told so.</td></tr>
+      <tr><td>Choose systems</td><td>Opens the scope dialog: <a href="#ch-09-the-scope-dialog">Everything, Groups, Tags, or the systems and talkgroups you tick</a>.</td></tr>
+      <tr><td>Delete access</td><td>Removes the row. Nothing is written until you save the section.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-access">
+    <img alt="The Access section with two rows expanded: the masked code with its reveal button, the ident, the expiration, the limit, and the Choose systems button.">
+    <figcaption>Two access codes as the section shows them. The code is masked until you press the eye; the summary line under <em>Choose systems</em> says whether the scope is all systems or the ones you ticked.</figcaption>
+  </figure>
+
+  <h3>An open server and a restricted one</h3>
+
+  <p>
+    The Access section decides which kind of server you are running. <strong>An empty access list is an open
+    server:</strong> every listener is given the whole configuration and is never asked for a code. A list
+    with one entry in it is a restricted server, and every listener must present a code before the server
+    sends it anything.
+  </p>
+
+  <p>
+    That is the whole switch, and it is worth being deliberate about. Adding the first access code changes
+    a server that anyone could listen to into one that answers nobody until they present a code — including
+    the applications that were listening a minute ago.
+  </p>
+
+  <h3>What a listener is told</h3>
+
+  <p>
+    The server checks a code in a fixed order, and the order is visible to the listener, so it is worth
+    knowing before someone phones you about it.
+  </p>
+
+  <table>
+    <caption>The listener's outcomes, in the order the server checks them</caption>
+    <thead><tr><th scope="col">Outcome</th><th scope="col">What the listener sees</th><th scope="col">What the log files</th></tr></thead>
+    <tbody>
+      <tr><td>Attempts spent</td><td>The code prompt again, and nothing else is examined — a correct code arriving after the attempts are spent is refused</td><td>Nothing: the attempts are counted, not recorded</td></tr>
+      <tr><td>Code not on the list</td><td>The code prompt again</td><td><em>a listener from</em> the address <em>presented an access code that is not valid</em>, once per window, not once per guess</td></tr>
+      <tr><td>Valid code on the last allowed attempt</td><td>The code prompt, and the code is refused</td><td><em>the access code for ident … is locked after too many attempts</em></td></tr>
+      <tr><td>Expired code</td><td>The access has expired</td><td><em>the access code for ident … has expired</em></td></tr>
+      <tr><td>Limit reached</td><td>The connection limit is reached</td><td><em>ident … is already at its limit of N listeners, and the connection was refused</em></td></tr>
+      <tr><td>Accepted</td><td>The live feed starts, with the configuration the scope allows</td><td>Nothing. A listener joining is a <em>Live feed</em> entry, not a login entry</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Five attempts is the limit, counted twice over: once for the session and once for the address it came
+    from. A code that is accepted clears both counters. A code that is refused does not, whichever reason
+    refused it, which is what makes the counter a limit on <em>trying</em> rather than a limit on being
+    wrong.
+  </p>
+
+  <aside class="note">
+    <p>
+      A code is a credential, so the server never writes one in its log. The entry that names a refused
+      code names the address it came from, and the entry that names an expired or locked code names the
+      ident — never the code. A guessing tool must not be able to fill the log view, which is why the
+      warning about an invalid code is said once per window and not once per guess.
+    </p>
+  </aside>
+
+  <h3>API keys</h3>
+
+  <p>
+    An API key is the credential an ingest source posts calls with. It carries the key itself, a name, a
+    switch that turns it off without deleting it, and the systems and talkgroups it may upload to.
+  </p>
+
+  <table>
+    <caption>The API key row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Disabled</td><td>Turns the key off. A disabled key uploads nothing, and the row stays where it is so you can turn it back on.</td></tr>
+      <tr><td>Key</td><td>The credential. Required. The copy button next to it puts it on the clipboard, which is what you paste into the recorder's configuration.</td></tr>
+      <tr><td>Ident</td><td>The name for this key.</td></tr>
+      <tr><td>Choose systems</td><td>Opens the same scope dialog an access code uses.</td></tr>
+      <tr><td>Delete API key</td><td>Removes the row.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    A key you add with the section's add control starts scoped to <em>Everything</em>. A key whose scope is
+    empty uploads nothing, so a key you have scoped to systems and then unticked everything under is a key
+    that has stopped working — the upload is refused, and the log says the key is not valid.
+  </p>
+
+  <figure data-shot="section-apikeys">
+    <img alt="The API Keys section with two rows expanded: the disabled switch, the key with its copy button, the ident, and the Choose systems button.">
+    <figcaption>Two API keys. The copy button is how a key gets into a recorder's configuration without being retyped off a screen.</figcaption>
+  </figure>
+
+  <p>
+    Where the key goes depends on the ingest path. A watched directory needs no key at all — the directory
+    is the credential, which is why watched directories are yours to protect. An upload to
+    <code>/api/call-upload</code> carries the key in the <code>key</code> form field of the multipart
+    request, and a trunk-recorder upload carries it in the same field. A downstream carries the key the
+    <em>other</em> server accepts, in its <em>API key</em> field.
+  </p>
+
+  <p>
+    An upload the server refuses is answered <code>401</code> with the plain text <code>Access denied</code>,
+    and the refusal is filed in the log as <em>the apikey is not valid</em> — the recorder gets the same
+    text it has always got, and you have a record of the box that reached the server and was turned away.
+  </p>
+
+  <h3 id="ch-09-the-scope-dialog">The scope dialog</h3>
+
+  <p>
+    Access codes, API keys, and downstreams all open the same dialog, because the server scopes all three
+    against the same pair: a system and a talkgroup.
+  </p>
+
+  <ul>
+    <li><strong>Everything</strong> is the whole deployment: every system, every talkgroup, and every one
+      added later.</li>
+    <li><strong>Groups</strong> and <strong>Tags</strong> tick a whole group or tag at once. A box in its
+      third state means the scope covers part of that group, which is what a group you ticked and then
+      narrowed inside the Systems list looks like.</li>
+    <li><strong>Systems</strong> lists each system with its talkgroups under it. Ticking a system ticks its
+      talkgroups; unticking one talkgroup leaves the rest.</li>
+  </ul>
+
+  <p>
+    <strong>A system in the scope with no talkgroups named under it is not in the scope at all.</strong>
+    That is the shape of the stored scope, and it is the one thing about the dialog that bites: a system
+    whose talkgroup list is empty grants nothing, so a listener holding that scope sees a live feed with
+    nothing in it and an upload to that system is refused.
+  </p>
+
+  <p>
+    For a downstream, the scope is not what the downstream may <em>see</em> — it is the calls this server
+    forwards to it. A downstream scoped to two systems forwards those systems' calls and nothing else, and a
+    downstream with no scope forwards nothing.
+  </p>
+
+  <p>
+    The dialog is on <a href="#ch-08-administration-interface">the administration interface chapter</a>,
+    photographed with the groups and tags named.
+  </p>
+
+  <aside class="caution">
+    <p>
+      Scoping is a grant, not a filter. A listener whose scope covers a talkgroup can hear it; a listener
+      whose scope does not cannot, and there is no setting on the listener's side that changes that. When
+      someone reports a talkgroup they cannot hear, the answer is in that listener's scope, and the
+      summary line under <em>Choose systems</em> — <em>all systems and talkgroups</em> or <em>some</em> —
+      is where you start.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-10-getting-audio-in">10 · Getting audio in</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Audio arrives in one of three ways: the server <strong>watches a directory</strong> the recorder
+    writes into, a recorder <strong>posts a call</strong> to an upload endpoint, or another Rdio Scanner
+    deployment <strong>forwards its calls</strong> here. A deployment usually runs one of the first two,
+    and the choice is a matter of where the recorder sits relative to the server.
+  </p>
+
+  <table>
+    <caption>The three ingest paths, and when each one is the right one</caption>
+    <thead><tr><th scope="col">Path</th><th scope="col">Needs</th><th scope="col">Use it when</th></tr></thead>
+    <tbody>
+      <tr><td>Dirwatch</td><td>A directory both the recorder and the server can reach, and the server's own file access</td><td>The recorder writes on the same machine, or on a share the server can read</td></tr>
+      <tr><td>Upload endpoint</td><td>An API key, and a recorder that can post to the server's address</td><td>The recorder is on another host, another site, or behind a box you cannot mount</td></tr>
+      <tr><td>Downstream</td><td>The other deployment's address and an API key valid there</td><td>Two deployments, and one of them should carry the other's calls</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Dirwatch</h3>
+
+  <p>
+    A dirwatch is a directory the server watches, plus the instructions for reading the files that appear
+    in it. The row says which recorder writes there, because the recorder decides how a file's metadata is
+    written — in the file name, in the path, in the MP3 tags, or in a sidecar JSON file.
+  </p>
+
+  <table>
+    <caption>The dirwatch row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Directory</td><td>The directory to watch. The recorder's own output directory: <em>Record</em>, <em>1R-Record</em>, or <em>VC-Record</em> for DSDPlus Fast Lane, <em>Recordings</em> for SDR Trunk, <em>captureDir</em> for Trunk Recorder, and any directory you point a recorder at for the default type.</td></tr>
+      <tr><td>Type</td><td>How a file's metadata is read. See the table below.</td></tr>
+      <tr><td>Extension</td><td>The audio extension to watch, without the period: <code>mp3</code>, <code>wav</code>.</td></tr>
+      <tr><td>System, Site, Talkgroup</td><td>Send everything in this directory to a fixed system, site, and talkgroup, whatever the file says. Leave them empty and the metadata read from the file decides.</td></tr>
+      <tr><td>Mask</td><td>For the default type: the pattern that reads the metadata out of the file name. See the tokens below.</td></tr>
+      <tr><td>Frequency</td><td>A fake frequency in hertz shown on the listener's screen, for a recorder that reports none.</td></tr>
+      <tr><td>Delay</td><td>Milliseconds a file is allowed to settle before the server reads it, for a recorder that writes the sidecar after the audio. The default is <code>2000</code>. A delay longer than a day is clamped to a day.</td></tr>
+      <tr><td>Delete after</td><td>Delete the files once the call is built, so the watched directory does not fill up. On by default.</td></tr>
+      <tr><td>Disabled</td><td>Stops watching this directory without deleting the row.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-dirwatch">
+    <img alt="The Dirwatch section with a row expanded: the directory, the type select, the extension, the system, site, and talkgroup selects, the mask, the frequency, and the delay.">
+    <figcaption>A watched directory as the section shows it. The type decides what the mask field means, and the system, site, and talkgroup selects override what the file names.</figcaption>
+  </figure>
+
+  <aside class="caution">
+    <p>
+      A watched directory must be a local directory. Dirwatch is not compatible with networked disk: a
+      watch over a network mount misses files, reads them half-written, and reports failures you cannot
+      fix from the server. Put the recorder's output on the server's own disk, and in a container, watch
+      the mount, not the recorder's path.
+    </p>
+  </aside>
+
+  <h3>The four recorder types</h3>
+
+  <table>
+    <caption>What each type reads a call's metadata from</caption>
+    <thead><tr><th scope="col">Type</th><th scope="col">Metadata comes from</th><th scope="col">What you set</th></tr></thead>
+    <tbody>
+      <tr><td>Default</td><td>The file name, read with a mask you write</td><td>Mask, extension, and the system, site, and talkgroup overrides</td></tr>
+      <tr><td>DSDPlus Fast Lane</td><td>The file path: the folder names under the record directory name the system, talkgroup, and unit</td><td>The directory, and nothing else</td></tr>
+      <tr><td>SDR Trunk</td><td>The MP3 tags SDR Trunk writes from its aliases tab</td><td>The directory and the extension</td></tr>
+      <tr><td>Trunk Recorder</td><td>The JSON sidecar Trunk Recorder writes beside the audio file</td><td>The directory, and the extension</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The mask tokens</h3>
+
+  <p>
+    A mask is the file name written with tokens standing in for the parts you want read. The server
+    replaces each token with a pattern, matches the file name against the result, and assigns the captured
+    pieces to the values the tokens name. The order the tokens appear in the mask is the order the pieces
+    appear in the name.
+  </p>
+
+  <table>
+    <caption>Every mask token</caption>
+    <thead><tr><th scope="col">Token</th><th scope="col">Reads</th></tr></thead>
+    <tbody>
+      <tr><td><code>#DATE</code></td><td>The date: <code>20201231</code>, <code>2020-12-31</code>, <code>2020_12_31</code></td></tr>
+      <tr><td><code>#TIME</code></td><td>The local time: <code>085343</code>, <code>08-34-39</code>, <code>08:34:39</code></td></tr>
+      <tr><td><code>#ZTIME</code></td><td>The same shape of time, read as the call's instant in the server's zone</td></tr>
+      <tr><td><code>#SYS</code></td><td>The system identifier, decimal, as the recorder numbers it</td></tr>
+      <tr><td><code>#SYSLBL</code></td><td>The system label</td></tr>
+      <tr><td><code>#SITE</code></td><td>The site identifier</td></tr>
+      <tr><td><code>#SITELBL</code></td><td>The site label</td></tr>
+      <tr><td><code>#TG</code></td><td>The talkgroup identifier, decimal</td></tr>
+      <tr><td><code>#TGLBL</code></td><td>The talkgroup label</td></tr>
+      <tr><td><code>#TGAFS</code></td><td>The talkgroup identifier in agency-fleet-subfleet form, <code>11-061</code></td></tr>
+      <tr><td><code>#GROUP</code></td><td>The group label</td></tr>
+      <tr><td><code>#TAG</code></td><td>The tag label</td></tr>
+      <tr><td><code>#UNIT</code></td><td>The unit identifier</td></tr>
+      <tr><td><code>#UNITLBL</code></td><td>The unit label</td></tr>
+      <tr><td><code>#HZ</code></td><td>A frequency in hertz, <code>119100000</code></td></tr>
+      <tr><td><code>#KHZ</code></td><td>A frequency in kilohertz, <code>119100</code></td></tr>
+      <tr><td><code>#MHZ</code></td><td>A frequency in megahertz, <code>119.100</code></td></tr>
+      <tr><td><code>#TGHZ</code></td><td>A frequency in hertz, and the talkgroup identifier set from it: <code>119100000</code> becomes talkgroup <code>119100</code></td></tr>
+      <tr><td><code>#TGKHZ</code></td><td>A frequency in kilohertz, and the talkgroup identifier set from it: <code>119100.000</code> becomes talkgroup <code>119100</code></td></tr>
+      <tr><td><code>#TGMHZ</code></td><td>A frequency in megahertz, and the talkgroup identifier set from it: <code>119.100000</code> becomes talkgroup <code>119100</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    A mask for a conventional recorder that names the talkgroup by its frequency is therefore
+    <code>cymx_#TG_#DATE_#TIME_#HZ</code>, and for the airband recorder below,
+    <code>laurentides_#DATE_#TIME_#TGHZ</code>.
+  </p>
+
+  <p>
+    A mask is compiled as a regular expression, and two things about it are worth knowing. A mask that is
+    not a valid expression is refused when you save the section, so a stray bracket never reaches the
+    watcher. And a mask whose groups do not line up with the tokens it names is reported when the watch
+    starts — the watcher says the mask captures more pieces than it names, which is the shape of a call
+    built with the wrong values in it.
+  </p>
+
+  <h3>Uploading a call</h3>
+
+  <p>
+    Two endpoints take a call as a multipart form. Both answer plain text, and both answer the same way
+    whatever the server then makes of the call: a call that was accepted is answered
+    <code>Call imported successfully.</code>, and a call the credentials refuse is answered
+    <code>401</code> with <code>Invalid API key for system &lt;nil&gt; talkgroup &lt;nil&gt;.</code>
+  </p>
+
+  <table>
+    <caption>The upload endpoints</caption>
+    <thead><tr><th scope="col">Endpoint</th><th scope="col">What it takes</th><th scope="col">Use it for</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/call-upload</code></td><td>A multipart body: the credential in the <code>key</code> field, the recording in the <code>audio</code> field, and the metadata in the fields below</td><td>A recorder, a script, or an integration that names the call's fields itself</td></tr>
+      <tr><td><code>POST /api/trunk-recorder-call-upload</code></td><td>A multipart body: <code>key</code>, the recording in <code>audio</code>, and Trunk Recorder's JSON sidecar in <code>meta</code></td><td>Trunk Recorder, on a host the server cannot watch</td></tr>
+    </tbody>
+  </table>
+
+  <table>
+    <caption>The fields <code>/api/call-upload</code> reads</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>key</code></td><td>The API key. The upload is refused when it is missing, disabled, or scoped away from the call.</td></tr>
+      <tr><td><code>audio</code></td><td>The recording, as a file part. Its name and content type are taken from the part.</td></tr>
+      <tr><td><code>audioFilename</code>, <code>audioName</code></td><td>The name to file the recording under, and the type its extension implies</td></tr>
+      <tr><td><code>audioMime</code>, <code>audioType</code></td><td>The recording's content type</td></tr>
+      <tr><td><code>audioLength</code></td><td>The recorder's own length in seconds. The server takes its word and measures nothing.</td></tr>
+      <tr><td><code>timestamp</code></td><td>The call's instant, RFC 3339</td></tr>
+      <tr><td><code>dateTime</code></td><td>The same instant under its pre-v7 name, as a Unix second count or an RFC 3339 string</td></tr>
+      <tr><td><code>system</code>, <code>site</code>, <code>talkgroup</code></td><td>The identifiers, as the recorder numbers them. These are matched against the identifiers your configuration uses.</td></tr>
+      <tr><td><code>systemLabel</code>, <code>talkgroupLabel</code>, <code>talkgroupName</code></td><td>The labels, used to find the system and talkgroup when no identifier matched, and to name a talkgroup auto populate creates</td></tr>
+      <tr><td><code>talkgroupGroup</code>, <code>talkgroupGroups</code></td><td>The group labels for a talkgroup auto populate creates</td></tr>
+      <tr><td><code>talkgroupTag</code></td><td>The tag label for a talkgroup auto populate creates</td></tr>
+      <tr><td><code>frequency</code>, <code>frequencies</code></td><td>One frequency, or a JSON list of them with <code>freq</code>, <code>dbm</code>, <code>pos</code>, <code>errorCount</code>, and <code>spikeCount</code></td></tr>
+      <tr><td><code>source</code>, <code>units</code></td><td>The unit identifier, or a JSON list of units with their offsets</td></tr>
+      <tr><td><code>patches</code>, <code>patched_talkgroups</code></td><td>The talkgroup identifiers patched into this call</td></tr>
+      <tr><td><code>channelType</code></td><td><code>trunked</code> or <code>conventional</code>. Shown on the live frame for a call happening now; nothing else acts on it.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Every field is optional and each is read on its own, so a field the server does not know is read as
+    nothing and the rest of the upload still lands. A call the server cannot place — no system matches, no
+    talkgroup matches, auto populate switched off — is answered as accepted all the same, and the reason
+    lands in the log under <em>Call ingest</em>. That is the first place to look when a capture box says it
+    uploaded and the call is nowhere to be found.
+  </p>
+
+  <h3>Trunk Recorder on another host</h3>
+
+  <p>
+    Trunk Recorder's <code>uploadScript</code> property runs a script for each finished call, with the
+    system identifier as its first argument and the recording's full path as its second. This is the
+    script the repository carries; it posts the recording and its sidecar and then removes them.
+  </p>
+
+  <pre><code>#!/bin/bash
+#
+# Use this script with Trunk Recorder's uploadScript system property in its
+# config.json file:
+#
+#   {
+#     ...
+#     "uploadScript": "upload-call.sh 7537"
+#     ...
+#   }
+#
+# The first argument is the Rdio Scanner system identifier; Trunk Recorder adds
+# the full path of the audio file as the second argument.
+
+# The API key configured in your Rdio Scanner instance.
+apikey=b29eb8b9-9bcd-4e6e-bb4f-d244ada12736
+
+basename="${2%.*}"
+
+curl -sS http://127.0.0.1:3000/api/trunk-recorder-call-upload \
+     -F "key=${apikey}" \
+     -F "audio=@${basename}.wav;type=audio/wav" \
+     -F "meta=@${basename}.json;type=application/json" \
+     -F "system=${1:-0}"
+
+# The audio file and its JSON sidecar are then deleted.
+rm -f ${basename}.*</code></pre>
+
+  <p>
+    Change the key and the address, and give Trunk Recorder your system's identifier. When the recorder and
+    the server are on the same host, watch the capture directory instead — a dirwatch needs no key, no
+    script, and no network.
+  </p>
+
+  <h3>RTLSDR-Airband</h3>
+
+  <p>
+    RTLSDR-Airband writes one file per transmission into a directory, naming the file from a template and
+    appending the frequency when <code>include_freq</code> is on. The server reads that name with a mask,
+    so the pair is a recorder configuration and a dirwatch row.
+  </p>
+
+  <pre><code>devices: (
+  {
+    type = "rtlsdr";
+    serial = "00000081";
+    gain = 22.9;
+    centerfreq = 119.1;
+    channels: (
+      {
+        freq = 119.1;
+        lowpass = 2500;
+        highpass = 250;
+        modulation = "am";
+        outputs: (
+          {
+            type = "file";
+            directory = "/tmp/recorders/Laurentides";
+            filename_template = "laurentides";
+            split_on_transmission = true;
+            include_freq = true;
+          }
+        );
+      }
+    );
+  }
+);</code></pre>
+
+  <p>And the dirwatch row that reads it:</p>
+
+  <table>
+    <caption>The dirwatch row for the airband recorder above</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">Value</th></tr></thead>
+    <tbody>
+      <tr><td>Directory</td><td><code>/tmp/recorders/Laurentides</code></td></tr>
+      <tr><td>Extension</td><td><code>mp3</code></td></tr>
+      <tr><td>Type</td><td>Default</td></tr>
+      <tr><td>System</td><td>The system the channels belong to</td></tr>
+      <tr><td>Mask</td><td><code>laurentides_#DATE_#TIME_#TGHZ</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    <code>#TGHZ</code> is what makes this work: it reads the frequency out of the name and sets the
+    talkgroup identifier from it, so each frequency RTLSDR-Airband records becomes its own talkgroup
+    without you listing one per channel.
+  </p>
+
+  <h3>Downstreams</h3>
+
+  <p>
+    A downstream is another Rdio Scanner deployment this one re-posts its calls to. The row carries the
+    address to post to, the API key that deployment accepts, a switch, and the scope of the calls to
+    forward.
+  </p>
+
+  <table>
+    <caption>The downstream row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>URL</td><td>The other deployment's address. Only <code>http</code> and <code>https</code> are accepted, and the row is refused at save with any other scheme: the server posts your recordings and the key to this address, so it will not post them over something else.</td></tr>
+      <tr><td>API key</td><td>The key the <em>other</em> server has in its API Keys section. A key from this server means nothing there.</td></tr>
+      <tr><td>Disabled</td><td>Stops forwarding without deleting the row.</td></tr>
+      <tr><td>Choose systems</td><td>The calls to forward. A downstream with no scope forwards nothing.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-downstreams">
+    <img alt="The Downstreams section with a row expanded: the URL, the API key, the disabled switch, and the Choose systems button.">
+    <figcaption>A downstream. The key is the one the other deployment's API Keys section carries, and the scope decides which of this server's calls are forwarded.</figcaption>
+  </figure>
+
+  <p>
+    Forwarding is a delivery, and it is logged as one: the <em>Downstreams</em> subsystem names the system,
+    the talkgroup, the destination, and the outcome. When a call was recorded here and never appeared
+    there, that entry is the answer, and the usual causes are a key that is disabled on the far side, a
+    scope that does not cover the talkgroup, and an address that does not answer.
+  </p>
+
+  <h3>Auto populate</h3>
+
+  <p>
+    Auto populate is what makes a deployment that receives calls it has no configuration for keep working.
+    It is a server-wide option and a per-system switch, and they do different things.
+  </p>
+
+  <table>
+    <caption>What auto populate creates, and which switch decides</caption>
+    <thead><tr><th scope="col">Created</th><th scope="col">Enabled by</th><th scope="col">Named from</th></tr></thead>
+    <tbody>
+      <tr><td>A system</td><td>The server-wide option only</td><td>The identifiers and label the call claims</td></tr>
+      <tr><td>A talkgroup</td><td>The server-wide option, or that system's own switch</td><td>The identifiers and labels the call claims; a talkgroup with no labels joins the group <em>Unknown</em> and the tag <em>Untagged</em></td></tr>
+      <tr><td>Units</td><td>The server-wide option, or that system's own switch</td><td>The unit identifiers the call names</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Each creation is a <em>Configuration</em> log entry naming the recording that caused it, so a system
+    that appeared on its own is traceable to the file that named it. A system's <em>Blacklists</em> field is
+    the counterweight: a comma-separated list of talkgroup identifiers that system refuses, which has an
+    effect only when auto populate is enabled. The Talkgroups section carries a
+    <strong>Blacklist talkgroup</strong> button that appends the talkgroup to its system's list, so the
+    list is edited where the talkgroup is, and saved with the Systems section.
+  </p>
+
+  <p>
+    Auto populate is a good default for a deployment that follows a system as it grows, and a nuisance on
+    a deployment with a fixed list: a capture box with a broken configuration fills a database with
+    talkgroups nobody named. The per-system switch is what a deployment that mostly runs a fixed list wants.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-11-systems-sites-talkgroups-units">11 · Systems, sites, talkgroups, and units</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The configuration has one spine. A <strong>system</strong> is the trunked system or the conventional
+    network the recorder captures; under it are its <strong>sites</strong>, its <strong>talkgroups</strong>,
+    and its <strong>units</strong>. Everything the server files a recording against, and everything a
+    listener selects, sits on that spine.
+  </p>
+
+  <p>
+    Systems is its own section. Sites, Talkgroups, and Units are the sub-sections of the system you have
+    selected: each names the system at its head, and the rows you add there belong to it.
+  </p>
+
+  <h3>Systems</h3>
+
+  <table>
+    <caption>The system row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Id</td><td>The system identifier, in decimal, as your recorder numbers it. This is the identifier a recorder's metadata is matched against, and the one an access code's scope names.</td></tr>
+      <tr><td>Label</td><td>The name listeners see, on the main screen and in the search panel.</td></tr>
+      <tr><td>Type</td><td>The system's modulation or trunking standard: AM, DMR, FM, NFM, NXDN, P25, Provoice, SmartNet, Tetra, or no type. It is shown with the system; nothing in the server's behaviour depends on it.</td></tr>
+      <tr><td>Audio alert</td><td>An alert tone prefixed to every call assigned to this system. The alerts are the named oscillator sequences the server knows; they are listed in <a href="#ch-16-rest-api">chapter 16</a>.</td></tr>
+      <tr><td>Led Color</td><td>The colour a listener's display shows for this system's calls. The default is green.</td></tr>
+      <tr><td>Auto Populate</td><td>Creates this system's talkgroups and units when a recording names ones you have not configured. It works beside the server-wide option: see <a href="#ch-10-getting-audio-in">auto populate</a>.</td></tr>
+      <tr><td>Delay</td><td>Minutes this system's calls are held before they are propagated to listeners.</td></tr>
+      <tr><td>Blacklists</td><td>A comma-separated list of talkgroup identifiers this system refuses. It has an effect only where auto populate is enabled.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Rows are dragged into the order listeners see them in, and the order is saved with the section. A
+    system's rows are deleted with the row's own button, and deleting a system takes its sites, talkgroups,
+    and units with it.
+  </p>
+
+  <figure data-shot="section-systems">
+    <img alt="The Systems section with one system expanded: the identifier, label, audio alert, LED colour, auto populate switch, delay, blacklists, and type.">
+    <figcaption>A system as the section shows it. The drag handle in the row's header is what orders the systems, and the fields below it are saved with the section.</figcaption>
+  </figure>
+
+  <h3>Sites</h3>
+
+  <p>
+    A site is a transmitter location within a system. The row carries the recorder's site identifier and
+    the label listeners see, and the sites of a system are dragged into order like everything else.
+  </p>
+
+  <figure data-shot="section-sites">
+    <img alt="The Sites section for one system: the picker naming the system whose sites are being edited, and two site rows with their identifiers and labels.">
+    <figcaption>Sites belong to the system you have picked at the head of the section. The identifier is the one the recorder's metadata names.</figcaption>
+  </figure>
+
+  <h3>Talkgroups</h3>
+
+  <p>
+    A talkgroup is what a listener selects and what a recording is filed against. It carries the recorder's
+    identifier, the label and name shown on the listener's screen, the groups it belongs to, the tag it
+    carries, its alert and colour, its type, a fake frequency, and its own delay.
+  </p>
+
+  <table>
+    <caption>The talkgroup row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Id</td><td>The talkgroup identifier, in decimal, as the recorder numbers it.</td></tr>
+      <tr><td>Label</td><td>The label shown on the main screen and on the listener's buttons.</td></tr>
+      <tr><td>Name</td><td>The name shown on the main screen, beside the label.</td></tr>
+      <tr><td>Groups</td><td>The groups this talkgroup belongs to, ticked in place. A talkgroup in no group is selected on its own and nowhere else.</td></tr>
+      <tr><td>Tag</td><td>The one tag this talkgroup carries, chosen from the Tags section.</td></tr>
+      <tr><td>Audio alert</td><td>An alert tone prefixed to this talkgroup's calls.</td></tr>
+      <tr><td>Led Color</td><td>The colour this talkgroup's calls show in a listener's display.</td></tr>
+      <tr><td>Type</td><td>The talkgroup's channel type, shown to listeners.</td></tr>
+      <tr><td>Frequency</td><td>A fake frequency in hertz shown on the main screen, for a talkgroup the recorder reports no frequency for.</td></tr>
+      <tr><td>Delay</td><td>Minutes this talkgroup's calls are held before they are propagated to listeners.</td></tr>
+      <tr><td>Blacklist talkgroup</td><td>Appends this talkgroup's identifier to its system's blacklist, so auto populate stops creating it. The list lives on the system row and is saved with the Systems section.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-talkgroups">
+    <img alt="The Talkgroups section for one system: rows expanded with identifier, label, name, the group checkboxes, the tag select, alert, LED colour, type, frequency, and delay.">
+    <figcaption>Talkgroups of the selected system. The groups a talkgroup belongs to are ticked here, and the tag select lists what the Tags section defines.</figcaption>
+  </figure>
+
+  <h3>Units</h3>
+
+  <p>
+    A unit is a radio the calls are attributed to. The row carries the identifier the recorder names, the
+    label the listener sees, and an identifier range.
+  </p>
+
+  <table>
+    <caption>The unit row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Id</td><td>The unit identifier, in decimal, as the recorder names it.</td></tr>
+      <tr><td>Range from, Range to</td><td>A range of identifiers this one row covers, so a fleet of identifiers that share a label is written as one row.</td></tr>
+      <tr><td>Label</td><td>The name the listener sees for the unit.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-units">
+    <img alt="The Units section for one system: rows with the identifier, the range from and range to fields, and the label.">
+    <figcaption>Units of the selected system. A row with a range covers every identifier between its two ends.</figcaption>
+  </figure>
+
+  <h3>Identifiers, and how a recording finds its talkgroup</h3>
+
+  <p>
+    Every one of these rows carries an identifier that belongs to your recorder, not to the database. The
+    server keeps its own identifiers, and the row's <em>Id</em> is the reference the recorder and the
+    listener applications use. When a recording arrives, the server looks for the system and the talkgroup in
+    a fixed order:
+  </p>
+
+  <ol>
+    <li>the database identifier, when the upload names one;</li>
+    <li>then the recorder identifier you typed into the row;</li>
+    <li>then the label, when the recording names a system or talkgroup by name.</li>
+  </ol>
+
+  <p>
+    Nothing is created by that lookup on its own — that is auto populate's job, and it is a
+    <a href="#ch-10-getting-audio-in">separate decision</a>. A recording that matches nothing is a
+    <em>Call ingest</em> log entry naming the recording, which is where a capture box that stopped appearing
+    is diagnosed.
+  </p>
+
+  <aside class="caution">
+    <p>
+      Two rows carrying the same identifier in one system is a deployment that files calls against whichever
+      row the lookup reaches first. The interface marks the second row <em>Id is already defined</em> and
+      keeps the section's Save disabled until you fix it; the server's own endpoint does not refuse the
+      identifier, so a configuration written through the API can carry the duplicate. When calls land on a
+      talkgroup with a label you did not expect, the duplicate identifier is what to look for.
+    </p>
+  </aside>
+
+  <h3>Alerts, colours, and which one wins</h3>
+
+  <p>
+    Alert tones and LED colours are set at four levels — group, tag, system, talkgroup — and the assignment
+    order is <strong>group, then tag, then system, then talkgroup</strong>. A talkgroup in a group that
+    carries an alert takes the group's alert, whatever its system says. The colour works the same way, and
+    the default colour is green.
+  </p>
+
+  <h3>Importing the list</h3>
+
+  <p>
+    A talkgroup and unit list from another application is imported as CSV, from the Tools section, per
+    system. It is on <a href="#ch-15-tools">the tools chapter</a>, with the columns it takes.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-12-groups-and-tags">12 · Groups and tags</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    A <strong>group</strong> is how a listener selects many talkgroups at once. A <strong>tag</strong> is a
+    label on a talkgroup that a listener filters by. Both carry an alert tone and a colour that win over the
+    system and the talkgroup, and both are used as scope shortcuts when an access code is written.
+  </p>
+
+  <h3>Groups</h3>
+
+  <p>
+    A group is a named collection of talkgroups. The group row is short: a label, an alert, and a colour.
+    The talkgroups join it from the Talkgroups section, where the groups are ticked on each talkgroup row.
+  </p>
+
+  <table>
+    <caption>The group row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Label</td><td>Required. The name shown on the listener's main screen, in the search panel, and in the select panel.</td></tr>
+      <tr><td>Audio alert</td><td>An alert tone prefixed to every call assigned to this group. It wins over the system's and the talkgroup's alert.</td></tr>
+      <tr><td>Led Color</td><td>The colour this group's calls show, winning over the system's colour. The default is green.</td></tr>
+      <tr><td>Delete Group</td><td>Removes the group. The talkgroups that were in it stay, and become members of no group.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-groups">
+    <img alt="The Groups section with rows expanded: the label, the audio alert select, and the LED colour select.">
+    <figcaption>Groups as the section shows them. The talkgroups are chosen on the talkgroup rows, not here.</figcaption>
+  </figure>
+
+  <p>
+    A talkgroup must belong to at least one group: the interface marks a talkgroup with no group
+    <em>Group is required</em> and keeps the section's Save disabled until one is ticked. A deployment that
+    groups nothing is a deployment whose listeners select talkgroups one at a time.
+  </p>
+
+  <h3>Tags</h3>
+
+  <p>
+    A tag is a label a talkgroup carries — <em>Fire</em>, <em>EMS</em>, <em>Dispatch</em> — and a talkgroup
+    carries one tag at most, chosen on the talkgroup row.
+  </p>
+
+  <table>
+    <caption>The tag row</caption>
+    <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>Label</td><td>Required. The name shown on the listener's main screen and in the search panel.</td></tr>
+      <tr><td>Audio alert</td><td>An alert tone prefixed to every call on a talkgroup carrying this tag. It wins over the system's and the talkgroup's alert, and loses to the group's.</td></tr>
+      <tr><td>Led Color</td><td>The colour calls on a talkgroup with this tag show, winning over the system's colour.</td></tr>
+      <tr><td>Delete Tag</td><td>Removes the tag. Talkgroups that carried it are left untagged.</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="section-tags">
+    <img alt="The Tags section with rows expanded: the label, the audio alert select, and the LED colour select.">
+    <figcaption>Tags as the section shows them. A talkgroup picks one of these on its own row.</figcaption>
+  </figure>
+
+  <h3>Groups and tags in the rest of the deployment</h3>
+
+  <table>
+    <caption>Where groups and tags are used</caption>
+    <thead><tr><th scope="col">Used by</th><th scope="col">How</th></tr></thead>
+    <tbody>
+      <tr><td>The listener's select panel</td><td>A group is selected as one item, and brings its talkgroups with it.</td></tr>
+      <tr><td>The scope dialog</td><td>Groups and Tags are the two shortcuts for writing an access code's, an API key's, or a downstream's scope: ticking a group ticks its talkgroups. See <a href="#ch-09-the-scope-dialog">the scope dialog</a>.</td></tr>
+      <tr><td>Alerts and colours</td><td>The assignment order is group, then tag, then system, then talkgroup.</td></tr>
+      <tr><td>Auto populate</td><td>A talkgroup created from a recording that names no group joins the group <em>Unknown</em> and carries the tag <em>Untagged</em>. A recording that names group and tag labels creates them under those names.</td></tr>
+      <tr><td>The log</td><td>A group, tag, or talkgroup the server created because a recording named it is a <em>Configuration</em> entry naming the recording.</td></tr>
+    </tbody>
+  </table>
+
+  <aside class="note">
+    <p>
+      Groups and tags are the two scope shortcuts that survive a system's growth. An access code scoped to a
+      group covers the talkgroups added to that group later; a code scoped to a list of talkgroups covers
+      exactly the ones you ticked. For a deployment whose listeners follow a system as it grows, groups are
+      the scope that keeps working.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-13-options">13 · Options</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Options are the settings that describe how the server behaves rather than what it contains: audio
+    conversion, auto populate, the listener cap, retention, duplicate detection, and the text a listener
+    sees on the main screen. They are saved like any other section, and they take effect without a restart.
+  </p>
+
+  <figure data-shot="section-options">
+    <img alt="The Options section: the audio conversion select, the auto populate and duplicate detection switches, the branding and support email fields, the keypad beep style select, the max clients and prune days numbers, and the listeners count and talkgroup sorting switches.">
+    <figcaption>The Options section as the server carries it. Each control names itself and says what it does, in the caption under its name.</figcaption>
+  </figure>
+
+  <table>
+    <caption>The options, with their defaults</caption>
+    <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td>Audio Conversion</td><td>Enabled without normalization</td><td>Converts an ingested recording to AAC in an m4a container at 32 kbit/s with ffmpeg, so a recording in any format the recorder writes plays in a browser. See the modes below.</td></tr>
+      <tr><td>Auto Populate</td><td>On</td><td>Globally allows the creation of systems, talkgroups, and units a recording names that you have not configured. The per-system switch is on a system row. See <a href="#ch-10-getting-audio-in">auto populate</a>.</td></tr>
+      <tr><td>Branding Label</td><td>Empty</td><td>A line of text shown above the listener's main screen, to identify which instance a listener is looking at.</td></tr>
+      <tr><td>Disable Duplicate Call Detection</td><td>Off, so detection is on</td><td>Stops the server discarding a recording that duplicates the one before it: two calls on the same system, talkgroup, and site within half a second are the same call. The window is fixed at 500 milliseconds.</td></tr>
+      <tr><td>Email Support</td><td>Empty</td><td>The address listeners are pointed to when they need support.</td></tr>
+      <tr><td>Keypad Beep Style</td><td>Uniden</td><td>The tones a listener's keypad actions synthesize: the Uniden set or the Whistler set.</td></tr>
+      <tr><td>Max Clients</td><td>200</td><td>How many listener connections the server holds at once. A listener arriving when the cap is reached has its connection closed, with nothing said on it.</td></tr>
+      <tr><td>Prune Days</td><td>7</td><td>How long the call history and the log are kept. The retention pass runs once an hour. <code>0</code> switches retention off, and a deployment with retention off writes no retention entry.</td></tr>
+      <tr><td>Show Listeners Count</td><td>Off</td><td>Shows how many listeners are connected, on the main screen and in the live feed.</td></tr>
+      <tr><td>Sort Talkgroups</td><td>Off</td><td>Sorts the talkgroup lists by identifier, instead of the order you dragged them into.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Audio conversion, in its four modes</h3>
+
+  <table>
+    <caption>The audio conversion modes</caption>
+    <thead><tr><th scope="col">Mode</th><th scope="col">What the server does with a recording</th></tr></thead>
+    <tbody>
+      <tr><td>Disabled</td><td>Stores the recording exactly as it arrived and runs nothing. A recording the browser cannot play is a recording the listener cannot play.</td></tr>
+      <tr><td>Enabled without normalization</td><td>Converts to AAC at 32 kbit/s. Loudness is whatever the recorder captured.</td></tr>
+      <tr><td>Enabled with normalization</td><td>Converts, and applies ffmpeg's loudness normalization to the result, with a three-second pad so a short transmission is not clipped by the filter.</td></tr>
+      <tr><td>Enabled with loud normalization</td><td>The same, with the loudness target fixed: −16 LUFS integrated, −1.5 dBTP true peak, 11 LU loudness range. This is the mode for a deployment whose recordings come from recorders with wildly different gains.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Two things about conversion are worth knowing before you rely on it. The normalization modes need a
+    ffmpeg built with the <code>loudnorm</code> filter; the server checks the program it has at startup, and
+    a build without the filter converts in the plain mode whatever the option says. And the tags written
+    into the converted file — the album, artist, date, genre, and title a recording carries when a listener
+    downloads it — are written only for a talkgroup that has a tag.
+  </p>
+
+  <aside class="note">
+    <p>
+      A recording is never lost because its audio would not convert. When ffmpeg is not installed, the
+      server says so once and stores recordings as they arrived. When ffmpeg refuses a file, the server
+      files what ffmpeg said under <em>Audio conversion</em> and stores the recording as it arrived. The
+      conversion is a step after the call is filed, and a deployment with a broken ffmpeg keeps its calls.
+    </p>
+  </aside>
+
+  <h3>Retention</h3>
+
+  <p>
+    <em>Prune Days</em> is the deployment's memory: the call history, the recordings, and the log entries
+    older than that many days are removed by a pass that runs once an hour. It is the option that decides
+    whether a deployment fills its disk, and the <em>Retention</em> subsystem is where you check that it is
+    running. The detail is on <a href="#ch-14-logs">the log chapter</a>.
+  </p>
+
+  <h3>What is not in Options</h3>
+
+  <p>
+    The administrator password and the server's signing secret live in the options table and are not
+    controls on this section: the password is changed in the Tools section, on
+    <a href="#ch-15-tools">the tools chapter</a>. The flags — the address the server answers on, the
+    database it opens, TLS, the service — are not options either, and they are set at startup:
+    <a href="#ch-06-flags-and-ini">the flags chapter</a>.
+  </p>
+
+  <aside class="caution">
+    <p>
+      Options are saved as a section, and the section is written whole. Two administrators in the Options
+      section is the case the conflict banner is for: the banner appears when the other session saved while
+      you were editing, and <strong>Reload from server</strong> is the answer. See
+      <a href="#ch-08-administration-interface">the administration interface</a>.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-14-logs">14 · Logs</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The server writes down what it does, and every entry says which part of the server wrote it. On a
+    deployment that is misbehaving you do not read everything the server said: you ask for what the
+    directory watchers said, or what the last hour of logins said, and read only that.
+  </p>
+
+  <h3>The log is in three places, and it is the same log</h3>
+
+  <ul>
+    <li>the <strong>Logs</strong> section of the administration interface, at <code>/admin/</code>;</li>
+    <li>the server's console, which is what <code>journalctl -u rdio-scanner</code> shows on a service deployment;</li>
+    <li>the <code>logs</code> table of the database.</li>
+  </ul>
+
+  <p>
+    The levels are <em>Informative</em>, <em>Warning</em>, and <em>Error</em>. A line that only ever went
+    to the console — the base folder the server serves, the server stopping, a new signing secret, and
+    everything the server said about a listener connection it could not read, could not understand, or
+    could not write to — is written to the log as well, so it is searchable instead of something you had to
+    be watching when it happened. The three notices that name the addresses the server is listening on are
+    console only: they say where to point a browser, not what the server did.
+  </p>
+
+  <p>
+    A stored message says what happened, in the language of the system, and where something failed the
+    failure's own text follows it. On the console and in the service log the same entry carries its level
+    and its subsystem in front of it, so the subsystem split reaches the deployments diagnosed from a
+    terminal:
+  </p>
+
+  <pre><code>warn dirwatch: the watcher for /data/rdio/watch/trunk stopped: no such file or directory</code></pre>
+
+  <p>
+    That is what you grep for: <code>journalctl -u rdio-scanner | grep ' dirwatch: '</code>.
+  </p>
+
+  <h3>The subsystems</h3>
+
+  <p>
+    The names are a closed list. Asking the log view for a subsystem the server does not have is answered as
+    a bad request, not as an empty log: an empty log would tell you nothing happened, when what happened is
+    that you asked for something this server cannot report.
+  </p>
+
+  <table>
+    <caption>Every subsystem the server files entries under, and what it reports</caption>
+    <thead><tr><th scope="col">Subsystem</th><th scope="col">Shown as</th><th scope="col">What it covers</th></tr></thead>
+    <tbody>
+      <tr><td><code>server</code></td><td>Server</td><td>The server starting, the base folder it serves, and the server stopping — including an address it could not stop answering.</td></tr>
+      <tr><td><code>config</code></td><td>Configuration</td><td>A configuration you saved, a configuration that could not be saved, and a system, talkgroup, group, tag, or unit the server created because a recording named it.</td></tr>
+      <tr><td><code>dirwatch</code></td><td>Directory watchers</td><td>The watched recording directories: starting a watch, losing one, reading one, and handing a recording to the ingest path.</td></tr>
+      <tr><td><code>downstream</code></td><td>Downstreams</td><td>Sending a call to another Rdio Scanner deployment.</td></tr>
+      <tr><td><code>delayer</code></td><td>Delayed calls</td><td>Calls held back by the <em>Delayed</em> feature: holding one, releasing one, and failing to do either.</td></tr>
+      <tr><td><code>ingest</code></td><td>Call ingest</td><td>A recording becoming a call, and a recording that matches no system or talkgroup the server knows.</td></tr>
+      <tr><td><code>login</code></td><td>Logins</td><td>A refused attempt, too many attempts from one address, a sign-in or sign-out the server could not carry out. A sign-in that worked writes nothing: the administration interface's own connection records that an administrator arrived, under <em>Administration</em>.</td></tr>
+      <tr><td><code>access</code></td><td>Access codes</td><td>A client presenting an access code that is not valid, expired, locked, or already at its connection limit.</td></tr>
+      <tr><td><code>livefeed</code></td><td>Live feed</td><td>Listeners joining and leaving, how many there are, and what the server could not read from or write to one.</td></tr>
+      <tr><td><code>ffmpeg</code></td><td>Audio conversion</td><td>Converting a recording to playable audio. The entry carries what the converter said, and the reason is at the end of it.</td></tr>
+      <tr><td><code>upload</code></td><td>Uploads</td><td>An upload the server refused, and the reason it refused it — the text the recorder gets back.</td></tr>
+      <tr><td><code>prune</code></td><td>Retention</td><td>The retention pass, how much it removed, and what stopped it removing anything.</td></tr>
+      <tr><td><code>logs</code></td><td>Log search</td><td>The log view failing to answer a search.</td></tr>
+      <tr><td><code>database</code></td><td>Database</td><td>The database migration: what it migrated, what it refused, and what it left damaged.</td></tr>
+      <tr><td><code>admin</code></td><td>Administration</td><td>The administrator account: a password changed or not changed, a user added or removed, a new signing secret, the administration interface's own connection — joined, ended, or presenting a session token this server did not issue — and a request from the administrator whose body the server could not read.</td></tr>
+      <tr><td><code>mcp</code></td><td>Assistant surface</td><td>The Model Context Protocol endpoint, when it is enabled: a caller it would not let in, named by the address the request came from; a capability refusing a caller; a capability that changed the deployment; and the endpoint's own transport trouble. It files no entry for a read an assistant was entitled to, and no entry ever carries a credential.</td></tr>
+      <tr><td><code>calls</code></td><td>Calls</td><td>A call an operator acted on, such as pinning one. The current server writes nothing under this name; on a database upgraded from the previous server it holds the entries that server wrote.</td></tr>
+      <tr><td><code>legacy</code></td><td>From the previous server</td><td>Entries that arrived before this field existed, or from a server that does not write it.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Entries written by the previous server were not rewritten. They were filed under the subsystem their old
+    prefix names — <code>invalid login attempt</code> became a <em>login</em> entry,
+    <code>dirwatch.walkdir:</code> a <em>dirwatch</em> entry — and anything that matches no prefix is shown
+    as <em>From the previous server</em>. A log you had before the upgrade is still readable, and still
+    filterable.
+  </p>
+
+  <figure data-shot="section-logs">
+    <img alt="The Logs section with entries listed newest first, the strip of per-subsystem counts above the table, and the paging controls below it.">
+    <figcaption>The log as the server filled it: newest first, the per-subsystem counts above the table, and the entries the ingest, the conversion, and the downstream delivery wrote.</figcaption>
+  </figure>
+
+  <h3>Searching</h3>
+
+  <p>The log view has six controls and two buttons.</p>
+
+  <table>
+    <caption>The log view's controls</caption>
+    <thead><tr><th scope="col">Control</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td>Sort order</td><td>Oldest first or newest first. Newest first is the default, and is what you want when something just broke.</td></tr>
+      <tr><td>Date</td><td>Narrows to one day, and the window depends on the sort order. <em>Oldest first</em> takes the minute you chose and runs forward a full day. <em>Newest first</em> runs back a day from the minute you chose and then back again by that same hour and minute, so the window is shorter than a day and usually lands on the day <em>before</em> the one you typed. An empty table after choosing today is normally this, not a log with nothing in it: try the other sort order, or the same date at <code>00:00</code>.</td></tr>
+      <tr><td>Level</td><td><em>Informative</em>, <em>Warning</em>, or <em>Error</em>, or all of them.</td></tr>
+      <tr><td>Subsystem</td><td>One of the names above, or all of them.</td></tr>
+      <tr><td>Text</td><td>A substring of the message, matched without regard to case. A <code>%</code> or an <code>_</code> you type matches itself.</td></tr>
+      <tr><td>Auto-refresh</td><td>Keeps the view current, once every ten seconds, and skips a refresh while one is already in flight.</td></tr>
+      <tr><td>Reload</td><td>Runs the search again.</td></tr>
+      <tr><td>Reset</td><td>Clears every filter and runs the search again.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Above the table is a strip of counts: how many entries each part of the server wrote among everything
+    your filters match, noisiest first. <strong>They are buttons.</strong> Clicking
+    <em>Directory watchers (137)</em> sets the subsystem filter to <code>dirwatch</code> and gives you a log
+    that is only those 137 entries. The counts deliberately ignore the subsystem filter you already set — a
+    strip narrowed to the one subsystem you chose would offer nothing to narrow to next — so they always add
+    up to the total of the search you are looking at.
+  </p>
+
+  <p>Entries are paged: the view shows ten at a time and asks the server for two hundred at a time.</p>
+
+  <figure data-shot="section-logs-filters">
+    <img alt="The Logs section with the subsystem filter set to Directory watchers and the level filter set to Error, listing entries that name a directory the server could not read.">
+    <figcaption>Filters narrow the log to the subsystem and the level an administrator is chasing: here the Directory watchers subsystem at the error level, and the entries name the directory the server could not read.</figcaption>
+  </figure>
+
+  <h3>Retention</h3>
+
+  <p>
+    The <em>Prune days</em> option is how long the call history and the log are kept, and the server applies
+    it once an hour. <code>0</code> switches the retention off, and a deployment with the retention off
+    writes no retention entry at all. A pass that ran says what it removed:
+  </p>
+
+  <pre><code>info prune: the retention pass removed 1204 calls and 318 log entries</code></pre>
+
+  <p>
+    A pass that could not run says that instead, and says why. A pass that wrote its notice before it
+    started made a failed pass look exactly like a successful one, and a pass that had stopped removing
+    anything was invisible until the disk was full.
+  </p>
+
+  <h3>Reading the log when something is wrong</h3>
+
+  <table>
+    <caption>Where to look, by what you are chasing</caption>
+    <thead><tr><th scope="col">What you are chasing</th><th scope="col">Start here</th></tr></thead>
+    <tbody>
+      <tr><td>Recordings are not being picked up</td><td><em>Directory watchers</em>, then <em>Call ingest</em>. A watch that started names the directory; a watch that stopped, or a directory that could not be read, names the directory and the failure; a recording that matches no talkgroup says so.</td></tr>
+      <tr><td>A call was recorded but never reached another instance</td><td><em>Downstreams</em> — the line names the system, the talkgroup, the destination, and the outcome.</td></tr>
+      <tr><td>Calls are being held and not released</td><td><em>Delayed calls</em>.</td></tr>
+      <tr><td>Someone cannot sign in, or something is trying</td><td><em>Logins</em>. Attempts, refusals, and the address they came from. A sign-in that worked writes nothing here; <em>Administration</em> is where the interface's connection appears.</td></tr>
+      <tr><td>Clients cannot listen</td><td><em>Access codes</em> and <em>Live feed</em>.</td></tr>
+      <tr><td>Audio will not play</td><td><em>Audio conversion</em>. The entry carries what the converter said, and the reason is at the end of it.</td></tr>
+      <tr><td>A capture box's upload is refused</td><td><em>Uploads</em>. The entry names the reason the server gave, which is the text the box gets back.</td></tr>
+      <tr><td>The server restarted, or stopped</td><td><em>Server</em>.</td></tr>
+      <tr><td>A system, talkgroup, or unit appeared on its own</td><td><em>Configuration</em>. Each entry names the recording that caused the server to create it, so the question becomes which recording that was.</td></tr>
+      <tr><td>The administration interface itself is doing something odd</td><td><em>Administration</em>. The connection joining and ending, a session token this server did not issue, a new signing secret — which ends every session that was open before it — and a save whose body the server could not read.</td></tr>
+      <tr><td>You are not sure the history is being trimmed</td><td><em>Retention</em>. A pass that ran says how much it removed; a pass that could not run says what stopped it.</td></tr>
+      <tr><td>You are not sure the log itself is working</td><td><em>Log search</em> — the log view's own failures are entries too.</td></tr>
+      <tr><td>An upgrade from the previous server went wrong</td><td><em>Database</em>: what it migrated, what it refused, and what it left damaged.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    A text search is how you narrow inside a subsystem: <em>Call ingest</em> plus the talkgroup number,
+    <em>Directory watchers</em> plus the directory, <em>Logins</em> plus the address.
+  </p>
 </section>
 
 <section>
