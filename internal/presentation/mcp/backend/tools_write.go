@@ -443,7 +443,7 @@ func proposeSection(deps Deps, configuration domain.Configuration, in manageConf
 	}
 
 	section := application.ConfigSection(in.Section)
-	what := "this server's " + in.Section + " section"
+	what := "the " + in.Section + " section"
 
 	switch section {
 	case application.AccessSection:
@@ -1125,7 +1125,7 @@ func addAccessUser(ctx context.Context, req *mcp.CallToolRequest, deps Deps, con
 	}
 
 	message := listAskMessage("manage_access_user",
-		"the listener access code of "+in.Ident+" on this server", changes) +
+		"the listener access code of "+in.Ident, changes) +
 		" The access code itself is not shown here and is never answered back."
 
 	asked, refusal, err := askToConfirm(req, "manage_access_user", message,
@@ -1191,10 +1191,18 @@ func removeAccessUser(ctx context.Context, req *mcp.CallToolRequest, deps Deps, 
 		rows = append(rows, accessRowOf(deps.Clock.Now(), access))
 	}
 
-	message := fmt.Sprintf("manage_access_user — remove %d listener access codes carrying identity %s "+
+	// The count is read in the words the count needs: an operator deciding on one code is not
+	// shown a sentence about several.
+	noun := "listener access codes"
+
+	if len(going) == 1 {
+		noun = "listener access code"
+	}
+
+	message := fmt.Sprintf("manage_access_user — remove %d %s carrying identity %s "+
 		"from this server (%s). The codes are deleted, the listeners using them are let out, and this "+
 		"server cannot restore them. The codes themselves are not shown here. Confirm to remove them, "+
-		"decline to leave the access list alone.", len(going), in.Ident, strings.Join(names, ", "))
+		"decline to leave the access list alone.", len(going), noun, in.Ident, strings.Join(names, ", "))
 
 	asked, refusal, err := askToConfirm(req, "manage_access_user", message,
 		fmt.Sprintf("access %s: %d removed", in.Ident, len(going)))

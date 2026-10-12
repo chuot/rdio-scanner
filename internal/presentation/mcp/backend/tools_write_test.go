@@ -959,3 +959,87 @@ func probeToolOf(args map[string]any) string {
 
 	return "rotate_admin_password"
 }
+
+// The ask is the sentence the operator decides on. The exploratory pass read the surface's own asks
+// back to it, and three of them read wrong: the add named the server twice in one sentence, the
+// removal counted one code in the plural, and a section replace named the server twice. All three are
+// pinned here, because an operator who is asked to confirm a change has to be able to read the
+// sentence in one pass.
+func TestTheAccessCodeAskNamesOneServerOnce(t *testing.T) {
+	s, operator := newConfirmingSession(t, "accept")
+
+	call(t, s, "manage_access_user", map[string]any{
+		"action":     "add",
+		"ident":      "volunteer",
+		"systems":    "*",
+		"expiration": "2026-12-31T00:00:00Z",
+	})
+
+	if len(operator.asks) != 1 {
+		t.Fatalf("the add asked %d times, want one ask: %s", len(operator.asks), operator.asked())
+	}
+
+	if n := strings.Count(operator.asks[0], "this server"); n != 1 {
+		t.Fatalf("the add asked %q, which names the server %d times, want it named once", operator.asks[0], n)
+	}
+}
+
+func TestTheRemovalAskCountsItsCodesInTheWordsTheCountNeeds(t *testing.T) {
+	s, operator := newConfirmingSession(t, "accept")
+
+	onboard := func(code string) {
+		t.Helper()
+
+		call(t, s, "manage_access_user", map[string]any{
+			"action":     "add",
+			"ident":      "volunteer",
+			"code":       code,
+			"systems":    "*",
+			"expiration": "2026-12-31T00:00:00Z",
+		})
+	}
+
+	onboard("700101")
+
+	operator.asks = nil
+
+	call(t, s, "manage_access_user", map[string]any{"action": "remove", "ident": "volunteer"})
+
+	if len(operator.asks) != 1 {
+		t.Fatalf("the removal of one code asked %d times, want one ask: %s", len(operator.asks), operator.asked())
+	}
+
+	if !strings.Contains(operator.asks[0], "remove 1 listener access code carrying") {
+		t.Fatalf("the removal of one code asked %q, which counts one code in the plural", operator.asks[0])
+	}
+
+	onboard("700101")
+	onboard("700102")
+
+	operator.asks = nil
+
+	call(t, s, "manage_access_user", map[string]any{"action": "remove", "ident": "volunteer"})
+
+	if !strings.Contains(operator.asks[0], "remove 2 listener access codes carrying") {
+		t.Fatalf("the removal of two codes asked %q, which does not count two codes in the plural", operator.asks[0])
+	}
+}
+
+// The same sentence read twice: a section replace is stated as a replace of the section, on one
+// server. The walk read the section asks back and found the server named twice in the sentence.
+func TestTheSectionAskNamesOneServerOnce(t *testing.T) {
+	s, operator := newConfirmingSession(t, "accept")
+
+	rows := readRows(t, s, groupsURI)
+	rows = append(rows, map[string]any{"id": float64(0), "label": "Mutual Aid", "alert": "", "led": ""})
+
+	call(t, s, "manage_config", map[string]any{"section": "groups", "payload": rows})
+
+	if len(operator.asks) != 1 {
+		t.Fatalf("the section replace asked %d times, want one ask: %s", len(operator.asks), operator.asked())
+	}
+
+	if n := strings.Count(operator.asks[0], "this server"); n != 1 {
+		t.Fatalf("the section replace asked %q, which names the server %d times, want it named once", operator.asks[0], n)
+	}
+}
