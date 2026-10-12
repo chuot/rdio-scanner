@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-//go:build !(linux && amd64) && !(linux && arm64) && !(linux && arm) && !(linux && 386) && !(windows && amd64)
+//go:build !(linux && amd64) && !(linux && arm64) && !(linux && arm) && !(linux && 386) && !(windows && amd64) && !(darwin && amd64) && !(darwin && arm64) && !(freebsd && amd64)
 
 package bundle
 
@@ -26,9 +26,9 @@ import (
 	"io/fs"
 )
 
-// A target this project compiles no ffmpeg for carries none, whatever is sitting in the bundle
-// directories. macOS and FreeBSD are the release targets this covers, and they use the ffmpeg their
-// host installs.
+// A target this project ships no ffmpeg for carries none, whatever is sitting in the bundle directories:
+// the platforms outside the release matrix, and every architecture of a release target whose pair this
+// build carries no way to embed.
 func target() (fs.FS, string) {
 	return nil, ""
 }

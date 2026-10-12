@@ -44,6 +44,19 @@ func TestARecordedTargetCarriesABundle(t *testing.T) {
 	}
 }
 
+// The three targets whose pair is compiled on the platform each one runs on are the ordinary state of a
+// fresh clone: their directories hold only the placeholder that makes the embed compile, so a binary built
+// from that clone carries nothing and converts with the ffmpeg its host installs.
+func TestASuppliedTargetWhosePairWasNeverDroppedCarriesNoBundle(t *testing.T) {
+	for _, dir := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		files := fstest.MapFS{dir + "/.gitkeep": {Data: []byte{}}}
+
+		if _, ok := lookup(files, dir); ok {
+			t.Errorf("%s holds only its placeholder and still reported a bundle", dir)
+		}
+	}
+}
+
 func TestATargetWithNoRecordCarriesNoBundle(t *testing.T) {
 	files := fstest.MapFS{
 		"linux-amd64/ffmpeg.gz":  {Data: []byte("ffmpeg")},
