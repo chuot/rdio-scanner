@@ -293,37 +293,70 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	}
 }
 
-// A supplied pair is cached by the pair itself: the digest of each program is the only thing that says
-// which binaries went into that cache directory, and the way a target's ffmpeg comes to be is part of what
-// the directory holds.
+// A supplied target's cache entry is named by the manifest's record and the target, exactly as a compiled
+// target's is. The binaries themselves are not part of the name of the entry they land in: the cache is
+// this machine's own tree, gitignored, and what this machine compiled is what sits in it. An Apple Silicon
+// Mac and an Intel Mac keying the Intel target alike is not a collision, because each machine's cache
+// holds only what that machine compiled.
 //
 // The five compiled targets' keys are pinned by value here. A warm cache is the only reason a release run
 // takes minutes rather than hours, and a manifest that gains a field must not throw it away: a compiled
-// record pins no programs, and its key is the compile's inputs and nothing else. The values below are the
-// compile as it reads today, so a recipe that gains a switch moves them — which is the key doing its job,
-// and the release run that follows recompiles those five targets once.
-func TestTheFfmpegCacheKeyForASuppliedTargetIsThePairItPins(t *testing.T) {
+// record has no supplied fields at all, and its key is the compile's inputs and nothing else. The values
+// below are the compile as it reads today, so a recipe that gains a switch moves them — which is the key
+// doing its job, and the release run that follows recompiles those five targets once.
+func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
 	supplied := cacheKey(manifest, "macos-arm64")
 
-	rebuilt := bundle.ReadManifest()
-	record := rebuilt.Targets["macos-arm64"]
-	record.Programs = map[string]string{"ffmpeg": strings.Repeat("a", 64), "ffprobe": strings.Repeat("b", 64)}
-	rebuilt.Targets["macos-arm64"] = record
+	// The record the manifest carries, copied and changed: the map is shared when the manifest struct is
+	// copied, so a test that wants a second record builds a second map.
+	withFlags := bundle.ReadManifest()
+	targets := map[string]bundle.Target{}
+	for name, record := range withFlags.Targets {
+		targets[name] = record
+	}
+	record := targets["macos-arm64"]
+	record.LDFlags = append(append([]string{}, record.LDFlags...), "-mmacosx-version-min=12.0")
+	targets["macos-arm64"] = record
+	withFlags.Targets = targets
 
-	if cacheKey(rebuilt, "macos-arm64") == supplied {
-		t.Error("a supplied pair rebuilt on its own platform reuses the cache of the pair it replaced")
+	if cacheKey(withFlags, "macos-arm64") == supplied {
+		t.Error("a supplied record whose flags changed reuses the cache of the binaries the old flags built")
+	}
+
+	withMake := bundle.ReadManifest()
+	targets = map[string]bundle.Target{}
+	for name, rec := range withMake.Targets {
+		targets[name] = rec
+	}
+	record = targets["macos-arm64"]
+	record.Make = "make"
+	targets["macos-arm64"] = record
+	withMake.Targets = targets
+
+	if cacheKey(withMake, "macos-arm64") == supplied {
+		t.Error("a supplied record naming a different make program reuses the cache of the binaries the old one built")
 	}
 
 	compiled := bundle.ReadManifest()
-	record = compiled.Targets["macos-arm64"]
+	targets = map[string]bundle.Target{}
+	for name, rec := range compiled.Targets {
+		targets[name] = rec
+	}
+	record = targets["macos-arm64"]
 	record.Produced = ""
-	record.Programs = nil
-	compiled.Targets["macos-arm64"] = record
+	targets["macos-arm64"] = record
+	compiled.Targets = targets
 
 	if cacheKey(compiled, "macos-arm64") == supplied {
-		t.Error("a target this build compiles an ffmpeg for keeps the cache entry of the pair it no longer ships")
+		t.Error("a target this build compiles an ffmpeg for keeps the cache entry of the binaries it no longer ships")
+	}
+
+	// The two macOS targets are compiled by the same host with the same recipe and differ only by the
+	// architecture the compile is told to produce, so their keys have to differ.
+	if cacheKey(manifest, "macos-amd64") == cacheKey(manifest, "macos-arm64") {
+		t.Error("macos-amd64 and macos-arm64 share a cache key, and one Mac compiling both writes one entry")
 	}
 
 	want := map[string]string{
@@ -561,36 +594,23 @@ func carries(args []string, want string) bool {
 	return false
 }
 
-// The supplied targets are the ones this build compiles no ffmpeg for: the pair is compiled on the
-// platform the target runs on, dropped where the build finds it, pinned by digest, and proved by the
-// ffmpeg check on that platform. These are the decisions the ffmpeg phase makes about a pair it cannot
-// run, and every one of them is taken before anything is written.
+// The supplied targets are the ones this build compiles no ffmpeg for in a container: the ffmpeg binaries
+// are compiled on the platform the target runs on, dropped where the build finds it, and run by the run
+// that adopts them. These are the decisions the ffmpeg phase makes about binaries it must run to know
+// anything about them, and the plan takes them before anything is written.
 
-// aManifestPinning is the manifest this repository carries, with the digests of a supplied pair pinned for
-// one target.
-func aManifestPinning(target string, ffmpegDigest string, ffprobeDigest string) bundle.Manifest {
-	manifest := bundle.ReadManifest()
-
-	record := manifest.Targets[target]
-	record.Programs = map[string]string{"ffmpeg": ffmpegDigest, "ffprobe": ffprobeDigest}
-	manifest.Targets[target] = record
-
-	return manifest
-}
-
-// aSuppliedPair drops the pair a maintainer builds for one target, records the proof the ffmpeg check
-// recorded for it, and returns the manifest that pins them.
-func aSuppliedPair(t *testing.T, repo string, target string) (bundle.Manifest, string, string) {
+// aSuppliedPair drops the binaries a maintainer builds for one target and returns the manifest this
+// repository carries. Nothing is recorded about them: the run that adopts them is the run that proves them.
+func aSuppliedPair(t *testing.T, repo string, target string) bundle.Manifest {
 	t.Helper()
 
 	body := aSuppliedProgramBytes(target)
-	other := append(append([]byte{}, body...), byte(len(target)))
 
-	return aSuppliedPairWith(t, repo, target, body, other), sha256Of(body), sha256Of(other)
+	return aSuppliedPairWith(t, repo, target, body, append(append([]byte{}, body...), byte(len(target))))
 }
 
-// aSuppliedPairWith drops a pair whose programs are the bytes a test asks for, pins them, and records the
-// proof for them. The pair is accepted by digest and by proof, so what the build refuses is the shape.
+// aSuppliedPairWith drops binaries whose programs are the bytes a test asks for. The plan reads which
+// machine code they hold, so a test that wants the plan to reach the run hands it the target's own shape.
 func aSuppliedPairWith(t *testing.T, repo string, target string, ffmpegBytes []byte, ffprobeBytes []byte) bundle.Manifest {
 	t.Helper()
 
@@ -611,26 +631,17 @@ func aSuppliedPairWith(t *testing.T, repo string, target string, ffmpegBytes []b
 		}
 	}
 
-	ffmpegDigest := sha256Of(ffmpegBytes)
-	ffprobeDigest := sha256Of(ffprobeBytes)
-
-	if err := writeFfmpegCheck(repo, aCheckFor(target, ffmpegDigest, ffprobeDigest)); err != nil {
-		t.Fatalf("recording the ffmpeg check: %v", err)
-	}
-
-	return aManifestPinning(target, ffmpegDigest, ffprobeDigest)
+	return bundle.ReadManifest()
 }
 
-// A pair that was not dropped is the ordinary state of a release run on a machine that does not have the
-// Mac or the FreeBSD box in front of it. It is not a failure, and the build says where to drop the pair
-// and what proves it.
-func TestASuppliedTargetWhosePairWasNotDroppedProducesNothing(t *testing.T) {
+// Binaries that were not dropped are the ordinary state of a release run on a machine that does not have
+// the Mac or the FreeBSD box in front of it. It is not a failure, and the build says where to build them
+// and where to drop them.
+func TestASuppliedTargetWhoseBinariesWereNotDroppedProducesNothing(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
-		manifest := aManifestPinning(target, theFFmpegDigest, theFFProbeDigest)
-
-		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, anUncompiledTree(), theReleaseHost)
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 		if err != nil {
-			t.Errorf("%s: a pair that was simply not dropped failed the run: %v", target, err)
+			t.Errorf("%s: binaries that were simply not dropped failed the run: %v", target, err)
 			continue
 		}
 
@@ -643,53 +654,12 @@ func TestASuppliedTargetWhosePairWasNotDroppedProducesNothing(t *testing.T) {
 		}
 
 		if !strings.Contains(plan.Says, "internal/infrastructure/ffmpeg/bundle/"+target) {
-			t.Errorf("%s: the message %q does not name the directory to drop the pair in", target, plan.Says)
+			t.Errorf("%s: the message %q does not name the directory to drop the binaries in", target, plan.Says)
 		}
 
-		if !strings.Contains(plan.Says, "ffmpeg-check") {
-			t.Errorf("%s: the message %q does not name the command that proves the pair", target, plan.Says)
+		if !strings.Contains(plan.Says, "go run ./cmd/build ffmpeg "+target) {
+			t.Errorf("%s: the message %q does not name the command that compiles them where they run", target, plan.Says)
 		}
-	}
-}
-
-// Nothing is adopted for a target whose pair has not been pinned: the pair is not reproducible from this
-// repository, so the digest in the manifest is the thing a release is made of, and a build that adopted
-// whatever it found would be shipping a binary nobody recorded.
-func TestTheBuildRefusesASuppliedPairTheManifestDoesNotPin(t *testing.T) {
-	repo := t.TempDir()
-
-	aSuppliedPairWith(t, repo, "macos-arm64", aSuppliedProgramBytes("macos-arm64"), aSuppliedProgramBytes("macos-arm64"))
-
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
-	if err == nil {
-		t.Fatal("the build adopted a pair the manifest does not pin")
-	}
-
-	if !strings.Contains(err.Error(), "manifest.json") || !strings.Contains(err.Error(), "programs") {
-		t.Errorf("the failure %q does not name the manifest field to fill in", err.Error())
-	}
-}
-
-// The pinned digest is the pair. A pair that is not the pinned one is a rebuild nobody recorded, and the
-// failure names both digests, because the operator has to be able to tell which one is in front of them.
-func TestTheBuildRefusesASuppliedPairThatIsNotThePinnedOne(t *testing.T) {
-	repo := t.TempDir()
-
-	_, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
-
-	pinned := aManifestPinning("macos-arm64", strings.Repeat("7", 64), strings.Repeat("8", 64))
-
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, pinned, anUncompiledTree(), theReleaseHost)
-	if err == nil {
-		t.Fatal("the build adopted a pair that is not the pair the manifest pins")
-	}
-
-	if !strings.Contains(err.Error(), ffmpegDigest) || !strings.Contains(err.Error(), strings.Repeat("7", 64)) {
-		t.Errorf("the failure %q names neither the digest found nor the digest pinned", err.Error())
-	}
-
-	if !strings.Contains(err.Error(), ffprobeDigest) {
-		t.Errorf("the failure %q does not name the ffprobe it also refused", err.Error())
 	}
 }
 
@@ -714,49 +684,25 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 	}
 }
 
-// The proof is the only evidence a supplied pair converts audio. A pair the check never proved is not
-// adopted, and the failure names the command that produces a proof and the machine it runs on.
-func TestTheBuildRefusesASuppliedPairNobodyProvedOnItsOwnPlatform(t *testing.T) {
+// Binaries dropped for a target the build cannot run in a container are adopted: the plan says so, and the
+// run that adopts them runs them first. The plan carries the adoption, because the licence text the archive
+// carries is written from that run.
+func TestTheBuildAdoptsTheSuppliedBinariesDroppedForItsTarget(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest := aSuppliedPairWith(t, repo, "macos-arm64", aSuppliedProgramBytes("macos-arm64"), aSuppliedProgramBytes("macos-arm64"))
-
-	if err := os.Remove(ffmpegCheckFile(repo, "macos-arm64")); err != nil {
-		t.Fatalf("removing the proof: %v", err)
-	}
-
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
-	if err == nil {
-		t.Fatal("the build adopted a pair with no ffmpeg check recorded for it")
-	}
-
-	if !strings.Contains(err.Error(), "ffmpeg-check") {
-		t.Errorf("the failure %q does not name the command that records the proof", err.Error())
-	}
-}
-
-// A pair that is pinned, shaped, and proved is adopted: the plan carries the proof it verified, because
-// the licence text the release archive carries names the check that ran.
-func TestTheBuildAdoptsTheSuppliedPairItPinsAndItsCheckProved(t *testing.T) {
-	repo := t.TempDir()
-
-	manifest, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aSuppliedPair(t, repo, "macos-arm64")
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err != nil {
-		t.Fatalf("the build refused the pair it pins and its check proved: %v", err)
+		t.Fatalf("the build refused the binaries that were dropped: %v", err)
 	}
 
 	if plan.Skipped {
-		t.Error("the build skipped a pair that was dropped, pinned, shaped, and proved")
+		t.Error("the build skipped binaries that were dropped for it")
 	}
 
-	if plan.Check.Target != "macos-arm64" {
-		t.Errorf("the plan carries no proof of the pair it adopted: %+v", plan.Check)
-	}
-
-	if plan.Check.FFmpeg != ffmpegDigest || plan.Check.FFProbe != ffprobeDigest {
-		t.Errorf("the plan carries the proof of the pair %s / %s, not the pair it adopted", plan.Check.FFmpeg, plan.Check.FFProbe)
+	if !plan.Adopts {
+		t.Error("the plan does not carry the adoption, so the run publishes a cache entry it never adopted into")
 	}
 
 	if !strings.Contains(plan.Says, "supplied") {
@@ -764,58 +710,71 @@ func TestTheBuildAdoptsTheSuppliedPairItPinsAndItsCheckProved(t *testing.T) {
 	}
 }
 
-// A pair that is already in the cache is not adopted again, and the drop is not needed for it: the cache
-// key is the pinned digests, so a warm cache is the pair the manifest names.
-func TestASuppliedPairAlreadyInCacheIsNotAdoptedAgain(t *testing.T) {
+// Binaries that are already in the cache are not adopted again, and the drop is not needed for them: the
+// cache is keyed by the manifest's record and the target, so a warm entry is what this machine's own run
+// produced.
+func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest, _, _ := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aSuppliedPair(t, repo, "macos-arm64")
 
 	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
 
-	if err := adoptSuppliedFFmpeg(paths, "macos-arm64"); err != nil {
-		t.Fatalf("adopting the pair: %v", err)
+	if err := adoptSuppliedFFmpeg(paths, "macos-arm64", suppliedFFMpegLicence(manifest, "macos-arm64", aRunOfTheBinaries())); err != nil {
+		t.Fatalf("adopting the binaries: %v", err)
 	}
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, ffmpegState{bundleIsCached: true}, theReleaseHost)
 	if err != nil {
-		t.Fatalf("the build refused a cached supplied pair: %v", err)
+		t.Fatalf("the build refused cached supplied binaries: %v", err)
 	}
 
 	if len(plan.Steps) != 0 {
-		t.Errorf("a cached supplied pair is adopted again: %d steps", len(plan.Steps))
+		t.Errorf("cached supplied binaries are adopted again: %d steps", len(plan.Steps))
 	}
 
 	if plan.Skipped {
-		t.Error("a cached supplied pair is skipped, and the release run ships no archive for it")
+		t.Error("cached supplied binaries are skipped, and the release run ships no archive for them")
+	}
+
+	if plan.Adopts {
+		t.Error("the plan adopts binaries the cache already holds, so the run looks for a drop it does not need")
 	}
 
 	if plan.Says == "" {
-		t.Error("the build says nothing about reusing a supplied pair")
+		t.Error("the build says nothing about reusing supplied binaries")
 	}
 }
 
-// The drop is consumed: the pair moves out of the directory a server binary embeds, and what stays there
-// is the gzipped pair and its licence. A raw pair left in that directory is embedded next to the gzipped
-// one, and every server built for that target carries about ten megabytes of uncompressed program.
-func TestASuppliedPairIsAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
+// The drop is consumed: the binaries move out of the directory a server binary embeds, and what stays
+// there is the gzipped pair and its licence. Raw binaries left in that directory are embedded next to the
+// gzipped ones, and every server built for that target carries about ten megabytes of uncompressed program.
+func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aSuppliedPair(t, repo, "macos-arm64")
 
 	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
 
-	check, err := readFfmpegCheck(repo, "macos-arm64", ffmpegDigest, ffprobeDigest)
-	if err != nil {
-		t.Fatalf("reading the proof: %v", err)
+	licence := suppliedFFMpegLicence(manifest, "macos-arm64", aRunOfTheBinaries())
+
+	digests := map[string]string{}
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		body, err := os.ReadFile(suppliedDropFor(paths, "macos-arm64")[name])
+		if err != nil {
+			t.Fatalf("reading the dropped %s: %v", name, err)
+		}
+
+		digests[name] = sha256Of(body)
 	}
 
-	if err := adoptSuppliedFFmpeg(paths, "macos-arm64"); err != nil {
-		t.Fatalf("adopting the pair: %v", err)
+	if err := adoptSuppliedFFmpeg(paths, "macos-arm64", licence); err != nil {
+		t.Fatalf("adopting the binaries: %v", err)
 	}
 
-	if err := publishFFmpeg(paths, manifest, "macos-arm64", suppliedFFMpegLicence(manifest, "macos-arm64", check)); err != nil {
-		t.Fatalf("publishing the pair: %v", err)
+	if err := publishFFmpeg(paths, manifest, "macos-arm64", licence); err != nil {
+		t.Fatalf("publishing the binaries: %v", err)
 	}
 
 	names := []string{}
@@ -839,15 +798,21 @@ func TestASuppliedPairIsAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
 		}
 	}
 
-	// The pair the server writes out of its own binary is the pair that was dropped: gzip is lossless,
-	// and the ad-hoc code signature a signed pair carries is a hash over those exact bytes. The bundle
-	// package's own tests are what prove a directory holding this pair is a directory it materializes.
+	// The licence text travels with the cache entry: a run reusing the entry publishes the words the run
+	// that compiled the binaries wrote, and not words it composes about a compile it did not take part in.
+	if !aFileIsThere(filepath.Join(paths.cached, "LICENCE.md")) {
+		t.Errorf("the cache entry %s carries no licence text, so a reusing run has nothing to put in the archive", paths.cached)
+	}
+
+	// The binaries the server writes out of its own binary are the binaries that were dropped: gzip is
+	// lossless, and the ad-hoc code signature a signed pair carries is a hash over those exact bytes. The
+	// bundle package's own tests are what prove a directory holding them is a directory it materializes.
 	for _, pair := range []struct {
 		name   string
 		digest string
 	}{
-		{"ffmpeg", ffmpegDigest},
-		{"ffprobe", ffprobeDigest},
+		{"ffmpeg", digests["ffmpeg"]},
+		{"ffprobe", digests["ffprobe"]},
 	} {
 		for _, dir := range []string{paths.cached, paths.bundle} {
 			body, err := readGzip(filepath.Join(dir, pair.name+".gz"))
@@ -856,21 +821,41 @@ func TestASuppliedPairIsAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
 			}
 
 			if sha256Of(body) != pair.digest {
-				t.Errorf("%s in %s is %s, and the pair dropped was %s", pair.name, dir, sha256Of(body), pair.digest)
+				t.Errorf("%s in %s is %s, and the binaries dropped were %s", pair.name, dir, sha256Of(body), pair.digest)
 			}
 		}
 	}
 }
 
-// The licence a supplied archive carries says what that ffmpeg is, and says where it was compiled: on the
-// host the target runs on, which is the one place a pair of that shape is compiled, and adopted by the
-// release build on the digest the manifest pins and the proof the check left there.
-func TestTheBuildSaysWhatASuppliedFfmpegIsAndUnderWhatLicence(t *testing.T) {
-	manifest := aManifestPinning("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+// aRunOfTheBinaries is the run of a working build: the host that is the target, the codecs the audio-only
+// recipe registers, and the six recordings of the server's own audio.
+func aRunOfTheBinaries() theRunOfTheBinaries {
+	return theRunOfTheBinaries{
+		Host:        "darwin-arm64",
+		Version:     "ffmpeg version 9.0.2 Copyright (c) 2000-2025 the FFmpeg developers",
+		Codecs:      codecRegistry{Audio: theAudioCodecNames},
+		Conversions: 6,
+		Productions: []production{
+			{Input: "wav", Mode: "plain", Bytes: 7675, Duration: "2.128000"},
+			{Input: "wav", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
+			{Input: "wav", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
+			{Input: "mp3", Mode: "plain", Bytes: 7756, Duration: "2.128000"},
+			{Input: "mp3", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
+			{Input: "mp3", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
+		},
+	}
+}
 
-	check := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+// The licence a supplied archive carries says what those ffmpeg binaries are and where they came from: the
+// host that compiled them, the source and recipe they were built from, the command that built them, and the
+// codecs the run recorded. It names no digest of a program, because the build checks nothing about these
+// binaries beyond that they run and which machine code they hold.
+func TestTheBuildSaysWhatSuppliedBinariesAreAndUnderWhatLicence(t *testing.T) {
+	manifest := bundle.ReadManifest()
 
-	text := suppliedFFMpegLicence(manifest, "macos-arm64", check)
+	run := aRunOfTheBinaries()
+
+	text := suppliedFFMpegLicence(manifest, "macos-arm64", run)
 
 	for _, want := range []string{
 		"Lesser General Public License",
@@ -878,25 +863,56 @@ func TestTheBuildSaysWhatASuppliedFfmpegIsAndUnderWhatLicence(t *testing.T) {
 		manifest.Source.URL,
 		manifest.Source.SHA256,
 		manifest.Recipe[0],
-		theFFmpegDigest,
-		theFFProbeDigest,
+		"compiled for audio",
+		"go run ./cmd/build ffmpeg macos-arm64",
 		"compiled on",
-		"adopted",
 		"macos-arm64",
-		check.Host,
-		check.Checked,
+		run.Host,
+		theAudioCodecNames[0],
+		"no video codec",
+		"6 recordings",
 	} {
 		if !strings.Contains(text, want) {
-			t.Errorf("the licence text for a supplied pair names no %q", want)
+			t.Errorf("the licence text for supplied binaries names no %q:\n%s", want, text)
 		}
 	}
 
 	for _, not := range []string{
-		"go run ./cmd/build ffmpeg macos-arm64",
+		"programs",
+		"ffmpeg  sha256",
 		"compiled from source for macos-arm64. It converts",
 	} {
 		if strings.Contains(text, not) {
-			t.Errorf("the licence text says %q, which is not true of a pair this build did not compile", not)
+			t.Errorf("the licence text says %q, which is not true of binaries this build did not compile in a container:\n%s", not, text)
+		}
+	}
+}
+
+// A cache entry older than the licence text travelling with it says only what the manifest says, and
+// names this machine's cache as where the binaries came from. It invents no host and no run.
+func TestTheLicenceOfBinariesReusedFromCacheNamesNoRunItDidNotSee(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	text := suppliedFFMpegLicence(manifest, "macos-arm64", theRunOfTheBinaries{})
+
+	for _, want := range []string{
+		"the machine that compiled them",
+		manifest.Source.SHA256,
+		"macos-arm64",
+		"reuses what that run published in its own cache",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the licence text for cached binaries names no %q:\n%s", want, text)
+		}
+	}
+
+	for _, not := range []string{
+		"darwin-arm64",
+		"recordings",
+		"The run that adopted them asked",
+	} {
+		if strings.Contains(text, not) {
+			t.Errorf("the licence text says %q, which is a run this build did not witness:\n%s", not, text)
 		}
 	}
 }
@@ -1167,58 +1183,43 @@ func TestAMacOSHostCompilesTheOtherArchitecturesPair(t *testing.T) {
 	}
 }
 
-// The cache entry of a supplied target is keyed by the pair the manifest pins. The pair a host compiled for
-// the other macOS architecture is a pair with digests of its own — the compiler was told to produce that
-// architecture — so it is not the entry of the pair the target's own host compiled, and the two never share
-// an entry. The machine that computes the key is not part of it: the release machine adopting a pinned pair
-// and the Mac that compiled that pair look for the same entry of the same manifest, which is what makes a
-// warm cache mean one thing to every machine that reads it.
-func TestTheCacheEntryOfAPairCompiledAcrossTheArchitecturesIsTheEntryOfItsOwnPair(t *testing.T) {
+// The cache entry of a supplied target is named by the manifest's record and the target, and not by the
+// machine computing it: the Mac that compiled the binaries and a run reusing them look for the same entry.
+// Each machine's cache is its own tree and gitignored, so an Apple Silicon Mac and an Intel Mac compiling
+// the Intel target key the same entry in their own caches, and each cache holds what that machine compiled.
+// The two macOS targets key differently, which is what lets one Mac compile both architectures into two
+// entries.
+func TestTheCacheEntryOfSuppliedBinariesIsTheSameEntryOnEveryHost(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
-	unpinned := cacheKey(manifest, "macos-amd64")
+	fromTheIntelHost := cacheKey(manifest, "macos-amd64")
+	fromTheAppleSiliconHost := cacheKey(manifest, "macos-amd64")
 
-	onItsOwnHost := bundle.ReadManifest()
-	onItsOwnHost.Targets["macos-amd64"] = aPinnedPair(manifest.Targets["macos-amd64"], "the pair the Intel Mac compiled", "its ffprobe")
-
-	fromTheOtherMac := bundle.ReadManifest()
-	fromTheOtherMac.Targets["macos-amd64"] = aPinnedPair(manifest.Targets["macos-amd64"], "the pair the Apple Silicon Mac compiled for it", "its ffprobe")
-
-	if cacheKey(onItsOwnHost, "macos-amd64") == unpinned {
-		t.Error("a manifest pinning a pair computes the entry of a manifest pinning nothing: the pair a host compiled is published from the entry of no pair")
+	if fromTheIntelHost != fromTheAppleSiliconHost {
+		t.Errorf("the same manifest and target give two cache keys, %s and %s", fromTheIntelHost, fromTheAppleSiliconHost)
 	}
 
-	if cacheKey(onItsOwnHost, "macos-amd64") == cacheKey(fromTheOtherMac, "macos-amd64") {
-		t.Error("two pinned pairs share one cache entry: the digests a compile pins are the pair's own identity, and the two are different programs")
+	if cacheKey(manifest, "macos-amd64") == cacheKey(manifest, "macos-arm64") {
+		t.Error("macos-amd64 and macos-arm64 share a cache entry, and one Mac compiling both writes one entry")
 	}
 
 	repo := t.TempDir()
 
 	warm := ffmpegState{bundleIsCached: true}
 
-	onIntel, err := planFFmpeg(options{target: "macos-amd64"}, repo, onItsOwnHost, warm, aMachineForTarget("macos-amd64"))
+	onIntel, err := planFFmpeg(options{target: "macos-amd64"}, repo, manifest, warm, aMachineForTarget("macos-amd64"))
 	if err != nil {
-		t.Fatalf("the Intel host refused to reuse the pinned pair: %v", err)
+		t.Fatalf("the Intel host refused to reuse the cached binaries: %v", err)
 	}
 
-	onAppleSilicon, err := planFFmpeg(options{target: "macos-amd64"}, repo, onItsOwnHost, warm, host{goos: "darwin", goarch: "arm64"})
+	onAppleSilicon, err := planFFmpeg(options{target: "macos-amd64"}, repo, manifest, warm, host{goos: "darwin", goarch: "arm64"})
 	if err != nil {
-		t.Fatalf("the Apple Silicon host refused to reuse the pinned pair: %v", err)
+		t.Fatalf("the Apple Silicon host refused to reuse the cached binaries: %v", err)
 	}
 
 	if onIntel.Paths.cached != onAppleSilicon.Paths.cached {
-		t.Errorf("the two hosts look for the pinned pair in different entries: %s and %s", onIntel.Paths.cached, onAppleSilicon.Paths.cached)
+		t.Errorf("the two hosts look for the binaries in different entries: %s and %s", onIntel.Paths.cached, onAppleSilicon.Paths.cached)
 	}
-}
-
-// aPinnedPair is a target record with the two program digests a compile writes.
-func aPinnedPair(record bundle.Target, ffmpeg string, ffprobe string) bundle.Target {
-	record.Programs = map[string]string{
-		"ffmpeg":  sha256Of([]byte(ffmpeg)),
-		"ffprobe": sha256Of([]byte(ffprobe)),
-	}
-
-	return record
 }
 
 // A compile across the two macOS architectures names the architecture it is building for: ffmpeg's own
@@ -1350,48 +1351,52 @@ func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
 	}
 }
 
-// A pair the maintainer dropped is adopted on its own host exactly as it is adopted anywhere else: the
-// compile is what the build does when there is nothing to adopt, not a replacement for the drop.
-func TestASuppliedPairDroppedOnItsOwnHostIsAdoptedAndNotCompiled(t *testing.T) {
+// Binaries the maintainer dropped are adopted on their own host exactly as they are adopted anywhere
+// else: the compile is what the build does when there is nothing to adopt, not a replacement for the drop.
+func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest, _, _ := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aSuppliedPair(t, repo, "macos-arm64")
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
 	if err != nil {
-		t.Fatalf("the build refused the pair dropped for it: %v", err)
+		t.Fatalf("the build refused the binaries dropped for it: %v", err)
 	}
 
 	if plan.Native {
-		t.Error("the build compiled a pair when a pair is sitting in the directory it embeds")
+		t.Error("the build compiled binaries when binaries are sitting in the directory it embeds")
 	}
 
-	if plan.Check.Target != "macos-arm64" {
-		t.Errorf("the plan adopts nothing: %+v", plan.Check)
+	if !plan.Adopts {
+		t.Error("the plan adopts nothing: the host standing on the target is the host that can run them")
 	}
 }
 
-// A pair the cache holds is reused on its own host, and nothing is compiled over it: the cache key is the
-// pinned pair, so a warm cache is the pair the manifest names.
-func TestASuppliedPairInCacheIsReusedOnItsOwnHost(t *testing.T) {
+// Binaries the cache holds are reused on their own host, and nothing is compiled over them: the cache key
+// is the manifest's record and the target, so a warm entry is what this machine's own run published.
+func TestSuppliedBinariesInCacheAreReusedOnTheirOwnHost(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest, _, _ := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aSuppliedPair(t, repo, "macos-arm64")
 
 	state := aNativeTree("macos-arm64")
 	state.bundleIsCached = true
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, state, aMachineForTarget("macos-arm64"))
 	if err != nil {
-		t.Fatalf("the build refused a cached pair: %v", err)
+		t.Fatalf("the build refused cached binaries: %v", err)
 	}
 
 	if plan.Native {
-		t.Error("the build compiles a pair the cache already holds")
+		t.Error("the build compiles binaries the cache already holds")
+	}
+
+	if plan.Adopts {
+		t.Error("the build adopts binaries the cache already holds, and looks for a drop it does not need")
 	}
 
 	if len(plan.Steps) != 0 {
-		t.Errorf("the build has %d steps for a pair it already has", len(plan.Steps))
+		t.Errorf("the build has %d steps for binaries it already has", len(plan.Steps))
 	}
 }
 
@@ -1518,53 +1523,4 @@ func sameWords(got []string, want []string) bool {
 	}
 
 	return true
-}
-
-// The manifest is one file for the whole matrix and it sits beside the target's directory, not inside it.
-// The run that tells the operator to fill it in is the run that ends the pair compiled on the other Mac:
-// the Intel Mac compiles the arm64 pair, the Apple Silicon Mac proves it, and the operator carries the
-// digests the proof prints into the manifest. The path that message names is the file the operator opens,
-// so it is the file the build writes, and a path inside the target's directory sends the operator looking
-// for a file that is not there.
-func TestTheManifestTheBuildNamesIsTheManifestTheBuildWrites(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
-		repo := t.TempDir()
-
-		paths := ffmpegPathsFor(repo, bundle.ReadManifest(), target)
-
-		if err := os.MkdirAll(paths.bundle, 0755); err != nil {
-			t.Fatalf("%s: making the bundle directory: %v", target, err)
-		}
-
-		for _, name := range []string{"ffmpeg", "ffprobe"} {
-			if err := os.WriteFile(suppliedDropFor(paths, target)[name], aSuppliedProgramBytes(target), 0755); err != nil {
-				t.Fatalf("%s: dropping the %s: %v", target, name, err)
-			}
-		}
-
-		_, err := planFFmpeg(options{target: target}, repo, bundle.ReadManifest(), aNativeTree(target), aMachineForTarget(target))
-		if err == nil {
-			t.Fatalf("%s: the plan adopted a pair the manifest pins nothing for", target)
-		}
-
-		if !strings.Contains(err.Error(), "pins no digest") {
-			t.Fatalf("%s: the plan refused the pair for something else: %v", target, err)
-		}
-
-		// The manifest's own path, and not a manifest inside the target's directory.
-		manifest := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
-
-		if !strings.Contains(err.Error(), manifest) {
-			t.Errorf("%s: the refusal %q does not name %s", target, err.Error(), manifest)
-		}
-
-		if strings.Contains(err.Error(), filepath.Join("bundle", target, "manifest.json")) {
-			t.Errorf("%s: the refusal %q names a manifest inside the target's directory, where there is no manifest", target, err.Error())
-		}
-
-		// The file the message names is a file this repository has.
-		if _, err := os.Stat(filepath.Join("..", "..", manifest)); err != nil {
-			t.Errorf("%s: the refusal names %s, which is not a file in this repository: %v", target, manifest, err)
-		}
-	}
 }

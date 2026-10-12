@@ -73,21 +73,21 @@ type tool struct {
 	// archives whose ffmpeg it can produce.
 	ffmpeg func(options, io.Writer) (bool, error)
 
-	// checkFFmpeg proves the pair the maintainer dropped for one target, on the platform that target
-	// runs on, and records what it saw. It is not an external command and it builds nothing.
-	checkFFmpeg func(options, io.Writer) error
-
-	// prove is the gate a supplied pair passes before anything adopts it: the shape the target's own
-	// linker writes, the version line the program says, and the six conversions the build's check runs,
-	// recorded in the proof the release reads. The ffmpeg check command proves a dropped pair with it, and
-	// the compile of a supplied pair proves the pair it just produced with the same.
-	prove func(target string, paths ffmpegPaths, stdout io.Writer) (anFfmpegCheck, error)
+	// prove is the gate the ffmpeg binaries pass before anything adopts them: the version line the
+	// programs say, the conversions the build runs them through, and the codecs they register. It runs
+	// them on the machine standing here, which is the machine that compiled them, and it records nothing.
+	prove func(target string, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error)
 
 	// source is the ffmpeg release the manifest pins arriving in the build's cache and being recognised
 	// as that release: the fetch when the tree does not have it, and the digest that says it is. Every
 	// compile passes through it, in a container and on a target's own host alike, because the source is
 	// the one input both of them fetch over the network.
 	source func(ffmpegSource, bundle.Manifest) error
+
+	// theRun is one program run here, handed a recording on its input, answering with what it wrote. It
+	// is how the build runs the ffmpeg binaries it compiled: the container targets run them inside the
+	// container that can run them, and a supplied target's binaries run on the machine that compiled them.
+	theRun command
 
 	// machine is the platform the build is running on. A supplied target is decided by it — the pair is
 	// compiled by the machine that is the platform it runs on, and adopted by every other — so the plan
@@ -129,9 +129,9 @@ func newTool(repo string) tool {
 	t.prove = t.proveSuppliedPair
 	t.source = fetchAndCheckSource
 	t.machine = thisMachine
+	t.theRun = onThisMachine()
 
 	t.ffmpeg = t.runFFmpeg
-	t.checkFFmpeg = t.runFFmpegCheck
 
 	return t
 }
@@ -140,7 +140,7 @@ func newTool(repo string) tool {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|ffmpeg-check goos-goarch|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
 		return 2
 	}
 
@@ -176,17 +176,6 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 		for _, path := range removed {
 			fmt.Fprintf(stdout, "%-7s %s\n", subClean, path)
-		}
-
-		return 0
-	}
-
-	// The ffmpeg check proves a pair this build cannot run, on the platform that pair runs on, and
-	// writes down what it saw. It builds nothing: the machine it runs on is a Mac or a FreeBSD box, and
-	// the programs it proves already exist.
-	if o.sub == subFFmpegCheck {
-		if err := t.checkFFmpeg(o, stdout); err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", subFFmpegCheck, err))
 		}
 
 		return 0

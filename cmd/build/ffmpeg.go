@@ -25,7 +25,6 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -194,9 +193,10 @@ type ffmpegPlan struct {
 	// machine they are standing on, and it is never a skip: the compile is what that run asked for.
 	Native bool
 
-	// Check is the ffmpeg check the build adopted a supplied pair on, and is empty for a target this
-	// build compiles. The licence text the release archive carries names the check that ran.
-	Check anFfmpegCheck
+	// Adopts says the plan is taking binaries a maintainer dropped in the target's bundle directory,
+	// rather than compiling them. The run that adopts them runs them first, through the same gate a
+	// compile runs its own binaries through.
+	Adopts bool
 
 	Source ffmpegSource
 	Paths  ffmpegPaths
@@ -238,14 +238,14 @@ func sourceDir(manifest bundle.Manifest) string {
 // cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the source this
 // project pinned, the target, the configure recipe, and that target's toolchain and check environment.
 //
-// The digest is in here and not only in the check that runs before compiling, because a cache hit skips
-// that check: without it, a manifest whose pinned source was changed would quietly reuse what the old
-// source compiled.
+// The source digest is in here and not only in the run that proves the binaries after compiling, because a
+// cache hit skips that run: without it, a manifest whose pinned source was changed would quietly reuse
+// what the old source compiled.
 //
-// A target whose pair is compiled on its own platform has no container to key on, so its key adds the way
-// it is produced, the make program that build names, and the digest of each program. A pair rebuilt on that
-// platform is a new cache entry, and a compiled record keys on the compile's container inputs alone, so a
-// manifest gaining these fields does not invalidate a warm cache.
+// A target whose ffmpeg binaries are compiled on its own platform has no container to key on, so its key
+// adds the way it is produced, the make program that build names, and the flags the compile is told to
+// pass. A compiled record keys on the container's inputs alone, so a manifest gaining these fields does
+// not invalidate a warm cache.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
@@ -266,10 +266,11 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 	}
 
 	// The fields a target compiled on its own platform has are the way it is produced, the make program
-	// that build ran, and the digest of each program it produced. A compiled target keys on the
-	// container's inputs alone, so a manifest gaining these fields does not invalidate a warm cache.
+	// that build ran, and the flags its compile passes. The binaries themselves are not part of the name
+	// of the entry they land in: the cache is this machine's own tree, and what this machine compiled is
+	// what sits in it.
 	if record.Produced != "" {
-		parts = append(parts, record.Produced, record.Make, record.Programs["ffmpeg"], record.Programs["ffprobe"])
+		parts = append(parts, record.Produced, record.Make)
 	}
 
 	return sha256Of([]byte(strings.Join(parts, "\n")))
@@ -455,22 +456,20 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 // there, or a pair the maintainer built by hand and dropped for it to adopt.
 const suppliedProduction = "supplied"
 
-// planSuppliedFFmpeg decides what the ffmpeg phase does with a pair this build compiles in a container
+// planSuppliedFFmpeg decides what the ffmpeg phase does with binaries this build compiles in a container
 // nowhere.
 //
-// The pair is compiled on the platform it runs on, and two machines can produce it. The maintainer's own
-// build does, and drops the pair in the bundle directory for this build to adopt; the build standing on
-// that same platform does it itself, with the source, digest, recipe, flags, and check the manifest
-// already carries. A pair the maintainer dropped wins over the compile every time: the drop is the pair
-// its proof was recorded for, and compiling over it would throw away the evidence the release adopts on.
+// They are compiled on the platform they run on, and two machines can produce them. The maintainer's own
+// build does, and drops them in the bundle directory for this build to adopt; the build standing on that
+// same platform does it itself, with the source, digest, recipe, flags, and recipe the manifest already
+// carries. Binaries the maintainer dropped win over the compile every time: the drop is the pair he built
+// and tested, and compiling over it would throw it away.
 //
-// The build never runs a supplied pair it was handed. The evidence it can gather is the digest the
-// manifest pins, the shape the target's own linker writes, and the proof the ffmpeg check recorded on
-// that platform, and all three have to agree with the pair in front of the build before any of it is
-// written.
+// The plan reads one thing from a drop: which machine code the files hold. The run that adopts them runs
+// them, on the machine standing here, through the same gate a compile runs its own binaries through.
 //
 // A target with nothing dropped for it, on a machine that is not its platform, is not a failure. The
-// three pairs are built on machines the release machine does not control, and a release run that stopped
+// three targets are built on machines the release machine does not control, and a release run that stopped
 // for the one it does not have would ship nothing at all, including the five archives it could have
 // shipped. It is reported, and skipped.
 func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
@@ -487,7 +486,7 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 	drop := suppliedDropFor(paths, target)
 
 	if !aFileIsThere(drop["ffmpeg"]) && !aFileIsThere(drop["ffprobe"]) {
-		// Nothing was dropped, and this machine can produce the pair: the compile is what only a host of
+		// Nothing was dropped, and this machine can produce the binaries: the compile is what only a host of
 		// the target's own operating system can do, and it is what the operator asked for when they asked
 		// for the ffmpeg of the machine they are on. A macOS host of the other architecture is such a
 		// host, because one macOS toolchain produces both architectures.
@@ -497,52 +496,33 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 
 		return ffmpegPlan{
 			Target: target,
-			Says: "the ffmpeg for " + target + " was not supplied: drop ffmpeg and ffprobe in " + paths.bundle +
-				", prove them with go run ./cmd/build ffmpeg-check " + target + " on a " + target + " host, and pin what it prints in manifest.json",
+			Says: "the ffmpeg for " + target + " was not supplied: build them on a " + target +
+				" host with go run ./cmd/build ffmpeg " + target + ", or drop ffmpeg and ffprobe in " + paths.bundle,
 			Skipped: true,
 			Paths:   paths,
 		}, nil
 	}
 
-	ffmpegDigest, ffprobeDigest := record.Programs["ffmpeg"], record.Programs["ffprobe"]
-
-	if ffmpegDigest == "" || ffprobeDigest == "" {
-		return ffmpegPlan{}, fmt.Errorf("the ffmpeg for %s is supplied and the manifest pins no digest for it: fill programs.ffmpeg and programs.ffprobe in %s with the digests go run ./cmd/build ffmpeg-check %s prints",
-			target, theManifestPath(repo), target)
-	}
-
-	digests := map[string]string{}
-
+	// The binaries a maintainer dropped are run by the run that adopts them, on this machine, through the
+	// same gate the compile runs its own binaries through. What the plan reads here is which machine code
+	// they hold, because that is the one thing running cannot say on a machine that runs both macOS
+	// architectures.
 	for _, name := range []string{"ffmpeg", "ffprobe"} {
-		body, err := os.ReadFile(drop[name])
-		if err != nil {
-			return ffmpegPlan{}, fmt.Errorf("the supplied %s for %s cannot be read: %w", name, target, err)
+		if !aFileIsThere(drop[name]) {
+			return ffmpegPlan{}, fmt.Errorf("the ffmpeg for %s is supplied and %s has no %s: drop ffmpeg and ffprobe in %s, or build them on a %s host with go run ./cmd/build ffmpeg %s",
+				target, paths.bundle, name, paths.bundle, target, target)
 		}
 
-		digests[name] = sha256Of(body)
-	}
-
-	if digests["ffmpeg"] != ffmpegDigest || digests["ffprobe"] != ffprobeDigest {
-		return ffmpegPlan{}, fmt.Errorf("the supplied pair for %s is %s / %s and the manifest pins %s / %s: rebuild it on a %s host, run go run ./cmd/build ffmpeg-check %s, and pin the digests it prints",
-			target, digests["ffmpeg"], digests["ffprobe"], ffmpegDigest, ffprobeDigest, target, target)
-	}
-
-	for _, name := range []string{"ffmpeg", "ffprobe"} {
 		if err := checkSuppliedProgram(drop[name], target); err != nil {
 			return ffmpegPlan{}, err
 		}
 	}
 
-	check, err := readFfmpegCheck(repo, target, digests["ffmpeg"], digests["ffprobe"])
-	if err != nil {
-		return ffmpegPlan{}, err
-	}
-
 	return ffmpegPlan{
 		Target: target,
 		Says:   "adopting the ffmpeg supplied for " + target,
+		Adopts: true,
 		Paths:  paths,
-		Check:  check,
 	}, nil
 }
 
@@ -719,14 +699,17 @@ func suppliedDropFor(paths ffmpegPaths, target string) map[string]string {
 	return drop
 }
 
-// adoptSuppliedFFmpeg consumes the drop: the pair moves out of the directory a server binary embeds and
-// into this build's own cache, gzipped.
+// adoptSuppliedFFmpeg consumes the drop: the binaries move out of the directory a server binary embeds and
+// into this build's own cache, gzipped, with the licence text the run wrote beside them.
 //
-// The pair has to leave that directory. //go:embed all: takes every file in it, so a raw pair left sitting
-// next to the gzipped one is embedded as well, and every server built for that target carries about ten
-// megabytes of program it will never use. The gzipped pair in the cache is the same pair: gzip is
+// The binaries have to leave that directory. //go:embed all: takes every file in it, so a raw program left
+// sitting next to the gzipped one is embedded as well, and every server built for that target carries
+// about ten megabytes of program it will never use. The gzipped pair in the cache is the same pair: gzip is
 // lossless, and the ad-hoc code signature a signed macOS pair carries is a hash over these bytes.
-func adoptSuppliedFFmpeg(paths ffmpegPaths, target string) error {
+//
+// The licence text goes into the cache entry for the same reason the binaries do: the entry is what a
+// reusing run reads, and the words a run wrote about the binaries it ran belong with them.
+func adoptSuppliedFFmpeg(paths ffmpegPaths, target string, licence string) error {
 	if err := os.MkdirAll(paths.cached, 0755); err != nil {
 		return fmt.Errorf("the build cannot prepare %s: %w", paths.cached, err)
 	}
@@ -748,178 +731,27 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string) error {
 		}
 	}
 
-	return nil
-}
-
-// pinSuppliedPair writes the digests a proof recorded into the manifest, in the one record of the target
-// the pair was compiled for, and returns the manifest as it now reads.
-//
-// The manifest is a tracked file, and the only tracked file this build writes. It is written as a splice
-// of the two digest values into the file's own bytes, and not as the manifest re-encoded: a JSON encoder
-// writes map entries in its own order with its own indentation, so re-encoding the file would rewrite
-// every record in it, and the diff the operator commits would be the whole file with one true change
-// buried in it.
-//
-// The write is atomic, because the file being changed is the file the next release run reads.
-//
-// What it prints is what the operator commits. A record that already pinned a pair prints the digest it
-// replaces, because a pair rebuilt on its own host replaces the pins the run before wrote, and a manifest
-// whose pins were written by hand is a manifest whose pins move silently.
-// theManifestPath is the one file a supplied pair is pinned in: the manifest beside the target
-// directories, the file the release reads, and the file the operator edits when a pair was proved on
-// another machine. The write that pins a pair and the message that tells the operator to fill the pins in
-// name this path, so the file the operator opens is the file the build writes.
-func theManifestPath(repo string) string {
-	return filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
-}
-
-func pinSuppliedPair(repo string, target string, check anFfmpegCheck, stdout io.Writer) (bundle.Manifest, error) {
-	path := theManifestPath(repo)
-
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return bundle.Manifest{}, fmt.Errorf("the manifest the build pins the supplied pair in cannot be read: %w", err)
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return bundle.Manifest{}, fmt.Errorf("the manifest the build pins the supplied pair in cannot be read: %w", err)
-	}
-
-	digests := map[string]string{"ffmpeg": check.FFmpeg, "ffprobe": check.FFProbe}
-
-	pinned := body
-	replaced := map[string]string{}
-
-	for _, name := range []string{"ffmpeg", "ffprobe"} {
-		where, previous, err := splicePin(pinned, target, name, digests[name])
-		if err != nil {
-			return bundle.Manifest{}, err
-		}
-
-		pinned, replaced[name] = where, previous
-	}
-
-	if err := writeManifestFile(path, pinned, info.Mode().Perm()); err != nil {
-		return bundle.Manifest{}, err
-	}
-
-	var manifest bundle.Manifest
-
-	if err := json.Unmarshal(pinned, &manifest); err != nil {
-		return bundle.Manifest{}, fmt.Errorf("the manifest the build pinned is not readable: %w", err)
-	}
-
-	for _, name := range []string{"ffmpeg", "ffprobe"} {
-		if replaced[name] != "" {
-			fmt.Fprintf(stdout, "%-7s %s %s %s replaces %s\n", "pin", "manifest.json", target, name, replaced[name])
-		}
-
-		fmt.Fprintf(stdout, "%-7s %s %s %s sha256 %s\n", "pin", "manifest.json", target, name, digests[name])
-	}
-
-	return manifest, nil
-}
-
-// splicePin replaces one program's digest inside one target's record and returns the file's bytes with it
-// written, along with the digest that was there.
-//
-// The splice is cut to that one record: the search for the record's end stops at the next record key, so
-// a program name appearing anywhere else in the file is not what gets written.
-func splicePin(body []byte, target string, name string, digest string) ([]byte, string, error) {
-	start := bytes.Index(body, []byte(`"`+target+`": {`))
-	if start < 0 {
-		return nil, "", fmt.Errorf("the manifest has no record for %s to pin the pair in", target)
-	}
-
-	// The record ends where its own braces close. Searching for the next key is not enough, because the
-	// record's own programs key is a key with a brace after it, and stopping there is stopping inside the
-	// record the pin is written into.
-	end := len(body)
-
-	depth := 0
-	opened := false
-
-	for at := start + len(`"`+target+`"`); at < len(body); at++ {
-		if body[at] == '{' {
-			depth++
-			opened = true
-		} else if body[at] == '}' {
-			depth--
-
-			if opened && depth == 0 {
-				end = at
-				break
-			}
-		}
-	}
-
-	programs := bytes.Index(body[start:end], []byte(`"programs"`))
-	if programs < 0 {
-		return nil, "", fmt.Errorf("the manifest's record for %s has no programs to pin the pair in", target)
-	}
-
-	from := start + programs
-
-	key := []byte(`"` + name + `": "`)
-
-	value := bytes.Index(body[from:end], key)
-	if value < 0 {
-		return nil, "", fmt.Errorf("the manifest's record for %s has no %s digest to pin", target, name)
-	}
-
-	value = from + value + len(key)
-
-	closing := bytes.Index(body[value:end], []byte(`"`))
-	if closing < 0 {
-		return nil, "", fmt.Errorf("the manifest's %s digest for %s is not a value it can be written into", name, target)
-	}
-
-	pinned := append([]byte{}, body[:value]...)
-	pinned = append(pinned, []byte(digest)...)
-	pinned = append(pinned, body[value+closing:]...)
-
-	return pinned, string(body[value : value+closing]), nil
-}
-
-// writeManifestFile replaces the manifest with the bytes the build pinned, through a temporary file in
-// the same directory: the file the next release run reads is never left half written, and its mode is
-// part of the file the operator tracks.
-func writeManifestFile(path string, body []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "manifest.json.*")
-	if err != nil {
-		return fmt.Errorf("the build cannot prepare to write the manifest it pins: %w", err)
-	}
-
-	name := tmp.Name()
-
-	if _, err := tmp.Write(body); err != nil {
-		tmp.Close()
-		os.Remove(name)
-
-		return fmt.Errorf("the build cannot write the manifest it pins: %w", err)
-	}
-
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		os.Remove(name)
-
-		return fmt.Errorf("the build cannot write the manifest it pins: %w", err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		os.Remove(name)
-
-		return fmt.Errorf("the build cannot write the manifest it pins: %w", err)
-	}
-
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-
-		return fmt.Errorf("the build cannot put the manifest it pinned where the release reads it: %w", err)
+	if err := os.WriteFile(filepath.Join(paths.cached, "LICENCE.md"), []byte(licence), 0644); err != nil {
+		return fmt.Errorf("the build cannot write the licence text for %s: %w", target, err)
 	}
 
 	return nil
+}
+
+// theLicenceInTheCache is the licence text the run that produced one cache entry wrote. An entry older
+// than that habit says only what the manifest says, and names this machine's cache as where the binaries
+// came from.
+func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target string) (string, error) {
+	body, err := os.ReadFile(filepath.Join(paths.cached, "LICENCE.md"))
+	if err == nil {
+		return string(body), nil
+	}
+
+	if !os.IsNotExist(err) {
+		return "", fmt.Errorf("the licence text in %s cannot be read: %w", paths.cached, err)
+	}
+
+	return suppliedFFMpegLicence(manifest, target, theRunOfTheBinaries{}), nil
 }
 
 // buildImageArgs prepares the container one target is compiled or checked in. The build context is an
@@ -1157,34 +989,54 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	return false, nil
 }
 
-// runSuppliedFFmpeg does the work of a supplied pair this build was handed: the pair already in the
-// cache, the pair dropped in the bundle directory, and the target with neither.
+// runSuppliedFFmpeg does the work of a target whose ffmpeg binaries are compiled on the platform they run
+// on: the binaries a maintainer dropped, the binaries this machine compiled, or the binaries already in
+// this machine's cache.
 //
-// Nothing here fetches, compiles, runs, or builds a container. The compile of a supplied pair is the
-// machine that is the target's to do, and runNativeFFmpeg carries it there; what is left is the evidence
-// a pair arrives with — the digest the manifest pins, the shape the target's own linker writes, and the
-// proof the ffmpeg check recorded — and the adoption that consumes the pair into the cache and publishes
-// it into the bundle.
+// The dropped binaries are run before they are adopted, on the machine standing here, through the same gate
+// the compile runs its own binaries through. What converts is gzipped into the cache entry, and the licence
+// text the archive carries is written from that run: it names the machine that ran them.
 //
-// A target whose pair was not dropped, on a machine that is not its platform, is reported as skipped, and
-// that is the whole of it: the message the plan printed says where to drop the pair, what proves it, and
-// what pins it.
+// A target with nothing dropped for it, on a machine that is not its platform, is reported as skipped, and
+// that is the whole of it: the message the plan printed says where to drop the binaries and where to build
+// them.
 func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Skipped {
 		return true, nil
 	}
 
-	// A warm cache is the pinned pair, and the drop has already been consumed out of the directory:
-	// there is nothing to adopt, and publishing from the cache is what makes the archive.
-	if plan.Check.Target == target {
-		if err := adoptSuppliedFFmpeg(plan.Paths, target); err != nil {
+	if plan.Adopts {
+		run, err := t.prove(target, plan.Paths, stdout)
+		if err != nil {
+			return false, err
+		}
+
+		licence := suppliedFFMpegLicence(manifest, target, run)
+
+		if err := adoptSuppliedFFmpeg(plan.Paths, target, licence); err != nil {
 			return false, err
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", "adopt", plan.Paths.cached)
+
+		if err := publishFFmpeg(plan.Paths, manifest, target, licence); err != nil {
+			return false, err
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
+
+		return false, nil
 	}
 
-	if err := publishFFmpeg(plan.Paths, manifest, target, suppliedFFMpegLicence(manifest, target, plan.Check)); err != nil {
+	// The cache entry holds the binaries this machine's own run produced, and the licence text that run
+	// wrote is in the entry beside them: the archive carries the words the run said, not words this run
+	// composes about a compile it did not take part in.
+	licence, err := theLicenceInTheCache(plan.Paths, manifest, target)
+	if err != nil {
+		return false, err
+	}
+
+	if err := publishFFmpeg(plan.Paths, manifest, target, licence); err != nil {
 		return false, err
 	}
 
@@ -1195,16 +1047,14 @@ func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, targe
 
 // runNativeFFmpeg does the work of a supplied pair compiled on the machine that runs it.
 //
-// The pair is dropped where a maintainer's pair is dropped, and from there the run is the adoption path:
-// the same proof, the same gzip into the cache entry, the same licence text, and the same removal of the
-// raw pair from the directory the server embeds. A compile that published its own pair by its own route
-// would be a second adoption path, and the two would drift apart.
+// The binaries are dropped where a maintainer's binaries are dropped, and from there the run is the
+// adoption path: the same run of the binaries, the same gzip into the cache entry, the same licence text,
+// and the same removal of the raw programs from the directory the server embeds. A compile that published
+// its own binaries by its own route would be a second adoption path, and the two would drift apart.
 //
-// The order is the order the evidence is needed in. The pair is proved before it is pinned, because a
-// manifest that pinned a pair the proof refused would be a release adopting on the build's own promise.
-// The pair is gzipped into the cache entry the pinned manifest names, because the cache entry is keyed by
-// the manifest and a pair landed in the entry the unpinned manifest named is a pair the next run compiles
-// again.
+// The order is the order the evidence is needed in. The binaries are run before anything is adopted,
+// because a cache entry holding binaries that convert nothing is an archive that ships a server that
+// converts nothing.
 func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if err := prepareFFmpeg(plan.Paths); err != nil {
 		return false, err
@@ -1240,29 +1090,24 @@ func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target 
 
 	fmt.Fprintf(stdout, "%-7s %s\n", "drop", plan.Paths.bundle)
 
-	check, err := t.prove(target, plan.Paths, stdout)
+	run, err := t.prove(target, plan.Paths, stdout)
 	if err != nil {
 		return false, err
 	}
 
-	pinned, err := pinSuppliedPair(t.repo, target, check, stdout)
-	if err != nil {
+	licence := suppliedFFMpegLicence(manifest, target, run)
+
+	if err := adoptSuppliedFFmpeg(plan.Paths, target, licence); err != nil {
 		return false, err
 	}
 
-	paths := ffmpegPathsFor(t.repo, pinned, target)
+	fmt.Fprintf(stdout, "%-7s %s\n", "adopt", plan.Paths.cached)
 
-	if err := adoptSuppliedFFmpeg(paths, target); err != nil {
+	if err := publishFFmpeg(plan.Paths, manifest, target, licence); err != nil {
 		return false, err
 	}
 
-	fmt.Fprintf(stdout, "%-7s %s\n", "adopt", paths.cached)
-
-	if err := publishFFmpeg(paths, pinned, target, suppliedFFMpegLicence(pinned, target, check)); err != nil {
-		return false, err
-	}
-
-	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, paths.bundle)
+	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
 
 	return false, nil
 }
@@ -1517,21 +1362,27 @@ func theRecipeCarries(recipe []string, flag string) bool {
 	return false
 }
 
-// suppliedFFMpegLicence is what a release archive carries about a pair adopted from the host the target
-// runs on.
+// suppliedFFMpegLicence is what a release archive carries about the ffmpeg binaries compiled on the host
+// the target runs on.
 //
-// A compiled pair is reproducible from this repository, so its notice points at the manifest and the
-// command. A supplied pair is not reproducible on the machine that produces the releases: it is compiled
-// where the target runs, by a build standing on that machine, and the record this repository holds of it
-// is the digest the manifest pins and the proof the ffmpeg check left there. The notice names those, and
-// says plainly that the release build adopted the pair rather than produced it.
-func suppliedFFMpegLicence(manifest bundle.Manifest, target string, check anFfmpegCheck) string {
+// A compiled target's binaries are reproducible from this repository, so its notice points at the manifest
+// and the command. These are not reproducible on the machine that produces the releases: they are compiled
+// where the target runs, by a build standing on that machine, and the build ran them there. The notice
+// names that machine, the source and recipe they were built from, the command that built them, and the
+// codecs the run recorded. It says plainly that a deployment inherits the libraries of the machine that
+// compiled them, because that is the one thing about these binaries the build does not check.
+func suppliedFFMpegLicence(manifest bundle.Manifest, target string, run theRunOfTheBinaries) string {
 	var text strings.Builder
+
+	host := run.Host
+	if host == "" {
+		host = "the machine that compiled them"
+	}
 
 	text.WriteString("# The ffmpeg this server carries\n\n")
 	text.WriteString(fmt.Sprintf(
-		"This build of rdio-scanner carries ffmpeg %s and ffprobe %s inside its own binary, compiled for %s\non %s, the platform that target runs on. It converts audio with nothing installed on the host.\n\n",
-		manifest.FFmpeg, manifest.FFmpeg, target, check.Host,
+		"This build of rdio-scanner carries ffmpeg %s and ffprobe %s inside its own binary, compiled for %s\non the machine that runs that machine code. It converts audio with nothing installed on the host.\n\n",
+		manifest.FFmpeg, manifest.FFmpeg, target,
 	))
 
 	text.WriteString("ffmpeg is free software, copyright the FFmpeg developers. This binary is used under the GNU\nLesser General Public License version 2.1 or later, and was configured without --enable-gpl\nand without --enable-nonfree, so it carries no GPL or otherwise restricted component. The\nlicence text is at https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html\n\n")
@@ -1547,31 +1398,30 @@ func suppliedFFMpegLicence(manifest bundle.Manifest, target string, check anFfmp
 
 	text.WriteString(theAudioOnlyPosture(manifest.Recipe))
 
-	text.WriteString("The programs this archive carries, by digest:\n\n")
+	text.WriteString(fmt.Sprintf(
+		"\nThe command that produced them, on %s:\n\n    go run ./cmd/build ffmpeg %s\n\n",
+		host, target,
+	))
 
-	record := manifest.Targets[target]
-
-	text.WriteString(fmt.Sprintf("    ffmpeg  sha256 %s\n    ffprobe sha256 %s\n\n", record.Programs["ffmpeg"], record.Programs["ffprobe"]))
-
-	if check.Target == target {
-		if len(check.Codecs.Audio) > 0 {
-			text.WriteString(fmt.Sprintf(
-				"\nThe proof recorded the codecs it registers: %s, and names no video codec, video decoder, or video encoder.\n",
-				strings.Join(check.Codecs.Audio, ", "),
-			))
-		}
-
+	if len(run.Codecs.Audio) > 0 {
 		text.WriteString(fmt.Sprintf(
-			"\nThis pair was compiled on %s, the machine that is the target: the machine that produces the\nreleases runs no %s program, so a pair of this shape is compiled where the target runs. The release\nbuild adopted it after checking it against the digest recorded in\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and on the evidence of the build's ffmpeg check,\nwhich ran for it on %s on %s and converted %d recordings.\n",
-			check.Host, target, check.Host, check.Checked, len(check.Conversions),
+			"The run that adopted them asked them what they register: %s, and names no video codec, video\ndecoder, or video encoder. It converted %d recordings of the server's own audio.\n\n",
+			strings.Join(run.Codecs.Audio, ", "), run.Conversions,
+		))
+	}
+
+	if run.Host != "" {
+		text.WriteString(fmt.Sprintf(
+			"These binaries were compiled on %s, the machine that is the %s target: the machine that produces\nthe releases runs no %s program. The build ran them there and adopted what converted, and it\nchecked one thing about them beyond running them: that the file holds the machine code %s runs.\nWhat libraries they need is what that machine has, which is the one thing this build does not\ncheck.\n",
+			run.Host, target, target, target,
 		))
 
 		return text.String()
 	}
 
 	text.WriteString(fmt.Sprintf(
-		"\nThis pair was compiled on the machine that is the target, %s: the machine that produces the\nreleases runs no %s program, so a pair of this shape is compiled where the target runs. The release\nbuild adopted it on the digest above, and on the evidence of the build's ffmpeg check recorded for it\non its own platform.\n",
-		target, target,
+		"These binaries were compiled on the machine that is the %s target: the machine that produces the\nreleases runs no %s program. The run that compiled them ran them there and adopted what converted,\nand this release reuses what that run published in its own cache. Beyond running them, that run\nchecked only that the file holds the machine code %s runs. What libraries they need is what that\nmachine has, which is the one thing this build does not check.\n",
+		target, target, target,
 	))
 
 	return text.String()

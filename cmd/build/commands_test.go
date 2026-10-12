@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bytes"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -185,33 +186,41 @@ func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
 	}
 }
 
-// The check proves the pair the maintainer dropped for one target, on the platform that target runs on.
-// The target is the whole point of the command, so a command line without it is refused: a check that
-// defaulted to the machine it happens to stand on would prove a pair the release does not ship.
-func TestTheFfmpegCheckNamesTheTargetItProves(t *testing.T) {
-	o, err := parseArgs([]string{"ffmpeg-check", "macos-arm64"})
-	if err != nil {
-		t.Fatalf("parseArgs: %v", err)
-	}
-
-	if o.sub != subFFmpegCheck {
-		t.Errorf("the command is %q, want %s", o.sub, subFFmpegCheck)
-	}
-
-	if o.target != "macos-arm64" {
-		t.Errorf("the check proves %s, want macos-arm64", o.target)
-	}
-
+// The compile is the check: the build runs the binaries it compiled, and a drop is run by the compile
+// that adopts it. There is no command that proves binaries the build did not compile, and no file a
+// later build reads back as somebody else's proof.
+func TestTheFfmpegCheckIsNotACommandThisToolAccepts(t *testing.T) {
 	for _, args := range [][]string{
 		{"ffmpeg-check"},
-		{"ffmpeg-check", "macos"},
-		{"ffmpeg-check", "macos-arm64", "linux-arm64"},
-		{"ffmpeg-check", "netbsd-amd64"},
-		{"ffmpeg-check", "dist"},
+		{"ffmpeg-check", "macos-arm64"},
+		{"ffmpeg-check", "darwin-amd64"},
+		{"ffmpeg-check", "freebsd-amd64"},
 	} {
 		if _, err := parseArgs(args); err == nil {
 			t.Errorf("%v is a command line this tool honours, and it is not one", args)
 		}
+	}
+}
+
+// The usage line is what an operator reads when they type something the tool does not do. It names the
+// commands the tool has, and a command that no longer exists in it is not in that line.
+func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
+	out := &bytes.Buffer{}
+
+	if code := (&tool{}).run([]string{"nonsense"}, out); code == 0 {
+		t.Fatal("a run naming no command succeeded")
+	}
+
+	line := out.String()
+
+	for _, want := range []string{"client", "scanner", "admin", "ffmpeg", "server", "dist", "container", "clean", "version"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("the usage line %q does not name %s", line, want)
+		}
+	}
+
+	if strings.Contains(line, "ffmpeg-check") {
+		t.Errorf("the usage line offers a command the tool does not have: %q", line)
 	}
 }
 
@@ -226,7 +235,6 @@ func TestTheTargetACommandNamesIsTheReleaseWordTheRunBuildsFor(t *testing.T) {
 		{args: []string{"ffmpeg", "darwin-arm64"}, target: "macos-arm64"},
 		{args: []string{"ffmpeg", "darwin-amd64"}, target: "macos-amd64"},
 		{args: []string{"dist", "darwin-arm64"}, target: "macos-arm64"},
-		{args: []string{"ffmpeg-check", "darwin-amd64"}, target: "macos-amd64"},
 		{args: []string{"ffmpeg", "macos-arm64"}, target: "macos-arm64"},
 		{args: []string{"ffmpeg", "linux-amd64"}, target: "linux-amd64"},
 		{args: []string{"ffmpeg", "freebsd-amd64"}, target: "freebsd-amd64"},

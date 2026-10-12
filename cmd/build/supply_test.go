@@ -574,168 +574,16 @@ func aSuppliedProgramBytes(target string) []byte {
 	panic("no supplied program fixture for " + target)
 }
 
-// The proof is the only evidence a supplied pair converts audio: the build cannot run it. So the proof
-// names the pair it ran, the target it ran for, and the machine it ran on, and a proof that does not match
-// the pair being adopted is not a proof at all.
-func TestTheFfmpegCheckProofNamesThePairItRan(t *testing.T) {
-	repo := t.TempDir()
-
-	ffmpegDigest := strings.Repeat("a", 64)
-	ffprobeDigest := strings.Repeat("b", 64)
-
-	record := aCheckFor("macos-arm64", ffmpegDigest, ffprobeDigest)
-
-	if err := writeFfmpegCheck(repo, record); err != nil {
-		t.Fatalf("writeFfmpegCheck: %v", err)
-	}
-
-	got, err := readFfmpegCheck(repo, "macos-arm64", ffmpegDigest, ffprobeDigest)
-	if err != nil {
-		t.Fatalf("the proof the check recorded for its own pair was refused: %v", err)
-	}
-
-	if got.Target != "macos-arm64" {
-		t.Errorf("the proof names %s, want macos-arm64", got.Target)
-	}
-
-	if got.Host != record.Host {
-		t.Errorf("the proof names the host %s, want %s", got.Host, record.Host)
-	}
-
-	if got.FFmpeg != ffmpegDigest || got.FFProbe != ffprobeDigest {
-		t.Errorf("the proof names the pair %s / %s, want the digests it was recorded with", got.FFmpeg, got.FFProbe)
-	}
-
-	if len(got.Conversions) != 6 {
-		t.Errorf("the proof records %d conversions, want the six the check runs: %+v", len(got.Conversions), got.Conversions)
-	}
-
-	if got.Checked == "" || got.Version == "" {
-		t.Errorf("the proof names no ffmpeg version %q and no check time %q", got.Version, got.Checked)
-	}
-}
-
-// A proof is only worth what it proves about the pair in front of the build. A proof for another pair,
-// another target, another platform, or none at all, is a pair the build ships without evidence that it
-// converts anything, which is the promise the compiled targets do not make.
-func TestTheBuildRefusesAPairTheFfmpegCheckDidNotProve(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		record func(repo string)
-		rule   string
-	}{
-		{
-			name:   "no proof at all",
-			record: func(repo string) {},
-			rule:   "ffmpeg-check",
-		},
-		{
-			name: "a proof recorded for the other macOS architecture",
-			record: func(repo string) {
-				writeFfmpegCheck(repo, aCheckFor("macos-amd64", theFFmpegDigest, theFFProbeDigest))
-			},
-			rule: "macos-amd64",
-		},
-		{
-			name: "a proof recorded for a pair that has since been rebuilt",
-			record: func(repo string) {
-				writeFfmpegCheck(repo, aCheckFor("macos-arm64", strings.Repeat("9", 64), theFFProbeDigest))
-			},
-			rule: "digest",
-		},
-		{
-			name: "a proof that is not readable",
-			record: func(repo string) {
-				if err := os.MkdirAll(filepath.Dir(theCheckFile(repo, "macos-arm64")), 0755); err != nil {
-					t.Fatalf("making the checks directory: %v", err)
-				}
-
-				if err := os.WriteFile(theCheckFile(repo, "macos-arm64"), []byte("the maintainer says it works"), 0644); err != nil {
-					t.Fatalf("writing the proof: %v", err)
-				}
-			},
-			rule: "check",
-		},
-		{
-			name: "a proof recorded on another platform",
-			record: func(repo string) {
-				record := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
-				record.Host = "linux-amd64"
-
-				writeFfmpegCheck(repo, record)
-			},
-			rule: "host",
-		},
-	} {
-		repo := t.TempDir()
-		tc.record(repo)
-
-		_, err := readFfmpegCheck(repo, "macos-arm64", theFFmpegDigest, theFFProbeDigest)
-		if err == nil {
-			t.Errorf("%s: the build adopted a pair with %s", tc.name, tc.name)
-			continue
-		}
-
-		if !strings.Contains(err.Error(), tc.rule) {
-			t.Errorf("%s: the failure %q does not name the %s it is missing", tc.name, err.Error(), tc.rule)
-		}
-	}
-}
-
-// The proof of a macOS pair is valid from a macOS host of either architecture, and the proof file keeps
-// naming the host that recorded it. An Apple Silicon Mac proving the Intel pair through Rosetta 2 records
-// the proof of the program the Intel machine runs, and the release record says which machine proved it. A
-// proof from a host of another operating system is the proof of a pair that host cannot run at all.
-func TestTheProofOfAMacOSTargetIsRecordedByAMacOSHostOfEitherArchitecture(t *testing.T) {
-	for _, tc := range []struct {
-		name, host string
-		adopted    bool
-	}{
-		{name: "the other macOS architecture", host: "darwin-arm64", adopted: true},
-		{name: "the target's own architecture", host: "darwin-amd64", adopted: true},
-		{name: "a Linux host", host: "linux-amd64", adopted: false},
-		{name: "a FreeBSD host", host: "freebsd-amd64", adopted: false},
-		{name: "a Windows host", host: "windows-amd64", adopted: false},
-	} {
-		repo := t.TempDir()
-
-		record := aCheckFor("macos-amd64", theFFmpegDigest, theFFProbeDigest)
-		record.Host = tc.host
-
-		if err := writeFfmpegCheck(repo, record); err != nil {
-			t.Fatalf("%s: writeFfmpegCheck: %v", tc.name, err)
-		}
-
-		got, err := readFfmpegCheck(repo, "macos-amd64", theFFmpegDigest, theFFProbeDigest)
-
-		if tc.adopted {
-			if err != nil {
-				t.Errorf("%s: the build refused a proof of macos-amd64 recorded on %s: %v", tc.name, tc.host, err)
-			}
-
-			if got.Host != tc.host {
-				t.Errorf("%s: the proof adopted names the host %s, want %s: the proof file says which machine proved the pair", tc.name, got.Host, tc.host)
-			}
-
-			continue
-		}
-
-		if err == nil {
-			t.Errorf("%s: the build adopted a pair proved on %s, a host that cannot run the pair", tc.name, tc.host)
-		}
-	}
-}
-
-// The proof is the pair's own execution. A host that cannot execute the pair it is asked to prove — an
-// Intel Mac holding the arm64 pair, this Linux host holding a macOS pair — has no proof to record, and it is
-// not refused by a guess about what the host has installed: the pair is run, the operating system answers,
-// and the build's answer names the host that can prove the pair, the command that proves it, and the
-// directory the pair is sitting in. Nothing is recorded and nothing is pinned: a proof of a pair the host
-// cannot run is a proof of nothing, and the release would have no way to tell it from a pair that converts.
+// The gate is the binaries' own execution. A host that cannot execute the binaries it compiled — an Intel
+// Mac holding the arm64 binaries, this Linux host holding a macOS pair — adopts nothing, and it is not
+// refused by a guess about what the host has installed: the binaries are run, the operating system answers,
+// and the build's answer names the host that compiles them, the command that compiles them there, and the
+// directory the ones this run compiled are sitting in. Nothing is recorded: binaries a host cannot run are
+// binaries the release ships nothing about.
 //
-// The pair here is the fixture shape FEAT-033's shape rules adopt, so the shape rules let it through to the
+// The binaries here are the fixture shape the shape rules adopt, so the shape rules let them through to the
 // run, and the run is where this host answers.
-func TestAHostThatCannotRunThePairIsToldWhichHostCanProveIt(t *testing.T) {
+func TestAHostThatCannotRunTheBinariesIsToldWhichHostCompilesThem(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		repo := t.TempDir()
 
@@ -751,21 +599,21 @@ func TestAHostThatCannotRunThePairIsToldWhichHostCanProveIt(t *testing.T) {
 			}
 		}
 
-		tl := tool{repo: repo}
+		tl := tool{repo: repo, theRun: onThisMachine()}
 
 		_, err := tl.proveSuppliedPair(target, paths, io.Discard)
 
 		if err == nil {
-			t.Fatalf("%s: the proof recorded a pair this %s host cannot execute", target, runtime.GOOS)
+			t.Fatalf("%s: the run adopted binaries this %s host cannot execute", target, runtime.GOOS)
 		}
 
 		for _, want := range []string{
 			target,
-			"go run ./cmd/build ffmpeg-check " + target,
+			"go run ./cmd/build ffmpeg " + target,
 			"a " + target + " host",
 			paths.bundle,
-			// The operating system's own refusal, carried out of the run: the pair never started, and the
-			// reason is the answer the operator needs.
+			// The operating system's own refusal, carried out of the run: the binaries never started,
+			// and the reason is the answer the operator needs.
 			"fork/exec",
 		} {
 			if !strings.Contains(err.Error(), want) {
@@ -773,178 +621,163 @@ func TestAHostThatCannotRunThePairIsToldWhichHostCanProveIt(t *testing.T) {
 			}
 		}
 
-		if _, err := os.Stat(theCheckFile(repo, target)); err == nil {
-			t.Errorf("%s: the run recorded a proof for a pair it could not run", target)
+		if aFileIsThere(theProofFileInTheBuildTree(repo, target)) {
+			t.Errorf("%s: the run recorded a proof of binaries it could not run", target)
 		}
 	}
 }
 
-// The proof is the evidence a supplied pair is adopted on, and the host that compiled the pair is the
-// only machine that can record it. A proof naming video codecs is that host telling the release it
-// compiled a program this project does not ship; a proof recorded by a build that never asked what the
-// pair registers is the proof of a pair nobody looked at.
-func TestTheBuildRefusesAProofThatNamesVideoCodecs(t *testing.T) {
-	repo := t.TempDir()
-
-	record := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
-	record.Codecs = codecRegistry{Audio: []string{"aac"}, Video: []string{"h264", "mpeg4"}}
-
-	if err := writeFfmpegCheck(repo, record); err != nil {
-		t.Fatalf("writeFfmpegCheck: %v", err)
-	}
-
-	_, err := readFfmpegCheck(repo, "macos-arm64", theFFmpegDigest, theFFProbeDigest)
-	if err == nil {
-		t.Fatal("the build adopted a pair whose proof names video codecs")
-	}
-
-	for _, want := range []string{"h264", "mpeg4"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the failure %q does not name the video codec %s the proof recorded", err.Error(), want)
-		}
-	}
-}
-
-func TestTheBuildRefusesAProofThatNamesNoCodecs(t *testing.T) {
-	repo := t.TempDir()
-
-	record := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
-	record.Codecs = codecRegistry{}
-
-	if err := writeFfmpegCheck(repo, record); err != nil {
-		t.Fatalf("writeFfmpegCheck: %v", err)
-	}
-
-	_, err := readFfmpegCheck(repo, "macos-arm64", theFFmpegDigest, theFFProbeDigest)
-	if err == nil {
-		t.Fatal("the build adopted a pair whose proof names no codecs")
-	}
-
-	if !strings.Contains(err.Error(), "ffmpeg-check") {
-		t.Errorf("the failure %q does not name the command that records what the pair registers", err.Error())
-	}
-}
-
-// The check proves the pair a maintainer drops. A target this build compiles an ffmpeg for is proved by
-// the compile itself, inside the container that can run it, and a check pointed at it would be looking for
-// a raw pair that directory has never held.
-func TestTheFfmpegCheckRefusesATargetThisBuildCompilesAnFfmpegFor(t *testing.T) {
-	tl := tool{repo: t.TempDir()}
-
-	err := tl.runFFmpegCheck(options{target: "linux-amd64"}, io.Discard)
-	if err == nil {
-		t.Fatal("the check accepted a target whose pair this build compiles in a container")
-	}
-
-	if !strings.Contains(err.Error(), "linux-amd64") || !strings.Contains(err.Error(), "go run ./cmd/build ffmpeg linux-amd64") {
-		t.Errorf("the failure %q does not name the target and the command that proves it", err.Error())
-	}
-}
-
-// The check runs the pair, so it runs where the pair runs. Asked for a target this machine is not, it
-// names the machine to run it on: a check that quietly skipped the pair it cannot execute would be a
-// proof of nothing, and the build would have no way to tell.
-func TestTheFfmpegCheckRefusesAHostThatIsNotItsTargets(t *testing.T) {
-	if err := checkFfmpegCheckHost("linux-amd64", thisMachine()); err != nil {
-		t.Errorf("the check refused the host it is standing on: %v", err)
-	}
-
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
-		err := checkFfmpegCheckHost(target, thisMachine())
-		if err == nil {
-			t.Errorf("the check accepted %s on a machine that is not a %s host", target, target)
-			continue
-		}
-
-		if !strings.Contains(err.Error(), target) {
-			t.Errorf("the failure %q does not name the %s host to run it on", err.Error(), target)
-		}
-	}
-
-	// A platform outside the release matrix has no pair to prove, and the check is the proof of a pair.
-	if err := checkFfmpegCheckHost("netbsd-amd64", thisMachine()); err == nil {
-		t.Error("the check accepted a platform this project releases no archive for")
-	} else if !strings.Contains(err.Error(), "netbsd-amd64") {
-		t.Errorf("the failure %q does not name the platform it refused", err.Error())
-	}
-}
-
-// The rule the check enforces is the operating system, not the architecture inside it. A macOS pair is
-// proved on a macOS host of either architecture: an Apple Silicon Mac executes an Intel program through
-// Rosetta 2, and the proof is the pair's own execution, so the proof an Apple Silicon Mac records for the
-// Intel pair is the proof of the program the Intel machine runs. The proof file keeps naming the host that
-// recorded it, which is what says which machine proved the pair.
-//
-// A host that cannot execute the pair it is asked to prove is not this rule's business: the pair is run,
-// and the operating system answers. FreeBSD is one architecture in this release, and its pair is proved on
-// FreeBSD.
-func TestTheFfmpegCheckOfAMacOSTargetRunsOnEitherMacOSArchitecture(t *testing.T) {
-	for _, tc := range []struct {
-		target  string
-		machine host
-		runs    bool
-	}{
-		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "arm64"}, runs: true},
-		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "amd64"}, runs: true},
-		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "amd64"}, runs: true},
-		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "arm64"}, runs: true},
-		{target: "freebsd-amd64", machine: host{goos: "freebsd", goarch: "amd64"}, runs: true},
-		{target: "linux-amd64", machine: host{goos: "linux", goarch: "amd64"}, runs: true},
-		{target: "macos-amd64", machine: host{goos: "linux", goarch: "amd64"}, runs: false},
-		{target: "macos-arm64", machine: host{goos: "freebsd", goarch: "amd64"}, runs: false},
-		{target: "freebsd-amd64", machine: host{goos: "darwin", goarch: "arm64"}, runs: false},
-		{target: "freebsd-amd64", machine: host{goos: "linux", goarch: "amd64"}, runs: false},
-	} {
-		err := checkFfmpegCheckHost(tc.target, tc.machine)
-
-		if tc.runs {
-			if err == nil {
-				continue
-			}
-
-			t.Errorf("%s on a %s/%s host: the check refused a host that runs the pair: %v", tc.target, tc.machine.goos, tc.machine.goarch, err)
-			continue
-		}
-
-		if err == nil {
-			t.Errorf("%s on a %s/%s host: the check accepted a host of another operating system, which cannot run the pair at all", tc.target, tc.machine.goos, tc.machine.goarch)
-			continue
-		}
-
-		if !strings.Contains(err.Error(), tc.target) {
-			t.Errorf("the failure %q does not name the %s host to run it on", err.Error(), tc.target)
-		}
-	}
-}
-
-// theCheckFile is where the proof for one target is kept, and theFFmpegDigest and theFFProbeDigest are
-// the pair a test is adopting, so a test can change one of them and say which one the proof named.
-func theCheckFile(repo string, target string) string {
+// theProofFileInTheBuildTree is where this build used to keep a proof of one target's binaries. The tests
+// name the path to say the build writes nothing there.
+func theProofFileInTheBuildTree(repo string, target string) string {
 	return filepath.Join(repo, ".build", "ffmpeg", "checks", target+".json")
 }
 
-const (
-	theFFmpegDigest  = "1111111111111111111111111111111111111111111111111111111111111111"
-	theFFProbeDigest = "2222222222222222222222222222222222222222222222222222222222222222"
-)
+// aDropInTheBundle lays the binaries a maintainer dropped into one target's bundle directory, with
+// nothing recorded about them: no proof file, no digest, no pin.
+func aDropInTheBundle(t *testing.T, repo string, target string) ffmpegPaths {
+	t.Helper()
 
-func aCheckFor(target string, ffmpegDigest string, ffprobeDigest string) anFfmpegCheck {
-	return anFfmpegCheck{
-		Target:  target,
-		Host:    aHostForTarget(target),
-		FFmpeg:  ffmpegDigest,
-		FFProbe: ffprobeDigest,
-		Version: "ffmpeg version 9.0.2 Copyright (c) 2000-2025 the FFmpeg developers",
-		Checked: "2026-10-12T09:00:00Z",
-		Codecs:  codecRegistry{Audio: theAudioCodecNames},
-		Conversions: []production{
-			{Input: "wav", Mode: "plain", Bytes: 7675, Duration: "2.128000"},
-			{Input: "wav", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
-			{Input: "wav", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
-			{Input: "mp3", Mode: "plain", Bytes: 7756, Duration: "2.128000"},
-			{Input: "mp3", Mode: "norm", Bytes: 12251, Duration: "3.010667"},
-			{Input: "mp3", Mode: "loudnorm", Bytes: 12131, Duration: "3.010667"},
-		},
+	dir := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("making the bundle directory: %v", err)
+	}
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		body := aSuppliedProgramBytes(target)
+
+		if err := os.WriteFile(filepath.Join(dir, name+programSuffix(target)), body, 0755); err != nil {
+			t.Fatalf("dropping the %s: %v", name, err)
+		}
+	}
+
+	return ffmpegPathsFor(repo, bundle.ReadManifest(), target)
+}
+
+// aHostRunningTheBinaries answers the run's commands the way a working build answers them, and says
+// which release it is when the build asks it what it is.
+type aHostRunningTheBinaries struct {
+	aStandIn
+}
+
+func (s *aHostRunningTheBinaries) run(argv []string, stdin []byte) ([]byte, error) {
+	for _, arg := range argv {
+		if arg == "-version" {
+			s.runs = append(s.runs, strings.Join(argv, " "))
+
+			return []byte("ffmpeg version 9.0.2 Copyright (c) 2000-2025 the FFmpeg developers\n"), nil
+		}
+	}
+
+	return s.aStandIn.run(argv, stdin)
+}
+
+// aBuildOnAHost is the build standing on the host that runs one target's binaries, running them
+// through the stand-in that answers like a working build.
+func aBuildOnAHost(t *testing.T, repo string, target string, theHost host, theRun command) *tool {
+	t.Helper()
+
+	return &tool{
+		repo:    repo,
+		machine: func() host { return theHost },
+		theRun:  theRun,
+	}
+}
+
+// The run of the ffmpeg binaries is the gate, and it is a run: it prints what it saw and keeps nothing.
+// No proof file is left for a later build to read, and no digest is printed for a manifest to pin.
+func TestTheRunOfTheBinariesRecordsNothing(t *testing.T) {
+	repo := t.TempDir()
+
+	paths := aDropInTheBundle(t, repo, "macos-arm64")
+
+	stand := &aHostRunningTheBinaries{}
+
+	tl := aBuildOnAHost(t, repo, "macos-arm64", host{goos: "darwin", goarch: "arm64"}, stand.run)
+
+	out := &bytes.Buffer{}
+
+	run, err := tl.proveSuppliedPair("macos-arm64", paths, out)
+	if err != nil {
+		t.Fatalf("the run of the binaries the host compiled: %v", err)
+	}
+
+	if !strings.Contains(run.Version, "9.0.2") {
+		t.Errorf("the run records %q as the version the binaries said they are", run.Version)
+	}
+
+	if len(run.Codecs.Audio) == 0 {
+		t.Error("the run records no codecs")
+	}
+
+	if run.Conversions == 0 {
+		t.Error("the run records no conversions")
+	}
+
+	if run.Host != "darwin-arm64" {
+		t.Errorf("the run names %s as the machine that ran the binaries, want the host it stood on", run.Host)
+	}
+
+	if aFileIsThere(theProofFileInTheBuildTree(repo, "macos-arm64")) {
+		t.Errorf("the run recorded a proof file at %s", theProofFileInTheBuildTree(repo, "macos-arm64"))
+	}
+
+	if strings.Contains(out.String(), "sha256") {
+		t.Errorf("the run printed digests for a manifest to pin:\n%s", out.String())
+	}
+
+	if !strings.Contains(out.String(), "check") {
+		t.Errorf("the run printed no summary of what it saw:\n%s", out.String())
+	}
+}
+
+// Binaries that register a video codec are refused by the run that asked them, on the host that
+// compiled them: this project ships an ffmpeg compiled for audio.
+func TestTheRunRefusesBinariesThatRegisterVideoCodecs(t *testing.T) {
+	repo := t.TempDir()
+
+	paths := aDropInTheBundle(t, repo, "macos-arm64")
+
+	stand := &aHostRunningTheBinaries{}
+	stand.codecs = append(theAudioCodecLines, "DEVIL. h264                 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10")
+
+	tl := aBuildOnAHost(t, repo, "macos-arm64", host{goos: "darwin", goarch: "arm64"}, stand.run)
+
+	_, err := tl.proveSuppliedPair("macos-arm64", paths, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("the run adopted binaries that register a video codec")
+	}
+
+	if !strings.Contains(err.Error(), "h264") {
+		t.Errorf("the failure %q does not name the video codec the binaries register", err.Error())
+	}
+
+	if aFileIsThere(theProofFileInTheBuildTree(repo, "macos-arm64")) {
+		t.Errorf("a proof file was recorded for binaries that were refused: %s", theProofFileInTheBuildTree(repo, "macos-arm64"))
+	}
+}
+
+// Binaries that convert nothing are refused by the run, and the failure carries the operating system's
+// own refusal when the host cannot start them at all.
+func TestTheRunRefusesBinariesThatDoNotConvert(t *testing.T) {
+	repo := t.TempDir()
+
+	paths := aDropInTheBundle(t, repo, "macos-arm64")
+
+	tl := aBuildOnAHost(t, repo, "macos-arm64", host{goos: "darwin", goarch: "arm64"}, aCheckThatRefuses("the binaries said no"))
+
+	_, err := tl.proveSuppliedPair("macos-arm64", paths, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("the run adopted binaries that convert nothing")
+	}
+
+	if !strings.Contains(err.Error(), "the binaries said no") {
+		t.Errorf("the failure %q does not carry what the binaries answered with", err.Error())
+	}
+
+	if aFileIsThere(theProofFileInTheBuildTree(repo, "macos-arm64")) {
+		t.Errorf("a proof file was recorded for binaries that were refused: %s", theProofFileInTheBuildTree(repo, "macos-arm64"))
 	}
 }
 
@@ -1062,76 +895,6 @@ func TestTheBuildRefusesAFreeBSDProgramOfTheOtherWidthAndArchitecture(t *testing
 
 		if !strings.Contains(err.Error(), tc.rule) {
 			t.Errorf("%s: the failure %q does not name the %s rule", tc.name, err.Error(), tc.rule)
-		}
-	}
-}
-
-// The manifest is the file the release machine reads, and the build writing a pin into it is the one
-// write the build makes to a tracked file. The record it changes is the one record of the target the pair
-// was compiled for: every other byte of the file is what the operator committed, including the shape the
-// file is written in, because the operator reads this file and commits what they read of it.
-func TestPinningASuppliedPairWritesOnlyThatTargetsRecord(t *testing.T) {
-	repo := t.TempDir()
-
-	original := theManifestFile(t, repo)
-
-	check := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
-
-	var out bytes.Buffer
-
-	manifest, err := pinSuppliedPair(repo, "macos-arm64", check, &out)
-	if err != nil {
-		t.Fatalf("the build could not pin the pair it proved: %v", err)
-	}
-
-	record := manifest.Targets["macos-arm64"]
-
-	if record.Programs["ffmpeg"] != theFFmpegDigest || record.Programs["ffprobe"] != theFFProbeDigest {
-		t.Errorf("the manifest the build returns pins %v", record.Programs)
-	}
-
-	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
-	if err != nil {
-		t.Fatalf("the manifest the build pinned is not there to read: %v", err)
-	}
-
-	if mode, err := os.Stat(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")); err != nil || mode.Mode().Perm() != 0644 {
-		t.Errorf("the manifest is written mode %v, want 0644: the build writes a tracked file, and its mode is part of it", mode.Mode().Perm())
-	}
-
-	// The file is compared line by line, because the rule is about the bytes around the pins: a manifest
-	// rewritten by a JSON encoder loses the order its records were written in and the shape of its
-	// indentation, and the operator's next diff is the whole file.
-	got := strings.Split(string(body), "\n")
-	want := strings.Split(string(original), "\n")
-
-	if len(got) != len(want) {
-		t.Fatalf("the pinned manifest has %d lines and the file it was written into has %d: the pins were not written into the file, they replaced it", len(got), len(want))
-	}
-
-	differing := []string{}
-
-	for i := range want {
-		if got[i] != want[i] {
-			differing = append(differing, got[i])
-		}
-	}
-
-	if len(differing) != 2 {
-		t.Fatalf("the pinned manifest differs from the file it was written into in %d lines (%v), want the two lines carrying the digests", len(differing), differing)
-	}
-
-	for _, line := range differing {
-		if !strings.Contains(line, theFFmpegDigest) && !strings.Contains(line, theFFProbeDigest) {
-			t.Errorf("the line %q changed and carries neither digest", line)
-		}
-	}
-
-	says := out.String()
-
-	for _, want := range []string{"macos-arm64", theFFmpegDigest, theFFProbeDigest} {
-		if !strings.Contains(says, want) {
-			t.Errorf("the run prints %q nowhere, and the operator copies the pins from what it prints", says)
 		}
 	}
 }

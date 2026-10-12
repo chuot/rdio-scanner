@@ -163,11 +163,7 @@
       ],
       "ldflags": [
         "-mmacosx-version-min=11.0"
-      ],
-      "programs": {
-        "ffmpeg": "",
-        "ffprobe": ""
-      }
+      ]
     },
     "macos-arm64": {
       "produced": "supplied",
@@ -176,22 +172,14 @@
       ],
       "ldflags": [
         "-mmacosx-version-min=11.0"
-      ],
-      "programs": {
-        "ffmpeg": "",
-        "ffprobe": ""
-      }
+      ]
     },
     "freebsd-amd64": {
       "produced": "supplied",
       "ldflags": [
         "-static"
       ],
-      "make": "gmake",
-      "programs": {
-        "ffmpeg": "",
-        "ffprobe": ""
-      }
+      "make": "gmake"
     }
   }
 }

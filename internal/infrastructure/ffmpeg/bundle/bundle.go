@@ -68,7 +68,7 @@ type Source struct {
 //
 // A record with no `produced` names a toolchain: the container that holds it, the packages to install in
 // it, and the configure arguments that make the compile cross to it. This build compiles that target's
-// ffmpeg and runs the pair it produced through the ffmpeg check.
+// ffmpeg and runs the binaries it produced.
 //
 // A record with `produced` saying `supplied` names no container, no packages, no cross arguments, and no
 // check environment: the machine that produces the releases has none of those for it, and asking for one
@@ -95,16 +95,10 @@ type Target struct {
 	Conformance Conformance `json:"conformance"`
 
 	// Produced says how this target's ffmpeg comes to be. Empty is the ordinary case: this build compiles
-	// it, in a container. "supplied" is the pair compiled on the target's own platform — by this build
-	// standing on that machine, or by the maintainer and dropped where this build finds it — and adopted
-	// from there.
+	// it, in a container. "supplied" is the ffmpeg binaries compiled on the target's own platform — by
+	// this build standing on that machine, or by the maintainer and dropped where this build finds it —
+	// and adopted from there.
 	Produced string `json:"produced"`
-
-	// Programs is the digest of each program of a supplied pair: the sha256 of the ffmpeg and of the
-	// ffprobe, which is the only thing this build can check a pair it cannot run against. An empty digest
-	// is a pair that has not been pinned yet, and nothing is adopted for that target. A compiled target
-	// pins nothing, because it produced its own pair and can run it.
-	Programs map[string]string `json:"programs"`
 }
 
 // Conformance is the environment the build runs the compiled ffmpeg in to prove it can do the job: the

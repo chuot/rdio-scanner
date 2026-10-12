@@ -262,11 +262,10 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 }
 
 // A supplied target's archive says what the ffmpeg inside its binary is, in the text the ffmpeg phase
-// writes for a pair it adopted and did not compile: the licence terms, the source release the manifest
-// pins, the configure recipe, the two programs by digest, that the project's maintainer compiled the pair
-// on the platform the target runs on, and that the build's ffmpeg check ran for it there, on the date the
-// proof recorded. The archive carries that text under the name a reader looks for, and carries no
-// markdown file beside it.
+// writes for binaries it adopted and did not compile in a container: the licence terms, the source release
+// the manifest pins, the configure recipe, the audio-only posture, the host that compiled them, the command
+// that built them, and the codecs the run recorded. The archive carries that text under the name a reader
+// looks for, and carries no markdown file beside it.
 func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 	repo := t.TempDir()
 
@@ -277,18 +276,9 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 
 	manifest := bundle.ReadManifest()
 
-	check := anFfmpegCheck{
-		Target:      "macos-arm64",
-		Host:        "macos-arm64",
-		FFmpeg:      strings.Repeat("a", 64),
-		FFProbe:     strings.Repeat("b", 64),
-		Version:     "ffmpeg version 7.1",
-		Checked:     "2026-10-09T12:00:00Z",
-		Codecs:      codecRegistry{Audio: theAudioCodecNames},
-		Conversions: []production{{Input: "0s", Mode: "plain", Bytes: 1024, Duration: "3.500000"}},
-	}
+	run := aRunOfTheBinaries()
 
-	licence := suppliedFFMpegLicence(manifest, "macos-arm64", check)
+	licence := suppliedFFMpegLicence(manifest, "macos-arm64", run)
 
 	writeArchiveSource(t, repo, "macos-arm64", "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
@@ -315,19 +305,20 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 	carried := string(files[2].body)
 
 	if carried != licence {
-		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase writes for a supplied pair", carried)
+		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase writes for supplied binaries", carried)
 	}
 
 	for _, want := range []string{
 		"ffmpeg is free software",
 		"Lesser General Public License version 2.1",
 		manifest.Source.URL,
-		"compiled for macos-arm64\non macos-arm64",
+		"compiled for macos-arm64\non the machine that runs that machine code",
 		"compiled for audio",
 		"no network protocol is compiled in",
-		"the codecs it registers: " + strings.Join(theAudioCodecNames, ", "),
-		"This pair was compiled on macos-arm64",
-		"which ran for it on macos-arm64 on 2026-10-09T12:00:00Z and converted 1 recordings",
+		"The run that adopted them asked them what they register: " + strings.Join(theAudioCodecNames, ", "),
+		"These binaries were compiled on " + run.Host,
+		"It converted 6 recordings",
+		"go run ./cmd/build ffmpeg macos-arm64",
 	} {
 		if !strings.Contains(carried, want) {
 			t.Errorf("the licence in the archive does not say %q:\n%s", want, carried)

@@ -21,6 +21,8 @@
 package bundle
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -134,20 +136,18 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 		if record.Produced != "" {
 			t.Errorf("%s is compiled by this build and says it is produced by %q", target, record.Produced)
 		}
-
-		if len(record.Programs) != 0 {
-			t.Errorf("%s is compiled from source and pins the digests of programs it did not produce: %v", target, record.Programs)
-		}
 	}
 }
 
 // The three targets this build compiles no ffmpeg for are the ones the maintainer compiles on the platform
-// each one runs on. The manifest records such a pair by the digest of each program, and records no
-// toolchain and no check environment for it, because the machine that produces the releases has neither.
+// each one runs on. The manifest records the compile that runs there — its flags and its make program — and
+// records no toolchain and no check environment for them, because the machine that produces the releases
+// has neither.
 //
-// A digest left unpinned is the ordinary state of a target whose pair has not been built yet: the build
-// says so and ships nothing for it, and never adopts a pair it cannot name.
-func TestTheManifestRecordsTheSuppliedTargetsByDigest(t *testing.T) {
+// It records nothing about the binaries themselves. The build runs the binaries it adopts, so the binaries
+// are their own record: a manifest carrying a digest of a program the build never ran would be a promise
+// the release has no way to keep.
+func TestTheManifestRecordsTheSuppliedTargetsAsCompiledOnTheirOwnPlatform(t *testing.T) {
 	manifest := ReadManifest()
 
 	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
@@ -161,24 +161,56 @@ func TestTheManifestRecordsTheSuppliedTargetsByDigest(t *testing.T) {
 			t.Errorf("%s is produced by %q, want supplied", target, record.Produced)
 		}
 
-		for _, name := range []string{"ffmpeg", "ffprobe"} {
-			digest, ok := record.Programs[name]
-			if !ok {
-				t.Errorf("%s records no %s digest, so the build has nothing to adopt the pair against", target, name)
-				continue
-			}
-
-			if len(digest) != 0 && len(digest) != 64 {
-				t.Errorf("%s records the %s digest %q, want a sha256 or nothing pinned", target, name, digest)
-			}
-		}
-
 		if record.Container != "" || len(record.Packages) > 0 || len(record.Cross) > 0 {
 			t.Errorf("%s is supplied and still records a toolchain: container %q, packages %v, cross %v", target, record.Container, record.Packages, record.Cross)
 		}
 
 		if record.Conformance.Container != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
 			t.Errorf("%s is supplied and still records a check environment: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
+		}
+	}
+}
+
+// The manifest is the file the operator reads and commits, and the build writes nothing into it. A field
+// naming a program's digest is a field a build would have to fill in, and the build fills in nothing: the
+// binaries it adopts are binaries it ran.
+func TestTheManifestCarriesNoDigestOfAnyProgram(t *testing.T) {
+	body, err := os.ReadFile("manifest.json")
+	if err != nil {
+		t.Fatalf("the manifest this package embeds is not there to read: %v", err)
+	}
+
+	var file map[string]json.RawMessage
+
+	if err := json.Unmarshal(body, &file); err != nil {
+		t.Fatalf("the manifest is not readable: %v", err)
+	}
+
+	var targets map[string]json.RawMessage
+
+	if err := json.Unmarshal(file["targets"], &targets); err != nil {
+		t.Fatalf("the manifest's targets are not readable: %v", err)
+	}
+
+	if len(targets) == 0 {
+		t.Fatal("the manifest names no targets at all")
+	}
+
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64", "linux-amd64", "linux-arm64", "linux-arm", "linux-386", "windows-amd64"} {
+		record, ok := targets[target]
+		if !ok {
+			t.Errorf("the manifest names no record for %s", target)
+			continue
+		}
+
+		var fields map[string]json.RawMessage
+
+		if err := json.Unmarshal(record, &fields); err != nil {
+			t.Fatalf("%s: the record is not readable: %v", target, err)
+		}
+
+		if _, found := fields["programs"]; found {
+			t.Errorf("%s carries a programs field: the build has no digest to write into it, and the operator has no digest to commit", target)
 		}
 	}
 }
