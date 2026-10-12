@@ -691,11 +691,17 @@ footer.site .signoff {
     the audio demuxers, decoders, encoder, muxers and filters this server converts with, and the pipe, fd and
     file protocols a recording arrives and leaves on, so no video codec, decoder, or encoder, and no network
     protocol, is compiled into it. The Linux and Windows archives carry the pair this project's build
-    compiles, in a container, from the source release its manifest pins. The macOS and FreeBSD archives carry
-    a pair compiled on the platform each target runs on, and on that platform this build compiles it on the
-    machine that is the target: one command there, <code>go run ./cmd/build ffmpeg</code>, compiles the pair,
-    proves it, pins it in the manifest, and adopts it into the release. A pair built by hand is adopted the
-    same way — dropped in the target's bundle directory, proved there with
+    compiles, in a container, from the source release its manifest pins. The macOS and FreeBSD archives
+    carry a pair compiled on the platform each target runs on, and this build compiles it on a machine that
+    runs the target's operating system: the operating system is the rule, and the architecture inside it is
+    not. The two macOS architectures compile each other's pair, so one Apple Silicon Mac compiles both macOS
+    archives, and Rosetta 2 is what lets it prove the Intel pair; FreeBSD is compiled on FreeBSD, the one
+    architecture FreeBSD is built for here. On the machine that is the target, one command —
+    <code>go run ./cmd/build ffmpeg</code> — compiles the pair, proves it, pins it in the manifest, and
+    adopts it into the release. On the other macOS architecture,
+    <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel pair for the Intel archive, and the
+    pair a host compiles for the architecture it cannot run is proved on the Mac that runs it. A pair built
+    by hand is adopted the same way — dropped in the target's bundle directory, proved there with
     <code>go run ./cmd/build ffmpeg-check &lt;target&gt;</code>, and pinned with the digests it prints —
     and the build adopts a supplied pair on the digest the manifest pins, on the shape of the two programs,
     and on the proof its ffmpeg check left on that platform. The <code>FFMPEG.txt</code> beside the program
@@ -765,9 +771,10 @@ footer.site .signoff {
     <li>podman, for building the container image, and for compiling the ffmpeg of the five targets the
       build compiles one for.</li>
     <li>A C toolchain, and on FreeBSD <code>gmake</code>, to build the macOS and FreeBSD ffmpeg pairs:
-      those pairs are compiled by this build on the machine that is the target, and that machine is a Mac
-      or a FreeBSD box. The five Linux and Windows pairs are compiled in a container, by podman, on the
-      machine that produces the releases.</li>
+      those pairs are compiled by this build on a machine that runs the target's operating system, and that
+      machine is a Mac for the two macOS targets — either architecture for either, since the two macOS
+      architectures compile each other's pair — or a FreeBSD box for the FreeBSD target. The five Linux and
+      Windows pairs are compiled in a container, by podman, on the machine that produces the releases.</li>
   </ul>
 
   <p>
@@ -881,6 +888,7 @@ docker run --detach --name rdio-scanner \
 
   <pre><code>go run ./cmd/build client     # the web applications the server carries
 go run ./cmd/build ffmpeg     # the ffmpeg of the platform you are on, compiled here
+go run ./cmd/build ffmpeg macos-amd64 # the Intel pair, compiled on an Apple Silicon Mac
 go run ./cmd/build server     # one binary, into dist/&lt;target&gt;/
 go run ./cmd/build dist       # the release archive of this platform, into dist/
 go run ./cmd/build dist --all # every release archive, into dist/
@@ -900,12 +908,18 @@ go run ./cmd/build container  # the container image, locally</code></pre>
     the source disables every component and enables the audio components this server converts with, and the
     proof that pair passes through refuses a pair that registers a video codec. The build compiles the five
     Linux and Windows pairs itself, in a container, from the source release its manifest pins. The macOS and
-    FreeBSD pairs are compiled on the platform each target runs on, and on that platform the build compiles
-    them itself: <code>go run ./cmd/build ffmpeg</code> there compiles the pair, proves it, pins it, and
-    adopts it, and the archive you build on that machine carries it. The machine that produces the releases runs neither
-    program, so a release run there skips those targets and ships the five archives it can ship, saying
-    what would have made the rest buildable. A pair you build by hand is adopted too: drop ffmpeg and
-    ffprobe in the target's bundle directory, prove them there with
+    FreeBSD pairs are compiled on a machine that runs the target's operating system, and there the build
+    compiles them itself: <code>go run ./cmd/build ffmpeg</code> compiles the pair, proves it, pins it, and
+    adopts it, and the archive you build on that machine carries it. The two macOS architectures compile each
+    other's pair, so an Apple Silicon Mac compiles the Intel pair with
+    <code>go run ./cmd/build ffmpeg macos-amd64</code>, and the pair it compiles for the other architecture
+    is proved on the Mac that runs it: the proof is the pair's own execution, and Rosetta 2 is what lets an
+    Apple Silicon Mac execute the Intel pair. The host that cannot run the pair it compiled leaves it in the
+    target's bundle directory, pins nothing, and names the Mac that can prove it and the command that proves
+    it, so an arm64 pair compiled on an Intel Mac is carried to an Apple Silicon Mac for the proof. The
+    machine that produces the releases runs neither program, so a release run there skips those targets and
+    ships the five archives it can ship, saying what would have made the rest buildable. A pair you build by
+    hand is adopted too: drop ffmpeg and ffprobe in the target's bundle directory, prove them there with
     <code>go run ./cmd/build ffmpeg-check &lt;target&gt;</code>, and pin the two digests it prints in the
     manifest. The licence of the ffmpeg a release carries travels in that release, beside this guide.
   </p>
@@ -3342,12 +3356,16 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
     and <code>rdio-scanner-macos-arm64-v&lt;version&gt;.zip</code> for an Apple one. Both carry their own
     <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio on a macOS machine
     for the architecture they run on, so nothing has to be installed on the host for recordings to convert.
-    A macOS pair is compiled with macOS's own compiler and linker, so this build compiles it on the machine
-    that is the target: <code>go run ./cmd/build ffmpeg</code> on that Mac compiles the pair, proves it,
-    pins it, and adopts it. The machine that produces the releases runs neither program, which is why a
-    release run there skips these targets and ships the five archives it can ship. The archive's
-    <code>FFMPEG.txt</code> names the host that compiled it, the digests the release pins, and the date
-    the build's ffmpeg check ran for it there.
+    A macOS pair is compiled with macOS's own compiler and linker, so this build compiles it on a machine
+    that runs macOS: <code>go run ./cmd/build ffmpeg</code> on that Mac compiles the pair, proves it, pins
+    it, and adopts it. The two macOS architectures compile each other's pair, so one Apple Silicon Mac
+    compiles both macOS archives — <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel
+    pair there, and Rosetta 2 is what lets that Mac prove it. An arm64 pair compiled on an Intel Mac is
+    proved on an Apple Silicon Mac, because an Intel machine will not execute it: the compile leaves the
+    pair in its bundle directory and names the Mac that can prove it, and the operator carries it there. The
+    machine that produces the releases runs neither program, which is why a release run there skips these
+    targets and ships the five archives it can ship. The archive's <code>FFMPEG.txt</code> names the host
+    that compiled it, the digests the release pins, and the date the build's ffmpeg check ran for it there.
   </p>
 
   <pre><code>% sudo ./rdio-scanner -service install
@@ -3374,8 +3392,9 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   <p>
     The FreeBSD archive is <code>rdio-scanner-freebsd-amd64-v&lt;version&gt;.zip</code>. The FreeBSD build
     carries its own <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio on
-    a FreeBSD machine, so nothing has to be installed on the host for recordings to convert. This build
-    compiles it on the machine that is the target — <code>go run ./cmd/build ffmpeg</code> on that box,
+    a FreeBSD machine, so nothing has to be installed on the host for recordings to convert. FreeBSD is
+    compiled on FreeBSD, so this build compiles it on the machine that is the target —
+    <code>go run ./cmd/build ffmpeg</code> on that box,
     running <code>gmake</code> because ffmpeg's build asks for GNU make and FreeBSD's base make is not it —
     and the archive's <code>FFMPEG.txt</code> names the host that compiled it, the digests the release pins,
     and the date the build's ffmpeg check ran.
@@ -3810,6 +3829,7 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
       <tr><td>The webapp connects and hears nothing</td><td>The proxy's upgrade headers, the access code, the listener cap</td><td><a href="#ch-20-reverse-proxies">20</a>, <a href="#ch-09-access-and-api-keys">9</a></td></tr>
       <tr><td>A downstream deployment gets nothing</td><td>The log under <em>Downstreams</em>, and the answer the other server gave</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>The log is full of one message</td><td>The subsystem filter, and the count strip</td><td><a href="#ch-14-logs">14</a></td></tr>
+      <tr><td>The build compiled a macOS pair that does not run on the Mac it compiled it on</td><td>The proof is the pair's own execution: the compile leaves the pair in the target's bundle directory and names the Mac that can prove it, and the operator carries it there</td><td><a href="#ch-04-installation">4</a>, <a href="#ch-21-running-as-a-service">21</a></td></tr>
       <tr><td>The save bar will not save, or the conflict banner is up</td><td>What the banner says, and the other session that saved</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
     </tbody>
   </table>
@@ -4000,6 +4020,21 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     for a program you built yourself with plain <code>go build</code>, which carries none, and read the
     notice the server prints at startup, which is the program telling you which converter it found.
     <a href="#ch-03-requirements">Chapter 3</a> is the requirements chapter.
+  </p>
+
+  <h3>Which Mac do I build the macOS archives on?</h3>
+
+  <p>
+    Either one: the two macOS architectures compile each other's pair, so one Apple Silicon Mac compiles
+    both macOS archives. <code>go run ./cmd/build ffmpeg</code> there builds the ffmpeg of the machine it
+    stands on, and <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel pair on that same
+    Apple Silicon Mac, where Rosetta 2 is what lets the build prove the pair it compiled. An arm64 pair
+    compiled on an Intel Mac is proved on an Apple Silicon Mac — the compile says so, and leaves the pair in
+    the target's bundle directory for the other Mac to prove. The target word is the one the release matrix
+    spells, and the build also accepts the words go names a macOS machine by: <code>darwin-amd64</code> is
+    <code>macos-amd64</code>, and <code>darwin-arm64</code> is <code>macos-arm64</code>. FreeBSD is the one
+    target whose pair is compiled only on FreeBSD.
+    <a href="#ch-21-running-as-a-service">Chapter 21</a> is the chapter for each platform's service.
   </p>
 
   <h3>How do I put a reverse proxy in front of the server?</h3>
@@ -4281,12 +4316,15 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     proof recorded on the host that compiled that pair. For the Linux and Windows builds it names the source
     release, the digest, the configure recipe and the command that produced it, all reproducible from this
     project's own repository. For the macOS and FreeBSD builds it names the host that compiled it — this
-    build, on the machine that is the target, running the same trimmed build from the same source release
-    the manifest pins, or a pair the project's maintainer compiled there and this build adopted — the two
-    program digests the release pins, and the date the build's ffmpeg check ran for that pair on that
-    platform. A deployment that installs ffmpeg on the host — which a release deployment has no reason to
-    do, and a program you built yourself with plain <code>go build</code> is the one case that needs it —
-    takes the licence the package it installs carries.
+    build, on a machine that runs the target's operating system, running the same trimmed build from the
+    same source release the manifest pins, or a pair the project's maintainer compiled there and this build
+    adopted — the two program digests the release pins, and the date the build's ffmpeg check ran for that
+    pair on that platform. The proof is recorded by a host that ran the pair, so the text names the host
+    that recorded the proof, and for a pair compiled across the two macOS architectures that is the other
+    Mac: the Apple Silicon Mac that proved the Intel pair through Rosetta 2 is named beside the Intel host
+    the pair was compiled for. A deployment that installs ffmpeg on the host — which a release deployment
+    has no reason to do, and a program you built yourself with plain <code>go build</code> is the one case
+    that needs it — takes the licence the package it installs carries.
   </p>
 
   <h3>Support</h3>

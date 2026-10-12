@@ -975,8 +975,8 @@ func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.
 		{
 			chapter: "ch-03-requirements",
 			need: []string{
-				"compiled by this build on the machine that is the target",
-				"this build compiles it on the machine that is the target",
+				"compiled by this build on a machine that runs the target's operating system",
+				"this build compiles it on a machine that runs the target's operating system",
 			},
 		},
 		{
@@ -1033,6 +1033,101 @@ func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.
 	for _, step := range []string{"./configure", "make -j", "codesign -s -", "tar -xJf", "strip ffmpeg"} {
 		if strings.Contains(words(chapterOf(t, body, "ch-04-installation")), step) {
 			t.Errorf("the guide's chapter 4 tells the operator to run %s, which is the build's step to run", step)
+		}
+	}
+}
+
+// The two macOS architectures compile each other's pair, and the guide is where an operator learns which
+// Mac to stand on. The statements here are the ones that answer the question the release host cannot:
+// there is no machine that is both macOS architectures, so the release of the Intel archive comes from an
+// Apple Silicon Mac, and the release of the Apple Silicon archive can come from an Intel Mac. Rosetta 2 is
+// what lets the Apple Silicon Mac prove the Intel pair, and the proof an Intel Mac records for the arm64
+// pair is the proof of the program the Apple Silicon machine runs.
+func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
+	body := guidePath(t)
+
+	places := []struct {
+		chapter string
+		need    []string
+	}{
+		{
+			chapter: "ch-03-requirements",
+			need: []string{
+				"the two macOS architectures compile each other's pair",
+				"one Apple Silicon Mac compiles both macOS archives",
+				"Rosetta 2",
+				"FreeBSD is compiled on FreeBSD",
+			},
+		},
+		{
+			chapter: "ch-04-installation",
+			need: []string{
+				"the pair it compiles for the other architecture is proved on the Mac that runs it",
+				"host that cannot run the pair it compiled leaves it in the target's bundle directory",
+			},
+		},
+		{
+			chapter: "ch-21-running-as-a-service",
+			need: []string{
+				"arm64 pair compiled on an Intel Mac is proved on an Apple Silicon Mac",
+				"Rosetta 2",
+			},
+		},
+		{
+			chapter: "ch-26-faq",
+			need: []string{
+				"darwin-amd64",
+				"darwin-arm64",
+				"one Apple Silicon Mac compiles both macOS archives",
+			},
+		},
+		{
+			chapter: "ch-27-reference",
+			need: []string{
+				"the host that recorded the proof",
+			},
+		},
+		{
+			chapter: "ch-25-troubleshooting",
+			need: []string{
+				"the compile leaves the pair in the target's bundle directory and names the Mac that can prove it",
+			},
+		},
+	}
+
+	for _, p := range places {
+		text := words(chapterOf(t, body, p.chapter))
+
+		for _, want := range p.need {
+			if !strings.Contains(text, want) {
+				t.Errorf("the guide's chapter %q never says %q", p.chapter, want)
+			}
+		}
+	}
+
+	// The compile across the two architectures is a command an operator runs, so it stands on its own
+	// line in the list of commands, beside the one command for the platform you are on.
+	var lines []string
+
+	for _, block := range regexp.MustCompile(`(?is)<pre><code>(.*?)</code></pre>`).FindAllStringSubmatch(chapterOf(t, body, "ch-04-installation"), -1) {
+		for _, line := range strings.Split(block[1], "\n") {
+			if i := strings.Index(line, "#"); i >= 0 {
+				line = line[:i]
+			}
+
+			lines = append(lines, strings.TrimSpace(line))
+		}
+	}
+
+	if !slices.Contains(lines, "go run ./cmd/build ffmpeg macos-amd64") {
+		t.Errorf("the guide's commands are %v, and none of them is the command an Apple Silicon Mac runs to compile the Intel pair", lines)
+	}
+
+	// The words the operator types are the words go names a macOS machine by, and the guide is where
+	// they are taught: darwin-amd64 and darwin-arm64 are accepted as the release words.
+	for _, word := range []string{"darwin-amd64", "darwin-arm64"} {
+		if !strings.Contains(words(chapterOf(t, body, "ch-26-faq")), word) {
+			t.Errorf("the guide never says the build accepts %s", word)
 		}
 	}
 }
