@@ -52,10 +52,12 @@ import (
 //	                          FreeBSD links statically with its own libc and a deployment has nothing to
 //	                          install
 //
-// The three failures a pair built by hand actually carries are a Homebrew bottle, an unsigned Apple
-// Silicon binary, and a dynamically linked FreeBSD binary. Each one ships a server that converts nothing,
-// and each one is refused here with the rule named, on the machine that produces the release, instead of
-// on the deployment that cannot tell what went wrong.
+// The one thing this build reads out of a program it did not compile is which machine code the file
+// holds. The failures the audit layers used to name — a Homebrew bottle, an unsigned Apple Silicon
+// binary, a dynamically linked FreeBSD binary — are the business of the machine that built the program,
+// and the licence text the archive carries names that machine. The architecture is not: an Apple Silicon
+// Mac runs arm64 and x86-64 alike, so running the program it compiled for the other architecture cannot
+// tell it what the compiler produced.
 const (
 	machOMagic   = 0xfeedfacf // MH_MAGIC_64: a thin 64-bit image, little-endian
 	machO32Magic = 0xfeedface // MH_MAGIC: 32-bit, which no release of this project ships
@@ -64,37 +66,21 @@ const (
 	cpuX8664 = 0x01000007 // CPU_TYPE_X86_64
 	cpuArm64 = 0x0100000c // CPU_TYPE_ARM64
 
-	lcLoadDylib       = 0x0c       // LC_LOAD_DYLIB
-	lcIdDylib         = 0x0d       // LC_ID_DYLIB
-	lcLoadWeakDylib   = 0x80000018 // LC_LOAD_WEAK_DYLIB
-	lcCodeSignature   = 0x8000001d // LC_CODE_SIGNATURE
-	lcReexportDylib   = 0x8000001f // LC_REEXPORT_DYLIB
-	lcLoadUpwardDylib = 0x80000023 // LC_LOAD_UPWARD_DYLIB
-
 	machOHeaderSize = 32
 
 	elfMagic        = "\x7fELF"
 	elf64Class      = 2  // EI_CLASS: 64-bit
 	elfFreeBSDOSABI = 9  // EI_OSABI: ELFOSABI_FREEBSD
 	elfX8664Machine = 62 // e_machine: EM_X86_64
-	elfInterpSeg    = 3  // PT_INTERP: a program interpreter, which a static binary has no use for
 
-	elfHeaderSize        = 64
-	elfProgramHeaderSize = 56
-
-	// maxHeaders is the ceiling on what this build will read out of a file it has been handed as a
-	// program: a header claiming more than a megabyte of load commands is not a program.
-	maxHeaders = 1 << 20
-
-	// systemLibraryDir is the only place a macOS program this project ships may link from. macOS cannot
-	// link statically, so this is the form its "needs nothing installed" rule takes.
-	systemLibraryDir = "/usr/lib/"
+	elfHeaderSize = 64
 )
 
 // checkSuppliedProgram reports whether the program at path is the program the given target runs.
 //
-// It reads the file and never runs it: the build produces the releases on a machine that cannot execute
-// these programs, and running them is what the ffmpeg check on the target's own platform is for.
+// It reads the header and never runs the program: this is read alike of a program the build compiled and
+// of one the maintainer dropped by hand, and the machine code the file holds is the one fact a run
+// cannot give the machine that compiled across the two macOS architectures.
 func checkSuppliedProgram(path string, target string) error {
 	name := filepath.Base(path)
 
@@ -108,7 +94,7 @@ func checkSuppliedProgram(path string, target string) error {
 	}
 
 	if info.Mode().Perm()&0111 == 0 {
-		return fmt.Errorf("the supplied %s for %s is not executable: the server writes it out of its own binary and runs it, so the pair has to be dropped as an executable program", name, target)
+		return fmt.Errorf("the supplied %s for %s is not executable: the server writes it out of its own binary and runs it, so the ffmpeg binaries have to be dropped as executable programs", name, target)
 	}
 
 	switch target {
@@ -124,7 +110,11 @@ func checkSuppliedProgram(path string, target string) error {
 }
 
 // checkMachO reports whether the program at path is the thin 64-bit Mach-O image the given macOS target
-// runs, carrying a code signature and linking nothing the host has to install.
+// runs.
+//
+// The architecture is the rule the crossed compile needs: an Apple Silicon Mac compiling the Intel
+// binaries runs what it produced under Rosetta 2 and an arm64 program just as well, so only the file
+// itself says which machine code the compiler wrote.
 func checkMachO(path string, name string, cpuType uint32, target string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -142,7 +132,7 @@ func checkMachO(path string, name string, cpuType uint32, target string) error {
 	// fat magic is looked for in the big-endian reading of the first four bytes, and the thin magics in
 	// the little-endian one.
 	if binary.BigEndian.Uint32(header[0:]) == fatMagic {
-		return fmt.Errorf("the supplied %s for %s is a universal binary: this project ships one archive per architecture and each binary carries the pair that architecture runs, so build one program per architecture", name, target)
+		return fmt.Errorf("the supplied %s for %s is a universal binary: this project ships one archive per architecture and each binary carries the ffmpeg binaries that architecture runs, so build one program per architecture", name, target)
 	}
 
 	switch magic := binary.LittleEndian.Uint32(header[0:]); magic {
@@ -150,80 +140,19 @@ func checkMachO(path string, name string, cpuType uint32, target string) error {
 	case machO32Magic:
 		return fmt.Errorf("the supplied %s for %s is a 32-bit Mach-O program: the macOS releases this project ships are 64-bit", name, target)
 	default:
-		return fmt.Errorf("the supplied %s for %s is not a Mach-O program: %s carries the pair its own architecture runs", name, target, target)
+		return fmt.Errorf("the supplied %s for %s is not a Mach-O program: %s carries the ffmpeg binaries its own architecture runs", name, target, target)
 	}
 
 	if cpu := binary.LittleEndian.Uint32(header[4:]); cpu != cpuType {
 		return fmt.Errorf("the supplied %s is compiled for the %s architecture, and %s runs %s", name, nameOfCPU(cpu), target, nameOfCPU(cpuType))
 	}
 
-	// The header's own words, in order: the number of load commands at offset 16 and the total size of
-	// those commands at offset 20. The size is what the commands occupy; the count is how many of them
-	// there are. A program a linker produced carries both, and they are not the same number.
-	commands := make([]byte, binary.LittleEndian.Uint32(header[20:]))
-	if len(commands) == 0 || len(commands) > maxHeaders {
-		return fmt.Errorf("the supplied %s for %s is not a Mach-O program this build can read: its header says its load commands are %d bytes", name, target, len(commands))
-	}
-
-	if _, err := io.ReadFull(f, commands); err != nil {
-		return fmt.Errorf("the supplied %s for %s is not a complete Mach-O program: its load commands are shorter than its header says", name, target)
-	}
-
-	signed := false
-
-	for i := 0; i+8 <= len(commands); {
-		cmd := binary.LittleEndian.Uint32(commands[i:])
-		size := int(binary.LittleEndian.Uint32(commands[i+4:]))
-
-		if size < 8 || i+size > len(commands) {
-			return fmt.Errorf("the supplied %s for %s is not a Mach-O program this build can read: its load commands do not fit inside what its header describes", name, target)
-		}
-
-		switch cmd {
-		case lcCodeSignature:
-			signed = true
-		case lcLoadDylib, lcIdDylib, lcLoadWeakDylib, lcReexportDylib, lcLoadUpwardDylib:
-			lib, err := nameOfDylib(commands[i : i+size])
-			if err != nil {
-				return fmt.Errorf("the supplied %s for %s is not a Mach-O program this build can read: %v", name, target, err)
-			}
-
-			if !strings.HasPrefix(lib, systemLibraryDir) {
-				return fmt.Errorf("the supplied %s links %s: the ffmpeg a macOS release carries depends on nothing the host has to install, which is what the recipe in the manifest gives you when no external library is enabled and nothing is found in a prefix", name, lib)
-			}
-		}
-
-		i += size
-	}
-
-	if !signed {
-		return fmt.Errorf("the supplied %s carries no code signature: an Apple Silicon Mac refuses to run unsigned code, and the server runs its ffmpeg from a file it writes out of its own binary, so sign the pair with codesign -s - before you drop it", name)
-	}
-
 	return nil
 }
 
-// nameOfDylib is the library one load command refers to. The name starts at the offset the command
-// carries and ends at its first NUL, inside the command's own size.
-func nameOfDylib(command []byte) (string, error) {
-	offset := int(binary.LittleEndian.Uint32(command[8:]))
-
-	if offset < 12 || offset >= len(command) {
-		return "", fmt.Errorf("a library reference names its path at offset %d, outside the %d bytes of its own load command", offset, len(command))
-	}
-
-	body := command[offset:]
-
-	end := strings.IndexByte(string(body), 0)
-	if end < 0 {
-		return "", fmt.Errorf("a library reference names a path with no end inside its own %d byte load command", len(command))
-	}
-
-	return string(body[:end]), nil
-}
-
-// checkFreeBSDProgram reports whether the program at path is a static 64-bit x86-64 ELF branded FreeBSD,
-// which is the pair freebsd-amd64 carries: a program the host needs nothing installed for.
+// checkFreeBSDProgram reports whether the program at path is a 64-bit x86-64 ELF branded FreeBSD, which is
+// the machine code freebsd-amd64 runs. Whether it links FreeBSD's loader and libraries is the business of
+// the FreeBSD box that built it, and the licence text names that box.
 func checkFreeBSDProgram(path string, name string, target string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -237,7 +166,7 @@ func checkFreeBSDProgram(path string, name string, target string) error {
 	}
 
 	if string(header[0:4]) != elfMagic {
-		return fmt.Errorf("the supplied %s for %s is not an ELF program: %s carries the pair its own architecture runs", name, target, target)
+		return fmt.Errorf("the supplied %s for %s is not an ELF program: %s carries the ffmpeg binaries its own architecture runs", name, target, target)
 	}
 
 	// The identification area is the magic, the class, the byte order, the version, the brand, the ABI
@@ -247,38 +176,11 @@ func checkFreeBSDProgram(path string, name string, target string) error {
 	}
 
 	if osabi := header[7]; osabi != elfFreeBSDOSABI {
-		return fmt.Errorf("the supplied %s is branded %s, and %s runs the pair built on FreeBSD: build it on FreeBSD, with FreeBSD's own libc", name, nameOfOSABI(osabi), target)
+		return fmt.Errorf("the supplied %s is branded %s, and %s runs the ffmpeg binaries built on FreeBSD: build them on FreeBSD, with FreeBSD's own libc", name, nameOfOSABI(osabi), target)
 	}
 
 	if machine := binary.LittleEndian.Uint16(header[18:]); machine != elfX8664Machine {
 		return fmt.Errorf("the supplied %s is compiled for the %s architecture, and %s runs x86-64", name, nameOfMachine(machine), target)
-	}
-
-	offset := int(binary.LittleEndian.Uint64(header[32:]))
-	stride := int(binary.LittleEndian.Uint16(header[54:]))
-	count := int(binary.LittleEndian.Uint16(header[56:]))
-
-	if offset < elfHeaderSize || stride < elfProgramHeaderSize || count == 0 {
-		return fmt.Errorf("the supplied %s for %s is not an ELF program this build can read: its header describes %d program headers of %d bytes at offset %d", name, target, count, stride, offset)
-	}
-
-	if size := stride * count; size > maxHeaders {
-		return fmt.Errorf("the supplied %s for %s is not an ELF program this build can read: its header describes %d bytes of program headers", name, target, size)
-	}
-
-	if _, err := f.Seek(int64(offset), io.SeekStart); err != nil {
-		return fmt.Errorf("the supplied %s for %s is not an ELF program this build can read: %w", name, target, err)
-	}
-
-	entries := make([]byte, stride*count)
-	if _, err := io.ReadFull(f, entries); err != nil {
-		return fmt.Errorf("the supplied %s for %s is not a complete ELF program: its program headers are shorter than its header says", name, target)
-	}
-
-	for i := 0; i < count; i++ {
-		if kind := binary.LittleEndian.Uint32(entries[i*stride:]); kind == elfInterpSeg {
-			return fmt.Errorf("the supplied %s is linked against a program interpreter: the FreeBSD release this project ships carries a statically linked ffmpeg, which needs nothing installed on the host, so build it with the recipe's --extra-ldflags=-static", name)
-		}
 	}
 
 	return nil

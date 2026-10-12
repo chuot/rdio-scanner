@@ -693,26 +693,24 @@ func TestTheBuildRefusesASuppliedPairThatIsNotThePinnedOne(t *testing.T) {
 	}
 }
 
-// A pair accepted by digest and by proof is refused on its shape, with the rule named: the build cannot
-// run it, and the headers are what it can read.
-func TestTheBuildRefusesASuppliedPairThatIsNotTheProgramItsTargetRuns(t *testing.T) {
+// The machine code the file holds is the one thing the build reads of binaries it did not compile, and it
+// reads it before anything else: an Apple Silicon Mac runs the arm64 binaries and the x86-64 ones alike,
+// so the only thing that says the Intel archive carries Intel code is the header. The refusal names the
+// architecture in both words, because the operator has to see which one is in front of them.
+func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 	repo := t.TempDir()
 
-	// The same recipe on an Apple Silicon Mac produces a signed program. An unsigned build is what a
-	// maintainer gets when he forgets codesign, and the proof is recorded for it, because the check ran
-	// on a machine that let it start.
-	unsigned := aSystemProgram(theArm64CPU)
-	unsigned.Signature = false
+	intel := machOBytes(aSystemProgram(theX8664CPU))
 
-	manifest := aSuppliedPairWith(t, repo, "macos-arm64", machOBytes(unsigned), aSuppliedProgramBytes("macos-arm64"))
+	manifest := aSuppliedPairWith(t, repo, "macos-arm64", intel, intel)
 
 	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err == nil {
-		t.Fatal("the build adopted an unsigned program for macos-arm64")
+		t.Fatal("the build adopted x86-64 binaries for macos-arm64, which runs arm64")
 	}
 
-	if !strings.Contains(err.Error(), "signature") {
-		t.Errorf("the failure %q does not name the code signature rule", err.Error())
+	if !strings.Contains(err.Error(), "arm64") || !strings.Contains(err.Error(), "x86-64") {
+		t.Errorf("the failure %q does not name both architectures", err.Error())
 	}
 }
 

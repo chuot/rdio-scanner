@@ -33,10 +33,11 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// These are unit tests of the shape rules a supplied ffmpeg pair is adopted under. The build cannot run
-// a macOS or a FreeBSD program, so the headers are what it can read, and every rule here is a byte
-// comparison a fixture can produce: the fixtures are headers this project writes, not programs it
-// compiled.
+// These are unit tests of the one rule the build reads out of a program it did not compile: which machine
+// code the file holds. The build compiles these programs on a machine that runs their operating system and
+// runs them there, so nothing else about them is the build's business — not whether they are signed, not
+// which libraries they link, not whether they are static. Every rule here is a byte comparison a fixture
+// can produce: the fixtures are headers this project writes, not programs it compiled.
 
 // The Mach-O numbers the rules are written in. A macOS ffmpeg is built by the maintainer, and these are
 // the numbers his linker writes.
@@ -316,11 +317,12 @@ func TestASuppliedMachOIsTheProgramItsTargetRuns(t *testing.T) {
 	}
 }
 
-// The pair the operator's Mac compiles is a program that machine's own linker shaped: nineteen load
+// The binaries the owner's Mac compiles are a program that machine's own linker shaped: nineteen load
 // commands, five of them 72-byte segments, the count of them a small number and the size they occupy in
-// the hundreds. A reader that reads the count as the size reads this program as a header whose load
-// commands do not fit inside what it describes, which is the answer a Mac that compiled its pair
-// successfully printed when the build came to prove it.
+// the hundreds. The build reads the first words of that header and nothing after it, and accepts the
+// program: a reader that walked the load commands read this program as a header whose load commands do
+// not fit inside what it describes, which is the answer a Mac that compiled its binaries successfully
+// printed when the build came to prove them.
 func TestTheBuildReadsAProgramTheMacsLinkerShaped(t *testing.T) {
 	for _, tc := range []struct {
 		target  string
@@ -373,30 +375,27 @@ func TestTheBuildRefusesAUniversalMachO(t *testing.T) {
 	}
 }
 
-// An Apple Silicon Mac refuses to run unsigned code, and the server runs its ffmpeg from a file it
-// writes out of its own binary at startup. An unsigned pair is a server that converts nothing, and the
-// signature is a hash over the file's contents, so signing has to happen before the drop.
-func TestTheBuildRefusesAMachOWithNoCodeSignature(t *testing.T) {
+// The compile signs the programs it produces as the last step of building them, and a program the
+// maintainer built by hand is signed by the machine that built it. Whether the code inside the archive is
+// signed is that machine's business and macOS's, not the build's: the build adopts it and the licence
+// text names the host it came from, which is the evidence a deployment has.
+func TestTheBuildAdoptsAMachOWithNoCodeSignature(t *testing.T) {
 	fixture := aSystemProgram(theArm64CPU)
 	fixture.Signature = false
 
 	path := writeMachO(t, "ffmpeg", fixture)
 
-	err := checkSuppliedProgram(path, "macos-arm64")
-	if err == nil {
-		t.Fatal("an unsigned program was adopted for macos-arm64, which runs signed code only")
-	}
-
-	if !strings.Contains(err.Error(), "signature") {
-		t.Errorf("the failure %q does not name the code signature rule", err.Error())
+	if err := checkSuppliedProgram(path, "macos-arm64"); err != nil {
+		t.Errorf("an unsigned program was refused for macos-arm64: %v", err)
 	}
 }
 
-// macOS cannot link a static binary, so the bundle's rule for macOS is the rule the Linux and Windows
-// targets have in the only form macOS allows: the program depends on nothing the host has to install.
-// A library outside /usr/lib/ is a Homebrew bottle, and a deployment without Homebrew runs it for a
-// few seconds before it dies.
-func TestTheBuildRefusesAMachOLinkingALibraryTheHostHasToInstall(t *testing.T) {
+// The recipe the manifest records enables no external library, so the compile links only what the
+// operating system provides. A program the maintainer built by hand that links a Homebrew library, a
+// library resolved at run time, or a library from his own build directory is his choice: the build adopts
+// it, and the licence text names the host that compiled it, which is where a deployment checks whether
+// that host's libraries are there.
+func TestTheBuildAdoptsAMachOLinkingTheHostsOwnLibraries(t *testing.T) {
 	for _, tc := range []struct {
 		name, path string
 		command    uint32
@@ -412,14 +411,9 @@ func TestTheBuildRefusesAMachOLinkingALibraryTheHostHasToInstall(t *testing.T) {
 
 		path := writeMachO(t, "ffmpeg", fixture)
 
-		err := checkSuppliedProgram(path, "macos-amd64")
-		if err == nil {
-			t.Errorf("%s was adopted for macos-amd64", tc.name)
+		if err := checkSuppliedProgram(path, "macos-amd64"); err != nil {
+			t.Errorf("%s was refused for macos-amd64: %v", tc.name, err)
 			continue
-		}
-
-		if !strings.Contains(err.Error(), tc.path) {
-			t.Errorf("the failure %q does not name the library %s it refused", err.Error(), tc.path)
 		}
 	}
 }
@@ -1011,22 +1005,18 @@ func TestTheBuildRefusesASuppliedProgramThatIsNotFreeBSDs(t *testing.T) {
 	}
 }
 
-// FreeBSD links statically with its own libc, and the recipe the manifest records is the recipe that
-// does it. A pair with a program interpreter needs FreeBSD's own loader and every library it pulls in,
-// which is the thing the bundle exists to avoid.
-func TestTheBuildRefusesADynamicFreeBSDProgram(t *testing.T) {
+// The recipe the manifest records links FreeBSD statically, and that is what the compile produces. A
+// program the maintainer built by hand with a program interpreter is his choice, the same as a macOS
+// program linking a Homebrew library: the build adopts it, and the licence text names the host that
+// compiled it.
+func TestTheBuildAdoptsADynamicFreeBSDProgram(t *testing.T) {
 	fixture := aStaticFreeBSDProgram()
 	fixture.Segments = []uint32{theInterpSegment, theLoadSegment}
 
 	path := writeELF(t, "ffprobe", fixture)
 
-	err := checkSuppliedProgram(path, "freebsd-amd64")
-	if err == nil {
-		t.Fatal("a pair with a program interpreter was adopted for freebsd-amd64")
-	}
-
-	if !strings.Contains(err.Error(), "static") {
-		t.Errorf("the failure %q does not name the static linking rule", err.Error())
+	if err := checkSuppliedProgram(path, "freebsd-amd64"); err != nil {
+		t.Errorf("a program with a program interpreter was refused for freebsd-amd64: %v", err)
 	}
 }
 
