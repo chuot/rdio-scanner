@@ -136,9 +136,15 @@ func checkMachO(path string, name string, cpuType uint32, target string) error {
 		return fmt.Errorf("the supplied %s for %s is not a Mach-O program: it is shorter than the header a Mach-O program starts with", name, target)
 	}
 
-	switch magic := binary.LittleEndian.Uint32(header[0:]); magic {
-	case fatMagic:
+	// A universal binary's magic is written big-endian by every linker that produces one, whatever the
+	// byte order of the images inside it; a thin image's magic is the byte order of that image. So the
+	// fat magic is looked for in the big-endian reading of the first four bytes, and the thin magics in
+	// the little-endian one.
+	if binary.BigEndian.Uint32(header[0:]) == fatMagic {
 		return fmt.Errorf("the supplied %s for %s is a universal binary: this project ships one archive per architecture and each binary carries the pair that architecture runs, so build one program per architecture", name, target)
+	}
+
+	switch magic := binary.LittleEndian.Uint32(header[0:]); magic {
 	case machOMagic:
 	case machO32Magic:
 		return fmt.Errorf("the supplied %s for %s is a 32-bit Mach-O program: the macOS releases this project ships are 64-bit", name, target)
@@ -150,7 +156,10 @@ func checkMachO(path string, name string, cpuType uint32, target string) error {
 		return fmt.Errorf("the supplied %s is compiled for the %s architecture, and %s runs %s", name, nameOfCPU(cpu), target, nameOfCPU(cpuType))
 	}
 
-	commands := make([]byte, binary.LittleEndian.Uint32(header[16:]))
+	// The header's own words, in order: the number of load commands at offset 16 and the total size of
+	// those commands at offset 20. The size is what the commands occupy; the count is how many of them
+	// there are. A program a linker produced carries both, and they are not the same number.
+	commands := make([]byte, binary.LittleEndian.Uint32(header[20:]))
 	if len(commands) == 0 || len(commands) > maxHeaders {
 		return fmt.Errorf("the supplied %s for %s is not a Mach-O program this build can read: its header says its load commands are %d bytes", name, target, len(commands))
 	}
@@ -230,6 +239,8 @@ func checkFreeBSDProgram(path string, name string, target string) error {
 		return fmt.Errorf("the supplied %s for %s is not an ELF program: %s carries the pair its own architecture runs", name, target, target)
 	}
 
+	// The identification area is the magic, the class, the byte order, the version, the brand, the ABI
+	// version, and then padding: the class is the fifth byte of the header and the brand the eighth.
 	if header[4] != elf64Class {
 		return fmt.Errorf("the supplied %s for %s is a 32-bit program: the FreeBSD release this project ships is 64-bit", name, target)
 	}

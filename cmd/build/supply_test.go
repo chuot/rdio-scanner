@@ -45,6 +45,8 @@ const (
 	theX8664CPU = 0x01000007 // CPU_TYPE_X86_64
 	theArm64CPU = 0x0100000c // CPU_TYPE_ARM64
 
+	theExecFileType = 2 // MH_EXECUTE: a program the operating system runs, which is what a pair is
+
 	theLoadDylib       = 0x0c       // LC_LOAD_DYLIB
 	theLoadWeakDylib   = 0x80000018 // LC_LOAD_WEAK_DYLIB
 	theReexportDylib   = 0x8000001f // LC_REEXPORT_DYLIB
@@ -95,7 +97,11 @@ func writeMachO(t *testing.T, name string, fixture aMachO) string {
 	return path
 }
 
-// machOBytes is the header and the load commands a fixture describes.
+// machOBytes is the header and the load commands a fixture describes, laid out the way a Mach-O linker
+// lays them out: magic, cpu type, cpu subtype, file type, the number of load commands, the total size of
+// those commands, the flags, a reserved word. The count and the size are two different numbers — four
+// commands of 24, 24, 24 and 16 bytes are 4 and 88 — and a reader that takes one for the other reads a
+// program a real linker produced as a header whose load commands do not fit inside it.
 func machOBytes(fixture aMachO) []byte {
 	commands := []byte{}
 	count := 0
@@ -111,12 +117,25 @@ func machOBytes(fixture aMachO) []byte {
 	}
 
 	header := make([]byte, 32)
-	binary.LittleEndian.PutUint32(header[0:], fixture.Magic)
+	putMachOMagic(header, fixture.Magic)
 	binary.LittleEndian.PutUint32(header[4:], fixture.CPUType)
-	binary.LittleEndian.PutUint32(header[12:], uint32(count))
-	binary.LittleEndian.PutUint32(header[16:], uint32(len(commands)))
+	binary.LittleEndian.PutUint32(header[12:], theExecFileType)
+	binary.LittleEndian.PutUint32(header[16:], uint32(count))
+	binary.LittleEndian.PutUint32(header[20:], uint32(len(commands)))
 
 	return append(append(header, commands...), fixture.Body...)
+}
+
+// putMachOMagic writes the magic the way the image carries it on disk. A universal binary's magic is
+// big-endian whatever machine produced it; a thin image's magic is the byte order of the image itself,
+// which for the images this project ships is little-endian.
+func putMachOMagic(header []byte, magic uint32) {
+	if magic == theFatMagic {
+		binary.BigEndian.PutUint32(header[0:], magic)
+		return
+	}
+
+	binary.LittleEndian.PutUint32(header[0:], magic)
 }
 
 func aDylibCommand(dylib aDylib) []byte {
@@ -140,6 +159,121 @@ func aCodeSignatureCommand() []byte {
 	binary.LittleEndian.PutUint32(command[4:], uint32(len(command)))
 
 	return command
+}
+
+// The command numbers a Mach-O linker writes into a program, beyond the library references and the
+// signature the rules above are about. The sizes are the sizes the linker writes for each of them.
+const (
+	theSegment64Command    = 0x19 // LC_SEGMENT_64, naming one segment of the program
+	theSymtabCommand       = 0x02 // LC_SYMTAB
+	theDysymtabCommand     = 0x0b // LC_DYSYMTAB
+	theLoadDylinkerCommand = 0x0e // LC_LOAD_DYLINKER: the dynamic linker the program needs
+	theUUIDCommand         = 0x1b // LC_UUID
+	theDyldInfoCommand     = 0x22 // LC_DYLD_INFO_ONLY
+	theFunctionStarts      = 0x26 // LC_FUNCTION_STARTS
+	theDataInCode          = 0x29 // LC_DATA_IN_CODE
+	theBuildVersion        = 0x2c // LC_BUILD_VERSION
+	theMainCommand         = 0x80000028
+	theExportsTrie         = 0x80000033 // LC_DYLD_EXPORTS_TRIE
+	theChainedFixups       = 0x80000034 // LC_DYLD_CHAINED_FIXUPS
+)
+
+// aCommandOf is a load command of the size the linker writes for it: its number, the size it occupies,
+// and the bytes the linker leaves in the rest.
+func aCommandOf(command uint32, size int) []byte {
+	bytes := make([]byte, size)
+
+	binary.LittleEndian.PutUint32(bytes[0:], command)
+	binary.LittleEndian.PutUint32(bytes[4:], uint32(size))
+
+	return bytes
+}
+
+// aSegmentCommand is the 72-byte command a Mach-O linker writes for one segment of a program, naming the
+// segment inside it.
+func aSegmentCommand(name string) []byte {
+	bytes := aCommandOf(theSegment64Command, 72)
+
+	copy(bytes[8:24], name)
+
+	return bytes
+}
+
+// aDylinkerCommand names the dynamic linker a program needs, the way the linker writes it: the name
+// starts after the command's fixed part.
+func aDylinkerCommand(path string) []byte {
+	size := 12 + len(path) + 1
+	if size%8 != 0 {
+		size += 8 - size%8
+	}
+
+	bytes := aCommandOf(theLoadDylinkerCommand, size)
+
+	binary.LittleEndian.PutUint32(bytes[8:], 12)
+	copy(bytes[12:], path)
+
+	return bytes
+}
+
+// aMainCommandSize is the size of the entry-point command for one architecture: it carries the machine's
+// register set, so it is a different size for each.
+func aMainCommandSize(cpuType uint32) int {
+	if cpuType == theArm64CPU {
+		return 152
+	}
+
+	return 248
+}
+
+// theLinkerShapedMachO is the program a Mac's own linker produces for one architecture: five 72-byte
+// segments, the symbol tables, the dynamic linker's name, the uuid, the build version, the entry point,
+// the fixups, the two libraries the operating system provides, and the code signature. Nineteen commands
+// occupying 860 bytes: the count is a small number and the size is in the hundreds, and they live in
+// different words of the header. A reader that takes the count for the size reads this program as a
+// header whose load commands do not fit inside what it describes.
+func theLinkerShapedMachO(cpuType uint32) []byte {
+	commands := [][]byte{
+		aSegmentCommand("__PAGEZERO"),
+		aSegmentCommand("__TEXT"),
+		aSegmentCommand("__DATA_CONST"),
+		aSegmentCommand("__DATA"),
+		aSegmentCommand("__LINKEDIT"),
+		aCommandOf(theSymtabCommand, 24),
+		aCommandOf(theDysymtabCommand, 52),
+		aDylinkerCommand("/usr/lib/dyld"),
+		aCommandOf(theUUIDCommand, 24),
+		aCommandOf(theBuildVersion, 24),
+		aCommandOf(theDyldInfoCommand, 48),
+		aCommandOf(theMainCommand, aMainCommandSize(cpuType)),
+		aCommandOf(theFunctionStarts, 16),
+		aCommandOf(theDataInCode, 16),
+		aCommandOf(theChainedFixups, 16),
+		aCommandOf(theExportsTrie, 16),
+		aDylibCommand(aDylib{Command: theLoadDylib, Path: "/usr/lib/libSystem.B.dylib"}),
+		aDylibCommand(aDylib{Command: theLoadDylib, Path: "/usr/lib/libz.1.2.13.dylib"}),
+		aCodeSignatureCommand(),
+	}
+
+	size := 0
+
+	for _, command := range commands {
+		size += len(command)
+	}
+
+	header := make([]byte, 32)
+	putMachOMagic(header, theMachOMagic)
+	binary.LittleEndian.PutUint32(header[4:], cpuType)
+	binary.LittleEndian.PutUint32(header[12:], theExecFileType)
+	binary.LittleEndian.PutUint32(header[16:], uint32(len(commands)))
+	binary.LittleEndian.PutUint32(header[20:], uint32(size))
+
+	body := append([]byte{}, header...)
+
+	for _, command := range commands {
+		body = append(body, command...)
+	}
+
+	return append(body, make([]byte, 4096)...)
 }
 
 // aSystemProgram is the pair of fixtures every rule is measured against: a thin 64-bit image of the
@@ -175,6 +309,27 @@ func TestASuppliedMachOIsTheProgramItsTargetRuns(t *testing.T) {
 
 		if err := checkSuppliedProgram(path, target); err != nil {
 			t.Errorf("%s refused a signed thin %s Mach-O linking only system libraries: %v", target, nameOfCPU(cpuType), err)
+		}
+	}
+}
+
+// The pair the operator's Mac compiles is a program that machine's own linker shaped: nineteen load
+// commands, five of them 72-byte segments, the count of them a small number and the size they occupy in
+// the hundreds. A reader that reads the count as the size reads this program as a header whose load
+// commands do not fit inside what it describes, which is the answer a Mac that compiled its pair
+// successfully printed when the build came to prove it.
+func TestTheBuildReadsAProgramTheMacsLinkerShaped(t *testing.T) {
+	for _, tc := range []struct {
+		target  string
+		cpuType uint32
+	}{
+		{target: "macos-amd64", cpuType: theX8664CPU},
+		{target: "macos-arm64", cpuType: theArm64CPU},
+	} {
+		path := writeMachO(t, "ffmpeg", aMachO{Raw: theLinkerShapedMachO(tc.cpuType)})
+
+		if err := checkSuppliedProgram(path, tc.target); err != nil {
+			t.Errorf("%s refused the program its own linker shapes: %v", tc.target, err)
 		}
 	}
 }
@@ -363,7 +518,11 @@ func writeELF(t *testing.T, name string, fixture aFreeBSDProgram) string {
 	return path
 }
 
-// elfBytes is the header and the program headers a fixture describes.
+// elfBytes is the header and the program headers a fixture describes, laid out the way an ELF linker
+// lays them out. The identification area after the magic is the class, the byte order, the version, the
+// brand, the ABI version, and padding: the class is the fifth byte of the header and the brand the
+// eighth. The program header offset, the size of one entry, and the count of them are the words at
+// offsets 32, 54 and 56 of a 64-bit header.
 func elfBytes(fixture aFreeBSDProgram) []byte {
 	header := make([]byte, 64)
 	copy(header[0:], theELFMagic)
@@ -860,4 +1019,89 @@ func theManifestFile(t *testing.T, repo string) []byte {
 	}
 
 	return body
+}
+
+// The header a program carries is the promise its reader keeps. A Mach-O header names its load commands
+// twice — the count of them at offset 16, and the size they occupy at offset 20, two different numbers.
+// An ELF program's class is the sixth byte of its identification area and its brand the ninth, with a
+// padding byte between the magic and the class. A universal binary's magic is big-endian on disk,
+// whatever machine produced it. A fixture that writes the bytes its own reader happens to look at,
+// instead of the bytes a linker writes, proves the reader agrees with itself and proves nothing about a
+// program: that is how a pair compiled on a Mac came to be refused as a header whose load commands do
+// not fit inside what it describes, and how a FreeBSD program compiled on FreeBSD came to be refused as
+// a 32-bit one. This test reads the fixtures' own bytes back at the published offsets.
+func TestTheFixtureProgramsAreLaidOutTheWayLinkersLayThemOut(t *testing.T) {
+	t.Run("the Mach-O header names its load commands twice", func(t *testing.T) {
+		fixture := aSystemProgram(theArm64CPU)
+
+		bytes := machOBytes(fixture)
+
+		count := len(fixture.Dylibs)
+		size := 0
+
+		for _, dylib := range fixture.Dylibs {
+			size += len(aDylibCommand(dylib))
+		}
+
+		if fixture.Signature {
+			count++
+			size += len(aCodeSignatureCommand())
+		}
+
+		if got := binary.LittleEndian.Uint32(bytes[16:]); got != uint32(count) {
+			t.Errorf("the header names %d load commands at offset 16, where the count lives; want %d", got, count)
+		}
+
+		if got := binary.LittleEndian.Uint32(bytes[20:]); got != uint32(size) {
+			t.Errorf("the header says its load commands occupy %d bytes at offset 20, where the size lives; want %d", got, size)
+		}
+
+		if count == size {
+			t.Errorf("the count of commands (%d) and the size they occupy (%d) are the same number: a fixture that writes one number in both places lets a reader that reads the count for the size pass", count, size)
+		}
+
+		// Walking the commands by the size each one names has to land exactly on the end of the area the
+		// header describes: that is the walk the build performs on a program it has been handed.
+		walked := 0
+
+		for walked < size {
+			walked += int(binary.LittleEndian.Uint32(bytes[machOHeaderSize+walked+4:]))
+		}
+
+		if walked != size {
+			t.Errorf("the load commands walked to %d bytes, and the header describes %d", walked, size)
+		}
+	})
+
+	t.Run("a universal binary's magic is big-endian on disk", func(t *testing.T) {
+		bytes := machOBytes(aMachO{Magic: theFatMagic, CPUType: theArm64CPU, Signature: true})
+
+		if got := binary.BigEndian.Uint32(bytes[0:]); got != theFatMagic {
+			t.Errorf("the fixture writes the universal magic as the bytes %x, want ca fe ba be", bytes[0:4])
+		}
+	})
+
+	t.Run("the ELF identification area carries the class and the brand", func(t *testing.T) {
+		bytes := elfBytes(aStaticFreeBSDProgram())
+
+		if bytes[4] != theELF64Class {
+			t.Errorf("the class is the byte %d at offset 4, want %d: the fifth byte of the header is the class", bytes[4], theELF64Class)
+		}
+
+		if bytes[5] != 1 {
+			t.Errorf("the byte order is %d at offset 5, want 1: the sixth byte says how the words are ordered", bytes[5])
+		}
+
+		if bytes[6] != 1 {
+			t.Errorf("the version is the byte %d at offset 6, want 1: the seventh byte is the version", bytes[6])
+		}
+
+		if bytes[7] != theFreeBSDOSABI {
+			t.Errorf("the brand is the byte %d at offset 7, want %d: the eighth byte of the header is the brand", bytes[7], theFreeBSDOSABI)
+		}
+
+		if bytes[9] != 0 {
+			t.Errorf("the padding at offset 9 holds %d: a program puts nothing in the bytes after its ABI version", bytes[9])
+		}
+	})
 }
