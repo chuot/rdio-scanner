@@ -50,7 +50,7 @@ What it fetches and compiles is build output: `.build/ffmpeg` holds the source t
 
 A server whose target carries none — `macos-amd64`, `macos-arm64`, `freebsd-amd64`, and a plain `go build` a developer runs — converts with the ffmpeg its host installs, and says so once at startup when it cannot find one.
 
-The licence the compiled ffmpeg is under, the release it was compiled from, and the recipe it was compiled with are written next to the bundle and travel into each release archive as `FFMPEG.md`.
+The licence the compiled ffmpeg is under, the release it was compiled from, and the recipe it was compiled with are written next to the bundle and travel into each release archive as `FFMPEG.txt`.
 
 ## Say what version you are building
 
@@ -87,8 +87,8 @@ When finished, you will find the precompiled versions for various platforms in t
         rdio-scanner-macos-arm64-v8.0.0.zip
         rdio-scanner-windows-amd64-v8.0.0.zip
 
-Each archive holds the server binary for its platform and the documentation as the files it is written in: the change log, the platform page for that target, the scanner webapp guide, the FAQ, and the pictures those four files point at. The archive's layout is the repository's own layout, so the relative picture paths the documents wrote resolve inside the archive. For the five targets this project compiles an ffmpeg for, the archive also carries the `FFMPEG.md` licence text.
+Each archive holds the server binary for its platform and the administrator guide: one self-contained HTML file, pictures inside it, readable offline from the extracted folder. For the five targets this project compiles an ffmpeg for, the archive also carries the ffmpeg licence as plain text under the name `FFMPEG.txt`.
 
-The tool stamps nothing. The version reaches the binary through the linker flag and the bundles through the environment. The version literals the documentation carries — in `COMPILING.md`, `README.md`, `docs/docker/README.md`, and the platform pages — are edited by hand at release.
+The tool stamps nothing. The version reaches the binary through the linker flag and the bundles through the environment. The version literals the documentation carries — in `COMPILING.md`, `README.md`, and the administrator guide — are edited by hand at release.
 
 **Happy Rdio scanning !**
