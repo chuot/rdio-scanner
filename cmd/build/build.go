@@ -35,6 +35,8 @@ import (
 	"strings"
 
 	"rdio-scanner/cmd/build/buildinfo"
+
+	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
 // tool is the build tool: where the repository is, how it asks that repository what it says about
@@ -79,6 +81,48 @@ type tool struct {
 	// recorded in the proof the release reads. The ffmpeg check command proves a dropped pair with it, and
 	// the compile of a supplied pair proves the pair it just produced with the same.
 	prove func(target string, paths ffmpegPaths, stdout io.Writer) (anFfmpegCheck, error)
+
+	// source is the ffmpeg release the manifest pins arriving in the build's cache and being recognised
+	// as that release: the fetch when the tree does not have it, and the digest that says it is. Every
+	// compile passes through it, in a container and on a target's own host alike, because the source is
+	// the one input both of them fetch over the network.
+	source func(ffmpegSource, bundle.Manifest) error
+
+	// machine is the platform the build is running on. A supplied target is decided by it — the pair is
+	// compiled by the machine that is the platform it runs on, and adopted by every other — so the plan
+	// the run composes is composed with it, and the run asks it of the machine rather than reading it in
+	// the middle of the plan.
+	machine func() host
+}
+
+// newTool is the tool the build command runs with: the tree it works in, and every part the phases ask
+// of it.
+//
+// The parts the phases ask for are wired before the phases themselves are bound, because taking a method
+// value of the tool captures the tool as it is at that moment: a phase bound first carries the copy made
+// before the fields after it were set, and the panic is in the phase, on the machine the operator is
+// standing on, where no test runs.
+func newTool(repo string) tool {
+	t := tool{
+		repo:         repo,
+		read:         readSource,
+		resolve:      resolveExecutable,
+		installed:    directoryExists,
+		execute:      runStep,
+		archive:      writeArchive,
+		clean:        cleanTree,
+		state:        buildState,
+		releaseFiles: archiveFiles,
+	}
+
+	t.prove = t.proveSuppliedPair
+	t.source = fetchAndCheckSource
+	t.machine = thisMachine
+
+	t.ffmpeg = t.runFFmpeg
+	t.checkFFmpeg = t.runFFmpegCheck
+
+	return t
 }
 
 // run resolves the version, says what it resolved and why, and then runs the steps that build it.

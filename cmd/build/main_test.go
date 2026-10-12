@@ -22,9 +22,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -740,5 +743,356 @@ func TestAFirstRunBuildsTheApplicationsTheFfmpegAndTheServer(t *testing.T) {
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("the run ran %v, want %v", got, want)
+	}
+}
+
+// The native run is the build standing on the host a supplied pair is compiled on. The two boundaries it
+// crosses are the external commands and the source arriving from the network, and both are stood in for
+// here. The tree is a real tree, because what the run writes is a manifest pin, a cache entry, and a bundle
+// directory, and those are the files the release reads.
+
+// whatRan is what the native run touched, gathered by the fakes: the order it ran in, the pair the proof
+// found and the mode it arrived with, and the pins that were in the manifest when the proof ran.
+type whatRan struct {
+	ran      []string
+	dropMode map[string]os.FileMode
+	pins     map[string]string
+}
+
+func aNativeRun(t *testing.T, target string, failAt string) (*tool, *bytes.Buffer, *whatRan, string) {
+	t.Helper()
+
+	repo := t.TempDir()
+
+	theManifestFile(t, repo)
+
+	// The directory the pair is dropped into is the directory the server embeds, and the repository
+	// carries it empty for each supplied target.
+	if err := os.MkdirAll(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target), 0755); err != nil {
+		t.Fatalf("the tree has no bundle directory for %s: %v", target, err)
+	}
+
+	seen := &whatRan{dropMode: map[string]os.FileMode{}, pins: map[string]string{}}
+
+	out := &bytes.Buffer{}
+
+	tl := &tool{
+		repo:      repo,
+		resolve:   func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		installed: func(string) bool { return true },
+
+		// The harness is the build standing on the host the pair is compiled on, which is the one
+		// fact that makes the plan compile the pair instead of skipping the target.
+		machine: func() host { return aMachineForTarget(target) },
+
+		source: func(src ffmpegSource, manifest bundle.Manifest) error {
+			seen.ran = append(seen.ran, "source")
+
+			if failAt == "source" {
+				return errors.New("the source the manifest pins is not there to fetch")
+			}
+
+			if err := os.MkdirAll(filepath.Dir(src.Path), 0755); err != nil {
+				return err
+			}
+
+			return os.WriteFile(src.Path, []byte("the source the manifest pins"), 0644)
+		},
+
+		execute: func(s step) error {
+			if s.label == failAt {
+				return errors.New(s.label + " said no")
+			}
+
+			seen.ran = append(seen.ran, s.label)
+
+			// The directory the step works in is what the step before it made: the unpack is the
+			// command that creates the source tree, and a harness that runs no command makes the
+			// directory the way the command that would have run makes it.
+			if err := os.MkdirAll(s.dir, 0755); err != nil {
+				return err
+			}
+
+			// The compile's own output: the pair the source tree ends with.
+			if s.label == "make" {
+				for _, name := range []string{"ffmpeg", "ffprobe"} {
+					if err := os.WriteFile(filepath.Join(s.dir, name), []byte("the compiled "+name), 0755); err != nil {
+						return err
+					}
+				}
+			}
+
+			return nil
+		},
+
+		prove: func(target string, paths ffmpegPaths, stdout io.Writer) (anFfmpegCheck, error) {
+			seen.ran = append(seen.ran, "prove")
+
+			drop := suppliedDropFor(paths, target)
+
+			body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+			if err != nil {
+				return anFfmpegCheck{}, err
+			}
+
+			var manifest bundle.Manifest
+
+			if err := json.Unmarshal(body, &manifest); err != nil {
+				return anFfmpegCheck{}, err
+			}
+
+			// The pins the proof finds are the pins that were there before it ran. A build that pinned
+			// first would adopt on the digest it promised, and the proof would be the step that agrees
+			// with it afterwards.
+			seen.pins["ffmpeg"] = manifest.Targets[target].Programs["ffmpeg"]
+			seen.pins["ffprobe"] = manifest.Targets[target].Programs["ffprobe"]
+
+			for _, name := range []string{"ffmpeg", "ffprobe"} {
+				info, err := os.Stat(drop[name])
+				if err != nil {
+					return anFfmpegCheck{}, fmt.Errorf("the compile left no %s to prove: %w", name, err)
+				}
+
+				seen.dropMode[name] = info.Mode().Perm()
+			}
+
+			if failAt == "prove" {
+				return anFfmpegCheck{}, errors.New("the proof said no")
+			}
+
+			digests := map[string]string{}
+
+			for _, name := range []string{"ffmpeg", "ffprobe"} {
+				body, err := os.ReadFile(drop[name])
+				if err != nil {
+					return anFfmpegCheck{}, err
+				}
+
+				digests[name] = sha256Of(body)
+			}
+
+			return aCheckFor(target, digests["ffmpeg"], digests["ffprobe"]), nil
+		},
+	}
+
+	return tl, out, seen, repo
+}
+
+// The pair a host compiles is proved, pinned, gzipped into the cache entry the pinned manifest names, and
+// published. The run is not a skip: the operator asked for the ffmpeg of the machine they are on, and the
+// server and the archive that carry it are what that run was for.
+func TestTheNativeRunCompilesProvesPinsAdoptsAndPublishes(t *testing.T) {
+	for _, target := range []string{"macos-arm64", "freebsd-amd64"} {
+		tl, out, seen, repo := aNativeRun(t, target, "")
+
+		skipped, err := tl.runFFmpeg(options{target: target}, out)
+		if err != nil {
+			t.Errorf("%s: the run on the host that is the target failed: %v", target, err)
+			continue
+		}
+
+		if skipped {
+			t.Errorf("%s: the run reports the pair it compiled as a pair it has nothing to produce for, and the release ships no archive for it", target)
+			continue
+		}
+
+		want := []string{"source", "unpack", "configure", "make", "strip"}
+
+		if strings.HasPrefix(target, "macos-") {
+			want = append(want, "sign")
+		}
+
+		want = append(want, "prove")
+
+		if !sameWords(seen.ran, want) {
+			t.Errorf("%s: the run did %v, want %v", target, seen.ran, want)
+		}
+
+		// The pair is dropped where the build embeds from, and executable: the server materializes it
+		// from the cache and runs it, and a pair dropped unreadable is a pair the server cannot start.
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			if seen.dropMode[name] != 0755 {
+				t.Errorf("%s: the %s was proved as mode %o, want 0755", target, name, seen.dropMode[name])
+			}
+		}
+
+		if seen.pins["ffmpeg"] != "" || seen.pins["ffprobe"] != "" {
+			t.Errorf("%s: the proof ran on pins that were already written (%v), so the release adopted on the digest the build promised and the proof only agreed with it", target, seen.pins)
+		}
+
+		body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+		if err != nil {
+			t.Fatalf("%s: the manifest the run pinned is not there to read: %v", target, err)
+		}
+
+		var pinned bundle.Manifest
+
+		if err := json.Unmarshal(body, &pinned); err != nil {
+			t.Fatalf("%s: the manifest the run pinned is not readable: %v", target, err)
+		}
+
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			want := sha256Of([]byte("the compiled " + name))
+
+			if got := pinned.Targets[target].Programs[name]; got != want {
+				t.Errorf("%s: the manifest pins %s as %s, want the digest of the pair the compile produced, %s", target, name, got, want)
+			}
+		}
+
+		// The cache entry is the one the pinned manifest names, because that is the entry the next run
+		// looks for: a pair gzipped into the entry the unpinned manifest named is a pair the next run
+		// compiles again.
+		paths := ffmpegPathsFor(repo, pinned, target)
+
+		for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+			if !aFileIsThere(paths.cachedProgram(name)) {
+				t.Errorf("%s: the pair is not in the cache entry the pinned manifest names (%s)", target, paths.cached)
+			}
+
+			if !aFileIsThere(filepath.Join(paths.bundle, name)) {
+				t.Errorf("%s: the bundle the server embeds has no %s", target, name)
+			}
+		}
+
+		if !aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+			t.Errorf("%s: the bundle carries no licence text, and the archive quotes the one it ships", target)
+		}
+
+		for _, name := range suppliedDropFor(paths, target) {
+			if aFileIsThere(name) {
+				t.Errorf("%s: the raw %s is left in the directory the server embeds, next to the gzipped pair", target, filepath.Base(name))
+			}
+		}
+
+		for _, want := range []string{target, sha256Of([]byte("the compiled ffmpeg")), paths.bundle} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%s: the run prints %q nowhere, and the operator commits the pins from what it prints", target, want)
+			}
+		}
+	}
+}
+
+// A pair the proof refused is not pinned, not cached, and not published. The manifest is the file the
+// release reads, and a run that wrote a pin before the pair was proved would be a run that adopted on its
+// own promise.
+func TestTheNativeRunLeavesTheManifestAloneWhenTheProofFails(t *testing.T) {
+	tl, out, seen, repo := aNativeRun(t, "macos-arm64", "prove")
+
+	original := theManifestFile(t, repo)
+
+	_, err := tl.runFFmpeg(options{target: "macos-arm64"}, out)
+	if err == nil {
+		t.Fatal("the run published a pair its proof refused")
+	}
+
+	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+	if err != nil {
+		t.Fatalf("the manifest is not there to read: %v", err)
+	}
+
+	if !bytes.Equal(body, original) {
+		t.Error("the run wrote a pin into the manifest for a pair the proof refused")
+	}
+
+	if !sameWords(seen.ran, []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}) {
+		t.Errorf("the run did %v, and the proof is what refused the pair", seen.ran)
+	}
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "macos-arm64")
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		if aFileIsThere(paths.cachedProgram(name)) {
+			t.Errorf("the pair the proof refused is in the cache as %s", name)
+		}
+	}
+
+	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+		t.Error("the licence text names a pair the proof refused")
+	}
+}
+
+// A pair rebuilt on its own host replaces the pins the run before wrote. The manifest is a tracked file,
+// and its pins are the release's promise about a pair the release machine cannot run: a run that moved
+// them without saying so would be a release shipping a pair nobody read the change of.
+func TestANativeRunOnAManifestThatAlreadyPinsAPairPrintsTheDigestItReplaces(t *testing.T) {
+	tl, out, seen, repo := aNativeRun(t, "macos-arm64", "")
+
+	aManifestPinnedIn(t, repo, "macos-arm64", sha256Of([]byte("the old ffmpeg")), sha256Of([]byte("the old ffprobe")))
+
+	skipped, err := tl.runFFmpeg(options{target: "macos-arm64"}, out)
+	if err != nil {
+		t.Fatalf("the run refused to rebuild the pair the manifest already pins: %v", err)
+	}
+
+	if skipped {
+		t.Error("the run reports a rebuilt pair as a pair it has nothing to produce for, and the release ships no archive for it")
+	}
+
+	if !sameWords(seen.ran, []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}) {
+		t.Errorf("the run did %v, want the compile and then the proof", seen.ran)
+	}
+
+	says := out.String()
+
+	for _, want := range []string{"replaces", sha256Of([]byte("the old ffmpeg")), sha256Of([]byte("the old ffprobe"))} {
+		if !strings.Contains(says, want) {
+			t.Errorf("the run prints %q nowhere, and the digest it replaced is the digest the release is shipping today", want)
+		}
+	}
+
+	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
+	if err != nil {
+		t.Fatalf("the manifest the run re-pinned is not there to read: %v", err)
+	}
+
+	var pinned bundle.Manifest
+
+	if err := json.Unmarshal(body, &pinned); err != nil {
+		t.Fatalf("the manifest the run re-pinned is not readable: %v", err)
+	}
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		want := sha256Of([]byte("the compiled " + name))
+
+		if got := pinned.Targets["macos-arm64"].Programs[name]; got != want {
+			t.Errorf("the manifest pins %s as %s, want the digest of the pair this run compiled, %s", name, got, want)
+		}
+	}
+
+	// The cache entry is keyed by the manifest, so the rebuilt pair has to land in the entry the new
+	// pins name: a pair left in the entry the old pins named is a pair the next run compiles again.
+	paths := ffmpegPathsFor(repo, pinned, "macos-arm64")
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		if !aFileIsThere(paths.cachedProgram(name)) {
+			t.Errorf("the rebuilt pair is not in the cache entry its own pins name (%s), so the next run compiles it again", paths.cached)
+		}
+	}
+}
+
+// aManifestPinnedIn writes pins into the manifest in the tree the build runs in, the way the run that
+// pinned this release's pair wrote them.
+func aManifestPinnedIn(t *testing.T, repo string, target string, ffmpeg string, ffprobe string) {
+	t.Helper()
+
+	path := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the manifest cannot be pinned ahead of the run: %v", err)
+	}
+
+	pinned, _, err := splicePin(body, target, "ffmpeg", ffmpeg)
+	if err != nil {
+		t.Fatalf("the manifest cannot be pinned ahead of the run: %v", err)
+	}
+
+	pinned, _, err = splicePin(pinned, target, "ffprobe", ffprobe)
+	if err != nil {
+		t.Fatalf("the manifest cannot be pinned ahead of the run: %v", err)
+	}
+
+	if err := os.WriteFile(path, pinned, 0644); err != nil {
+		t.Fatalf("the manifest cannot be pinned ahead of the run: %v", err)
 	}
 }

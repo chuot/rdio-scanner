@@ -23,6 +23,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -268,5 +269,36 @@ func TestAReleaseRunAsksWhetherTheServerBinaryIsCurrent(t *testing.T) {
 
 	if !state.serverCurrent {
 		t.Errorf("a release run does not ask whether the binary it is building is current: %v", state)
+	}
+}
+
+// The build command runs with the tool newTool makes, and every part the phases ask for has to be wired
+// into it. A part left unwired is a nil function a phase calls on the machine the operator is standing
+// on, and the phases that compile a supplied pair run on a Mac and a FreeBSD box this machine cannot
+// reach: the panic is in the operator's terminal, and no test here runs that code.
+//
+// The order the wiring is written in is part of what this pins. Taking a method value of the tool
+// captures the tool as it is at that moment, so a phase bound before the fields it asks for are set
+// carries a copy that does not have them.
+func TestTheBuildToolCarriesEveryPartThePhasesAskFor(t *testing.T) {
+	tl := newTool("/repo")
+
+	if tl.repo != "/repo" {
+		t.Errorf("the tool is told to build %q, want the tree it was given", tl.repo)
+	}
+
+	value := reflect.ValueOf(tl)
+	kind := value.Type()
+
+	for i := 0; i < kind.NumField(); i++ {
+		field := kind.Field(i)
+
+		if field.Type.Kind() != reflect.Func {
+			continue
+		}
+
+		if value.Field(i).IsNil() {
+			t.Errorf("the tool the build command runs with has no %s, and the phase that asks for it panics on the machine the operator is standing on", field.Name)
+		}
 	}
 }

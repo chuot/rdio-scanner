@@ -37,21 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	t := tool{
-		repo:         repo,
-		read:         readSource,
-		resolve:      resolveExecutable,
-		installed:    directoryExists,
-		execute:      runStep,
-		archive:      writeArchive,
-		clean:        cleanTree,
-		state:        buildState,
-		releaseFiles: archiveFiles,
-	}
-
-	t.ffmpeg = t.runFFmpeg
-	t.checkFFmpeg = t.runFFmpegCheck
-	t.prove = t.proveSuppliedPair
+	t := newTool(repo)
 
 	os.Exit(t.run(os.Args[1:], os.Stdout))
 }

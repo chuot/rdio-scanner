@@ -992,7 +992,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		nativeTools:    nativeTools,
 	}
 
-	plan, err := planFFmpeg(o, t.repo, manifest, state, thisMachine())
+	plan, err := planFFmpeg(o, t.repo, manifest, state, t.machine())
 	if err != nil {
 		return false, err
 	}
@@ -1002,7 +1002,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	}
 
 	if plan.Native {
-		return false, fmt.Errorf("the ffmpeg for %s is compiled on this machine, and this build does not run that compile yet", target)
+		return t.runNativeFFmpeg(plan, manifest, target, stdout)
 	}
 
 	if record.Produced == suppliedProduction {
@@ -1016,13 +1016,9 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 		if plan.Source.Fetch {
 			fmt.Fprintf(stdout, "%-7s %s\n", "fetch", plan.Source.URL)
-
-			if err := fetchSource(plan.Source); err != nil {
-				return false, err
-			}
 		}
 
-		if err := checkSource(plan.Source.Path, manifest); err != nil {
+		if err := t.source(plan.Source, manifest); err != nil {
 			return false, err
 		}
 
@@ -1089,6 +1085,144 @@ func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, targe
 	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Paths.bundle)
 
 	return false, nil
+}
+
+// runNativeFFmpeg does the work of a supplied pair compiled on the machine that runs it.
+//
+// The pair is dropped where a maintainer's pair is dropped, and from there the run is the adoption path:
+// the same proof, the same gzip into the cache entry, the same licence text, and the same removal of the
+// raw pair from the directory the server embeds. A compile that published its own pair by its own route
+// would be a second adoption path, and the two would drift apart.
+//
+// The order is the order the evidence is needed in. The pair is proved before it is pinned, because a
+// manifest that pinned a pair the proof refused would be a release adopting on the build's own promise.
+// The pair is gzipped into the cache entry the pinned manifest names, because the cache entry is keyed by
+// the manifest and a pair landed in the entry the unpinned manifest named is a pair the next run compiles
+// again.
+func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
+	if err := prepareFFmpeg(plan.Paths); err != nil {
+		return false, err
+	}
+
+	// Each compile starts from a pristine copy of the tarball. A tree left by the compile before it,
+	// configured for whatever the host compiled last, fails later in a way that reads like a broken
+	// recipe. The container targets throw their own tree away in a step of their plan; this tree is the
+	// build's own to throw away.
+	if err := resetScratch(plan.Paths.scratch); err != nil {
+		return false, err
+	}
+
+	if plan.Source.Fetch {
+		fmt.Fprintf(stdout, "%-7s %s\n", "fetch", plan.Source.URL)
+	}
+
+	if err := t.source(plan.Source, manifest); err != nil {
+		return false, err
+	}
+
+	for _, s := range plan.Steps {
+		if err := t.execute(s); err != nil {
+			return false, fmt.Errorf("%s: %w", s.label, err)
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
+	}
+
+	if err := nativeDrop(t, plan, manifest, target); err != nil {
+		return false, err
+	}
+
+	fmt.Fprintf(stdout, "%-7s %s\n", "drop", plan.Paths.bundle)
+
+	check, err := t.prove(target, plan.Paths, stdout)
+	if err != nil {
+		return false, err
+	}
+
+	pinned, err := pinSuppliedPair(t.repo, target, check, stdout)
+	if err != nil {
+		return false, err
+	}
+
+	paths := ffmpegPathsFor(t.repo, pinned, target)
+
+	if err := adoptSuppliedFFmpeg(paths, target); err != nil {
+		return false, err
+	}
+
+	fmt.Fprintf(stdout, "%-7s %s\n", "adopt", paths.cached)
+
+	if err := publishFFmpeg(paths, pinned, target, suppliedFFMpegLicence(pinned, target, check)); err != nil {
+		return false, err
+	}
+
+	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, paths.bundle)
+
+	return false, nil
+}
+
+// nativeDrop puts the compiled pair where a maintainer's pair is dropped, executable.
+//
+// The proof reads it from there, the adoption consumes it from there, and the directory it is dropped in
+// is the directory the server embeds, which is why the adoption takes it back out again.
+func nativeDrop(t tool, plan ffmpegPlan, manifest bundle.Manifest, target string) error {
+	work := filepath.Join(plan.Paths.scratch, sourceDir(manifest))
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		body, err := os.ReadFile(filepath.Join(work, name))
+		if err != nil {
+			return fmt.Errorf("the compile produced no %s for %s: %w", name, target, err)
+		}
+
+		drop := filepath.Join(plan.Paths.bundle, name+programSuffix(target))
+
+		file, err := os.OpenFile(drop, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			return fmt.Errorf("the build cannot drop the compiled %s in %s: %w", name, plan.Paths.bundle, err)
+		}
+
+		if _, err := file.Write(body); err != nil {
+			file.Close()
+
+			return fmt.Errorf("the build cannot drop the compiled %s in %s: %w", name, plan.Paths.bundle, err)
+		}
+
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("the build cannot drop the compiled %s in %s: %w", name, plan.Paths.bundle, err)
+		}
+
+		// The mode is set, not asked for: a file that was already there keeps the mode it had, and a
+		// pair the server cannot start is a pair dropped unreadable.
+		if err := os.Chmod(drop, 0755); err != nil {
+			return fmt.Errorf("the build cannot make the compiled %s runnable: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// resetScratch empties the directory one target's compile works in.
+func resetScratch(scratch string) error {
+	if err := os.RemoveAll(scratch); err != nil {
+		return fmt.Errorf("the build cannot empty %s: %w", scratch, err)
+	}
+
+	if err := os.MkdirAll(scratch, 0755); err != nil {
+		return fmt.Errorf("the build cannot prepare %s: %w", scratch, err)
+	}
+
+	return nil
+}
+
+// fetchAndCheckSource puts the pinned release in the build's cache and recognises it as that release.
+func fetchAndCheckSource(src ffmpegSource, manifest bundle.Manifest) error {
+	if src.Fetch {
+		if err := fetchSource(src); err != nil {
+			return err
+		}
+	}
+
+	return checkSource(src.Path, manifest)
 }
 
 // prepareFFmpeg makes the directories the phase writes into. The scratch directory is emptied by the
