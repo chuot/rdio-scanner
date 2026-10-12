@@ -1,4 +1,4 @@
-// The OpenAPI section's view of the contract (FEAT-024, CA-003): every path and
+// The OpenAPI section's view of the contract: every path and
 // method of docs/openapi.json lands in exactly one group, the Config box splits
 // by resource, and a contract edit that adds an endpoint fails this test until
 // the view names it — the section can only ever show what the server answers.

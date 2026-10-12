@@ -1,4 +1,4 @@
-// rdio-admin-units (FEAT-016): the units of one system, saved on their own.
+// rdio-admin-units: the units of one system, saved on their own.
 // Same scaffold as the sites section: a system dropdown, the rows of the
 // selected system, add/delete/drag-sort, and the per-level save bar.
 

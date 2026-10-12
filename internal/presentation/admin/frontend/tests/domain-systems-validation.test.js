@@ -1,4 +1,4 @@
-// T042: systems section validation (domain). Mirrors the legacy admin.service.ts
+// Systems section validation (domain). Mirrors the legacy admin.service.ts
 // validators: systemRef/siteRef/talkgroupRef required + min + duplicate, unit
 // ref/range rules, groupIds/tagId cross-references, blacklists format.
 

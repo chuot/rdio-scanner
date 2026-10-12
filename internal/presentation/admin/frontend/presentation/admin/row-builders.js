@@ -1,4 +1,4 @@
-// Shared row builders for the systems tree sections (FEAT-016): the systems
+// Shared row builders for the systems tree sections: the systems
 // section and the three per-level sections (sites, talkgroups, units) build the
 // same panels, captions, fields and delete rows, so the builders live once.
 // The openState map keeps a row's details open across re-renders, exactly as

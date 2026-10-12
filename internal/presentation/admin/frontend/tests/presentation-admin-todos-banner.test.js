@@ -1,4 +1,4 @@
-// The todos banner (T013, CA-001, CA-002): todos are shown in a persistent banner at
+// The todos banner: todos are shown in a persistent banner at
 // the top of the screen, not as a section. The banner renders nothing when there is
 // nothing to say, and the navigation no longer carries a todos item.
 

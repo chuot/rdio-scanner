@@ -1,11 +1,11 @@
-// Systems section validation (T042). Pure port of the legacy admin.service.ts
+// Systems section validation. Pure port of the legacy admin.service.ts
 // validators for the systems tree: system → sites / talkgroups / units.
 //
 // Cross-references (talkgroup groupIds / tagId) are validated against the
 // current groups/tags working copies so a save can never hit a server foreign
 // key. Legacy quirk kept: a single-number groupIds value is membership-checked
 // the same way; arrays are checked too (legacy skipped arrays, which let stale
-// ids reach the server and fail with 417 — see decision-legacy-bug-fixes.md).
+// ids reach the server and fail with 417).
 
 const BLACKLISTS_PATTERN = /^[0-9]+(,[0-9]+)*$/;
 
@@ -150,7 +150,7 @@ export function systemsSectionInvalid(systems, groups, tags) {
   return false;
 }
 
-// Per-level invalid flag (FEAT-016): the rows of one level of one system,
+// Per-level invalid flag: the rows of one level of one system,
 // validated the same way the systems tree validated them, against the current
 // groups/tags working copies for the talkgroup foreign keys.
 export function subSectionInvalid(level, rows, groups, tags) {

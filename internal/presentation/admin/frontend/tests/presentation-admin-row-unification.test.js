@@ -1,4 +1,4 @@
-// Row layout unification (FEAT-019, CA-006): the show-code and copy-key icon
+// Row layout unification: the show-code and copy-key icon
 // buttons sit inline right of their field, Options carries the intro caption every
 // other section has, and Dirwatch renders its help through the standard caption
 // block (span.body + span.caption) instead of its own builder.

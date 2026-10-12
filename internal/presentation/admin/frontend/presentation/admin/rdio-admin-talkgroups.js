@@ -1,4 +1,4 @@
-// rdio-admin-talkgroups (FEAT-016): the talkgroups of one system, saved on
+// rdio-admin-talkgroups: the talkgroups of one system, saved on
 // their own. Same scaffold as the sites and units sections, plus the fields a
 // talkgroup carries (groups, tag, alert, delay, frequency, led, type) and the
 // Blacklist action, which appends the talkgroup id to the system's blacklists

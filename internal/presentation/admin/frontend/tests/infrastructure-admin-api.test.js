@@ -138,7 +138,7 @@ describe('infrastructure/admin-api — endpoints', () => {
     });
 });
 
-describe('infrastructure/admin-api — per-section endpoints (T035)', () => {
+describe('infrastructure/admin-api — per-section endpoints', () => {
     it('GET /api/admin/config/<section> returns just that section', async () => {
         const fakes = createFakes();
         fakes.respond('/api/admin/config/groups', 200, [{ id: 1, label: 'Dispatch' }]);

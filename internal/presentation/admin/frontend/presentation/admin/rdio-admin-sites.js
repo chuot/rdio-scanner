@@ -1,4 +1,4 @@
-// rdio-admin-sites (FEAT-016): the sites of one system, saved on their own.
+// rdio-admin-sites: the sites of one system, saved on their own.
 // A system dropdown picks the system; the rows are added, edited, deleted and
 // drag-sorted in the `subsection:sites:<systemId>` slice, and the save bar
 // issues the per-level PUT only.

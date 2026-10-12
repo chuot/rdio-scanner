@@ -1,8 +1,8 @@
-// rdio-admin-tools (T044): admin tools (legacy import-export-config,
+// rdio-admin-tools: admin tools (legacy import-export-config,
 // import-talkgroups, import-units screens). Not a config section: no
 // section bar. Imports mutate the per-section working copies (each affected
-// section becomes dirty and is saved individually — per-section model per
-// decision-admin-section-api.md, replacing the legacy whole-form swap).
+// section becomes dirty and is saved individually, replacing the legacy
+// whole-form swap).
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { ADMIN_CONFIG_SECTIONS } from '../../../../common/frontend/domain/config.js';

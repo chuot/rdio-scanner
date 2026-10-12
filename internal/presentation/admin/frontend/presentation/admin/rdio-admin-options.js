@@ -1,4 +1,4 @@
-// rdio-admin-options (T041): options section (legacy config/options). Single
+// rdio-admin-options: options section (legacy config/options). Single
 // object form (no rows): the editable options in legacy order with the legacy
 // control types. The 12-hour time format, dimmer delay, duplicate detection
 // time frame and playback-goes-live options are retired: the browser locale

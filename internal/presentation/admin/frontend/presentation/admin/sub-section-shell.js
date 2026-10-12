@@ -1,4 +1,4 @@
-// Shared scaffold for the three per-level sections (FEAT-016): a system
+// Shared scaffold for the three per-level sections: a system
 // dropdown over the saved systems in display order, the rows of the selected
 // system's level, add/delete/drag-sort with the 1-based order rewrite, and the
 // save bar bound to the `subsection:<level>:<systemId>` slice. The row editor

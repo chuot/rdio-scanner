@@ -1,4 +1,4 @@
-// The per-level sections (T017, CA-004, CA-006, CA-008): each section shows the
+// The per-level sections: each section shows the
 // saved systems in display order in its dropdown, edits the rows of the selected
 // system in its own slice, and the talkgroups section carries the Blacklist
 // action that appends the talkgroup id to the system's blacklists.

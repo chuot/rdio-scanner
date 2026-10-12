@@ -1,4 +1,4 @@
-// rdio-admin-dirwatch (T038): dirwatch section (legacy config/dirwatch).
+// rdio-admin-dirwatch: dirwatch section (legacy config/dirwatch).
 // Rows: disabled / deleteAfter toggles, type select driving conditional field
 // visibility, directory, extension, system / site / talkgroup selects fed by
 // the systems working copy, mask with token help, frequency, delay. Drag

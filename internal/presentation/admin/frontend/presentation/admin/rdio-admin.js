@@ -1,5 +1,5 @@
-// rdio-admin (T032): admin shell with sidebar navigation (replaces the legacy
-// mat-accordion per decision-admin-section-api.md). One section page visible
+// rdio-admin: admin shell with sidebar navigation (replaces the legacy
+// mat-accordion). One section page visible
 // at a time; each section element loads and saves independently. Logout lives
 // in the header. Unimplemented sections render a placeholder until their task
 // registers the element.

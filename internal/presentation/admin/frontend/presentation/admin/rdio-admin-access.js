@@ -1,4 +1,4 @@
-// rdio-admin-access (T037): access codes section (legacy config/access).
+// rdio-admin-access: access codes section (legacy config/access).
 // Rows: code (hide/show), ident, expiration, limit, systems selection dialog.
 // Hidden id/order round-trip; per-section Save lives in the shared bar.
 
@@ -167,7 +167,7 @@ class RdioAdminAccess extends HTMLElement {
       this.updateRow(index, { limit: limitInput.value === '' ? undefined : Number(limitInput.value) });
     });
 
-    // systems — selection dialog hookup (T036).
+    // systems — selection dialog hookup.
     const systemsRow = document.createElement('div');
     systemsRow.className = 'row';
 

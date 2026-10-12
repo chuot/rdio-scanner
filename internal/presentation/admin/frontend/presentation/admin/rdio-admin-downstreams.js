@@ -1,4 +1,4 @@
-// rdio-admin-downstreams (T039): downstream connections section (legacy
+// rdio-admin-downstreams: downstream connections section (legacy
 // config/downstreams). Rows: disabled toggle, url, apikey, systems selection
 // dialog. The systems payload may carry `id_as` remote-id mappings (see
 // legacy admin.service.ts Downstream type) — no UI for it; the deep-cloned

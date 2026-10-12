@@ -1,4 +1,4 @@
-// rdio-admin-groups (T040): groups section (legacy config/groups). Rows are
+// rdio-admin-groups: groups section (legacy config/groups). Rows are
 // drag-sortable panels: label, audio alert select with audition, led color
 // select. New Group inserts first; hidden id/order round-trip; per-section
 // Save lives in the shared bar.

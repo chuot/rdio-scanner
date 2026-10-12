@@ -1,5 +1,5 @@
 // Admin use-cases: login/logout orchestration, session lifecycle, the admin
-// config socket wiring, and per-section config state (T035, REQ-019):
+// config socket wiring, and per-section config state:
 // each of the 8 sections lives in a `section:<name>` store slice holding
 // { baseline, working, dirty, invalid, conflict }.
 
@@ -218,7 +218,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     return true;
   }
 
-  // --- per-section editing state (T035) ------------------------------------
+  // --- per-section editing state ------------------------------------------
 
   function setSectionWorking(name, value) {
     const current = store.getState()[sliceKey(name)];

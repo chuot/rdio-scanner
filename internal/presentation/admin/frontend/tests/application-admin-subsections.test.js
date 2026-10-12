@@ -1,4 +1,4 @@
-// The per-level store slices (T017, CA-004, CA-005, CA-007): each level of each
+// The per-level store slices: each level of each
 // system — sites, talkgroups, units — lives in a `subsection:<level>:<systemId>`
 // slice with the same baseline/working/dirty/invalid/conflict semantics as the
 // section slices, saves through the per-level endpoints, and keeps the talkgroup

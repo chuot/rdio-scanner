@@ -1,4 +1,4 @@
-// rdio-admin-openapi (FEAT-018 CA-005, FEAT-024 CA-003): the OpenAPI submenu.
+// rdio-admin-openapi: the OpenAPI submenu.
 // The card renders the endpoint groups derived from docs/openapi.json — the
 // complete API contract — through the shared rdio-admin-openapi-box, so the
 // endpoints the administrator reads are the endpoints the server answers. The

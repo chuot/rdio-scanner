@@ -1,4 +1,4 @@
-// Dirwatch row validation (T038): pure port of the legacy admin.service.ts
+// Dirwatch row validation: pure port of the legacy admin.service.ts
 // dirwatch validators — required / duplicate / network directory, extension,
 // mask tokens, delay, frequency, and the conditional system / talkgroup rules.
 // No DOM, no store: the section element owns rendering, this owns the rules.

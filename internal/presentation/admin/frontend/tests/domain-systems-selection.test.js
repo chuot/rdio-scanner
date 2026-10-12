@@ -1,4 +1,4 @@
-// T036: tri-state systems/talkgroups selection propagation (domain).
+// Tri-state systems/talkgroups selection propagation (domain).
 // Mirrors legacy config/systems-selection semantics: everything → groups/tags/
 // systems → talkgroups, cascading in all four directions; emitted ids are the
 // business refs (systemRef / talkgroupRef / group.id / tag.id).

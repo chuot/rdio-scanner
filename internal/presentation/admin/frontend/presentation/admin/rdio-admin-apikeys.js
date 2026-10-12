@@ -1,4 +1,4 @@
-// rdio-admin-apikeys (T037): API keys section (legacy config/apikeys).
+// rdio-admin-apikeys: API keys section (legacy config/apikeys).
 // Rows: disabled toggle, key (generated on add, copy button), ident, systems
 // selection dialog. Hidden id/order round-trip; per-section Save in the bar.
 

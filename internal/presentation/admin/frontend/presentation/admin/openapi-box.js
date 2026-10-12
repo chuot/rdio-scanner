@@ -1,4 +1,4 @@
-// The OpenAPI entrypoint box (FEAT-018 CA-005, FEAT-024 CA-003, FEAT-027 CA-006):
+// The OpenAPI entrypoint box:
 // the OpenAPI section renders one box per group derived from docs/openapi.json.
 // The box is presentational: the section hands it a group from
 // domain/openapi-view.js — title, icon, endpoints, and for Config the subgroups by

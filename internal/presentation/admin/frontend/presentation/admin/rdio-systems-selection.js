@@ -1,4 +1,4 @@
-// rdio-systems-selection (T036): tri-state selection dialog
+// rdio-systems-selection: tri-state selection dialog
 // (legacy config/systems-selection). The tree Everything → Groups / Tags /
 // Systems → Talkgroups is rendered from the pure domain model; every check
 // cascades through it and the tree re-renders. Result: '*' or

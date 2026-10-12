@@ -1,4 +1,4 @@
-// The Rdio Scanner logo in the top bar (FEAT-018): the bundled PWA icon plus the
+// The Rdio Scanner logo in the top bar: the bundled PWA icon plus the
 // wordmark, on the surface the administrator sees after login. The login card
 // carries the wordmark title only: no logo.
 

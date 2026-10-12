@@ -1,4 +1,4 @@
-// The retired options (T015, CA-009, CA-010, CA-011, CA-012): the options section
+// The retired options: the options section
 // shows no control for the 12-hour time format, the dimmer delay, the duplicate
 // detection time frame, or playback-goes-live, and the working object the section
 // edits keeps only the editable keys.

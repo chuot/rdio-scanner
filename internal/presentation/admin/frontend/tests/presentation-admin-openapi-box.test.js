@@ -1,4 +1,4 @@
-// The OpenAPI submenu (FEAT-018 CA-005, FEAT-024 CA-003, FEAT-027 CA-006): the
+// The OpenAPI submenu: the
 // section renders the endpoint groups derived from docs/openapi.json through the
 // shared box. Each endpoint is a detail row: its summary line names the method,
 // the path, and the summary, and it opens on the description, the parameters, the

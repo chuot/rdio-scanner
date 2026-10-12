@@ -1,4 +1,4 @@
-// T031: admin login/logout orchestration (application/admin-use-cases.js).
+// Admin login/logout orchestration (application/admin-use-cases.js).
 // Red first: these tests define the boot/login/logout/session-expiry contract.
 
 import test from 'node:test';
@@ -258,7 +258,7 @@ test('a rejected 401 from any admin request ends the session', async () => {
   assert.equal(store.getState().auth.authenticated, false);
 });
 
-// --- T035: per-section baseline/working/dirty/conflict state -----------------
+// --- per-section baseline/working/dirty/conflict state ----------------------
 
 test('boot initializes a slice for each of the 8 sections with independent working copies', async () => {
   const { store, useCases } = setup({ token: 'jwt-0' });
@@ -277,7 +277,7 @@ test('boot initializes a slice for each of the 8 sections with independent worki
 
   assert.deepEqual(store.getState()['section:groups'].working, [{ id: 1, label: 'Dispatch' }]);
 
-  // round-trip normalization (decision-config-roundtrip.md): server emits
+  // round-trip normalization: server emits
   // talkgroup order under "talkgroup"; the working copy renames it to "order".
   assert.equal(store.getState()['section:systems'].working[0].talkgroups[0].order, 5);
   assert.equal('talkgroup' in store.getState()['section:systems'].working[0].talkgroups[0], false);

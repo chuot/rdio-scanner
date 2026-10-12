@@ -1,4 +1,4 @@
-// The password panel in Tools (T018, CA-016): the form lives inside the Tools
+// The password panel in Tools: the form lives inside the Tools
 // section as a details panel, carries no username field, and the standalone
 // password section is gone from the navigation.
 

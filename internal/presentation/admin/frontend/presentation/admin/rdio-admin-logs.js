@@ -1,10 +1,10 @@
-// rdio-admin-logs (T043): admin logs section (legacy logs.component.ts).
+// rdio-admin-logs: admin logs section (legacy logs.component.ts).
 // Not a config section: no section bar, no store slice — the query state is
 // local to the element. rdio-admin.js creates a fresh element on every section
 // open, so connecting IS the reload-on-open behavior. Client pages of 10 over
 // server pages of 200 reuse the search-pagination domain helpers.
 //
-// FEAT-010: the view narrows on the part of the server that wrote an entry, searches the message text,
+// The view narrows on the part of the server that wrote an entry, searches the message text,
 // shows how many entries each part wrote, and can keep itself current. The decisions behind all four —
 // what the filters mean as a request, what the counts become, when a refresh is due — are in
 // domain/log-search.js and domain/log-refresh.js; this owns the rendering.

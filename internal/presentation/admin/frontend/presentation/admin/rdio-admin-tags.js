@@ -1,4 +1,4 @@
-// rdio-admin-tags (T040): tags section (legacy config/tags). Identical shape
+// rdio-admin-tags: tags section (legacy config/tags). Identical shape
 // to the groups section: drag-sortable panels with label, audio alert select
 // with audition, led color select. New Tag inserts first; hidden id/order
 // round-trip; per-section Save lives in the shared bar.

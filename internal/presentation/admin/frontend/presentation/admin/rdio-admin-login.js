@@ -1,4 +1,4 @@
-// rdio-admin-login (T031): admin login form (legacy login.component.ts).
+// rdio-admin-login: admin login form (legacy login.component.ts).
 // Password required; form disabled while submitting; a wrong password shows
 // "Invalid password", and a server that cannot be reached is named as such —
 // the form re-enables for a retry either way.

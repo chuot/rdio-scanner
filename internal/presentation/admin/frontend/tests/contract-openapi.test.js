@@ -1,7 +1,7 @@
 // The OpenAPI document docs/openapi.json is the contract the front ends and the command-line
 // tooling are written against. It must parse with Node's built-in JSON support and cover every
 // entry point the server answers: the admin REST surface, the two ingestion endpoints, the two
-// WebSocket surfaces, and the two static applications (FEAT-022).
+// WebSocket surfaces, and the two static applications.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +25,7 @@ test('the OpenAPI document declares OpenAPI 3.1 with a title and the server vers
   assert.equal(doc.info.version, version, 'info.version must equal VERSION.txt');
 });
 
-test('every legacy admin endpoint from contract §3 is documented', () => {
+test('every legacy admin endpoint is documented', () => {
   const expected = {
     '/api/admin/login': ['post'],
     '/api/admin/logout': ['post'],
@@ -95,7 +95,7 @@ test('the six per-level system GET/PUT pairs are documented', () => {
   }
 });
 
-// FEAT-018: the API entrypoint submenu names the user management and the capture
+// The API entrypoint submenu names the user management and the capture
 // endpoints, so the document must carry them. The capture endpoints authenticate
 // with the apikey form field, not the admin token.
 const EXTRA_PATHS = {
@@ -203,7 +203,7 @@ test('both ingestion endpoints are documented with the parser field catalogue', 
 });
 
 // The listener protocol and the administrator configuration socket are documented as
-// x-websocket components (decision-openapi-websocket-representation.md): the command set
+// x-websocket components: the command set
 // mirrors internal/presentation/scanner/backend/message.go.
 const LISTENER_COMMANDS = ['CAL', 'CFG', 'IOS', 'LCL', 'LFM', 'LSC', 'MAX', 'PID', 'PIN', 'SRV', 'VER', 'XPR'];
 

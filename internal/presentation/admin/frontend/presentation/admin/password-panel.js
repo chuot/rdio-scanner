@@ -1,4 +1,4 @@
-// The password panel (FEAT-016, T018): the administrator password form lives in
+// The password panel: the administrator password form lives in
 // Tools as a details panel, not in a section of its own. No username field —
 // the API takes only the current and the new password. The save flow is the
 // legacy one: disable → changePassword → snackbar → reset on success,

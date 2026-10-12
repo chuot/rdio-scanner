@@ -1,4 +1,4 @@
-// rdio-admin-systems (T042, FEAT-016): systems section (legacy config/systems).
+// rdio-admin-systems: systems section (legacy config/systems).
 // The system level only: sites, talkgroups and units are saved on their own in
 // the per-level sections, so the nested sub-lists are gone. Validation lives in
 // domain/systems-validation.js; the systems section still saves the whole

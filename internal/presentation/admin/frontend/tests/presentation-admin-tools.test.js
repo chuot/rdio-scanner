@@ -1,4 +1,4 @@
-// Tools panel layout and icons (FEAT-018 CA-003/CA-004, FEAT-024 CA-006): every
+// Tools panel layout and icons: every
 // panel icon is a valid Material Icons ligature, every panel body follows the
 // standard row pattern, and the config panels are split: Export config first,
 // Import config second, then the csv imports and the password panel.

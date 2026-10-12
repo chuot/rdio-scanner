@@ -1,6 +1,6 @@
-// The OpenAPI section's view of the contract (FEAT-024, CA-003): the endpoint
+// The OpenAPI section's view of the contract: the endpoint
 // groups the administrator reads are derived from docs/openapi.json, the complete
-// API contract (FEAT-022), so the section can only ever name endpoints the server
+// API contract, so the section can only ever name endpoints the server
 // answers. The contract carries no tags, so the grouping is by path: the admin
 // surface splits into Authentication, Config, Alerts, Logs, Password and Users,
 // the ingestion endpoints form Capture, and the static applications form

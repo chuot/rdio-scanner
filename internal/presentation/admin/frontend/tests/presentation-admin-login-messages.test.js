@@ -1,4 +1,4 @@
-// The login form tells the truth about why it failed (FEAT-024, CA-008): a wrong
+// The login form tells the truth about why it failed: a wrong
 // password says Invalid password; a server that cannot be reached is named as
 // unreachable, not as a bad password.
 

@@ -1,4 +1,4 @@
-// The administrator's log view's filters and counts (FEAT-010 T031): what the filters turn into a request,
+// The administrator's log view's filters and counts: what the filters turn into a request,
 // and what the server's per-subsystem counts turn into what the view shows. The element owns the rendering;
 // these are the decisions it makes.
 

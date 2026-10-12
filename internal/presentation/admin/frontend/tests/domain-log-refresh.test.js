@@ -1,4 +1,4 @@
-// The log view's auto-refresh (FEAT-010 T031): what the toggle decides. Nothing here waits — the schedule
+// The log view's auto-refresh: what the toggle decides. Nothing here waits — the schedule
 // is given a timer the test controls, so every poll is something the test chose to run.
 
 import test from 'node:test';

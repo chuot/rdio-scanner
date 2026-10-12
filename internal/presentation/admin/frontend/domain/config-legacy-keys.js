@@ -1,8 +1,7 @@
 // Migration of pre-7.x exported config files to the current key layout
 // (legacy import-export-config.component.ts import()).
 // Deviation: the legacy code iterated config.access instead of config.apikeys
-// when mapping apiKeys _id → id; the intended mapping is applied here
-// (decision-legacy-bug-fixes.md).
+// when mapping apiKeys _id → id; the intended mapping is applied here.
 
 export function migrateLegacyConfig(raw) {
   const config = structuredClone(raw);

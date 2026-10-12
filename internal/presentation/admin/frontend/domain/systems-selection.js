@@ -1,4 +1,4 @@
-// Tri-state systems/talkgroups selection model (T036).
+// Tri-state systems/talkgroups selection model.
 // Pure state machine behind rdio-systems-selection: the tree is
 // Everything → Groups / Tags / Systems → Talkgroups, and checks cascade in
 // all four directions (legacy config/systems-selection semantics).

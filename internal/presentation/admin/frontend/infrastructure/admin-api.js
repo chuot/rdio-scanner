@@ -53,7 +53,7 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('PUT', '/config', config);
     },
 
-    // Per-section endpoints (REQ-019): GET/PUT /api/admin/config/<section>.
+    // Per-section endpoints: GET/PUT /api/admin/config/<section>.
     async getSection(section) {
       assertSection(section);
 
@@ -66,7 +66,7 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('PUT', `/config/${section}`, value);
     },
 
-    // Per-level endpoints (FEAT-016): GET/PUT /api/admin/config/systems/<id>/<level>.
+    // Per-level endpoints: GET/PUT /api/admin/config/systems/<id>/<level>.
     async getSubSection(systemId, level) {
       assertSubLevel(level);
 

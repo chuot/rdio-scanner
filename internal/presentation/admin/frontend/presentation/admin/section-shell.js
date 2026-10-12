@@ -34,7 +34,7 @@ export function sectionWorking(name) {
   return sectionSlice(name)?.working;
 }
 
-// Config for the systems-selection dialog (T036): the working copies of the
+// Config for the systems-selection dialog: the working copies of the
 // groups, tags and systems sections.
 export function selectionConfig() {
   return {
@@ -52,7 +52,7 @@ export function setSectionInvalid(name, invalid) {
   getAdminContext().useCases.setSectionInvalid(name, invalid);
 }
 
-// Per-level slices (FEAT-016): `subsection:<level>:<systemId>` carries the same
+// Per-level slices: `subsection:<level>:<systemId>` carries the same
 // baseline/working/dirty/invalid/conflict state a section slice does.
 export function subSlice(level, systemId) {
   return getAdminContext().store.getState()[`subsection:${level}:${systemId}`];
