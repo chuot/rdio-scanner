@@ -262,6 +262,24 @@ aside .label {
 aside.caution .label { color: var(--caution); }
 aside.danger .label { color: var(--danger); }
 
+/* a pronunciation line, set the way a dictionary sets one: the word, the sounds, the reading */
+
+aside .pron {
+  font-size: 1.08rem;
+  margin-bottom: 0.45rem;
+}
+
+aside .pron .ipa {
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+
+aside .pron .syllables {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
 /* figures */
 
 figure {
@@ -470,10 +488,13 @@ footer.site .signoff {
 
   <aside class="note">
     <span class="label">How the name is said</span>
+    <p class="pron">
+      <strong>Rdio Scanner</strong>
+      <span class="ipa">/ˈreɪ.di.oʊ ˈskæn.ər/</span>
+      <span class="syllables">RAY-dee-oh SCAN-er</span>
+    </p>
     <p>
-      The name is written <strong>Rdio Scanner</strong> and said <strong>Raydio Scanner</strong>:
-      <em>Rdio</em> is pronounced <em>Ray-dio</em>, the way the project says it, and spelled the way the
-      project spells it.
+      The name is written <strong>Rdio Scanner</strong> and pronounced <em>Raydio Scanner</em>.
     </p>
   </aside>
 
@@ -3134,7 +3155,7 @@ trusted_proxies = 127.0.0.1, 10.0.0.0/8</code></pre>
     is the address of the deployment.
   </p>
 
-  <pre><code>&lt;iframe src="https://radio.example.org" width="410" height="608"&gt;&lt;/iframe&gt;</code></pre>
+  <pre><code>&lt;iframe src="<your deployment address>" width="410" height="608"&gt;&lt;/iframe&gt;</code></pre>
 
   <p>
     Put the frame on the same host name the deployment answers on, so the browser treats the page and the
@@ -3880,12 +3901,348 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
 <section>
   <h2 id="ch-26-faq">26 · Frequently asked questions</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The questions an administrator asks, answered with the control that does the thing. Each answer points
+    at the chapter that operates it.
+  </p>
+
+  <h3>How do I update from the version 5 program?</h3>
+
+  <p>
+    There is no upgrade from it: the version 6 server replaced the version 5 program, and what carries over
+    is the database. Stop the old server, copy its <code>database.sqlite</code> into the new deployment's
+    folder, rename the copy to <code>rdio-scanner.db</code>, and start the new program. On MySQL or
+    MariaDB, back the database up and start the new program pointed at it with the <code>-db_*</code>
+    flags. <a href="#ch-24-upgrading-and-migrating">Chapter 24</a> is the path, with the migration it
+    triggers and the archive that holds what cannot be carried.
+  </p>
+
+  <h3>I tried the automatic certificate and get strange errors</h3>
+
+  <p>
+    The authority verifies the name by reaching back to the machine it was asked for. The port the https
+    listener answers on must be reachable from the internet, the domain must point at this machine, and the
+    name you gave is the only name the server asks for. <a href="#ch-19-tls">Chapter 19</a> is the
+    certificate chapter, and its failure table is where the causes are listed.
+  </p>
+
+  <h3>The listener page keeps saying a new version is available</h3>
+
+  <p>
+    The page is a cached copy of the page the browser loaded before the update. Force a refresh
+    (usually <code>ctrl-shift-r</code>), and if it keeps saying it, clear the site's stored data from the
+    browser's site settings. It is the browser holding the old page, not the server holding a version
+    notice.
+  </p>
+
+  <h3>How do I install ffmpeg on Windows?</h3>
+
+  <p>
+    You do not, for the deployment. The Windows amd64 build carries its own <code>ffmpeg</code> and
+    <code>ffprobe</code> inside the program, as do the Linux builds for 386, ARM, and ARM64. Install
+    ffmpeg on the host only for the targets that do not carry it — macOS, FreeBSD, and the container —
+    and read the notice the server prints at startup, which is the program telling you which converter it
+    found. <a href="#ch-03-requirements">Chapter 3</a> is the requirements chapter.
+  </p>
+
+  <h3>How do I put a reverse proxy in front of the server?</h3>
+
+  <p>
+    The proxy must carry the connection upgrade, because the listener's connection is a connection the
+    browser opens through the same address as the page. HTTP/1.1, the <code>Upgrade</code> header, and a
+    <code>Connection</code> header that follows the request: those are the requirement, and buffering and
+    short timeouts are the two settings that break a deployment that otherwise works.
+    <a href="#ch-20-reverse-proxies">Chapter 20</a> carries the nginx configuration, the Apache
+    directives, and the trusted-proxy setting the proxy forces you to make.
+  </p>
+
+  <h3>How do I hear about a new release?</h3>
+
+  <p>
+    The project's repository watches its releases: the watch control on the repository tells you when a
+    release is published, and the release is where the archive is. The change log inside the archive is the
+    release-by-release history; <a href="#ch-01-overview">chapter 1</a> is the short list of what changed
+    since the last published release.
+  </p>
+
+  <h3>How do I listen to several deployments from one browser?</h3>
+
+  <p>
+    Open each one with an <code>id</code> parameter that distinguishes it:
+    <code>http://localhost:3000/?id=dispatch</code>. The talkgroup selections a listener makes are
+    remembered per identifier; without it, every deployment shares one remembered selection, and the last
+    one wins.
+  </p>
+
+  <h3>How do I change the access code a listener entered?</h3>
+
+  <p>
+    The code is stored in the browser's own storage. Append <code>/reset</code> to the address —
+    <code>http://localhost:3000/reset</code> — and the page clears what it stored and returns to the main
+    address. The code itself is issued, scoped, and expired in the Access section,
+    <a href="#ch-09-access-and-api-keys">chapter 9</a>.
+  </p>
+
+  <h3>Where are the recordings stored?</h3>
+
+  <p>
+    In the database, in the call's own row. There is no recordings folder to keep in step with the
+    database: the file that is the deployment is the file that holds the audio.
+    <a href="#ch-23-backup-and-restore">Chapter 23</a> is the backup chapter, and it is short because of
+    this.
+  </p>
+
+  <h3>Can I give a second person their own administrator login?</h3>
+
+  <p>
+    No. The deployment has one administrator credential, and it opens everything. The people who need to
+    listen get access codes with a scope, an expiry, and a limit; the people who need to change the
+    deployment share the administrator password, and the log is where you see what was changed.
+    <a href="#ch-22-security-hardening">Chapter 22</a> is the credential model.
+  </p>
+
+  <h3>Why did my administrator sessions all end?</h3>
+
+  <p>
+    The signing secret changed. A start that made a secret, replaced one that was too short to be safe, or
+    opened a database with a different secret ends every session signed with the old one, and says so on
+    the console and in the log. Restoring a database is the same event.
+    <a href="#ch-22-security-hardening">Chapter 22</a> is the credential chapter.
+  </p>
+
+  <h3>Can I move a deployment to another machine?</h3>
+
+  <p>
+    Install the program, copy the base directory, and start it. The ini file, the database with its
+    recordings, and the autocert folder are the deployment. Expect the sessions to end, and expect the
+    first start on a server database to apply the schema.
+    <a href="#ch-23-backup-and-restore">Chapter 23</a> is the restore.
+  </p>
+
+  <h3>Does this guide cover the scanner webapp and the phone apps?</h3>
+
+  <p>
+    No. This guide is the server and its administration interface. The scanner webapp's own guide is the
+    file <code>docs/webapp.md</code> in the same archive, and the native applications are the project's
+    own apps. The webapp's behaviour is named here only where the server's settings change it — the access
+    codes, the scope, the listener cap, the delay, and the alert tones are the server's decisions that the
+    listener feels.
+  </p>
+
+  <h3>My question is not here</h3>
+
+  <p>
+    Ask it. The project takes questions on the repository's discussions, and the support address is in
+    <a href="#ch-27-reference">chapter 27</a>. Before you ask, the log view is the deployment telling you
+    what it saw, filtered by subsystem and by text, and it is the fastest way to turn a question into a
+    report: what you expected, what the log says, and which subsystem said it.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-27-reference">27 · Reference appendices</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The tables you look up rather than read: every flag and its default, the log's subsystems, the words
+    the guide uses, the recorders and how each one gets audio in, and the project's position on the licence
+    and the APIs.
+  </p>
+
+  <h3>Flag reference</h3>
+
+  <p>
+    Every flag the server answers, with the default it carries when you do not name it. The ini key is the
+    flag's name; <a href="#ch-06-flags-and-ini">chapter 6</a> explains what each one does and the order the
+    settings are read in.
+  </p>
+
+  <table>
+    <caption>The flags, alphabetically</caption>
+    <thead><tr><th scope="col">Flag</th><th scope="col">Default</th><th scope="col">What it sets</th></tr></thead>
+    <tbody>
+      <tr><td><code>-admin_password &lt;password&gt;</code></td><td class="default">—</td><td>Stores a new administrator password in the deployment's database and stops. <a href="#ch-18-command-line-client">18</a></td></tr>
+      <tr><td><code>-base_dir &lt;dir&gt;</code></td><td class="default">the program's folder, then <code>~/Rdio Scanner</code></td><td>Where every file the deployment writes goes. <a href="#ch-05-first-run">5</a></td></tr>
+      <tr><td><code>-bcrypt_cost &lt;10-14&gt;</code></td><td class="default"><code>10</code></td><td>The cost the administrator credential is hashed at. A cost outside the range stops the server. <a href="#ch-22-security-hardening">22</a></td></tr>
+      <tr><td><code>-cmd &lt;action&gt;</code></td><td class="default">—</td><td>Drives a running server as a client. <a href="#ch-18-command-line-client">18</a></td></tr>
+      <tr><td><code>-config &lt;file&gt;</code></td><td class="default"><code>rdio-scanner.ini</code></td><td>The ini file the server reads, resolved against the base directory. <a href="#ch-06-flags-and-ini">6</a></td></tr>
+      <tr><td><code>-config_save</code></td><td class="default">off</td><td>Writes the configuration the flags named into the ini file, and stops. <a href="#ch-06-flags-and-ini">6</a></td></tr>
+      <tr><td><code>-db_connect_timeout &lt;duration&gt;</code></td><td class="default">the driver's</td><td>How long the server waits to connect to a server database: <code>5s</code>, <code>1m</code>. Not a bare number. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_file &lt;file&gt;</code></td><td class="default"><code>rdio-scanner.db</code></td><td>The SQLite database file, resolved against the base directory. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_host &lt;host&gt;</code></td><td class="default"><code>localhost</code></td><td>The database machine. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_name &lt;name&gt;</code></td><td class="default">—</td><td>The database name on a server database. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_pass &lt;password&gt;</code></td><td class="default">—</td><td>The database account's password. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_port &lt;port&gt;</code></td><td class="default"><code>3306</code></td><td>The database port. PostgreSQL's own is 5432. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_sslmode &lt;mode&gt;</code></td><td class="default">the driver's</td><td>PostgreSQL's transport security, by its own name. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_tls &lt;mode&gt;</code></td><td class="default">the driver's</td><td>MariaDB and MySQL transport security: <code>true</code>, <code>false</code>, <code>skip-verify</code>, or a registered configuration name. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_type &lt;dialect&gt;</code></td><td class="default"><code>sqlite</code></td><td>One of <code>sqlite</code>, <code>mariadb</code>, <code>mysql</code>, <code>postgresql</code>. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-db_user &lt;user&gt;</code></td><td class="default">—</td><td>The database account. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-listen &lt;address&gt;</code></td><td class="default"><code>:3000</code></td><td>The address the server answers on. No port means 3000. <a href="#ch-06-flags-and-ini">6</a></td></tr>
+      <tr><td><code>-mcp_server</code></td><td class="default">off</td><td>Mounts the assistant surface at <code>/mcp</code>. <a href="#ch-17-mcp-server">17</a></td></tr>
+      <tr><td><code>-service &lt;action&gt;</code></td><td class="default">—</td><td><code>install</code>, <code>uninstall</code>, <code>start</code>, <code>stop</code>, <code>restart</code>; <code>run</code> is the manager's own action. <a href="#ch-21-running-as-a-service">21</a></td></tr>
+      <tr><td><code>-ssl_auto_cert &lt;domain&gt;</code></td><td class="default">—</td><td>The one domain the server obtains a certificate for. <a href="#ch-19-tls">19</a></td></tr>
+      <tr><td><code>-ssl_cert_file &lt;file&gt;</code></td><td class="default">—</td><td>The PEM certificate, chain appended. <a href="#ch-19-tls">19</a></td></tr>
+      <tr><td><code>-ssl_key_file &lt;file&gt;</code></td><td class="default">—</td><td>The PEM key that matches it. <a href="#ch-19-tls">19</a></td></tr>
+      <tr><td><code>-ssl_listen &lt;address&gt;</code></td><td class="default">—</td><td>The https address. No port means 3000, so name <code>:443</code>. <a href="#ch-19-tls">19</a></td></tr>
+      <tr><td><code>-trusted_proxies &lt;list&gt;</code></td><td class="default">—</td><td>The proxy addresses whose <code>X-Forwarded-For</code> the server believes, comma-separated, CIDR or bare. <a href="#ch-20-reverse-proxies">20</a></td></tr>
+      <tr><td><code>-version</code></td><td class="default">off</td><td>Prints the version and stops. <a href="#ch-18-command-line-client">18</a></td></tr>
+    </tbody>
+  </table>
+
+  <h3>The log's subsystems</h3>
+
+  <p>
+    Every entry the server writes is filed under the part of the server that wrote it.
+    <a href="#ch-14-logs">Chapter 14</a> says what each one reports and what its messages mean; this is the
+    index you filter by.
+  </p>
+
+  <table>
+    <caption>The subsystems, alphabetically</caption>
+    <thead><tr><th scope="col">Subsystem</th><th scope="col">The part it names</th></tr></thead>
+    <tbody>
+      <tr><td><em>Access</em></td><td>The listener's credential: attempts, scope, limits, expiry</td></tr>
+      <tr><td><em>Administration</em></td><td>The configuration as the interface saves it, and the sessions</td></tr>
+      <tr><td><em>Assistant surface</em></td><td>The protocol endpoint: refusals, and what a tool changed</td></tr>
+      <tr><td><em>Call history</em></td><td>The recorded calls, and the searches of them</td></tr>
+      <tr><td><em>Database</em></td><td>The schema, the migration, the archive, the connection</td></tr>
+      <tr><td><em>Delayer</em></td><td>The calls held out of the live stream</td></tr>
+      <tr><td><em>Downstream</em></td><td>The calls forwarded to another deployment</td></tr>
+      <tr><td><em>ffmpeg</em></td><td>The converter: what it was asked for, what it produced</td></tr>
+      <tr><td><em>Ingest</em></td><td>The call being placed: the system, site, talkgroup, unit it resolved to</td></tr>
+      <tr><td><em>Live feed</em></td><td>The listener connections and what they are sent</td></tr>
+      <tr><td><em>Log</em></td><td>The log's own operations, including retention</td></tr>
+      <tr><td><em>Login</em></td><td>The administrator's logins, refusals, and lockouts</td></tr>
+      <tr><td><em>Server</em></td><td>Startup, the addresses it answers on, shutdown, and the failures that stop it</td></tr>
+      <tr><td><em>Upload</em></td><td>The upload endpoints and the bodies they read</td></tr>
+      <tr><td><em>Watched directories</em></td><td>The directories, the files found, the files read</td></tr>
+      <tr><td><em>Legacy</em></td><td>Entries a migrated database arrived with, whose writer is not known</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The words the guide uses</h3>
+
+  <table>
+    <caption>Glossary</caption>
+    <thead><tr><th scope="col">Term</th><th scope="col">What it means in this deployment</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Access code</strong></td><td>A listener's credential: an ident, a scope of systems and talkgroups, an expiry, and a simultaneous-listener limit.</td></tr>
+      <tr><td><strong>Administration interface</strong></td><td>The application at <code>/admin/</code>: the sections, the save bar, the log view, the tools.</td></tr>
+      <tr><td><strong>API key</strong></td><td>A recorder's credential for the upload endpoints, scoped to a system and talkgroup.</td></tr>
+      <tr><td><strong>Base directory</strong></td><td>The folder the deployment writes in: the ini file, the database, the autocert cache.</td></tr>
+      <tr><td><strong>Call</strong></td><td>One transmission, with its recording, its system, talkgroup, site, unit, and instant.</td></tr>
+      <tr><td><strong>Conflict banner</strong></td><td>The notice that another session saved the section you are editing.</td></tr>
+      <tr><td><strong>Dirwatch</strong></td><td>A directory the server watches, with a type that says how its file names are read.</td></tr>
+      <tr><td><strong>Downstream</strong></td><td>Another deployment this one posts its calls to.</td></tr>
+      <tr><td><strong>Group</strong></td><td>A named collection of talkgroups, carrying an alert tone and LED colours.</td></tr>
+      <tr><td><strong>Ingest</strong></td><td>The step that resolves a call's identifiers against the configuration and files it.</td></tr>
+      <tr><td><strong>Listener</strong></td><td>A person, and the connection their browser or application holds open.</td></tr>
+      <tr><td><strong>Mask</strong></td><td>A watched directory's template for reading a file's name into a call's identifiers.</td></tr>
+      <tr><td><strong>Migration archive</strong></td><td>The table holding the rows a migration read and could not carry, with the reason.</td></tr>
+      <tr><td><strong>Save bar</strong></td><td>The control that writes a section's working copy to the server.</td></tr>
+      <tr><td><strong>Scanner webapp</strong></td><td>The application the server serves at <code>/</code> for listeners. Out of this guide's scope.</td></tr>
+      <tr><td><strong>Scope</strong></td><td>What a credential is entitled to see: systems, and the talkgroups within them.</td></tr>
+      <tr><td><strong>Session token</strong></td><td>The signature the server makes with its signing secret, presented in the <code>Authorization</code> header.</td></tr>
+      <tr><td><strong>Signing secret</strong></td><td>The value stored in the database that signs administrator sessions. Changing it ends them.</td></tr>
+      <tr><td><strong>Site</strong></td><td>A transmitter location within a system.</td></tr>
+      <tr><td><strong>Subsystem</strong></td><td>The part of the server a log entry names as its writer.</td></tr>
+      <tr><td><strong>System</strong></td><td>A radio network: the trunked system, the conventional channel, the simulcast, named by its type.</td></tr>
+      <tr><td><strong>Tag</strong></td><td>A label across systems, carrying an alert tone and LED colours, applied to talkgroups by name.</td></tr>
+      <tr><td><strong>Talkgroup</strong></td><td>A channel listeners tune to, identified by the recorder's number within its system.</td></tr>
+      <tr><td><strong>Todos banner</strong></td><td>The list of what the deployment is still missing, computed from its configuration.</td></tr>
+      <tr><td><strong>Unit</strong></td><td>A radio that transmits, identified within its system.</td></tr>
+      <tr><td><strong>Working copy</strong></td><td>The section as you have edited it, before you save it.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Recorders, and how each one gets audio in</h3>
+
+  <table>
+    <caption>The recorders the project knows</caption>
+    <thead><tr><th scope="col">Recorder</th><th scope="col">Upload endpoints</th><th scope="col">Watched directory type</th></tr></thead>
+    <tbody>
+      <tr><td>Trunk Recorder</td><td>Yes — the sidecar endpoint, marked deprecated, or the general endpoint with the fields named</td><td><code>trunk-recorder</code></td></tr>
+      <tr><td>RTLSDR-Airband</td><td>—</td><td><code>default</code>, with the frequency in the name</td></tr>
+      <tr><td>SDRTrunk</td><td>—</td><td><code>sdr-trunk</code></td></tr>
+      <tr><td>ProScan</td><td>—</td><td><code>default</code></td></tr>
+      <tr><td>DSDPlus Fast Lane</td><td>—</td><td><code>dsdplus</code></td></tr>
+      <tr><td>voxcall</td><td>Yes — the general endpoint</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    A recorder not on this list works if it writes one file per transmission, and the file's name says
+    enough to identify the call. <a href="#ch-10-getting-audio-in">Chapter 10</a> is the ingest chapter,
+    with the mask tokens and the recorder configurations the project carries.
+  </p>
+
+  <h3>The licence, and the two APIs</h3>
+
+  <p>
+    The software is free software under the <strong>GNU General Public License, version 3</strong>: you may
+    use it, modify it, and distribute it under those terms.
+  </p>
+
+  <p>
+    The <strong>HTTP REST API</strong> is not restricted. It is available under the GPL terms for every
+    use, self-hosted deployments and third-party applications included: the endpoints in
+    <a href="#ch-16-rest-api">chapter 16</a> are yours to drive.
+  </p>
+
+  <p>
+    The <strong>WebSocket API</strong> — the connection a listener holds open, the one taken over the
+    address the scanner webapp is served from — is a proprietary real-time channel provided by Saubeo
+    Solutions, and it is the exception to the GPL position. It is available through Saubeo Solutions'
+    hosted service for its native applications and the integrated scanner webapp. A self-hosted deployment
+    answers the HTTP REST API without restriction; a self-hosted deployment whose own clients use the
+    WebSocket API needs a prior written licence agreement with Saubeo Solutions. Authorized clients use
+    the credentials Saubeo Solutions provides and do not share them.
+  </p>
+
+  <p>
+    The restrictions that go with that position: the WebSocket API is not used without authorization, not
+    used in a commercial application or service without a licence agreement, not reverse-engineered,
+    replicated, or redistributed, and not unlocked by modifying the code that restricts it. Access can be
+    revoked, an agreement terminated, and unauthorized use pursued. The reason the project states is that
+    the channel funds the development.
+  </p>
+
+  <p>
+    To ask about licensing, write to <strong>rdio-scanner@saubeo.solutions</strong>.
+  </p>
+
+  <h3>The ffmpeg licence</h3>
+
+  <p>
+    The builds that carry their own converter — Linux 386, AMD64, ARM, and ARM64, and Windows AMD64 — carry
+    <code>ffmpeg</code> and <code>ffprobe</code> inside the program, and the archive carries
+    <code>FFMPEG.txt</code> beside it: the licence terms of the components the build embeds, and the source
+    the project's build used to make them. A deployment that installs ffmpeg on the host takes the licence
+    the package it installs carries.
+  </p>
+
+  <h3>Support</h3>
+
+  <ul>
+    <li>
+      <strong>The log view, first.</strong> It is the deployment telling you what it saw, filtered by
+      subsystem, by level, by date, and by text. A report that quotes it is answered faster than one that
+      describes it.
+    </li>
+    <li>
+      <strong>The project's discussions</strong>, on the repository, are where questions and comments go,
+      and where the answers become the documentation the next release carries.
+    </li>
+    <li>
+      <strong>rdio-scanner@saubeo.solutions</strong> is the address for support, and for the WebSocket API
+      licence.
+    </li>
+    <li>
+      <strong>The project is funded by its sponsor and by sponsorship.</strong> A deployment that earns
+      something from the project, or runs it for others, is the deployment the project asks to sponsor it.
+      Starring the repository costs nothing and is appreciated.
+    </li>
+  </ul>
 </section>
 
 </main>
