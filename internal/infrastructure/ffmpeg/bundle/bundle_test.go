@@ -260,6 +260,117 @@ func TestTheRecipeEnablesNoGplOrNonfreeComponent(t *testing.T) {
 	}
 }
 
+// The recipe is the whole of the audio-only promise this project makes to ffmpeg's build. The pinned
+// release has no --disable-video to carry, so the promise is `--disable-everything` plus a list of
+// components that are all audio, and `--disable-network`, the switch that keeps libavformat's socket
+// layer out of the compiled program. The recipe is the only place the build is told anything, so the
+// switches are named here.
+func TestTheRecipeSaysAudioOnlyToTheBuild(t *testing.T) {
+	recipe := ReadManifest().Recipe
+
+	for _, want := range []string{
+		"--disable-everything",
+		"--disable-network",
+	} {
+		if !hasFlag(recipe, want) {
+			t.Errorf("the recipe does not carry %s, and the build is not told what this project ships", want)
+		}
+	}
+}
+
+// Nothing in the recipe may enable a video component. The ffmpeg this project ships converts audio, and
+// a decoder, encoder, filter, demuxer, muxer, protocol, parser, bitstream filter, hardware accelerator,
+// or device that carries video is not the program its licence text describes. The list below is the
+// components the converter's own argument list asks of ffmpeg, and it is closed: a component is added
+// here with the conversion that needs it, or it is not added.
+func TestTheRecipeEnablesNoVideoComponent(t *testing.T) {
+	// The rule is shown refusing a video component on a recipe of the test's own, so it is a gate and
+	// not a description of the manifest as it happens to read today.
+	for _, fixture := range []string{
+		"--enable-decoder=h264",
+		"--enable-encoder=mpeg4",
+		"--enable-filter=crop",
+		"--enable-demuxer=mpegts",
+		"--enable-muxer=mp4",
+		"--enable-protocol=http",
+	} {
+		if got := theComponentsOutside([]string{fixture}); len(got) == 0 {
+			t.Errorf("the rule accepts %s, a component this server does not convert with", fixture)
+		}
+	}
+
+	for _, name := range theComponentsOutside(ReadManifest().Recipe) {
+		t.Errorf("the recipe enables %s, which is not a component this server converts with", name)
+	}
+}
+
+// theAudioComponents are the components the recipe is allowed to enable: the audio demuxers, decoders,
+// encoder, muxers and filters the converter's argument list runs, the pipe, fd and file protocols the
+// server hands the recording in and out on, and the json muxer the length probe reads.
+var theAudioComponents = map[string]bool{
+	"protocol=pipe": true,
+	"protocol=fd":   true,
+	"protocol=file": true,
+
+	"demuxer=wav": true,
+	"demuxer=mp3": true,
+	"demuxer=mov": true,
+
+	"decoder=pcm_s16le":  true,
+	"decoder=pcm_s16be":  true,
+	"decoder=pcm_s24le":  true,
+	"decoder=pcm_f32le":  true,
+	"decoder=pcm_mulaw":  true,
+	"decoder=pcm_alaw":   true,
+	"decoder=mp3float":   true,
+	"decoder=mp3":        true,
+	"encoder=aac":        true,
+	"muxer=ipod":         true,
+	"muxer=json":         true,
+	"filter=abuffer":     true,
+	"filter=abuffersink": true,
+	"filter=aformat":     true,
+	"filter=aresample":   true,
+	"filter=apad":        true,
+	"filter=loudnorm":    true,
+}
+
+// theComponentKinds are the component names configure is given with `--enable-<kind>=<name>`. A flag
+// that enables something with no name — the programs, the static link — is not a component, and is not
+// what this rule is about.
+var theComponentKinds = map[string]bool{
+	"decoder":  true,
+	"encoder":  true,
+	"demuxer":  true,
+	"muxer":    true,
+	"filter":   true,
+	"protocol": true,
+	"parser":   true,
+	"bsf":      true,
+	"hwaccel":  true,
+	"indev":    true,
+	"outdev":   true,
+}
+
+// theComponentsOutside names the components a recipe enables that are not on the audio list.
+func theComponentsOutside(recipe []string) []string {
+	var outside []string
+
+	for _, flag := range recipe {
+		kind, name, named := strings.Cut(strings.TrimPrefix(flag, "--enable-"), "=")
+
+		if !named || !theComponentKinds[kind] {
+			continue
+		}
+
+		if !theAudioComponents[kind+"="+name] {
+			outside = append(outside, kind+"="+name)
+		}
+	}
+
+	return outside
+}
+
 func hasFlag(recipe []string, flag string) bool {
 	for _, one := range recipe {
 		if one == flag {

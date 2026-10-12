@@ -299,7 +299,9 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 //
 // The five compiled targets' keys are pinned by value here. A warm cache is the only reason a release run
 // takes minutes rather than hours, and a manifest that gains a field must not throw it away: a compiled
-// record pins no programs, and its key is the compile's inputs and nothing else.
+// record pins no programs, and its key is the compile's inputs and nothing else. The values below are the
+// compile as it reads today, so a recipe that gains a switch moves them — which is the key doing its job,
+// and the release run that follows recompiles those five targets once.
 func TestTheFfmpegCacheKeyForASuppliedTargetIsThePairItPins(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -325,16 +327,16 @@ func TestTheFfmpegCacheKeyForASuppliedTargetIsThePairItPins(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"linux-386":     "0cd9273ac845d3c3d35e306a25e8152ff395612b35387252c79a1d233033713a",
-		"linux-amd64":   "5f61837e16fee38e02dae5e4f0a05ae20db87d0c27f735642c3aec234ca53406",
-		"linux-arm":     "11189b426f1288d3695dc9b147757c66dbdebd81771580b34c2b73d5b2fb1c1b",
-		"linux-arm64":   "b35cdc455075b176a92e14f535b0329a3248b9cdd8355c12a097c191f573dccd",
-		"windows-amd64": "6efc3ed684d2ff1e065d30c158d2a6d0e23c0e7cb3efad68045d65e0fc5c6d45",
+		"linux-386":     "0fe270712477f3b22658387941f2c232a793e664bbe5a55970996d701be746b9",
+		"linux-amd64":   "fba72d5bd353a0ec01117d488c7475e065c72f7fd4f0d552aa04600d595fbf72",
+		"linux-arm":     "11319ad2a5697ebfab755f69fe8fe3d8939b6e95e444b727d5275430e0010367",
+		"linux-arm64":   "56eb350e321fcb3a9ce58c41158da28b1b0729f4d945a9f5b61de69b59278aaa",
+		"windows-amd64": "d526f96b16f0fb55e4baaf8038ead09d8de9dac0f69640329a43bd1464558f20",
 	}
 
 	for _, target := range []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"} {
 		if got := cacheKey(manifest, target); got != want[target] {
-			t.Errorf("%s's cache key is %s, want %s: the compiled inputs did not change, and a warm cache is thrown away", target, got, want[target])
+			t.Errorf("%s's cache key is %s, want %s: something the compiled compile reads has moved, and the warm entries move with it — when the move is the recipe, record the key it computes now", target, got, want[target])
 		}
 	}
 }
@@ -984,6 +986,46 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsPair(t *testing.T) {
 
 			if stepIndex(plan.Steps, "strip") > stepIndex(plan.Steps, "sign") {
 				t.Errorf("%s: the pair is signed before it is stripped, and the signature is over bytes strip rewrote", target)
+			}
+		}
+	}
+}
+
+// The audio-only switches are not a note kept in the manifest: they are what the source is told. Both
+// routes are shown passing them to configure — the compile this machine runs in a container, and the
+// compile a target's own host runs on the machine that is the target — because a switch that reaches
+// only one route is one recipe with two meanings, and the supplied pairs are compiled by the other one.
+func TestTheAudioOnlySwitchesReachConfigureOnBothRoutes(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	want := []string{"--disable-everything", "--disable-network"}
+
+	container, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
+	if err != nil {
+		t.Fatalf("the build refused linux-arm64: %v", err)
+	}
+
+	native, err := planFFmpeg(options{target: "macos-arm64"}, t.TempDir(), manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
+	if err != nil {
+		t.Fatalf("the build refused to compile macos-arm64 on its own host: %v", err)
+	}
+
+	for _, route := range []struct {
+		target string
+		plan   ffmpegPlan
+	}{
+		{target: "linux-arm64", plan: container},
+		{target: "macos-arm64", plan: native},
+	} {
+		configure := stepFor(route.plan.Steps, "configure")
+
+		if configure.name == "" {
+			t.Fatalf("%s: the compile plans no configure", route.target)
+		}
+
+		for _, flag := range want {
+			if !carries(configure.args, flag) {
+				t.Errorf("%s: the configure does not tell the source %s: %v", route.target, flag, configure.args)
 			}
 		}
 	}

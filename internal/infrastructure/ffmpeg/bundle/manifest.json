@@ -7,6 +7,7 @@
   "recipe": [
     "--disable-everything",
     "--disable-autodetect",
+    "--disable-network",
     "--disable-doc",
     "--disable-ffplay",
     "--enable-ffmpeg",
