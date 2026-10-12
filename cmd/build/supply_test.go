@@ -86,6 +86,15 @@ func writeMachO(t *testing.T, name string, fixture aMachO) string {
 		return path
 	}
 
+	if err := os.WriteFile(path, machOBytes(fixture), mode); err != nil {
+		t.Fatalf("writing the fixture: %v", err)
+	}
+
+	return path
+}
+
+// machOBytes is the header and the load commands a fixture describes.
+func machOBytes(fixture aMachO) []byte {
 	commands := []byte{}
 	count := 0
 
@@ -105,11 +114,7 @@ func writeMachO(t *testing.T, name string, fixture aMachO) string {
 	binary.LittleEndian.PutUint32(header[12:], uint32(count))
 	binary.LittleEndian.PutUint32(header[16:], uint32(len(commands)))
 
-	if err := os.WriteFile(path, append(append(header, commands...), fixture.Body...), mode); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
-	}
-
-	return path
+	return append(append(header, commands...), fixture.Body...)
 }
 
 func aDylibCommand(dylib aDylib) []byte {
@@ -138,8 +143,7 @@ func aCodeSignatureCommand() []byte {
 // aSystemProgram is the pair of fixtures every rule is measured against: a thin 64-bit image of the
 // architecture the target runs, carrying a code signature, linking only libraries the operating system
 // itself provides.
-func aSystemProgram(t *testing.T, cpuType uint32) aMachO {
-	t.Helper()
+func aSystemProgram(cpuType uint32) aMachO {
 
 	return aMachO{
 		Magic:     theMachOMagic,
@@ -163,7 +167,7 @@ func TestASuppliedMachOIsTheProgramItsTargetRuns(t *testing.T) {
 			cpuType = theArm64CPU
 		}
 
-		fixture := aSystemProgram(t, cpuType)
+		fixture := aSystemProgram(cpuType)
 
 		path := writeMachO(t, "ffmpeg", fixture)
 
@@ -176,7 +180,7 @@ func TestASuppliedMachOIsTheProgramItsTargetRuns(t *testing.T) {
 // One archive per architecture is what the release matrix ships, and each binary embeds its own
 // architecture's pair. A pair built for the other macOS architecture is a pair that will not run.
 func TestTheBuildRefusesASuppliedMachOOfTheOtherArchitecture(t *testing.T) {
-	fixture := aSystemProgram(t, theArm64CPU)
+	fixture := aSystemProgram(theArm64CPU)
 
 	path := writeMachO(t, "ffmpeg", fixture)
 
@@ -194,7 +198,7 @@ func TestTheBuildRefusesASuppliedMachOOfTheOtherArchitecture(t *testing.T) {
 // and each one carries its own pair, so a fat drop says it was built for a matrix the build does not
 // have, and the pair the archive carries is not the pair its architecture runs.
 func TestTheBuildRefusesAUniversalMachO(t *testing.T) {
-	fixture := aSystemProgram(t, theX8664CPU)
+	fixture := aSystemProgram(theX8664CPU)
 	fixture.Magic = theFatMagic
 
 	path := writeMachO(t, "ffmpeg", fixture)
@@ -213,7 +217,7 @@ func TestTheBuildRefusesAUniversalMachO(t *testing.T) {
 // writes out of its own binary at startup. An unsigned pair is a server that converts nothing, and the
 // signature is a hash over the file's contents, so signing has to happen before the drop.
 func TestTheBuildRefusesAMachOWithNoCodeSignature(t *testing.T) {
-	fixture := aSystemProgram(t, theArm64CPU)
+	fixture := aSystemProgram(theArm64CPU)
 	fixture.Signature = false
 
 	path := writeMachO(t, "ffmpeg", fixture)
@@ -243,7 +247,7 @@ func TestTheBuildRefusesAMachOLinkingALibraryTheHostHasToInstall(t *testing.T) {
 		{"a reexported library outside the system", "/opt/homebrew/opt/zstd/lib/libzstd.1.dylib", theReexportDylib},
 		{"an upward-linked library outside the system", "/Users/maintainer/build/lib/libssl.dylib", theLoadUpwardDylib},
 	} {
-		fixture := aSystemProgram(t, theX8664CPU)
+		fixture := aSystemProgram(theX8664CPU)
 		fixture.Dylibs = append(fixture.Dylibs, aDylib{Command: tc.command, Path: tc.path})
 
 		path := writeMachO(t, "ffmpeg", fixture)
@@ -350,6 +354,15 @@ func writeELF(t *testing.T, name string, fixture aFreeBSDProgram) string {
 		return path
 	}
 
+	if err := os.WriteFile(path, elfBytes(fixture), mode); err != nil {
+		t.Fatalf("writing the fixture: %v", err)
+	}
+
+	return path
+}
+
+// elfBytes is the header and the program headers a fixture describes.
+func elfBytes(fixture aFreeBSDProgram) []byte {
 	header := make([]byte, 64)
 	copy(header[0:], theELFMagic)
 	header[4] = fixture.Class
@@ -372,18 +385,13 @@ func writeELF(t *testing.T, name string, fixture aFreeBSDProgram) string {
 		body = append(body, entry...)
 	}
 
-	if err := os.WriteFile(path, body, mode); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
-	}
-
-	return path
+	return body
 }
 
 // aStaticFreeBSDProgram is the fixture every FreeBSD rule is measured against: a 64-bit x86-64
 // executable branded FreeBSD, with no program interpreter, which is what needs nothing installed on the
 // host it runs on.
-func aStaticFreeBSDProgram(t *testing.T) aFreeBSDProgram {
-	t.Helper()
+func aStaticFreeBSDProgram() aFreeBSDProgram {
 
 	return aFreeBSDProgram{
 		Class:    theELF64Class,
@@ -392,6 +400,20 @@ func aStaticFreeBSDProgram(t *testing.T) aFreeBSDProgram {
 		Type:     theExecType,
 		Segments: []uint32{theLoadSegment},
 	}
+}
+
+// aSuppliedProgramBytes is the program a maintainer drops for one target: the shape the build adopts.
+func aSuppliedProgramBytes(target string) []byte {
+	switch target {
+	case "macos-amd64":
+		return machOBytes(aSystemProgram(theX8664CPU))
+	case "macos-arm64":
+		return machOBytes(aSystemProgram(theArm64CPU))
+	case "freebsd-amd64":
+		return elfBytes(aStaticFreeBSDProgram())
+	}
+
+	panic("no supplied program fixture for " + target)
 }
 
 // The proof is the only evidence a supplied pair converts audio: the build cannot run it. So the proof
@@ -574,7 +596,7 @@ func aHostForTarget(target string) string {
 // rule for it is the rule the Linux targets have: the program the server writes out and runs needs
 // nothing installed on the host.
 func TestASuppliedFreeBSDProgramIsAStaticBinaryForItsTarget(t *testing.T) {
-	path := writeELF(t, "ffmpeg", aStaticFreeBSDProgram(t))
+	path := writeELF(t, "ffmpeg", aStaticFreeBSDProgram())
 
 	if err := checkSuppliedProgram(path, "freebsd-amd64"); err != nil {
 		t.Errorf("a static x86-64 FreeBSD program was refused: %v", err)
@@ -593,7 +615,7 @@ func TestTheBuildRefusesASuppliedProgramThatIsNotFreeBSDs(t *testing.T) {
 		{"a Linux program", theLinuxOSABI, "FreeBSD"},
 		{"a program branded nothing", theNoneOSABI, "FreeBSD"},
 	} {
-		fixture := aStaticFreeBSDProgram(t)
+		fixture := aStaticFreeBSDProgram()
 		fixture.OSABI = tc.osabi
 
 		path := writeELF(t, "ffmpeg", fixture)
@@ -614,7 +636,7 @@ func TestTheBuildRefusesASuppliedProgramThatIsNotFreeBSDs(t *testing.T) {
 // does it. A pair with a program interpreter needs FreeBSD's own loader and every library it pulls in,
 // which is the thing the bundle exists to avoid.
 func TestTheBuildRefusesADynamicFreeBSDProgram(t *testing.T) {
-	fixture := aStaticFreeBSDProgram(t)
+	fixture := aStaticFreeBSDProgram()
 	fixture.Segments = []uint32{theInterpSegment, theLoadSegment}
 
 	path := writeELF(t, "ffprobe", fixture)
@@ -658,7 +680,7 @@ func TestTheBuildRefusesAFreeBSDProgramOfTheOtherWidthAndArchitecture(t *testing
 			rule: "ELF",
 		},
 	} {
-		fixture := aStaticFreeBSDProgram(t)
+		fixture := aStaticFreeBSDProgram()
 		tc.patch(&fixture)
 
 		path := writeELF(t, "ffmpeg", fixture)

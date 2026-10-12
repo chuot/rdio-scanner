@@ -21,6 +21,8 @@
 package main
 
 import (
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -471,7 +473,7 @@ func TestAReusedFfmpegIsPublishedTheWayAFreshOneIs(t *testing.T) {
 		}
 	}
 
-	if err := publishFFmpeg(paths, manifest, "linux-arm64"); err != nil {
+	if err := publishFFmpeg(paths, manifest, "linux-arm64", ffmpegLicence(manifest, "linux-arm64")); err != nil {
 		t.Fatalf("the build refused to publish a compiled ffmpeg: %v", err)
 	}
 
@@ -502,4 +504,371 @@ func carries(args []string, want string) bool {
 	}
 
 	return false
+}
+
+// The supplied targets are the ones this build compiles no ffmpeg for: the pair is compiled on the
+// platform the target runs on, dropped where the build finds it, pinned by digest, and proved by the
+// ffmpeg check on that platform. These are the decisions the ffmpeg phase makes about a pair it cannot
+// run, and every one of them is taken before anything is written.
+
+// aManifestPinning is the manifest this repository carries, with the digests of a supplied pair pinned for
+// one target.
+func aManifestPinning(target string, ffmpegDigest string, ffprobeDigest string) bundle.Manifest {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets[target]
+	record.Programs = map[string]string{"ffmpeg": ffmpegDigest, "ffprobe": ffprobeDigest}
+	manifest.Targets[target] = record
+
+	return manifest
+}
+
+// aSuppliedPair drops the pair a maintainer builds for one target, records the proof the ffmpeg check
+// recorded for it, and returns the manifest that pins them.
+func aSuppliedPair(t *testing.T, repo string, target string) (bundle.Manifest, string, string) {
+	t.Helper()
+
+	body := aSuppliedProgramBytes(target)
+	other := append(append([]byte{}, body...), byte(len(target)))
+
+	return aSuppliedPairWith(t, repo, target, body, other), sha256Of(body), sha256Of(other)
+}
+
+// aSuppliedPairWith drops a pair whose programs are the bytes a test asks for, pins them, and records the
+// proof for them. The pair is accepted by digest and by proof, so what the build refuses is the shape.
+func aSuppliedPairWith(t *testing.T, repo string, target string, ffmpegBytes []byte, ffprobeBytes []byte) bundle.Manifest {
+	t.Helper()
+
+	dir := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("making the bundle directory: %v", err)
+	}
+
+	// The directory a clone carries: the placeholder that makes the embed compile, and nothing else.
+	if err := os.WriteFile(filepath.Join(dir, ".gitkeep"), nil, 0644); err != nil {
+		t.Fatalf("writing the placeholder: %v", err)
+	}
+
+	for name, body := range map[string][]byte{"ffmpeg": ffmpegBytes, "ffprobe": ffprobeBytes} {
+		if err := os.WriteFile(filepath.Join(dir, name+programSuffix(target)), body, 0755); err != nil {
+			t.Fatalf("dropping the supplied %s: %v", name, err)
+		}
+	}
+
+	ffmpegDigest := sha256Of(ffmpegBytes)
+	ffprobeDigest := sha256Of(ffprobeBytes)
+
+	if err := writeFfmpegCheck(repo, aCheckFor(target, ffmpegDigest, ffprobeDigest)); err != nil {
+		t.Fatalf("recording the ffmpeg check: %v", err)
+	}
+
+	return aManifestPinning(target, ffmpegDigest, ffprobeDigest)
+}
+
+// A pair that was not dropped is the ordinary state of a release run on a machine that does not have the
+// Mac or the FreeBSD box in front of it. It is not a failure, and the build says where to drop the pair
+// and what proves it.
+func TestASuppliedTargetWhosePairWasNotDroppedProducesNothing(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		manifest := aManifestPinning(target, theFFmpegDigest, theFFProbeDigest)
+
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, anUncompiledTree())
+		if err != nil {
+			t.Errorf("%s: a pair that was simply not dropped failed the run: %v", target, err)
+			continue
+		}
+
+		if len(plan.Steps) != 0 {
+			t.Errorf("%s: the build has %d steps for a target with nothing dropped", target, len(plan.Steps))
+		}
+
+		if !plan.Skipped {
+			t.Errorf("%s: the plan does not mark the target skipped, so the release run builds a server and an archive for nothing", target)
+		}
+
+		if !strings.Contains(plan.Says, "internal/infrastructure/ffmpeg/bundle/"+target) {
+			t.Errorf("%s: the message %q does not name the directory to drop the pair in", target, plan.Says)
+		}
+
+		if !strings.Contains(plan.Says, "ffmpeg-check") {
+			t.Errorf("%s: the message %q does not name the command that proves the pair", target, plan.Says)
+		}
+	}
+}
+
+// Nothing is adopted for a target whose pair has not been pinned: the pair is not reproducible from this
+// repository, so the digest in the manifest is the thing a release is made of, and a build that adopted
+// whatever it found would be shipping a binary nobody recorded.
+func TestTheBuildRefusesASuppliedPairTheManifestDoesNotPin(t *testing.T) {
+	repo := t.TempDir()
+
+	aSuppliedPairWith(t, repo, "macos-arm64", aSuppliedProgramBytes("macos-arm64"), aSuppliedProgramBytes("macos-arm64"))
+
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, bundle.ReadManifest(), anUncompiledTree())
+	if err == nil {
+		t.Fatal("the build adopted a pair the manifest does not pin")
+	}
+
+	if !strings.Contains(err.Error(), "manifest.json") || !strings.Contains(err.Error(), "programs") {
+		t.Errorf("the failure %q does not name the manifest field to fill in", err.Error())
+	}
+}
+
+// The pinned digest is the pair. A pair that is not the pinned one is a rebuild nobody recorded, and the
+// failure names both digests, because the operator has to be able to tell which one is in front of them.
+func TestTheBuildRefusesASuppliedPairThatIsNotThePinnedOne(t *testing.T) {
+	repo := t.TempDir()
+
+	_, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
+
+	pinned := aManifestPinning("macos-arm64", strings.Repeat("7", 64), strings.Repeat("8", 64))
+
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, pinned, anUncompiledTree())
+	if err == nil {
+		t.Fatal("the build adopted a pair that is not the pair the manifest pins")
+	}
+
+	if !strings.Contains(err.Error(), ffmpegDigest) || !strings.Contains(err.Error(), strings.Repeat("7", 64)) {
+		t.Errorf("the failure %q names neither the digest found nor the digest pinned", err.Error())
+	}
+
+	if !strings.Contains(err.Error(), ffprobeDigest) {
+		t.Errorf("the failure %q does not name the ffprobe it also refused", err.Error())
+	}
+}
+
+// A pair accepted by digest and by proof is refused on its shape, with the rule named: the build cannot
+// run it, and the headers are what it can read.
+func TestTheBuildRefusesASuppliedPairThatIsNotTheProgramItsTargetRuns(t *testing.T) {
+	repo := t.TempDir()
+
+	// The same recipe on an Apple Silicon Mac produces a signed program. An unsigned build is what a
+	// maintainer gets when he forgets codesign, and the proof is recorded for it, because the check ran
+	// on a machine that let it start.
+	unsigned := aSystemProgram(theArm64CPU)
+	unsigned.Signature = false
+
+	manifest := aSuppliedPairWith(t, repo, "macos-arm64", machOBytes(unsigned), aSuppliedProgramBytes("macos-arm64"))
+
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree())
+	if err == nil {
+		t.Fatal("the build adopted an unsigned program for macos-arm64")
+	}
+
+	if !strings.Contains(err.Error(), "signature") {
+		t.Errorf("the failure %q does not name the code signature rule", err.Error())
+	}
+}
+
+// The proof is the only evidence a supplied pair converts audio. A pair the check never proved is not
+// adopted, and the failure names the command that produces a proof and the machine it runs on.
+func TestTheBuildRefusesASuppliedPairNobodyProvedOnItsOwnPlatform(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest := aSuppliedPairWith(t, repo, "macos-arm64", aSuppliedProgramBytes("macos-arm64"), aSuppliedProgramBytes("macos-arm64"))
+
+	if err := os.Remove(ffmpegCheckFile(repo, "macos-arm64")); err != nil {
+		t.Fatalf("removing the proof: %v", err)
+	}
+
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree())
+	if err == nil {
+		t.Fatal("the build adopted a pair with no ffmpeg check recorded for it")
+	}
+
+	if !strings.Contains(err.Error(), "ffmpeg-check") {
+		t.Errorf("the failure %q does not name the command that records the proof", err.Error())
+	}
+}
+
+// A pair that is pinned, shaped, and proved is adopted: the plan carries the proof it verified, because
+// the licence text the release archive carries names the check that ran.
+func TestTheBuildAdoptsTheSuppliedPairItPinsAndItsCheckProved(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree())
+	if err != nil {
+		t.Fatalf("the build refused the pair it pins and its check proved: %v", err)
+	}
+
+	if plan.Skipped {
+		t.Error("the build skipped a pair that was dropped, pinned, shaped, and proved")
+	}
+
+	if plan.Check.Target != "macos-arm64" {
+		t.Errorf("the plan carries no proof of the pair it adopted: %+v", plan.Check)
+	}
+
+	if plan.Check.FFmpeg != ffmpegDigest || plan.Check.FFProbe != ffprobeDigest {
+		t.Errorf("the plan carries the proof of the pair %s / %s, not the pair it adopted", plan.Check.FFmpeg, plan.Check.FFProbe)
+	}
+
+	if !strings.Contains(plan.Says, "supplied") {
+		t.Errorf("the message %q does not say the ffmpeg is supplied", plan.Says)
+	}
+}
+
+// A pair that is already in the cache is not adopted again, and the drop is not needed for it: the cache
+// key is the pinned digests, so a warm cache is the pair the manifest names.
+func TestASuppliedPairAlreadyInCacheIsNotAdoptedAgain(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest, _, _ := aSuppliedPair(t, repo, "macos-arm64")
+
+	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
+
+	if err := adoptSuppliedFFmpeg(paths, "macos-arm64"); err != nil {
+		t.Fatalf("adopting the pair: %v", err)
+	}
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, ffmpegState{bundleIsCached: true})
+	if err != nil {
+		t.Fatalf("the build refused a cached supplied pair: %v", err)
+	}
+
+	if len(plan.Steps) != 0 {
+		t.Errorf("a cached supplied pair is adopted again: %d steps", len(plan.Steps))
+	}
+
+	if plan.Skipped {
+		t.Error("a cached supplied pair is skipped, and the release run ships no archive for it")
+	}
+
+	if plan.Says == "" {
+		t.Error("the build says nothing about reusing a supplied pair")
+	}
+}
+
+// The drop is consumed: the pair moves out of the directory a server binary embeds, and what stays there
+// is the gzipped pair and its licence. A raw pair left in that directory is embedded next to the gzipped
+// one, and every server built for that target carries about ten megabytes of uncompressed program.
+func TestASuppliedPairIsAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest, ffmpegDigest, ffprobeDigest := aSuppliedPair(t, repo, "macos-arm64")
+
+	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
+
+	check, err := readFfmpegCheck(repo, "macos-arm64", ffmpegDigest, ffprobeDigest)
+	if err != nil {
+		t.Fatalf("reading the proof: %v", err)
+	}
+
+	if err := adoptSuppliedFFmpeg(paths, "macos-arm64"); err != nil {
+		t.Fatalf("adopting the pair: %v", err)
+	}
+
+	if err := publishFFmpeg(paths, manifest, "macos-arm64", suppliedFFMpegLicence(manifest, "macos-arm64", check)); err != nil {
+		t.Fatalf("publishing the pair: %v", err)
+	}
+
+	names := []string{}
+
+	entries, err := os.ReadDir(paths.bundle)
+	if err != nil {
+		t.Fatalf("reading the bundle directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+
+		if entry.Name() == "ffmpeg" || entry.Name() == "ffprobe" {
+			t.Errorf("%s is left in the directory the server embeds: //go:embed all: embeds every file in it", entry.Name())
+		}
+	}
+
+	for _, want := range []string{".gitkeep", "ffmpeg.gz", "ffprobe.gz", "LICENCE.md"} {
+		if !theNamesCarry(names, want) {
+			t.Errorf("the bundle directory does not carry %s: %v", want, names)
+		}
+	}
+
+	// The pair the server writes out of its own binary is the pair that was dropped: gzip is lossless,
+	// and the ad-hoc code signature a signed pair carries is a hash over those exact bytes. The bundle
+	// package's own tests are what prove a directory holding this pair is a directory it materializes.
+	for _, pair := range []struct {
+		name   string
+		digest string
+	}{
+		{"ffmpeg", ffmpegDigest},
+		{"ffprobe", ffprobeDigest},
+	} {
+		for _, dir := range []string{paths.cached, paths.bundle} {
+			body, err := readGzip(filepath.Join(dir, pair.name+".gz"))
+			if err != nil {
+				t.Fatalf("reading %s in %s: %v", pair.name+".gz", dir, err)
+			}
+
+			if sha256Of(body) != pair.digest {
+				t.Errorf("%s in %s is %s, and the pair dropped was %s", pair.name, dir, sha256Of(body), pair.digest)
+			}
+		}
+	}
+}
+
+// The licence a supplied archive carries says what that ffmpeg is, and does not claim this build compiled
+// it: the pair was compiled by the maintainer, on the platform the target runs on, and the only evidence
+// of it is the digest the manifest pins and the check that ran there.
+func TestTheBuildSaysWhatASuppliedFfmpegIsAndUnderWhatLicence(t *testing.T) {
+	manifest := aManifestPinning("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+
+	check := aCheckFor("macos-arm64", theFFmpegDigest, theFFProbeDigest)
+
+	text := suppliedFFMpegLicence(manifest, "macos-arm64", check)
+
+	for _, want := range []string{
+		"Lesser General Public License",
+		manifest.FFmpeg,
+		manifest.Source.URL,
+		manifest.Source.SHA256,
+		manifest.Recipe[0],
+		theFFmpegDigest,
+		theFFProbeDigest,
+		"maintainer",
+		"macos-arm64",
+		check.Host,
+		check.Checked,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the licence text for a supplied pair names no %q", want)
+		}
+	}
+
+	for _, not := range []string{
+		"go run ./cmd/build ffmpeg macos-arm64",
+		"compiled from source for macos-arm64. It converts",
+	} {
+		if strings.Contains(text, not) {
+			t.Errorf("the licence text says %q, which is not true of a pair this build did not compile", not)
+		}
+	}
+}
+
+func theNamesCarry(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+
+	return false
+}
+
+func readGzip(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	reader, err := gzip.NewReader(file)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
 }
