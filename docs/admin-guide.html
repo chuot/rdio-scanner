@@ -317,6 +317,13 @@ footer.site {
 
 footer.site .wrap { max-width: 78rem; margin: 0 auto; }
 
+footer.site .signoff {
+  margin-top: 1.1rem;
+  font-size: 1.05rem;
+  font-style: italic;
+  color: var(--brand);
+}
+
 /* ---------------------------------------------------------------- narrow */
 
 @media (max-width: 62rem) {
@@ -2364,22 +2371,416 @@ rm -f ${basename}.*</code></pre>
 
 <section>
   <h2 id="ch-15-tools">15 · Tools</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The Tools section is where a deployment moves in and out of files: the configuration out as one JSON
+    file, a configuration back in, a talkgroup or unit list from another application, and the administrator
+    password.
+  </p>
+
+  <figure data-shot="section-tools">
+    <img alt="The Tools section: the export panel, the import panel with its file picker, the talkgroup and unit import panels with their system selects, and the change password panel.">
+    <figcaption>The Tools section as the server carries it: four file operations and the password panel, each with its own caption.</figcaption>
+  </figure>
+
+  <h3>Export and import the configuration</h3>
+
+  <p>
+    <strong>Export config</strong> downloads the saved configuration as one JSON file: every section as the
+    server has it, with the working copies of open sections left out. It is the deployment's own record —
+    the file you keep before an upgrade, the file you copy to a second deployment, and the file you attach
+    when you ask for help.
+  </p>
+
+  <figure data-shot="snackbar-config-exported">
+    <img alt="The Tools section with the snackbar at the bottom of the page naming what just happened: the configuration was exported.">
+    <figcaption>The snackbar confirms the export. It is how the interface says a file left the browser: a download with no message is a download you have to go and find.</figcaption>
+  </figure>
+
+  <p>
+    <strong>Import</strong> loads a configuration JSON file into the sections' working copies. It does not
+    write anything: the caption under the picker says it plainly, because the difference matters. After an
+    import, each section holds unsaved changes and its save bar is enabled, and the deployment changes only
+    when you save the sections you want to apply.
+  </p>
+
+  <aside class="caution">
+    <p>
+      An import is a whole configuration arriving in a running deployment. Save the sections you checked,
+      and discard the ones you did not: the sections you leave alone keep their unsaved import in the
+      working copy, and a save bar pressed later writes them. Importing a configuration from another
+      deployment brings its access codes, its API keys, and its downstreams with it.
+    </p>
+  </aside>
+
+  <h3>Import talkgroups and units from CSV</h3>
+
+  <p>
+    A talkgroup list from another application is imported per system. Pick the system, choose the CSV file,
+    and the section shows you the rows it is about to write before you import them.
+  </p>
+
+  <table>
+    <caption>The CSV imports</caption>
+    <thead><tr><th scope="col">Import</th><th scope="col">Columns</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Import talkgroups</td><td><code>id</code>, <code>frequency</code>, <code>label</code>, <code>group</code>, <code>name</code>, <code>tag</code>, <code>description</code></td><td>Groups and tags the file names that the deployment does not have are created automatically. The rows are written into the system you picked.</td></tr>
+      <tr><td>Import units</td><td><code>id</code>, <code>label</code></td><td>The units are written into the system you picked.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The preview table lists the rows with a remove control on each, so a file that carries rows you do not
+    want is edited on the way in, not after.
+  </p>
+
+  <h3>Change the password</h3>
+
+  <p>
+    The password panel takes the current password, a new one, and the new one again to verify it. The new
+    password is at least eight characters, and the server checks the current password before it writes
+    anything: a change with the wrong current password is refused, and the log says the password was not
+    changed and why.
+  </p>
+
+  <figure data-shot="tools-change-password">
+    <img alt="The password panel: the current password, the new password, the verify field, and the Save and Reset buttons.">
+    <figcaption>The password panel. The server verifies the current password, so a panel filled in by the wrong person changes nothing.</figcaption>
+  </figure>
+
+  <p>
+    A server still running the password it shipped with says so in the todos banner at the top of the
+    administration interface, and the banner is quiet once the password is changed. Changing the password
+    does not end the sessions that are open: the session token is signed with the server's signing secret,
+    not with the password. See <a href="#ch-22-security-hardening">security hardening</a>.
+  </p>
+
+  <aside class="note">
+    <p>
+      A password you have lost is recovered with the program itself, not with the interface: the
+      <code>-admin_password</code> flag stores a new administrator password
+      <a href="#ch-06-flags-and-ini">on the machine where the server runs</a>, where the database is. The
+      password you type is a command-line argument, so it is visible to the other processes on that machine
+      — run it where the server runs, and not in front of a share.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-16-rest-api">16 · The HTTP REST API</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The server answers HTTP for three kinds of caller: an administrator session, a listener presenting an
+    access code, and an ingest source presenting an API key. Everything the administration interface does,
+    it does through these endpoints, so what you can do from a screen you can do from a script.
+  </p>
+
+  <h3>The three credentials</h3>
+
+  <table>
+    <caption>How each credential is presented</caption>
+    <thead><tr><th scope="col">Credential</th><th scope="col">Where it goes</th><th scope="col">What it opens</th></tr></thead>
+    <tbody>
+      <tr><td>Administrator session</td><td>The <code>Authorization</code> header, carrying the token from the login endpoint <strong>with no <code>Bearer</code> prefix</strong></td><td>Every administration endpoint: the configuration, the log, the alerts, the password, the access users</td></tr>
+      <tr><td>Access code</td><td>The <code>X-Access-Code</code> header</td><td>The call history endpoints only, beside an administrator session. A server with no access list answers them to an anonymous caller.</td></tr>
+      <tr><td>API key</td><td>The <code>key</code> field of an upload's multipart body</td><td>The two upload endpoints</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The session token is signed with the server's signing secret and carries no expiry of its own: the
+    server keeps the last five tokens it issued, and a server that generates a new secret ends every session
+    opened before it. A refused request is answered <code>401</code> with an empty body, on every entry
+    point, so a script never learns which credential it was missing.
+  </p>
+
+  <h3>The endpoint list</h3>
+
+  <p>
+    The OpenAPI section of the administration interface renders this list from the contract the server
+    publishes, grouped the way the contract groups it, with the credential each endpoint takes. The list
+    below is the same list, with what each endpoint is for.
+  </p>
+
+  <figure data-shot="section-openapi">
+    <img alt="The OpenAPI section: the endpoint list grouped by Authentication, Config, Alerts, Logs, Calls, Password, Users, Capture, and Applications, each with its method and path.">
+    <figcaption>The OpenAPI section as the server carries it. It reads the contract the server publishes, so the list cannot drift from what the server answers.</figcaption>
+  </figure>
+
+  <table>
+    <caption>The endpoints the server answers</caption>
+    <thead><tr><th scope="col">Method and path</th><th scope="col">Takes</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/admin/login</code></td><td>nothing</td><td>Exchanges the administrator password for a session token, and reports that the shipped password is still in use.</td></tr>
+      <tr><td><code>POST /api/admin/logout</code></td><td>session</td><td>Invalidates the token the caller presents.</td></tr>
+      <tr><td><code>GET /api/admin/config</code></td><td>session</td><td>The whole configuration, under the key <code>config</code>.</td></tr>
+      <tr><td><code>PUT /api/admin/config</code></td><td>session</td><td>Replaces configuration sections from a whole-configuration body. Only the top-level keys the body names are applied.</td></tr>
+      <tr><td><code>GET /api/admin/config/{section}</code></td><td>session</td><td>One section.</td></tr>
+      <tr><td><code>PUT /api/admin/config/{section}</code></td><td>session</td><td>Replaces one section, persists it, and broadcasts the whole configuration to the administration sessions that are open.</td></tr>
+      <tr><td><code>GET /api/admin/config/systems/{systemId}/sites</code></td><td>session</td><td>The sites of one system.</td></tr>
+      <tr><td><code>PUT /api/admin/config/systems/{systemId}/sites</code></td><td>session</td><td>Saves the sites of one system.</td></tr>
+      <tr><td><code>GET /api/admin/config/systems/{systemId}/talkgroups</code></td><td>session</td><td>The talkgroups of one system.</td></tr>
+      <tr><td><code>PUT /api/admin/config/systems/{systemId}/talkgroups</code></td><td>session</td><td>Saves the talkgroups of one system.</td></tr>
+      <tr><td><code>GET /api/admin/config/systems/{systemId}/units</code></td><td>session</td><td>The units of one system.</td></tr>
+      <tr><td><code>PUT /api/admin/config/systems/{systemId}/units</code></td><td>session</td><td>Saves the units of one system.</td></tr>
+      <tr><td><code>GET /api/admin/alerts</code></td><td>session</td><td>The named alert oscillator sequences the alert selects list.</td></tr>
+      <tr><td><code>POST /api/admin/logs</code></td><td>session</td><td>Searches the log: sort order, date, level, subsystem, text, and paging.</td></tr>
+      <tr><td><code>POST /api/admin/password</code></td><td>session</td><td>Changes the administrator password. The current password is verified.</td></tr>
+      <tr><td><code>POST /api/admin/user-add</code></td><td>session</td><td>Adds a listener access code, with its ident, expiration, limit, and scope.</td></tr>
+      <tr><td><code>POST /api/admin/user-remove</code></td><td>session</td><td>Removes every access code sharing the user name the body names.</td></tr>
+      <tr><td><code>POST /api/calls/search</code></td><td>session or access code</td><td>Searches the recorded calls, inside the caller's scope.</td></tr>
+      <tr><td><code>GET /api/calls/{callId}</code></td><td>session or access code</td><td>One recorded call.</td></tr>
+      <tr><td><code>GET /api/calls/{callId}/audio</code></td><td>session or access code</td><td>One recording.</td></tr>
+      <tr><td><code>POST /api/call-upload</code></td><td>the <code>key</code> field</td><td>Uploads a call as multipart form fields.</td></tr>
+      <tr><td><code>POST /api/trunk-recorder-call-upload</code></td><td>the <code>key</code> field</td><td>Uploads a trunk-recorder call: the JSON sidecar in <code>meta</code>, the recording in <code>audio</code>.</td></tr>
+      <tr><td><code>GET /</code></td><td>nothing</td><td>The scanner webapp.</td></tr>
+      <tr><td><code>GET /admin</code></td><td>nothing</td><td>Redirects to <code>/admin/</code>, so the interface's relative addresses resolve inside its own subtree.</td></tr>
+      <tr><td><code>GET /admin/</code></td><td>nothing</td><td>The administration interface.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Two connections, not requests</h3>
+
+  <p>
+    Two paths take a connection rather than a request.
+  </p>
+
+  <ul>
+    <li>
+      <strong>The listener connection</strong> is taken over the address the scanner webapp is served from:
+      the same path answers a browser and a listener, and the upgrade header decides which. The server asks
+      a restricted server's listeners for an access code, sends the configuration their scope grants, and
+      streams the calls. This connection is reserved for Saubeo Solutions and its native applications; the
+      position is stated in <a href="#ch-27-reference">chapter 27</a>.
+    </li>
+    <li>
+      <strong>The administration connection</strong> at <code>/api/admin/config</code> is how an open
+      administration session learns that the configuration changed: a save on the server is broadcast to
+      every session, which is what makes the conflict banner appear on a page that is already open.
+    </li>
+  </ul>
+
+  <h3>What the endpoints answer</h3>
+
+  <ul>
+    <li>Administration endpoints answer JSON, and a failure is answered with the status and an empty body.</li>
+    <li>The upload endpoints answer <strong>plain text</strong>, because the recorders that post to them read
+      a line, not a JSON document: <code>Call imported successfully.</code> when the call was taken,
+      <code>Invalid API key for system &lt;nil&gt; talkgroup &lt;nil&gt;.</code> with <code>401</code> when
+      the credential refused it. See <a href="#ch-10-getting-audio-in">the upload endpoints</a>.</li>
+    <li>A method an endpoint does not take is answered <code>405</code>; the upload endpoints answer it with
+      a line of text, and file it in the log, because a recorder posting with the wrong method is a standing
+      misconfiguration.</li>
+  </ul>
+
+  <aside class="note">
+    <p>
+      The endpoints that write are the endpoints the interface uses, and they write to the running server:
+      a configuration written through the API takes effect at once, is broadcast to the open administration
+      sessions, and is filed in the log as a configuration change. The flags are not in this list —
+      <a href="#ch-06-flags-and-ini">the flags chapter</a> is where those are set.
+    </p>
+  </aside>
+
+  <h3>Reading the contract</h3>
+
+  <p>
+    The contract the server publishes is machine-readable and is what the OpenAPI section reads. It names
+    each path, its method, the credential it takes, and the shape of the bodies. The section is the
+    quickest way to see what a running server answers, and it is the source the endpoint table above is
+    checked against.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-17-mcp-server">17 · The MCP server</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The server can answer the Model Context Protocol: an assistant connected to your deployment can read the
+    configuration, search the calls and the log, and — when it presents the administrator's credential —
+    change the deployment. It is off by default, and it is mounted at <code>/mcp</code>.
+  </p>
+
+  <h3>Enabling it</h3>
+
+  <p>
+    The endpoint exists only when the server is started with <code>-mcp_server</code>, and the ini file
+    carries the same setting as <code>mcp_server = true</code>. With the flag off, the path is not
+    registered: the server answers nothing there, and the surface leaves no trace in the log.
+  </p>
+
+  <h3>Who reaches it, and how far</h3>
+
+  <p>
+    The endpoint has no credential of its own. It reads the same two credentials the rest of the server
+    reads, and the credential decides the tier.
+  </p>
+
+  <table>
+    <caption>The two tiers, and what each one may do</caption>
+    <thead><tr><th scope="col">Credential presented</th><th scope="col">Tier</th><th scope="col">What it opens</th></tr></thead>
+    <tbody>
+      <tr><td><code>Authorization</code> with an administrator session token</td><td>Administrator</td><td>Read and write: the whole endpoint</td></tr>
+      <tr><td><code>X-Access-Code</code> with a listener access code</td><td>Read-only</td><td>The call history and the configuration reads, inside the scope that code carries</td></tr>
+      <tr><td>Nothing, on a server with no access list</td><td>Read-only</td><td>The reads the anonymous listener is entitled to</td></tr>
+      <tr><td>Anything the server does not accept</td><td>refused</td><td>An empty <code>401</code>, and the protocol handler is never reached</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The administrator's credential is examined first, so a stale access-code header on an administrator's
+    request cannot get the administrator refused as a listener. A refusal is filed under the
+    <em>Assistant surface</em> subsystem naming the address the request came from — what the caller
+    presented is a credential, and a credential is not written in the log.
+  </p>
+
+  <h3>What the endpoint carries</h3>
+
+  <p>
+    The capabilities are the server's own use cases, reached through the same handlers the administration
+    interface uses. The surface adds no capability of its own, and no path from it reaches a listener
+    connection.
+  </p>
+
+  <table>
+    <caption>The tools</caption>
+    <thead><tr><th scope="col">Tool</th><th scope="col">Reach</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>list_systems</code></td><td>Read-only and administrator</td><td>The systems, as the configuration has them.</td></tr>
+      <tr><td><code>search_calls</code></td><td>Read-only and administrator</td><td>Searches the recorded calls, inside the caller's scope.</td></tr>
+      <tr><td><code>get_call</code></td><td>Read-only and administrator</td><td>One call, with its recording.</td></tr>
+      <tr><td><code>diagnose_feed_problem</code></td><td>Read-only and administrator</td><td>One pass over the calls, the log, and the configuration for a listener who hears nothing.</td></tr>
+      <tr><td><code>inspect_system</code></td><td>Administrator</td><td>A system with its sites, talkgroups, units, alerts, and colours.</td></tr>
+      <tr><td><code>search_logs</code></td><td>Administrator</td><td>The log, with the filters the log view has.</td></tr>
+      <tr><td><code>explain_error</code></td><td>Administrator</td><td>One log entry, read against the configuration that produced it.</td></tr>
+      <tr><td><code>analyze_health</code></td><td>Administrator</td><td>The deployment's state: the log's warnings and errors, the configuration, the retention.</td></tr>
+      <tr><td><code>manage_config</code></td><td>Administrator, writes</td><td>Reads and replaces a configuration section, and a system's sites, talkgroups, and units.</td></tr>
+      <tr><td><code>manage_access_user</code></td><td>Administrator, writes</td><td>Adds and removes listener access codes.</td></tr>
+      <tr><td><code>rotate_admin_password</code></td><td>Administrator, writes</td><td>Changes the administrator password.</td></tr>
+    </tbody>
+  </table>
+
+  <table>
+    <caption>The prompts</caption>
+    <thead><tr><th scope="col">Prompt</th><th scope="col">What it asks an assistant to do</th></tr></thead>
+    <tbody>
+      <tr><td><code>daily_health_review</code></td><td>Read a day of the deployment: the log's warnings and errors, the configuration, and what changed.</td></tr>
+      <tr><td><code>explain_recent_errors</code></td><td>Take the recent log errors and say what they have in common.</td></tr>
+      <tr><td><code>troubleshoot_silent_talkgroup</code></td><td>Find out why a talkgroup stopped reporting.</td></tr>
+      <tr><td><code>audit_access_codes</code></td><td>Read the access codes: who is expiring, who is at its limit, who has no scope.</td></tr>
+      <tr><td><code>onboard_listener</code></td><td>Write an access code for a listener: ident, scope, expiry.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The resources are the configuration read as documents: the version, the systems, the options, the
+    groups, the tags, the access codes, the API keys, the watched directories, the downstreams, the alerts,
+    a system's sites, talkgroups, and units, and a slice of the log by level and date. The listener-facing
+    ones are open to the read-only tier; the rest are the administrator's.
+  </p>
+
+  <aside class="caution">
+    <p>
+      An assistant holding an administrator session token can change the deployment: it can add an access
+      code, replace a section, and change the administrator password. Treat that token as the credential it
+      is — give it to the assistant that needs it, for the session that needs it, and end it when the work
+      is done. Every change a tool makes is filed in the log, so the log is where you see what the assistant
+      did.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-18-command-line-client">18 · The command line client</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The program you installed is also a client of a server that is already running. Run it with
+    <code>-cmd</code> and an action, and it logs in, does the thing, and stops — the same administration
+    endpoints the interface uses, from a shell, in a script, on a machine that has no browser open.
+  </p>
+
+  <p>
+    It talks to a server over its address, so it needs no database and no configuration of the deployment:
+    it is a client, and it can be run anywhere that can reach the server.
+  </p>
+
+  <h3>The actions</h3>
+
+  <table>
+    <caption>The <code>-cmd</code> actions</caption>
+    <thead><tr><th scope="col">Action</th><th scope="col">What it does</th><th scope="col">Options it takes</th></tr></thead>
+    <tbody>
+      <tr><td><code>login</code></td><td>Signs in and keeps the session token for the commands that follow</td><td><code>+password</code>, or the environment</td></tr>
+      <tr><td><code>logout</code></td><td>Ends the session the token file holds</td><td>none</td></tr>
+      <tr><td><code>config-get</code></td><td>Writes the server's configuration to a file</td><td><code>+out &lt;file.json&gt;</code></td></tr>
+      <tr><td><code>config-set</code></td><td>Sends a configuration file to the server, applying the sections it names</td><td><code>+in &lt;file.json&gt;</code></td></tr>
+      <tr><td><code>admin-password</code></td><td>Gives the server a new administrator password</td><td><code>+password &lt;password&gt;</code></td></tr>
+      <tr><td><code>user-add</code></td><td>Adds a listener access code</td><td><code>+ident</code>, <code>+code</code>, and the optional <code>+expiration</code>, <code>+limit</code>, <code>+systems</code></td></tr>
+      <tr><td><code>user-remove</code></td><td>Removes every access code sharing an ident</td><td><code>+ident &lt;ident&gt;</code></td></tr>
+      <tr><td><code>help</code></td><td>Prints the list above, with the examples and the defaults for your system</td><td>none</td></tr>
+    </tbody>
+  </table>
+
+  <table>
+    <caption>The options every action takes</caption>
+    <thead><tr><th scope="col">Option</th><th scope="col">What it names</th></tr></thead>
+    <tbody>
+      <tr><td><code>+url</code></td><td>The server to talk to. Default <code>http://localhost:3000/</code>. An address that is not <code>http</code> or <code>https</code> stops the client before it reads anything else.</td></tr>
+      <tr><td><code>+token</code></td><td>The session token keystore. Default is a file named for the program, in the folder the server writes its data in.</td></tr>
+      <tr><td><code>+systems</code></td><td>The systems an access code is scoped to, as system identifiers: <code>10001,10002</code>.</td></tr>
+      <tr><td><code>+expiration</code></td><td>An access code's expiry, in RFC 3339 form.</td></tr>
+      <tr><td><code>+limit</code></td><td>An access code's simultaneous-listener cap.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Logging in without leaving the password in the shell</h3>
+
+  <p>
+    The client reads the password from the environment first, which is why the usage text shows the login
+    this way:
+  </p>
+
+  <pre><code>$ RDIO_ADMIN_PASSWORD=<password> ./rdio-scanner -cmd login
+$ ./rdio-scanner -cmd config-get +out deployment.json
+$ ./rdio-scanner -cmd user-add +ident "Dispatch desk" +code 7F2K9Q +systems 10001 +expiration 2026-12-31T00:00:00Z</code></pre>
+
+  <p>
+    <code>+password &lt;password&gt;</code> works the same and is what you use on Windows, where the shell
+    makes the environment form awkward. A password typed as an argument is visible to every other process on
+    the machine, so on a machine you share, use the environment.
+  </p>
+
+  <p>
+    The session lives in the token file, so a script logs in once and runs its commands, and a command run
+    with no session says <code>Not logged in.</code> and stops. A command that could not be done is
+    reported with the failure and ends with a non-zero status, which is what a script needs: a command run
+    against a server that is not answering is told it did not happen.
+  </p>
+
+  <h3>The flags the client mode is not</h3>
+
+  <p>
+    Three flags are the program doing the work itself, on the machine where it runs, with no server
+    involved:
+  </p>
+
+  <table>
+    <caption>The flags that act on the deployment, not on a running server</caption>
+    <thead><tr><th scope="col">Flag</th><th scope="col">What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>-admin_password &lt;password&gt;</code></td><td>Stores a new administrator password in the deployment's database, says so in the log, and stops without starting a server. This is the way back from a lost password.</td></tr>
+      <tr><td><code>-config_save</code></td><td>Writes the configuration the flags named into the ini file, and stops. See <a href="#ch-06-flags-and-ini">the flags chapter</a>.</td></tr>
+      <tr><td><code>-version</code></td><td>Prints the version and stops.</td></tr>
+    </tbody>
+  </table>
+
+  <aside class="note">
+    <p>
+      <code>config-set</code> writes the sections a file names, and only those. A file exported from
+      another deployment carries its access codes, its API keys, and its downstreams, and sending it changes
+      who can listen to this deployment and where its calls go.
+    </p>
+  </aside>
 </section>
 
 <section>
@@ -2441,6 +2842,7 @@ rm -f ${basename}.*</code></pre>
       This document is written for the server and its administration interface. It carries its own
       stylesheet and its own pictures, so it opens with nothing beside it and no network.
     </p>
+    <p class="signoff">Happy Rdio Scanning !</p>
   </div>
 </footer>
 </body>

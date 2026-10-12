@@ -245,6 +245,32 @@ func chapterOf(t *testing.T, body string, id string) string {
 	return body[start : start+end]
 }
 
+// The guide is a document the project hands to an administrator, and it closes the way the project hands
+// it over: the sign-off is the last thing the reader meets, inside the file, so a copy of the guide carries
+// it too.
+func TestTheGuideClosesWithTheSignOff(t *testing.T) {
+	body := guidePath(t)
+
+	footer := regexp.MustCompile(`(?is)<footer\b[^>]*>(.*?)</footer>`).FindStringSubmatch(body)
+	if len(footer) < 2 {
+		t.Fatalf("the guide has no footer to close with")
+	}
+
+	text := regexp.MustCompile(`(?is)<[^>]*>`).ReplaceAllString(footer[1], "\n")
+
+	last := ""
+
+	for _, line := range strings.Split(text, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			last = trimmed
+		}
+	}
+
+	if last != "Happy Rdio Scanning !" {
+		t.Errorf("the guide closes with %q, want the project's sign-off", last)
+	}
+}
+
 // The opening chapter tells an administrator coming from the last published release what they are walking
 // into: the changes, each one operable from a chapter of this guide, and the cost of the update. A list of
 // changes whose links land nowhere is a list the reader cannot act on, and a change summary that hides that
