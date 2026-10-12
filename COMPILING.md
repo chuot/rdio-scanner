@@ -23,10 +23,10 @@ Clone the official repository on your computer and start the build process.
 
 The tool compiles the two web applications before it compiles the server, because each bundle is written beside the Go package that embeds it and a server built before both existed would carry a stale one.
 
-The listener application and the administration console are two applications, in `internal/presentation/scanner/frontend` and `internal/presentation/admin/frontend`, and the modules they both use are in `internal/presentation/common/frontend`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/scanner/frontend/bundle` and `internal/presentation/admin/frontend/bundle` are build output and hold nothing but the `.gitkeep` that keeps a plain `go build` compiling.
+The scanner webapp and the administration console are two applications, in `internal/presentation/scanner/frontend` and `internal/presentation/admin/frontend`, and the modules they both use are in `internal/presentation/common/frontend`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/scanner/frontend/bundle` and `internal/presentation/admin/frontend/bundle` are build output and hold nothing but the `.gitkeep` that keeps a plain `go build` compiling.
 
         go run ./cmd/build client     # both applications
-        go run ./cmd/build scanner    # the listener application only
+        go run ./cmd/build scanner    # the scanner webapp only
         go run ./cmd/build admin      # the administration console only
         go run ./cmd/build ffmpeg     # the ffmpeg this machine's target carries
         go run ./cmd/build server     # the server binary only, against the bundles on disk
@@ -35,7 +35,7 @@ The listener application and the administration console are two applications, in
         go run ./cmd/build clean      # the release output, the client dependencies, and both bundle contents
         go run ./cmd/build version    # the version this build carries
 
-The server binary carries both bundles. One executable serves the listener application at `/` and the administration console at `/admin/`.
+The server binary carries both bundles. One executable serves the scanner webapp at `/` and the administration console at `/admin/`.
 
 ## The ffmpeg the server carries
 
@@ -87,7 +87,7 @@ When finished, you will find the precompiled versions for various platforms in t
         rdio-scanner-macos-arm64-v8.0.0.zip
         rdio-scanner-windows-amd64-v8.0.0.zip
 
-Each archive holds the server binary for its platform and the documentation as the files it is written in: the change log, the platform page for that target, the web app guide, the FAQ, and the pictures those four files point at. The archive's layout is the repository's own layout, so the relative picture paths the documents wrote resolve inside the archive. For the five targets this project compiles an ffmpeg for, the archive also carries the `FFMPEG.md` licence text.
+Each archive holds the server binary for its platform and the documentation as the files it is written in: the change log, the platform page for that target, the scanner webapp guide, the FAQ, and the pictures those four files point at. The archive's layout is the repository's own layout, so the relative picture paths the documents wrote resolve inside the archive. For the five targets this project compiles an ffmpeg for, the archive also carries the `FFMPEG.md` licence text.
 
 The tool stamps nothing. The version reaches the binary through the linker flag and the bundles through the environment. The version literals the documentation carries — in `COMPILING.md`, `README.md`, `docs/docker/README.md`, and the platform pages — are edited by hand at release.
 

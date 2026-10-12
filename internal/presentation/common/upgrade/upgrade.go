@@ -21,7 +21,7 @@
 // Package upgrade says whether a request is asking to become a websocket connection.
 //
 // It lives on its own because two endpoints of this server can be either a socket or an ordinary endpoint —
-// the administrator's configuration path, and the path the web application is served from — and a server
+// the administrator's configuration path, and the path the scanner webapp is served from — and a server
 // whose two endpoints disagree about what an upgrade request looks like answers the same request two
 // different ways depending on which one it reached first.
 package upgrade

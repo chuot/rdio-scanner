@@ -104,7 +104,7 @@ func NewAddAccessUserHandler(ports AccessUserPorts) *AddAccessUserHandler {
 // resulted.
 //
 // An access code that is already on the list is updated rather than added, which is what the
-// legacy server does and what the web app relies on when an administrator edits a user.
+// legacy server does and what the administration interface relies on when an administrator edits a user.
 func (handler *AddAccessUserHandler) Handle(ctx context.Context, cmd AddAccessUserCommand) (ManageAccessUserResult, error) {
 	failed := ManageAccessUserResult{Outcome: AccessUserSaveFailed}
 
@@ -162,7 +162,7 @@ func NewRemoveAccessUserHandler(ports AccessUserPorts) *RemoveAccessUserHandler 
 //
 // A removal that matched nothing stores nothing, announces nothing, and logs nothing — and the
 // legacy server still answers it as a success. That is reproduced here as its own outcome rather
-// than as a failure, because making it a failure would change what the web app has always been
+// than as a failure, because making it a failure would change what the administration interface has always been
 // told.
 func (handler *RemoveAccessUserHandler) Handle(ctx context.Context, cmd RemoveAccessUserCommand) (ManageAccessUserResult, error) {
 	failed := ManageAccessUserResult{Outcome: AccessUserSaveFailed}

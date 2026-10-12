@@ -161,7 +161,7 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 // own.
 //
 // The endpoint is hung on its exact path and on the subtree below it, so the assistant's address is
-// answered by the surface and not by the web application behind it, whichever form the assistant was
+// answered by the surface and not by the application behind it, whichever form the assistant was
 // given to configure.
 func withSubtreeDeadlines(routes http.Handler, streams http.Handler, streamAt, requestAt time.Duration) http.Handler {
 	tree := http.NewServeMux()

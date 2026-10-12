@@ -712,7 +712,7 @@ func capturedSessionCommands(t *testing.T) []string {
 // else opening this socket is a cross-site request that would read every live call and every
 // answer the listener socket carries. A connection with no Origin at all — a native
 // application, which is not a browser and sends no such header — passes, as the native apps
-// depend, and so does the hosted webapp, whose origin is the server's own address.
+// depend, and so does the hosted scanner webapp, whose origin is the server's own address.
 func TestTheListenerSocketRefusesAWebPageFromAnotherOrigin(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -745,7 +745,7 @@ func TestTheListenerSocketRefusesAWebPageFromAnotherOrigin(t *testing.T) {
 		"Origin": []string{"http://" + host},
 	})
 	if err != nil {
-		t.Fatalf("a same-origin connection was refused: %v — the hosted webapp connects from this very address", err)
+		t.Fatalf("a same-origin connection was refused: %v — the hosted scanner webapp connects from this very address", err)
 	}
 
 	same.Close()

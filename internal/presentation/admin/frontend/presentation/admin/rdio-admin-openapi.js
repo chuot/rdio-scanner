@@ -20,7 +20,7 @@ class RdioAdminOpenApi extends HTMLElement {
 
     const intro = document.createElement('p');
     intro.className = 'caption';
-    intro.textContent = 'Every entry point the server answers, read from the OpenAPI contract. The admin webapp uses these; the same calls work from any HTTP client. Admin endpoints take the raw JWT in the Authorization header, no Bearer prefix; the capture endpoints authenticate with the key form field.';
+    intro.textContent = 'Every entry point the server answers, read from the OpenAPI contract. The administration interface uses these; the same calls work from any HTTP client. Admin endpoints take the raw JWT in the Authorization header, no Bearer prefix; the capture endpoints authenticate with the key form field.';
 
     root.append(intro);
 

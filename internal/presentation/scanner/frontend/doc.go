@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package frontend is the listener web application, and the small Go file that serves what
+// Package frontend is the scanner webapp, and the small Go file that serves what
 // its build writes. The application's sources, its tests, and its built bundle all sit in this
 // one directory: a `go:embed` pattern cannot name a path outside the package directory it is
 // written in, so the bundle has to live where the embed is.

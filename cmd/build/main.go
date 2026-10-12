@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Command build compiles this project: the listener application, then the administration
+// Command build compiles this project: the scanner webapp, then the administration
 // application, then the server that carries both. It resolves the version the build carries from
 // VERSION.txt and from git, and injects it into the binary through the linker and into the bundles
 // through the environment, so that no source file has to be edited to say what version is being

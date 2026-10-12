@@ -186,7 +186,7 @@ func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error
 	options.AdminPasswordHash = hash
 
 	// A credential that is still the one the server ships with is one the administrator has to replace,
-	// which is what the web application insists on until they do.
+	// which is what the administration interface insists on until they do.
 	options.AdminPasswordNeedChange = password == domain.DefaultAdminPassword
 
 	if err := s.options.WriteOptions(ctx, options); err != nil {

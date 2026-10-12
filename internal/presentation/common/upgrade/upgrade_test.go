@@ -40,7 +40,7 @@ func TestWantedReadsTheUpgradeHeaderWhateverItsCase(t *testing.T) {
 
 // A request that says nothing about an upgrade is answered as an ordinary request. This is the test the
 // legacy server applies at the two endpoints that can be either a socket or an endpoint: the
-// administrator's configuration path, and the path the web application is served from.
+// administrator's configuration path, and the path the scanner webapp is served from.
 func TestWantedIsNotAskedForByAnythingElse(t *testing.T) {
 	cases := []struct {
 		name   string

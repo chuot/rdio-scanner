@@ -6,7 +6,7 @@ ask for what the directory watchers said, or what the last hour of logins said, 
 
 The log is in three places, and they are the same log:
 
-- the **Logs** section of the administration web app, at `http://<host>:<port>/admin/`;
+- the **Logs** section of the administration interface, at `http://<host>:<port>/admin/`;
 - the server's console, which is what `journalctl -u rdio-scanner` shows on a service deployment;
 - the `logs` table of the database.
 

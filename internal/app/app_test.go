@@ -99,7 +99,7 @@ func TestTheDatabaseBackendsAreTheNamesAConfigurationCarries(t *testing.T) {
 // The -admin_password mode is the way a deployment sets its credential from a script, and the way an
 // operator recovers a server whose credential was lost. It writes the whole configuration, which is also
 // what stores the signing secret the options read generated, and it says in the log view what it did. The
-// credential the server ships with is one the web application insists on replacing, so the mode marks it
+// credential the server ships with is one the administration interface insists on replacing, so the mode marks it
 // as needing replacement and marks a credential the operator chose as not needing one.
 func TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView(t *testing.T) {
 	ctx := context.Background()
@@ -136,7 +136,7 @@ func TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView(t *testing.
 		t.Error("the log view does not say the credential was changed")
 	}
 
-	// The credential the server ships with is the one the web application insists on replacing, so the
+	// The credential the server ships with is the one the administration interface insists on replacing, so the
 	// mode that stores it marks it as needing replacement.
 	if err := srv.ChangeAdminPassword(ctx, domain.DefaultAdminPassword); err != nil {
 		t.Fatalf("ChangeAdminPassword with the default credential: %v", err)

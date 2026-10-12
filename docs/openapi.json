@@ -8,7 +8,7 @@
   "servers": [
     {
       "url": "/",
-      "description": "Same origin as the webapp"
+      "description": "Same origin as the scanner webapp"
     }
   ],
   "security": [
@@ -2432,7 +2432,7 @@
     "x-websockets": {
       "listener": {
         "path": "*",
-        "summary": "Listener protocol: the connection the webapp and the native applications hold",
+        "summary": "Listener protocol: the connection the scanner webapp and the native applications hold",
         "description": "Any path under / and /admin/ carrying the Upgrade: websocket header is taken over as a listener connection before anything is looked up. Frames are JSON arrays: [command, ...args]. A server with access codes asks for one (PIN) before answering anything else; a server with no access codes is open. Reserved for Saubeo Solutions and its native applications per API_ACCESS_POLICY.md.",
         "framing": "JSON array frames: [command, ...args]",
         "auth": "The PIN command carries the access code when the server is restricted; no credential before it.",
@@ -2493,7 +2493,7 @@
       "adminConfig": {
         "path": "/api/admin/config",
         "summary": "Administrator configuration socket: live configuration change announcements",
-        "description": "The webapp holds this connection open on the whole-configuration path to learn about configuration changes as they happen. The upgrade is refused on the per-section and per-level paths. The connection sends its raw JWT as the first frame and only ever reads afterwards; the server pushes the configuration after each change. The upgrader insists the connection comes from the same origin the page was served from.",
+        "description": "The administration interface holds this connection open on the whole-configuration path to learn about configuration changes as they happen. The upgrade is refused on the per-section and per-level paths. The connection sends its raw JWT as the first frame and only ever reads afterwards; the server pushes the configuration after each change. The upgrader insists the connection comes from the same origin the page was served from.",
         "auth": "Raw JWT as the first frame; the connection is closed when the token is refused.",
         "direction": "read-only after authentication"
       }

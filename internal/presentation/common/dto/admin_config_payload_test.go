@@ -107,7 +107,7 @@ func TestAdminAccessSectionMatchesTheCapturedAccesses(t *testing.T) {
 }
 
 // A talkgroup's display order is written under the key `talkgroup` and not under the key `order`,
-// which is what the legacy server writes and what the web application has to correct for itself
+// which is what the legacy server writes and what the administration interface has to correct for itself
 // before it can show a talkgroup list in order. It is preserved because clients that do not correct for
 // it are reading the number from the key it is really written under.
 func TestAdminTalkgroupWritesItsOrderUnderTheTalkgroupKey(t *testing.T) {

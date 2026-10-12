@@ -389,7 +389,7 @@ func administratorToken(t *testing.T, srv *journeyServer) string {
 }
 
 // authorizedRequest reaches a path that needs the session a login handed out. The credential goes in the
-// Authorization header raw, with no scheme in front of it, because that is how the web app sends it.
+// Authorization header raw, with no scheme in front of it, because that is how the administration interface sends it.
 func authorizedRequest(t *testing.T, srv *journeyServer, method, path, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 

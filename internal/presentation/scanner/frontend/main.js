@@ -51,7 +51,7 @@ navigator.serviceWorker?.addEventListener('message', (ev) => {
 
   openDialog({
     title: 'New version available',
-    content: 'A new version of this webapp is available. Would you like to reload the page?',
+    content: 'A new version of the scanner webapp is available. Would you like to reload the page?',
     actions: [
       { label: 'No' },
       {

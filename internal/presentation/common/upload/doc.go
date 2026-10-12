@@ -22,8 +22,8 @@
 // capture application, and another rdio-scanner server posting what it received downstream use to
 // hand a recording to this server.
 //
-// It belongs to neither web application. The calls an upload creates are what the listener app
-// plays, but the uploader is a recorder and not the listener app, and what lets an upload through
+// It belongs to neither web application. The calls an upload creates are what the scanner webapp
+// plays, but the uploader is a recorder and not the scanner webapp, and what lets an upload through
 // is the apikey the upload carries and that key's scope — not an administrator session and not a
 // listener's access code.
 //

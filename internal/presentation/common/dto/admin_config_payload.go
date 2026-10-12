@@ -293,7 +293,7 @@ func (payload SystemListPayload) MarshalJSON() ([]byte, error) {
 //
 // A talkgroup's display order is written under the key `talkgroup`. That is not a name this server
 // would choose — the key says talkgroup and holds a number — but it is the key the legacy server
-// writes it under, and the web application has had to correct for it before it can show a talkgroup
+// writes it under, and the administration interface has had to correct for it before it can show a talkgroup
 // list in order. Recorded as a preserved quirk.
 func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 	out := []map[string]any{}

@@ -1,10 +1,10 @@
-# The web app
+# The scanner webapp
 
 ## Main screen
 
 The main [Rdio Scanner](https://github.com/chuot/rdio-scanner) screen as three sections, the LED area, the display area and the controls area.
 
-![web app main screen](./images/webapp-main.png?raw=true)\
+![scanner webapp main screen](./images/webapp-main.png?raw=true)\
 
 ### LED Area
 
@@ -108,7 +108,7 @@ At the bottom left of this section is the toggle switch which allows you to togg
 
 At the bottom right of this section is the _paginator_ to browse the whole database. This _paginator_ is disabled while in playback mode.
 
-> Note that playback mode always requires your web app to be online. It is called like that because it plays archived audio files from the database.
+> Note that playback mode always requires the scanner webapp to be online. It is called like that because it plays archived audio files from the database.
 
 ### Filters section
 

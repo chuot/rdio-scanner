@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package backend is the listener application's own surface: the WebSocket connection the web
+// Package backend is the scanner webapp's own surface: the WebSocket connection the web
 // app and the native Rdio Scanner applications hold open, the JSON-array frame they exchange,
 // the command constants of that protocol, and the hub that keeps the server's listener
 // connections.

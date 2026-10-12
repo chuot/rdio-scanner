@@ -168,7 +168,7 @@ func TestServerRefusesToStartWhenAStoredConfigurationCannotBeRead(t *testing.T) 
 	}
 }
 
-// The path the web application is served from is also the path a listener connects to, and the upgrade
+// The path the scanner webapp is served from is also the path a listener connects to, and the upgrade
 // header decides which. This is the one place in the server where a request can be either.
 func TestListenerPathHandsAnUpgradeToTheSocketAndEverythingElseToTheApplication(t *testing.T) {
 	answered := ""
@@ -393,7 +393,7 @@ func request(mux http.Handler, path string, upgrade bool) (int, string, string) 
 	return rec.Code, rec.Header().Get("Location"), strings.TrimSpace(rec.Body.String())
 }
 
-// A listener that connects to the path the web application is served from is taken over by the listener
+// A listener that connects to the path the scanner webapp is served from is taken over by the listener
 // endpoint, and is greeted the way the legacy server greets it.
 func TestServerTakesAListenerSocketAtThePathTheWebApplicationIsServedFrom(t *testing.T) {
 	srv := startedTestServer(t)
@@ -433,7 +433,7 @@ func TestServerTakesAListenerSocketAtThePathTheWebApplicationIsServedFrom(t *tes
 }
 
 // The administrator's configuration path answers both an endpoint and a socket, and the socket is the one
-// the web application holds open.
+// the administration interface holds open.
 func TestServerTakesAConfigurationSocketAtTheAdministratorConfigurationPath(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -452,7 +452,7 @@ func TestServerTakesAConfigurationSocketAtTheAdministratorConfigurationPath(t *t
 	}
 
 	if code := closed(); code != websocket.CloseNormalClosure {
-		t.Errorf("the socket was ended with close code %d, want the 1000 the web application reads as "+
+		t.Errorf("the socket was ended with close code %d, want the 1000 the administration interface reads as "+
 			"an unauthorized connection", code)
 	}
 }
@@ -700,12 +700,12 @@ func TestTheFfmpegNoticeIsFiledUnderFfmpeg(t *testing.T) {
 	}
 }
 
-// The path the web application is served from answers an ordinary request as the application, and not as a
+// The path the scanner webapp is served from answers an ordinary request as the application, and not as a
 // socket. In a checkout the bundle the binary carries has not been built — the target that builds it
 // is not run there — so what the application answers is the 404 it gives for a file it does not have. That is the
 // application answering: a request handed to the listener endpoint would have been answered as an upgrade,
 // and a request that reached nothing would not have been answered by this path at all.
-// An ordinary path is answered by the web application, the same way the application root is answered: with the
+// An ordinary path is answered by the scanner webapp, the same way the application root is answered: with the
 // application shell when the binary carries one, and with nothing when it does not. A binary built from a
 // repository that has never run `make webapp-ng-server` carries only the placeholder that keeps the embedded
 // directory in the repository, so this compares the two answers instead of naming one.
@@ -734,7 +734,7 @@ func TestServerDoesNotServeTheWebApplicationOverTheApiPaths(t *testing.T) {
 	rec := srv.get("/api/admin/logs")
 
 	if rec.Code == http.StatusOK && strings.Contains(rec.Body.String(), "<html") {
-		t.Errorf("the log endpoint was answered with the web application")
+		t.Errorf("the log endpoint was answered with the scanner webapp")
 	}
 }
 
@@ -841,7 +841,7 @@ func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
 	}
 
 	if code := adminClosed(); code != websocket.CloseNormalClosure {
-		t.Errorf("the administrator connection was ended with close code %d, want the %d the web application "+
+		t.Errorf("the administrator connection was ended with close code %d, want the %d the administration interface "+
 			"already reads as an ended configuration socket", code, websocket.CloseNormalClosure)
 	}
 

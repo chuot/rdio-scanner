@@ -8,9 +8,9 @@ A: First, don't use the update.js script, it won't work since the server portion
 
 A: Due to the ACME protocol used by Let's Encrypt, ports 80 and 443 must be open to the world for the autocert to work. The domain specified via the `-ssl_auto_cert` argument must also match the IP address of your Rdio Scanner instance.
 
-**Q: The web app keeps displaying a dialog telling me that a new version is available**
+**Q: The scanner webapp keeps displaying a dialog telling me that a new version is available**
 
-A: Force a refresh of the web application from the browser (usually with ctrl-shift-r) to resolve the issue. Alternatively, you can click on the icon just to the left of the URL address and select website settings, then clear all website data.
+A: Force a refresh of the scanner webapp from the browser (usually with ctrl-shift-r) to resolve the issue. Alternatively, you can click on the icon just to the left of the URL address and select website settings, then clear all website data.
 
 **Q: How do I install FFMPEG on Windows**
 

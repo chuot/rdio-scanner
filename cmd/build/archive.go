@@ -47,7 +47,7 @@ type archiveFile struct {
 }
 
 // documentSources is the documentation a release archive carries, in the order a reader gets it: the
-// change log, the target's own platform page, the web app guide, and the FAQ. These are the files the
+// change log, the target's own platform page, the scanner webapp guide, and the FAQ. These are the files the
 // pandoc build was fed, carried now as the files they are written in.
 func documentSources(tr releaseTarget) []string {
 	return []string{
@@ -96,7 +96,7 @@ func archiveText(text string) string {
 // ffmpeg its host installs has no ffmpeg inside its binary, so it has no licence to carry.
 //
 // The archive's layout is the repository's own layout, so every relative path a source wrote resolves
-// inside the archive: a platform page says `../images` and the web app guide says `./images`, and both
+// inside the archive: a platform page says `../images` and the scanner webapp guide says `./images`, and both
 // reach `docs/images`. The tool renders nothing, converts nothing, inlines nothing, and rewrites
 // nothing.
 func archiveFiles(repo string, tr releaseTarget) ([]archiveFile, error) {

@@ -95,9 +95,9 @@ func TestTheArchiveCarriesTheDocumentationAsTheFilesItIsWrittenIn(t *testing.T) 
 	}
 }
 
-// The platform documents say `../images` and the web app guide says `./images`, and both reach the same
+// The platform documents say `../images` and the scanner webapp guide says `./images`, and both reach the same
 // folder. An image is resolved against the directory of the document it is written in, so an archive
-// that resolved every path against the repository root would carry the web app guide's pictures twice
+// that resolved every path against the repository root would carry the scanner webapp guide's pictures twice
 // and none of the platform page's.
 func TestTheImagesAreResolvedAgainstTheDocumentEachIsWrittenIn(t *testing.T) {
 	repo := t.TempDir()
@@ -182,7 +182,7 @@ func TestAnImageTheDocumentationPointsAtThatIsNotInTheTreeStopsTheRelease(t *tes
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
 	writeRepoFile(t, repo, "docs/platforms/linux.md", "![gone](../images/gone.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "the web app guide")
+	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 
 	_, err := archiveFiles(repo, releaseTargets[4])
@@ -203,7 +203,7 @@ func TestAnUncoveredTargetCarriesNoFfmpegLicence(t *testing.T) {
 	writeArchiveSource(t, repo, "macos-arm64", "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
 	writeRepoFile(t, repo, "docs/platforms/macos.md", "the macos page")
-	writeRepoFile(t, repo, "docs/webapp.md", "the web app guide")
+	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 	writeArchiveLicence(t, repo, "macos-arm64", "a licence that should not be in the archive")
 
@@ -231,7 +231,7 @@ func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) 
 	writeArchiveSource(t, repo, "windows-amd64", "rdio-scanner.exe", "the binary")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
 	writeRepoFile(t, repo, "docs/platforms/windows.md", "the windows page")
-	writeRepoFile(t, repo, "docs/webapp.md", "the web app guide")
+	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 	writeArchiveLicence(t, repo, "windows-amd64", "the licence")
 
@@ -255,7 +255,7 @@ func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
 	writeRepoFile(t, repo, "docs/platforms/linux.md", "![one](../images/one.png?raw=true)")
-	writeRepoFile(t, repo, "docs/webapp.md", "the web app guide")
+	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 	writeRepoFile(t, repo, "docs/images/one.png", "the first picture")
 	writeArchiveLicence(t, repo, target, "the licence")

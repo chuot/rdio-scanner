@@ -245,7 +245,7 @@ func (s *journeyServer) postAuthorized(path, token, body string) *httptest.Respo
 
 // authorizedRequest reaches a path that needs the session a login handed out, with the verb the test
 // names. The credential goes in the Authorization header raw, with no scheme in front of it, because that
-// is how the web app sends it.
+// is how the administration interface sends it.
 func (s *journeyServer) authorizedRequest(t *testing.T, method, path, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 

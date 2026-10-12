@@ -40,7 +40,7 @@ import (
 
 // The -cmd mode is how an operator drives a server that is already running: log in, read the configuration,
 // write it back, change the administrator credential, add or remove a listener access. It is a client of the
-// same administrator endpoints the web application uses, and it keeps the session token in a file so that a
+// same administrator endpoints the administration interface uses, and it keeps the session token in a file so that a
 // script can log in once and then run several commands against the server.
 //
 // It is a mode of running the program rather than a thing the server does while it runs, which is why it

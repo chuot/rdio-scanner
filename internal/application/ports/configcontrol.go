@@ -46,7 +46,7 @@ type Dirwatchers interface {
 	Start(ctx context.Context, watches domain.Dirwatches)
 }
 
-// AdministratorSessions are the open administrator connections that exist so the web app
+// AdministratorSessions are the open administrator connections that exist so the administration interface
 // learns about configuration changes as they happen, rather than on its next reload.
 type AdministratorSessions interface {
 	// NotifyConfigurationChanged tells every open administrator connection what the

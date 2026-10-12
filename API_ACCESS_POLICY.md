@@ -26,7 +26,7 @@ The **WebSocket API** is a proprietary real-time communication channel provided 
 
 **Official Saubeo Solutions Service:**
 
-- The WebSocket API is exclusively available through Saubeo Solutions' hosted service for its native applications and the integrated web application.
+- The WebSocket API is exclusively available through Saubeo Solutions' hosted service for its native applications and the integrated scanner webapp.
 
 **Self-Hosted Deployments:**
 

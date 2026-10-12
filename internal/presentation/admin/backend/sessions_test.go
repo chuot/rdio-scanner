@@ -39,7 +39,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's configuration socket is how the web app learns that something changed while it was
+// The administrator's configuration socket is how the administration interface learns that something changed while it was
 // open. It is not a listener connection: it has no commands, no live feed, and no history — it sends its
 // credential and then only ever reads.
 //
@@ -142,7 +142,7 @@ func newFixtureLogging(t *testing.T, logs recordedLogs) *fixture {
 	return fixture
 }
 
-// open connects to the socket the way the web app does: no credential in the request.
+// open connects to the socket the way the administration interface does: no credential in the request.
 func (fixture *fixture) open(t *testing.T) *websocket.Conn {
 	t.Helper()
 
@@ -206,7 +206,7 @@ func (fixture *fixture) closedOnTheServer(t *testing.T, conn *websocket.Conn) fu
 	}
 }
 
-// present sends the frame the web app sends first: the token, on its own, not wrapped in JSON.
+// present sends the frame the administration interface sends first: the token, on its own, not wrapped in JSON.
 func (fixture *fixture) present(t *testing.T, conn *websocket.Conn, token string) {
 	t.Helper()
 
@@ -422,7 +422,7 @@ func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T)
 	}
 
 	// The close is what the peer sees. What the operator sees is an entry saying a connection presented a
-	// credential this server does not have — which is the difference between a web app holding an expired
+	// credential this server does not have — which is the difference between an administration interface holding an expired
 	// session and somebody trying to open the configuration socket from somewhere they should not.
 	//
 	// Waiting for the close is enough to know the entry is written: the refusal happens before the read loop
@@ -550,7 +550,7 @@ func TestStoppingTheSessionsReportsEveryConnectionItIsHolding(t *testing.T) {
 		t.Errorf("the server still holds %d administrator connections after closing the socket, want none", got)
 	}
 
-	// Both connections are ended, so the web app asks for a new one instead of waiting out a read timeout.
+	// Both connections are ended, so the administration interface asks for a new one instead of waiting out a read timeout.
 	for _, conn := range []*websocket.Conn{first, second} {
 		if _, _, err := conn.ReadMessage(); err == nil {
 			t.Error("the server kept an administrator connection open after closing the socket")
@@ -566,7 +566,7 @@ func TestStoppingTheSessionsReportsEveryConnectionItIsHolding(t *testing.T) {
 }
 
 // TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay is the half of the shutdown that ending the
-// connections does not cover, on the socket the web application holds open. A connection that let go a moment
+// connections does not cover, on the socket the administration interface holds open. A connection that let go a moment
 // earlier is already being reported by the goroutine that was reading it, which took the connection out of the
 // set before it wrote the entry — so the close finds nothing to report and nothing to wait for, says that the
 // server stopped, and closes the database the log lives in while that entry is still on its way.
@@ -661,7 +661,7 @@ func TestConfigSocketSendsNothingToAConnectionThatHasNotPresentedACredential(t *
 	}
 }
 
-// Opening the socket is not how an administrator gets the configuration. The web app reads it from the
+// Opening the socket is not how an administrator gets the configuration. The administration interface reads it from the
 // endpoint and opens the socket only to hear about what changes afterwards.
 func TestConfigSocketSendsNothingWhenAConnectionOpens(t *testing.T) {
 	fixture := newFixture(t)

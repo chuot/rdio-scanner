@@ -18,7 +18,7 @@
 // Unauthorized access is strictly prohibited.
 // See API_ACCESS_POLICY.md for full terms.
 
-// Package adminws is the administrator's configuration socket: the connection the web app holds open so it
+// Package adminws is the administrator's configuration socket: the connection the administration interface holds open so it
 // learns about configuration changes as they happen instead of on its next reload.
 //
 // It is not a listener connection and shares nothing with one. It has no commands, no live feed, no history,
@@ -87,7 +87,7 @@ type Sessions struct {
 
 	// logs and clock are how this socket reports what it did with a connection. The socket had no log at
 	// all: a listener connection says who joined, who left and whose credential it would not take, and the
-	// administrator's own connection — the one the web app holds open — said none of that, which is the
+	// administrator's own connection — the one the administration interface holds open — said none of that, which is the
 	// difference between a page that was closed and a server that let go of it.
 	logs  ports.LogRepository
 	clock ports.Clock
@@ -485,7 +485,7 @@ func (sessions *Sessions) depart(ctx context.Context, admin *administrator) {
 }
 
 // log writes one entry to the server log, filed under the administrator's own subsystem: these are the
-// administrator's connections, and an operator tracing the web app filters the log to this.
+// administrator's connections, and an operator tracing the administration interface filters the log to this.
 //
 // A connection outlives the request that upgraded it, so none of these entries belong to a request's
 // lifetime and none are written with one's context.
