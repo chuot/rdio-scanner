@@ -1521,3 +1521,52 @@ func sameWords(got []string, want []string) bool {
 
 	return true
 }
+
+// The manifest is one file for the whole matrix and it sits beside the target's directory, not inside it.
+// The run that tells the operator to fill it in is the run that ends the pair compiled on the other Mac:
+// the Intel Mac compiles the arm64 pair, the Apple Silicon Mac proves it, and the operator carries the
+// digests the proof prints into the manifest. The path that message names is the file the operator opens,
+// so it is the file the build writes, and a path inside the target's directory sends the operator looking
+// for a file that is not there.
+func TestTheManifestTheBuildNamesIsTheManifestTheBuildWrites(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		repo := t.TempDir()
+
+		paths := ffmpegPathsFor(repo, bundle.ReadManifest(), target)
+
+		if err := os.MkdirAll(paths.bundle, 0755); err != nil {
+			t.Fatalf("%s: making the bundle directory: %v", target, err)
+		}
+
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			if err := os.WriteFile(suppliedDropFor(paths, target)[name], aSuppliedProgramBytes(target), 0755); err != nil {
+				t.Fatalf("%s: dropping the %s: %v", target, name, err)
+			}
+		}
+
+		_, err := planFFmpeg(options{target: target}, repo, bundle.ReadManifest(), aNativeTree(target), aMachineForTarget(target))
+		if err == nil {
+			t.Fatalf("%s: the plan adopted a pair the manifest pins nothing for", target)
+		}
+
+		if !strings.Contains(err.Error(), "pins no digest") {
+			t.Fatalf("%s: the plan refused the pair for something else: %v", target, err)
+		}
+
+		// The manifest's own path, and not a manifest inside the target's directory.
+		manifest := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+
+		if !strings.Contains(err.Error(), manifest) {
+			t.Errorf("%s: the refusal %q does not name %s", target, err.Error(), manifest)
+		}
+
+		if strings.Contains(err.Error(), filepath.Join("bundle", target, "manifest.json")) {
+			t.Errorf("%s: the refusal %q names a manifest inside the target's directory, where there is no manifest", target, err.Error())
+		}
+
+		// The file the message names is a file this repository has.
+		if _, err := os.Stat(filepath.Join("..", "..", manifest)); err != nil {
+			t.Errorf("%s: the refusal names %s, which is not a file in this repository: %v", target, manifest, err)
+		}
+	}
+}

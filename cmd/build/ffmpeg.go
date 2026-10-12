@@ -508,7 +508,7 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 
 	if ffmpegDigest == "" || ffprobeDigest == "" {
 		return ffmpegPlan{}, fmt.Errorf("the ffmpeg for %s is supplied and the manifest pins no digest for it: fill programs.ffmpeg and programs.ffprobe in %s with the digests go run ./cmd/build ffmpeg-check %s prints",
-			target, filepath.Join(paths.bundle, "manifest.json"), target)
+			target, theManifestPath(repo), target)
 	}
 
 	digests := map[string]string{}
@@ -765,8 +765,16 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string) error {
 // What it prints is what the operator commits. A record that already pinned a pair prints the digest it
 // replaces, because a pair rebuilt on its own host replaces the pins the run before wrote, and a manifest
 // whose pins were written by hand is a manifest whose pins move silently.
+// theManifestPath is the one file a supplied pair is pinned in: the manifest beside the target
+// directories, the file the release reads, and the file the operator edits when a pair was proved on
+// another machine. The write that pins a pair and the message that tells the operator to fill the pins in
+// name this path, so the file the operator opens is the file the build writes.
+func theManifestPath(repo string) string {
+	return filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+}
+
 func pinSuppliedPair(repo string, target string, check anFfmpegCheck, stdout io.Writer) (bundle.Manifest, error) {
-	path := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+	path := theManifestPath(repo)
 
 	body, err := os.ReadFile(path)
 	if err != nil {
