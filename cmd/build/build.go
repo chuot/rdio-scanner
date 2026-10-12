@@ -73,6 +73,12 @@ type tool struct {
 	// checkFFmpeg proves the pair the maintainer dropped for one target, on the platform that target
 	// runs on, and records what it saw. It is not an external command and it builds nothing.
 	checkFFmpeg func(options, io.Writer) error
+
+	// prove is the gate a supplied pair passes before anything adopts it: the shape the target's own
+	// linker writes, the version line the program says, and the six conversions the build's check runs,
+	// recorded in the proof the release reads. The ffmpeg check command proves a dropped pair with it, and
+	// the compile of a supplied pair proves the pair it just produced with the same.
+	prove func(target string, paths ffmpegPaths, stdout io.Writer) (anFfmpegCheck, error)
 }
 
 // run resolves the version, says what it resolved and why, and then runs the steps that build it.

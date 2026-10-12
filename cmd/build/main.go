@@ -51,6 +51,7 @@ func main() {
 
 	t.ffmpeg = t.runFFmpeg
 	t.checkFFmpeg = t.runFFmpegCheck
+	t.prove = t.proveSuppliedPair
 
 	os.Exit(t.run(os.Args[1:], os.Stdout))
 }

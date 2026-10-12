@@ -471,27 +471,40 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 			target, target)
 	}
 
-	paths := ffmpegPathsFor(t.repo, manifest, target)
+	_, err := t.prove(target, ffmpegPathsFor(t.repo, manifest, target), stdout)
+
+	return err
+}
+
+// proveSuppliedPair proves the pair sitting in one target's bundle directory, on the machine that runs it,
+// and records what it saw.
+//
+// The pair is read before it is run: a Homebrew bottle, an unsigned program, and a dynamically linked
+// FreeBSD program all start on the machine that built them, and a check that ran them would pass them and
+// record a proof of a pair no deployment can run.
+//
+// The record is the only evidence a supplied pair has, and the digests printed here are what the manifest
+// pins. The ffmpeg check command proves a pair the maintainer dropped with this, and the compile of a
+// supplied pair proves the pair it just produced with this same code: two gates would be two standards, and
+// a release adopting on the weaker one is not visible from outside the build.
+func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writer) (anFfmpegCheck, error) {
 	drop := suppliedDropFor(paths, target)
 
-	// The pair is checked before it is run: a Homebrew bottle, an unsigned program, and a dynamically
-	// linked FreeBSD program all start on the machine that built them, and the check would pass them and
-	// record a proof of a pair no deployment can run.
 	for _, name := range []string{"ffmpeg", "ffprobe"} {
 		if !aFileIsThere(drop[name]) {
-			return fmt.Errorf("there is no %s in %s to check: build the pair on a %s host, drop ffmpeg and ffprobe in %s, and run this again",
+			return anFfmpegCheck{}, fmt.Errorf("there is no %s in %s to check: build the pair on a %s host, drop ffmpeg and ffprobe in %s, and run this again",
 				name, paths.bundle, target, paths.bundle)
 		}
 
 		if err := checkSuppliedProgram(drop[name], target); err != nil {
-			return err
+			return anFfmpegCheck{}, err
 		}
 	}
 
 	work := filepath.Join(t.repo, ".build", "ffmpeg", "checks", target)
 
 	if err := os.MkdirAll(work, 0755); err != nil {
-		return fmt.Errorf("the build cannot prepare %s: %w", work, err)
+		return anFfmpegCheck{}, fmt.Errorf("the build cannot prepare %s: %w", work, err)
 	}
 
 	programs := checkPrograms{FFmpeg: []string{drop["ffmpeg"]}, FFProbe: []string{drop["ffprobe"]}, Work: work}
@@ -500,12 +513,12 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 
 	version, err := theProgramVersion(run, programs.FFmpeg)
 	if err != nil {
-		return err
+		return anFfmpegCheck{}, err
 	}
 
 	report, err := ffmpegCheck(run, programs, work)
 	if err != nil {
-		return err
+		return anFfmpegCheck{}, err
 	}
 
 	digests := map[string]string{}
@@ -513,7 +526,7 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 	for _, name := range []string{"ffmpeg", "ffprobe"} {
 		body, err := os.ReadFile(drop[name])
 		if err != nil {
-			return fmt.Errorf("the supplied %s for %s cannot be read: %w", name, target, err)
+			return anFfmpegCheck{}, fmt.Errorf("the supplied %s for %s cannot be read: %w", name, target, err)
 		}
 
 		digests[name] = sha256Of(body)
@@ -530,7 +543,7 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 	}
 
 	if err := writeFfmpegCheck(t.repo, check); err != nil {
-		return err
+		return anFfmpegCheck{}, err
 	}
 
 	fmt.Fprintf(stdout, "%-7s %d conversions, %s s to %s s\n", "check", report.Conversions,
@@ -544,7 +557,7 @@ func (t tool) runFFmpegCheck(o options, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "%-7s ffprobe sha256 %s\n", "digest", check.FFProbe)
 	fmt.Fprintf(stdout, "%-7s %s\n", subFFmpegCheck, ffmpegCheckFile(t.repo, target))
 
-	return nil
+	return check, nil
 }
 
 // theProgramVersion is the first line the program says about itself, which is the release the proof
