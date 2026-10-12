@@ -1,0 +1,500 @@
+// Copyright (C) 2019-2026 Chrystian Huot <chrystian.huot@saubeo.solutions>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>
+//
+// WebSocket API Access Policy:
+// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
+// Unauthorized access is strictly prohibited.
+// See API_ACCESS_POLICY.md for full terms.
+
+package main
+
+import (
+	"encoding/binary"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// These are unit tests of the shape rules a supplied ffmpeg pair is adopted under. The build cannot run
+// a macOS or a FreeBSD program, so the headers are what it can read, and every rule here is a byte
+// comparison a fixture can produce: the fixtures are headers this project writes, not programs it
+// compiled.
+
+// The Mach-O numbers the rules are written in. A macOS ffmpeg is built by the maintainer, and these are
+// the numbers his linker writes.
+const (
+	theMachOMagic   = 0xfeedfacf // MH_MAGIC_64, a thin 64-bit image, little-endian
+	theMachO32Magic = 0xfeedface // MH_MAGIC, a 32-bit image: no macOS deployment this project ships
+	theFatMagic     = 0xcafebabe // a universal binary, holding more than one architecture
+
+	theX8664CPU = 0x01000007 // CPU_TYPE_X86_64
+	theArm64CPU = 0x0100000c // CPU_TYPE_ARM64
+
+	theLoadDylib       = 0x0c       // LC_LOAD_DYLIB
+	theLoadWeakDylib   = 0x80000018 // LC_LOAD_WEAK_DYLIB
+	theReexportDylib   = 0x8000001f // LC_REEXPORT_DYLIB
+	theLoadUpwardDylib = 0x80000023 // LC_LOAD_UPWARD_DYLIB
+	theCodeSignature   = 0x8000001d // LC_CODE_SIGNATURE
+)
+
+// aMachO is a Mach-O header and the load commands a test cares about, written to a file the build reads.
+// Raw, when set, is written alone: a drop that is not a Mach-O at all, and a drop that is empty.
+type aMachO struct {
+	Magic     uint32
+	CPUType   uint32
+	Signature bool
+	Dylibs    []aDylib
+	Mode      os.FileMode
+	Body      []byte
+	Raw       []byte
+}
+
+// an aDylib is one library reference, named the way the linker names it.
+type aDylib struct {
+	Command uint32
+	Path    string
+}
+
+func writeMachO(t *testing.T, name string, fixture aMachO) string {
+	t.Helper()
+
+	mode := fixture.Mode
+	if mode == 0 {
+		mode = 0755
+	}
+
+	path := filepath.Join(t.TempDir(), name)
+
+	if fixture.Raw != nil {
+		if err := os.WriteFile(path, fixture.Raw, mode); err != nil {
+			t.Fatalf("writing the fixture: %v", err)
+		}
+
+		return path
+	}
+
+	commands := []byte{}
+	count := 0
+
+	for _, dylib := range fixture.Dylibs {
+		commands = append(commands, aDylibCommand(dylib)...)
+		count++
+	}
+
+	if fixture.Signature {
+		commands = append(commands, aCodeSignatureCommand()...)
+		count++
+	}
+
+	header := make([]byte, 32)
+	binary.LittleEndian.PutUint32(header[0:], fixture.Magic)
+	binary.LittleEndian.PutUint32(header[4:], fixture.CPUType)
+	binary.LittleEndian.PutUint32(header[12:], uint32(count))
+	binary.LittleEndian.PutUint32(header[16:], uint32(len(commands)))
+
+	if err := os.WriteFile(path, append(append(header, commands...), fixture.Body...), mode); err != nil {
+		t.Fatalf("writing the fixture: %v", err)
+	}
+
+	return path
+}
+
+func aDylibCommand(dylib aDylib) []byte {
+	command := make([]byte, 12+len(dylib.Path)+1)
+	if len(command)%8 != 0 {
+		command = append(command, make([]byte, 8-len(command)%8)...)
+	}
+
+	binary.LittleEndian.PutUint32(command[0:], dylib.Command)
+	binary.LittleEndian.PutUint32(command[4:], uint32(len(command)))
+	binary.LittleEndian.PutUint32(command[8:], 12)
+	copy(command[12:], dylib.Path)
+
+	return command
+}
+
+func aCodeSignatureCommand() []byte {
+	command := make([]byte, 16)
+
+	binary.LittleEndian.PutUint32(command[0:], theCodeSignature)
+	binary.LittleEndian.PutUint32(command[4:], uint32(len(command)))
+
+	return command
+}
+
+// aSystemProgram is the pair of fixtures every rule is measured against: a thin 64-bit image of the
+// architecture the target runs, carrying a code signature, linking only libraries the operating system
+// itself provides.
+func aSystemProgram(t *testing.T, cpuType uint32) aMachO {
+	t.Helper()
+
+	return aMachO{
+		Magic:     theMachOMagic,
+		CPUType:   cpuType,
+		Signature: true,
+		Dylibs: []aDylib{
+			{Command: theLoadDylib, Path: "/usr/lib/libSystem.B.dylib"},
+			{Command: theLoadDylib, Path: "/usr/lib/libz.1.2.13.dylib"},
+			{Command: theLoadWeakDylib, Path: "/usr/lib/libiconv.2.dylib"},
+		},
+	}
+}
+
+// The shape rule is what lets a macOS archive carry its ffmpeg: the server writes the program out of its
+// own binary and runs it, so the file has to be the program that machine runs, and nothing it has to
+// install first.
+func TestASuppliedMachOIsTheProgramItsTargetRuns(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		cpuType := uint32(theX8664CPU)
+		if target == "macos-arm64" {
+			cpuType = theArm64CPU
+		}
+
+		fixture := aSystemProgram(t, cpuType)
+
+		path := writeMachO(t, "ffmpeg", fixture)
+
+		if err := checkSuppliedProgram(path, target); err != nil {
+			t.Errorf("%s refused a signed thin %s Mach-O linking only system libraries: %v", target, nameOfCPU(cpuType), err)
+		}
+	}
+}
+
+// One archive per architecture is what the release matrix ships, and each binary embeds its own
+// architecture's pair. A pair built for the other macOS architecture is a pair that will not run.
+func TestTheBuildRefusesASuppliedMachOOfTheOtherArchitecture(t *testing.T) {
+	fixture := aSystemProgram(t, theArm64CPU)
+
+	path := writeMachO(t, "ffmpeg", fixture)
+
+	err := checkSuppliedProgram(path, "macos-amd64")
+	if err == nil {
+		t.Fatal("an arm64 program was adopted for macos-amd64, which runs x86-64")
+	}
+
+	if !strings.Contains(err.Error(), "architecture") {
+		t.Errorf("the failure %q does not name the architecture rule", err.Error())
+	}
+}
+
+// A universal binary is one file for two architectures. This project ships one archive per architecture
+// and each one carries its own pair, so a fat drop says it was built for a matrix the build does not
+// have, and the pair the archive carries is not the pair its architecture runs.
+func TestTheBuildRefusesAUniversalMachO(t *testing.T) {
+	fixture := aSystemProgram(t, theX8664CPU)
+	fixture.Magic = theFatMagic
+
+	path := writeMachO(t, "ffmpeg", fixture)
+
+	err := checkSuppliedProgram(path, "macos-amd64")
+	if err == nil {
+		t.Fatal("a universal binary was adopted for a single-architecture target")
+	}
+
+	if !strings.Contains(err.Error(), "universal") {
+		t.Errorf("the failure %q does not name the universal binary rule", err.Error())
+	}
+}
+
+// An Apple Silicon Mac refuses to run unsigned code, and the server runs its ffmpeg from a file it
+// writes out of its own binary at startup. An unsigned pair is a server that converts nothing, and the
+// signature is a hash over the file's contents, so signing has to happen before the drop.
+func TestTheBuildRefusesAMachOWithNoCodeSignature(t *testing.T) {
+	fixture := aSystemProgram(t, theArm64CPU)
+	fixture.Signature = false
+
+	path := writeMachO(t, "ffmpeg", fixture)
+
+	err := checkSuppliedProgram(path, "macos-arm64")
+	if err == nil {
+		t.Fatal("an unsigned program was adopted for macos-arm64, which runs signed code only")
+	}
+
+	if !strings.Contains(err.Error(), "signature") {
+		t.Errorf("the failure %q does not name the code signature rule", err.Error())
+	}
+}
+
+// macOS cannot link a static binary, so the bundle's rule for macOS is the rule the Linux and Windows
+// targets have in the only form macOS allows: the program depends on nothing the host has to install.
+// A library outside /usr/lib/ is a Homebrew bottle, and a deployment without Homebrew runs it for a
+// few seconds before it dies.
+func TestTheBuildRefusesAMachOLinkingALibraryTheHostHasToInstall(t *testing.T) {
+	for _, tc := range []struct {
+		name, path string
+		command    uint32
+	}{
+		{"a Homebrew library", "/opt/homebrew/opt/x264/lib/libx264.164.dylib", theLoadDylib},
+		{"a library path resolved at run time", "@rpath/libavcodec.dylib", theLoadDylib},
+		{"a weakly linked library outside the system", "/usr/local/lib/libpng.dylib", theLoadWeakDylib},
+		{"a reexported library outside the system", "/opt/homebrew/opt/zstd/lib/libzstd.1.dylib", theReexportDylib},
+		{"an upward-linked library outside the system", "/Users/maintainer/build/lib/libssl.dylib", theLoadUpwardDylib},
+	} {
+		fixture := aSystemProgram(t, theX8664CPU)
+		fixture.Dylibs = append(fixture.Dylibs, aDylib{Command: tc.command, Path: tc.path})
+
+		path := writeMachO(t, "ffmpeg", fixture)
+
+		err := checkSuppliedProgram(path, "macos-amd64")
+		if err == nil {
+			t.Errorf("%s was adopted for macos-amd64", tc.name)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.path) {
+			t.Errorf("the failure %q does not name the library %s it refused", err.Error(), tc.path)
+		}
+	}
+}
+
+// The pair is embedded, gzipped, written out at startup and executed. A file that is not an executable
+// program of the target's operating system is not a pair at all: it is a drop that went wrong, and the
+// build says which rule it broke rather than shipping it.
+func TestTheBuildRefusesAFileThatIsNotAProgramForItsTarget(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		fixture aMachO
+		rule    string
+	}{
+		{
+			name:    "a 32-bit program",
+			fixture: aMachO{Magic: theMachO32Magic, CPUType: 7, Signature: true},
+			rule:    "64-bit",
+		},
+		{
+			name:    "not a Mach-O at all",
+			fixture: aMachO{Raw: []byte("\x7fELF\x02\x01\x01\x09\x00\x00\x00\x00\x00\x00\x00\x00")},
+			rule:    "Mach-O",
+		},
+		{
+			name:    "an empty file",
+			fixture: aMachO{Raw: []byte{}},
+			rule:    "empty",
+		},
+		{
+			name:    "a file that is not executable",
+			fixture: aMachO{Magic: theMachOMagic, CPUType: theX8664CPU, Signature: true, Mode: 0644},
+			rule:    "executable",
+		},
+	} {
+		path := writeMachO(t, "ffprobe", tc.fixture)
+
+		err := checkSuppliedProgram(path, "macos-amd64")
+		if err == nil {
+			t.Errorf("%s was adopted for macos-amd64", tc.name)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.rule) {
+			t.Errorf("%s: the failure %q does not name the %s rule", tc.name, err.Error(), tc.rule)
+		}
+	}
+}
+
+// The ELF numbers the FreeBSD rule is written in. FreeBSD links statically with its own libc, and these
+// are the numbers its linker writes.
+const (
+	theELFMagic      = "\x7fELF"
+	theELF64Class    = 2
+	theELF32Class    = 1
+	theFreeBSDOSABI  = 9
+	theLinuxOSABI    = 3
+	theNoneOSABI     = 0
+	theX8664Machine  = 0x3e
+	theI386Machine   = 0x03
+	theExecType      = 2
+	theLoadSegment   = 1
+	theInterpSegment = 3
+)
+
+// aFreeBSDProgram is an ELF header and the program headers a test cares about. Raw, when set, is written
+// alone: a drop that is not an ELF at all.
+type aFreeBSDProgram struct {
+	Class    byte
+	OSABI    byte
+	Machine  uint16
+	Type     uint16
+	Segments []uint32
+	Mode     os.FileMode
+	Raw      []byte
+}
+
+func writeELF(t *testing.T, name string, fixture aFreeBSDProgram) string {
+	t.Helper()
+
+	mode := fixture.Mode
+	if mode == 0 {
+		mode = 0755
+	}
+
+	path := filepath.Join(t.TempDir(), name)
+
+	if fixture.Raw != nil {
+		if err := os.WriteFile(path, fixture.Raw, mode); err != nil {
+			t.Fatalf("writing the fixture: %v", err)
+		}
+
+		return path
+	}
+
+	header := make([]byte, 64)
+	copy(header[0:], theELFMagic)
+	header[4] = fixture.Class
+	header[5] = 1 // EI_DATA: little-endian, which is both architectures this project ships for FreeBSD
+	header[6] = 1 // EI_VERSION
+	header[7] = fixture.OSABI
+	binary.LittleEndian.PutUint16(header[16:], fixture.Type)
+	binary.LittleEndian.PutUint16(header[18:], fixture.Machine)
+	binary.LittleEndian.PutUint64(header[32:], 64) // e_phoff: the program headers follow the header
+	binary.LittleEndian.PutUint16(header[52:], 64) // e_ehsize
+	binary.LittleEndian.PutUint16(header[54:], 56) // e_phentsize
+	binary.LittleEndian.PutUint16(header[56:], uint16(len(fixture.Segments)))
+
+	body := append([]byte{}, header...)
+
+	for _, segment := range fixture.Segments {
+		entry := make([]byte, 56)
+		binary.LittleEndian.PutUint32(entry[0:], segment)
+
+		body = append(body, entry...)
+	}
+
+	if err := os.WriteFile(path, body, mode); err != nil {
+		t.Fatalf("writing the fixture: %v", err)
+	}
+
+	return path
+}
+
+// aStaticFreeBSDProgram is the fixture every FreeBSD rule is measured against: a 64-bit x86-64
+// executable branded FreeBSD, with no program interpreter, which is what needs nothing installed on the
+// host it runs on.
+func aStaticFreeBSDProgram(t *testing.T) aFreeBSDProgram {
+	t.Helper()
+
+	return aFreeBSDProgram{
+		Class:    theELF64Class,
+		OSABI:    theFreeBSDOSABI,
+		Machine:  theX8664Machine,
+		Type:     theExecType,
+		Segments: []uint32{theLoadSegment},
+	}
+}
+
+// FreeBSD is the release target this project ships whose pair is built on FreeBSD itself, and the bundle's
+// rule for it is the rule the Linux targets have: the program the server writes out and runs needs
+// nothing installed on the host.
+func TestASuppliedFreeBSDProgramIsAStaticBinaryForItsTarget(t *testing.T) {
+	path := writeELF(t, "ffmpeg", aStaticFreeBSDProgram(t))
+
+	if err := checkSuppliedProgram(path, "freebsd-amd64"); err != nil {
+		t.Errorf("a static x86-64 FreeBSD program was refused: %v", err)
+	}
+}
+
+// The bundle carries the operating system's own brand in the header, and the build reads it: a pair
+// linked against glibc is a pair that runs on Linux and not on FreeBSD, and a pair branded nothing is a
+// pair nobody can say anything about.
+func TestTheBuildRefusesASuppliedProgramThatIsNotFreeBSDs(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		osabi byte
+		rule  string
+	}{
+		{"a Linux program", theLinuxOSABI, "FreeBSD"},
+		{"a program branded nothing", theNoneOSABI, "FreeBSD"},
+	} {
+		fixture := aStaticFreeBSDProgram(t)
+		fixture.OSABI = tc.osabi
+
+		path := writeELF(t, "ffmpeg", fixture)
+
+		err := checkSuppliedProgram(path, "freebsd-amd64")
+		if err == nil {
+			t.Errorf("%s was adopted for freebsd-amd64", tc.name)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.rule) {
+			t.Errorf("the failure %q does not name the %s rule", err.Error(), tc.rule)
+		}
+	}
+}
+
+// FreeBSD links statically with its own libc, and the recipe the manifest records is the recipe that
+// does it. A pair with a program interpreter needs FreeBSD's own loader and every library it pulls in,
+// which is the thing the bundle exists to avoid.
+func TestTheBuildRefusesADynamicFreeBSDProgram(t *testing.T) {
+	fixture := aStaticFreeBSDProgram(t)
+	fixture.Segments = []uint32{theInterpSegment, theLoadSegment}
+
+	path := writeELF(t, "ffprobe", fixture)
+
+	err := checkSuppliedProgram(path, "freebsd-amd64")
+	if err == nil {
+		t.Fatal("a pair with a program interpreter was adopted for freebsd-amd64")
+	}
+
+	if !strings.Contains(err.Error(), "static") {
+		t.Errorf("the failure %q does not name the static linking rule", err.Error())
+	}
+}
+
+// One archive per architecture, and the FreeBSD archive this project ships is the x86-64 one.
+func TestTheBuildRefusesAFreeBSDProgramOfTheOtherWidthAndArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		patch func(*aFreeBSDProgram)
+		rule  string
+	}{
+		{
+			name: "an i386 program",
+			patch: func(f *aFreeBSDProgram) {
+				f.Machine = theI386Machine
+			},
+			rule: "architecture",
+		},
+		{
+			name: "a 32-bit program",
+			patch: func(f *aFreeBSDProgram) {
+				f.Class = theELF32Class
+			},
+			rule: "64-bit",
+		},
+		{
+			name: "not an ELF at all",
+			patch: func(f *aFreeBSDProgram) {
+				f.Raw = []byte{0xcf, 0xfa, 0xed, 0xfe} // the Mach-O 64-bit magic, which is not an ELF
+			},
+			rule: "ELF",
+		},
+	} {
+		fixture := aStaticFreeBSDProgram(t)
+		tc.patch(&fixture)
+
+		path := writeELF(t, "ffmpeg", fixture)
+
+		err := checkSuppliedProgram(path, "freebsd-amd64")
+		if err == nil {
+			t.Errorf("%s was adopted for freebsd-amd64", tc.name)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.rule) {
+			t.Errorf("%s: the failure %q does not name the %s rule", tc.name, err.Error(), tc.rule)
+		}
+	}
+}
