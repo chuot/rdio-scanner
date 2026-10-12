@@ -66,8 +66,8 @@ type tool struct {
 	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
 	// through the converter's own argument list, and puts it where the server embeds it.
 	//
-	// It reports the target it has nothing to produce for: the three targets whose pair is compiled on
-	// their own platform are compiled there, by a build standing on that machine, and a release run
+	// It reports the target it has nothing to produce for: the three targets whose ffmpeg binaries are
+	// compiled on their own platform are compiled there, by a build standing on that machine, and a release run
 	// asked for one of them on a machine that is not that platform, with nothing dropped for it, has no
 	// ffmpeg to embed. That is not a failure, and the run that was asked for the whole matrix ships the
 	// archives whose ffmpeg it can produce.
@@ -89,8 +89,9 @@ type tool struct {
 	// container that can run them, and a supplied target's binaries run on the machine that compiled them.
 	theRun command
 
-	// machine is the platform the build is running on. A supplied target is decided by it — the pair is
-	// compiled by the machine that is the platform it runs on, and adopted by every other — so the plan
+	// machine is the platform the build is running on. A supplied target is decided by it — the ffmpeg
+	// binaries are compiled by the machine that is the platform they run on, and adopted by every other —
+	// so the plan
 	// the run composes is composed with it, and the run asks it of the machine rather than reading it in
 	// the middle of the plan.
 	machine func() host
@@ -126,7 +127,7 @@ func newTool(repo string) tool {
 		releaseFiles: archiveFiles,
 	}
 
-	t.prove = t.proveSuppliedPair
+	t.prove = t.proveSuppliedBinaries
 	t.source = fetchAndCheckSource
 	t.machine = thisMachine
 	t.theRun = onThisMachine()
@@ -206,8 +207,9 @@ func (t tool) run(args []string, stdout io.Writer) int {
 			return fail(stdout, fmt.Errorf("%s: %w", subFFmpeg, err))
 		}
 
-		// The pair this target carries is compiled on its own platform and was not dropped for it, and
-		// the message the ffmpeg phase printed says where to drop it and what proves it. A server
+		// The ffmpeg binaries this target carries are compiled on their own platform and were not
+		// dropped for it, and the message the ffmpeg phase printed says where to build them and where to
+		// drop them. A server
 		// compiled now embeds no ffmpeg and converts with whatever the host happens to have, which is
 		// not what this target releases, so the run ends here, successfully, and compiles no binary.
 		if skipped {
@@ -274,8 +276,9 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 // release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
 // to embed.
 //
-// A target whose pair is compiled on its own platform is not compiled, and not dropped for it, by the
-// machine running a matrix run: that pair is produced on a machine the release machine does not control,
+// A target whose ffmpeg binaries are compiled on its own platform is not compiled, and not dropped for
+// it, by the machine running a matrix run: they are produced on a machine the release machine does not
+// control,
 // and a run that stopped for it would ship nothing at all. It is skipped, and the run ships the rest.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
 	// The list is decided once, before any of it runs, so that a run asked for the machine it is
@@ -301,9 +304,9 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
 		}
 
-		// The message the ffmpeg phase printed for this target says where to drop the pair, what proves
-		// it, and what pins it. The run carries on to the targets whose ffmpeg it can produce, and ends
-		// successfully with the archives it wrote.
+		// The message the ffmpeg phase printed for this target says which host compiles the binaries,
+		// the command that compiles them there, and the directory to drop them in. The run carries on to
+		// the targets whose ffmpeg it can produce, and ends successfully with the archives it wrote.
 		if skipped {
 			continue
 		}

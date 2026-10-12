@@ -311,7 +311,7 @@ func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
 // A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
 // after it are not built: a half matrix is not a release, and a run that carried on would leave an
 // archive directory with a server in it and no ffmpeg to embed. This is the promise the compiled targets
-// keep, and it is not the way a supplied pair that was never dropped is treated.
+// keep, and it is not the way supplied binaries that were never dropped are treated.
 func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -385,11 +385,11 @@ func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
 	}
 }
 
-// skipsSuppliedPairs makes the stand-in answer the way the ffmpeg phase answers for a target whose
+// skipsSuppliedTargets makes the stand-in answer the way the ffmpeg phase answers for a target whose
 // binaries the maintainer never dropped: the message names the target, the host that compiles them, the
 // command that compiles them there, and the directory to drop them in, and the target is reported as
 // skipped.
-func skipsSuppliedPairs(tl *tool, ran *[]step) {
+func skipsSuppliedTargets(tl *tool, ran *[]step) {
 	tl.ffmpeg = func(o options, stdout io.Writer) (bool, error) {
 		record, found := bundle.ReadManifest().Targets[o.target]
 
@@ -414,7 +414,7 @@ func skipsSuppliedPairs(tl *tool, ran *[]step) {
 func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	skipsSuppliedPairs(tl, ran)
+	skipsSuppliedTargets(tl, ran)
 
 	if code := tl.run([]string{"dist", "--all"}, out); code != 0 {
 		t.Fatalf("exit code = %d, want 0: a release run missing one supplied target's binaries ships the rest", code)
@@ -457,7 +457,7 @@ func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
 func TestADistRunForASuppliedTargetWithNothingDroppedProducesNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	skipsSuppliedPairs(tl, ran)
+	skipsSuppliedTargets(tl, ran)
 
 	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
@@ -695,10 +695,10 @@ func TestAFirstRunBuildsTheApplicationsTheFfmpegAndTheServer(t *testing.T) {
 	}
 }
 
-// The native run is the build standing on the host a supplied pair is compiled on. The two boundaries it
-// crosses are the external commands and the source arriving from the network, and both are stood in for
-// here. The tree is a real tree, because what the run writes is a manifest pin, a cache entry, and a bundle
-// directory, and those are the files the release reads.
+// The native run is the build standing on the host the ffmpeg binaries are compiled on. The two
+// boundaries it crosses are the external commands and the source arriving from the network, and both are
+// stood in for here. The tree is a real tree, because what the run writes is a cache entry and a bundle
+// directory, and those are the directories the release reads.
 
 // whatRan is what the native run touched, gathered by the fakes: the order it ran in, and the mode the
 // binaries the compile produced arrived with in the directory the build embeds from.
@@ -771,7 +771,7 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 				return err
 			}
 
-			// The compile's own output: the pair the source tree ends with.
+			// The compile's own output: the programs the source tree ends with.
 			if s.label == "make" {
 				for _, name := range []string{"ffmpeg", "ffprobe"} {
 					if err := os.WriteFile(filepath.Join(s.dir, name), []byte("the compiled "+name), 0755); err != nil {

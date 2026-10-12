@@ -119,13 +119,13 @@ type checkReport struct {
 	Longest     float64
 
 	// Codecs is what the program registers: the codecs it can decode and encode. The check is the one
-	// gate every pair passes through, so this is where the pair is proved to be the audio-only program
+	// gate every ffmpeg binary passes through, so this is where it is proved to be the audio-only program
 	// the recipe says it is.
 	Codecs codecRegistry
 
 	// Productions is what each conversion produced, in the order the check ran them. The build prints
-	// the shortest and the longest of them; the proof a supplied pair is adopted on records every one,
-	// because that proof is the only evidence anybody has that a pair the build cannot run converts.
+	// the shortest and the longest of them; the run that adopts binaries records every one, because the
+	// run is the only evidence anybody has that binaries the build did not compile convert.
 	Productions []production
 }
 
@@ -207,10 +207,10 @@ func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkRepo
 		}
 	}
 
-	// The conversions prove the pair does the job. What the pair *is* is the other half of the promise,
-	// and it is asked here, on the machine that can run it, because this is the gate every pair passes
-	// through: the compiled pair inside the container that can run it, and a supplied pair on the host
-	// that compiled it.
+	// The conversions prove the binaries do the job. What they *are* is the other half of the promise,
+	// and it is asked here, on the machine that can run them, because this is the gate every ffmpeg
+	// binary passes through: the compiled ones inside the container that can run them, and the adopted
+	// ones on the host that compiled them.
 	codecs, err := theCodecsTheProgramRegisters(execute, programs)
 	if err != nil {
 		return report, err

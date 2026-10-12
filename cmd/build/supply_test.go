@@ -49,7 +49,7 @@ const (
 	theX8664CPU = 0x01000007 // CPU_TYPE_X86_64
 	theArm64CPU = 0x0100000c // CPU_TYPE_ARM64
 
-	theExecFileType = 2 // MH_EXECUTE: a program the operating system runs, which is what a pair is
+	theExecFileType = 2 // MH_EXECUTE: a program the operating system runs, which is what these programs are
 
 	theLoadDylib       = 0x0c       // LC_LOAD_DYLIB
 	theLoadWeakDylib   = 0x80000018 // LC_LOAD_WEAK_DYLIB
@@ -280,7 +280,7 @@ func theLinkerShapedMachO(cpuType uint32) []byte {
 	return append(body, make([]byte, 4096)...)
 }
 
-// aSystemProgram is the pair of fixtures every rule is measured against: a thin 64-bit image of the
+// aSystemProgram is one of the two fixtures every rule is measured against: a thin 64-bit image of the
 // architecture the target runs, carrying a code signature, linking only libraries the operating system
 // itself provides.
 func aSystemProgram(cpuType uint32) aMachO {
@@ -340,7 +340,8 @@ func TestTheBuildReadsAProgramTheMacsLinkerShaped(t *testing.T) {
 }
 
 // One archive per architecture is what the release matrix ships, and each binary embeds its own
-// architecture's pair. A pair built for the other macOS architecture is a pair that will not run.
+// architecture's ffmpeg binaries. Binaries built for the other macOS architecture are binaries that
+// will not run.
 func TestTheBuildRefusesASuppliedMachOOfTheOtherArchitecture(t *testing.T) {
 	fixture := aSystemProgram(theArm64CPU)
 
@@ -357,8 +358,8 @@ func TestTheBuildRefusesASuppliedMachOOfTheOtherArchitecture(t *testing.T) {
 }
 
 // A universal binary is one file for two architectures. This project ships one archive per architecture
-// and each one carries its own pair, so a fat drop says it was built for a matrix the build does not
-// have, and the pair the archive carries is not the pair its architecture runs.
+// and each one carries its own ffmpeg binaries, so a fat drop says it was built for a matrix the build
+// does not have, and the binaries the archive carries are not the binaries its architecture runs.
 func TestTheBuildRefusesAUniversalMachO(t *testing.T) {
 	fixture := aSystemProgram(theX8664CPU)
 	fixture.Magic = theFatMagic
@@ -418,8 +419,9 @@ func TestTheBuildAdoptsAMachOLinkingTheHostsOwnLibraries(t *testing.T) {
 	}
 }
 
-// The pair is embedded, gzipped, written out at startup and executed. A file that is not an executable
-// program of the target's operating system is not a pair at all: it is a drop that went wrong, and the
+// The ffmpeg binaries are embedded, gzipped, written out at startup and executed. A file that is not an
+// executable program of the target's operating system is not a program at all: it is a drop that went
+// wrong, and the
 // build says which rule it broke rather than shipping it.
 func TestTheBuildRefusesAFileThatIsNotAProgramForItsTarget(t *testing.T) {
 	for _, tc := range []struct {
@@ -575,7 +577,7 @@ func aSuppliedProgramBytes(target string) []byte {
 }
 
 // The gate is the binaries' own execution. A host that cannot execute the binaries it compiled — an Intel
-// Mac holding the arm64 binaries, this Linux host holding a macOS pair — adopts nothing, and it is not
+// Mac holding the arm64 binaries, this Linux host holding the macOS binaries — adopts nothing, and it is not
 // refused by a guess about what the host has installed: the binaries are run, the operating system answers,
 // and the build's answer names the host that compiles them, the command that compiles them there, and the
 // directory the ones this run compiled are sitting in. Nothing is recorded: binaries a host cannot run are
@@ -601,7 +603,7 @@ func TestAHostThatCannotRunTheBinariesIsToldWhichHostCompilesThem(t *testing.T) 
 
 		tl := tool{repo: repo, theRun: onThisMachine()}
 
-		_, err := tl.proveSuppliedPair(target, paths, io.Discard)
+		_, err := tl.proveSuppliedBinaries(target, paths, io.Discard)
 
 		if err == nil {
 			t.Fatalf("%s: the run adopted binaries this %s host cannot execute", target, runtime.GOOS)
@@ -698,7 +700,7 @@ func TestTheRunOfTheBinariesRecordsNothing(t *testing.T) {
 
 	out := &bytes.Buffer{}
 
-	run, err := tl.proveSuppliedPair("macos-arm64", paths, out)
+	run, err := tl.proveSuppliedBinaries("macos-arm64", paths, out)
 	if err != nil {
 		t.Fatalf("the run of the binaries the host compiled: %v", err)
 	}
@@ -744,7 +746,7 @@ func TestTheRunRefusesBinariesThatRegisterVideoCodecs(t *testing.T) {
 
 	tl := aBuildOnAHost(t, repo, "macos-arm64", host{goos: "darwin", goarch: "arm64"}, stand.run)
 
-	_, err := tl.proveSuppliedPair("macos-arm64", paths, &bytes.Buffer{})
+	_, err := tl.proveSuppliedBinaries("macos-arm64", paths, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("the run adopted binaries that register a video codec")
 	}
@@ -767,7 +769,7 @@ func TestTheRunRefusesBinariesThatDoNotConvert(t *testing.T) {
 
 	tl := aBuildOnAHost(t, repo, "macos-arm64", host{goos: "darwin", goarch: "arm64"}, aCheckThatRefuses("the binaries said no"))
 
-	_, err := tl.proveSuppliedPair("macos-arm64", paths, &bytes.Buffer{})
+	_, err := tl.proveSuppliedBinaries("macos-arm64", paths, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("the run adopted binaries that convert nothing")
 	}
@@ -798,7 +800,8 @@ func aHostForTarget(target string) string {
 	return goos + "-" + goarch
 }
 
-// FreeBSD is the release target this project ships whose pair is built on FreeBSD itself, and the bundle's
+// FreeBSD is the release target this project ships whose ffmpeg binaries are built on FreeBSD itself, and
+// the bundle's
 // rule for it is the rule the Linux targets have: the program the server writes out and runs needs
 // nothing installed on the host.
 func TestASuppliedFreeBSDProgramIsAStaticBinaryForItsTarget(t *testing.T) {
@@ -809,9 +812,9 @@ func TestASuppliedFreeBSDProgramIsAStaticBinaryForItsTarget(t *testing.T) {
 	}
 }
 
-// The bundle carries the operating system's own brand in the header, and the build reads it: a pair
-// linked against glibc is a pair that runs on Linux and not on FreeBSD, and a pair branded nothing is a
-// pair nobody can say anything about.
+// The bundle carries the operating system's own brand in the header, and the build reads it: a program
+// linked against glibc is a program that runs on Linux and not on FreeBSD, and a program branded nothing
+// is a program nobody can say anything about.
 func TestTheBuildRefusesASuppliedProgramThatIsNotFreeBSDs(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -928,7 +931,7 @@ func theManifestFile(t *testing.T, repo string) []byte {
 // padding byte between the magic and the class. A universal binary's magic is big-endian on disk,
 // whatever machine produced it. A fixture that writes the bytes its own reader happens to look at,
 // instead of the bytes a linker writes, proves the reader agrees with itself and proves nothing about a
-// program: that is how a pair compiled on a Mac came to be refused as a header whose load commands do
+// program: that is how a program compiled on a Mac came to be refused as a header whose load commands do
 // not fit inside what it describes, and how a FreeBSD program compiled on FreeBSD came to be refused as
 // a 32-bit one. This test reads the fixtures' own bytes back at the published offsets.
 func TestTheFixtureProgramsAreLaidOutTheWayLinkersLayThemOut(t *testing.T) {

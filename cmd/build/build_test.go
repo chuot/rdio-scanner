@@ -274,7 +274,8 @@ func TestAReleaseRunAsksWhetherTheServerBinaryIsCurrent(t *testing.T) {
 
 // The build command runs with the tool newTool makes, and every part the phases ask for has to be wired
 // into it. A part left unwired is a nil function a phase calls on the machine the operator is standing
-// on, and the phases that compile a supplied pair run on a Mac and a FreeBSD box this machine cannot
+// on, and the phases that compile the ffmpeg binaries on their own platform run on a Mac and a FreeBSD
+// box this machine cannot
 // reach: the panic is in the operator's terminal, and no test here runs that code.
 //
 // The order the wiring is written in is part of what this pins. Taking a method value of the tool

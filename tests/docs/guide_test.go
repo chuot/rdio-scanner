@@ -838,10 +838,10 @@ func TestTheGuideIsSmallEnoughToCarry(t *testing.T) {
 // The release matrix table is what an administrator reads to decide what a deployment runs, and the column
 // that says whether the archive carries its own ffmpeg is the reason a deployment installs nothing. Every
 // target this project releases carries one inside the program, and the guide has to say so for every row:
-// the pair this project's build compiles for the Linux and Windows targets, and the pair compiled on the
-// target's own platform and adopted by the release for the macOS and FreeBSD ones.
+// the ffmpeg binaries this project's build compiles for the Linux and Windows targets, and the binaries
+// compiled on the target's own platform and adopted by the release for the macOS and FreeBSD ones.
 func TestTheReleaseMatrixSaysEveryArchiveCarriesItsOwnFfmpeg(t *testing.T) {
-	const caption = "The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program; the macOS and FreeBSD pairs are compiled on the platform each target runs on, and the build adopts them into the release."
+	const caption = "The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program; the macOS and FreeBSD ffmpeg binaries are compiled on the platform each target runs on, and the build adopts them into the release."
 
 	body := guidePath(t)
 
@@ -890,22 +890,22 @@ func words(body string) string {
 	return strings.Join(strings.Fields(stripTags(body)), " ")
 }
 
-// The macOS and FreeBSD pair is compiled by the build on the machine that is the target, with the one
-// command the operator already knows, and the guide is where an operator reads that. The statement is
-// pinned in the places the ritual is written — the chapter that says what an archive carries, the chapter
-// that lists the commands, the per-platform sections of the service chapter, and the licence appendix —
-// because a reader who finds the old ritual in one of them follows the old ritual.
+// The macOS and FreeBSD ffmpeg binaries are compiled by the build on the machine that is the target, with
+// the one command the operator already knows, and the guide is where an operator reads that. The statement
+// is pinned in the places the ritual is written — the chapter that says what an archive carries, the
+// chapter that lists the commands, the per-platform sections of the service chapter, and the licence
+// appendix — because a reader who finds the old ritual in one of them follows the old ritual.
 //
-// The hand route stays: a pair built by hand is dropped, proved, and pinned, and the build adopts it.
-// What the guide has to stop doing is listing the compile's own steps as the operator's ritual, because
-// the build runs them, and a guide that tells an operator to run them invites a pair the release adopts
-// on nothing.
-// The pair every release carries is compiled for audio: the recipe disables every component and enables
-// the audio components the converter asks of ffmpeg, and the build's proof refuses a pair that registers
-// a video codec. An operator decides what to install, and what to do when a conversion fails, from
-// chapters that say what the program they are installing carries, so the statement is pinned where they
-// read it: the requirements chapter, the installation chapter, the service sections, the troubleshooting
-// entry, the FAQ answer, and the licence appendix.
+// The hand route stays: binaries built by hand are dropped where the build looks for them, and the build
+// runs them and adopts what converts. What the guide has to stop doing is listing the compile's own steps
+// as the operator's ritual, because the build runs them, and a guide that tells an operator to run them
+// invites binaries the release adopts on nothing.
+// The ffmpeg binaries every release carries are compiled for audio: the recipe disables every component
+// and enables the audio components the converter asks of ffmpeg, and the run that adopts binaries refuses
+// ones that register a video codec. An operator decides what to install, and what to do when a conversion
+// fails, from chapters that say what the program they are installing carries, so the statement is pinned
+// where they read it: the requirements chapter, the installation chapter, the service sections, the
+// troubleshooting entry, the FAQ answer, and the licence appendix.
 func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	body := guidePath(t)
 
@@ -924,7 +924,7 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 			chapter: "ch-04-installation",
 			need: []string{
 				"compiled for audio",
-				"refuses a pair that registers a video codec",
+				"refuses binaries that register a video codec",
 			},
 		},
 		{
@@ -949,7 +949,7 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 			chapter: "ch-27-reference",
 			need: []string{
 				"no video codec, decoder, or encoder, and no network protocol",
-				"the codecs the proof recorded",
+				"the codecs the run recorded",
 			},
 		},
 	}
@@ -965,7 +965,7 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	}
 }
 
-func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.T) {
+func TestTheGuideSaysTheFfmpegBinariesAreCompiledByTheBuildOnTheirOwnHost(t *testing.T) {
 	body := guidePath(t)
 
 	places := []struct {
@@ -976,27 +976,27 @@ func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.
 			chapter: "ch-03-requirements",
 			need: []string{
 				"compiled by this build on a machine that runs the target's operating system",
-				"this build compiles it on a machine that runs the target's operating system",
+				"this build compiles them on a machine that runs the target's operating system",
 			},
 		},
 		{
 			chapter: "ch-04-installation",
 			need: []string{
 				"go run ./cmd/build ffmpeg",
-				"compiles the pair, proves it, pins it, and adopts it",
+				"compiles them, runs them, and adopts what converts",
 				"drop ffmpeg and ffprobe",
 			},
 		},
 		{
 			chapter: "ch-21-running-as-a-service",
 			need: []string{
-				"this build compiles it on the machine that is the target",
+				"this build compiles them on the machine that is the target",
 			},
 		},
 		{
 			chapter: "ch-27-reference",
 			need: []string{
-				"names the host that compiled it",
+				"names the host that compiled them",
 			},
 		},
 	}
@@ -1037,12 +1037,12 @@ func TestTheGuideSaysTheSuppliedPairIsCompiledByTheBuildOnItsOwnHost(t *testing.
 	}
 }
 
-// The two macOS architectures compile each other's pair, and the guide is where an operator learns which
-// Mac to stand on. The statements here are the ones that answer the question the release host cannot:
-// there is no machine that is both macOS architectures, so the release of the Intel archive comes from an
-// Apple Silicon Mac, and the release of the Apple Silicon archive can come from an Intel Mac. Rosetta 2 is
-// what lets the Apple Silicon Mac prove the Intel pair, and the proof an Intel Mac records for the arm64
-// pair is the proof of the program the Apple Silicon machine runs.
+// The two macOS architectures compile each other's ffmpeg binaries, and the guide is where an operator
+// learns which Mac to stand on. The statements here are the ones that answer the question the release host
+// cannot: there is no machine that is both macOS architectures, so the release of the Intel archive comes
+// from an Apple Silicon Mac, and the release of the Apple Silicon archive can come from an Intel Mac.
+// Rosetta 2 is what lets the Apple Silicon Mac run the Intel binaries it compiled, and the run an Intel Mac
+// performs on the arm64 binaries is the run that proves the program the Apple Silicon machine ships.
 func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	body := guidePath(t)
 
@@ -1053,7 +1053,7 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 		{
 			chapter: "ch-03-requirements",
 			need: []string{
-				"the two macOS architectures compile each other's pair",
+				"the two macOS architectures compile each other's ffmpeg binaries",
 				"one Apple Silicon Mac compiles both macOS archives",
 				"Rosetta 2",
 				"FreeBSD is compiled on FreeBSD",
@@ -1062,14 +1062,14 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 		{
 			chapter: "ch-04-installation",
 			need: []string{
-				"the pair it compiles for the other architecture is proved on the Mac that runs it",
-				"host that cannot run the pair it compiled leaves it in the target's bundle directory",
+				"binaries it compiles for the other architecture are run on the Mac that runs them",
+				"host that cannot run the binaries it compiled leaves them in the target's bundle directory",
 			},
 		},
 		{
 			chapter: "ch-21-running-as-a-service",
 			need: []string{
-				"arm64 pair compiled on an Intel Mac is proved on an Apple Silicon Mac",
+				"arm64 binaries compiled on an Intel Mac are run on an Apple Silicon Mac",
 				"Rosetta 2",
 			},
 		},
@@ -1084,13 +1084,13 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 		{
 			chapter: "ch-27-reference",
 			need: []string{
-				"the host that recorded the proof",
+				"the host that ran them",
 			},
 		},
 		{
 			chapter: "ch-25-troubleshooting",
 			need: []string{
-				"the compile leaves the pair in the target's bundle directory and names the Mac that can prove it",
+				"the compile leaves the binaries in the target's bundle directory and names the Mac that runs them",
 			},
 		},
 	}
@@ -1120,7 +1120,7 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	}
 
 	if !slices.Contains(lines, "go run ./cmd/build ffmpeg macos-amd64") {
-		t.Errorf("the guide's commands are %v, and none of them is the command an Apple Silicon Mac runs to compile the Intel pair", lines)
+		t.Errorf("the guide's commands are %v, and none of them is the command an Apple Silicon Mac runs to compile the Intel binaries", lines)
 	}
 
 	// The words the operator types are the words go names a macOS machine by, and the guide is where
@@ -1128,6 +1128,79 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	for _, word := range []string{"darwin-amd64", "darwin-arm64"} {
 		if !strings.Contains(words(chapterOf(t, body, "ch-26-faq")), word) {
 			t.Errorf("the guide never says the build accepts %s", word)
+		}
+	}
+}
+
+// The compile is the check, and it is one command: the guide is where an operator learns that nothing
+// else is asked of them. The check command, the digests to copy, and the manifest to edit are gone, and a
+// guide that still named them would send an operator to a command the tool refuses and a file the build
+// never reads.
+//
+// The compile's own steps are the build's, and the hand route asks the operator to drop two files and run
+// one command: the guide says that, and says nothing about what the build records, because the build
+// records nothing.
+func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
+	body := strings.ToLower(words(guidePath(t)))
+
+	for _, gone := range []string{
+		"ffmpeg-check",
+		"digests it prints",
+		"pin the two digests",
+		"pinned with the digests",
+		"the digests the release pins",
+		"digests the manifest pins",
+		"proof file",
+		".build/ffmpeg/checks",
+		"the host that recorded the proof",
+		"the proof its ffmpeg check left",
+	} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the guide says %q, which is the ritual of a build that audited the binaries it adopted", gone)
+		}
+	}
+
+	for _, want := range []string{
+		"the compile is the check",
+		"runs them",
+		"adopts what converts",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the guide never says %q, which is the whole of what the build does with the binaries it compiles", want)
+		}
+	}
+}
+
+// COMPILING.md is the developer's note beside the repository, and it states the same ritual the guide
+// states: one command on a Mac, one on a FreeBSD box, one Apple Silicon Mac for both macOS archives, the
+// compile running the binaries it compiled, no check command, and no digests for anybody to copy.
+func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
+	body := strings.ToLower(words(repoFile(t, "COMPILING.md")))
+
+	for _, want := range []string{
+		"go run ./cmd/build ffmpeg",
+		"the compile is the check",
+		"runs them",
+		"adopts what converts",
+		"the two macos architectures compile each other's ffmpeg binaries",
+		"rosetta 2",
+		"drop `ffmpeg` and `ffprobe`",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("COMPILING.md never says %q", want)
+		}
+	}
+
+	for _, gone := range []string{
+		"ffmpeg-check",
+		"digests it prints",
+		"proof file",
+		".build/ffmpeg/checks",
+		"no code signature",
+		"program interpreter",
+	} {
+		if strings.Contains(body, gone) {
+			t.Errorf("COMPILING.md says %q, which describes the audit this build no longer performs", gone)
 		}
 	}
 }

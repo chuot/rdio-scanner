@@ -247,7 +247,7 @@ func TestMaterializingABundleWritesNothingWhenOneOfItsProgramsIsNotReadable(t *t
 
 	bundle, ok := lookup(notGzipped(t, "linux-amd64", ffprobe), "linux-amd64")
 	if !ok {
-		t.Fatal("the bundle lookup should report the pair is present even when one of them is broken")
+		t.Fatal("the bundle lookup should report both programs present even when one of them is broken")
 	}
 
 	if _, _, err := bundle.Materialize(dir); err == nil {

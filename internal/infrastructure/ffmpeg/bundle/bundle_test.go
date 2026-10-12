@@ -31,9 +31,9 @@ import (
 // These are unit tests of the rule that decides whether a target carries a bundle. They are given a
 // directory they can see completely, so they say nothing about which target this machine happens to be.
 
-// A directory holding both programs is a bundle, whatever the way those programs came to be: the pair this
-// build compiles, and the pair the maintainer drops for a macOS or FreeBSD target, end up in the same
-// shape, and the server materializes both the same way.
+// A directory holding both programs is a bundle, whatever the way those programs came to be: the ffmpeg
+// binaries this build compiles, and the binaries the maintainer drops for a macOS or FreeBSD target, end
+// up in the same shape, and the server materializes both the same way.
 func TestARecordedTargetCarriesABundle(t *testing.T) {
 	for _, dir := range []string{"linux-arm64", "macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		files := fstest.MapFS{
@@ -53,10 +53,11 @@ func TestARecordedTargetCarriesABundle(t *testing.T) {
 	}
 }
 
-// The three targets whose pair is compiled on the platform each one runs on are the ordinary state of a
+// The three targets whose ffmpeg binaries are compiled on the platform each one runs on are the ordinary
+// state of a
 // fresh clone: their directories hold only the placeholder that makes the embed compile, so a binary built
 // from that clone carries nothing and converts with the ffmpeg its host installs.
-func TestASuppliedTargetWhosePairWasNeverDroppedCarriesNoBundle(t *testing.T) {
+func TestASuppliedTargetWhoseBinariesWereNeverDroppedCarriesNoBundle(t *testing.T) {
 	for _, dir := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		files := fstest.MapFS{dir + "/.gitkeep": {Data: []byte{}}}
 
@@ -215,8 +216,8 @@ func TestTheManifestCarriesNoDigestOfAnyProgram(t *testing.T) {
 	}
 }
 
-// A supplied pair is compiled on the platform the target runs on, and the manifest is where that compile is
-// written down: the flags that set the floor the binary declares and link it the way the target needs, and
+// The ffmpeg binaries of a supplied target are compiled on the platform the target runs on, and the
+// manifest is where that compile is written down: the flags that set the floor the binary declares and link it the way the target needs, and
 // the make program the build runs. ffmpeg's own documentation refuses BSD make, so the FreeBSD record names
 // gmake; the macOS records name none, because the Command Line Tools carry make.
 func TestTheSuppliedRecordsNameTheCompileTheirHostRuns(t *testing.T) {

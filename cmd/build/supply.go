@@ -37,15 +37,14 @@ import (
 //
 // The machine that produces the releases runs Linux, and it cannot execute a macOS program or a FreeBSD
 // one. So the build reads what it can read — the headers the target's own linker wrote — and requires the
-// pair to be the program that target runs, in the form the bundle's rule asks for:
+// binaries to be the programs that target runs, in the form the bundle's rule asks for:
 //
-//	macos-amd64, macos-arm64  a thin 64-bit Mach-O of that architecture, carrying a code signature, and
-//	                          linking only libraries from /usr/lib/, because macOS cannot link a static
-//	                          binary and a deployment has nothing to install
+//	macos-amd64, macos-arm64  a thin 64-bit Mach-O holding that architecture's machine code, because an
+//	                          Apple Silicon Mac runs arm64 and x86-64 alike and running the binaries
+//	                          cannot say which one the compiler produced
 //
-//	freebsd-amd64             a 64-bit x86-64 ELF branded FreeBSD with no program interpreter, because
-//	                          FreeBSD links statically with its own libc and a deployment has nothing to
-//	                          install
+//	freebsd-amd64             a 64-bit x86-64 ELF branded FreeBSD, because a FreeBSD program is FreeBSD's
+//	                          own libc, and a binary branded for another system is not a FreeBSD program
 //
 // The one thing this build reads out of a program it did not compile is which machine code the file
 // holds. The failures the audit layers used to name — a Homebrew bottle, an unsigned Apple Silicon
@@ -236,7 +235,7 @@ type theRunOfTheBinaries struct {
 	Productions []production
 }
 
-// thePairTheHostCannotRun is what a host is told when the ffmpeg binaries it compiled do not run on it.
+// theBinariesTheHostCannotRun is what a host is told when the ffmpeg binaries it compiled do not run on it.
 //
 // The gate is the binaries' own execution, so a host that cannot execute them adopts nothing, and the
 // answer it gets names the host that can run them, the command that compiles them there, and the directory
@@ -244,14 +243,14 @@ type theRunOfTheBinaries struct {
 //
 // The operating system's own refusal is carried inside it. This build does not ask the host what it has
 // installed and does not guess at what it can execute: an Intel Mac holding the arm64 binaries, and a
-// Linux host holding a macOS pair, are answered by the programs not starting.
-func thePairTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
+// Linux host holding the macOS binaries, are answered by the programs not starting.
+func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
 	return fmt.Errorf("the %s ffmpeg binaries do not run on this machine (%s): %w\n"+
 		"the ffmpeg binaries are compiled where they run: run go run ./cmd/build ffmpeg %s on a %s host, and the binaries this run compiled are in %s",
 		target, releaseTargetWordFor(machine.goos, machine.goarch), err, target, target, paths.bundle)
 }
 
-// proveSuppliedPair runs the ffmpeg binaries sitting in one target's bundle directory, on the machine
+// proveSuppliedBinaries runs the ffmpeg binaries sitting in one target's bundle directory, on the machine
 // standing here, and says what it saw.
 //
 // The binaries are read before they are run: the machine code the file holds is the one fact a run cannot
@@ -261,7 +260,7 @@ func thePairTheHostCannotRun(target string, paths ffmpegPaths, machine host, err
 // The compile of a supplied target runs the binaries it produced through this, and the run that adopts a
 // drop runs the dropped binaries through this: two gates would be two standards, and a release adopting on
 // the weaker one is not visible from outside the build.
-func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
+func (t tool) proveSuppliedBinaries(target string, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
 	drop := suppliedDropFor(paths, target)
 
 	for _, name := range []string{"ffmpeg", "ffprobe"} {
@@ -287,12 +286,12 @@ func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writ
 
 	version, err := theProgramVersion(t.theRun, programs.FFmpeg)
 	if err != nil {
-		return theRunOfTheBinaries{}, thePairTheHostCannotRun(target, paths, machine, err)
+		return theRunOfTheBinaries{}, theBinariesTheHostCannotRun(target, paths, machine, err)
 	}
 
 	report, err := ffmpegCheck(t.theRun, programs, work)
 	if err != nil {
-		return theRunOfTheBinaries{}, thePairTheHostCannotRun(target, paths, machine, err)
+		return theRunOfTheBinaries{}, theBinariesTheHostCannotRun(target, paths, machine, err)
 	}
 
 	fmt.Fprintf(stdout, "%-7s %d conversions, %d codecs, %s s to %s s\n", "check", report.Conversions,
@@ -310,18 +309,18 @@ func (t tool) proveSuppliedPair(target string, paths ffmpegPaths, stdout io.Writ
 	}, nil
 }
 
-// theProgramVersion is the first line the program says about itself, which is the release the proof
-// records: the manifest pins one release, and a pair built from another is a pair this release does not
-// ship.
+// theProgramVersion is the first line the program says about itself, which is the release the run
+// records: the manifest pins one release, and binaries built from another are binaries this release does
+// not ship.
 func theProgramVersion(run command, program []string) (string, error) {
 	body, err := run(starts(program, "-version"), nil)
 	if err != nil {
-		return "", fmt.Errorf("the pair cannot say what it is: %s -version: %w", program[0], err)
+		return "", fmt.Errorf("the ffmpeg binaries cannot say what they are: %s -version: %w", program[0], err)
 	}
 
 	line, _, _ := strings.Cut(strings.TrimSpace(string(body)), "\n")
 	if line == "" {
-		return "", fmt.Errorf("the pair says nothing about what it is: %s -version printed nothing", program[0])
+		return "", fmt.Errorf("the ffmpeg binaries say nothing about what they are: %s -version printed nothing", program[0])
 	}
 
 	return line, nil
@@ -329,14 +328,14 @@ func theProgramVersion(run command, program []string) (string, error) {
 
 // onThisMachine runs one program here, hands it a recording on its input, and hands back what it wrote.
 //
-// It is the shape the check runs a compiled pair through a container in, used for a pair this machine can
-// run: the ffmpeg check for a supplied pair runs on the pair's own platform, so nothing stands between the
-// check and the programs.
+// It is the shape the check runs compiled binaries through a container in, used for the binaries this
+// machine can run: the run that adopts binaries runs them on their own platform, so nothing stands
+// between the check and the programs.
 //
 // A program that ran and answered badly answers with its own words, which is what the check reads. A
 // program that never started has no words of its own: the operating system refused to start it, and that
 // refusal is the whole answer, so it is carried out and not thrown away. It is the answer a host gives that
-// was handed a pair of the other macOS architecture.
+// was handed the binaries of the other macOS architecture.
 func onThisMachine() command {
 	return func(argv []string, stdin []byte) ([]byte, error) {
 		out := bytes.NewBuffer([]byte(nil))

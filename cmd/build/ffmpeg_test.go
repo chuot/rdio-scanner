@@ -273,7 +273,7 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 		t.Error("a changed configure recipe reuses the previous recipe's cache")
 	}
 
-	// The source is part of what the compiled pair is. A cache that survives the digest being changed
+	// The source is part of what the compiled binaries are. A cache that survives the digest being changed
 	// is a cache that can be handed a tarball this project never pinned.
 	withSource := manifest
 	withSource.Source = bundle.Source{URL: manifest.Source.URL, SHA256: strings.Repeat("0", 64)}
@@ -599,19 +599,19 @@ func carries(args []string, want string) bool {
 // that adopts them. These are the decisions the ffmpeg phase makes about binaries it must run to know
 // anything about them, and the plan takes them before anything is written.
 
-// aSuppliedPair drops the binaries a maintainer builds for one target and returns the manifest this
+// aDropOfSuppliedBinaries drops the binaries a maintainer builds for one target and returns the manifest this
 // repository carries. Nothing is recorded about them: the run that adopts them is the run that proves them.
-func aSuppliedPair(t *testing.T, repo string, target string) bundle.Manifest {
+func aDropOfSuppliedBinaries(t *testing.T, repo string, target string) bundle.Manifest {
 	t.Helper()
 
 	body := aSuppliedProgramBytes(target)
 
-	return aSuppliedPairWith(t, repo, target, body, append(append([]byte{}, body...), byte(len(target))))
+	return aDropOfSuppliedBinariesWith(t, repo, target, body, append(append([]byte{}, body...), byte(len(target))))
 }
 
-// aSuppliedPairWith drops binaries whose programs are the bytes a test asks for. The plan reads which
+// aDropOfSuppliedBinariesWith drops binaries whose programs are the bytes a test asks for. The plan reads which
 // machine code they hold, so a test that wants the plan to reach the run hands it the target's own shape.
-func aSuppliedPairWith(t *testing.T, repo string, target string, ffmpegBytes []byte, ffprobeBytes []byte) bundle.Manifest {
+func aDropOfSuppliedBinariesWith(t *testing.T, repo string, target string, ffmpegBytes []byte, ffprobeBytes []byte) bundle.Manifest {
 	t.Helper()
 
 	dir := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target)
@@ -672,7 +672,7 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 
 	intel := machOBytes(aSystemProgram(theX8664CPU))
 
-	manifest := aSuppliedPairWith(t, repo, "macos-arm64", intel, intel)
+	manifest := aDropOfSuppliedBinariesWith(t, repo, "macos-arm64", intel, intel)
 
 	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err == nil {
@@ -690,7 +690,7 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 func TestTheBuildAdoptsTheSuppliedBinariesDroppedForItsTarget(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err != nil {
@@ -716,7 +716,7 @@ func TestTheBuildAdoptsTheSuppliedBinariesDroppedForItsTarget(t *testing.T) {
 func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
 	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
 
@@ -747,12 +747,12 @@ func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 }
 
 // The drop is consumed: the binaries move out of the directory a server binary embeds, and what stays
-// there is the gzipped pair and its licence. Raw binaries left in that directory are embedded next to the
+// there are the gzipped binaries and their licence. Raw binaries left in that directory are embedded next to the
 // gzipped ones, and every server built for that target carries about ten megabytes of uncompressed program.
 func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
 	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
 
@@ -805,9 +805,9 @@ func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T)
 	}
 
 	// The binaries the server writes out of its own binary are the binaries that were dropped: gzip is
-	// lossless, and the ad-hoc code signature a signed pair carries is a hash over those exact bytes. The
+	// lossless, and the ad-hoc code signature signed binaries carry is a hash over those exact bytes. The
 	// bundle package's own tests are what prove a directory holding them is a directory it materializes.
-	for _, pair := range []struct {
+	for _, program := range []struct {
 		name   string
 		digest string
 	}{
@@ -815,13 +815,13 @@ func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T)
 		{"ffprobe", digests["ffprobe"]},
 	} {
 		for _, dir := range []string{paths.cached, paths.bundle} {
-			body, err := readGzip(filepath.Join(dir, pair.name+".gz"))
+			body, err := readGzip(filepath.Join(dir, program.name+".gz"))
 			if err != nil {
-				t.Fatalf("reading %s in %s: %v", pair.name+".gz", dir, err)
+				t.Fatalf("reading %s in %s: %v", program.name+".gz", dir, err)
 			}
 
-			if sha256Of(body) != pair.digest {
-				t.Errorf("%s in %s is %s, and the binaries dropped were %s", pair.name, dir, sha256Of(body), pair.digest)
+			if sha256Of(body) != program.digest {
+				t.Errorf("%s in %s is %s, and the binaries dropped were %s", program.name, dir, sha256Of(body), program.digest)
 			}
 		}
 	}
@@ -947,7 +947,7 @@ func readGzip(path string) ([]byte, error) {
 // named the way the release names it. On a Mac that is macos-arm64, the target the manifest records, and
 // not the darwin-arm64 name go builds for: a phase that named the machine by go's word asked the manifest
 // about a target this project has no record for, and answered with the uncovered-target message on the
-// very machine the supplied pair is built on.
+// very machine the supplied ffmpeg binaries are built on.
 func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *testing.T) {
 	want := releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
 
@@ -956,28 +956,29 @@ func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *tes
 	}
 }
 
-// The machine a supplied pair is compiled on is the machine that runs it, and the build can be standing on
+// The machine supplied ffmpeg binaries are compiled on is the machine that runs them, and the build can be
+// standing on
 // it: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are on, and the
 // repository in front of them names the source, its digest, the recipe, the flags that floor sets, the make
 // program that build needs, and the check that proves the result. The compile is what that run asked for,
 // and it is what only that machine can do.
-func TestTheSuppliedTargetOnItsOwnHostCompilesItsPair(t *testing.T) {
+func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		manifest := bundle.ReadManifest()
 
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, aNativeTree(target), aMachineForTarget(target))
 		if err != nil {
-			t.Errorf("%s: the build refused to compile the pair on the host that is the target: %v", target, err)
+			t.Errorf("%s: the build refused to compile the binaries on the host that is the target: %v", target, err)
 			continue
 		}
 
 		if !plan.Native {
-			t.Errorf("%s: the plan does not compile the pair on the host that is the target", target)
+			t.Errorf("%s: the plan does not compile the binaries on the host that is the target", target)
 			continue
 		}
 
 		if plan.Skipped {
-			t.Errorf("%s: the plan skips the target whose pair it can compile, and the operator on that host is told to drop a pair they are standing on", target)
+			t.Errorf("%s: the plan skips the target whose binaries it can compile, and the operator on that host is told to build binaries they are standing on", target)
 		}
 
 		want := []string{"unpack", "configure", "make", "strip"}
@@ -993,7 +994,7 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsPair(t *testing.T) {
 
 		for _, s := range plan.Steps {
 			if s.name == "podman" {
-				t.Errorf("%s: the compile of a pair built on this host runs a container: %v", target, s.args)
+				t.Errorf("%s: the compile of binaries built on this host runs a container: %v", target, s.args)
 			}
 		}
 
@@ -1028,7 +1029,7 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsPair(t *testing.T) {
 		}
 
 		if carries(configure.args, "--enable-cross-compile") {
-			t.Errorf("%s: the compile cross-compiles on the machine the pair runs on", target)
+			t.Errorf("%s: the compile cross-compiles on the machine the binaries run on", target)
 		}
 
 		make := stepFor(plan.Steps, "make")
@@ -1049,7 +1050,7 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsPair(t *testing.T) {
 			}
 
 			if stepIndex(plan.Steps, "strip") > stepIndex(plan.Steps, "sign") {
-				t.Errorf("%s: the pair is signed before it is stripped, and the signature is over bytes strip rewrote", target)
+				t.Errorf("%s: the binaries are signed before they are stripped, and the signature is over bytes strip rewrote", target)
 			}
 		}
 	}
@@ -1108,7 +1109,7 @@ func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, aNativeTree(target), aMachineForTarget(target))
 		if err != nil {
-			t.Errorf("%s: the build refused to compile the pair on the host that is the target: %v", target, err)
+			t.Errorf("%s: the build refused to compile the binaries on the host that is the target: %v", target, err)
 			continue
 		}
 
@@ -1140,10 +1141,10 @@ func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 
 // The two macOS architectures ship one toolchain: the Command Line Tools' clang produces x86_64 on an
 // Apple Silicon Mac and arm64 on an Intel Mac, the macOS SDK carries the libraries of both, and codesign
-// signs a program of either architecture on either machine. A FreeBSD pair is statically linked against
-// FreeBSD's own libc, which is the pair's whole point, so a host of another operating system has nothing
-// to link it against and compiles nothing.
-func TestAMacOSHostCompilesTheOtherArchitecturesPair(t *testing.T) {
+// signs a program of either architecture on either machine. A FreeBSD ffmpeg binary is statically linked
+// against FreeBSD's own libc, which is the whole point of compiling it there, so a host of another
+// operating system has nothing to link it against and compiles nothing.
+func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 	for _, tc := range []struct {
 		target  string
 		machine host
@@ -1153,7 +1154,7 @@ func TestAMacOSHostCompilesTheOtherArchitecturesPair(t *testing.T) {
 	} {
 		plan, err := planFFmpeg(options{target: tc.target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(tc.target), tc.machine)
 		if err != nil {
-			t.Errorf("%s on a %s host: the build refused to compile the pair: %v", tc.target, tc.machine.goarch, err)
+			t.Errorf("%s on a %s host: the build refused to compile the binaries: %v", tc.target, tc.machine.goarch, err)
 			continue
 		}
 
@@ -1174,11 +1175,11 @@ func TestAMacOSHostCompilesTheOtherArchitecturesPair(t *testing.T) {
 		}
 
 		if plan.Native {
-			t.Errorf("freebsd-amd64 on a %s host: the build compiled a FreeBSD pair on a machine that is not FreeBSD, and the pair is FreeBSD's own libc", machine.goarch)
+			t.Errorf("freebsd-amd64 on a %s host: the build compiled a FreeBSD ffmpeg on a machine that is not FreeBSD, and it is linked against FreeBSD's own libc", machine.goarch)
 		}
 
 		if !plan.Skipped {
-			t.Errorf("freebsd-amd64 on a %s host: the run promises an ffmpeg for a target it has no pair for", machine.goarch)
+			t.Errorf("freebsd-amd64 on a %s host: the run promises an ffmpeg for a target it has no binaries for", machine.goarch)
 		}
 	}
 }
@@ -1266,7 +1267,7 @@ func TestACompileAcrossTheTwoArchitecturesNamesTheTargetArchitecture(t *testing.
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, t.TempDir(), bundle.ReadManifest(), aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
 	if err != nil {
-		t.Fatalf("the build refused to compile the pair of the machine it is standing on: %v", err)
+		t.Fatalf("the build refused to compile the ffmpeg binaries of the machine it is standing on: %v", err)
 	}
 
 	own := stepFor(plan.Steps, "configure")
@@ -1292,8 +1293,8 @@ func theFlagNamed(args []string, prefix string) string {
 	return ""
 }
 
-// A run asked for the machine it is standing on, in the words go names that machine by, compiles the pair
-// of the release target that machine is: the alias is a spelling, and the phase that compiles sees the
+// A run asked for the machine it is standing on, in the words go names that machine by, compiles the
+// ffmpeg binaries of the release target that machine is: the alias is a spelling, and the phase that compiles sees the
 // target, not the spelling.
 func TestTheFFmpegPhaseAskedForTheWordGoNamesTheMachineByPlansTheReleaseTarget(t *testing.T) {
 	o, err := parseArgs([]string{"ffmpeg", "darwin-arm64"})
@@ -1303,7 +1304,7 @@ func TestTheFFmpegPhaseAskedForTheWordGoNamesTheMachineByPlansTheReleaseTarget(t
 
 	plan, err := planFFmpeg(o, t.TempDir(), bundle.ReadManifest(), aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
 	if err != nil {
-		t.Fatalf("the build refused to compile the pair of the machine it is standing on: %v", err)
+		t.Fatalf("the build refused to compile the ffmpeg binaries of the machine it is standing on: %v", err)
 	}
 
 	if plan.Target != "macos-arm64" {
@@ -1327,8 +1328,9 @@ func argAfter(args []string, flag string) string {
 	return ""
 }
 
-// The compile is what the target's own host does. A machine outside it compiles nothing, and says what
-// FEAT-033 says: the pair is not supplied, where to drop it, what proves it, and what pins it.
+// The compile is what the target's own host does. A machine outside it compiles nothing, and says the
+// binaries were not supplied, the host that compiles them, the command that compiles them there, and the
+// directory to drop them in.
 func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(target), theReleaseHost)
@@ -1338,11 +1340,11 @@ func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
 		}
 
 		if plan.Native {
-			t.Errorf("%s: the build compiled a %s pair on a machine that cannot run it", target, target)
+			t.Errorf("%s: the build compiled %s binaries on a machine that cannot run them", target, target)
 		}
 
 		if !plan.Skipped {
-			t.Errorf("%s: the build does not skip a target whose pair it cannot produce", target)
+			t.Errorf("%s: the build does not skip a target whose binaries it cannot produce", target)
 		}
 
 		if len(plan.Steps) != 0 {
@@ -1356,7 +1358,7 @@ func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
 func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
 	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
 	if err != nil {
@@ -1377,7 +1379,7 @@ func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testin
 func TestSuppliedBinariesInCacheAreReusedOnTheirOwnHost(t *testing.T) {
 	repo := t.TempDir()
 
-	manifest := aSuppliedPair(t, repo, "macos-arm64")
+	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
 	state := aNativeTree("macos-arm64")
 	state.bundleIsCached = true
@@ -1445,7 +1447,8 @@ func aMachineForTarget(target string) host {
 	return host{goos: tr.goos, goarch: tr.goarch}
 }
 
-// theReleaseHost is the machine that produces the releases: Linux, and no host a supplied pair runs on.
+// theReleaseHost is the machine that produces the releases: Linux, and no host supplied ffmpeg binaries
+// run on.
 var theReleaseHost = host{goos: "linux", goarch: "amd64"}
 
 // aNativeTree is a tree with nothing compiled in it, and the host's own build tools in front of it.

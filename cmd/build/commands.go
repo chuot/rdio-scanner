@@ -99,7 +99,7 @@ func (o options) buildsServerBinary() bool {
 }
 
 // planState is what the tree says about what has already been built. A phase that has nothing to do does
-// not run, which is the rule the ffmpeg cache follows: the compiled pair is reused and nothing is
+// not run, which is the rule the ffmpeg cache follows: the compiled binaries are reused and nothing is
 // compiled.
 type planState struct {
 	scannerCurrent bool

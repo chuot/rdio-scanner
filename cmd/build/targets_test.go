@@ -154,8 +154,8 @@ func serviceChapterHeadings(guide string) []string {
 }
 
 // Which targets carry an ffmpeg is answered by the manifest, not by a second list. Every release target
-// has a record: five records name the toolchain this build compiles the pair in, and three name a pair the
-// maintainer compiles on the platform the target runs on and pins by digest.
+// has a record: five records name the toolchain this build compiles the ffmpeg binaries in, and three
+// name the binaries the maintainer compiles on the platform the target runs on.
 func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -302,7 +302,7 @@ func TestADistRunAskedForATargetOutsideTheMatrixIsRefused(t *testing.T) {
 // output path, and every message an operator reads name the target by the name the release uses. The name
 // go builds a macOS binary for is darwin, and the release is named macos: a machine named by go's word
 // asks the manifest about a target this project has no record for, and the operator standing on the Mac
-// that the pair is built on is told that no ffmpeg is compiled for a platform they are standing on.
+// the ffmpeg binaries are built on is told that no ffmpeg is compiled for a platform they are standing on.
 //
 // A machine the matrix has no entry for keeps the name go gives it: a hand-named target is built for the
 // platform its own name names, and the phase asked to build for it says what it can do there.

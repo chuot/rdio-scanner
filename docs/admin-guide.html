@@ -671,7 +671,7 @@ footer.site .signoff {
   <h3>Platforms a release is built for</h3>
 
   <table>
-    <caption>The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program; the macOS and FreeBSD pairs are compiled on the platform each target runs on, and the build adopts them into the release.</caption>
+    <caption>The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program; the macOS and FreeBSD ffmpeg binaries are compiled on the platform each target runs on, and the build adopts them into the release.</caption>
     <thead><tr><th scope="col">Operating system</th><th scope="col">Architecture</th><th scope="col">Archive</th><th scope="col">Carries its own ffmpeg</th></tr></thead>
     <tbody>
       <tr><td>FreeBSD</td><td>amd64</td><td><code>rdio-scanner-freebsd-amd64-v8.0.0.zip</code></td><td>Yes</td></tr>
@@ -687,25 +687,26 @@ footer.site .signoff {
 
   <p>
     Every release carries the ffmpeg the audio conversion uses, embedded in the binary, so conversion works
-    with nothing to install. The pair is compiled for audio: the recipe disables every component and enables
-    the audio demuxers, decoders, encoder, muxers and filters this server converts with, and the pipe, fd and
-    file protocols a recording arrives and leaves on, so no video codec, decoder, or encoder, and no network
-    protocol, is compiled into it. The Linux and Windows archives carry the pair this project's build
-    compiles, in a container, from the source release its manifest pins. The macOS and FreeBSD archives
-    carry a pair compiled on the platform each target runs on, and this build compiles it on a machine that
-    runs the target's operating system: the operating system is the rule, and the architecture inside it is
-    not. The two macOS architectures compile each other's pair, so one Apple Silicon Mac compiles both macOS
-    archives, and Rosetta 2 is what lets it prove the Intel pair; FreeBSD is compiled on FreeBSD, the one
-    architecture FreeBSD is built for here. On the machine that is the target, one command —
-    <code>go run ./cmd/build ffmpeg</code> — compiles the pair, proves it, pins it in the manifest, and
-    adopts it into the release. On the other macOS architecture,
-    <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel pair for the Intel archive, and the
-    pair a host compiles for the architecture it cannot run is proved on the Mac that runs it. A pair built
-    by hand is adopted the same way — dropped in the target's bundle directory, proved there with
-    <code>go run ./cmd/build ffmpeg-check &lt;target&gt;</code>, and pinned with the digests it prints —
-    and the build adopts a supplied pair on the digest the manifest pins, on the shape of the two programs,
-    and on the proof its ffmpeg check left on that platform. The <code>FFMPEG.txt</code> beside the program
-    says how the pair the archive carries came to be.
+    with nothing to install. The ffmpeg binaries are compiled for audio: the recipe disables every component
+    and enables the audio demuxers, decoders, encoder, muxers and filters this server converts with, and the
+    pipe, fd and file protocols a recording arrives and leaves on, so no video codec, decoder, or encoder,
+    and no network protocol, is compiled into it. The Linux and Windows archives carry the ffmpeg binaries
+    this project's build compiles, in a container, from the source release its manifest pins. The macOS and
+    FreeBSD archives carry ffmpeg binaries compiled on the platform each target runs on, and this build
+    compiles them on a machine that runs the target's operating system: the operating system is the rule,
+    and the architecture inside it is not. The two macOS architectures compile each other's ffmpeg binaries,
+    so one Apple Silicon Mac compiles both macOS archives, and Rosetta 2 is what lets it run the Intel
+    programs it compiled; FreeBSD is compiled on FreeBSD, the one architecture FreeBSD is built for here. On
+    the machine that is the target, one command — <code>go run ./cmd/build ffmpeg</code> — compiles them,
+    runs them, and adopts what converts. The compile is the check: the build runs the binaries it produced
+    through the server's own conversions, asks them what they register, and adopts the ones that convert. On
+    the other macOS architecture, <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel
+    binaries for the Intel archive, and the binaries a host compiles for the architecture it cannot run are
+    left in the target's bundle directory for the Mac that runs them. Binaries you build by hand are adopted
+    the same way — dropped in the target's bundle directory, and run by the build that adopts them — and the
+    build adopts binaries on two things and nothing else: that the file holds the machine code the target
+    runs, and that the binaries convert. The <code>FFMPEG.txt</code> beside the program says how the ffmpeg
+    binaries the archive carries came to be.
   </p>
 
   <h3>Ports</h3>
@@ -770,11 +771,12 @@ footer.site .signoff {
     <li>Node.js 20 or newer, for the web applications the server carries inside it.</li>
     <li>podman, for building the container image, and for compiling the ffmpeg of the five targets the
       build compiles one for.</li>
-    <li>A C toolchain, and on FreeBSD <code>gmake</code>, to build the macOS and FreeBSD ffmpeg pairs:
-      those pairs are compiled by this build on a machine that runs the target's operating system, and that
-      machine is a Mac for the two macOS targets — either architecture for either, since the two macOS
-      architectures compile each other's pair — or a FreeBSD box for the FreeBSD target. The five Linux and
-      Windows pairs are compiled in a container, by podman, on the machine that produces the releases.</li>
+    <li>A C toolchain, and on FreeBSD <code>gmake</code>, to build the macOS and FreeBSD ffmpeg binaries:
+      those are compiled by this build on a machine that runs the target's operating system, and that machine
+      is a Mac for the two macOS targets — either architecture for either, since the two macOS architectures
+      compile each other's ffmpeg binaries — or a FreeBSD box for the FreeBSD target. The five Linux and
+      Windows ffmpeg binaries are compiled in a container, by podman, on the machine that produces the
+      releases.</li>
   </ul>
 
   <p>
@@ -802,10 +804,10 @@ footer.site .signoff {
   <ul>
     <li>the <code>rdio-scanner</code> executable for your platform;</li>
     <li>this guide, at <code>docs/admin-guide.html</code>;</li>
-    <li><code>FFMPEG.txt</code>, the licence of the ffmpeg inside the program, and what it is: the pair
-      this project's build compiled — in a container for the Linux and Windows targets, on the machine
-      that is the target for the macOS and FreeBSD ones — or the pair its maintainer compiled on that
-      platform and the build adopted.</li>
+    <li><code>FFMPEG.txt</code>, the licence of the ffmpeg inside the program, and what it is: the ffmpeg
+      binaries this project's build compiled — in a container for the Linux and Windows targets, on the
+      machine that is the target for the macOS and FreeBSD ones — or the binaries its maintainer compiled on
+      that platform and the build adopted.</li>
   </ul>
 
   <p>
@@ -888,7 +890,7 @@ docker run --detach --name rdio-scanner \
 
   <pre><code>go run ./cmd/build client     # the web applications the server carries
 go run ./cmd/build ffmpeg     # the ffmpeg of the platform you are on, compiled here
-go run ./cmd/build ffmpeg macos-amd64 # the Intel pair, compiled on an Apple Silicon Mac
+go run ./cmd/build ffmpeg macos-amd64 # the Intel ffmpeg binaries, compiled on an Apple Silicon Mac
 go run ./cmd/build server     # one binary, into dist/&lt;target&gt;/
 go run ./cmd/build dist       # the release archive of this platform, into dist/
 go run ./cmd/build dist --all # every release archive, into dist/
@@ -906,22 +908,25 @@ go run ./cmd/build container  # the container image, locally</code></pre>
   <p>
     Every one of the eight builds carries its own ffmpeg, compiled for audio: the recipe the build tells
     the source disables every component and enables the audio components this server converts with, and the
-    proof that pair passes through refuses a pair that registers a video codec. The build compiles the five
-    Linux and Windows pairs itself, in a container, from the source release its manifest pins. The macOS and
-    FreeBSD pairs are compiled on a machine that runs the target's operating system, and there the build
-    compiles them itself: <code>go run ./cmd/build ffmpeg</code> compiles the pair, proves it, pins it, and
-    adopts it, and the archive you build on that machine carries it. The two macOS architectures compile each
-    other's pair, so an Apple Silicon Mac compiles the Intel pair with
-    <code>go run ./cmd/build ffmpeg macos-amd64</code>, and the pair it compiles for the other architecture
-    is proved on the Mac that runs it: the proof is the pair's own execution, and Rosetta 2 is what lets an
-    Apple Silicon Mac execute the Intel pair. The host that cannot run the pair it compiled leaves it in the
-    target's bundle directory, pins nothing, and names the Mac that can prove it and the command that proves
-    it, so an arm64 pair compiled on an Intel Mac is carried to an Apple Silicon Mac for the proof. The
-    machine that produces the releases runs neither program, so a release run there skips those targets and
-    ships the five archives it can ship, saying what would have made the rest buildable. A pair you build by
-    hand is adopted too: drop ffmpeg and ffprobe in the target's bundle directory, prove them there with
-    <code>go run ./cmd/build ffmpeg-check &lt;target&gt;</code>, and pin the two digests it prints in the
-    manifest. The licence of the ffmpeg a release carries travels in that release, beside this guide.
+    run that adopts binaries refuses binaries that register a video codec. The build compiles the five Linux and
+    Windows targets itself, in a container, from the source release its manifest pins. The macOS and FreeBSD
+    ffmpeg binaries are compiled on a machine that runs the target's operating system, and there the build
+    compiles them itself: <code>go run ./cmd/build ffmpeg</code> compiles them, runs them, and adopts what
+    converts, and the archive you build on that machine carries them. The compile is the check: the build
+    runs the binaries it produced through the server's own conversions, asks them what they register, and
+    adopts the ones that convert. The two macOS architectures compile each other's ffmpeg binaries, so an
+    Apple Silicon Mac compiles the Intel binaries with
+    <code>go run ./cmd/build ffmpeg macos-amd64</code>, and the binaries it compiles for the other
+    architecture are run on the Mac that runs them: the run is the binaries' own execution, and Rosetta 2 is
+    what lets an Apple Silicon Mac execute the Intel programs. The host that cannot run the binaries it
+    compiled leaves them in the target's bundle directory, writes nothing down, and names the Mac that runs
+    them and the command that compiles them there, so the arm64 binaries compiled on an Intel Mac are carried to an
+    Apple Silicon Mac. The machine that produces the releases runs neither program, so a release run there
+    skips those targets and ships the five archives it can ship, saying what would have made the rest
+    buildable. Binaries you build by hand are adopted too: drop ffmpeg and ffprobe in the target's bundle
+    directory, and the build runs them and adopts what converts. Nothing is copied out of a build and
+    committed anywhere. The licence of the ffmpeg a release carries travels in that release, beside this
+    guide.
   </p>
 
   <p>
@@ -1579,7 +1584,7 @@ bcrypt_cost = 12</code></pre>
 
   <p>
     Access codes, API keys, and downstreams all open the same dialog, because the server scopes all three
-    against the same pair: a system and a talkgroup.
+    against the same two things: a system and a talkgroup.
   </p>
 
   <ul>
@@ -1877,7 +1882,7 @@ rm -f ${basename}.*</code></pre>
   <p>
     RTLSDR-Airband writes one file per transmission into a directory, naming the file from a template and
     appending the frequency when <code>include_freq</code> is on. The server reads that name with a mask,
-    so the pair is a recorder configuration and a dirwatch row.
+    so what you set up is a recorder configuration and a dirwatch row.
   </p>
 
   <pre><code>devices: (
@@ -2919,7 +2924,7 @@ $ ./rdio-scanner -cmd user-add +ident "Dispatch desk" +code 7F2K9Q +systems 1000
     -ssl_cert_file mycert.crt -ssl_key_file mykey.key</code></pre>
 
   <p>
-    The certificate and the key are a pair: the server starts the https listener only when
+    The certificate and the key belong together: the server starts the https listener only when
     <strong>both</strong> are named, and a key that does not match the certificate is one of the ways this
     chapter's failure looks. When your certificate comes from an authority that signs it with an
     intermediate certificate, append the intermediate's contents to the certificate file, in the order the
@@ -3356,16 +3361,17 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
     and <code>rdio-scanner-macos-arm64-v&lt;version&gt;.zip</code> for an Apple one. Both carry their own
     <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio on a macOS machine
     for the architecture they run on, so nothing has to be installed on the host for recordings to convert.
-    A macOS pair is compiled with macOS's own compiler and linker, so this build compiles it on a machine
-    that runs macOS: <code>go run ./cmd/build ffmpeg</code> on that Mac compiles the pair, proves it, pins
-    it, and adopts it. The two macOS architectures compile each other's pair, so one Apple Silicon Mac
-    compiles both macOS archives — <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel
-    pair there, and Rosetta 2 is what lets that Mac prove it. An arm64 pair compiled on an Intel Mac is
-    proved on an Apple Silicon Mac, because an Intel machine will not execute it: the compile leaves the
-    pair in its bundle directory and names the Mac that can prove it, and the operator carries it there. The
-    machine that produces the releases runs neither program, which is why a release run there skips these
-    targets and ships the five archives it can ship. The archive's <code>FFMPEG.txt</code> names the host
-    that compiled it, the digests the release pins, and the date the build's ffmpeg check ran for it there.
+    A macOS ffmpeg binary is compiled with macOS's own compiler and linker, so this build compiles them on
+    the machine that is the target: <code>go run ./cmd/build ffmpeg</code> on that Mac compiles them, runs
+    them, and adopts what converts. The two macOS architectures compile each other's ffmpeg binaries, so one
+    Apple Silicon Mac compiles both macOS archives — <code>go run ./cmd/build ffmpeg macos-amd64</code>
+    compiles the Intel binaries there, and Rosetta 2 is what lets that Mac run them. The arm64 binaries compiled on an
+    Intel Mac are run on an Apple Silicon Mac, because an Intel machine will not execute them: the compile
+    leaves the binaries in the target's bundle directory and names the Mac that runs them, and the operator
+    carries them there. The machine that produces the releases runs neither program, which is why a release
+    run there skips these targets and ships the five archives it can ship. The archive's
+    <code>FFMPEG.txt</code> names the host that compiled them, the codecs the run recorded, and the command
+    that built them there.
   </p>
 
   <pre><code>% sudo ./rdio-scanner -service install
@@ -3396,8 +3402,8 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
     compiled on FreeBSD, so this build compiles it on the machine that is the target —
     <code>go run ./cmd/build ffmpeg</code> on that box,
     running <code>gmake</code> because ffmpeg's build asks for GNU make and FreeBSD's base make is not it —
-    and the archive's <code>FFMPEG.txt</code> names the host that compiled it, the digests the release pins,
-    and the date the build's ffmpeg check ran.
+    and the archive's <code>FFMPEG.txt</code> names the host that compiled them, the codecs the run
+    recorded, and the command that built them there.
   </p>
 
   <pre><code># ./rdio-scanner -service install
@@ -3829,7 +3835,7 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
       <tr><td>The webapp connects and hears nothing</td><td>The proxy's upgrade headers, the access code, the listener cap</td><td><a href="#ch-20-reverse-proxies">20</a>, <a href="#ch-09-access-and-api-keys">9</a></td></tr>
       <tr><td>A downstream deployment gets nothing</td><td>The log under <em>Downstreams</em>, and the answer the other server gave</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>The log is full of one message</td><td>The subsystem filter, and the count strip</td><td><a href="#ch-14-logs">14</a></td></tr>
-      <tr><td>The build compiled a macOS pair that does not run on the Mac it compiled it on</td><td>The proof is the pair's own execution: the compile leaves the pair in the target's bundle directory and names the Mac that can prove it, and the operator carries it there</td><td><a href="#ch-04-installation">4</a>, <a href="#ch-21-running-as-a-service">21</a></td></tr>
+      <tr><td>The build compiled macOS binaries that do not run on the Mac it compiled them on</td><td>The run is the binaries' own execution: the compile leaves the binaries in the target's bundle directory and names the Mac that runs them, and the operator carries them there</td><td><a href="#ch-04-installation">4</a>, <a href="#ch-21-running-as-a-service">21</a></td></tr>
       <tr><td>The save bar will not save, or the conflict banner is up</td><td>What the banner says, and the other session that saved</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
     </tbody>
   </table>
@@ -3870,9 +3876,9 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     <li>
       <strong>The conversion mode.</strong> The four modes decide what the server does to an incoming
       recording. A mode that converts with ffmpeg needs ffmpeg: every release build carries it inside the
-      program, compiled for audio, the five Linux and Windows pairs compiled by this project's build in a
-      container, and the macOS and FreeBSD pairs compiled by this build on the machines that are their
-      targets, with the one command chapter 4 lists. A program built with plain <code>go build</code>
+      program, compiled for audio, the five Linux and Windows ffmpeg binaries compiled by this project's
+      build in a container, and the macOS and FreeBSD ffmpeg binaries compiled by this build on the machines
+      that are their targets, with the one command chapter 4 lists. A program built with plain <code>go build</code>
       carries none. A deployment whose converter is missing says so on the console at startup, and the
       notice is worth reading on every new release.
     </li>
@@ -4014,8 +4020,9 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <p>
     You do not, for the deployment. Every release build carries its own <code>ffmpeg</code> and
     <code>ffprobe</code> inside the program, compiled for audio: the Windows amd64 build, the Linux builds
-    for 386, ARM, ARM64 and amd64, and the macOS and FreeBSD builds, whose pairs this build compiles on
-    those platforms with the one command <code>go run ./cmd/build ffmpeg</code> and adopts into the release.
+    for 386, ARM, ARM64 and amd64, and the macOS and FreeBSD builds, whose ffmpeg binaries this build
+    compiles on those platforms with the one command <code>go run ./cmd/build ffmpeg</code> and adopts into
+    the release.
     The container image is built from the linux-amd64 bundle. Install ffmpeg on the host only
     for a program you built yourself with plain <code>go build</code>, which carries none, and read the
     notice the server prints at startup, which is the program telling you which converter it found.
@@ -4025,15 +4032,15 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <h3>Which Mac do I build the macOS archives on?</h3>
 
   <p>
-    Either one: the two macOS architectures compile each other's pair, so one Apple Silicon Mac compiles
-    both macOS archives. <code>go run ./cmd/build ffmpeg</code> there builds the ffmpeg of the machine it
-    stands on, and <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel pair on that same
-    Apple Silicon Mac, where Rosetta 2 is what lets the build prove the pair it compiled. An arm64 pair
-    compiled on an Intel Mac is proved on an Apple Silicon Mac — the compile says so, and leaves the pair in
-    the target's bundle directory for the other Mac to prove. The target word is the one the release matrix
-    spells, and the build also accepts the words go names a macOS machine by: <code>darwin-amd64</code> is
-    <code>macos-amd64</code>, and <code>darwin-arm64</code> is <code>macos-arm64</code>. FreeBSD is the one
-    target whose pair is compiled only on FreeBSD.
+    Either one: the two macOS architectures compile each other's ffmpeg binaries, so one Apple Silicon Mac
+    compiles both macOS archives. <code>go run ./cmd/build ffmpeg</code> there builds the ffmpeg of the
+    machine it stands on, and <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel binaries
+    on that same Apple Silicon Mac, where Rosetta 2 is what lets the build run the binaries it compiled. An
+    arm64 set compiled on an Intel Mac is run on an Apple Silicon Mac — the compile says so, and leaves the
+    binaries in the target's bundle directory for the other Mac. The target word is the one the release
+    matrix spells, and the build also accepts the words go names a macOS machine by: <code>darwin-amd64</code>
+    is <code>macos-amd64</code>, and <code>darwin-arm64</code> is <code>macos-arm64</code>. FreeBSD is the
+    one target whose ffmpeg binaries are compiled only on FreeBSD.
     <a href="#ch-21-running-as-a-service">Chapter 21</a> is the chapter for each platform's service.
   </p>
 
@@ -4311,20 +4318,20 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <p>
     Every release build carries <code>ffmpeg</code> and <code>ffprobe</code> inside the program, and the
     archive carries <code>FFMPEG.txt</code> beside it: the licence terms of the components the build embeds,
-    and what the pair is. It says the pair is compiled for audio — no video codec, decoder, or encoder, and
-    no network protocol is compiled into it — and for a pair the build adopted, it names the codecs the
-    proof recorded on the host that compiled that pair. For the Linux and Windows builds it names the source
-    release, the digest, the configure recipe and the command that produced it, all reproducible from this
-    project's own repository. For the macOS and FreeBSD builds it names the host that compiled it — this
-    build, on a machine that runs the target's operating system, running the same trimmed build from the
-    same source release the manifest pins, or a pair the project's maintainer compiled there and this build
-    adopted — the two program digests the release pins, and the date the build's ffmpeg check ran for that
-    pair on that platform. The proof is recorded by a host that ran the pair, so the text names the host
-    that recorded the proof, and for a pair compiled across the two macOS architectures that is the other
-    Mac: the Apple Silicon Mac that proved the Intel pair through Rosetta 2 is named beside the Intel host
-    the pair was compiled for. A deployment that installs ffmpeg on the host — which a release deployment
-    has no reason to do, and a program you built yourself with plain <code>go build</code> is the one case
-    that needs it — takes the licence the package it installs carries.
+    and what the binaries are. It says they are compiled for audio — no video codec, decoder, or encoder, and
+    no network protocol is compiled into it — and for binaries the build adopted, it names the codecs the run
+    recorded and the conversions it performed. For the Linux and Windows builds it names the source release,
+    the digest, the configure recipe and the command that produced them, all reproducible from this project's
+    own repository. For the macOS and FreeBSD builds it names the host that compiled them — this build, on a
+    machine that runs the target's operating system, running the same trimmed build from the same source
+    release the manifest pins, or binaries the project's maintainer compiled there and this build adopted —
+    the command that built them there, and the codecs the run that adopted them asked them what they
+    register. The run is the binaries' own execution, so the text names the host that ran them, and for
+    binaries compiled across the two macOS architectures that is the other Mac: the Apple Silicon Mac that
+    ran the Intel programs through Rosetta 2 is named as the host the release carries them from. A
+    deployment that installs ffmpeg on the host — which a release deployment has no reason to do, and a
+    program you built yourself with plain <code>go build</code> is the one case that needs it — takes the
+    licence the package it installs carries.
   </p>
 
   <h3>Support</h3>

@@ -42,7 +42,8 @@ import (
 // runtimeTarget is the target this build is running on, which is the target an operator who named none
 // is building for. It is named by the release target the machine belongs to, because the manifest, the
 // output path, and the messages an operator reads all name the target by the name the release uses: the
-// operator on the Mac that a macOS pair is built on is asked about macos-arm64, the target the manifest
+// operator on the Mac that the macOS ffmpeg binaries are built on is asked about macos-arm64, the
+// target the manifest
 // records, and not about the name go builds a macOS binary for.
 func runtimeTarget() string {
 	return releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
@@ -62,7 +63,7 @@ type ffmpegState struct {
 }
 
 // host is the platform the machine running the build is on, named the way the release names a platform:
-// the pair a supplied target carries runs on one platform alone, and the question the build asks of it is
+// the ffmpeg binaries a supplied target carries run on one platform alone, and the question the build asks of it is
 // whether the machine standing in front of the build is that platform.
 type host struct {
 	goos   string
@@ -74,25 +75,26 @@ func thisMachine() host {
 	return host{goos: runtime.GOOS, goarch: runtime.GOARCH}
 }
 
-// isTheHostOf says whether this machine is the platform one target's pair runs on.
+// isTheHostOf says whether this machine is the platform one target's ffmpeg binaries run on.
 //
-// It is the rule that decides what a supplied target means for a run. The pair is compiled with the
+// It is the rule that decides what a supplied target means for a run. The ffmpeg binaries are compiled
 // platform's own compiler, against the platform's own libraries, and a compile of it written on any other
 // machine is a binary that platform refuses to run: the build that is standing on the target's platform
-// compiles the pair, and every other machine adopts what was dropped or skips the target.
+// compiles them, and every other machine adopts what was dropped or skips the target.
 func (h host) isTheHostOf(target string) bool {
 	tr, found := targetFor(target)
 
 	return found && h.goos == tr.goos && h.goarch == tr.goarch
 }
 
-// canCompile says whether this machine can produce the pair of one target: the operating system is the
+// canCompile says whether this machine can produce one target's ffmpeg binaries: the operating system is the
 // target's, and the architecture is the target's, or the other architecture macOS ships.
 //
 // Apple ships one toolchain that produces both macOS architectures: the Command Line Tools' clang takes
 // -arch x86_64 on an Apple Silicon Mac and -arch arm64 on an Intel Mac, the macOS SDK carries the
 // libraries of both, and codesign signs a program of either architecture on either machine. A FreeBSD
-// pair is statically linked against FreeBSD's own libc, which is the pair's whole point, and a host of
+// ffmpeg binary is statically linked against FreeBSD's own libc, which is the whole point of compiling it
+// there, and a host of
 // another operating system does not have it.
 func (h host) canCompile(target string) bool {
 	tr, found := targetFor(target)
@@ -180,16 +182,16 @@ type ffmpegPlan struct {
 	Says string
 
 	// Steps are the external commands that produce the bundle, and are empty when nothing has to be
-	// compiled: an uncovered target, a bundle that is already there, or a pair adopted from what was
-	// dropped for it.
+	// compiled: an uncovered target, a bundle that is already there, or the ffmpeg binaries adopted from what
+	// was dropped for it.
 	Steps []step
 
-	// Skipped says this target has nothing to build and produces nothing: the pair the manifest says is
-	// supplied was not dropped. A release run skips it and ships the rest.
+	// Skipped says this target has nothing to build and produces nothing: the ffmpeg binaries the manifest says are
+	// supplied were not dropped. A release run skips it and ships the rest.
 	Skipped bool
 
-	// Native says this plan compiles the pair on the machine running the build, because that machine is
-	// the platform the pair runs on. It is the answer to the operator who asked for the ffmpeg of the
+	// Native says this plan compiles the ffmpeg binaries on the machine running the build, because that
+	// machine is the platform they run on. It is the answer to the operator who asked for the ffmpeg of the
 	// machine they are standing on, and it is never a skip: the compile is what that run asked for.
 	Native bool
 
@@ -310,9 +312,9 @@ func ffmpegTarget(o options) string {
 // server that will do without.
 //
 // The machine is the platform the build is running on, and it is part of the decision because three of
-// the targets are compiled on the platform their pair runs on: on that platform the build has the source,
-// the digest, the recipe, the flags, and the check, and compiling the pair there is what the operator
-// asked for. On every other platform the pair is something the build is handed.
+// the targets are compiled on the platform their ffmpeg binaries run on: on that platform the build has
+// the source, the digest, the recipe, the flags, and the run, and compiling them there is what the
+// operator asked for. On every other platform they are something the build is handed.
 func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState, machine host) (ffmpegPlan, error) {
 	target := ffmpegTarget(o)
 
@@ -450,10 +452,11 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	return plan, nil
 }
 
-// suppliedProduction is the manifest's way of saying that this build compiles the pair for a target where
+// suppliedProduction is the manifest's way of saying that this build compiles the ffmpeg binaries for a
+// target where
 // the target runs, and not in a container: the machine that is the target compiles it with its own
-// toolchain, and every other machine adopts the pair that host produced — the pair this build compiled
-// there, or a pair the maintainer built by hand and dropped for it to adopt.
+// toolchain, and every other machine adopts the binaries that host produced — the ones this build
+// compiled there, or the ones the maintainer built by hand and dropped for it to adopt.
 const suppliedProduction = "supplied"
 
 // planSuppliedFFmpeg decides what the ffmpeg phase does with binaries this build compiles in a container
@@ -462,7 +465,7 @@ const suppliedProduction = "supplied"
 // They are compiled on the platform they run on, and two machines can produce them. The maintainer's own
 // build does, and drops them in the bundle directory for this build to adopt; the build standing on that
 // same platform does it itself, with the source, digest, recipe, flags, and recipe the manifest already
-// carries. Binaries the maintainer dropped win over the compile every time: the drop is the pair he built
+// carries. Binaries the maintainer dropped win over the compile every time: the drop is what he built
 // and tested, and compiling over it would throw it away.
 //
 // The plan reads one thing from a drop: which machine code the files hold. The run that adopts them runs
@@ -473,8 +476,9 @@ const suppliedProduction = "supplied"
 // for the one it does not have would ship nothing at all, including the five archives it could have
 // shipped. It is reported, and skipped.
 func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
-	// The cache key is the pinned pair, so a warm cache is the cache of the pair the manifest names, and
-	// the drop is not needed again: it has already been consumed out of this directory.
+	// The cache key is the manifest's record and the target, so a warm cache is the entry this machine's
+	// own run published, and the drop is not needed again: it has already been consumed out of this
+	// directory.
 	if state.bundleIsCached {
 		return ffmpegPlan{
 			Target: target,
@@ -526,14 +530,14 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 	}, nil
 }
 
-// planNativeFFmpeg decides what the compile of a supplied pair looks like when the build is standing on
-// the platform that pair runs on.
+// planNativeFFmpeg decides what the compile of the ffmpeg binaries looks like when the build is standing
+// on the platform they run on.
 //
 // It is the same trimmed build the container targets make, from the same source the manifest pins, with
 // the same recipe, and with the record's flags reaching configure the way they do there. What it does not
 // have is a container: the host's own compiler, linker, stripper, make program, and signer are the
-// toolchain, and the pair comes out of it as the platform's own binary — which is the whole reason the
-// pair is compiled there and not shipped from a cross-compiler.
+// toolchain, and the binaries come out of it as the platform's own programs — which is the whole reason
+// they are compiled there and not shipped from a cross-compiler.
 //
 // Stripping comes before signing, and the order is not a style: strip rewrites the binary, and a signature
 // computed over the bytes strip removed is a signature macOS refuses to run.
@@ -621,8 +625,8 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 
 	if strings.HasPrefix(target, "macos-") {
 		// macOS refuses to run an unsigned binary out of a downloaded archive, and the ad-hoc signature
-		// is what the pair carries: it needs no developer identity, and it is the signature the pair the
-		// server embeds has to have to start.
+		// is what the binaries carry: they need no developer identity, and it is the signature the programs the
+		// server embeds have to have to start.
 		plan.Steps = append(plan.Steps, step{
 			label:  "sign",
 			result: "the ad-hoc signature ffmpeg and ffprobe run under",
@@ -647,7 +651,7 @@ func makeProgram(record bundle.Target) string {
 
 // nativeProgramsAre the programs a compile on the target's own platform runs: the archive reader, a C
 // compiler, the stripper, and the make program the record names, plus the signer on a macOS target, where
-// the pair has to carry a signature to run.
+// the binaries have to carry a signature to run.
 func nativeProgramsAre(record bundle.Target, target string) []string {
 	programs := []string{"tar", "cc", "strip", makeProgram(record)}
 
@@ -687,8 +691,8 @@ func whereTheToolComesFrom(name string, target string) string {
 	return "the Xcode Command Line Tools carry it"
 }
 
-// suppliedDropFor is where a pair built by hand sits before this build adopts it, and where a pair this
-// build compiled on its own host is put so the adoption can consume it.
+// suppliedDropFor is where binaries built by hand sit before this build adopts them, and where the
+// binaries this build compiled on its own host are put so the adoption can consume them.
 func suppliedDropFor(paths ffmpegPaths, target string) map[string]string {
 	drop := map[string]string{}
 
@@ -704,8 +708,9 @@ func suppliedDropFor(paths ffmpegPaths, target string) map[string]string {
 //
 // The binaries have to leave that directory. //go:embed all: takes every file in it, so a raw program left
 // sitting next to the gzipped one is embedded as well, and every server built for that target carries
-// about ten megabytes of program it will never use. The gzipped pair in the cache is the same pair: gzip is
-// lossless, and the ad-hoc code signature a signed macOS pair carries is a hash over these bytes.
+// about ten megabytes of program it will never use. The gzipped binaries in the cache are the same
+// programs: gzip is lossless, and the ad-hoc code signature signed macOS programs carry is a hash over
+// these bytes.
 //
 // The licence text goes into the cache entry for the same reason the binaries do: the entry is what a
 // reusing run reads, and the words a run wrote about the binaries it ran belong with them.
@@ -882,11 +887,11 @@ func fetchSource(src ffmpegSource) error {
 
 // runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
 //
-// It reports the targets it has nothing to produce for: the three whose pair is compiled on its own
+// It reports the targets it has nothing to produce for: the three whose ffmpeg binaries are compiled on their own
 // platform, on a machine this build is not standing on, with nothing dropped for it. Such a target is
 // skipped, and the caller decides what a skipped target means for the run — the release run ships the
 // archives it can ship, and a run that compiles one binary compiles none. On the machine that is the
-// target, the same phase compiles the pair, and that is not a skip.
+// target, the same phase compiles them, and that is not a skip.
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
@@ -1045,7 +1050,7 @@ func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, targe
 	return false, nil
 }
 
-// runNativeFFmpeg does the work of a supplied pair compiled on the machine that runs it.
+// runNativeFFmpeg does the work of the ffmpeg binaries compiled on the machine that runs them.
 //
 // The binaries are dropped where a maintainer's binaries are dropped, and from there the run is the
 // adoption path: the same run of the binaries, the same gzip into the cache entry, the same licence text,
@@ -1112,7 +1117,7 @@ func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target 
 	return false, nil
 }
 
-// nativeDrop puts the compiled pair where a maintainer's pair is dropped, executable.
+// nativeDrop puts the compiled binaries where a maintainer's drop is put, executable.
 //
 // The proof reads it from there, the adoption consumes it from there, and the directory it is dropped in
 // is the directory the server embeds, which is why the adoption takes it back out again.
@@ -1143,7 +1148,7 @@ func nativeDrop(t tool, plan ffmpegPlan, manifest bundle.Manifest, target string
 		}
 
 		// The mode is set, not asked for: a file that was already there keeps the mode it had, and a
-		// pair the server cannot start is a pair dropped unreadable.
+		// binary the server cannot start is a binary dropped unreadable.
 		if err := os.Chmod(drop, 0755); err != nil {
 			return fmt.Errorf("the build cannot make the compiled %s runnable: %w", name, err)
 		}
@@ -1262,7 +1267,7 @@ func gzipCompiled(paths ffmpegPaths, manifest bundle.Manifest, target string) er
 	return nil
 }
 
-// publishFFmpeg puts the pair, and what a release archive has to say about it, into the bundle directory
+// publishFFmpeg puts the binaries, and what a release archive has to say about them, into the bundle directory
 // the server embeds. The placeholder that keeps a plain go build compiling is left where it is.
 //
 // The licence text is passed in, because the two ways a target's ffmpeg comes to be say different and

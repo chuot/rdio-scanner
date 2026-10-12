@@ -406,9 +406,9 @@ func namesTheCodecProbe(argv []string) bool {
 }
 
 // The ffmpeg this project ships is compiled for audio: the recipe says --disable-everything and enables
-// audio components only. A pair that registers a video decoder or encoder is not that program, and the
-// check is the gate every pair passes through — the compiled pair inside the container that can run it,
-// and a supplied pair on the host that is its target.
+// audio components only. Binaries that register a video decoder or encoder are not that program, and
+// the check is the gate every ffmpeg binary passes through — the compiled ones inside the container that
+// can run them, and the adopted ones on the host that is their target.
 func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
 	stand := &aStandIn{codecs: []string{
 		"D.A.L. mp3                  MP3 (MPEG audio layer 3)",
@@ -428,14 +428,15 @@ func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
 	}
 
 	// The question is asked of the compiled program, inside the container the check runs it in: the
-	// refusal is about the pair the build is about to ship, and not about the machine the build stands on.
+	// refusal is about the binaries the build is about to ship, and not about the machine the build stands on.
 	if !wasRun(stand.asked("/work/ffmpeg-9.0.2/ffmpeg"), "-codecs") {
-		t.Error("the check asked the machine it stands on what it registers, and not the compiled pair")
+		t.Error("the check asked the machine it stands on what it registers, and not the compiled binaries")
 	}
 }
 
-// The check asks the program what it registers, once, on the program it is proving: the compiled pair
-// answers inside its conformance container, and a supplied pair answers on the host that compiled it.
+// The check asks the program what it registers, once, on the program it is proving: the compiled
+// binaries answer inside their conformance container, and the adopted ones answer on the host that
+// compiled them.
 func TestTheFFMPEGCheckAsksTheProgramWhatItRegisters(t *testing.T) {
 	stand := &aStandIn{}
 
@@ -456,9 +457,9 @@ func TestTheFFMPEGCheckAsksTheProgramWhatItRegisters(t *testing.T) {
 	}
 }
 
-// The proof records the codecs the pair registers, so the proof file says what the program is and not
-// only what it converted. The codec descriptors every ffmpeg carries are not codecs the program
-// registers: they decode and encode nothing.
+// The check records the codecs the program registers, so the run's report says what the binaries are
+// and not only what they converted. The codec descriptors every ffmpeg carries are not codecs the
+// program registers: they decode and encode nothing.
 func TestTheFFMPEGCheckRecordsTheCodecsTheProgramRegisters(t *testing.T) {
 	report, err := anFFMPEGCheck(t, (&aStandIn{}).run)
 	if err != nil {

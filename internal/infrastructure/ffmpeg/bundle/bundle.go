@@ -20,16 +20,16 @@
 
 // Package bundle is the ffmpeg this server carries inside its own binary.
 //
-// A server built for a target whose ffmpeg this build compiles carries the pair compiled for that
-// target, so a deployment needs nothing installed on the host it runs on. A server built for a target
-// whose pair is compiled where the target runs carries the pair that compile produced — the pair this
-// build compiled on the machine that is the target, or the pair dropped for it — for the same effect. A
-// server built for a target whose pair never arrived, and for every plain `go build` a developer
-// runs, carries none, and the server falls back to the ffmpeg its host provides.
+// A server built for a target whose ffmpeg this build compiles carries the ffmpeg binaries compiled for
+// that target, so a deployment needs nothing installed on the host it runs on. A server built for a
+// target whose ffmpeg binaries are compiled where the target runs carries the binaries that compile
+// produced — the ones this build compiled on the machine that is the target, or the ones dropped for it
+// — for the same effect. A server built for a target whose binaries never arrived, and for every plain
+// `go build` a developer runs, carries none, and the server falls back to the ffmpeg its host provides.
 //
 // Which target a binary carries is decided by its build tags, in the bundle_<target>.go files: each
-// one embeds exactly one target's directory, so a linux-arm64 binary carries the linux-arm64 pair and
-// nothing else. This file holds the rules that do not depend on the target.
+// one embeds exactly one target's directory, so a linux-arm64 binary carries the linux-arm64 ffmpeg
+// binaries and nothing else. This file holds the rules that do not depend on the target.
 package bundle
 
 import (
@@ -127,7 +127,7 @@ func ReadManifest() Manifest {
 	return manifest
 }
 
-// Bundle is the pair of programs one target carries.
+// Bundle is the two programs one target carries.
 type Bundle struct {
 	// Dir is the target this bundle was compiled for, which is also the directory its programs are
 	// embedded under.
