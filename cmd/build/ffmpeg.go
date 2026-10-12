@@ -130,6 +130,11 @@ func sourceDir(manifest bundle.Manifest) string {
 // The digest is in here and not only in the check that runs before compiling, because a cache hit skips
 // that check: without it, a manifest whose pinned source was changed would quietly reuse what the old
 // source compiled.
+//
+// A target whose pair is compiled on its own platform has no toolchain to key on, so its key is the pair:
+// the way it is produced and the digest of each program. A pair rebuilt on that platform is a new cache
+// entry, and a compiled record keys on the compile's inputs alone, so a manifest gaining these fields
+// does not invalidate a warm cache.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
@@ -147,6 +152,10 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		record.Conformance.Container,
 		strings.Join(record.Conformance.Packages, " "),
 		strings.Join(record.Conformance.Run, " "),
+	}
+
+	if record.Produced != "" {
+		parts = append(parts, record.Produced, record.Programs["ffmpeg"], record.Programs["ffprobe"])
 	}
 
 	return sha256Of([]byte(strings.Join(parts, "\n")))

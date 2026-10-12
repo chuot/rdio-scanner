@@ -290,6 +290,52 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	}
 }
 
+// A supplied pair is cached by the pair itself: the digest of each program is the only thing that says
+// which binaries went into that cache directory, and the way a target's ffmpeg comes to be is part of what
+// the directory holds.
+//
+// The five compiled targets' keys are pinned by value here. A warm cache is the only reason a release run
+// takes minutes rather than hours, and a manifest that gains a field must not throw it away: a compiled
+// record pins no programs, and its key is the compile's inputs and nothing else.
+func TestTheFfmpegCacheKeyForASuppliedTargetIsThePairItPins(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	supplied := cacheKey(manifest, "macos-arm64")
+
+	rebuilt := bundle.ReadManifest()
+	record := rebuilt.Targets["macos-arm64"]
+	record.Programs = map[string]string{"ffmpeg": strings.Repeat("a", 64), "ffprobe": strings.Repeat("b", 64)}
+	rebuilt.Targets["macos-arm64"] = record
+
+	if cacheKey(rebuilt, "macos-arm64") == supplied {
+		t.Error("a supplied pair rebuilt on its own platform reuses the cache of the pair it replaced")
+	}
+
+	compiled := bundle.ReadManifest()
+	record = compiled.Targets["macos-arm64"]
+	record.Produced = ""
+	record.Programs = nil
+	compiled.Targets["macos-arm64"] = record
+
+	if cacheKey(compiled, "macos-arm64") == supplied {
+		t.Error("a target this build compiles an ffmpeg for keeps the cache entry of the pair it no longer ships")
+	}
+
+	want := map[string]string{
+		"linux-386":     "0cd9273ac845d3c3d35e306a25e8152ff395612b35387252c79a1d233033713a",
+		"linux-amd64":   "5f61837e16fee38e02dae5e4f0a05ae20db87d0c27f735642c3aec234ca53406",
+		"linux-arm":     "11189b426f1288d3695dc9b147757c66dbdebd81771580b34c2b73d5b2fb1c1b",
+		"linux-arm64":   "b35cdc455075b176a92e14f535b0329a3248b9cdd8355c12a097c191f573dccd",
+		"windows-amd64": "6efc3ed684d2ff1e065d30c158d2a6d0e23c0e7cb3efad68045d65e0fc5c6d45",
+	}
+
+	for _, target := range []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"} {
+		if got := cacheKey(manifest, target); got != want[target] {
+			t.Errorf("%s's cache key is %s, want %s: the compiled inputs did not change, and a warm cache is thrown away", target, got, want[target])
+		}
+	}
+}
+
 // A second build that changes nothing does not compile anything again.
 func TestAFfmpegAlreadyCompiledForTheSameRecipeIsNotCompiledAgain(t *testing.T) {
 	plan, err := planFFmpeg(
