@@ -1375,12 +1375,51 @@ func ffmpegLicence(manifest bundle.Manifest, target string) string {
 		text.WriteString("    " + flag + "\n")
 	}
 
+	text.WriteString(theAudioOnlyPosture(manifest.Recipe))
+
 	text.WriteString(fmt.Sprintf(
 		"\nThe same recipe, the same digest and the same toolchain are recorded in this repository at\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and the command that produced this binary\nis `go run ./cmd/build ffmpeg %s`.\n",
 		target,
 	))
 
 	return text.String()
+}
+
+// theAudioOnlyPosture is what the recipe says is not compiled in, in the words the licence texts use.
+// It is composed from the recipe, because a notice that names a switch the recipe dropped is a notice
+// promising a build the recipe does not produce, and that notice travels inside every archive.
+//
+// The video filters the compiled program carries are the ones ffmpeg's own program selects for its
+// output handling, and no configure switch takes them out; the posture is about codecs, decoders,
+// encoders and the network, which is what the recipe decides and the proof reads back.
+func theAudioOnlyPosture(recipe []string) string {
+	var posture []string
+
+	if theRecipeCarries(recipe, "--disable-everything") {
+		posture = append(posture, "the recipe disables every component and enables only the audio demuxers, decoders, encoder, muxers and filters the server converts with, and the pipe, fd and file protocols the recording arrives and leaves on")
+		posture = append(posture, "no video codec, video decoder, or video encoder is compiled in")
+	}
+
+	if theRecipeCarries(recipe, "--disable-network") {
+		posture = append(posture, "no network protocol is compiled in")
+	}
+
+	if len(posture) == 0 {
+		return ""
+	}
+
+	return "This program is compiled for audio: " + strings.Join(posture, "; ") + ".\n\n"
+}
+
+// theRecipeCarries reports whether the recipe tells the build one switch.
+func theRecipeCarries(recipe []string, flag string) bool {
+	for _, one := range recipe {
+		if one == flag {
+			return true
+		}
+	}
+
+	return false
 }
 
 // suppliedFFMpegLicence is what a release archive carries about a pair adopted from the host the target
@@ -1411,6 +1450,8 @@ func suppliedFFMpegLicence(manifest bundle.Manifest, target string, check anFfmp
 		text.WriteString("    " + flag + "\n")
 	}
 
+	text.WriteString(theAudioOnlyPosture(manifest.Recipe))
+
 	text.WriteString("The programs this archive carries, by digest:\n\n")
 
 	record := manifest.Targets[target]
@@ -1418,6 +1459,13 @@ func suppliedFFMpegLicence(manifest bundle.Manifest, target string, check anFfmp
 	text.WriteString(fmt.Sprintf("    ffmpeg  sha256 %s\n    ffprobe sha256 %s\n\n", record.Programs["ffmpeg"], record.Programs["ffprobe"]))
 
 	if check.Target == target {
+		if len(check.Codecs.Audio) > 0 {
+			text.WriteString(fmt.Sprintf(
+				"\nThe proof recorded the codecs it registers: %s, and names no video codec, video decoder, or video encoder.\n",
+				strings.Join(check.Codecs.Audio, ", "),
+			))
+		}
+
 		text.WriteString(fmt.Sprintf(
 			"\nThis pair was compiled on %s, the machine that is the target: the machine that produces the\nreleases runs no %s program, so a pair of this shape is compiled where the target runs. The release\nbuild adopted it after checking it against the digest recorded in\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and on the evidence of the build's ffmpeg check,\nwhich ran for it on %s on %s and converted %d recordings.\n",
 			check.Host, target, check.Host, check.Checked, len(check.Conversions),

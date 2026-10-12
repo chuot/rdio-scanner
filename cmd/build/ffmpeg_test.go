@@ -460,6 +460,56 @@ func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) 
 	}
 }
 
+// The licence text says the program is compiled for audio, and the switches that make that true are the
+// recipe's. The text is composed from the recipe, so a recipe that drops a switch stops promising the
+// build that switch makes: a notice that promises what the recipe does not produce is a notice the
+// release cannot stand behind, and the archive carries it into every deployment.
+func TestTheLicenceSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	licence := ffmpegLicence(manifest, "linux-arm64")
+
+	for _, want := range []string{
+		"compiled for audio",
+		"no video codec, video decoder, or video encoder is compiled in",
+		"no network protocol is compiled in",
+	} {
+		if !strings.Contains(licence, want) {
+			t.Errorf("the licence text does not say %q:\n%s", want, licence)
+		}
+	}
+
+	dropped := bundle.ReadManifest()
+	dropped.Recipe = aRecipeWithout(dropped.Recipe, "--disable-network")
+
+	if strings.Contains(ffmpegLicence(dropped, "linux-arm64"), "no network protocol is compiled in") {
+		t.Error("the licence text promises a build with no network protocol to a recipe that dropped --disable-network")
+	}
+
+	dropped = bundle.ReadManifest()
+	dropped.Recipe = aRecipeWithout(dropped.Recipe, "--disable-everything")
+
+	if strings.Contains(ffmpegLicence(dropped, "linux-arm64"), "no video codec") {
+		t.Error("the licence text promises a build with no video codec to a recipe that dropped --disable-everything")
+	}
+}
+
+// aRecipeWithout is the recipe with one switch taken out, which is how a test shows a licence text
+// promising a build its own recipe does not produce.
+func aRecipeWithout(recipe []string, flag string) []string {
+	kept := []string{}
+
+	for _, one := range recipe {
+		if one == flag {
+			continue
+		}
+
+		kept = append(kept, one)
+	}
+
+	return kept
+}
+
 // A reused compile has to leave the same tree a fresh one does, licence text included: what a release
 // archive carries cannot depend on whether the cache happened to be warm.
 func TestAReusedFfmpegIsPublishedTheWayAFreshOneIs(t *testing.T) {

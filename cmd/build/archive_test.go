@@ -284,6 +284,7 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 		FFProbe:     strings.Repeat("b", 64),
 		Version:     "ffmpeg version 7.1",
 		Checked:     "2026-10-09T12:00:00Z",
+		Codecs:      codecRegistry{Audio: theAudioCodecNames},
 		Conversions: []production{{Input: "0s", Mode: "plain", Bytes: 1024, Duration: "3.500000"}},
 	}
 
@@ -322,6 +323,9 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 		"Lesser General Public License version 2.1",
 		manifest.Source.URL,
 		"compiled for macos-arm64\non macos-arm64",
+		"compiled for audio",
+		"no network protocol is compiled in",
+		"the codecs it registers: " + strings.Join(theAudioCodecNames, ", "),
 		"This pair was compiled on macos-arm64",
 		"which ran for it on macos-arm64 on 2026-10-09T12:00:00Z and converted 1 recordings",
 	} {
