@@ -1204,3 +1204,36 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 		}
 	}
 }
+
+// The hand-built drop is adopted by the three targets whose ffmpeg binaries are compiled where they run.
+// The five this build compiles in a container take the binaries the container produced: a program an
+// operator drops in one of those directories is embedded by the server binary, is used by nothing, and
+// no message says it is there. The guide is where the operator reads the drop route, so the guide names
+// the targets the route belongs to and says what a drop in the other directories costs.
+func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
+	body := guidePath(t)
+
+	chapter := strings.ToLower(words(chapterOf(t, body, "ch-04-installation")))
+
+	for _, want := range []string{
+		"drop ffmpeg and ffprobe in the target's bundle directory",
+		"the macOS and FreeBSD targets",
+		"embedded in the binary and used by nothing",
+	} {
+		if !strings.Contains(chapter, strings.ToLower(want)) {
+			t.Errorf("the guide's installation chapter never says %q", want)
+		}
+	}
+
+	notes := strings.ToLower(words(repoFile(t, "COMPILING.md")))
+
+	for _, want := range []string{
+		"drop `ffmpeg` and `ffprobe`",
+		"the three targets compiled on their own platform",
+		"embedded in the binary and used by nothing",
+	} {
+		if !strings.Contains(notes, strings.ToLower(want)) {
+			t.Errorf("COMPILING.md never says %q", want)
+		}
+	}
+}

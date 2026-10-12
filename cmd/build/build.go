@@ -125,12 +125,16 @@ func newTool(repo string) tool {
 		clean:        cleanTree,
 		state:        buildState,
 		releaseFiles: archiveFiles,
+
+		// The machine standing here and the way one program is run on it are wired with the fields,
+		// before any phase is bound: the run that adopts a drop asks the machine what it ran, and a
+		// phase bound now would carry the copy made before them.
+		machine: thisMachine,
+		theRun:  onThisMachine(),
 	}
 
 	t.prove = t.proveSuppliedBinaries
 	t.source = fetchAndCheckSource
-	t.machine = thisMachine
-	t.theRun = onThisMachine()
 
 	t.ffmpeg = t.runFFmpeg
 

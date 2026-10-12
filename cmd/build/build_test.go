@@ -21,11 +21,15 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
 // The tool's four contacts with the machine it runs on: which tree it builds, which programs it can
@@ -301,5 +305,60 @@ func TestTheBuildToolCarriesEveryPartThePhasesAskFor(t *testing.T) {
 		if value.Field(i).IsNil() {
 			t.Errorf("the tool the build command runs with has no %s, and the phase that asks for it panics on the machine the operator is standing on", field.Name)
 		}
+	}
+}
+
+// The phases bound in newTool are method values, and a method value carries the tool as it was when it
+// was taken: the copy the phase runs on is not the tool the command holds. Checking the tool's own
+// fields says nothing about the copies, so the wiring is measured by asking a bound phase to do the
+// work it does on the operator's machine.
+//
+// The run that adopts a drop is the phase that runs programs here, and a drop of the other macOS
+// architecture is the case that reaches it on any machine: the machine-code rule lets it through on a
+// Linux host, and the Linux host cannot execute it. The answer is the refusal naming the host that runs
+// those binaries — not a crash in the operator's terminal.
+func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest := bundle.ReadManifest()
+
+	paths := ffmpegPathsFor(repo, manifest, "macos-arm64")
+
+	if err := os.MkdirAll(paths.bundle, 0755); err != nil {
+		t.Fatalf("the bundle directory cannot be prepared: %v", err)
+	}
+
+	fixture := machOBytes(aSystemProgram(theArm64CPU))
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		if err := os.WriteFile(filepath.Join(paths.bundle, name), fixture, 0755); err != nil {
+			t.Fatalf("the drop cannot be written: %v", err)
+		}
+	}
+
+	out := &bytes.Buffer{}
+
+	report, err := newTool(repo).prove("macos-arm64", paths, out)
+
+	if err == nil {
+		t.Fatal("a Linux host ran and adopted the arm64 macOS binaries it cannot execute")
+	}
+
+	if report.Host != "" || report.Conversions != 0 || len(report.Codecs.Audio) != 0 {
+		t.Errorf("the refused run left a report behind, and the licence text would name it: %+v", report)
+	}
+
+	for _, want := range []string{
+		"the macos-arm64 ffmpeg binaries do not run on this machine",
+		"run go run ./cmd/build ffmpeg macos-arm64 on a macos-arm64 host",
+		paths.bundle,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal says %q, and does not name %q", err, want)
+		}
+	}
+
+	if strings.Contains(out.String(), "check") {
+		t.Errorf("the run printed %q, which is what a run that converted the recordings says", out.String())
 	}
 }

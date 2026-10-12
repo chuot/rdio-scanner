@@ -235,18 +235,19 @@ type theRunOfTheBinaries struct {
 	Productions []production
 }
 
-// theBinariesTheHostCannotRun is what a host is told when the ffmpeg binaries it compiled do not run on it.
+// theBinariesTheHostCannotRun is what a host is told when the ffmpeg binaries in front of it do not run on it.
 //
 // The gate is the binaries' own execution, so a host that cannot execute them adopts nothing, and the
 // answer it gets names the host that can run them, the command that compiles them there, and the directory
-// the ones this run compiled are sitting in.
+// the ones it cannot run are sitting in. The binaries in front of it are the ones it compiled, or the ones
+// somebody dropped.
 //
 // The operating system's own refusal is carried inside it. This build does not ask the host what it has
 // installed and does not guess at what it can execute: an Intel Mac holding the arm64 binaries, and a
 // Linux host holding the macOS binaries, are answered by the programs not starting.
 func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
 	return fmt.Errorf("the %s ffmpeg binaries do not run on this machine (%s): %w\n"+
-		"the ffmpeg binaries are compiled where they run: run go run ./cmd/build ffmpeg %s on a %s host, and the binaries this run compiled are in %s",
+		"the ffmpeg binaries are compiled where they run: run go run ./cmd/build ffmpeg %s on a %s host, and the binaries in %s are the ones this host cannot run",
 		target, releaseTargetWordFor(machine.goos, machine.goarch), err, target, target, paths.bundle)
 }
 

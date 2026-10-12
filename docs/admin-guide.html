@@ -923,10 +923,12 @@ go run ./cmd/build container  # the container image, locally</code></pre>
     them and the command that compiles them there, so the arm64 binaries compiled on an Intel Mac are carried to an
     Apple Silicon Mac. The machine that produces the releases runs neither program, so a release run there
     skips those targets and ships the five archives it can ship, saying what would have made the rest
-    buildable. Binaries you build by hand are adopted too: drop ffmpeg and ffprobe in the target's bundle
-    directory, and the build runs them and adopts what converts. Nothing is copied out of a build and
-    committed anywhere. The licence of the ffmpeg a release carries travels in that release, beside this
-    guide.
+    buildable. Binaries you build by hand are adopted too, for the macOS and FreeBSD targets: drop ffmpeg
+    and ffprobe in the target's bundle directory, and the build runs them and adopts what converts. The
+    five targets this build compiles in a container take the binaries the container produced, and a program
+    you drop in one of their directories is embedded in the binary and used by nothing. Nothing is copied
+    out of a build and committed anywhere. The licence of the ffmpeg a release carries travels in that
+    release, beside this guide.
   </p>
 
   <p>
