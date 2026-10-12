@@ -374,6 +374,8 @@ footer.site .signoff {
   body { font-size: 15px; }
   nav.toc ol { columns: 1; }
   header.site h1 { font-size: 1.6rem; }
+  table { display: block; overflow-x: auto; }
+  p code, li code { white-space: normal; overflow-wrap: anywhere; }
 }
 
 /* ---------------------------------------------------------------- print */
@@ -608,9 +610,9 @@ footer.site .signoff {
     Both paths end at the same ingest. The ingest resolves the system, site, talkgroup, and unit the
     metadata names against your configuration. When <em>Auto populate</em> is on, an identity the
     configuration does not know is created on the spot; when it is off, the call is refused and the log
-    says why. The ingest then converts the audio to H.264 m4a when the <em>Audio conversion</em> option
-    asks for it, which is what makes recordings small and playable in a browser, and files the call in the
-    database with its audio.
+    says why. The ingest then converts the audio to AAC in an m4a container when the <em>Audio conversion</em>
+    option asks for it, which is what makes recordings small and playable in a browser, and files the call in
+    the database with its audio.
   </p>
 
   <aside class="note">
@@ -715,7 +717,7 @@ footer.site .signoff {
     <tbody>
       <tr><td>Trunk Recorder</td><td>Yes</td><td>Yes</td></tr>
       <tr><td>RTLSDR-Airband</td><td>No</td><td>Yes</td></tr>
-      <tr><td>SDRTrunk</td><td>Yes</td><td>No</td></tr>
+      <tr><td>SDRTrunk</td><td>No</td><td>Yes</td></tr>
       <tr><td>voxcall</td><td>Yes</td><td>No</td></tr>
       <tr><td>ProScan</td><td>No</td><td>Yes</td></tr>
       <tr><td>DSDPlus Fast Lane</td><td>No</td><td>Yes</td></tr>
@@ -723,9 +725,9 @@ footer.site .signoff {
   </table>
 
   <p>
-    Worked recorder configurations, as the recorder's own configuration files, are in the repository and
-    in the archive under <code>docs/examples/trunk-recorder</code> and
-    <code>docs/examples/rtlsdr-airband</code>.
+    Worked recorder configurations, as the recorder's own configuration files, are in the repository under
+    <code>docs/examples/trunk-recorder</code> and <code>docs/examples/rtlsdr-airband</code>. The worked
+    configurations this guide carries are in <a href="#ch-10-getting-audio-in">chapter 10</a>.
   </p>
 
   <h3>Machines</h3>
@@ -756,7 +758,8 @@ footer.site .signoff {
 
   <p>
     The build tool needs no configuration: it reads the release matrix, the version, and the ffmpeg bundle
-    recipe from the repository. What it builds, and in what order, is what the four commands above say.
+    recipe from the repository. What it builds, and in what order, is what the four commands in
+    <a href="#ch-04-installation">chapter 4</a> show.
   </p>
 </section>
 
@@ -935,9 +938,10 @@ go run ./cmd/build container  # the container image, locally</code></pre>
 
   <p>
     The login endpoint answers a token, and the browser keeps it for the session. The server signs tokens
-    with its secret and keeps the last five it issued, so signing in ends the sessions older than that.
+    with its secret, keeps the last five it issued, and gives each one a seven-day life, so signing in ends
+    the sessions older than that, and a session seven days old ends on its own.
     Three failed logins from one address lock that address out for ten minutes; the server logs the
-    attempts under the <em>login</em> subsystem.
+    attempts under the <code>login</code> subsystem.
   </p>
 
   <h3>The banner that lists what is missing</h3>
@@ -1021,7 +1025,7 @@ go run ./cmd/build container  # the container image, locally</code></pre>
     <caption>Every flag the server accepts</caption>
     <thead><tr><th scope="col">Flag</th><th scope="col">Default</th><th scope="col">What it decides</th></tr></thead>
     <tbody>
-      <tr><td><code>-admin_password</code></td><td class="default">none</td><td>Hash and store this password for the administrator, then continue. The one flag that changes the credential from the command line.</td></tr>
+      <tr><td><code>-admin_password</code></td><td class="default">none</td><td>Hash and store this password for the administrator, and stop without starting a server. The one flag that changes the credential from the command line. See <a href="#ch-18-command-line-client">the command line client</a>.</td></tr>
       <tr><td><code>-base_dir</code></td><td class="default">the executable's folder, else <code>~/Rdio Scanner</code></td><td>Where the database file, the configuration file, and the server's state are written. Must be writable.</td></tr>
       <tr><td><code>-bcrypt_cost</code></td><td class="default"><code>10</code></td><td>The bcrypt cost the administrator credential is hashed at, 10 to 14. A cost outside that range is refused at start-up.</td></tr>
       <tr><td><code>-config</code></td><td class="default"><code>rdio-scanner.ini</code></td><td>The name of the configuration file, read from the base directory.</td></tr>
@@ -1057,8 +1061,8 @@ go run ./cmd/build container  # the container image, locally</code></pre>
   </table>
 
   <p>
-    <code>-h</code> prints this list. The platform pages print it too, and where a platform page and this
-    table disagree, this table is the one the running server answers to.
+    <code>-h</code> prints this list, and this table is the same list: where the two disagree, this table
+    is the one the running server answers to.
   </p>
 
   <h3>The ini file, and which value wins</h3>
@@ -1130,8 +1134,8 @@ bcrypt_cost = 12</code></pre>
   </ul>
 
   <p>
-    A TLS listener that cannot start is the start-up failure that does not stop the server: the plain
-    address keeps serving, and the log says the TLS listener failed. See
+    A TLS listener that cannot start is the one failure that stops a server that was already answering:
+    the plain address stops with it, and the log says the https address it could not answer. See
     <a href="#ch-19-tls">TLS and HTTPS</a>.
   </p>
 
@@ -1179,7 +1183,7 @@ bcrypt_cost = 12</code></pre>
 
   <p>
     The server opens the database at start-up and refuses to start when it cannot reach it. A database
-    that goes away while the server runs is reported in the log under the <em>database</em> subsystem, and
+    that goes away while the server runs is reported in the log under the <code>database</code> subsystem, and
     the server recovers when the database comes back.
   </p>
 
@@ -1214,7 +1218,7 @@ bcrypt_cost = 12</code></pre>
 
   <p>
     The retention pass deletes the calls and the log entries older than the <em>Prune days</em> option,
-    calls first and the log after, and files what it removed under the <em>prune</em> subsystem:
+    calls first and the log after, and files what it removed under the <code>prune</code> subsystem:
     <code>retention pass removed 1 234 calls and 5 678 log entries</code>. Setting the option to
     <code>0</code> disables the pass, and the deployment keeps everything it has ever ingested.
   </p>
@@ -1246,7 +1250,7 @@ bcrypt_cost = 12</code></pre>
   <ul>
     <li>Back up the database file while the server is not writing to it, or take the backup from the database server's own tools. See <a href="#ch-23-backup-and-restore">Backup and restore</a>.</li>
     <li>Give the server-side backends a database user with the narrowest grant that lets the server work: the database, its tables, and nothing else.</li>
-    <li>Watch the <em>database</em> subsystem in the log. Connection failures, statements that failed, and the migration's own lines are filed there.</li>
+    <li>Watch the <code>database</code> subsystem in the log. Connection failures, statements that failed, and the migration's own lines are filed there.</li>
     <li>Do not edit the tables by hand. The administration interface is the path the server expects, and a hand-edited row is a row the server will read as its own.</li>
   </ul>
 </section>
@@ -1270,9 +1274,9 @@ bcrypt_cost = 12</code></pre>
   <p>
     The login sends the password to the server and the server answers a session token. The browser keeps
     that token for the session, and every request the interface makes carries it. The token is signed with
-    the server's signing secret and has no expiry of its own: the server keeps the last five tokens it
-    issued, so signing in four times ends the sessions older than that, and a server that generates a new
-    secret ends every session that was open before it.
+    the server's signing secret and is valid for seven days: the server keeps the last five tokens it
+    issued, so a sixth sign-in ends the oldest session, a token past its seven days is refused, and a
+    server that generates a new secret ends every session that was open before it.
   </p>
 
   <p>
@@ -1610,7 +1614,7 @@ bcrypt_cost = 12</code></pre>
     <caption>The dirwatch row</caption>
     <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
     <tbody>
-      <tr><td>Directory</td><td>The directory to watch. The recorder's own output directory: <em>Record</em>, <em>1R-Record</em>, or <em>VC-Record</em> for DSDPlus Fast Lane, <em>Recordings</em> for SDR Trunk, <em>captureDir</em> for Trunk Recorder, and any directory you point a recorder at for the default type.</td></tr>
+      <tr><td>Directory</td><td>The directory to watch. The recorder's own output directory: <em>Record</em>, <em>1R-Record</em>, or <em>VC-Record</em> for DSDPlus Fast Lane, <em>Recordings</em> for SDRTrunk, <em>captureDir</em> for Trunk Recorder, and any directory you point a recorder at for the default type.</td></tr>
       <tr><td>Type</td><td>How a file's metadata is read. See the table below.</td></tr>
       <tr><td>Extension</td><td>The audio extension to watch, without the period: <code>mp3</code>, <code>wav</code>.</td></tr>
       <tr><td>System, Site, Talkgroup</td><td>Send everything in this directory to a fixed system, site, and talkgroup, whatever the file says. Leave them empty and the metadata read from the file decides.</td></tr>
@@ -1644,7 +1648,7 @@ bcrypt_cost = 12</code></pre>
     <tbody>
       <tr><td>Default</td><td>The file name, read with a mask you write</td><td>Mask, extension, and the system, site, and talkgroup overrides</td></tr>
       <tr><td>DSDPlus Fast Lane</td><td>The file path: the folder names under the record directory name the system, talkgroup, and unit</td><td>The directory, and nothing else</td></tr>
-      <tr><td>SDR Trunk</td><td>The MP3 tags SDR Trunk writes from its aliases tab</td><td>The directory and the extension</td></tr>
+      <tr><td>SDRTrunk</td><td>The MP3 tags SDRTrunk writes from its aliases tab</td><td>The directory and the extension</td></tr>
       <tr><td>Trunk Recorder</td><td>The JSON sidecar Trunk Recorder writes beside the audio file</td><td>The directory, and the extension</td></tr>
     </tbody>
   </table>
@@ -2353,8 +2357,8 @@ rm -f ${basename}.*</code></pre>
 
   <p>
     Entries written by the previous server were not rewritten. They were filed under the subsystem their old
-    prefix names — <code>invalid login attempt</code> became a <em>login</em> entry,
-    <code>dirwatch.walkdir:</code> a <em>dirwatch</em> entry — and anything that matches no prefix is shown
+    prefix names — <code>invalid login attempt</code> became a <code>login</code> entry,
+    <code>dirwatch.walkdir:</code> a <code>dirwatch</code> entry — and anything that matches no prefix is shown
     as <em>From the previous server</em>. A log you had before the upgrade is still readable, and still
     filterable.
   </p>
@@ -2562,7 +2566,7 @@ rm -f ${basename}.*</code></pre>
   </table>
 
   <p>
-    The session token is signed with the server's signing secret and carries no expiry of its own: the
+    The session token is signed with the server's signing secret and is valid for seven days: the
     server keeps the last five tokens it issued, and a server that generates a new secret ends every session
     opened before it. A refused request is answered <code>401</code> with an empty body, on every entry
     point, so a script never learns which credential it was missing.
@@ -2814,7 +2818,7 @@ rm -f ${basename}.*</code></pre>
     this way:
   </p>
 
-  <pre><code>$ RDIO_ADMIN_PASSWORD=<password> ./rdio-scanner -cmd login
+  <pre><code>$ RDIO_ADMIN_PASSWORD=&lt;password&gt; ./rdio-scanner -cmd login
 $ ./rdio-scanner -cmd config-get +out deployment.json
 $ ./rdio-scanner -cmd user-add +ident "Dispatch desk" +code 7F2K9Q +systems 10001 +expiration 2026-12-31T00:00:00Z</code></pre>
 
@@ -3092,7 +3096,7 @@ LoadModule proxy_wstunnel_module modules/mod_proxy_wstunnel.so
     <thead><tr><th scope="col">Setting</th><th scope="col">What it does to the deployment</th></tr></thead>
     <tbody>
       <tr><td>Buffering left on</td><td>The proxy collects the audio and the call stream instead of passing them, and listeners hear calls arrive in blocks. Turn it off for the location: <code>proxy_buffering off;</code>, <code>ProxyEnableForwarding</code>-style buffering directives, whichever your proxy uses.</td></tr>
-      <tr><td>A short read timeout</td><td>A listener connection is open for as long as the listener is listening. The server bounds one *request* at 30 seconds and keeps keep-alives on; a proxy that closes an idle connection at 60 seconds drops every listener on the deployment once a minute. Set the read and send timeouts on that location to hours, not minutes.</td></tr>
+      <tr><td>A short read timeout</td><td>A listener connection is open for as long as the listener is listening. The server bounds one <em>request</em> at 30 seconds and keeps keep-alives on; a proxy that closes an idle connection at 60 seconds drops every listener on the deployment once a minute. Set the read and send timeouts on that location to hours, not minutes.</td></tr>
       <tr><td>The upgrade headers dropped</td><td>The page loads, the connection is refused, and nothing plays. The four proxy lines above are the requirement, not an optimization.</td></tr>
       <tr><td>The host header rewritten</td><td>A deployment that answers several names, or a certificate obtained for one name, stops matching what the browser asked for. Forward the host as the browser sent it.</td></tr>
     </tbody>
@@ -3413,8 +3417,9 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
 
   <p>
     The session token is not a credential you store: it is a signature the server makes with its secret,
-    and the server keeps the last five it issued. Signing in ends the sessions older than the five, and a
-    server that changes its secret ends every session opened before the change — which is why the console
+    valid for seven days, and the server keeps the last five it issued. Signing in ends the sessions older
+    than the five, and a server that changes its secret ends every session opened before the change — which
+    is why the console
     says it out loud on the start that does it, and why restoring a database from a backup ends the
     sessions opened on the deployment you restored over.
   </p>
@@ -3444,7 +3449,7 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
     <caption>What the server refuses, and how</caption>
     <thead><tr><th scope="col">Limit</th><th scope="col">Value</th><th scope="col">What it looks like from outside</th></tr></thead>
     <tbody>
-      <tr><td>Administrator logins per address</td><td>Three in a ten-minute window</td><td>The address is refused for the rest of the window. The answer is an empty <code>401</code>, with no hint of how many attempts are left. The lockout is one warning in the log, under <em>Login</em>, per window.</td></tr>
+      <tr><td>Administrator logins per address</td><td>Three in a ten-minute window</td><td>The address is refused for the rest of the window. The answer is an empty <code>401</code>, with no hint of how many attempts are left. The lockout is one warning in the log, under <em>Logins</em>, per window.</td></tr>
       <tr><td>Access attempts</td><td>Five per session, and five per address</td><td>A listener who has used the five is refused, and a listener whose fifth attempt arrives while they are locked out is refused as locked out — a valid code included.</td></tr>
       <tr><td>Simultaneous listeners</td><td><code>MaxClients</code>, default 200, and per access code</td><td>The connection is refused in silence: the server does not tell the caller why.</td></tr>
       <tr><td>Session tokens kept</td><td>The last five issued</td><td>A sixth login ends the oldest session.</td></tr>
@@ -3467,7 +3472,8 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
     <li><strong>No address allowlist.</strong> The server answers whoever connects. Restricting who
     reaches the deployment is the firewall's and the proxy's job.</li>
     <li><strong>No rate limit on the upload endpoints.</strong> An ingest key is a key: anyone holding it
-    posts calls. Rotate a key you think is loose, and watch the log under <em>Ingest</em>.</li>
+    posts calls. Rotate a key you think is loose, and watch the log under <em>Uploads</em>, where the
+    refusals are filed, and <em>Call ingest</em>, where the calls it posts land.</li>
     <li><strong>No audit trail beyond the log.</strong> The log is the record: configuration changes,
     logins, refusals, lockouts, retention, migrations, the assistant surface's writes. It is filed by
     subsystem, and it is pruned by the retention setting — so a deployment that needs the record keeps the
@@ -3647,7 +3653,7 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <p>
     Each old table the pass finds is announced in the log under <em>Database</em> — <code>migrating
-    groups...</code> and its eleven siblings — and a database the new server created itself, or a version 7
+    groups...</code> and its twelve siblings — and a database the new server created itself, or a version 7
     database already migrated, is left exactly as it was, with nothing said.
   </p>
 
@@ -3764,10 +3770,10 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     <tbody>
       <tr><td>A talkgroup that used to report is silent</td><td>The log, filtered to the subsystem that receives the audio, over the day it went quiet</td><td><a href="#ch-14-logs">14</a></td></tr>
       <tr><td>Calls arrive and play nothing</td><td>The conversion mode, and whether this build carries the converter</td><td><a href="#ch-13-options">13</a>, <a href="#ch-03-requirements">3</a></td></tr>
-      <tr><td>The login is refused</td><td>The log under <em>Login</em>, and the ten-minute window</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-22-security-hardening">22</a></td></tr>
-      <tr><td>A recorder's upload is refused</td><td>The line the server answered, and the log under <em>Ingest</em></td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>The login is refused</td><td>The log under <em>Logins</em>, and the ten-minute window</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-22-security-hardening">22</a></td></tr>
+      <tr><td>A recorder's upload is refused</td><td>The line the server answered, and the log under <em>Uploads</em></td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>The webapp connects and hears nothing</td><td>The proxy's upgrade headers, the access code, the listener cap</td><td><a href="#ch-20-reverse-proxies">20</a>, <a href="#ch-09-access-and-api-keys">9</a></td></tr>
-      <tr><td>A downstream deployment gets nothing</td><td>The log under <em>Downstream</em>, and the answer the other server gave</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
+      <tr><td>A downstream deployment gets nothing</td><td>The log under <em>Downstreams</em>, and the answer the other server gave</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>The log is full of one message</td><td>The subsystem filter, and the count strip</td><td><a href="#ch-14-logs">14</a></td></tr>
       <tr><td>The save bar will not save, or the conflict banner is up</td><td>What the banner says, and the other session that saved</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
     </tbody>
@@ -3808,8 +3814,8 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <ul>
     <li>
       <strong>The conversion mode.</strong> The four modes decide what the server does to an incoming
-      recording. A mode that converts with ffmpeg needs ffmpeg: the Linux and Windows amd64 builds carry
-      it inside the program, and the macOS, FreeBSD, and other Linux builds use the one the host installs.
+      recording. A mode that converts with ffmpeg needs ffmpeg: the Linux builds and the Windows amd64
+      build carry it inside the program, and the macOS and FreeBSD builds use the one the host installs.
       A deployment whose converter is missing says so on the console at startup, and the notice is worth
       reading on every new release.
     </li>
@@ -3830,7 +3836,7 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <ul>
     <li>
       <strong>Three guesses in ten minutes lock the address out</strong>, and the refusal is an empty
-      <code>401</code> that says nothing about the window. The log under <em>Login</em> carries one warning
+      <code>401</code> that says nothing about the window. The log under <em>Logins</em> carries one warning
       per lockout, naming the address. Behind a proxy, the address is the proxy's — name the proxy in
       <code>-trusted_proxies</code> and the lockout counts the machine that guessed.
     </li>
@@ -3950,8 +3956,9 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <p>
     You do not, for the deployment. The Windows amd64 build carries its own <code>ffmpeg</code> and
-    <code>ffprobe</code> inside the program, as do the Linux builds for 386, ARM, and ARM64. Install
-    ffmpeg on the host only for the targets that do not carry it — macOS, FreeBSD, and the container —
+    <code>ffprobe</code> inside the program, as do the Linux builds for 386, ARM, and ARM64, and the
+    container image is built from the linux-amd64 bundle. Install
+    ffmpeg on the host only for the targets that do not carry it — macOS and FreeBSD —
     and read the notice the server prints at startup, which is the program telling you which converter it
     found. <a href="#ch-03-requirements">Chapter 3</a> is the requirements chapter.
   </p>
@@ -3971,8 +3978,10 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <p>
     The project's repository watches its releases: the watch control on the repository tells you when a
-    release is published, and the release is where the archive is. The change log inside the archive is the
-    release-by-release history; <a href="#ch-01-overview">chapter 1</a> is the short list of what changed
+    release is published, and the release is where the archive is. The release notes on the release, and the
+    change log the repository publishes, are the release-by-release history; an archive carries the program,
+    this guide, and the licence of the ffmpeg it embeds.
+    <a href="#ch-01-overview">Chapter 1</a> is the short list of what changed
     since the last published release.
   </p>
 
@@ -4034,10 +4043,10 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <p>
     No. This guide is the server and its administration interface. The scanner webapp's own guide is the
-    file <code>docs/webapp.md</code> in the same archive, and the native applications are the project's
-    own apps. The webapp's behaviour is named here only where the server's settings change it — the access
-    codes, the scope, the listener cap, the delay, and the alert tones are the server's decisions that the
-    listener feels.
+    file <code>docs/webapp.md</code> in the repository, beside this one, and the native applications are
+    the project's own apps. The webapp's behaviour is named here only where the server's settings change
+    it — the access codes, the scope, the listener cap, the delay, and the alert tones are the server's
+    decisions that the listener feels.
   </p>
 
   <h3>My question is not here</h3>
@@ -4108,25 +4117,27 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   </p>
 
   <table>
-    <caption>The subsystems, alphabetically</caption>
-    <thead><tr><th scope="col">Subsystem</th><th scope="col">The part it names</th></tr></thead>
+    <caption>The subsystems, alphabetically, with the name the log view shows and the name the filter uses</caption>
+    <thead><tr><th scope="col">Shown as</th><th scope="col">Filter value</th><th scope="col">The part it names</th></tr></thead>
     <tbody>
-      <tr><td><em>Access</em></td><td>The listener's credential: attempts, scope, limits, expiry</td></tr>
-      <tr><td><em>Administration</em></td><td>The configuration as the interface saves it, and the sessions</td></tr>
-      <tr><td><em>Assistant surface</em></td><td>The protocol endpoint: refusals, and what a tool changed</td></tr>
-      <tr><td><em>Call history</em></td><td>The recorded calls, and the searches of them</td></tr>
-      <tr><td><em>Database</em></td><td>The schema, the migration, the archive, the connection</td></tr>
-      <tr><td><em>Delayer</em></td><td>The calls held out of the live stream</td></tr>
-      <tr><td><em>Downstream</em></td><td>The calls forwarded to another deployment</td></tr>
-      <tr><td><em>ffmpeg</em></td><td>The converter: what it was asked for, what it produced</td></tr>
-      <tr><td><em>Ingest</em></td><td>The call being placed: the system, site, talkgroup, unit it resolved to</td></tr>
-      <tr><td><em>Live feed</em></td><td>The listener connections and what they are sent</td></tr>
-      <tr><td><em>Log</em></td><td>The log's own operations, including retention</td></tr>
-      <tr><td><em>Login</em></td><td>The administrator's logins, refusals, and lockouts</td></tr>
-      <tr><td><em>Server</em></td><td>Startup, the addresses it answers on, shutdown, and the failures that stop it</td></tr>
-      <tr><td><em>Upload</em></td><td>The upload endpoints and the bodies they read</td></tr>
-      <tr><td><em>Watched directories</em></td><td>The directories, the files found, the files read</td></tr>
-      <tr><td><em>Legacy</em></td><td>Entries a migrated database arrived with, whose writer is not known</td></tr>
+      <tr><td><em>Access codes</em></td><td><code>access</code></td><td>The listener's credential: attempts, scope, limits, expiry</td></tr>
+      <tr><td><em>Administration</em></td><td><code>admin</code></td><td>The administrator account, the interface's sessions, and a save whose body the server could not read</td></tr>
+      <tr><td><em>Assistant surface</em></td><td><code>mcp</code></td><td>The protocol endpoint: refusals, and what a tool changed</td></tr>
+      <tr><td><em>Audio conversion</em></td><td><code>ffmpeg</code></td><td>The converter: what it was asked for, what it produced</td></tr>
+      <tr><td><em>Call ingest</em></td><td><code>ingest</code></td><td>The call being placed: the system, site, talkgroup, unit it resolved to</td></tr>
+      <tr><td><em>Calls</em></td><td><code>calls</code></td><td>A call an operator acted on, on a database this server did not write</td></tr>
+      <tr><td><em>Configuration</em></td><td><code>config</code></td><td>A configuration saved or refused, and a system, talkgroup, group, tag, or unit a recording created</td></tr>
+      <tr><td><em>Database</em></td><td><code>database</code></td><td>The schema, the migration, the archive, the connection</td></tr>
+      <tr><td><em>Delayed calls</em></td><td><code>delayer</code></td><td>The calls held out of the live stream</td></tr>
+      <tr><td><em>Directory watchers</em></td><td><code>dirwatch</code></td><td>The directories, the files found, the files read</td></tr>
+      <tr><td><em>Downstreams</em></td><td><code>downstream</code></td><td>The calls forwarded to another deployment</td></tr>
+      <tr><td><em>From the previous server</em></td><td><code>legacy</code></td><td>Entries a migrated database arrived with, whose writer is not known</td></tr>
+      <tr><td><em>Live feed</em></td><td><code>livefeed</code></td><td>The listener connections and what they are sent</td></tr>
+      <tr><td><em>Log search</em></td><td><code>logs</code></td><td>The log view's own failures</td></tr>
+      <tr><td><em>Logins</em></td><td><code>login</code></td><td>The administrator's logins, refusals, and lockouts</td></tr>
+      <tr><td><em>Retention</em></td><td><code>prune</code></td><td>The retention pass, what it removed, and what stopped it</td></tr>
+      <tr><td><em>Server</em></td><td><code>server</code></td><td>Startup, the addresses it answers on, shutdown, and the failures that stop it</td></tr>
+      <tr><td><em>Uploads</em></td><td><code>upload</code></td><td>The upload endpoints and the bodies they read</td></tr>
     </tbody>
   </table>
 
