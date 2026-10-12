@@ -1081,6 +1081,61 @@ func TestTheAudioOnlySwitchesReachConfigureOnBothRoutes(t *testing.T) {
 	}
 }
 
+// ffmpeg's configure writes its build files into the directory it is run from: the config.mak its
+// Makefile includes on its second line, the config headers, and the directory skeleton of the tree it is
+// configuring. Run it from anywhere else and two things happen: the tree it configured has no
+// config.mak, so the make that follows fails reading its own Makefile, and the directory it was run from
+// gains the source tree's directories. The compile's own steps therefore run in the tree the compile
+// unpacked, and the repository is where the tar command is run from, not where the source is configured
+// or built.
+func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
+	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+		manifest := bundle.ReadManifest()
+
+		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, aNativeTree(target), aMachineForTarget(target))
+		if err != nil {
+			t.Errorf("%s: the build refused to compile the pair on the host that is the target: %v", target, err)
+			continue
+		}
+
+		work := filepath.Join(plan.Paths.scratch, sourceDir(manifest))
+
+		unpack := stepFor(plan.Steps, "unpack")
+
+		if got := argAfter(unpack.args, "-C"); got != plan.Paths.scratch {
+			t.Errorf("%s: the unpack extracts into %s, want %s: the tree the rest of the compile reads is the one the unpack writes", target, got, plan.Paths.scratch)
+		}
+
+		for _, label := range []string{"configure", "make", "strip", "sign"} {
+			s := stepFor(plan.Steps, label)
+
+			if s.name == "" {
+				continue
+			}
+
+			if s.dir != work {
+				t.Errorf("%s: the %s step runs in %s, want the tree the unpack wrote (%s)", target, label, s.dir, work)
+			}
+		}
+
+		if name := stepFor(plan.Steps, "configure").name; name != filepath.Join(work, "configure") {
+			t.Errorf("%s: the configure is %s, want the configure of the tree the unpack wrote (%s)", target, name, work)
+		}
+	}
+}
+
+// argAfter is the argument a command names after a flag, which is how a test reads where a step is
+// pointed at.
+func argAfter(args []string, flag string) string {
+	for i, arg := range args {
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+
+	return ""
+}
+
 // The compile is what the target's own host does. A machine outside it compiles nothing, and says what
 // FEAT-033 says: the pair is not supplied, where to drop it, what proves it, and what pins it.
 func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {

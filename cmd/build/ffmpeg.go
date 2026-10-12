@@ -530,10 +530,15 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 		configure = append(configure, "--extra-ldflags="+strings.Join(record.LDFlags, " "))
 	}
 
+	// The configure writes its build files into the directory it is run from — the config.mak the
+	// Makefile includes on its second line, the config headers, and the directory skeleton of the tree
+	// it is configuring — so it is run in the tree the unpack wrote. Run from anywhere else, that tree
+	// has no config.mak for its own make to include, and the directory the configure ran from gains the
+	// source tree's directories. The container route says the same thing with a workdir of its own.
 	plan.Steps = append(plan.Steps, step{
 		label:  "configure",
 		result: "the trimmed build for " + target,
-		dir:    repo,
+		dir:    work,
 		name:   configure[0],
 		args:   configure[1:],
 	})
