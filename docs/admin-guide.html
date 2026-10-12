@@ -446,27 +446,446 @@ footer.site .wrap { max-width: 78rem; margin: 0 auto; }
 
 <section>
   <h2 id="ch-01-overview">1 · What Rdio Scanner is, and what this guide covers</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Rdio Scanner ingests the audio files a software-defined radio recorder writes, files them against the
+    system, site, talkgroup, and unit they came from, and serves them to listeners as a scanner. This guide
+    is about the server: the program you install, the flags and options that configure it, the
+    administration interface you use to set it up, and the APIs it answers on.
+  </p>
+
+  <p>
+    A deployment is one program. It listens on one address, keeps one database, and offers two interfaces:
+    the <strong>main interface</strong> that listeners open, and the <strong>administration
+    interface</strong> at <code>/admin/</code> that you configure the deployment with. Everything in this
+    guide is about the server and the administration interface.
+  </p>
+
+  <h3>What this guide does not cover</h3>
+
+  <p>
+    The listener web app — the page a listener opens on the main address, with its talkgroup list, its
+    call history, and its player — is documented in <a href="./webapp.md">the web app guide</a>. The native
+    mobile applications are Saubeo Solutions' own clients. Neither is covered here, and no screenshot in
+    this guide shows a listener screen. Where a chapter needs to say something about what a listener sees,
+    it says it from the server's side: the option that changes it, the credential that unlocks it, the
+    endpoint that serves it.
+  </p>
+
+  <h3>How the documentation is arranged</h3>
+
+  <p>
+    This guide is the path from nothing to a working deployment, and it is written to be read in order once
+    and consulted afterwards. The other documents in the repository stay the authorities for their own
+    subjects, and this guide links to them instead of duplicating them:
+  </p>
+
+  <table>
+    <caption>The documents this guide links to, and what each one is for</caption>
+    <thead><tr><th scope="col">Document</th><th scope="col">What it is for</th></tr></thead>
+    <tbody>
+      <tr><td><a href="./platforms/linux.md">Linux</a>, <a href="./platforms/windows.md">Windows</a>, <a href="./platforms/macos.md">macOS</a>, <a href="./platforms/freebsd.md">FreeBSD</a></td><td>The platform page for the system you installed on: its service mode, its paths, its per-system notes.</td></tr>
+      <tr><td><a href="./webapp.md">Web app guide</a></td><td>The listener web app, which this guide excludes.</td></tr>
+      <tr><td><a href="./admin-logs.md">Log guide</a></td><td>The log in detail: its subsystems, its levels, what each subsystem reports.</td></tr>
+      <tr><td><a href="./docker/README.md">Container guide</a></td><td>The container image: how to run it, the volume, the user it runs as.</td></tr>
+      <tr><td><a href="./openapi.json">OpenAPI contract</a></td><td>The machine-readable contract of every endpoint the server answers.</td></tr>
+      <tr><td><a href="./faq.md">FAQ</a></td><td>Short answers to the questions people actually ask.</td></tr>
+      <tr><td><a href="./update-from-v5.md">Upgrade guide</a></td><td>Moving a version 5 deployment onto the rewritten server.</td></tr>
+      <tr><td><a href="../COMPILING.md">Compiling</a></td><td>Building the server, the archives, and the container image yourself.</td></tr>
+      <tr><td><a href="../API_ACCESS_POLICY.md">API access policy</a></td><td>What is free to use, and what needs a licence.</td></tr>
+    </tbody>
+  </table>
+
+  <aside class="note">
+    <span class="label">Reading this guide offline</span>
+    <p>
+      This file carries its own stylesheet and its own pictures. It opens from an extracted release
+      archive, a mail attachment, or a USB stick with no network, and it prints with a page break at each
+      chapter. Its links to the other documents resolve inside the extracted archive, whose layout is the
+      repository's.
+    </p>
+  </aside>
 </section>
 
 <section>
   <h2 id="ch-02-how-audio-flows">2 · How audio flows through the server</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Audio arrives in one of two ways, is filed against the configuration, and leaves toward listeners.
+    Understanding the path explains most of what you will configure, and most of what can go wrong.
+  </p>
+
+  <h3>In</h3>
+
+  <p>A recorder's output reaches the server by one of these paths:</p>
+
+  <ul>
+    <li>
+      <strong>Dirwatch</strong> — the server watches a directory the recorder writes into, reads each new
+      audio file, and takes the call's identity from the file's name, its MP3 tags, or its sidecar JSON,
+      depending on the recorder type you chose for that watch. See
+      <a href="#ch-10-getting-audio-in">Getting audio in</a>.
+    </li>
+    <li>
+      <strong>The upload endpoints</strong> — a recorder posts the audio and its metadata to
+      <code>POST /api/call-upload</code>, or posts trunk-recorder's JSON sidecar to
+      <code>POST /api/trunk-recorder-call-upload</code>, presenting an API key. See
+      <a href="#ch-16-rest-api">The HTTP REST API</a>.
+    </li>
+  </ul>
+
+  <p>
+    Both paths end at the same ingest. The ingest resolves the system, site, talkgroup, and unit the
+    metadata names against your configuration. When <em>Auto populate</em> is on, an identity the
+    configuration does not know is created on the spot; when it is off, the call is refused and the log
+    says why. The ingest then converts the audio to H.264 m4a when the <em>Audio conversion</em> option
+    asks for it, which is what makes recordings small and playable in a browser, and files the call in the
+    database with its audio.
+  </p>
+
+  <aside class="note">
+    <span class="label">Audio lives in the database</span>
+    <p>
+      The server stores the recordings inside the database, not as files beside it. The directory the
+      server serves holds the database, the configuration file, and the server's own state — the recordings
+      are rows. That is what makes a single file the whole archive of a deployment, and it is what you back
+      up.
+    </p>
+  </aside>
+
+  <h3>Out</h3>
+
+  <ul>
+    <li>
+      <strong>Listeners</strong> read the call history and the recordings over the HTTP REST API, and follow
+      live calls over the server's real-time channel. The REST API is free to use for any purpose; the
+      real-time channel is proprietary, as <a href="../API_ACCESS_POLICY.md">the access policy</a> states.
+    </li>
+    <li>
+      <strong>Downstreams</strong> forward calls to another Rdio Scanner deployment, presenting an API key
+      there, scoped to the systems and talkgroups you choose.
+    </li>
+  </ul>
+
+  <h3>What the server keeps</h3>
+
+  <table>
+    <caption>What the server holds, and where</caption>
+    <thead><tr><th scope="col">Thing</th><th scope="col">Where it lives</th><th scope="col">Changed by</th></tr></thead>
+    <tbody>
+      <tr><td>Systems, sites, talkgroups, units, groups, tags, access codes, API keys, dirwatches, downstreams, options</td><td>The database, edited as sections in the administration interface</td><td>You, in a section, saved with that section's save bar</td></tr>
+      <tr><td>Recorded calls and their audio</td><td>The database</td><td>The ingest, when audio arrives</td></tr>
+      <tr><td>The log</td><td>The database, read in the Logs section</td><td>The server, as it works</td></tr>
+      <tr><td>Flags: addresses, database connection, TLS, service</td><td><code>rdio-scanner.ini</code> in the base directory, written by <code>-config_save</code></td><td>You, in the file, or on the command line</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The split matters at configuration time: the sections are saved through the running server and are
+    announced to every open administration session, while the flags are read at start-up and need a
+    restart.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-03-requirements">3 · Requirements</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    The server is one program with a database behind it. What you need is a machine that runs one of the
+    released platforms, a place to keep the data, and a recorder whose output the server can read.
+  </p>
+
+  <h3>Platforms a release is built for</h3>
+
+  <table>
+    <caption>The release matrix, as the build tool defines it</caption>
+    <thead><tr><th scope="col">Operating system</th><th scope="col">Architecture</th><th scope="col">Archive</th><th scope="col">Carries its own ffmpeg</th></tr></thead>
+    <tbody>
+      <tr><td>FreeBSD</td><td>amd64</td><td><code>rdio-scanner-freebsd-amd64-v8.0.0.zip</code></td><td>No</td></tr>
+      <tr><td>Linux</td><td>386</td><td><code>rdio-scanner-linux-386-v8.0.0.zip</code></td><td>Yes</td></tr>
+      <tr><td>Linux</td><td>amd64</td><td><code>rdio-scanner-linux-amd64-v8.0.0.zip</code></td><td>Yes</td></tr>
+      <tr><td>Linux</td><td>arm</td><td><code>rdio-scanner-linux-arm-v8.0.0.zip</code></td><td>Yes</td></tr>
+      <tr><td>Linux</td><td>arm64</td><td><code>rdio-scanner-linux-arm64-v8.0.0.zip</code></td><td>Yes</td></tr>
+      <tr><td>macOS</td><td>amd64</td><td><code>rdio-scanner-macos-amd64-v8.0.0.zip</code></td><td>No</td></tr>
+      <tr><td>macOS</td><td>arm64</td><td><code>rdio-scanner-macos-arm64-v8.0.0.zip</code></td><td>No</td></tr>
+      <tr><td>Windows</td><td>amd64</td><td><code>rdio-scanner-windows-amd64-v8.0.0.zip</code></td><td>Yes</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The Linux and Windows releases carry the ffmpeg the audio conversion uses, embedded in the binary, so
+    conversion works on those platforms with nothing to install. The FreeBSD and macOS releases do not:
+    install ffmpeg from your system's own packages if you want conversion, and the server finds it on the
+    <em>PATH</em>.
+  </p>
+
+  <h3>Ports</h3>
+
+  <table>
+    <caption>The ports the server uses</caption>
+    <thead><tr><th scope="col">Port</th><th scope="col">What answers there</th><th scope="col">Flag</th></tr></thead>
+    <tbody>
+      <tr><td><code>3000</code></td><td>The main interface at <code>/</code>, the administration interface at <code>/admin/</code>, and every <code>/api/</code> endpoint</td><td><code>-listen</code> (default <code>:3000</code>)</td></tr>
+      <tr><td>none by default</td><td>The same interfaces over TLS</td><td><code>-ssl_listen</code> with <code>-ssl_cert_file</code> and <code>-ssl_key_file</code>, or <code>-ssl_auto_cert</code></td></tr>
+      <tr><td><code>80</code> and <code>443</code></td><td>Needed open to the world by the automatic certificate, which proves the domain owns the address</td><td><code>-ssl_auto_cert</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Recorders</h3>
+
+  <p>
+    Any recorder that writes one audio file per transmission works. What decides how the server reads the
+    call's identity is the dirwatch type you choose, or the fields the recorder posts.
+  </p>
+
+  <table>
+    <caption>Recorders known to work, and the paths they use</caption>
+    <thead><tr><th scope="col">Recorder</th><th scope="col">Upload API</th><th scope="col">Dirwatch</th></tr></thead>
+    <tbody>
+      <tr><td>Trunk Recorder</td><td>Yes</td><td>Yes</td></tr>
+      <tr><td>RTLSDR-Airband</td><td>No</td><td>Yes</td></tr>
+      <tr><td>SDRTrunk</td><td>Yes</td><td>No</td></tr>
+      <tr><td>voxcall</td><td>Yes</td><td>No</td></tr>
+      <tr><td>ProScan</td><td>No</td><td>Yes</td></tr>
+      <tr><td>DSDPlus Fast Lane</td><td>No</td><td>Yes</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Worked recorder configurations are in <a href="./examples/trunk-recorder/">docs/examples/trunk-recorder</a>
+    and <a href="./examples/rtlsdr-airband/">docs/examples/rtlsdr-airband</a>.
+  </p>
+
+  <h3>Machines</h3>
+
+  <p>
+    The server is a single Go binary and does not need much: a 1 GHz-class machine runs a small deployment
+    comfortably, and a Raspberry Pi 3 or newer runs a typical one. Plan for disk, not for CPU: recordings
+    accumulate, and the size of your database is the size of your retention. A deployment that keeps seven
+    days of a busy system is measured in gigabytes, and
+    <a href="#ch-13-options">the <em>Prune days</em> option</a> is what bounds it.
+  </p>
+
+  <p>
+    The database is a requirement in its own right. SQLite needs nothing — the server writes one file in
+    its data directory, which is the right choice for a single-instance deployment. MariaDB, MySQL, and
+    PostgreSQL need a server you run and the connection flags that name it. See
+    <a href="#ch-07-database">The database</a>.
+  </p>
+
+  <h3>If you are building from source</h3>
+
+  <ul>
+    <li>Go 1.26 or newer.</li>
+    <li>Node.js 20 or newer, for the web applications the server carries inside it.</li>
+    <li>podman, for building the container image.</li>
+    <li>A C toolchain, only if you build the bundled ffmpeg yourself.</li>
+  </ul>
+
+  <p>The whole procedure is in <a href="../COMPILING.md">Compiling</a>.</p>
 </section>
 
 <section>
   <h2 id="ch-04-installation">4 · Installation</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    Three ways to install: the precompiled archive for your platform, the container image, or the source.
+    All three produce the same server; they differ in how you upgrade it and where its data lives.
+  </p>
+
+  <h3>From the precompiled archive</h3>
+
+  <p>
+    Download the archive for your platform and architecture from the releases page, and extract it where
+    the server will live. An archive carries the binary and the documentation that goes with it:
+  </p>
+
+  <ul>
+    <li>the <code>rdio-scanner</code> executable for your platform;</li>
+    <li><code>CHANGELOG.md</code>;</li>
+    <li>the platform page for the archive's own system, under <code>docs/platforms/</code>;</li>
+    <li>this guide, at <code>docs/admin-guide.html</code>;</li>
+    <li>the web app guide and the FAQ, under <code>docs/</code>;</li>
+    <li>the pictures those documents point at, under <code>docs/images/</code>;</li>
+    <li><code>FFMPEG.md</code>, on the platforms that carry their own ffmpeg.</li>
+  </ul>
+
+  <p>
+    The archive's layout is the repository's, so the relative links between those documents resolve inside
+    the extracted folder. Put the folder somewhere the server can write: the server writes its database,
+    its configuration file, and its state into the folder it was started from.
+  </p>
+
+  <pre><code>cd /opt
+unzip ~/Downloads/rdio-scanner-linux-amd64-v8.0.0.zip
+cd rdio-scanner-linux-amd64-v8.0.0
+./rdio-scanner</code></pre>
+
+  <p>
+    The per-system details — paths, the service mode, the firewall — are on the platform page for the
+    system you installed on: <a href="./platforms/linux.md">Linux</a>,
+    <a href="./platforms/windows.md">Windows</a>, <a href="./platforms/macos.md">macOS</a>,
+    <a href="./platforms/freebsd.md">FreeBSD</a>.
+  </p>
+
+  <h3>From the container image</h3>
+
+  <p>
+    A container image is published for each release. The container serves from <code>/app/data</code>, so
+    the data you must keep is whatever you mount there, and the mount must be writable by the user the
+    container runs as:
+  </p>
+
+  <pre><code>mkdir -p ~/.rdio-scanner
+
+docker run --detach --name rdio-scanner \
+    --env TZ=America/Toronto \
+    --publish 3000:3000 \
+    --restart always \
+    --user $(id -u):$(id -g) \
+    --volume ~/.rdio-scanner:/app/data \
+    chuot/rdio-scanner:latest</code></pre>
+
+  <p>
+    Create the data folder <em>before</em> the first run. A folder the container daemon creates on your
+    behalf is owned by the wrong user, and the server refuses a directory it cannot write — the same rule
+    the server applies on a plain installation.
+  </p>
+
+  <p>
+    The documented compose file, the volume layout, the user, and the port mapping are in the
+    <a href="./docker/README.md">container guide</a>. Two things an administrator running the container
+    should know: the directory-watcher section is removed from the administration navigation when the
+    server's environment names the container, because a watched directory inside a container is a
+    container path and not yours; and the container's data directory is <code>/app/data</code>, so the
+    database file you back up is the one inside the mount.
+  </p>
+
+  <h3>From source</h3>
+
+  <p>
+    With Go 1.26 and Node 20 installed, the build tool does the work:
+  </p>
+
+  <pre><code>go run ./cmd/build client     # the web applications the server carries
+go run ./cmd/build server     # one binary, into dist/&lt;target&gt;/
+go run ./cmd/build dist       # every release archive, into dist/
+go run ./cmd/build container  # the container image, locally</code></pre>
+
+  <p>
+    <code>server</code> builds the web applications first, so the binary carries them and serves them with
+    no separate web server. <code>dist</code> writes the archives for every platform in the release matrix.
+    The details, including the ffmpeg bundle, are in <a href="../COMPILING.md">Compiling</a>.
+  </p>
 </section>
 
 <section>
   <h2 id="ch-05-first-run">5 · First run</h2>
-  <p class="lead">Placeholder — chapter body written by its task.</p>
+
+  <p class="lead">
+    A fresh server needs one flag to run: it serves, creates its own database, and tells you in its console
+    where it answers. The three things to do next are all in the administration interface, and the interface
+    tells you what they are.
+  </p>
+
+  <h3>Starting it</h3>
+
+  <pre><code>./rdio-scanner</code></pre>
+
+  <p>
+    The server writes everything into its <em>base directory</em>: the executable's own folder, and when
+    that folder is not writable, a folder named <code>Rdio Scanner</code> inside your home directory.
+    <code>-base_dir</code> names a folder of your choosing instead, and that is the flag to set on a
+    deployment you intend to keep. The server refuses to start when the base directory is not writable, and
+    says so on the console.
+  </p>
+
+  <p>On a first run the console says:</p>
+
+  <figure data-shot="console-startup">
+    <img alt="Server console showing the version, the data directory, the signing secret notice, and the main and administration addresses.">
+    <figcaption>The server's own console lines on a first run: the version, the data directory it serves, the notice that it generated a new signing secret and with it ended every earlier session, and the two addresses it answers on.</figcaption>
+  </figure>
+
+  <p>
+    The two addresses are the same port by default: the listener interface at <code>/</code> and the
+    administration interface at <code>/admin/</code>. The signing secret is how the server signs the
+    sessions you open; it is generated once, stored in the database, and changing it ends every session
+    that was open.
+  </p>
+
+  <h3>Logging in</h3>
+
+  <p>
+    Open <code>http://localhost:3000/admin/</code> in a browser. The server ships with one administrator
+    and the password <code>rdio-scanner</code>. Log in with it, and change it immediately — the interface
+    tells you to, in the banner it shows you.
+  </p>
+
+  <p>
+    The login endpoint answers a token, and the browser keeps it for the session. The server signs tokens
+    with its secret and keeps the last five it issued, so signing in ends the sessions older than that.
+    Three failed logins from one address lock that address out for ten minutes; the server logs the
+    attempts under the <em>login</em> subsystem.
+  </p>
+
+  <h3>The banner that lists what is missing</h3>
+
+  <p>
+    The first page after login is a card that lists what a deployment still needs. It is computed from
+    your configuration, so it clears itself as you work, and it names the control that clears each item:
+  </p>
+
+  <table>
+    <caption>The items the banner lists on a fresh deployment</caption>
+    <thead><tr><th scope="col">Level</th><th scope="col">Item</th><th scope="col">Cleared by</th></tr></thead>
+    <tbody>
+      <tr><td>Warning</td><td>You are using the default admin password, please change it from the tools / admin password menu.</td><td><a href="#ch-12-administration-interface">Tools ▸ Change password</a></td></tr>
+      <tr><td>Info</td><td>No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.</td><td>The Systems section, or the <em>Auto populate</em> option</td></tr>
+      <tr><td>Info</td><td>No apikeys or dirwatch defined. Set at least one to allow ingesting audio files.</td><td>The API Keys section or the Dirwatch section</td></tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="todos-fresh">
+    <img alt="The administration interface after a first login, with the banner listing the default password warning, the missing systems, and the missing apikey or dirwatch.">
+    <figcaption>A fresh deployment, logged in with the default password: the banner names the three things the server is missing, and the navigation carries every section the server offers.</figcaption>
+  </figure>
+
+  <h3>A first configuration, in order</h3>
+
+  <ol>
+    <li>Change the administration password in <strong>Tools</strong>.</li>
+    <li>Add a <strong>system</strong> in Systems — a system is the top of the hierarchy the listener browses.</li>
+    <li>Give the recorder a way in: an <strong>API key</strong> for a recorder that posts calls, or a <strong>dirwatch</strong> for a recorder that writes files. See <a href="#ch-10-getting-audio-in">Getting audio in</a>.</li>
+    <li>Watch the <strong>Logs</strong> section while the first calls arrive. The ingest names the system and talkgroup it resolved, and says when it refused a call and why.</li>
+  </ol>
+
+  <p>
+    Each section saves with its own save bar, and the save is a write to the running server: the change is
+    announced to every other open administration session, and the server files a
+    <em>the configuration changed</em> entry in the log. Nothing needs a restart, except the flags.
+  </p>
+
+  <h3>Writing the flags to a file</h3>
+
+  <p>
+    Flags are read at start-up. Once you have the flags you want, <code>-config_save</code> writes them to
+    <code>rdio-scanner.ini</code> in the base directory, and the server reads that file on every later
+    start, so the flags no longer have to be repeated on the command line:
+  </p>
+
+  <pre><code>./rdio-scanner -listen ":3000" -base_dir /opt/rdio-scanner -config_save
+./rdio-scanner          # reads /opt/rdio-scanner/rdio-scanner.ini</code></pre>
+
+  <p>
+    Command line flags win over the file. The file is plain INI, one flag per line, and it is the file to
+    keep with your backup — it is the deployment's own shape, in text.
+  </p>
+
+  <figure data-shot="todos-seeded">
+    <img alt="The administration interface of a configured deployment: the banner is gone, and the sections carry systems, talkgroups, apikeys, dirwatches, access codes, and downstreams.">
+    <figcaption>The same interface after the work is done: the banner is gone, and every section carries rows. This is the deployment the pictures in this guide are taken from.</figcaption>
+  </figure>
 </section>
 
 <section>
