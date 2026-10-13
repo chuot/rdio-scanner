@@ -14,6 +14,8 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
+import { markField, rowKey } from './row-builders.js';
+import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'tags';
 
@@ -40,6 +42,11 @@ class RdioAdminTags extends HTMLElement {
 
     const { store } = getAdminContext();
 
+    // The fields of this section's working copy remember the state of having been reached, the way
+    // the systems tree sections do: the key they are remembered by names this section's slice.
+    this.reached = new Set();
+    this.rowKeyPrefix = `section:${NAME}`;
+
     this.unsubscribe = store.subscribe([`section:${NAME}`, 'alerts'], () => this.render());
 
     this.render();
@@ -61,6 +68,12 @@ class RdioAdminTags extends HTMLElement {
     const slice = sectionSlice(NAME);
 
     if (!slice || slice.working === this.internalEdit) return;
+
+    harvestReached(this);
+
+    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
+    // the server — starts with every field unreached: the operator has touched nothing.
+    if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
     const alerts = this.alerts;
@@ -107,6 +120,8 @@ class RdioAdminTags extends HTMLElement {
     this.replaceChildren(root);
 
     for (const { field, message } of errorFields) field.setError(message);
+
+    restoreReached(this);
   }
 
   rowElement(row, index, alerts, errorFields) {
@@ -148,6 +163,8 @@ class RdioAdminTags extends HTMLElement {
     labelField.append(labelInput);
     labelRow.append(labelField);
     panel.append(labelRow);
+
+    markField(this, labelField, rowKey(row, index), 'label');
 
     if (errors.label) errorFields.push({ field: labelField, message: errors.label });
 

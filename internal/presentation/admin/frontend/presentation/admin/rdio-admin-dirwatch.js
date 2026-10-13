@@ -15,7 +15,8 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { captionBlock } from './row-builders.js';
+import { captionBlock, markField, rowKey } from './row-builders.js';
+import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
 const NAME = 'dirwatch';
@@ -73,6 +74,11 @@ class RdioAdminDirwatch extends HTMLElement {
       bindSectionSlice('systems', () => this.render()),
     ];
 
+    // The fields of this section's working copy remember the state of having been reached, the way
+    // the systems tree sections do: the key they are remembered by names this section's slice.
+    this.reached = new Set();
+    this.rowKeyPrefix = `section:${NAME}`;
+
     this.render();
   }
 
@@ -91,6 +97,12 @@ class RdioAdminDirwatch extends HTMLElement {
     if (!slice) return;
 
     if (!force && slice.working === this.internalEdit && systemsSlice?.working === this.systemsRef) return;
+
+    harvestReached(this);
+
+    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
+    // the server — starts with every field unreached: the operator has touched nothing.
+    if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
     const errors = rows.map((row) => validateDirwatchRow(row, rows));
@@ -148,6 +160,8 @@ class RdioAdminDirwatch extends HTMLElement {
         if (field.setError) field.setError(view.errors[key] ?? '');
       }
     }
+
+    restoreReached(this);
   }
 
   rowElement(row, index, rows, errors) {
@@ -273,6 +287,11 @@ class RdioAdminDirwatch extends HTMLElement {
 
       panel.append(this.fieldRow('Delay', 'Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a delay value in milliseconds for the audio file to settle before ingesting it.', delayField));
     }
+
+    // The fields the row builds carry the key this section remembers the state of having been
+    // reached by: the row's key and the field's name, so a rebuild hands the message back to the
+    // field it belongs to and not to the position a render happens to leave it in.
+    for (const [key, field] of view.fields) markField(this, field, rowKey(row, index), key);
 
     const bottom = document.createElement('div');
     bottom.className = 'row bottom';

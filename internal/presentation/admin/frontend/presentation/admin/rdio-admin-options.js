@@ -15,6 +15,7 @@ import {
   setSectionInvalid,
   setSectionWorking,
 } from './section-shell.js';
+import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'options';
 
@@ -129,6 +130,11 @@ class RdioAdminOptions extends HTMLElement {
 
     this.unwatchFocus = getAdminContext().store.subscribe(['focus'], () => this.applyFocus());
 
+    // The controls of this section's working copy remember the state of having been reached, the
+    // way the systems tree sections do: the key they are remembered by names this section's slice.
+    this.reached = new Set();
+    this.rowKeyPrefix = `section:${NAME}`;
+
     this.render();
   }
 
@@ -141,6 +147,12 @@ class RdioAdminOptions extends HTMLElement {
     const slice = sectionSlice(NAME);
 
     if (!slice || slice.working === null || slice.working === this.internalEdit) return;
+
+    harvestReached(this);
+
+    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
+    // the server — starts with every field unreached: the operator has touched nothing.
+    if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const options = slice.working;
     const errors = optionsFieldErrors(options);
@@ -165,6 +177,8 @@ class RdioAdminOptions extends HTMLElement {
     this.replaceChildren(root);
 
     for (const { field, message } of errorFields) field.setError(message);
+
+    restoreReached(this);
 
     this.applyFocus();
   }
@@ -244,6 +258,9 @@ class RdioAdminOptions extends HTMLElement {
     }
 
     row.append(field);
+
+    // The control carries the key this section remembers the state of having been reached by.
+    field.dataset.field = `${this.rowKeyPrefix}:${control.key}`;
 
     if (errors[control.key]) errorFields.push({ field, message: errors[control.key] });
 

@@ -14,6 +14,8 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
+import { markField, rowKey } from './row-builders.js';
+import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const NAME = 'apikeys';
@@ -38,6 +40,11 @@ class RdioAdminApikeys extends HTMLElement {
 
     this.unsubscribe = bindSectionSlice(NAME, () => this.render());
 
+    // The fields of this section's working copy remember the state of having been reached, the way
+    // the systems tree sections do: the key they are remembered by names this section's slice.
+    this.reached = new Set();
+    this.rowKeyPrefix = `section:${NAME}`;
+
     this.render();
   }
 
@@ -53,6 +60,12 @@ class RdioAdminApikeys extends HTMLElement {
     const slice = sectionSlice(NAME);
 
     if (!slice || slice.working === this.internalEdit) return;
+
+    harvestReached(this);
+
+    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
+    // the server — starts with every field unreached: the operator has touched nothing.
+    if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
 
@@ -95,6 +108,8 @@ class RdioAdminApikeys extends HTMLElement {
     this.replaceChildren(root);
 
     for (const { field, error } of this.errorTargets) field.setError(error);
+
+    restoreReached(this);
   }
 
   rowElement(row, index, rows) {
@@ -114,15 +129,17 @@ class RdioAdminApikeys extends HTMLElement {
     title.textContent = row.ident || 'NewAPIKey';
     header.append(title);
 
-    if (Object.keys(errors).length) {
-      const icon = document.createElement('i');
-      icon.className = 'material-icons row-invalid';
-      icon.setAttribute('aria-label', 'Invalid row');
-      icon.textContent = 'error';
-      header.append(icon);
-    }
+    if (Object.keys(errors).length) this.setHeaderInvalid(header, true);
 
     panel.append(header);
+
+    // The row's warning icon follows the row's validity, recomputed from the rows as the section
+    // holds them: the row the operator is editing stays on the page, so the icon moves on the spot.
+    const refreshMarker = () => {
+      const rows = this.rows;
+
+      this.setHeaderInvalid(header, Object.keys(apiKeyRowErrors(rows[index], index, rows)).length > 0);
+    };
 
     const disabledRow = document.createElement('div');
     disabledRow.className = 'row';
@@ -158,8 +175,18 @@ class RdioAdminApikeys extends HTMLElement {
 
     if (errors.key) this.errorTargets.push({ field: keyField, error: errors.key });
 
+    markField(this, keyField, rowKey(row, index), 'key');
+
     keyInput.addEventListener('change', () => {
       this.updateRow(index, { key: keyInput.value });
+
+      // The message the field carries is the one its row has now, read from the rows as the
+      // section holds them: a key another row has is a rule about the whole list.
+      const rows = this.rows;
+
+      refreshField(this, keyField, apiKeyRowErrors(rows[index], index, rows).key ?? '');
+
+      refreshMarker();
     });
 
     const identField = this.field('Ident');
@@ -168,8 +195,16 @@ class RdioAdminApikeys extends HTMLElement {
 
     if (errors.ident) this.errorTargets.push({ field: identField, error: errors.ident });
 
+    markField(this, identField, rowKey(row, index), 'ident');
+
     identInput.addEventListener('change', () => {
       this.updateRow(index, { ident: identInput.value });
+
+      const rows = this.rows;
+
+      refreshField(this, identField, apiKeyRowErrors(rows[index], index, rows).ident ?? '');
+
+      refreshMarker();
     });
 
     const systemsRow = document.createElement('div');
@@ -232,6 +267,22 @@ class RdioAdminApikeys extends HTMLElement {
     }
 
     return field;
+  }
+
+  setHeaderInvalid(header, invalid) {
+    if (!header) return;
+
+    const existing = header.querySelector('.row-invalid');
+
+    if (invalid && !existing) {
+      const icon = document.createElement('i');
+      icon.className = 'material-icons row-invalid';
+      icon.setAttribute('aria-label', 'Invalid row');
+      icon.textContent = 'error';
+      header.append(icon);
+    }
+
+    if (!invalid && existing) existing.remove();
   }
 
   updateRow(index, patch) {

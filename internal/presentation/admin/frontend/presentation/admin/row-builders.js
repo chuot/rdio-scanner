@@ -109,6 +109,16 @@ export function rowContext(component, key) {
   return { targets: component.errorTargets, reached: component.reached, key: `${prefix}${key}` };
 }
 
+// The sections that build their fields by hand mark them with the same key: the field is the node
+// the section hands back the state of having been reached, and it finds it by this key.
+export function markField(component, field, key, name) {
+  const prefix = component.rowKeyPrefix ? `${component.rowKeyPrefix}:` : '';
+
+  field.dataset.field = `${prefix}${key}:${name}`;
+
+  return field;
+}
+
 export function formField(ctx, details, name, title, caption, control, error, typeList) {
   const row = document.createElement('div');
   row.className = 'row';
