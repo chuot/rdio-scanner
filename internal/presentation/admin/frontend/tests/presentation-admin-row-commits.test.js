@@ -103,7 +103,9 @@ function rowButton(row, label) {
 }
 
 function marker(row) {
-  return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid'))[0] ?? null;
+  // The dirwatch row keeps its icon on the page and hides it when the row is valid, so the reading
+  // is the icon the row is showing, not the node sitting behind it.
+  return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid') && node.hidden !== true)[0] ?? null;
 }
 
 function barButton(el, className) {
@@ -143,6 +145,21 @@ const DRAG_SECTIONS = [
   ['Dirwatch', 'rdio-admin-dirwatch', 'Directory', '/var/spool/new', '/var/spool/first'],
 ];
 
+// What a section answers when its rows change: the Save control answers the rows as the section
+// holds them, and the row's warning icon follows the same reading.
+const VALIDITY_SECTIONS = [
+  ['Groups', 'rdio-admin-groups', 'Label', 'Dispatch', 'Delete Group'],
+  ['Tags', 'rdio-admin-tags', 'Label', 'Fire', 'Delete Tag'],
+  ['Dirwatch', 'rdio-admin-dirwatch', 'Directory', '/var/spool/first', 'Delete dirwatch'],
+];
+
+// The value that turns the row the add control created into the section's only invalid row: an empty
+// label for Groups and Tags, a network folder Dirwatch refuses.
+const INVALID_VALUES = { groups: '', tags: '', dirwatch: '\\\\network\\share' };
+
+// The value that makes that row valid again, unique among the rows the section holds.
+const VALID_VALUES = { groups: 'Tac', tags: 'Law', dirwatch: '/var/spool/new' };
+
 for (const [name, tag, title, typed, savedTitle] of DRAG_SECTIONS) {
   test(`dragging a ${name.toLowerCase()} row after editing it keeps what the operator typed`, () => {
     seed(getAdminContext().store);
@@ -174,5 +191,72 @@ for (const [name, tag, title, typed, savedTitle] of DRAG_SECTIONS) {
 
     assert.deepEqual(sectionWorking(name.toLowerCase()).map((row) => row[fieldOf]), [savedTitle, typed],
       'the working copy holds the rows in the order the operator left them, with the value they typed');
+  });
+}
+
+for (const [name, tag, title, savedTitle, deleteLabel] of VALIDITY_SECTIONS) {
+  const key = name.toLowerCase();
+
+  // The section's validity is recomputed by every commit of its rows. Deleting the row that made the
+  // section unsavable is such a commit: the Save control answers the rows the section holds after the
+  // delete, not the rows as they were when the row was added.
+  test(`the ${key} Save control answers the rows after the section deletes its only invalid row`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+
+    addRow(el);
+
+    assert.equal(saveButton(el).disabled, true, 'Save is disabled while the new row is invalid');
+
+    typeIn(rows(el)[0], title, VALID_VALUES[key]);
+
+    assert.equal(saveButton(el).disabled, false, 'the row carries a valid value and the section can be saved');
+
+    addRow(el);
+
+    assert.equal(saveButton(el).disabled, true, 'the second new row is invalid and the section is unsavable again');
+
+    rowButton(rows(el)[0], deleteLabel).click();
+    connectFields(el);
+
+    assert.equal(saveButton(el).disabled, false, 'deleting the section\'s only invalid row enables Save');
+    assert.deepEqual(sectionWorking(key).map((row) => row[key === 'dirwatch' ? 'directory' : 'label']), [VALID_VALUES[key], savedTitle],
+      'the rows the section holds after the delete are the row the operator filled in and the saved row');
+  });
+
+  // The drag is a commit too: the section moves the rows and its validity follows them.
+  test(`the ${key} Save control answers the rows after a drag`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+
+    addRow(el);
+
+    assert.equal(saveButton(el).disabled, true, 'Save is disabled while the new row is invalid');
+
+    dragRow(el, 0, 1);
+
+    assert.equal(saveButton(el).disabled, true, 'the invalid row is still in the section, so Save stays disabled');
+
+    typeIn(rows(el)[1], title, VALID_VALUES[key]);
+
+    assert.equal(saveButton(el).disabled, false, 'the row the operator moved carries a valid value and Save answers the section');
+  });
+
+  // The row's own warning icon travels with the row across the move.
+  test(`the ${key} row keeps its warning icon through a drag`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+
+    addRow(el);
+
+    assert.ok(marker(rows(el)[0]), 'the new invalid row carries its warning icon');
+
+    dragRow(el, 0, 1);
+
+    assert.ok(marker(rows(el)[1]), 'the row the operator moved keeps its warning icon');
+    assert.equal(marker(rows(el)[0]), null, 'the saved row the new row passed carries none');
   });
 }

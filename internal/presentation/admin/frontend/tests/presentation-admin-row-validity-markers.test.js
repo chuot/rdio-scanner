@@ -158,6 +158,10 @@ function saveButton(el) {
   return findAll(bar, (node) => node.tag === 'button' && node.className.split(/\s+/).includes('save'))[0];
 }
 
+function rowButton(row, label) {
+  return findAll(row, (node) => node.tag === 'button' && node.textContent === label)[0];
+}
+
 // The rows the operator adds, and what each one needs to become valid. Filling a row is typing in
 // it, which reaches every field of it: the marker and the Save control are read on rows the
 // operator has both touched and left.
@@ -212,5 +216,34 @@ for (const [name, tag, fillRow] of PINNED) {
 
     assert.equal(marker(row), null, 'the warning icon follows the row\'s validity, not the fields the operator left');
     assert.equal(saveButton(el).disabled, false, 'a section clean of errors can be saved');
+  });
+}
+
+// The delete is a commit of the section's rows, and carries the section's validity with it: the Save
+// control and the row icons answer the rows the section holds after the delete. The operator fills in
+// one new row and leaves another untouched, then deletes the row they filled in.
+const DELETES = [
+  ['Groups', 'rdio-admin-groups', (row) => typeIn(row, 'Label', 'Tac'), 'Delete Group'],
+  ['Tags', 'rdio-admin-tags', (row) => typeIn(row, 'Label', 'Law'), 'Delete Tag'],
+  ['Dirwatch', 'rdio-admin-dirwatch', (row) => typeIn(row, 'Directory', '/var/spool/second'), 'Delete dirwatch'],
+];
+
+for (const [name, tag, fillRow, deleteLabel] of DELETES) {
+  test(`the ${name.toLowerCase()} Save control stays disabled when the delete leaves the row nobody touched`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+
+    addRow(el);
+    fillRow(rows(el)[0]);
+
+    addRow(el);
+
+    // The row the operator filled in is the second on the page: the second add put a new row above it.
+    rowButton(rows(el)[1], deleteLabel).click();
+    connectFields(el);
+
+    assert.equal(saveButton(el).disabled, true, 'the section keeps the invalid row nobody touched, and stays unsavable');
+    assert.ok(marker(rows(el)[0]), 'the row nobody touched keeps its warning icon');
   });
 }
