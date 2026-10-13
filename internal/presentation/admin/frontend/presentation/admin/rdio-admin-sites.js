@@ -6,17 +6,19 @@
 import { getAdminContext } from '../../application/admin-context.js';
 import { siteErrors } from '../../domain/systems-validation.js';
 import { setSubWorking } from './section-shell.js';
-import { renderSubSection } from './sub-section-shell.js';
-import { deleteRow, numberField, parseNumber, rowKey, textField, makePanel } from './row-builders.js';
+import { connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { deleteRow, numberField, parseNumber, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'sites';
 
 const CAPTION = 'System sites, you can drag and drop sites to rearrange them. Pick the system the sites belong to.';
 
+const SPEC = { level: LEVEL, caption: CAPTION, addLabel: 'New Site', rowPrefix: 'site', listen: [], buildRow: siteRow };
+
 function siteRow(component, site, index, rows) {
   const errors = siteErrors(site, rows);
 
-  const key = `site:${rowKey(site, index)}`;
+  const key = rowPanelKey(component, site, index);
 
   const details = makePanel(component.openState, key, site.label?.trim() || 'NewSite', Object.keys(errors).length);
 
@@ -48,31 +50,15 @@ class RdioAdminSites extends HTMLElement {
     if (this.dataset.bound) return;
     this.dataset.bound = '1';
 
-    this.openState = new Map();
-
-    this.rebind();
-
-    this.render();
-  }
-
-  rebind() {
-    for (const unsubscribe of this.unsubscribes ?? []) unsubscribe();
-
-    const { store } = getAdminContext();
-
-    this.unsubscribes = [store.subscribe(['section:systems', `subsection:${LEVEL}:${this.systemId}`], () => this.render())];
+    connectSubSection(this, SPEC);
   }
 
   disconnectedCallback() {
-    for (const unsubscribe of this.unsubscribes ?? []) unsubscribe();
+    disconnectSubSection(this);
   }
 
   render() {
-    for (const details of this.querySelectorAll('details[data-key]')) {
-      this.openState.set(details.dataset.key, details.open);
-    }
-
-    renderSubSection(this, { level: LEVEL, caption: CAPTION, addLabel: 'New Site', buildRow: siteRow });
+    renderSubSection(this);
   }
 }
 

@@ -5,17 +5,19 @@
 import { getAdminContext } from '../../application/admin-context.js';
 import { unitErrors } from '../../domain/systems-validation.js';
 import { setSubWorking } from './section-shell.js';
-import { renderSubSection } from './sub-section-shell.js';
-import { deleteRow, numberField, parseNumber, rowKey, textField, makePanel } from './row-builders.js';
+import { connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { deleteRow, numberField, parseNumber, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'units';
 
 const CAPTION = 'Create units to display the label instead of showing the unit id on the main screen. You can drag and drop them to rearrange. Pick the system the units belong to.';
 
+const SPEC = { level: LEVEL, caption: CAPTION, addLabel: 'New unit', rowPrefix: 'unit', listen: [], buildRow: unitRow };
+
 function unitRow(component, unit, index, rows) {
   const errors = unitErrors(unit, rows);
 
-  const key = `unit:${rowKey(unit, index)}`;
+  const key = rowPanelKey(component, unit, index);
 
   const details = makePanel(component.openState, key, unit.label?.trim() || 'NewUnit', Object.keys(errors).length);
 
@@ -59,31 +61,15 @@ class RdioAdminUnits extends HTMLElement {
     if (this.dataset.bound) return;
     this.dataset.bound = '1';
 
-    this.openState = new Map();
-
-    this.rebind();
-
-    this.render();
-  }
-
-  rebind() {
-    for (const unsubscribe of this.unsubscribes ?? []) unsubscribe();
-
-    const { store } = getAdminContext();
-
-    this.unsubscribes = [store.subscribe(['section:systems', `subsection:${LEVEL}:${this.systemId}`], () => this.render())];
+    connectSubSection(this, SPEC);
   }
 
   disconnectedCallback() {
-    for (const unsubscribe of this.unsubscribes ?? []) unsubscribe();
+    disconnectSubSection(this);
   }
 
   render() {
-    for (const details of this.querySelectorAll('details[data-key]')) {
-      this.openState.set(details.dataset.key, details.open);
-    }
-
-    renderSubSection(this, { level: LEVEL, caption: CAPTION, addLabel: 'New unit', buildRow: unitRow });
+    renderSubSection(this);
   }
 }
 

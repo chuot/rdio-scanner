@@ -3,7 +3,17 @@
 // system's level, add/delete/drag-sort with the 1-based order rewrite, and the
 // save bar bound to the `subsection:<level>:<systemId>` slice. The row editor
 // is the only part each section supplies.
+//
+// The rows a section renders belong to the system it is showing, and only this
+// scaffold knows that id: the dropdown picks it, and a section falls back to
+// another system when the one it shows is deleted. So the scaffold owns the
+// store binding — it listens to the slice the section renders and moves the
+// binding when the shown system changes. A section that bound its own slice
+// before the scaffold picked the system would listen to a slice it never shows,
+// and keep its rows on screen while the data under them moved.
 
+import { getAdminContext } from '../../application/admin-context.js';
+import { subSectionInvalid } from '../../domain/systems-validation.js';
 import {
   attachDragSort,
   reorderAfterDrag,
@@ -13,7 +23,7 @@ import {
   sortedByOrder,
   subWorking,
 } from './section-shell.js';
-import { subSectionInvalid } from '../../domain/systems-validation.js';
+import { rowKey } from './row-builders.js';
 
 export function newRow(level) {
   const base = { id: 0, order: 0 };
@@ -27,10 +37,61 @@ export function newRow(level) {
   return { ...base, label: '', unitFrom: null, unitRef: null, unitTo: null };
 }
 
-export function renderSubSection(component, { level, caption, addLabel, buildRow }) {
+// The panel key the scaffold's open state and the section's row builders share:
+// the level's prefix keeps rows of different levels apart in one section, and
+// the scaffold needs it to name the row its add control creates.
+export function rowPanelKey(component, row, index) {
+  return `${component.subSection.rowPrefix}:${rowKey(row, index)}`;
+}
+
+function sliceKey(component) {
+  return `subsection:${component.subSection.level}:${component.systemId}`;
+}
+
+function bind(component) {
+  for (const unsubscribe of component.unsubscribes ?? []) unsubscribe();
+
+  component.boundKey = sliceKey(component);
+
+  const { store } = getAdminContext();
+
+  component.unsubscribes = [store.subscribe(
+    ['section:systems', ...component.subSection.listen, component.boundKey],
+    () => component.render(),
+  )];
+}
+
+// `spec` is the section's description: its level, caption, add control label,
+// row prefix, the extra slices its rows render from, and the row editor.
+export function connectSubSection(component, spec) {
+  component.subSection = spec;
+  component.openState = new Map();
+
+  bind(component);
+  component.render();
+}
+
+export function disconnectSubSection(component) {
+  for (const unsubscribe of component.unsubscribes ?? []) unsubscribe();
+
+  component.unsubscribes = [];
+}
+
+export function renderSubSection(component) {
+  const { level, caption, addLabel, buildRow } = component.subSection;
+
+  for (const details of component.querySelectorAll('details[data-key]')) {
+    component.openState.set(details.dataset.key, details.open);
+  }
+
   const systems = sortedByOrder(sectionWorking('systems') ?? []).filter((system) => typeof system.id === 'number' && system.id > 0);
 
   if (!systems.some((system) => system.id === component.systemId)) component.systemId = systems[0]?.id ?? null;
+
+  // The shown system moves under the section: the operator picks another one in
+  // the dropdown, or the system it shows is deleted and the section falls back.
+  // The rows follow it, so the binding follows with them.
+  if (component.boundKey !== sliceKey(component)) bind(component);
 
   component.errorTargets = [];
 
@@ -51,7 +112,6 @@ export function renderSubSection(component, { level, caption, addLabel, buildRow
 
     component.systemId = Number(ev.detail);
 
-    component.rebind();
     component.render();
   });
 
@@ -61,8 +121,14 @@ export function renderSubSection(component, { level, caption, addLabel, buildRow
   add.textContent = addLabel;
   add.addEventListener('click', () => {
     const rows = subWorking(level, component.systemId) ?? [];
+    const fresh = [newRow(level), ...rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    setSubWorking(level, component.systemId, [newRow(level), ...rows.map((row, i) => ({ ...row, order: i + 2 }))]);
+    // The row the add control creates is the one the operator came to fill in: the
+    // open state records it before the commit, so the rows the scaffold builds next
+    // open on the new row's fields and keep the rows the operator left open.
+    component.openState.set(rowPanelKey(component, fresh[0], 0), true);
+
+    setSubWorking(level, component.systemId, fresh);
   });
 
   top.append(help, select, add);

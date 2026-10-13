@@ -8,12 +8,11 @@ import { playAlert } from './play-alert.js';
 import { getAdminContext } from '../../application/admin-context.js';
 import { talkgroupErrors } from '../../domain/systems-validation.js';
 import { sectionWorking, setSectionWorking, setSubWorking } from './section-shell.js';
-import { renderSubSection } from './sub-section-shell.js';
+import { connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import {
   deleteRow,
   numberField,
   parseNumber,
-  rowKey,
   selectField,
   textField,
   titleCase,
@@ -23,6 +22,15 @@ import {
 const LEVEL = 'talkgroups';
 
 const CAPTION = 'System talkgroups, you can drag and drop talkgroups to rearrange them. They will appear with the same order on the talkgroup selection panel unless the sort talkgroups option is enabled. Pick the system the talkgroups belong to.';
+
+const SPEC = {
+  level: LEVEL,
+  caption: CAPTION,
+  addLabel: 'New talkgroup',
+  rowPrefix: 'tg',
+  listen: ['section:groups', 'section:tags', 'alerts'],
+  buildRow: talkgroupRow,
+};
 
 const LEDS = [
   ['', 'Default'],
@@ -78,7 +86,7 @@ function talkgroupRow(component, talkgroup, index, rows) {
     tagIds: tags.map((tag) => tag.id),
   });
 
-  const key = `tg:${rowKey(talkgroup, index)}`;
+  const key = rowPanelKey(component, talkgroup, index);
 
   const details = makePanel(component.openState, key, talkgroup.label?.trim() || 'NewTalkgroup', Object.keys(errors).length);
 
@@ -200,34 +208,15 @@ class RdioAdminTalkgroups extends HTMLElement {
     if (this.dataset.bound) return;
     this.dataset.bound = '1';
 
-    this.openState = new Map();
-
-    this.rebind();
-
-    this.render();
-  }
-
-  rebind() {
-    for (const unsubscribe of this.unsubscribes ?? []) unsubscribe();
-
-    const { store } = getAdminContext();
-
-    this.unsubscribes = [store.subscribe(
-      ['section:systems', 'section:groups', 'section:tags', 'alerts', `subsection:${LEVEL}:${this.systemId}`],
-      () => this.render(),
-    )];
+    connectSubSection(this, SPEC);
   }
 
   disconnectedCallback() {
-    for (const unsubscribe of this.unsubscribes ?? []) unsubscribe();
+    disconnectSubSection(this);
   }
 
   render() {
-    for (const details of this.querySelectorAll('details[data-key]')) {
-      this.openState.set(details.dataset.key, details.open);
-    }
-
-    renderSubSection(this, { level: LEVEL, caption: CAPTION, addLabel: 'New talkgroup', buildRow: talkgroupRow });
+    renderSubSection(this);
   }
 }
 

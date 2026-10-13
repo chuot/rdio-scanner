@@ -171,6 +171,16 @@ globalThis.window = {
   sessionStorage: fakeStorage(),
 };
 
+// The primitives re-dispatch a CustomEvent carrying the value the control picked, and a test that
+// drives a control through its own event needs the constructor the browser hands them.
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, init = {}) {
+    this.type = type;
+    this.detail = init.detail;
+    this.bubbles = !!init.bubbles;
+  }
+};
+
 // walk visits every node under a root, so a test can find a node by a predicate
 // without depending on the order the shell builds its children in.
 export function walk(root, visit) {
