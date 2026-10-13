@@ -204,9 +204,17 @@ class RdioFormField extends HTMLElement {
 
     const paint = () => {
       const shown = reached && !!message;
+      const input = control();
 
       error.textContent = shown ? message : '';
-      control()?.toggleAttribute('aria-invalid', shown);
+
+      // `aria-invalid` answers true or false: an empty value is not a name the screen reader and the
+      // stylesheet can read, so the mark is written as the word, and taken away when the field has
+      // nothing to say.
+      if (!input) return;
+
+      if (shown) input.setAttribute('aria-invalid', 'true');
+      else input.removeAttribute('aria-invalid');
     };
 
     this.setError = (text) => {

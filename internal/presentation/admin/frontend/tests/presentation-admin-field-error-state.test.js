@@ -188,6 +188,7 @@ test('leaving a field of a new talkgroup row reveals the message its empty value
   leave(row, 'Id');
 
   assert.equal(fieldMessage(field(row, 'Id')), 'Id is required');
+  assert.equal(controlOf(row, 'Id').getAttribute('aria-invalid'), 'true', 'the control the message is written under says it is invalid');
 });
 
 test('walking across a field of a new talkgroup row reveals nothing', () => {
@@ -203,6 +204,16 @@ test('walking across a field of a new talkgroup row reveals nothing', () => {
   control.dispatchEvent({ type: 'focusout' });
 
   assert.deepEqual(messages(row), [], 'a field the operator only walked over says nothing');
+
+  const marked = findAll(row, (node) => node.tag === 'rdio-form-field')
+    .map((node) => ({
+      title: texts(findAll(node, (child) => child.tag === 'label'))[0],
+      invalid: findAll(node, (child) => ['input', 'textarea', 'select'].includes(child.tag))[0]?.getAttribute('aria-invalid') === 'true',
+    }))
+    .filter((entry) => entry.invalid)
+    .map((entry) => entry.title);
+
+  assert.deepEqual(marked, [], 'no control of a row nobody edited is marked invalid');
 });
 
 test('picking in the Tag select of a new talkgroup row reveals that a tag is required', () => {
@@ -227,6 +238,7 @@ test('a good Label clears the message the Label field was showing', () => {
   typeIn(row, 'Label', 'Fire Dispatch');
 
   assert.equal(fieldMessage(field(row, 'Label')), '');
+  assert.equal(controlOf(row, 'Label').getAttribute('aria-invalid'), null, 'the mark goes away with the message');
 });
 
 test('clearing the Label brings its message back', () => {
