@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -325,6 +326,95 @@ func carriesAPath(paths []string, want string) bool {
 	}
 
 	return false
+}
+
+// The server compiles of a release run are independent, and the bound on them is about the machine's
+// memory and the log's readability, not about correctness. The operator can bound it lower: a release
+// run on a small machine compiling five toolchains at once is a run that trades the release for a
+// machine that stops responding. A value that is not a count of work is refused, because a run that
+// quietly ignored it would be a run doing more than the operator said.
+func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
+	cpus := runtime.NumCPU()
+
+	// More ready targets than cores: the bound is the cores.
+	workers, err := distWorkers(cpus+3, noEnvironment)
+	if err != nil {
+		t.Fatalf("distWorkers: %v", err)
+	}
+
+	if workers != cpus {
+		t.Errorf("%d workers for %d ready targets on %d cores, want the cores", workers, cpus+3, cpus)
+	}
+
+	// Fewer ready targets than cores: the bound is the targets, because a worker with nothing to do is
+	// a worker that does nothing.
+	workers, err = distWorkers(2, noEnvironment)
+	if err != nil {
+		t.Fatalf("distWorkers: %v", err)
+	}
+
+	if workers != 2 {
+		t.Errorf("%d workers for 2 ready targets, want 2", workers)
+	}
+
+	// The operator's bound, when it is lower than the cores, is the bound.
+	workers, err = distWorkers(8, anEnvironment(map[string]string{buildJobsEnv: "2"}))
+	if err != nil {
+		t.Fatalf("distWorkers: %v", err)
+	}
+
+	if workers != 2 {
+		t.Errorf("%d workers with %s=2, want 2", workers, buildJobsEnv)
+	}
+
+	// The operator's bound, when it is higher than the cores, is the cores.
+	workers, err = distWorkers(cpus+3, anEnvironment(map[string]string{buildJobsEnv: "9999"}))
+	if err != nil {
+		t.Fatalf("distWorkers: %v", err)
+	}
+
+	if workers != cpus {
+		t.Errorf("%d workers with %s=9999 on %d cores, want the cores", workers, buildJobsEnv, cpus)
+	}
+
+	// A variable set to nothing says nothing: it is the machine's own bound.
+	workers, err = distWorkers(2, anEnvironment(map[string]string{buildJobsEnv: ""}))
+	if err != nil {
+		t.Fatalf("distWorkers: %v", err)
+	}
+
+	if workers != 2 {
+		t.Errorf("%d workers with %s set to nothing, want the targets' own bound", workers, buildJobsEnv)
+	}
+
+	// A value that is not a count of work is refused.
+	for _, value := range []string{"four", "0", "-2", "2.5"} {
+		if _, err := distWorkers(2, anEnvironment(map[string]string{buildJobsEnv: value})); err == nil {
+			t.Errorf("%s=%s was accepted, and it is not a count of work", buildJobsEnv, value)
+		}
+	}
+
+	// Nothing ready, nothing to bound: the run that writes no archives reads no count of work.
+	workers, err = distWorkers(0, anEnvironment(map[string]string{buildJobsEnv: "four"}))
+	if err != nil {
+		t.Fatalf("distWorkers: %v", err)
+	}
+
+	if workers != 0 {
+		t.Errorf("%d workers for no ready targets, want none", workers)
+	}
+}
+
+// noEnvironment and anEnvironment answer the question a run asks of the machine's environment, so the
+// bound is a fact a test can state without changing the environment the tests run in.
+func noEnvironment(string) (string, bool) { return "", false }
+
+func anEnvironment(values map[string]string) func(string) (string, bool) {
+	return func(name string) (string, bool) {
+		value, ok := values[name]
+
+		return value, ok
+	}
 }
 
 // The version a server binary reports is stamped from the file the release declares its core version

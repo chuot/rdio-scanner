@@ -23,6 +23,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -265,10 +266,13 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 }
 
 // A release run asked for the whole matrix builds the applications once, because the bundles are the same
-// for every target, and then each target's ffmpeg before the server that embeds it. The order is the same
-// reason a single run has it: a server built before the ffmpeg its target carries exists is a server that
-// ships without one.
-func TestADistRunBuildsTheApplicationsOnceAndThenEachTarget(t *testing.T) {
+// for every target, then every target's ffmpeg, serially and in the matrix's order, and then the server
+// compiles and the archive writes of all those targets at once. The order within the phases is what the
+// release's correctness rests on: a server built before the ffmpeg its target carries exists is a server
+// that ships without one, and a target's archive is read from the path its own compile wrote to. Which
+// target finished its compile first is the machine's business, and the run's log says which target every
+// line is about.
+func TestADistRunBuildsTheApplicationsOnceThenEveryFfmpegThenTheTargetsAtOnce(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
 	if code := tl.run([]string{"dist", "--all"}, io.Discard); code != 0 {
@@ -282,16 +286,74 @@ func TestADistRunBuildsTheApplicationsOnceAndThenEachTarget(t *testing.T) {
 
 	want := []string{"scanner " + appBundle[subScanner], "admin " + appBundle[subAdmin]}
 	for _, tr := range releaseTargets {
-		want = append(want,
-			"ffmpeg "+tr.targetWord(),
-			"server "+defaultOutputPath(tr.targetWord()),
-			"archive "+archivePath(tr.targetWord(), "8.0.0"),
-		)
+		want = append(want, "ffmpeg "+tr.targetWord())
 	}
 
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Errorf("the release run ran\n  %v\nwant\n  %v", got, want)
+	// The applications come first, and the ffmpeg phase is one target's block of lines at a time, in
+	// the matrix's order.
+	for i, word := range []string{want[0], want[1]} {
+		if got[i] != word {
+			t.Fatalf("the release run ran %q at %d, want %q: the applications are built once, first", got[i], i, word)
+		}
 	}
+
+	for i, tr := range releaseTargets {
+		word := tr.targetWord()
+
+		if step := "ffmpeg " + word; got[2+i] != step {
+			t.Fatalf("the release run ran %q at %d, want %q: the ffmpeg phase is serial and runs in the matrix's order",
+				got[2+i], 2+i, step)
+		}
+	}
+
+	// The compiles and the writes are the rest, and their order is the machine's: the steps that ran
+	// are exactly the steps the matrix asks for, and each target's archive follows its own compile.
+	rest := theStepsCounted(got[2+len(releaseTargets):])
+
+	want2 := theStepsCounted(want[2+len(releaseTargets):])
+
+	for step, count := range want2 {
+		if rest[step] != count {
+			t.Fatalf("the release run ran\n  %v\nwant\n  %v", got, want)
+		}
+	}
+
+	for _, tr := range releaseTargets {
+		word := tr.targetWord()
+
+		compile, write := -1, -1
+
+		for i, step := range got {
+			if step == "server "+defaultOutputPath(word) {
+				compile = i
+			}
+
+			if step == "archive "+archivePath(word, "8.0.0") {
+				write = i
+			}
+		}
+
+		if compile < 0 || write < 0 {
+			t.Fatalf("the release run ran no server compile or no archive for %s:\n  %v", word, got)
+		}
+
+		if compile > write {
+			t.Errorf("the archive of %s was written at %d, before its server compile at %d: an archive is read from the path its own compile wrote to",
+				word, write, compile)
+		}
+	}
+}
+
+// theStepsCounted counts the steps a run recorded, so a test can say which steps ran without saying
+// which order the machine finished them in.
+func theStepsCounted(steps []string) map[string]int {
+	counts := map[string]int{}
+
+	for _, step := range steps {
+		counts[step]++
+	}
+
+	return counts
 }
 
 // A release run asked for one target builds that target and nothing else.
@@ -615,6 +677,219 @@ func TestTheVersionInAnArchiveNameIsReadByTheTargetTheNameNames(t *testing.T) {
 	}
 }
 
+// A release run compiles the server binaries of the targets it can at once, and a log written by
+// several targets at once is a log that has to say which target each line is about: an operator reading
+// a line that says `server  dist/linux-arm64/rdio-scanner` in a log of five targets is reading a line
+// whose owner the line itself has to name.
+func TestAReleaseRunNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	tl.ffmpeg = skipTheSuppliedTargets(ran)
+
+	// The three targets whose ffmpeg binaries are compiled on their own platform wrote none, which is
+	// the release this machine can produce: the run says so and exits 3.
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3", code)
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if line == "" {
+			continue
+		}
+
+		word := strings.Fields(line)[0]
+
+		// The version line, the notes, the two applications the whole run builds once for every
+		// target, the summary, and the removals are the run's own lines: they are about the run and not
+		// about one target's work.
+		if word == "version" || word == "note" || word == subDist || word == subScanner || word == subAdmin {
+			continue
+		}
+
+		if !isTarget(word) {
+			t.Errorf("the log line %q does not name the target its work is about", line)
+		}
+	}
+}
+
+// The ffmpeg phase builds container images, runs qemu and wine, and saturates the machine inside one
+// target. It stays serial, and it finishes before the server compiles start, so the log that records
+// what was adopted is one target's block of lines at a time.
+func TestAReleaseRunFinishesTheFfmpegPhaseBeforeTheServerCompilesStart(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	tl.ffmpeg = skipTheSuppliedTargets(ran)
+
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 3 {
+		t.Fatalf("exit code = %d, want 3", code)
+	}
+
+	lastFfmpeg, firstServer := -1, -1
+
+	for i, s := range *ran {
+		if s.label == subFFmpeg {
+			lastFfmpeg = i
+		}
+
+		if s.label == subServer && firstServer < 0 {
+			firstServer = i
+		}
+	}
+
+	if firstServer < 0 {
+		t.Fatal("the release run compiled no server binary")
+	}
+
+	if lastFfmpeg > firstServer {
+		t.Errorf("a server compile ran at %d, before the ffmpeg phase finished at %d: the ffmpeg phase is serial and comes first", firstServer, lastFfmpeg)
+	}
+}
+
+// The archives are the release's product, and their bytes must not depend on the order the targets ran
+// in. A run that read a target's binary after another target's compile had written over it, or that
+// wrote one target's archive from the bytes of the target beside it, would write a release that is not
+// the release the serial run writes.
+func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T) {
+	repo := t.TempDir()
+
+	// The tree a release run writes its archives from: each target's binary, the guide, and the licence
+	// of the ffmpeg each ready target carries. The times are fixed, because an archive carries the time
+	// of the file it carries, and both runs are reading the same tree.
+	for _, tr := range releaseTargets {
+		target := tr.targetWord()
+
+		if theSuppliedTargets[target] {
+			continue
+		}
+
+		writeRepoFile(t, repo, defaultOutputPath(target), "the binary of "+target)
+		writeArchiveLicence(t, repo, target, "the licence of "+target)
+	}
+
+	writeRepoFile(t, repo, guideSource, "the guide")
+
+	fixEveryFileTime(t, repo, time.Date(2026, 1, 2, 3, 4, 6, 0, time.Local))
+
+	tl, _, _ := fakeRun(released, "")
+
+	tl.repo = repo
+	tl.ffmpeg = skipTheSuppliedTargets(nil)
+
+	// The binaries are the ones this tree's sources produce, so the run copies them into its archives
+	// and compiles nothing: the bytes the two runs compare are the bytes of one tree.
+	tl.state = func(string, options) (planState, error) {
+		return planState{serverCurrent: true}, nil
+	}
+
+	tl.releaseFiles = archiveFiles
+
+	// The archive paths the run composes are relative to the tree it builds, and this tree is the
+	// temporary one: the real writer writes there.
+	tl.archive = func(path string, files []archiveFile) error {
+		return writeArchive(filepath.Join(repo, path), files)
+	}
+
+	t.Setenv(buildJobsEnv, "1")
+
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 3 {
+		t.Fatalf("the serial release run: exit code = %d, want 3", code)
+	}
+
+	serial := theArchivesOfTheRelease(t, repo)
+
+	t.Setenv(buildJobsEnv, "4")
+
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 3 {
+		t.Fatalf("the parallel release run: exit code = %d, want 3", code)
+	}
+
+	parallel := theArchivesOfTheRelease(t, repo)
+
+	if len(serial) != len(parallel) {
+		t.Fatalf("the serial run wrote %d archives and the parallel run wrote %d", len(serial), len(parallel))
+	}
+
+	for name, digest := range serial {
+		if parallel[name] != digest {
+			t.Errorf("%s: the parallel run wrote %s and the serial run wrote %s", name, parallel[name], digest)
+		}
+	}
+}
+
+// theSuppliedTargets are the targets whose ffmpeg binaries are compiled on the platform they run on:
+// on a Linux host they write none, and the five the host compiles are the ready targets.
+var theSuppliedTargets = map[string]bool{
+	"macos-amd64":   true,
+	"macos-arm64":   true,
+	"freebsd-amd64": true,
+}
+
+// skipTheSuppliedTargets is the ffmpeg phase of a machine that is not the platform the supplied
+// targets' binaries run on. The targets it produces for are recorded, when the caller is counting the
+// steps that ran.
+func skipTheSuppliedTargets(ran *[]step) func(options, io.Writer) (bool, error) {
+	return func(o options, stdout io.Writer) (bool, error) {
+		if theSuppliedTargets[o.target] {
+			return true, nil
+		}
+
+		if ran != nil {
+			*ran = append(*ran, step{label: subFFmpeg, result: o.target})
+		}
+
+		return false, nil
+	}
+}
+
+// fixEveryFileTime gives every file in a tree the same time, so the times the archives carry are the
+// tree's and not the moment the test ran.
+func fixEveryFileTime(t *testing.T, repo string, when time.Time) {
+	t.Helper()
+
+	err := filepath.Walk(repo, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		return os.Chtimes(path, when, when)
+	})
+
+	if err != nil {
+		t.Fatalf("fixing the tree's times: %v", err)
+	}
+}
+
+// theArchivesOfTheRelease reads the bytes of every archive the release folder holds, by name.
+func theArchivesOfTheRelease(t *testing.T, repo string) map[string]string {
+	t.Helper()
+
+	entries, err := os.ReadDir(filepath.Join(repo, "dist"))
+	if err != nil {
+		t.Fatalf("reading the release folder: %v", err)
+	}
+
+	archives := map[string]string{}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".zip") {
+			continue
+		}
+
+		body, err := os.ReadFile(filepath.Join(repo, "dist", entry.Name()))
+		if err != nil {
+			t.Fatalf("reading %s: %v", entry.Name(), err)
+		}
+
+		archives[entry.Name()] = fmt.Sprintf("%x", sha256.Sum256(body))
+	}
+
+	return archives
+}
+
 // The verification run runs the two suites and builds nothing: the same command a developer runs before
 // pushing is the command a release is gated on, and a run that built something first reported the
 // build's result and not the suites'.
@@ -671,9 +946,11 @@ func TestATestRunEndsNonZeroWhenASuiteFails(t *testing.T) {
 }
 
 // A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
-// after it are not built: a half matrix is not a release, and a run that carried on would leave an
-// archive directory with a server in it and no ffmpeg to embed. This is the promise the compiled targets
-// keep, and it is not the way supplied binaries that were never dropped are treated.
+// after it are not built, and no server is compiled for the targets before it either: the ffmpeg phase
+// finishes before any compile starts, so a run that stopped in that phase stopped with nothing compiled
+// at all. A half matrix is not a release, and a run that carried on would leave an archive directory
+// with a server in it and no ffmpeg to embed. This is the promise the compiled targets keep, and it is
+// not the way supplied binaries that were never dropped are treated.
 func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -704,14 +981,8 @@ func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 		"scanner " + appBundle[subScanner],
 		"admin " + appBundle[subAdmin],
 		"ffmpeg freebsd-amd64",
-		"server " + defaultOutputPath("freebsd-amd64"),
-		"archive " + archivePath("freebsd-amd64", "8.0.0"),
 		"ffmpeg linux-386",
-		"server " + defaultOutputPath("linux-386"),
-		"archive " + archivePath("linux-386", "8.0.0"),
 		"ffmpeg linux-amd64",
-		"server " + defaultOutputPath("linux-amd64"),
-		"archive " + archivePath("linux-amd64", "8.0.0"),
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {

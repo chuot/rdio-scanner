@@ -25,6 +25,7 @@ package main
 // every phase asks the tree. The web applications are in webapps.go, the ffmpeg is in ffmpeg.go.
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/fs"
@@ -32,7 +33,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"rdio-scanner/cmd/build/buildinfo"
@@ -347,21 +350,35 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		return fail(stdout, err)
 	}
 
+	// A run asked for one target writes one target's lines, and those lines need no owner: the log of a
+	// matrix run is written by several targets, and every line of it has to say which one it is about.
+	prefix := len(targets) > 1
+
+	var mu sync.Mutex
+
+	log := func(target string) io.Writer {
+		if !prefix {
+			return stdout
+		}
+
+		return &theReleaseLog{mu: &mu, target: target, out: stdout}
+	}
+
 	// The run keeps what it wrote and what wrote none, because the release's last line is the answer to
 	// the question the operator asked: is the release I asked for the release I have.
 	var written []string
 	var none []string
 
-	for _, tr := range targets {
-		// The target each iteration is building for is written into the options the server step and the
-		// archive path are read from, because each target's binary is a different file.
-		o.target = tr.targetWord()
+	// The ffmpeg phase stays serial: it builds container images, runs qemu and wine checks, and already
+	// saturates the machine inside one target. It finishes before any server compile starts, so the log
+	// that records what was adopted is one target's block of lines at a time.
+	ready := make([]releaseTarget, 0, len(targets))
 
-		// The matrix writes one binary per target, so the path it is written to is decided again for
-		// each one, and the archive of that target is read from the same path.
+	for _, tr := range targets {
+		o.target = tr.targetWord()
 		o.output = defaultOutputPath(o.target)
 
-		skipped, err := t.ffmpeg(o, stdout)
+		skipped, err := t.ffmpeg(o, log(o.target))
 		if err != nil {
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
 		}
@@ -375,29 +392,82 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			continue
 		}
 
-		// The binary for this target is current when it is newer than every file it is built from, and
-		// the bundles the client steps built are among them. The check is made for each target, because
-		// each target's binary is a different file.
-		if err := t.runServer(o, version, stdout); err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", subServer, o.target, err))
+		ready = append(ready, tr)
+	}
+
+	workers, err := distWorkers(len(ready), os.LookupEnv)
+	if err != nil {
+		return fail(stdout, err)
+	}
+
+	// The server compiles and the archive writes run at once. Each target's binary is a different file,
+	// built from the same sources, sharing only Go's own build cache, which is safe under concurrent
+	// use, and each target's archive is read from the path its own compile wrote to.
+	work := make([]theWorkOfOneTarget, len(ready))
+
+	var wg sync.WaitGroup
+
+	sem := make(chan struct{}, workers)
+
+	for i, tr := range ready {
+		wg.Add(1)
+
+		go func(i int, tr releaseTarget) {
+			defer wg.Done()
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			// The target each worker is building for is written into the options the server step and
+			// the archive path are read from, because each target's binary is a different file.
+			per := o
+			per.target = tr.targetWord()
+			per.output = defaultOutputPath(per.target)
+
+			out := log(per.target)
+
+			// The binary for this target is current when it is newer than every file it is built from,
+			// and the bundles the client steps built are among them.
+			if err := t.runServer(per, version, out); err != nil {
+				work[i] = theWorkOfOneTarget{target: per.target, err: fmt.Errorf("%s for %s: %w", subServer, per.target, err)}
+
+				return
+			}
+
+			// The archive carries the binary this run wrote, the documentation as the files it is
+			// written in, and the ffmpeg licence when the target carries an ffmpeg.
+			files, err := t.releaseFiles(t.repo, tr, per.output)
+			if err != nil {
+				work[i] = theWorkOfOneTarget{target: per.target, err: fmt.Errorf("%s for %s: %w", subArchive, per.target, err)}
+
+				return
+			}
+
+			path := archivePath(per.target, version.String())
+
+			if err := t.archive(path, files); err != nil {
+				work[i] = theWorkOfOneTarget{target: per.target, err: fmt.Errorf("%s for %s: %w", subArchive, per.target, err)}
+
+				return
+			}
+
+			fmt.Fprintf(out, "%-7s %s\n", subArchive, path)
+
+			work[i] = theWorkOfOneTarget{target: per.target, path: path}
+		}(i, tr)
+	}
+
+	wg.Wait()
+
+	// The release reports what it wrote in the order the matrix lists the targets, whichever order the
+	// workers finished in: the summary is the answer to the question the operator asked, and the answer
+	// is the same answer however the work was scheduled.
+	for _, w := range work {
+		if w.err != nil {
+			return fail(stdout, w.err)
 		}
 
-		// The archive carries the binary this run wrote, the documentation as the files it is written
-		// in, the pictures those files point at, and the ffmpeg licence when the target carries an ffmpeg.
-		files, err := t.releaseFiles(t.repo, tr, o.output)
-		if err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", subArchive, o.target, err))
-		}
-
-		path := archivePath(o.target, version.String())
-
-		if err := t.archive(path, files); err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", subArchive, o.target, err))
-		}
-
-		fmt.Fprintf(stdout, "%-7s %s\n", subArchive, path)
-
-		written = append(written, path)
+		written = append(written, w.path)
 	}
 
 	// The release folder is the set to upload, so the archives of the versions this run did not release
@@ -425,6 +495,85 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		subDist, archivesWord(len(written)), targetsWord(len(none)), strings.Join(none, ", "))
 
 	return 3
+}
+
+// theWorkOfOneTarget is what one worker of a release run has to say when it finishes: the archive it
+// wrote, or the failure the run stops on, named for the target the work was for.
+type theWorkOfOneTarget struct {
+	target string
+	path   string
+	err    error
+}
+
+// theReleaseLog is the output a target's work writes to in a matrix run: every line arrives as one
+// whole line naming the target that produced it. The lines are written under one lock, because a log
+// that interleaves half a line of one target with half a line of another names nothing.
+type theReleaseLog struct {
+	mu      *sync.Mutex
+	target  string
+	out     io.Writer
+	pending []byte
+}
+
+func (l *theReleaseLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.pending = append(l.pending, p...)
+
+	for {
+		end := bytes.IndexByte(l.pending, '\n')
+		if end < 0 {
+			break
+		}
+
+		if _, err := fmt.Fprintf(l.out, "%s  %s\n", l.target, l.pending[:end]); err != nil {
+			return 0, err
+		}
+
+		l.pending = l.pending[end+1:]
+	}
+
+	return len(p), nil
+}
+
+// buildJobsEnv names the bound an operator sets on the server compiles of a release run.
+const buildJobsEnv = "RDIO_BUILD_JOBS"
+
+// distWorkers is how many server compiles a release run runs at once: the cores the machine has, the
+// targets it is ready to build, and the bound the operator named, whichever is the fewest. The compiles
+// are independent — each target's binary is a different file, built from the same sources, sharing only
+// Go's own build cache — so the bound is about the machine's memory and the log's readability, not
+// about correctness: a release run on a small machine compiling five toolchains at once is a run that
+// trades the release for a machine that stops responding.
+//
+// A value that is not a count of work is refused, because a run that quietly ignored the bound the
+// operator named would be a run doing more than the operator said. A variable set to nothing says
+// nothing, and the machine's own bound stands.
+func distWorkers(ready int, lookup func(string) (string, bool)) (int, error) {
+	if ready == 0 {
+		return 0, nil
+	}
+
+	workers := runtime.NumCPU()
+
+	if value, ok := lookup(buildJobsEnv); ok && value != "" {
+		named, err := strconv.Atoi(value)
+		if err != nil || named < 1 {
+			return 0, fmt.Errorf("%s is %q, which is not a count of work: name a whole number of server compiles to run at once, like %s=4",
+				buildJobsEnv, value, buildJobsEnv)
+		}
+
+		if named < workers {
+			workers = named
+		}
+	}
+
+	if ready < workers {
+		workers = ready
+	}
+
+	return workers, nil
 }
 
 // archivesWord and targetsWord say a count and its noun the way the release log reads: one archive,
