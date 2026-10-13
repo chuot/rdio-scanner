@@ -218,7 +218,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	// The verification run runs the suites and builds nothing: the command a developer runs before
 	// pushing is the command a release is gated on, and a run that built something first reported the
 	// build's result and not the suites'. It needs no build output, no installed client dependencies,
-	// and no podman: the suites read the sources.
+	// and no container program: the suites read the sources.
 	if o.sub == subTest {
 		return t.runTest(o, stdout)
 	}
@@ -258,11 +258,16 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		}
 	}
 
-	// The container image compiles its own server, so the run that prepares it ends with podman: the
-	// applications and the ffmpeg the image's architecture embeds are what the Containerfile needs on
-	// disk, and a server binary built here is one the image throws away.
+	// The container image compiles its own server, so the run that prepares it ends with the container
+	// program: the applications and the ffmpeg the image's architecture embeds are what the Containerfile
+	// needs on disk, and a server binary built here is one the image throws away.
 	if o.sub == subContainer {
-		s := containerStep(o, t.repo, version, t.now())
+		program, err := resolveContainerProgram(t.resolve, os.LookupEnv)
+		if err != nil {
+			return fail(stdout, err)
+		}
+
+		s := containerStep(o, t.repo, version, t.now(), program)
 
 		if err := t.execute(s); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))

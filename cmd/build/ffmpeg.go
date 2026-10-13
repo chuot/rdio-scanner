@@ -51,7 +51,9 @@ func runtimeTarget() string {
 
 // ffmpegState is what the tree already has, read before anything is decided.
 type ffmpegState struct {
-	podmanIsThere  bool
+	// program is the container program this run speaks to, and it is empty when the machine has
+	// neither: a plan made from an empty program is refused before a source is fetched.
+	program        string
 	sourceIsCached bool
 	bundleIsCached bool
 
@@ -378,16 +380,6 @@ func sha256Of(body []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// podmanRun is how every step and every check command enters a container.
-//
-// --userns=host is what makes the artifacts the container writes belong to the operator who ran the
-// build. Without it, rootless podman maps the container's root to a subuid: the tree it compiled in
-// comes back owned by somebody the build cannot read, overwrite, or throw away, and the next build
-// cannot start.
-func podmanRun() []string {
-	return []string{"run", "--rm", "--userns=host"}
-}
-
 // ffmpegTarget is the target the ffmpeg phase compiles for: the one the operator named, or the one this
 // machine is.
 func ffmpegTarget(o options) string {
@@ -436,9 +428,14 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		}, nil
 	}
 
-	if !state.podmanIsThere {
-		return ffmpegPlan{}, fmt.Errorf("compiling the ffmpeg for %s needs podman, which this machine does not have", target)
+	if state.program == "" {
+		return ffmpegPlan{}, fmt.Errorf("compiling the ffmpeg for %s needs a container program: it looked for %s and %s and this machine has neither",
+			target, podmanProgram, dockerProgram)
 	}
+
+	// Every step of this plan speaks to the program the run resolved, and enters a container the way
+	// that program understands.
+	program := theContainerProgram{name: state.program}
 
 	key := cacheKey(manifest, target)
 	image := "rdio-ffmpeg:" + target + "-" + key[:12]
@@ -467,7 +464,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		label:  "image",
 		result: image,
 		dir:    repo,
-		name:   "podman",
+		name:   program.name,
 		args:   buildImageArgs(image, record.Container, packages),
 	})
 
@@ -476,7 +473,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 			label:  "runner",
 			result: runner,
 			dir:    repo,
-			name:   "podman",
+			name:   program.name,
 			args:   buildImageArgs(runner, record.Conformance.Container, record.Conformance.Packages),
 		})
 	}
@@ -489,8 +486,8 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		label:  "clean",
 		result: "/work",
 		dir:    repo,
-		name:   "podman",
-		args: append(podmanRun(),
+		name:   program.name,
+		args: append(program.run(),
 			"-v", paths.scratch+":/work",
 			image,
 			"find", "/work", "-mindepth", "1", "-delete",
@@ -501,8 +498,8 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		label:  "unpack",
 		result: "/work/" + sourceDir(manifest),
 		dir:    repo,
-		name:   "podman",
-		args: append(podmanRun(),
+		name:   program.name,
+		args: append(program.run(),
 			"-v", paths.sources+":/src:ro",
 			"-v", paths.scratch+":/work",
 			image,
@@ -510,14 +507,14 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		),
 	})
 
-	plan.Steps = append(plan.Steps, configureStep(repo, paths, image, manifest, record))
+	plan.Steps = append(plan.Steps, configureStep(repo, paths, image, manifest, record, program))
 
 	plan.Steps = append(plan.Steps, step{
 		label:  "make",
 		result: "ffmpeg and ffprobe for " + target,
 		dir:    repo,
-		name:   "podman",
-		args: append(podmanRun(),
+		name:   program.name,
+		args: append(program.run(),
 			"-v", paths.scratch+":/work",
 			"-w", "/work/"+sourceDir(manifest),
 			image,
@@ -525,18 +522,18 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		),
 	})
 
-	// The tree the container compiled in belongs to whatever uid podman gave the container, which is
-	// not a uid this build can name: rootless podman maps it into a subuid range, and the ownership
-	// ffmpeg's own tarball carries lands somewhere else again. Chasing the uid is a dead end — the
-	// numbers differ between rootless and rootful podman, and a wrong one leaves a tree the next build
-	// cannot even open. Making the tree readable, writable and traversable by everybody in it is what
-	// the build actually needs, and it does not depend on which uid turned out to be which.
+	// The tree the container compiled in belongs to whatever uid the container was given, which is not
+	// a uid this build can name: rootless podman maps it into a subuid range, and the ownership ffmpeg's
+	// own tarball carries lands somewhere else again. Chasing the uid is a dead end — the numbers differ
+	// between rootless and rootful podman, and a wrong one leaves a tree the next build cannot even
+	// open. Making the tree readable, writable and traversable by everybody in it is what the build
+	// actually needs, and it does not depend on which uid turned out to be which.
 	plan.Steps = append(plan.Steps, step{
 		label:  "chmod",
 		result: paths.scratch,
 		dir:    repo,
-		name:   "podman",
-		args: append(podmanRun(),
+		name:   program.name,
+		args: append(program.run(),
 			"-v", paths.scratch+":/work",
 			image,
 			"chmod", "-R", "a+rwX", "/work",
@@ -873,8 +870,8 @@ func buildImageArgs(image string, base string, packages []string) []string {
 //
 // --enable-cross-compile and ffmpeg's own win32 and win64 operating-system names are what the manifest
 // records, because both mistakes surface as a Makefile error rather than as a cross-compile error.
-func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle.Manifest, record bundle.Target) step {
-	args := append(podmanRun(),
+func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle.Manifest, record bundle.Target, program theContainerProgram) step {
+	args := append(program.run(),
 		"-v", paths.scratch+":/work",
 		"-w", "/work/"+sourceDir(manifest),
 		image,
@@ -896,7 +893,7 @@ func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle
 		label:  "configure",
 		result: "the trimmed build for " + record.Container,
 		dir:    repo,
-		name:   "podman",
+		name:   program.name,
 		args:   args,
 	}
 }
@@ -940,7 +937,8 @@ func checkSource(path string, manifest bundle.Manifest) error {
 }
 
 // fetchSource puts the release tarball in the build cache. It is fetched by the tool rather than by a
-// program the operator has to install, so that podman is the only new prerequisite this build adds.
+// program the operator has to install, so that a container program is the only new prerequisite this
+// build adds.
 func fetchSource(src ffmpegSource) error {
 	client := &http.Client{Timeout: 10 * time.Minute}
 
@@ -989,7 +987,12 @@ func fetchSource(src ffmpegSource) error {
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
-	podman, err := t.resolve("podman")
+	// The program the run speaks to is a fact of the machine, asked once, and every step of the plan
+	// carries it. A machine with neither program is told here, before a source is fetched.
+	program, err := resolveContainerProgram(t.resolve, os.LookupEnv)
+	if err != nil {
+		return false, err
+	}
 
 	target := ffmpegTarget(o)
 
@@ -999,9 +1002,9 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	record, covered := manifest.Targets[target]
 
-	// The tools of a compile that runs on the target's own platform are resolved the way podman is, and
-	// for the same reason: the plan is made from what this machine has, and a host missing one of them is
-	// told which one before the source is fetched.
+	// The tools of a compile that runs on the target's own platform are resolved the way the container
+	// program is, and for the same reason: the plan is made from what this machine has, and a host
+	// missing one of them is told which one before the source is fetched.
 	nativeTools := map[string]string{}
 
 	if covered && record.Produced == suppliedProduction {
@@ -1015,7 +1018,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	}
 
 	state := ffmpegState{
-		podmanIsThere:  err == nil && podman != "",
+		program:        program,
 		sourceIsCached: aFileIsThere(paths.source),
 		bundleIsCached: covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz")),
 		nativeTools:    nativeTools,
@@ -1059,7 +1062,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 		}
 
-		report, err := t.runFFMPEGCheck(podman, plan, manifest, record, target)
+		report, err := t.runFFMPEGCheck(theContainerProgram{name: state.program}, plan, manifest, record, target)
 		if err != nil {
 			return false, err
 		}
@@ -1289,7 +1292,7 @@ func prepareFFmpeg(paths ffmpegPaths) error {
 
 // runFFMPEGCheck runs the compiled programs through the converter's own argument list, inside the
 // container that can run them.
-func (t tool) runFFMPEGCheck(podman string, plan ffmpegPlan, manifest bundle.Manifest, record bundle.Target, target string) (checkReport, error) {
+func (t tool) runFFMPEGCheck(program theContainerProgram, plan ffmpegPlan, manifest bundle.Manifest, record bundle.Target, target string) (checkReport, error) {
 	image := plan.Image
 	if record.Conformance.Container != "" {
 		image = plan.Runner
@@ -1303,7 +1306,7 @@ func (t tool) runFFMPEGCheck(podman string, plan ffmpegPlan, manifest bundle.Man
 	// The recordings the check writes out land in the scratch directory itself, which the container
 	// sees at /work, and not in the source tree the compiled programs live in.
 	return ffmpegCheck(
-		inContainer(podman, image, plan.Paths.scratch),
+		inContainer(program, image, plan.Paths.scratch),
 		checkPrograms{FFmpeg: ffmpeg, FFProbe: ffprobe, Work: "/work"},
 		plan.Paths.scratch,
 	)
@@ -1311,9 +1314,9 @@ func (t tool) runFFMPEGCheck(podman string, plan ffmpegPlan, manifest bundle.Man
 
 // containerRun is how the build reaches a binary it cannot run itself: the compiled ffmpeg lives in the
 // mounted scratch directory, inside the container that compiled it. The image has to be named before the
-// program, or podman reads the program as the image to run.
-func containerRun(podman string, image string, scratch string, argv []string) []string {
-	args := append([]string{podman}, podmanRun()...)
+// program, or the program reads it as the image to run.
+func containerRun(program theContainerProgram, image string, scratch string, argv []string) []string {
+	args := append([]string{program.name}, program.run()...)
 	args = append(args, "-i", "-v", scratch+":/work", image)
 
 	return append(args, argv...)
@@ -1321,9 +1324,9 @@ func containerRun(podman string, image string, scratch string, argv []string) []
 
 // inContainer runs one program in that container, hands it a recording on its input, and hands back
 // what it wrote.
-func inContainer(podman string, image string, scratch string) command {
+func inContainer(program theContainerProgram, image string, scratch string) command {
 	return func(argv []string, stdin []byte) ([]byte, error) {
-		args := containerRun(podman, image, scratch, argv)
+		args := containerRun(program, image, scratch, argv)
 
 		out := bytes.NewBuffer([]byte(nil))
 		errout := bytes.NewBuffer([]byte(nil))

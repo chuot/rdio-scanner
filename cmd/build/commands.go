@@ -22,7 +22,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +57,77 @@ const (
 	containerImage     = "rdio-scanner"
 	containerLatestTag = "latest"
 )
+
+// The container programs this build knows, and the name the operator gives the one they want.
+//
+// podman is the program the build was developed against and the one the compile guide names first.
+// docker is the program a machine with no podman still has. The order here is the order a machine is
+// asked in.
+const (
+	podmanProgram = "podman"
+	dockerProgram = "docker"
+
+	// containerProgramEnv names the program the operator wants. It is how a machine that has both
+	// programs is told to use the one it does not prefer, which is the only way the docker path is
+	// exercised on a machine that has podman.
+	containerProgramEnv = "RDIO_CONTAINER_PROGRAM"
+)
+
+// resolveContainerProgram asks the machine which container program it has, in the order the build
+// prefers, and honours the name the operator gave.
+//
+// A machine with neither is refused, and the refusal names both programs it looked for: a message that
+// names one program tells the operator to install a program they may already have. A name the operator
+// gave that is not a container program is refused, and a name the machine does not have is refused: a
+// run that quietly fell back to the program the operator said not to use would be a run doing something
+// the operator ruled out. A variable set to nothing says nothing.
+func resolveContainerProgram(lookup func(string) (string, error), env func(string) (string, bool)) (string, error) {
+	named, ok := env(containerProgramEnv)
+
+	if ok && named != "" {
+		if named != podmanProgram && named != dockerProgram {
+			return "", fmt.Errorf("%s is %q, which is not a container program: name %s or %s",
+				containerProgramEnv, named, podmanProgram, dockerProgram)
+		}
+
+		if where, err := lookup(named); err != nil || where == "" {
+			return "", fmt.Errorf("%s names %s, which this machine does not have: use %s=%s to name the program this machine has",
+				containerProgramEnv, named, containerProgramEnv, dockerProgram)
+		}
+
+		return named, nil
+	}
+
+	for _, name := range []string{podmanProgram, dockerProgram} {
+		if where, err := lookup(name); err == nil && where != "" {
+			return name, nil
+		}
+	}
+
+	return "", fmt.Errorf("the build needs a container program: it looked for %s and %s and this machine has neither",
+		podmanProgram, dockerProgram)
+}
+
+// theContainerProgram is the program a run speaks to, and the way it says "run this one command in a
+// container and leave nothing behind".
+//
+// The files the container writes in the operator's tree belong to the operator who ran the build: the
+// ffmpeg phase compiles into a directory under the tree, and the build has to read, overwrite, and throw
+// away what the container wrote there. podman is told to keep the host's user namespace, which is what
+// makes the artifacts come back as the operator's own. docker has no user namespace to keep — asked for
+// one it runs as root and the artifacts come back owned by root — so it is told the operator's own
+// identity numbers, which is the same guarantee stated in the vocabulary docker has.
+type theContainerProgram struct {
+	name string
+}
+
+func (p theContainerProgram) run() []string {
+	if p.name == dockerProgram {
+		return []string{"run", "--rm", "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())}
+	}
+
+	return []string{"run", "--rm", "--userns=host"}
+}
 
 // The one thing a release writes that is not an external command: the archive. It is named so the log
 // says what a release run did, the same way it says what it compiled.
@@ -439,10 +512,10 @@ func imageTagFor(version string) string {
 	return strings.Replace(version, "+", "-", 1)
 }
 
-// containerStep asks podman to build the image. The version reaches it through the build argument the
-// Containerfile reads into the linker flag and into the image's own labels: an image built without it
-// reports the development fallback, which is the sign that nobody said what the image is. The server
-// binary is compiled inside the image, so the run that prepares it builds no binary of its own.
+// containerStep asks the container program to build the image. The version reaches it through the build
+// argument the Containerfile reads into the linker flag and into the image's own labels: an image built
+// without it reports the development fallback, which is the sign that nobody said what the image is. The
+// server binary is compiled inside the image, so the run that prepares it builds no binary of its own.
 //
 // The image is tagged with the version the run resolved and with `latest`. The versioned tag is the one
 // the run reports, because a machine that says which machine it is on has said less than the machine
@@ -450,17 +523,21 @@ func imageTagFor(version string) string {
 //
 // The moment the image was made is a fact the run knows and the Containerfile cannot: it arrives as the
 // build argument the created label reads.
-func containerStep(o options, repo string, version buildinfo.Version, created time.Time) step {
+//
+// The file the image is built from is named, because docker looks for Dockerfile and does not find
+// Containerfile: a build that names its file has one shape for both programs.
+func containerStep(o options, repo string, version buildinfo.Version, created time.Time, program string) step {
 	tag := containerImage + ":" + imageTagFor(version.String())
 
 	return step{
 		label:  subContainer,
 		result: tag,
 		dir:    repo,
-		name:   "podman",
+		name:   program,
 		args: []string{
 			"build",
 			"--pull",
+			"-f", "Containerfile",
 			"--build-arg", "VERSION=" + version.String(),
 			"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
 			"-t", tag,

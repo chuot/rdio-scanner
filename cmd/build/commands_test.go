@@ -22,6 +22,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,6 +40,10 @@ import (
 // The plan the tool composes for the applications is tested in webapps_test.go. These tests refuse
 // the command lines the tool cannot honour and read the server binary and the container image the
 // run composes. Nothing here runs a build.
+
+// theMoment is the moment a plan is composed at: the clock the run reports is a fact of the machine,
+// and a test that reads the command line the run composes has to be told what the clock said.
+var theMoment = time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
 
 // theVersion is the version a plan is composed for: an untagged build of the declared core, which is
 // the shape a development build has.
@@ -90,13 +95,12 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 // labels says nothing about where it came from: the tags and the labels are the image's own account of
 // what it is, read from the image and not from a document beside it.
 func TestTheContainerStepTagsTheImageWithTheVersionTheRunResolved(t *testing.T) {
-	created := time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
-
-	s := containerStep(options{}, "/repo", theVersion(t), created)
+	s := containerStep(options{}, "/repo", theVersion(t), theMoment, podmanProgram)
 
 	want := []string{
 		"build",
 		"--pull",
+		"-f", "Containerfile",
 		"--build-arg", "VERSION=8.0.0+gdb79311",
 		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
 		"-t", "rdio-scanner:8.0.0-gdb79311",
@@ -666,4 +670,192 @@ func TestTheFFmpegTargetIsTheWordRightAfterIt(t *testing.T) {
 			t.Errorf("%q is accepted as a platform, want it refused", word)
 		}
 	}
+}
+
+// The build speaks to the container program the machine has, and prefers podman: podman is the
+// prerequisite the compile guide names and the program the build was developed against, and docker is
+// the program a machine with no podman still has. A machine with neither is refused, and the refusal
+// names both programs it looked for, because a message naming one program tells the operator to install
+// a program they may already have.
+func TestTheBuildSpeaksToTheContainerProgramTheMachineHas(t *testing.T) {
+	// Both programs on the machine: the one the build prefers.
+	program, err := resolveContainerProgram(aMachineWith(podmanProgram, dockerProgram), noEnvironment)
+	if err != nil {
+		t.Fatalf("resolveContainerProgram: %v", err)
+	}
+
+	if program != podmanProgram {
+		t.Errorf("the machine has both programs and the build speaks to %q, want %q", program, podmanProgram)
+	}
+
+	// Only docker: the machine can build a container image, and a tool that names podman alone refuses
+	// a machine that can do the work.
+	program, err = resolveContainerProgram(aMachineWith(dockerProgram), noEnvironment)
+	if err != nil {
+		t.Fatalf("resolveContainerProgram: %v", err)
+	}
+
+	if program != dockerProgram {
+		t.Errorf("the machine has only docker and the build speaks to %q, want %q", program, dockerProgram)
+	}
+
+	// Only podman.
+	program, err = resolveContainerProgram(aMachineWith(podmanProgram), noEnvironment)
+	if err != nil {
+		t.Fatalf("resolveContainerProgram: %v", err)
+	}
+
+	if program != podmanProgram {
+		t.Errorf("the machine has only podman and the build speaks to %q, want %q", program, podmanProgram)
+	}
+
+	// Neither: refused, and the refusal names both programs the build looked for.
+	program, err = resolveContainerProgram(aMachineWith(), noEnvironment)
+	if err == nil {
+		t.Fatal("a machine with no container program was accepted, and the build cannot compile an ffmpeg there")
+	}
+
+	for _, name := range []string{podmanProgram, dockerProgram} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("the refusal %q does not name %s, which the build looked for", err, name)
+		}
+	}
+
+	if program != "" {
+		t.Errorf("the refusal still speaks to %q", program)
+	}
+
+	// The operator names docker, and the machine has it: the name stands, which is how the docker path
+	// is exercised on a machine that prefers podman.
+	program, err = resolveContainerProgram(aMachineWith(podmanProgram, dockerProgram),
+		anEnvironment(map[string]string{containerProgramEnv: dockerProgram}))
+	if err != nil {
+		t.Fatalf("resolveContainerProgram: %v", err)
+	}
+
+	if program != dockerProgram {
+		t.Errorf("the operator named %s and the build speaks to %q", dockerProgram, program)
+	}
+
+	// The operator names a program the machine does not have: refused, naming the one they named.
+	_, err = resolveContainerProgram(aMachineWith(dockerProgram),
+		anEnvironment(map[string]string{containerProgramEnv: podmanProgram}))
+	if err == nil {
+		t.Fatal("the operator named a program this machine does not have, and the run was accepted")
+	}
+
+	if !strings.Contains(err.Error(), podmanProgram) {
+		t.Errorf("the refusal %q does not name %s, which the operator named", err, podmanProgram)
+	}
+
+	// The operator names something that is not a container program.
+	_, err = resolveContainerProgram(aMachineWith(podmanProgram),
+		anEnvironment(map[string]string{containerProgramEnv: "container"}))
+	if err == nil {
+		t.Fatalf("the operator named %q, which is not a container program, and the run was accepted", "container")
+	}
+
+	if !strings.Contains(err.Error(), "container") {
+		t.Errorf("the refusal %q does not name %q, which the operator wrote", err, "container")
+	}
+
+	// A variable set to nothing says nothing: the machine's own preference stands.
+	program, err = resolveContainerProgram(aMachineWith(dockerProgram),
+		anEnvironment(map[string]string{containerProgramEnv: ""}))
+	if err != nil {
+		t.Fatalf("resolveContainerProgram: %v", err)
+	}
+
+	if program != dockerProgram {
+		t.Errorf("the variable was set to nothing and the build speaks to %q, want the machine's own program", program)
+	}
+}
+
+// aMachineWith is the machine's PATH: the programs it has, and nothing else.
+func aMachineWith(programs ...string) func(string) (string, error) {
+	there := map[string]bool{}
+
+	for _, name := range programs {
+		there[name] = true
+	}
+
+	return func(name string) (string, error) {
+		if there[name] {
+			return "/usr/bin/" + name, nil
+		}
+
+		return "", fmt.Errorf("%s is not on this machine", name)
+	}
+}
+
+// The release image build names the program the run resolved, and the file it builds from: docker looks
+// for Dockerfile and does not find Containerfile, and a build that names its file has one shape for both
+// programs.
+func TestTheReleaseImageBuildNamesTheProgramAndTheFileItBuildsFrom(t *testing.T) {
+	for _, program := range []string{podmanProgram, dockerProgram} {
+		s := containerStep(options{}, "/repo", theVersion(t), theMoment, program)
+
+		if s.name != program {
+			t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
+		}
+
+		if len(s.args) == 0 || s.args[0] != "build" {
+			t.Fatalf("the release image build runs %v, want a build", s.args)
+		}
+
+		if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
+			t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
+				file)
+		}
+	}
+}
+
+// The files a container writes in the operator's tree belong to the operator who ran the build: the
+// ffmpeg phase compiles into a directory under the tree, and the build has to read, overwrite, and throw
+// away what the container wrote there. podman is told to keep the host's user namespace. docker has no
+// user namespace to keep, and is told the operator's own identity numbers, which is the same guarantee
+// stated in the vocabulary docker has.
+func TestTheContainerRunArgsAreTheOnesTheProgramUnderstands(t *testing.T) {
+	podman := theContainerProgram{name: podmanProgram}
+	docker := theContainerProgram{name: dockerProgram}
+
+	want := []string{"run", "--rm", "--userns=host"}
+
+	if got := podman.run(); !sameArgs(got, want) {
+		t.Errorf("podman is asked to run with %v, want %v", got, want)
+	}
+
+	want = []string{"run", "--rm", "--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())}
+
+	if got := docker.run(); !sameArgs(got, want) {
+		t.Errorf("docker is asked to run with %v, want %v: the files it writes have to belong to the operator who ran the build",
+			got, want)
+	}
+}
+
+// sameArgs says two argument lists are the same arguments in the same order.
+func sameArgs(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// theFlagValue reads the value a flag carries in a command line, and says nothing when the flag is not
+// there.
+func theFlagValue(args []string, flag string) string {
+	for i, arg := range args {
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+
+	return ""
 }

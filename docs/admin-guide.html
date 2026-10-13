@@ -769,14 +769,15 @@ footer.site .signoff {
   <ul>
     <li>Go 1.26 or newer.</li>
     <li>Node.js 20 or newer, for the web applications the server carries inside it.</li>
-    <li>podman, for building the container image, and for compiling the ffmpeg of the five targets the
-      build compiles one for.</li>
+    <li>podman, or docker when podman is not there, for building the container image, and for compiling
+      the ffmpeg of the five targets the build compiles one for. The build asks the machine which one it
+      has and uses podman when it has both.</li>
     <li>A C toolchain, and on FreeBSD <code>gmake</code>, to build the macOS and FreeBSD ffmpeg binaries:
       those are compiled by this build on a machine that runs the target's operating system, and that machine
       is a Mac for the two macOS targets — either architecture for either, since the two macOS architectures
       compile each other's ffmpeg binaries — or a FreeBSD box for the FreeBSD target. The five Linux and
-      Windows ffmpeg binaries are compiled in a container, by podman, on the machine that produces the
-      releases.</li>
+      Windows ffmpeg binaries are compiled in a container, by the container program the build resolved, on
+      the machine that produces the releases.</li>
   </ul>
 
   <p>

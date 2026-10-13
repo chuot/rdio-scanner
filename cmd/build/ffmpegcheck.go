@@ -38,7 +38,8 @@ import (
 
 // command runs one program with its arguments, hands it a recording on its input, and hands back what
 // it wrote. It is how the ffmpeg check reaches a binary it cannot run itself: the compiled ffmpeg
-// lives inside the build container, and the check reaches it through podman.
+// lives inside the build container, and the check reaches it through the container program the run
+// resolved.
 type command func(argv []string, stdin []byte) ([]byte, error)
 
 // checkPrograms are the two compiled programs the check runs, each as the arguments that start

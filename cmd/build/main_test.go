@@ -29,6 +29,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -383,14 +384,16 @@ func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
 }
 
 // The archive is read from the path the server step writes to. A release run that read the program from
-// a path it chose for itself shipped whatever was standing at that path.
+// a path it chose for itself shipped whatever was standing at that path. The compiles of a matrix run
+// finish in whatever order the machine scheduled them, so the pairing is stated per target: the archive
+// of a target reads the path that target's server step wrote to.
 func TestADistRunReadsTheArchiveFromThePathTheServerStepWritesTo(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
 	var read []string
 
 	tl.releaseFiles = func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
-		read = append(read, output)
+		read = append(read, tr.targetWord()+" "+output)
 
 		return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
 	}
@@ -403,9 +406,12 @@ func TestADistRunReadsTheArchiveFromThePathTheServerStepWritesTo(t *testing.T) {
 
 	for _, s := range *ran {
 		if s.label == subServer {
-			built = append(built, theOutputPathOf(s))
+			built = append(built, theTargetOf(s)+" "+theOutputPathOf(s))
 		}
 	}
+
+	sort.Strings(read)
+	sort.Strings(built)
 
 	if strings.Join(read, " ") != strings.Join(built, " ") {
 		t.Errorf("the release read its programs from\n  %v\nand the server steps wrote them to\n  %v", read, built)
@@ -503,6 +509,38 @@ func theOutputPathOf(s step) string {
 	}
 
 	return ""
+}
+
+// theTargetOf reads the target a step was composed for out of the environment the step runs with, in
+// the name the release matrix calls a target by: the matrix sets GOOS and GOARCH for each target, and a
+// test that pairs a compile with the archive that read it needs the target, because the compiles finish
+// in whatever order the machine scheduled them.
+func theTargetOf(s step) string {
+	name, goarch := "", ""
+
+	for _, env := range s.env {
+		if value, ok := strings.CutPrefix(env, "GOOS="); ok {
+			name = theTargetNames[value]
+		}
+
+		if value, ok := strings.CutPrefix(env, "GOARCH="); ok {
+			goarch = value
+		}
+	}
+
+	if name == "" || goarch == "" {
+		return ""
+	}
+
+	return name + "-" + goarch
+}
+
+// theTargetNames is the name the release matrix calls each operating system by.
+var theTargetNames = map[string]string{
+	"darwin":  "macos",
+	"freebsd": "freebsd",
+	"linux":   "linux",
+	"windows": "windows",
 }
 
 // A release run refuses a tree with uncommitted changes. The archive is named for the commit it was
@@ -1138,7 +1176,9 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 // The version the image reports is the one the run resolved, through the build argument the
 // Containerfile reads, and the image is tagged with that version beside `latest` so a machine reading
 // the tags knows which release it is standing on. An image built without it reports the development
-// fallback, which is the sign that nobody said what the image is.
+// fallback, which is the sign that nobody said what the image is. The run asks the container program the
+// machine has, and names the file the image is built from, because docker looks for Dockerfile and does
+// not find Containerfile.
 func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1148,13 +1188,14 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 
 	last := (*ran)[len(*ran)-1]
 
-	if last.name != "podman" {
-		t.Fatalf("the container run ended with %s, want podman", last.name)
+	if last.name != podmanProgram {
+		t.Fatalf("the container run ended with %s, want %s", last.name, podmanProgram)
 	}
 
 	want := []string{
 		"build",
 		"--pull",
+		"-f", "Containerfile",
 		"--build-arg", "VERSION=8.0.0",
 		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
 		"-t", "rdio-scanner:8.0.0",
@@ -1163,7 +1204,7 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 	}
 
 	if strings.Join(last.args, " ") != strings.Join(want, " ") {
-		t.Errorf("podman ran with %v, want %v", last.args, want)
+		t.Errorf("%s ran with %v, want %v", last.name, last.args, want)
 	}
 }
 

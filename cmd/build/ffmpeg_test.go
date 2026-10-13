@@ -46,9 +46,9 @@ func aManifestWith(ffmpeg string, recipe []string) bundle.Manifest {
 	return manifest
 }
 
-// anUncompiledTree is a tree that has nothing cached and has podman to compile with.
+// anUncompiledTree is a tree that has nothing cached, on a machine that has podman to compile with.
 func anUncompiledTree() ffmpegState {
-	return ffmpegState{podmanIsThere: true}
+	return ffmpegState{program: podmanProgram}
 }
 
 func stepNamed(plan ffmpegPlan, label string) (step, bool) {
@@ -380,7 +380,7 @@ func TestAFfmpegAlreadyCompiledForTheSameRecipeIsNotCompiledAgain(t *testing.T) 
 		options{target: "linux-arm64"},
 		"/repo",
 		bundle.ReadManifest(),
-		ffmpegState{podmanIsThere: true, bundleIsCached: true},
+		ffmpegState{program: podmanProgram, bundleIsCached: true},
 		theReleaseHost,
 	)
 	if err != nil {
@@ -416,7 +416,7 @@ func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
 		options{target: "linux-arm64"},
 		"/repo",
 		bundle.ReadManifest(),
-		ffmpegState{podmanIsThere: true, sourceIsCached: true, bundleIsCached: true},
+		ffmpegState{program: podmanProgram, sourceIsCached: true, bundleIsCached: true},
 		theReleaseHost,
 	)
 	if err != nil {
@@ -433,7 +433,7 @@ func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
 // run, and says "invalid reference format".
 func TestTheFFMPEGCheckNamesTheContainerItRunsTheCompiledFfmpegIn(t *testing.T) {
 	argv := containerRun(
-		"podman",
+		theContainerProgram{name: podmanProgram},
 		"rdio-ffmpeg:linux-arm64-0123456789ab",
 		"/repo/.build/ffmpeg/scratch/linux-arm64",
 		[]string{"qemu-aarch64", "/work/ffmpeg-9.0.2/ffmpeg", "-i", "-"},
@@ -1526,4 +1526,58 @@ func sameWords(got []string, want []string) bool {
 	}
 
 	return true
+}
+
+// Every step that speaks to a container names the program the run resolved. A step that names a program
+// the machine does not have is a step that fails on a machine that can build the image, and a plan that
+// names the program in its image builds and composes it into its runs is a plan whose steps disagree
+// about who they are talking to.
+func TestEveryContainerStepOfTheFfmpegPlanNamesTheProgramTheRunResolved(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, program := range []string{podmanProgram, dockerProgram} {
+		plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", manifest, ffmpegState{program: program}, theReleaseHost)
+		if err != nil {
+			t.Fatalf("planFFmpeg for %s: %v", program, err)
+		}
+
+		if len(plan.Steps) == 0 {
+			t.Fatalf("the plan for %s composed no steps", program)
+		}
+
+		for _, s := range plan.Steps {
+			if s.name != program {
+				t.Errorf("the %s step speaks to %q, want the program the run resolved: %q", s.label, s.name, program)
+			}
+		}
+
+		// The steps that enter a container say it in the vocabulary that program understands, and every
+		// image build names the file it builds from: docker looks for Dockerfile and does not find
+		// Containerfile.
+		for _, s := range plan.Steps {
+			if len(s.args) == 0 {
+				t.Fatalf("the %s step carries no arguments", s.label)
+			}
+
+			switch s.args[0] {
+			case "run":
+				begins := theContainerProgram{name: program}.run()
+
+				if len(s.args) < len(begins) {
+					t.Errorf("the %s step runs %v, which is shorter than the arguments %s needs", s.label, s.args, program)
+
+					continue
+				}
+
+				if !sameArgs(s.args[:len(begins)], begins) {
+					t.Errorf("the %s step runs %v, want the arguments %s understands: %v", s.label, s.args, program, begins)
+				}
+			case "build":
+				if file := theFlagValue(s.args, "-f"); file == "" {
+					t.Errorf("the %s image build does not name the file it builds from: docker looks for Dockerfile and does not find Containerfile",
+						s.label)
+				}
+			}
+		}
+	}
 }
