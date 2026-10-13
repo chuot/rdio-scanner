@@ -107,3 +107,43 @@ describe('application/store — event bus parity with legacy RdioScannerEvent', 
         assert.equal(calls, 0);
     });
 });
+
+describe('application/store — notification snapshot', () => {
+    // A component that listens to the rows of the system it is showing moves that
+    // binding while it is being notified: the notification that made it re-render is
+    // the one that resolves the new system. It must not be entered again by the
+    // subscription it took inside that notification, and a subscription it released
+    // there must not be entered by it either.
+    it('does not enter a subscription taken while the notification is running', () => {
+        const store = createStore({ map: null, panel: null });
+        const entered = [];
+
+        store.subscribe('map', () => {
+            store.subscribe('panel', () => entered.push('taken mid-notification'));
+        });
+
+        store.setState({ map: { a: 1 }, panel: { b: 2 } });
+
+        assert.deepEqual(entered, [], 'the notification walks the subscriptions it started with');
+
+        store.setState({ panel: { b: 3 } });
+
+        assert.deepEqual(entered, ['taken mid-notification'], 'the new subscription is entered from the next notification on');
+    });
+
+    it('does not enter a subscription released while the notification is running', () => {
+        const store = createStore({ map: null, panel: null });
+        const entered = [];
+
+        // The subscriber that releases the binding is declared first, so the
+        // notification reaches the released subscription only by walking the
+        // subscriptions as they are mid-notification.
+        store.subscribe('map', () => unsubscribePanel());
+
+        const unsubscribePanel = store.subscribe('panel', () => entered.push('released mid-notification'));
+
+        store.setState({ map: { a: 1 }, panel: { b: 2 } });
+
+        assert.deepEqual(entered, [], 'a subscription that is gone is not entered after it is gone');
+    });
+});

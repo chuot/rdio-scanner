@@ -1,7 +1,9 @@
 // Application store: slice-based subscriptions with structural diffing,
 // replacing the legacy RdioScannerService EventEmitter<RdioScannerEvent>.
 // Subscribers declare the slices they care about; a setState only notifies
-// subscribers whose declared slices actually changed (deep-compared).
+// subscribers whose declared slices actually changed (deep-compared). A
+// notification walks the subscriptions it started with, so a subscriber that
+// moves its own binding inside a notification is safe to do so.
 
 export function createStore(initialState = {}) {
   const state = { ...initialState };
@@ -24,7 +26,14 @@ export function createStore(initialState = {}) {
 
       if (Object.keys(changed).length === 0) return;
 
-      for (const subscription of subscriptions) {
+      // Notify the subscriptions as they were when this notification started, and
+      // skip the ones released on the way: a component that moves its own binding
+      // while it is being notified must not be entered a second time by the
+      // subscription it took inside the notification, and a subscription released
+      // there must not be entered after it is gone.
+      for (const subscription of [...subscriptions]) {
+        if (!subscriptions.has(subscription)) continue;
+
         const event = {};
         let touched = false;
 
