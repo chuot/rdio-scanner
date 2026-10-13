@@ -93,7 +93,7 @@ const cfgPayload = {
 function setup(options = {}) {
     const socket = createFakeSocket();
     const storage = createFakeStorage(options.storage);
-    const audio = createFakeAudio();
+    const audio = options.audio ?? createFakeAudio();
     const timers = createFakeTimers();
     const store = createStore({});
     const events = [];
@@ -477,5 +477,183 @@ describe('application/listener-use-cases — auth', () => {
         socket.inject('LSC', 7);
 
         assert.equal(useCases.listeners, 7);
+    });
+});
+
+// The alert tone in front of a live call. The fake engine below keeps, in the order it was asked,
+// the tone sequences it was given and the recordings it was asked to start, and holds each tone open
+// until the test ends it, the way the audio engine resolves a sequence when its last oscillator ends.
+//
+// The tone is a live arrival's: a call the listener replays, a call opened from the search panel, and
+// anything in playback mode start their recording with no tone in front of it.
+
+function createToneAwareAudio() {
+    const schedule = [];
+    const open = [];
+
+    return {
+        schedule,
+
+        playCall: (call, handlers) => {
+            schedule.push({ recording: call.id });
+
+            call.ended = handlers.onEnded;
+
+            return { stop: () => (call.stopped = true) };
+        },
+
+        playOscillators: (sequence) => {
+            schedule.push({ tone: sequence });
+
+            return new Promise((resolve) => open.push({ sequence, resolve }));
+        },
+
+        // endTone ends the oldest tone that is waiting, as the audio engine does when the last
+        // oscillator of a sequence ends.
+        endTone: () => {
+            const tone = open.shift();
+
+            assert.ok(tone, 'no tone is waiting to be ended');
+
+            tone.resolve();
+
+            return tone.sequence;
+        },
+
+        download: () => {},
+    };
+}
+
+// The play path continues in a promise, so a test that ends a tone has to let the queued work run
+// before it can see what the engine was asked to do next.
+function settle() {
+    return new Promise((done) => setImmediate(done));
+}
+
+const alert5 = [
+    { begin: 0, end: 0.125, frequency: 800, type: 'square' },
+    { begin: 0.375, end: 0.5, frequency: 800, type: 'square' },
+    { begin: 1.125, end: 1.5, frequency: 1000, type: 'square' },
+];
+
+// The tone comes from the group Fire, which talkgroups 100 and 101 both belong to.
+const groupToneCfg = {
+    ...cfgPayload,
+    alerts: { alert5 },
+    groupsData: [{ id: 1, label: 'Fire', alert: 'alert5' }],
+};
+
+// The tone comes from talkgroup 100 alone, so a call on talkgroup 101 carries none.
+const talkgroupToneCfg = {
+    ...cfgPayload,
+    alerts: { alert5 },
+    systems: [
+        {
+            id: 10,
+            label: 'SYS1',
+            talkgroups: [
+                { id: 100, label: 'TG1', groups: ['Fire'], tag: 'T1', alert: 'alert5' },
+                { id: 101, label: 'TG2', groups: ['Fire'], tag: 'T1' },
+            ],
+        },
+        { id: 20, label: 'SYS2', talkgroups: [{ id: 200, label: 'TG3', groups: ['Police'], tag: 'T1' }] },
+    ],
+};
+
+describe('application/listener-use-cases — the alert tone in front of a live call', () => {
+    it('a live call whose group carries a tone plays the tone, then starts its recording', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket, store } = setup({ audio });
+
+        socket.inject('CFG', groupToneCfg);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+
+        assert.deepEqual(audio.schedule, [{ tone: alert5 }], 'the tone is scheduled before any recording starts');
+        assert.ok(!store.getState().call, 'the call reaches the store when its recording starts, not when its tone does');
+
+        audio.endTone();
+        await settle();
+
+        assert.deepEqual(audio.schedule, [{ tone: alert5 }, { recording: 1 }], 'the recording starts after the tone ends');
+        assert.equal(store.getState().call?.id, 1);
+    });
+
+    it('a live call with no alert starts its recording with no tone scheduled', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket } = setup({ audio });
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        await settle();
+
+        assert.deepEqual(audio.schedule, [{ recording: 1 }]);
+    });
+
+    it('a call opened from the search panel in playback mode starts with no tone', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket } = setup({ audio });
+
+        socket.inject('CFG', groupToneCfg);
+        useCases.loadAndPlay(42);
+        socket.inject('CAL', { id: 42, system: 10, talkgroup: 100, audio: { data: [1] } }, 'play');
+        await settle();
+
+        assert.equal(useCases.livefeedMode, 'playback');
+        assert.deepEqual(audio.schedule, [{ recording: 42 }], 'a recording the listener asked for carries no tone');
+    });
+
+    it('the replay of the previous call plays no tone', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket, timers } = setup({ audio });
+
+        socket.inject('CFG', groupToneCfg);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+
+        audio.endTone();
+        await settle();
+
+        useCases.call.ended();
+        timers.fireAll();
+
+        assert.deepEqual(audio.schedule, [{ tone: alert5 }, { recording: 1 }]);
+
+        useCases.replay();
+        await settle();
+
+        assert.deepEqual(
+            audio.schedule.at(-1),
+            { recording: 1 },
+            'a replay of a call whose arrival carried a tone schedules no tone of its own',
+        );
+    });
+
+    it('a call skipped while its tone is playing never starts its recording, and the queued call plays', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket } = setup({ audio });
+
+        socket.inject('CFG', talkgroupToneCfg);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 101, audio: { data: [2] } });
+
+        assert.deepEqual(audio.schedule, [{ tone: alert5 }]);
+
+        useCases.skip();
+        await settle();
+
+        assert.deepEqual(audio.schedule, [{ tone: alert5 }, { recording: 2 }], 'the queue carries on while the tone is open');
+
+        audio.endTone();
+        await settle();
+
+        assert.deepEqual(
+            audio.schedule,
+            [{ tone: alert5 }, { recording: 2 }],
+            'the skipped call recording never starts after its tone ends',
+        );
+        assert.equal(useCases.call?.id, 2);
     });
 });

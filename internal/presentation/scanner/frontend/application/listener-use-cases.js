@@ -15,6 +15,7 @@ import {
 } from '../domain/livefeed-map.js';
 import { deriveCategories, toggleCategory as toggleCategoryMap } from '../domain/categories.js';
 import { expireAvoid, nextAvoidStep } from '../domain/avoid.js';
+import { resolveAlertSequence } from '../domain/alert-priority.js';
 import { holdSystemMap, holdTalkgroupMap } from '../domain/hold.js';
 import { enqueue, filterActive } from '../domain/playback-queue.js';
 import { initialAuthState, nextAuthState, readPin } from '../domain/pin.js';
@@ -41,6 +42,7 @@ export function createListenerUseCases({
   let callPrevious = null;
   let callQueue = [];
   let skipDelay = null;
+  let playbackToken = 0;
 
   let playbackList = null;
   let playbackListSeq = 0;
@@ -107,6 +109,10 @@ export function createListenerUseCases({
   function play(next) {
     if (livefeedPaused || skipDelay) return;
 
+    // A call handed in is one the listener asked to hear again or opened from the search panel; a
+    // call taken from the queue is an arrival. Only an arrival carries an alert tone.
+    const arrival = !next?.audio;
+
     if (next?.audio) {
       if (call) stop({ emit: false });
       call = next;
@@ -123,9 +129,23 @@ export function createListenerUseCases({
 
     const queue = livefeedMode === LivefeedMode.Playback ? playbackQueueCount() : callQueue.length;
 
-    audio.playCall(call, { onEnded: () => skip({ delay: true }) });
+    const tone = arrival && livefeedMode === LivefeedMode.Online ? resolveAlertSequence(call, config) : undefined;
 
-    emit({ call, queue });
+    const token = playbackToken;
+
+    const start = () => {
+      // A tone opens a window: the call can be skipped, stopped, taken out of the selection, or
+      // left behind by the queue before its recording begins. Only the call the listener is still
+      // hearing starts one.
+      if (token !== playbackToken) return;
+
+      audio.playCall(call, { onEnded: () => skip({ delay: true }) });
+
+      emit({ call, queue });
+    };
+
+    if (tone) audio.playOscillators(tone).then(start);
+    else start();
   }
 
   function playbackQueueCount() {
@@ -140,6 +160,10 @@ export function createListenerUseCases({
   }
 
   function stop(options = {}) {
+    // Every action that ends a call moves this, including the ones that happen while a tone is
+    // still playing, so a recording that was waiting on its tone knows it is no longer wanted.
+    playbackToken += 1;
+
     if (call) {
       callPrevious = call;
       call = null;
