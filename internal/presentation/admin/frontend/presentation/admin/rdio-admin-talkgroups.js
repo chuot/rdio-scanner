@@ -8,12 +8,14 @@ import { playAlert } from './play-alert.js';
 import { getAdminContext } from '../../application/admin-context.js';
 import { talkgroupErrors } from '../../domain/systems-validation.js';
 import { sectionWorking, setSectionWorking } from './section-shell.js';
-import { commitSubRows, connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import {
   deleteRow,
   numberField,
   parseNumber,
+  rowContext,
   selectField,
+  setRowMarker,
   textField,
   titleCase,
   makePanel,
@@ -81,31 +83,48 @@ function talkgroupRow(component, talkgroup, index, rows) {
   const tags = (sectionWorking('tags') ?? []).filter((tag) => typeof tag.id === 'number' && tag.id > 0);
   const alerts = getAdminContext().store.getState().alerts ?? {};
 
-  const errors = talkgroupErrors(talkgroup, rows, {
-    groupIds: groups.map((group) => group.id),
-    tagIds: tags.map((tag) => tag.id),
-  });
+  const knownIds = { groupIds: groups.map((group) => group.id), tagIds: tags.map((tag) => tag.id) };
+
+  // The row's errors, recomputed from the rows as they are at the moment of the reading: a
+  // duplicate identifier is a rule about the whole list, and the row the operator's value collides
+  // with has to be found in the list as it now is.
+  const errorsFor = (list) => talkgroupErrors(list[index], list, knownIds);
+
+  const errors = errorsFor(rows);
 
   const key = rowPanelKey(component, talkgroup, index);
+  const ctx = rowContext(component, key);
 
   const details = makePanel(component.openState, key, talkgroup.label?.trim() || 'NewTalkgroup', Object.keys(errors).length);
 
-  const update = (patch) => {
-    commitSubRows(component, freshRows(component).map((t, i) => (i === index ? { ...t, ...patch } : t)), true);
+  const update = (patch, field, name) => {
+    const next = freshRows(component).map((t, i) => (i === index ? { ...t, ...patch } : t));
+
+    commitSubRows(component, next, true);
+
+    const nextErrors = errorsFor(next);
+
+    if (field) refreshField(component, field, nextErrors[name] ?? '');
+
+    setRowMarker(details, Object.keys(nextErrors).length > 0);
   };
 
-  const refField = numberField(component.errorTargets, details, 'Id', 'Talkgroup identifier in decimal format.', talkgroup.talkgroupRef, errors.talkgroupRef);
+  const refField = numberField(ctx, details, 'talkgroupRef', 'Id', 'Talkgroup identifier in decimal format.', talkgroup.talkgroupRef, errors.talkgroupRef);
   refField.input.min = '1';
   refField.input.step = '1';
-  refField.input.addEventListener('change', () => update({ talkgroupRef: parseNumber(refField.input.value) }));
+  refField.input.addEventListener('change', () => update({ talkgroupRef: parseNumber(refField.input.value) }, refField.field, 'talkgroupRef'));
 
-  const labelField = textField(component.errorTargets, details, 'Label', 'Talkgroup label displayed on the main screen and on buttons.', talkgroup.label, errors.label);
-  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }));
+  const labelField = textField(ctx, details, 'label', 'Label', 'Talkgroup label displayed on the main screen and on buttons.', talkgroup.label, errors.label);
+  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
-  const nameField = textField(component.errorTargets, details, 'Name', 'Talkgroup name displayed on the main screen.', talkgroup.name, errors.name);
-  nameField.input.addEventListener('change', () => update({ name: nameField.input.value }));
+  const nameField = textField(ctx, details, 'name', 'Name', 'Talkgroup name displayed on the main screen.', talkgroup.name, errors.name);
+  nameField.input.addEventListener('change', () => update({ name: nameField.input.value }, nameField.field, 'name'));
 
-  // groupIds — checkbox list of the saved groups (multi-select).
+  // groupIds — checkbox list of the saved groups (multi-select). The list is a field of its own:
+  // the row under it is marked only once the operator has reached the list, the same rule the
+  // fields inside a form field follow.
+  const groupsKey = `${ctx.key}:groupIds`;
+
   const groupsRow = document.createElement('div');
   groupsRow.className = 'row';
 
@@ -115,7 +134,16 @@ function talkgroupRow(component, talkgroup, index, rows) {
   const groupsList = document.createElement('div');
   groupsList.className = 'rdio-checkbox-list';
 
-  const selectedGroupIds = Array.isArray(talkgroup.groupIds) ? talkgroup.groupIds : typeof talkgroup.groupIds === 'number' ? [talkgroup.groupIds] : [];
+  const readGroupIds = (row) => (Array.isArray(row?.groupIds) ? row.groupIds : typeof row?.groupIds === 'number' ? [row.groupIds] : []);
+
+  const selectedGroupIds = readGroupIds(talkgroup);
+
+  const writeGroupsMarker = (rows) => {
+    const invalid = component.reached.has(groupsKey) && Boolean(errorsFor(rows).groupIds);
+
+    if (invalid) groupsRow.dataset.invalid = 'true';
+    else delete groupsRow.dataset.invalid;
+  };
 
   for (const group of groups) {
     const label = document.createElement('label');
@@ -124,11 +152,18 @@ function talkgroupRow(component, talkgroup, index, rows) {
     checkbox.type = 'checkbox';
     checkbox.checked = selectedGroupIds.includes(group.id);
     checkbox.addEventListener('change', () => {
-      const next = checkbox.checked
-        ? [...selectedGroupIds, group.id]
-        : selectedGroupIds.filter((id) => id !== group.id);
+      // The selection the boxes carry right now, read from the row as the store holds it: the row
+      // the operator is editing stays on the page, so the boxes they tick next are the boxes of
+      // this same render, and a pick must add to what the row already holds.
+      const selected = readGroupIds(freshRows(component)[index]);
+
+      const next = checkbox.checked ? [...selected, group.id] : selected.filter((id) => id !== group.id);
+
+      component.reached.add(groupsKey);
 
       update({ groupIds: next });
+
+      writeGroupsMarker(freshRows(component));
     });
 
     const text = document.createElement('span');
@@ -138,36 +173,36 @@ function talkgroupRow(component, talkgroup, index, rows) {
     groupsList.append(label);
   }
 
-  if (errors.groupIds) groupsRow.dataset.invalid = 'true';
+  writeGroupsMarker(rows);
 
   groupsRow.append(groupsHelp, groupsList);
   details.append(groupsRow);
 
   const tagOptions = tags.map((tag) => [String(tag.id), tag.label]);
 
-  selectField(component.errorTargets, details, 'Tag', 'Tag to which this talkgroups belongs.', tagOptions, talkgroup.tagId === null || talkgroup.tagId === undefined ? '' : String(talkgroup.tagId), (value) => update({ tagId: value === '' ? null : Number(value) }), null, errors.tagId);
+  const tagField = selectField(ctx, details, 'tagId', 'Tag', 'Tag to which this talkgroups belongs.', tagOptions, talkgroup.tagId === null || talkgroup.tagId === undefined ? '' : String(talkgroup.tagId), (value) => update({ tagId: value === '' ? null : Number(value) }, tagField.field, 'tagId'), null, errors.tagId);
 
   const alertOptions = [['', 'No Alert'], ...Object.keys(alerts).map((alert) => [alert, titleCase(alert)])];
 
-  selectField(component.errorTargets, details, 'Audio alert', TALKGROUP_ALERT_CAPTION, alertOptions, talkgroup.alert ?? '', (value) => {
+  selectField(ctx, details, 'alert', 'Audio alert', TALKGROUP_ALERT_CAPTION, alertOptions, talkgroup.alert ?? '', (value) => {
     update({ alert: value });
 
     if (value) playAlert(alerts, value);
   });
 
-  const delayField = numberField(component.errorTargets, details, 'Delay', 'Delay in minutes before propagating calls to clients.', talkgroup.delay);
+  const delayField = numberField(ctx, details, 'delay', 'Delay', 'Delay in minutes before propagating calls to clients.', talkgroup.delay);
   delayField.input.min = '0';
   delayField.input.step = '1';
   delayField.input.placeholder = 'Minutes';
-  delayField.input.addEventListener('change', () => update({ delay: parseNumber(delayField.input.value) }));
+  delayField.input.addEventListener('change', () => update({ delay: parseNumber(delayField.input.value) }, delayField.field, 'delay'));
 
-  const frequencyField = numberField(component.errorTargets, details, 'Frequency', 'Fake frequency in hertz displayed on the main screen.', talkgroup.frequency, errors.frequency);
+  const frequencyField = numberField(ctx, details, 'frequency', 'Frequency', 'Fake frequency in hertz displayed on the main screen.', talkgroup.frequency, errors.frequency);
   frequencyField.input.min = '0';
-  frequencyField.input.addEventListener('change', () => update({ frequency: parseNumber(frequencyField.input.value) }));
+  frequencyField.input.addEventListener('change', () => update({ frequency: parseNumber(frequencyField.input.value) }, frequencyField.field, 'frequency'));
 
-  selectField(component.errorTargets, details, 'Led Color', LED_CAPTION, LEDS, talkgroup.led ?? '', (value) => update({ led: value }));
+  selectField(ctx, details, 'led', 'Led Color', LED_CAPTION, LEDS, talkgroup.led ?? '', (value) => update({ led: value }));
 
-  selectField(component.errorTargets, details, 'Type', 'Type of radio system that will override the type defined at the system level, if any.', TYPES, talkgroup.type ?? '', (value) => update({ type: value }), TYPE_CAPTION);
+  selectField(ctx, details, 'type', 'Type', 'Type of radio system that will override the type defined at the system level, if any.', TYPES, talkgroup.type ?? '', (value) => update({ type: value }), TYPE_CAPTION);
 
   const bottom = document.createElement('div');
   bottom.className = 'row bottom';

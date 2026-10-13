@@ -24,7 +24,7 @@ import {
   subSlice,
   subWorking,
 } from './section-shell.js';
-import { rowKey } from './row-builders.js';
+import { rowKey, setRowMarker } from './row-builders.js';
 
 export function newRow(level) {
   const base = { id: 0, order: 0 };
@@ -54,6 +54,10 @@ function bind(component) {
 
   component.boundKey = sliceKey(component);
 
+  // The fields of the slice the section shows are reached or not, and the fields of another
+  // system are their own: the slice's key is the prefix every field key of this render is built on.
+  component.rowKeyPrefix = component.boundKey;
+
   const { store } = getAdminContext();
 
   component.unsubscribes = [store.subscribe(
@@ -67,6 +71,7 @@ function bind(component) {
 export function connectSubSection(component, spec) {
   component.subSection = spec;
   component.openState = new Map();
+  component.reached = new Set();
 
   bind(component);
   component.render();
@@ -92,12 +97,50 @@ export function commitSubRows(component, rows, selfEdit = false) {
   setSubInvalid(level, component.systemId, subSectionInvalid(level, rows, sectionWorking('groups') ?? [], sectionWorking('tags') ?? []));
 }
 
+// The field the operator just edited: its message is recomputed from the rows as they now are, and
+// editing a field is reaching it. The row's warning icon follows the same recomputation, because
+// the row stays on the page and the icon has to move with it.
+export function refreshField(component, field, message, panel, invalid) {
+  component.reached.add(field.dataset.field);
+
+  field.setError(message);
+  field.markReached();
+
+  if (panel) setRowMarker(panel, invalid);
+}
+
+// The fields the section built carry the key their reached state is remembered by; the state is
+// harvested before the rebuild, the way the open state is, and handed back after it.
+export function harvestReached(component) {
+  for (const field of component.querySelectorAll('rdio-form-field[data-field]')) {
+    if (field.isReached?.()) component.reached.add(field.dataset.field);
+  }
+}
+
+export function restoreReached(component) {
+  for (const field of component.querySelectorAll('rdio-form-field[data-field]')) {
+    if (component.reached.has(field.dataset.field)) field.markReached();
+  }
+}
+
+// A section whose working copy matches the server's baseline — saved, discarded, or pushed from the
+// server — starts with every field unreached: the operator has touched nothing. Only the fields of
+// the slice being rebuilt are cleared; the rows the operator is working on in another system keep
+// the state of the fields they edited.
+export function clearReached(component, prefix) {
+  for (const key of [...component.reached]) {
+    if (key.startsWith(`${prefix}:`)) component.reached.delete(key);
+  }
+}
+
 export function renderSubSection(component) {
   const { level, caption, addLabel, buildRow } = component.subSection;
 
   for (const details of component.querySelectorAll('details[data-key]')) {
     component.openState.set(details.dataset.key, details.open);
   }
+
+  harvestReached(component);
 
   const systems = sortedByOrder(sectionWorking('systems') ?? []).filter((system) => typeof system.id === 'number' && system.id > 0);
 
@@ -113,6 +156,10 @@ export function renderSubSection(component) {
   const slice = subSlice(level, component.systemId);
 
   if (slice && slice.working === component.internalEdit) return;
+
+  // A section whose working copy matches the server's baseline — saved, discarded, or pushed
+  // from the server — starts with every field unreached: the operator has touched nothing.
+  if (slice && !slice.dirty) clearReached(component, component.boundKey);
 
   component.errorTargets = [];
 
@@ -187,6 +234,8 @@ export function renderSubSection(component) {
   component.replaceChildren(root);
 
   for (const { field, error } of component.errorTargets) field.setError(error);
+
+  restoreReached(component);
 
   setSubInvalid(level, component.systemId, subSectionInvalid(level, rows, sectionWorking('groups') ?? [], sectionWorking('tags') ?? []));
 }

@@ -4,8 +4,8 @@
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { unitErrors } from '../../domain/systems-validation.js';
-import { commitSubRows, connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
-import { deleteRow, numberField, parseNumber, textField, makePanel } from './row-builders.js';
+import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { deleteRow, numberField, parseNumber, rowContext, setRowMarker, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'units';
 
@@ -13,43 +13,57 @@ const CAPTION = 'Create units to display the label instead of showing the unit i
 
 const SPEC = { level: LEVEL, caption: CAPTION, addLabel: 'New unit', rowPrefix: 'unit', listen: [], buildRow: unitRow };
 
+function freshRows(component) {
+  return getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
+}
+
 function unitRow(component, unit, index, rows) {
-  const errors = unitErrors(unit, rows);
+  // The row's errors, recomputed from the rows as they are at the moment of the reading: a
+  // duplicate identifier is a rule about the whole list, and the row the operator's value collides
+  // with has to be found in the list as it now is.
+  const errorsFor = (list) => unitErrors(list[index], list);
+
+  const errors = errorsFor(rows);
 
   const key = rowPanelKey(component, unit, index);
+  const ctx = rowContext(component, key);
 
   const details = makePanel(component.openState, key, unit.label?.trim() || 'NewUnit', Object.keys(errors).length);
 
-  const update = (patch) => {
-    const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
+  const update = (patch, field, name) => {
+    const next = freshRows(component).map((u, i) => (i === index ? { ...u, ...patch } : u));
 
-    commitSubRows(component, fresh.map((u, i) => (i === index ? { ...u, ...patch } : u)), true);
+    commitSubRows(component, next, true);
+
+    const nextErrors = errorsFor(next);
+
+    if (field) refreshField(component, field, nextErrors[name] ?? '');
+
+    setRowMarker(details, Object.keys(nextErrors).length > 0);
   };
 
-  const refField = numberField(component.errorTargets, details, 'Id', 'Unit identifier in decimal format. You can define a unique unit identifier here.', unit.unitRef, errors.unitRef);
+  const refField = numberField(ctx, details, 'unitRef', 'Id', 'Unit identifier in decimal format. You can define a unique unit identifier here.', unit.unitRef, errors.unitRef);
   refField.input.min = '1';
   refField.input.step = '1';
-  refField.input.addEventListener('change', () => update({ unitRef: parseNumber(refField.input.value) }));
+  refField.input.addEventListener('change', () => update({ unitRef: parseNumber(refField.input.value) }, refField.field, 'unitRef'));
 
-  const fromField = numberField(component.errorTargets, details, 'Range from', 'Unit identifier range from.', unit.unitFrom, errors.unitFrom);
+  const fromField = numberField(ctx, details, 'unitFrom', 'Range from', 'Unit identifier range from.', unit.unitFrom, errors.unitFrom);
   fromField.input.min = '1';
   fromField.input.step = '1';
   fromField.input.placeholder = 'From';
-  fromField.input.addEventListener('change', () => update({ unitFrom: parseNumber(fromField.input.value) }));
+  fromField.input.addEventListener('change', () => update({ unitFrom: parseNumber(fromField.input.value) }, fromField.field, 'unitFrom'));
 
-  const toField = numberField(component.errorTargets, details, 'Range to', 'Unit identifier range to.', unit.unitTo, errors.unitTo);
+  const toField = numberField(ctx, details, 'unitTo', 'Range to', 'Unit identifier range to.', unit.unitTo, errors.unitTo);
   toField.input.min = '1';
   toField.input.step = '1';
   toField.input.placeholder = 'To';
-  toField.input.addEventListener('change', () => update({ unitTo: parseNumber(fromField.input.value) }));
+  toField.input.addEventListener('change', () => update({ unitTo: parseNumber(toField.input.value) }, toField.field, 'unitTo'));
 
-  const labelField = textField(component.errorTargets, details, 'Label', 'Unit label.', unit.label, errors.label);
-  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }));
+  const labelField = textField(ctx, details, 'label', 'Label', 'Unit label.', unit.label, errors.label);
+  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   deleteRow(details, 'Delete unit', () => {
-    const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
-
-    commitSubRows(component, fresh.filter((_, i) => i !== index));
+    commitSubRows(component, freshRows(component).filter((_, i) => i !== index));
   });
 
   return details;

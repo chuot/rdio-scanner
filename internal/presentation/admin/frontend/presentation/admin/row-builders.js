@@ -1,8 +1,11 @@
-// Shared row builders for the systems tree sections: the systems
-// section and the three per-level sections (sites, talkgroups, units) build the
-// same panels, captions, fields and delete rows, so the builders live once.
-// The openState map keeps a row's details open across re-renders, exactly as
+// Shared row builders for the systems tree sections: the systems section and the three per-level
+// sections (sites, talkgroups, units) build the same panels, captions, fields and delete rows, so
+// the builders live once. The openState map keeps a row's details open across re-renders, exactly as
 // each section component did before.
+//
+// A field carries the key its section remembers it by — the row's panel key and the field's name —
+// so the section can hand the field back the state of having been reached when it rebuilds the row,
+// the same way it hands back the open state.
 
 export function makePanel(openState, key, title, invalid) {
   const details = document.createElement('details');
@@ -36,6 +39,24 @@ export function makePanel(openState, key, title, invalid) {
   details.append(summary);
 
   return details;
+}
+
+// The row's warning icon names the row invalid, and follows the row's validity: it is added when
+// the row gains an error and taken away when it loses its last one. The row the operator is editing
+// stays on the page, so the icon is moved on the spot rather than rebuilt.
+export function setRowMarker(panel, invalid) {
+  const icon = panel.querySelectorAll('.row-invalid')[0];
+
+  if (invalid && !icon) {
+    const added = document.createElement('i');
+    added.className = 'material-icons row-invalid';
+    added.setAttribute('aria-label', 'Invalid row');
+    added.textContent = 'error';
+
+    panel.querySelector('summary')?.append(added);
+  }
+
+  if (!invalid && icon) icon.remove();
 }
 
 export function captionBlock(title, caption, typeList) {
@@ -78,7 +99,17 @@ export function captionBlock(title, caption, typeList) {
   return help;
 }
 
-export function formField(errorTargets, details, title, caption, control, error, typeList) {
+// The context a row's fields are built with: where the field hands its message over, the reached
+// state the section carries across its rebuilds, and the key the field's own key is built on — the
+// slice the section is showing, then the row's panel key, so a field is remembered by the row it
+// belongs to and not by the position a render happens to leave it in.
+export function rowContext(component, key) {
+  const prefix = component.rowKeyPrefix ? `${component.rowKeyPrefix}:` : '';
+
+  return { targets: component.errorTargets, reached: component.reached, key: `${prefix}${key}` };
+}
+
+export function formField(ctx, details, name, title, caption, control, error, typeList) {
   const row = document.createElement('div');
   row.className = 'row';
 
@@ -90,8 +121,9 @@ export function formField(errorTargets, details, title, caption, control, error,
   label.textContent = title;
 
   field.append(label, control);
+  field.dataset.field = `${ctx.key}:${name}`;
 
-  if (error) errorTargets.push({ field, error });
+  if (error) ctx.targets.push({ field, error });
 
   row.append(field);
   details.append(row);
@@ -99,36 +131,30 @@ export function formField(errorTargets, details, title, caption, control, error,
   return field;
 }
 
-export function textField(errorTargets, details, title, caption, value, error) {
+export function textField(ctx, details, name, title, caption, value, error) {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value ?? '';
 
-  formField(errorTargets, details, title, caption, input, error);
-
-  return { input };
+  return { input, field: formField(ctx, details, name, title, caption, input, error) };
 }
 
-export function numberField(errorTargets, details, title, caption, value, error) {
+export function numberField(ctx, details, name, title, caption, value, error) {
   const input = document.createElement('input');
   input.type = 'number';
   input.value = value === null || value === undefined ? '' : String(value);
 
-  formField(errorTargets, details, title, caption, input, error);
-
-  return { input };
+  return { input, field: formField(ctx, details, name, title, caption, input, error) };
 }
 
-export function textareaField(errorTargets, details, title, caption, value, error) {
+export function textareaField(ctx, details, name, title, caption, value, error) {
   const textarea = document.createElement('textarea');
   textarea.value = value ?? '';
 
-  formField(errorTargets, details, title, caption, textarea, error);
-
-  return { textarea };
+  return { textarea, field: formField(ctx, details, name, title, caption, textarea, error) };
 }
 
-export function selectField(errorTargets, details, title, caption, options, value, onChange, typeList, error) {
+export function selectField(ctx, details, name, title, caption, options, value, onChange, typeList, error) {
   const select = document.createElement('rdio-select');
   select.setAttribute('options', JSON.stringify(options));
   select.setAttribute('value', value);
@@ -139,9 +165,7 @@ export function selectField(errorTargets, details, title, caption, options, valu
     if (typeof ev.detail === 'string') onChange(ev.detail);
   });
 
-  formField(errorTargets, details, title, caption, select, error, typeList);
-
-  return select;
+  return { select, field: formField(ctx, details, name, title, caption, select, error, typeList) };
 }
 
 export function toggleField(details, title, caption, checked, onChange) {

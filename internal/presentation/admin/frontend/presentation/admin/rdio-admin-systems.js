@@ -21,14 +21,17 @@ import {
   deleteRow,
   numberField,
   parseNumber,
+  rowContext,
   rowKey,
   selectField,
+  setRowMarker,
   textareaField,
   textField,
   titleCase,
   toggleField,
   makePanel,
 } from './row-builders.js';
+import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'systems';
 
@@ -78,6 +81,10 @@ class RdioAdminSystems extends HTMLElement {
     this.dataset.bound = '1';
 
     this.openState = new Map();
+    this.reached = new Set();
+
+    // The systems section renders one slice, so every field key it builds carries that slice's key.
+    this.rowKeyPrefix = `section:${NAME}`;
 
     this.unsubscribe = bindSectionSlices(() => this.render());
 
@@ -100,6 +107,12 @@ class RdioAdminSystems extends HTMLElement {
     for (const details of this.querySelectorAll('details[data-key]')) {
       this.openState.set(details.dataset.key, details.open);
     }
+
+    harvestReached(this);
+
+    // A section whose working copy matches the server's baseline — saved, discarded, or pushed
+    // from the server — starts with every field unreached: the operator has touched nothing.
+    if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const systems = this.systems;
 
@@ -142,6 +155,8 @@ class RdioAdminSystems extends HTMLElement {
 
     for (const { field, error } of this.errorTargets) field.setError(error);
 
+    restoreReached(this);
+
     setSectionInvalid(NAME, systemsSectionInvalid(systems, sectionWorking('groups') ?? [], sectionWorking('tags') ?? []));
   }
 
@@ -156,27 +171,41 @@ class RdioAdminSystems extends HTMLElement {
   }
 
   systemElement(system, index, systems, alerts) {
-    const errors = systemErrors(system, systems);
+    // The row's errors, recomputed from the rows as they are at the moment of the reading: a
+    // duplicate identifier is a rule about the whole list, and the row the operator's value collides
+    // with has to be found in the list as it now is.
+    const errorsFor = (list) => systemErrors(list[index], list);
 
-    const key = rowKey(system, index);
+    const errors = errorsFor(systems);
 
-    const details = makePanel(this.openState, `sys:${key}`, system.label?.trim() || 'NewSystem', Object.keys(errors).length);
+    const key = `sys:${rowKey(system, index)}`;
+    const ctx = rowContext(this, key);
 
-    const update = (patch) => {
-      this.commit(this.systems.map((s, i) => (i === index ? { ...s, ...patch } : s)), true);
+    const details = makePanel(this.openState, key, system.label?.trim() || 'NewSystem', Object.keys(errors).length);
+
+    const update = (patch, field, name) => {
+      const next = this.systems.map((s, i) => (i === index ? { ...s, ...patch } : s));
+
+      this.commit(next, true);
+
+      const nextErrors = errorsFor(next);
+
+      if (field) refreshField(this, field, nextErrors[name] ?? '');
+
+      setRowMarker(details, Object.keys(nextErrors).length > 0);
     };
 
-    const refField = numberField(this.errorTargets, details, 'Id', 'System identifier in decimal format.', system.systemRef, errors.systemRef);
+    const refField = numberField(ctx, details, 'systemRef', 'Id', 'System identifier in decimal format.', system.systemRef, errors.systemRef);
     refField.input.min = '1';
     refField.input.step = '1';
-    refField.input.addEventListener('change', () => update({ systemRef: parseNumber(refField.input.value) }));
+    refField.input.addEventListener('change', () => update({ systemRef: parseNumber(refField.input.value) }, refField.field, 'systemRef'));
 
-    const labelField = textField(this.errorTargets, details, 'Label', 'System label displayed on the main screen and on the search panel.', system.label, errors.label);
-    labelField.input.addEventListener('change', () => update({ label: labelField.input.value }));
+    const labelField = textField(ctx, details, 'label', 'Label', 'System label displayed on the main screen and on the search panel.', system.label, errors.label);
+    labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
     const alertOptions = [['', 'No Alert'], ...Object.keys(alerts).map((alert) => [alert, titleCase(alert)])];
 
-    selectField(this.errorTargets, details, 'Audio alert', ALERT_CAPTION, alertOptions, system.alert ?? '', (value) => {
+    selectField(ctx, details, 'alert', 'Audio alert', ALERT_CAPTION, alertOptions, system.alert ?? '', (value) => {
       update({ alert: value });
 
       if (value) playAlert(alerts, value);
@@ -184,18 +213,18 @@ class RdioAdminSystems extends HTMLElement {
 
     toggleField(details, 'Auto Populate', 'Allows the automatic creation of unconfigured talkgroups.', !!system.autoPopulate, (checked) => update({ autoPopulate: checked }));
 
-    const delayField = numberField(this.errorTargets, details, 'Delay', 'Delay in minutes before propagating calls to clients.', system.delay);
+    const delayField = numberField(ctx, details, 'delay', 'Delay', 'Delay in minutes before propagating calls to clients.', system.delay);
     delayField.input.min = '0';
     delayField.input.step = '1';
     delayField.input.placeholder = 'Minutes';
-    delayField.input.addEventListener('change', () => update({ delay: parseNumber(delayField.input.value) }));
+    delayField.input.addEventListener('change', () => update({ delay: parseNumber(delayField.input.value) }, delayField.field, 'delay'));
 
-    selectField(this.errorTargets, details, 'Led Color', LED_CAPTION, LEDS, system.led ?? '', (value) => update({ led: value }));
+    selectField(ctx, details, 'led', 'Led Color', LED_CAPTION, LEDS, system.led ?? '', (value) => update({ led: value }));
 
-    const blacklistsField = textareaField(this.errorTargets, details, 'Blacklists', 'A comma separated list of talkgroup Ids to blacklist from this system. This only has an effect if the auto populate option is enabled.', system.blacklists ?? '', errors.blacklists);
-    blacklistsField.textarea.addEventListener('change', () => update({ blacklists: blacklistsField.textarea.value }));
+    const blacklistsField = textareaField(ctx, details, 'blacklists', 'Blacklists', 'A comma separated list of talkgroup Ids to blacklist from this system. This only has an effect if the auto populate option is enabled.', system.blacklists ?? '', errors.blacklists);
+    blacklistsField.textarea.addEventListener('change', () => update({ blacklists: blacklistsField.textarea.value }, blacklistsField.field, 'blacklists'));
 
-    selectField(this.errorTargets, details, 'Type', null, TYPES, system.type ?? '', (value) => update({ type: value }), TYPE_CAPTION);
+    selectField(ctx, details, 'type', 'Type', null, TYPES, system.type ?? '', (value) => update({ type: value }), TYPE_CAPTION);
 
     const bottom = document.createElement('div');
     bottom.className = 'row bottom';

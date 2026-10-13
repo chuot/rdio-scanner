@@ -183,23 +183,57 @@ class RdioFormField extends HTMLElement {
     if (this.dataset.bound) return;
     this.dataset.bound = '1';
 
-    const input = this.querySelector('input, select, textarea');
-
     const label = this.querySelector('label');
-    if (label && input && !input.id) {
-      input.id = `fld-${Math.random().toString(36).slice(2, 8)}`;
-      label.htmlFor = input.id;
-    }
 
     const error = document.createElement('div');
     error.className = 'rdio-form-error';
     error.setAttribute('role', 'alert');
     this.append(error);
 
-    this.setError = (message) => {
-      error.textContent = message ?? '';
-      input?.toggleAttribute('aria-invalid', !!message);
+    // The message a section last computed for this field, and whether the operator has reached it.
+    // A field is reached when the operator changes its value, picks in it, or the form holding it is
+    // submitted — the reading Angular Material's error matcher used. Walking across a field says
+    // nothing: an invalid value nobody has edited is not reported.
+    let message = '';
+    let reached = false;
+
+    // The control is looked up when the field paints, not when it is connected: a select field's
+    // inner select is built by its own connectedCallback, which runs after this one, so the control
+    // is not under the field yet at connect time.
+    const control = () => this.querySelector('input, select, textarea');
+
+    const paint = () => {
+      const shown = reached && !!message;
+
+      error.textContent = shown ? message : '';
+      control()?.toggleAttribute('aria-invalid', shown);
     };
+
+    this.setError = (text) => {
+      message = text ?? '';
+      paint();
+    };
+
+    this.markReached = () => {
+      reached = true;
+      paint();
+    };
+
+    this.isReached = () => reached;
+
+    const field = control();
+
+    if (label && field && !field.id) {
+      field.id = `fld-${Math.random().toString(36).slice(2, 8)}`;
+      label.htmlFor = field.id;
+    }
+
+    // Typing, picking, and walking away all bubble out of the control to the field that owns it.
+    // A select reports its value through an event that does not bubble, and a form submit reaches
+    // no control at all: those two tell the field themselves, through markReached.
+    for (const type of ['input', 'change', 'focusout']) {
+      this.addEventListener(type, () => this.markReached());
+    }
   }
 }
 
@@ -221,7 +255,9 @@ class RdioSelect extends HTMLElement {
     if (this.hasAttribute('value')) select.value = this.getAttribute('value');
 
     select.addEventListener('change', () => {
-      this.dispatchEvent(new CustomEvent('change', { detail: select.value }));
+      // The value leaves the select as a bubbling event: the form field that owns the select is
+      // listening for the change the operator made, and a non-bubbling event stops at this element.
+      this.dispatchEvent(new CustomEvent('change', { detail: select.value, bubbles: true }));
     });
 
     this.append(select);

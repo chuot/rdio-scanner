@@ -5,8 +5,8 @@
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { siteErrors } from '../../domain/systems-validation.js';
-import { commitSubRows, connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
-import { deleteRow, numberField, parseNumber, textField, makePanel } from './row-builders.js';
+import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { deleteRow, numberField, parseNumber, rowContext, setRowMarker, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'sites';
 
@@ -14,31 +14,45 @@ const CAPTION = 'System sites, you can drag and drop sites to rearrange them. Pi
 
 const SPEC = { level: LEVEL, caption: CAPTION, addLabel: 'New Site', rowPrefix: 'site', listen: [], buildRow: siteRow };
 
+function freshRows(component) {
+  return getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
+}
+
 function siteRow(component, site, index, rows) {
-  const errors = siteErrors(site, rows);
+  // The row's errors, recomputed from the rows as they are at the moment of the reading: a
+  // duplicate identifier is a rule about the whole list, and the row the operator's value collides
+  // with has to be found in the list as it now is.
+  const errorsFor = (list) => siteErrors(list[index], list);
+
+  const errors = errorsFor(rows);
 
   const key = rowPanelKey(component, site, index);
+  const ctx = rowContext(component, key);
 
   const details = makePanel(component.openState, key, site.label?.trim() || 'NewSite', Object.keys(errors).length);
 
-  const update = (patch) => {
-    const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
+  const update = (patch, field, name) => {
+    const next = freshRows(component).map((s, i) => (i === index ? { ...s, ...patch } : s));
 
-    commitSubRows(component, fresh.map((s, i) => (i === index ? { ...s, ...patch } : s)), true);
+    commitSubRows(component, next, true);
+
+    const nextErrors = errorsFor(next);
+
+    if (field) refreshField(component, field, nextErrors[name] ?? '');
+
+    setRowMarker(details, Object.keys(nextErrors).length > 0);
   };
 
-  const refField = numberField(component.errorTargets, details, 'Id', 'Site identifier in decimal format.', site.siteRef, errors.siteRef);
+  const refField = numberField(ctx, details, 'siteRef', 'Id', 'Site identifier in decimal format.', site.siteRef, errors.siteRef);
   refField.input.min = '1';
   refField.input.step = '1';
-  refField.input.addEventListener('change', () => update({ siteRef: parseNumber(refField.input.value) }));
+  refField.input.addEventListener('change', () => update({ siteRef: parseNumber(refField.input.value) }, refField.field, 'siteRef'));
 
-  const labelField = textField(component.errorTargets, details, 'Label', 'Site label.', site.label, errors.label);
-  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }));
+  const labelField = textField(ctx, details, 'label', 'Label', 'Site label.', site.label, errors.label);
+  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   deleteRow(details, 'Delete site', () => {
-    const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
-
-    commitSubRows(component, fresh.filter((_, i) => i !== index));
+    commitSubRows(component, freshRows(component).filter((_, i) => i !== index));
   });
 
   return details;
