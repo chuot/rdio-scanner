@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -303,7 +303,7 @@ class RdioAdminApikeys extends HTMLElement {
     // Legacy generates a v4-shaped UUID seeded from the timestamp; the
     // standard crypto.randomUUID() produces the same shape.
     this.commitRows([
-      { id: 0, order: 0, disabled: false, key: crypto.randomUUID(), ident: '', systems: '*' },
+      markRowIdentity({ id: 0, order: 0, disabled: false, key: crypto.randomUUID(), ident: '', systems: '*' }),
       ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
     ]);
   }

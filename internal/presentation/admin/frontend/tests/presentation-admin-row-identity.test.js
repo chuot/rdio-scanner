@@ -19,6 +19,12 @@ import '../presentation/admin/rdio-admin-systems.js';
 import '../presentation/admin/rdio-admin-sites.js';
 import '../presentation/admin/rdio-admin-talkgroups.js';
 import '../presentation/admin/rdio-admin-units.js';
+import '../presentation/admin/rdio-admin-groups.js';
+import '../presentation/admin/rdio-admin-tags.js';
+import '../presentation/admin/rdio-admin-access.js';
+import '../presentation/admin/rdio-admin-apikeys.js';
+import '../presentation/admin/rdio-admin-downstreams.js';
+import '../presentation/admin/rdio-admin-dirwatch.js';
 
 import { connectFields, fieldMessage, findAll, reachField, texts } from './dom-shim.js';
 
@@ -43,6 +49,11 @@ const UNITS = {
 const GROUPS = [{ id: 1, label: 'Dispatch' }];
 const TAGS = [{ id: 3, label: 'Fire' }];
 
+const ACCESS = [{ id: 1, order: 1, code: 'alpha', ident: 'AAA', systems: '*' }];
+const APIKEYS = [{ id: 1, order: 1, key: 'first-key', ident: 'K1', systems: '*', disabled: false }];
+const DOWNSTREAMS = [{ id: 1, order: 1, url: 'https://first.example', apikey: 'dk-1', systems: '*', disabled: false }];
+const DIRWATCH = [{ id: 1, order: 1, directory: '/var/spool/first', extension: 'mp3', mask: '#SYS #TG', type: 'default', systemId: 2, siteId: null, talkgroupId: null, frequency: 1, delay: 2000, disabled: false }];
+
 function slice(baseline) {
   return { baseline, working: structuredClone(baseline), dirty: false, invalid: false, conflict: false };
 }
@@ -61,6 +72,10 @@ function seed(store) {
     'section:systems': slice([METRO, COUNTY]),
     'section:groups': slice(GROUPS),
     'section:tags': slice(TAGS),
+    'section:access': slice(ACCESS),
+    'section:apikeys': slice(APIKEYS),
+    'section:downstreams': slice(DOWNSTREAMS),
+    'section:dirwatch': slice(DIRWATCH),
   });
 
   return store;
@@ -86,14 +101,23 @@ function addRow(el) {
   return rows(el)[0];
 }
 
-// The rows on the page, in the order the section presents them.
+// The rows on the page, in the order the section presents them. The systems tree builds its rows as
+// panels that open; the sections that build their rows by hand build them as panels of their own.
 function rows(el) {
-  return findAll(el, (node) => node.tag === 'details');
+  return findAll(el, (node) => node.tag === 'details'
+    || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
+}
+
+// The name a field answers to: the systems-tree sections and the row sections with a dialog put a
+// <label> inside the field, and the sections that build their rows by hand name the field in the
+// description row beside it.
+function fieldTitle(node) {
+  return texts(findAll(node, (child) => child.tag === 'label'))[0]
+    ?? findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent;
 }
 
 function field(row, title) {
-  return findAll(row, (node) => node.tag === 'rdio-form-field')
-    .find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title);
+  return findAll(row, (node) => node.tag === 'rdio-form-field').find((node) => fieldTitle(node) === title);
 }
 
 function controlOf(row, title) {
@@ -103,7 +127,7 @@ function controlOf(row, title) {
 // Every message the row carries, named by the field that carries it.
 function messages(row) {
   return findAll(row, (node) => node.tag === 'rdio-form-field')
-    .map((node) => ({ title: texts(findAll(node, (child) => child.tag === 'label'))[0], message: fieldMessage(node) }))
+    .map((node) => ({ title: fieldTitle(node), message: fieldMessage(node) }))
     .filter((entry) => entry.message);
 }
 
@@ -248,3 +272,78 @@ test('the second new site row leaves the label the operator typed in the first n
 
   assert.deepEqual(working.map((site) => site.label), ['', 'Depot', 'East'], 'the working copy holds both new rows, each with what the operator left in it');
 });
+
+// ---------------------------------------------------------------------------
+// The six sections that build their rows by hand. Their rows are panels of their own, with no open
+// state to carry: the reading here is the message the operator revealed, and the row it belongs to.
+// ---------------------------------------------------------------------------
+
+const HAND_BUILT = [
+  ['groups', 'rdio-admin-groups', 'Label', 'Label is required', 'Delete Group'],
+  ['tags', 'rdio-admin-tags', 'Label', 'Label is required', 'Delete Tag'],
+  ['access', 'rdio-admin-access', 'Code', 'Code is required', 'Delete access'],
+  ['API keys', 'rdio-admin-apikeys', 'Ident', 'Ident is required', 'Delete API key'],
+  ['downstreams', 'rdio-admin-downstreams', 'URL', 'URL is required', 'Delete downstream'],
+  ['dirwatch', 'rdio-admin-dirwatch', 'Directory', 'Directory is required', 'Delete dirwatch'],
+];
+
+for (const [name, tag, title, message, deleteLabel] of HAND_BUILT) {
+  test(`a second new ${name} row keeps the message the operator revealed on the first new row`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+    const first = addRow(el);
+
+    typeIn(first, title, '');
+
+    assert.equal(fieldMessage(field(first, title)), message, 'the row the operator reached carries its message');
+
+    addRow(el);
+
+    const [second, firstRow] = rows(el);
+
+    assert.equal(fieldMessage(field(firstRow, title)), message, 'the message stays on the row the operator reached');
+    assert.deepEqual(messages(second), [], 'the row the second add created says nothing about fields nobody reached');
+  });
+
+  test(`a new ${name} row added after deleting a new row inherits nothing from it`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+    const row = addRow(el);
+
+    typeIn(row, title, '');
+
+    assert.equal(fieldMessage(field(row, title)), message);
+
+    rowButton(row, deleteLabel).click();
+    connectFields(el);
+
+    const fresh = addRow(el);
+
+    assert.deepEqual(messages(fresh), [], 'the new row inherits no message from the row the operator deleted');
+
+    for (const saved of rows(el).slice(1)) {
+      assert.deepEqual(messages(saved), [], 'no saved row carries a message of the row the operator deleted');
+    }
+  });
+
+  test(`dragging a new ${name} row moves the message with the row the operator reached`, () => {
+    seed(getAdminContext().store);
+
+    const el = attach(tag);
+
+    addRow(el);
+    addRow(el);
+
+    typeIn(rows(el)[1], title, '');
+
+    assert.equal(fieldMessage(field(rows(el)[1], title)), message, 'the row the operator reached carries its message');
+
+    dragRow(el, 1, 0);
+
+    assert.equal(fieldMessage(field(rows(el)[0], title)), message,
+      'the message travels with the row the operator reached, not with the position it leaves');
+    assert.deepEqual(messages(rows(el)[1]), [], 'the row nobody reached stays silent');
+  });
+}

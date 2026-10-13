@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'access';
@@ -297,7 +297,10 @@ class RdioAdminAccess extends HTMLElement {
   }
 
   add() {
-    this.commitRows([{ code: '', ident: '', systems: '*', order: 0 }, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))]);
+    this.commitRows([
+      markRowIdentity({ code: '', ident: '', systems: '*', order: 0 }),
+      ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
+    ]);
   }
 }
 

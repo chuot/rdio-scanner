@@ -15,7 +15,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { captionBlock, markField, rowKey } from './row-builders.js';
+import { captionBlock, markField, markRowIdentity, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
@@ -457,7 +457,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
   add() {
     const rows = [
-      { delay: 2000, deleteAfter: true, directory: '', disabled: false, order: 0, type: 'default' },
+      markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, order: 0, type: 'default' }),
       ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
     ];
 

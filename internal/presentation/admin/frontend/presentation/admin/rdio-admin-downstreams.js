@@ -16,7 +16,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'downstreams';
@@ -283,7 +283,7 @@ class RdioAdminDownstreams extends HTMLElement {
 
   add() {
     this.commitRows([
-      { id: 0, order: 0, apikey: '', disabled: false, systems: '*', url: '' },
+      markRowIdentity({ id: 0, order: 0, apikey: '', disabled: false, systems: '*', url: '' }),
       ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
     ]);
   }

@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'tags';
@@ -258,7 +258,7 @@ class RdioAdminTags extends HTMLElement {
   }
 
   add() {
-    const rows = [{ alert: '', label: '', led: '', order: 0 }, ...this.rows];
+    const rows = [markRowIdentity({ alert: '', label: '', led: '', order: 0 }), ...this.rows];
 
     setSectionWorking(NAME, rows);
     setSectionInvalid(NAME, rows.some((row) => !row.label));
