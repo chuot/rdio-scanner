@@ -5,8 +5,7 @@
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { siteErrors } from '../../domain/systems-validation.js';
-import { setSubWorking } from './section-shell.js';
-import { connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { commitSubRows, connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import { deleteRow, numberField, parseNumber, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'sites';
@@ -25,7 +24,7 @@ function siteRow(component, site, index, rows) {
   const update = (patch) => {
     const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
 
-    setSubWorking(LEVEL, component.systemId, fresh.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+    commitSubRows(component, fresh.map((s, i) => (i === index ? { ...s, ...patch } : s)), true);
   };
 
   const refField = numberField(component.errorTargets, details, 'Id', 'Site identifier in decimal format.', site.siteRef, errors.siteRef);
@@ -39,7 +38,7 @@ function siteRow(component, site, index, rows) {
   deleteRow(details, 'Delete site', () => {
     const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
 
-    setSubWorking(LEVEL, component.systemId, fresh.filter((_, i) => i !== index));
+    commitSubRows(component, fresh.filter((_, i) => i !== index));
   });
 
   return details;

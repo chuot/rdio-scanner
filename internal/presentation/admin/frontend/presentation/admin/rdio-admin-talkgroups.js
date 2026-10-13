@@ -7,8 +7,8 @@
 import { playAlert } from './play-alert.js';
 import { getAdminContext } from '../../application/admin-context.js';
 import { talkgroupErrors } from '../../domain/systems-validation.js';
-import { sectionWorking, setSectionWorking, setSubWorking } from './section-shell.js';
-import { connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { sectionWorking, setSectionWorking } from './section-shell.js';
+import { commitSubRows, connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import {
   deleteRow,
   numberField,
@@ -91,7 +91,7 @@ function talkgroupRow(component, talkgroup, index, rows) {
   const details = makePanel(component.openState, key, talkgroup.label?.trim() || 'NewTalkgroup', Object.keys(errors).length);
 
   const update = (patch) => {
-    setSubWorking(LEVEL, component.systemId, freshRows(component).map((t, i) => (i === index ? { ...t, ...patch } : t)));
+    commitSubRows(component, freshRows(component).map((t, i) => (i === index ? { ...t, ...patch } : t)), true);
   };
 
   const refField = numberField(component.errorTargets, details, 'Id', 'Talkgroup identifier in decimal format.', talkgroup.talkgroupRef, errors.talkgroupRef);
@@ -190,14 +190,14 @@ function talkgroupRow(component, talkgroup, index, rows) {
         return { ...system, blacklists };
       }));
 
-      setSubWorking(LEVEL, component.systemId, freshRows(component).filter((_, i) => i !== index));
+      commitSubRows(component, freshRows(component).filter((_, i) => i !== index));
     });
 
     bottom.append(blacklist);
   }
 
   deleteRow(details, 'Delete talkgroup', () => {
-    setSubWorking(LEVEL, component.systemId, freshRows(component).filter((_, i) => i !== index));
+    commitSubRows(component, freshRows(component).filter((_, i) => i !== index));
   }, bottom);
 
   return details;

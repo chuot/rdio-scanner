@@ -21,6 +21,7 @@ import {
   setSubInvalid,
   setSubWorking,
   sortedByOrder,
+  subSlice,
   subWorking,
 } from './section-shell.js';
 import { rowKey } from './row-builders.js';
@@ -77,6 +78,20 @@ export function disconnectSubSection(component) {
   component.unsubscribes = [];
 }
 
+// Model commit for a per-level section. A field edit carries the marker: the render
+// that sees the value it just committed returns without rebuilding, so the row the
+// operator is typing in — and the field they are in — stays on the page. Add,
+// delete, drag, and the level's own actions commit without the marker and rebuild.
+// The invalid flag is always recomputed from the committed rows.
+export function commitSubRows(component, rows, selfEdit = false) {
+  const { level } = component.subSection;
+
+  if (selfEdit) component.internalEdit = rows;
+
+  setSubWorking(level, component.systemId, rows);
+  setSubInvalid(level, component.systemId, subSectionInvalid(level, rows, sectionWorking('groups') ?? [], sectionWorking('tags') ?? []));
+}
+
 export function renderSubSection(component) {
   const { level, caption, addLabel, buildRow } = component.subSection;
 
@@ -92,6 +107,12 @@ export function renderSubSection(component) {
   // the dropdown, or the system it shows is deleted and the section falls back.
   // The rows follow it, so the binding follows with them.
   if (component.boundKey !== sliceKey(component)) bind(component);
+
+  // The operator's own field edit is what reaches here as a store change; the rows
+  // they are working on stay where they are. See commitSubRows.
+  const slice = subSlice(level, component.systemId);
+
+  if (slice && slice.working === component.internalEdit) return;
 
   component.errorTargets = [];
 
@@ -128,7 +149,7 @@ export function renderSubSection(component) {
     // open on the new row's fields and keep the rows the operator left open.
     component.openState.set(rowPanelKey(component, fresh[0], 0), true);
 
-    setSubWorking(level, component.systemId, fresh);
+    commitSubRows(component, fresh);
   });
 
   top.append(help, select, add);
@@ -152,7 +173,7 @@ export function renderSubSection(component) {
 
   rows.forEach((row, index) => list.append(buildRow(component, row, index, rows)));
 
-  attachDragSort(list, (from, to) => setSubWorking(level, component.systemId, reorderAfterDrag(rows, from, to)));
+  attachDragSort(list, (from, to) => commitSubRows(component, reorderAfterDrag(rows, from, to)));
 
   root.append(list);
 

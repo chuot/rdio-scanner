@@ -28,11 +28,11 @@ const SITES = {
 };
 const TALKGROUPS = {
   1: [],
-  2: [{ id: 7, label: 'Fire', thid: 70, order: 1, group: 1, name: 'Fire dispatch' }],
+  2: [{ id: 7, label: 'Fire', name: 'Fire dispatch', talkgroupRef: 70, order: 1, groupIds: [1], tagId: 3, alert: '', delay: null, frequency: null, led: '', type: '' }],
 };
 const UNITS = {
   1: [],
-  2: [{ id: 9, label: 'Car', order: 1, start: 100, end: 199 }],
+  2: [{ id: 9, label: 'Car', unitRef: 100, unitFrom: 100, unitTo: 199, order: 1 }],
 };
 
 const GROUPS = [{ id: 1, label: 'Dispatch' }, { id: 2, label: 'Tac' }];
@@ -126,6 +126,21 @@ function addRow(el) {
 
 function sliceFor(store, level, systemId) {
   return store.getState()[`subsection:${level}:${systemId}`];
+}
+
+function fieldInput(row, title) {
+  const field = findAll(row, (node) => node.tag === 'rdio-form-field')
+    .find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title);
+
+  return findAll(field, (node) => node.tag === 'input')[0];
+}
+
+// The operator types in the field and moves on: the value lands in the input, the
+// input has the focus, and the change event fires the way leaving the field fires it.
+function typeIn(input, value) {
+  input.value = value;
+  input.focus();
+  input.dispatchEvent({ type: 'change' });
 }
 
 function pushRows(store, level, systemId, rows) {
@@ -254,4 +269,55 @@ test('the section falls back to another system when the one it shows is deleted'
   addRow(el);
   assert.deepEqual(rowTitles(el), ['NewSite'],
     'after falling back, the add control renders its row on the system now showing');
+});
+
+// CA-003: a field edit is the operator's own typing, not a reason to rebuild the
+// rows they are working on. The Systems section already behaves this way; these
+// three cases hold the per-level sections to it.
+test('editing a site label keeps the row and the field the operator is in on the page', () => {
+  const store = seed();
+  const el = attach('rdio-admin-sites');
+
+  const row = rows(el)[0];
+  const input = fieldInput(row, 'Label');
+
+  typeIn(input, 'Depot');
+
+  assert.equal(rows(el)[0], row, 'the row the operator is editing stays on the page');
+  assert.equal(findAll(el, (node) => node === input).length, 1, 'the field the operator typed in is the same node');
+  assert.equal(input.focused, true, 'the operator keeps the focus they had in the field');
+  assert.equal(sliceFor(store, 'sites', 2).working[0].label, 'Depot', 'the section holds what the operator typed');
+  assert.equal(saveButton(el).disabled, false, 'Save is enabled for the change the operator made');
+});
+
+test('editing a talkgroup label keeps the row and the field the operator is in on the page', () => {
+  const store = seed();
+  const el = attach('rdio-admin-talkgroups');
+
+  const row = rows(el)[0];
+  const input = fieldInput(row, 'Label');
+
+  typeIn(input, 'Fire Dispatch');
+
+  assert.equal(rows(el)[0], row, 'the row the operator is editing stays on the page');
+  assert.equal(findAll(el, (node) => node === input).length, 1, 'the field the operator typed in is the same node');
+  assert.equal(input.focused, true, 'the operator keeps the focus they had in the field');
+  assert.equal(sliceFor(store, 'talkgroups', 2).working[0].label, 'Fire Dispatch', 'the section holds what the operator typed');
+  assert.equal(saveButton(el).disabled, false, 'Save is enabled for the change the operator made');
+});
+
+test('editing a unit label keeps the row and the field the operator is in on the page', () => {
+  const store = seed();
+  const el = attach('rdio-admin-units');
+
+  const row = rows(el)[0];
+  const input = fieldInput(row, 'Label');
+
+  typeIn(input, 'Car 1');
+
+  assert.equal(rows(el)[0], row, 'the row the operator is editing stays on the page');
+  assert.equal(findAll(el, (node) => node === input).length, 1, 'the field the operator typed in is the same node');
+  assert.equal(input.focused, true, 'the operator keeps the focus they had in the field');
+  assert.equal(sliceFor(store, 'units', 2).working[0].label, 'Car 1', 'the section holds what the operator typed');
+  assert.equal(saveButton(el).disabled, false, 'Save is enabled for the change the operator made');
 });

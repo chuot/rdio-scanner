@@ -4,8 +4,7 @@
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { unitErrors } from '../../domain/systems-validation.js';
-import { setSubWorking } from './section-shell.js';
-import { connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
+import { commitSubRows, connectSubSection, disconnectSubSection, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import { deleteRow, numberField, parseNumber, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'units';
@@ -24,7 +23,7 @@ function unitRow(component, unit, index, rows) {
   const update = (patch) => {
     const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
 
-    setSubWorking(LEVEL, component.systemId, fresh.map((u, i) => (i === index ? { ...u, ...patch } : u)));
+    commitSubRows(component, fresh.map((u, i) => (i === index ? { ...u, ...patch } : u)), true);
   };
 
   const refField = numberField(component.errorTargets, details, 'Id', 'Unit identifier in decimal format. You can define a unique unit identifier here.', unit.unitRef, errors.unitRef);
@@ -50,7 +49,7 @@ function unitRow(component, unit, index, rows) {
   deleteRow(details, 'Delete unit', () => {
     const fresh = getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
 
-    setSubWorking(LEVEL, component.systemId, fresh.filter((_, i) => i !== index));
+    commitSubRows(component, fresh.filter((_, i) => i !== index));
   });
 
   return details;
