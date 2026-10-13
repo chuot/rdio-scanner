@@ -247,3 +247,25 @@ for (const [name, tag, fillRow, deleteLabel] of DELETES) {
     assert.ok(marker(rows(el)[0]), 'the row nobody touched keeps its warning icon');
   });
 }
+
+// The row the add control creates carries the mask its section needs. The section's rule rejects the
+// empty string the server answers for a row saved without a mask, so a row created without one means
+// one thing as a new row (no mask at all: the rule passes it) and another as a saved row (the empty
+// string: the rule rejects it). The default is the token pair the fixture's rows carry, with the
+// separator the mask matching style uses.
+test('the dirwatch row the add control creates carries the mask the section needs, and Directory is its only complaint', () => {
+  seed(getAdminContext().store);
+
+  const el = attach('rdio-admin-dirwatch');
+
+  addRow(el);
+
+  const row = rows(el)[0];
+
+  assert.equal(controlOf(row, 'Mask').value, '#SYS_#TG', 'the Mask field carries the mask the add control creates');
+
+  const maskMessage = findAll(field(row, 'Mask'), (node) => node.className?.split(/\s+/).includes('rdio-form-error'))[0]?.textContent ?? '';
+
+  assert.equal(maskMessage, '', 'the Mask field says nothing about the mask the row carries');
+  assert.ok(marker(row), 'the row shows its warning icon for the Directory nobody filled in');
+});
