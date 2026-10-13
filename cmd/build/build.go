@@ -33,6 +33,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"rdio-scanner/cmd/build/buildinfo"
 
@@ -99,6 +100,11 @@ type tool struct {
 	// the run composes is composed with it, and the run asks it of the machine rather than reading it in
 	// the middle of the plan.
 	machine func() host
+
+	// now is the moment the run is making the container image. The image's build time is a fact the run
+	// knows and the Containerfile cannot, and a test that reads the command line the run composes has to
+	// be told what the clock said.
+	now func() time.Time
 }
 
 // theMachine is the platform the build is standing on. A tool assembled without it — a test that asks one
@@ -135,6 +141,7 @@ func newTool(repo string) tool {
 		// phase bound now would carry the copy made before them.
 		machine: thisMachine,
 		theRun:  onThisMachine(),
+		now:     time.Now,
 	}
 
 	t.prove = t.proveSuppliedBinaries
@@ -252,7 +259,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	// applications and the ffmpeg the image's architecture embeds are what the Containerfile needs on
 	// disk, and a server binary built here is one the image throws away.
 	if o.sub == subContainer {
-		s := containerStep(o, t.repo, version)
+		s := containerStep(o, t.repo, version, t.now())
 
 		if err := t.execute(s); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))

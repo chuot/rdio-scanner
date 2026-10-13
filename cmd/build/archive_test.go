@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
@@ -49,6 +50,98 @@ func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing
 
 	if got != want {
 		t.Errorf("the archive is written to %q, want %q", got, want)
+	}
+}
+
+// A release archive that stamps every entry with the moment the archive was written says nothing about
+// when the files inside it were written: the binary the run compiled, the guide the repository has, and
+// the licence the ffmpeg phase wrote are three files with three histories, and a reader who extracts
+// them and finds three identical timestamps has learned nothing from the timestamps. The archive is
+// required to state when the files it carries were written.
+func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
+	repo := t.TempDir()
+
+	target := releaseTargets[4].targetWord()
+
+	program := defaultOutputPath(target)
+	licence := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", target, "LICENCE.md")
+
+	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run compiled")
+	writeRepoFile(t, repo, guideSource, "the guide")
+	writeArchiveLicence(t, repo, target, "the licence")
+
+	// Three files, three histories. The times are distinct, in the range a zip archive records, and on
+	// even seconds, which is the resolution the archive's own timestamp field carries.
+	want := []struct {
+		name     string
+		path     string
+		modified time.Time
+	}{
+		{"rdio-scanner", program, time.Date(2026, 3, 4, 5, 6, 8, 0, time.Local)},
+		{guideSource, guideSource, time.Date(2025, 1, 2, 3, 4, 6, 0, time.Local)},
+		{"FFMPEG.txt", licence, time.Date(2024, 11, 22, 9, 10, 12, 0, time.Local)},
+	}
+
+	for _, w := range want {
+		if err := os.Chtimes(filepath.Join(repo, w.path), w.modified, w.modified); err != nil {
+			t.Fatalf("chtimes %s: %v", w.path, err)
+		}
+	}
+
+	files, err := archiveFiles(repo, releaseTargets[4], program)
+	if err != nil {
+		t.Fatalf("archiveFiles: %v", err)
+	}
+
+	if len(files) != len(want) {
+		t.Fatalf("the archive carries %d files, want %d: %v", len(files), len(want), fileNames(files))
+	}
+
+	for i, w := range want {
+		if files[i].name != w.name {
+			t.Fatalf("the archive carries %q at %d, want %q", files[i].name, i, w.name)
+		}
+
+		if !files[i].modified.Equal(w.modified) {
+			t.Errorf("%s carries the time %v, want the time of the file it carries (%v)", w.name, files[i].modified, w.modified)
+		}
+	}
+
+	// The times have to survive the archive: a reader's `unzip` is the consumer this rule is about, and
+	// a time the writer does not put in the header is a time the reader never sees.
+	path := filepath.Join(t.TempDir(), "release.zip")
+
+	if err := writeArchive(path, files); err != nil {
+		t.Fatalf("writeArchive: %v", err)
+	}
+
+	reader, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatalf("opening the archive: %v", err)
+	}
+
+	defer reader.Close()
+
+	if len(reader.File) != len(want) {
+		t.Fatalf("the archive holds %d entries, want %d", len(reader.File), len(want))
+	}
+
+	for i, w := range want {
+		entry := reader.File[i]
+
+		if entry.Name != w.name {
+			t.Fatalf("the archive holds %q at %d, want %q", entry.Name, i, w.name)
+		}
+
+		if !entry.Modified.Truncate(time.Second).Equal(w.modified) {
+			t.Errorf("the archive's entry %q carries %v, want %v", entry.Name, entry.Modified, w.modified)
+		}
+	}
+
+	// The program is a program the reader runs: the mode is the fact the archive has to carry for a
+	// standard tool to restore an executable binary.
+	if mode := reader.File[0].Mode().Perm(); mode != 0o755 {
+		t.Errorf("the archive's program entry has mode %o, want 0755", mode)
 	}
 }
 

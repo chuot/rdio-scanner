@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
@@ -57,6 +58,13 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		},
 		installed: func(string) bool {
 			return true
+		},
+
+		// The container image's build time is a fact the run reads off the clock, so the stand-in says
+		// what the clock said: a test that reads the command line the run composed has to know the
+		// moment it was composed at.
+		now: func() time.Time {
+			return time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
 		},
 		execute: func(s step) error {
 			if s.label == failAt {
@@ -848,7 +856,7 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 		"scanner " + appBundle[subScanner],
 		"admin " + appBundle[subAdmin],
 		"ffmpeg linux-amd64",
-		"container rdio-scanner:latest",
+		"container rdio-scanner:8.0.0",
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -857,8 +865,9 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 }
 
 // The version the image reports is the one the run resolved, through the build argument the
-// Containerfile reads. An image built without it reports the development fallback, which is the sign
-// that nobody said what the image is.
+// Containerfile reads, and the image is tagged with that version beside `latest` so a machine reading
+// the tags knows which release it is standing on. An image built without it reports the development
+// fallback, which is the sign that nobody said what the image is.
 func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -872,7 +881,15 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 		t.Fatalf("the container run ended with %s, want podman", last.name)
 	}
 
-	want := []string{"build", "--pull", "--build-arg", "VERSION=8.0.0", "-t", "rdio-scanner:latest", "."}
+	want := []string{
+		"build",
+		"--pull",
+		"--build-arg", "VERSION=8.0.0",
+		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+		"-t", "rdio-scanner:8.0.0",
+		"-t", "rdio-scanner:latest",
+		".",
+	}
 
 	if strings.Join(last.args, " ") != strings.Join(want, " ") {
 		t.Errorf("podman ran with %v, want %v", last.args, want)

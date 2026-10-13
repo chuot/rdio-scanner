@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"rdio-scanner/cmd/build/buildinfo"
 )
@@ -47,7 +48,12 @@ const (
 // for, and the name the image is tagged with.
 const (
 	containerTarget = "linux-amd64"
-	containerImage  = "rdio-scanner:latest"
+
+	// containerImage is the image's name. The tags are what say which release it is: the run tags the
+	// image with the version it resolved and with `latest`, and the versioned tag is the one the run
+	// reports, because that is the tag that says which release the machine is standing on.
+	containerImage     = "rdio-scanner"
+	containerLatestTag = "latest"
 )
 
 // The one thing a release writes that is not an external command: the archive. It is named so the log
@@ -399,10 +405,6 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 	}
 }
 
-// containerStep asks podman to build the image. The version reaches it through the build argument the
-// Containerfile reads into the linker flag: an image built without it reports the development fallback,
-// which is the sign that nobody said what the image is. The server binary is compiled inside the image,
-// so the run that prepares it builds no binary of its own.
 // testSteps are the two suites this project's automated verification is made of: the Go suite over the
 // whole repository, and the client suite the two applications' sources are tested by. They are composed
 // here, like every other command line the tool runs, so what each suite is told to run, and in what
@@ -429,17 +431,40 @@ func testSteps(o options, repo string) []step {
 	}
 }
 
-func containerStep(o options, repo string, version buildinfo.Version) step {
+// imageTagFor is the version spelled the way an image tag's grammar allows: a tag carries letters,
+// digits, dots, dashes and underscores, and has no `+`, so the sign that introduces the git metadata is
+// written as a dash. The image's own version label carries the version itself; the tag is the same
+// release spelled for the grammar a registry checks, and a reader holding the version can spell it.
+func imageTagFor(version string) string {
+	return strings.Replace(version, "+", "-", 1)
+}
+
+// containerStep asks podman to build the image. The version reaches it through the build argument the
+// Containerfile reads into the linker flag and into the image's own labels: an image built without it
+// reports the development fallback, which is the sign that nobody said what the image is. The server
+// binary is compiled inside the image, so the run that prepares it builds no binary of its own.
+//
+// The image is tagged with the version the run resolved and with `latest`. The versioned tag is the one
+// the run reports, because a machine that says which machine it is on has said less than the machine
+// that says which release it is standing on.
+//
+// The moment the image was made is a fact the run knows and the Containerfile cannot: it arrives as the
+// build argument the created label reads.
+func containerStep(o options, repo string, version buildinfo.Version, created time.Time) step {
+	tag := containerImage + ":" + imageTagFor(version.String())
+
 	return step{
 		label:  subContainer,
-		result: containerImage,
+		result: tag,
 		dir:    repo,
 		name:   "podman",
 		args: []string{
 			"build",
 			"--pull",
 			"--build-arg", "VERSION=" + version.String(),
-			"-t", containerImage,
+			"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
+			"-t", tag,
+			"-t", containerImage + ":" + containerLatestTag,
 			".",
 		},
 	}

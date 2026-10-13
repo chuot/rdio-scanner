@@ -22,10 +22,14 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/cmd/build/buildinfo"
 )
@@ -78,6 +82,138 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 
 	if s.dir != "/repo" {
 		t.Errorf("the server is built in %q, want the repository root", s.dir)
+	}
+}
+
+// The image a container run builds is the artifact an operator pushes and a machine pulls. One tag
+// named `latest` says which machine it is on and not which release it is, and an image carrying no
+// labels says nothing about where it came from: the tags and the labels are the image's own account of
+// what it is, read from the image and not from a document beside it.
+func TestTheContainerStepTagsTheImageWithTheVersionTheRunResolved(t *testing.T) {
+	created := time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
+
+	s := containerStep(options{}, "/repo", theVersion(t), created)
+
+	want := []string{
+		"build",
+		"--pull",
+		"--build-arg", "VERSION=8.0.0+gdb79311",
+		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+		"-t", "rdio-scanner:8.0.0-gdb79311",
+		"-t", "rdio-scanner:latest",
+		".",
+	}
+
+	if strings.Join(s.args, " ") != strings.Join(want, " ") {
+		t.Errorf("podman is asked to run\n  %v\nwant\n  %v", s.args, want)
+	}
+
+	if s.result != "rdio-scanner:8.0.0-gdb79311" {
+		t.Errorf("the run reports the image as %q, want the image named for the version the run resolved", s.result)
+	}
+}
+
+// An image tag's grammar is letters, digits, dots, dashes and underscores, and it has no `+`. The
+// version a release resolves carries a `+` the moment the commit is not tagged, so a run that asked
+// podman for a tag spelled like the version is a run podman refuses: the tag is the version spelled the
+// way the grammar allows, and the image's own version label carries the version itself.
+func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
+	for _, version := range []string{"8.0.0", "8.0.0+g1885b7e2", "8.0.0-rc1+g1885b7e2"} {
+		tag := imageTagFor(version)
+
+		if strings.Contains(tag, "+") {
+			t.Errorf("the tag for %s is %q, and an image tag carries no +", version, tag)
+		}
+
+		if !theImageTagGrammar.MatchString(tag) {
+			t.Errorf("the tag for %s is %q, which is not a tag a registry accepts", version, tag)
+		}
+
+		// The tag says the same release the version says: the same digits, the same prerelease name,
+		// and the same commit, with only the sign that introduces the git metadata written as a dash.
+		if tag != strings.Replace(version, "+", "-", 1) {
+			t.Errorf("the tag for %s is %q, want the version with the sign that introduces the git metadata written as a dash", version, tag)
+		}
+	}
+}
+
+// theImageTagGrammar is the tag grammar a registry accepts.
+var theImageTagGrammar = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
+
+// A base image named `latest` is a different image every week: the image built today is not the image
+// built last week, and nothing in the image says which one it is standing on. The labels are the
+// image's own account of its version, its source, its build time, and its documentation, and the
+// version and the build time are facts the container run knows and passes in.
+func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *testing.T) {
+	text, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
+	if err != nil {
+		t.Fatalf("reading the Containerfile: %v", err)
+	}
+
+	contents := string(text)
+
+	from := ""
+
+	for _, line := range strings.Split(contents, "\n") {
+		if strings.HasPrefix(line, "FROM ") {
+			from = line
+
+			break
+		}
+	}
+
+	if from == "" {
+		t.Fatal("the Containerfile has no FROM line")
+	}
+
+	if strings.Contains(from, ":latest") {
+		t.Errorf("the base image is named %q, and `latest` is a moving version: the image built today is not the image built last week", from)
+	}
+
+	base, found := strings.CutPrefix(from, "FROM docker.io/")
+	if !found {
+		t.Fatalf("the base image is %q, want it named on the registry it is pulled from", from)
+	}
+
+	name, version, found := strings.Cut(base, ":")
+	if !found || name != "alpine" || version == "" {
+		t.Fatalf("the base image is %q, want alpine named by version", from)
+	}
+
+	for _, part := range strings.Split(version, ".") {
+		if _, err := strconv.Atoi(part); err != nil {
+			t.Fatalf("the base image is named %q, which is not a release number", version)
+		}
+	}
+
+	// The labels the image carries, and the build arguments its version and its build time arrive
+	// through: a label repeating a literal is a label that goes stale the moment the release moves.
+	for _, label := range []string{
+		"org.opencontainers.image.title=",
+		"org.opencontainers.image.source=",
+		"org.opencontainers.image.version=",
+		"org.opencontainers.image.created=",
+		"org.opencontainers.image.documentation=",
+		"org.opencontainers.image.ref.name=",
+	} {
+		if !strings.Contains(contents, "LABEL "+label) {
+			t.Errorf("the Containerfile carries no %s label", strings.TrimSuffix(label, "="))
+		}
+	}
+
+	for _, label := range [][2]string{
+		{"org.opencontainers.image.version=", "VERSION"},
+		{"org.opencontainers.image.created=", "BUILD_TIME"},
+		{"org.opencontainers.image.ref.name=", "VERSION"},
+	} {
+		if !strings.Contains(contents, "ARG "+label[1]+"=") {
+			t.Errorf("the Containerfile declares no %s build argument, so its %s label cannot carry what the run knows",
+				label[1], strings.TrimSuffix(label[0], "="))
+		}
+
+		if !strings.Contains(contents, "LABEL "+label[0]+`"`+`$`+label[1]+`"`) {
+			t.Errorf("the Containerfile's %s label does not read the %s build argument", strings.TrimSuffix(label[0], "="), label[1])
+		}
 	}
 }
 

@@ -1,12 +1,29 @@
-FROM docker.io/alpine:latest
+# The base image is named by version. `latest` is a different image every week: the image built today
+# is not the image built last week, and nothing inside the image says which one it is standing on.
+# Moving this line moves the operating system the image ships, and is a change made on purpose.
+FROM docker.io/alpine:3.24.2
+
+# The version the binary reports, and the moment the image was made. `go run ./cmd/build container`
+# passes both: the version it resolved from VERSION.txt and git, and the clock reading when it asked
+# for the build. An image built without the version argument reports the same development fallback a
+# plain `go build` reports, which is the sign that nobody said what this image is.
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+
+# The image's own account of what it is, read out of the image by the machine that pulls it. The
+# version and the build time are facts the container run knows, and arrive through the arguments above:
+# a label repeating a literal is a label that goes stale the moment the release moves.
+LABEL org.opencontainers.image.title="rdio-scanner"
+LABEL org.opencontainers.image.source="https://github.com/chuot/rdio-scanner.git"
+LABEL org.opencontainers.image.documentation="https://github.com/chuot/rdio-scanner/blob/main/docs/admin-guide.html"
+LABEL org.opencontainers.image.licenses="GPL-3.0-only"
+LABEL org.opencontainers.image.version="$VERSION"
+LABEL org.opencontainers.image.created="$BUILD_TIME"
+LABEL org.opencontainers.image.ref.name="$VERSION"
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
+
 WORKDIR /app
 ENV DOCKER=1
-
-# The version the binary reports. `go run ./cmd/build container` passes it, resolved from VERSION.txt
-# and git. An image built without the argument reports the same development fallback a plain `go build`
-# reports, which is the sign that nobody said what this image is.
-ARG VERSION=dev
 
 COPY go.mod go.sum ./
 COPY cmd/ cmd/

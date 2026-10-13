@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
@@ -107,11 +108,34 @@ func pruneReleaseFolder(repo string, version string) ([]string, error) {
 	return removed, nil
 }
 
-// archiveFile is one file in a release archive.
+// archiveFile is one file in a release archive, with the time the file it carries was written. The
+// archive is required to state when the files it carries were written, and stamping every entry with the
+// moment the archive was written states nothing: the binary the run compiled, the guide the repository
+// has, and the licence the ffmpeg phase wrote are three files with three histories.
 type archiveFile struct {
-	name string
-	mode os.FileMode
-	body []byte
+	name     string
+	mode     os.FileMode
+	modified time.Time
+	body     []byte
+}
+
+// readArchiveSource reads one file the archive carries, at the path in the tree it reads it from, with
+// the time that file was written: the time the source file carries is the only time that says when the
+// file was written.
+func readArchiveSource(repo string, path string, name string, mode os.FileMode) (archiveFile, error) {
+	full := filepath.Join(repo, path)
+
+	body, err := os.ReadFile(full)
+	if err != nil {
+		return archiveFile{}, err
+	}
+
+	info, err := os.Stat(full)
+	if err != nil {
+		return archiveFile{}, err
+	}
+
+	return archiveFile{name: name, mode: mode, modified: info.ModTime(), body: body}, nil
 }
 
 // guideSource is the document a release archive carries: the administrator guide, at the path the guide
@@ -146,31 +170,27 @@ const guideSource = "docs/admin-guide.html"
 func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 	name := "rdio-scanner" + programSuffix(tr.targetWord())
 
-	body, err := os.ReadFile(filepath.Join(repo, output))
+	// The binary is a program the reader runs, and the guide is a document they read. Info-Zip
+	// restores the mode it finds in the archive, so the mode has to be in the archive.
+	program, err := readArchiveSource(repo, output, name, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("the release has no %s for %s: %w", name, tr.targetWord(), err)
 	}
 
-	// The binary is a program the reader runs, and the guide is a document they read. Info-Zip
-	// restores the mode it finds in the archive, so the mode has to be in the archive.
-	files := []archiveFile{{name: name, mode: 0o755, body: body}}
-
-	text, err := os.ReadFile(filepath.Join(repo, guideSource))
+	guide, err := readArchiveSource(repo, guideSource, guideSource, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("the release has no %s for %s: %w", guideSource, tr.targetWord(), err)
 	}
 
-	files = append(files, archiveFile{name: guideSource, mode: 0o644, body: text})
+	files := []archiveFile{program, guide}
 
 	if _, ok := bundle.ReadManifest().Targets[tr.targetWord()]; ok {
-		path := filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), "LICENCE.md")
-
-		body, err := os.ReadFile(path)
+		licence, err := readArchiveSource(repo, filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), "LICENCE.md"), "FFMPEG.txt", 0o644)
 		if err != nil {
 			return nil, fmt.Errorf("the release has no ffmpeg licence for %s: %w", tr.targetWord(), err)
 		}
 
-		files = append(files, archiveFile{name: "FFMPEG.txt", mode: 0o644, body: body})
+		files = append(files, licence)
 	}
 
 	return files, nil
@@ -189,9 +209,14 @@ func writeArchive(path string, files []archiveFile) error {
 
 	for _, f := range files {
 		header := &zip.FileHeader{
-			Name:   f.name,
-			Method: zip.Deflate,
+			Name:     f.name,
+			Method:   zip.Deflate,
+			Modified: f.modified,
 		}
+
+		// The entry carries the time of the file it carries. An archive whose every entry is stamped
+		// with the moment it was written tells a reader who extracts it nothing about when the files
+		// inside it were written, and the three files here have three histories.
 
 		// The mode has to be in the archive, because Info-Zip restores the mode it finds there and a
 		// binary that arrives not executable is a release a reader cannot run. SetMode is the supported
