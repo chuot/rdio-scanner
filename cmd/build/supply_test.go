@@ -601,7 +601,7 @@ func TestAHostThatCannotRunTheBinariesIsToldWhichHostCompilesThem(t *testing.T) 
 			}
 		}
 
-		tl := tool{repo: repo, theRun: onThisMachine()}
+		tl := tool{repo: repo, theRun: onThisMachine(), errout: io.Discard}
 
 		_, err := tl.proveSuppliedBinaries(target, paths, io.Discard)
 
@@ -684,6 +684,7 @@ func aBuildOnAHost(t *testing.T, repo string, target string, theHost host, theRu
 		repo:    repo,
 		machine: func() host { return theHost },
 		theRun:  theRun,
+		errout:  io.Discard,
 	}
 }
 

@@ -13,7 +13,7 @@ Your os distribution may have all of the following prerequisites available in it
 - latest version of Go ([here](https://go.dev/dl/))
 - podman ([here](https://podman.io/)) **or** docker ([here](https://www.docker.com/)), for building the container image and for compiling the ffmpeg of the five targets this build compiles in a container. The build asks the machine which one it has and uses podman when it has both; `RDIO_CONTAINER_PROGRAM=podman` or `RDIO_CONTAINER_PROGRAM=docker` names the one you want. The macOS and FreeBSD ffmpeg binaries are compiled by this build on a machine that runs the target's operating system — a Mac for the two macOS targets, either architecture for either, and a FreeBSD box for the FreeBSD target — and that machine needs a C compiler, `strip`, and the make program its record names — `gmake` on FreeBSD, where ffmpeg's build asks for GNU make and the base make is not it — and needs no container program
 
-## Compile the app
+## What to type
 
 Clone the official repository on your computer and start the build process.
 
@@ -21,33 +21,93 @@ Clone the official repository on your computer and start the build process.
         cd rdio-scanner
         go run ./cmd/build
 
-The tool compiles the two web applications before it compiles the server, because each bundle is written beside the Go package that embeds it and a server built before both existed would carry a stale one.
-
-The scanner webapp and the administration console are two applications, in `internal/presentation/scanner/frontend` and `internal/presentation/admin/frontend`, and the modules they both use are in `internal/presentation/common/frontend`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/scanner/frontend/bundle` and `internal/presentation/admin/frontend/bundle` are build output and hold nothing but the `.gitkeep` that keeps a plain `go build` compiling.
+A run that names no command builds this machine's whole tree: both applications, then the ffmpeg this machine's target carries, then the server that carries both. Every other line names one phase, and those phases are the ones that whole run walks, in that order.
 
         go run ./cmd/build client                 # both applications
         go run ./cmd/build scanner                # the scanner webapp only
         go run ./cmd/build admin                  # the administration console only
         go run ./cmd/build ffmpeg                 # the ffmpeg this machine's target carries
+        go run ./cmd/build ffmpeg linux-arm64     # another target, which is how the release matrix cross-builds
+        go run ./cmd/build ffmpeg macos-amd64     # the Intel ffmpeg binaries, compiled on an Apple Silicon Mac
         go run ./cmd/build server                 # the server binary only, against the bundles on disk
         go run ./cmd/build dist                   # the archive of the platform this machine is
         go run ./cmd/build dist --all             # the release matrix, and the archives it writes
-        go run ./cmd/build container              # the container image, built locally
+        go run ./cmd/build dist linux-arm64       # one target, which is how the matrix is built one at a time
+        go run ./cmd/build container              # the container image, built locally and never pushed
         go run ./cmd/build clean                  # the release output, the client dependencies, and both bundle contents
+        go run ./cmd/build test                   # this project's suites, and nothing compiled
         go run ./cmd/build version                # the version this build carries
+
+On a machine that runs the operating system of a target whose ffmpeg binaries are compiled where they run — `macos-amd64`, `macos-arm64`, `freebsd-amd64` — the ffmpeg line compiles that target's binaries there, runs them, and adopts what converts:
+
+        go run ./cmd/build ffmpeg   # on a machine that runs the target's operating system
+
+### The flags the tool accepts
+
+        --pre beta1     the prerelease name the version carries
+        -o PATH         where the server binary is written: the whole-tree run and the server run
+        --all           the release matrix: the dist run, and nothing else
+        --allow-dirty   release a tree that has uncommitted work in it: the dist run
+
+A flag a run cannot honour is refused with the command line that would have worked, and the run exits `2` without building anything.
+
+### The environment the tool reads
+
+        RDIO_BUILD_JOBS        how many server compiles a release run may have going at once
+        RDIO_CONTAINER_PROGRAM podman, or docker: the container program the run speaks to
+
+The release run's bound is the machine's cores, the targets it is ready to build, and `RDIO_BUILD_JOBS`, whichever is the fewest. The build asks the machine which container program it has and speaks to podman when it has both; naming a program the machine does not have, and naming something that is not a container program, are both refused.
+
+### What the exit code says
+
+        0   the run did what it was asked to do
+        1   a step failed, or the tree was refused
+        2   the command line is not one the tool accepts
+        3   a release run wrote fewer archives than the matrix it was asked for
+
+`go run` reports its own exit code, so a `3` asked through it arrives as `1`. The compiled tool carries the code itself: `go build -o buildtool ./cmd/build`. A release run that ends `3` wrote the archives it wrote, and says which targets wrote none.
+
+### Where the lines go
+
+The run's own lines — the version it resolved, the notes, and every `label  result` line — reach standard output, and a program the run started writes its own output there too. A failure, and a program's own complaints, reach standard error: the line that says the build stopped is not a line of the build's progress, and a log of progress that carries it reads as if the build got there.
+
+## How to verify a build
+
+The suites are the verification, and the tool runs both of them and compiles nothing:
+
+        go run ./cmd/build test
+
+They are the same suites, run by hand:
+
+        go test ./...
+        npm test
+
+Then ask the artifact what it says it is:
+
+        go run ./cmd/build version                    # the version this tree resolves
+        ./dist/linux-amd64/rdio-scanner -version      # the version the binary carries
+        podman inspect rdio-scanner:latest            # the image's own labels, the version among them
+        docker inspect rdio-scanner:latest            # the same, from the program that built it
+
+A release archive carries the server binary for its platform, the administrator guide as one self-contained HTML file, and `FFMPEG.txt`.
+
+A second run over unchanged sources compiles nothing: a run that says `reusing the ffmpeg compiled for` and prints no `server` line built nothing, and that is the phase rule doing its job.
+
+## Why it is this way
+
+### The two applications, and the order they are built in
+
+The tool compiles the two web applications before it compiles the server, because each bundle is written beside the Go package that embeds it and a server built before both existed would carry a stale one.
+
+The scanner webapp and the administration console are two applications, in `internal/presentation/scanner/frontend` and `internal/presentation/admin/frontend`, and the modules they both use are in `internal/presentation/common/frontend`. Each is built into the bundle directory of the Go package that embeds it, so `internal/presentation/scanner/frontend/bundle` and `internal/presentation/admin/frontend/bundle` are build output and hold nothing but the `.gitkeep` that keeps a plain `go build` compiling.
 
 The server binary carries both bundles. One executable serves the scanner webapp at `/` and the administration console at `/admin/`.
 
-## The ffmpeg the server carries
+### The ffmpeg the server carries
 
 A server compiled for any of the eight release targets carries its own `ffmpeg` and `ffprobe` inside its own binary, and converts audio with nothing installed on the host. The ffmpeg binaries are compiled for audio: the recipe tells the source `--disable-everything` and enables the audio demuxers, decoders, encoder, muxers and filters this server converts with, plus the `pipe`, `fd` and `file` protocols a recording arrives and leaves on, and `--disable-network` keeps libavformat's socket layer out of the build, so no video codec, video decoder, video encoder, and no network protocol is compiled in. Five of the eight targets — `linux-386`, `linux-amd64`, `linux-arm`, `linux-arm64` and `windows-amd64` — are compiled by this build, in a container, from the source the manifest pins. The other three — `macos-amd64`, `macos-arm64` and `freebsd-amd64` — are compiled on the platform each one runs on, and on that platform this build compiles them itself: the same source release, the same recipe, the host's own compiler and linker. One command there compiles them, runs them, and adopts what converts into the bundle its server embeds. The rule for those three is the operating system, and the architecture inside it is not: the two macOS architectures compile each other's ffmpeg binaries, so one Apple Silicon Mac compiles both macOS archives, and FreeBSD is compiled on FreeBSD.
 
-        go run ./cmd/build ffmpeg                    # the target this machine is
-        go run ./cmd/build ffmpeg linux-arm64        # another target, which is how the release matrix cross-builds
-        go run ./cmd/build ffmpeg macos-amd64        # the Intel ffmpeg binaries, compiled on an Apple Silicon Mac
-
-The version, the source, the configure recipe and the toolchain of every target this build compiles are written once, in `internal/infrastructure/ffmpeg/bundle/manifest.json`. The tool fetches that release from ffmpeg.org, checks it against the sha256 the manifest records — ffmpeg.org signs its releases and publishes no checksum, so the pinned digest is what this build trusts — compiles the recipe in a container built from `Containerfile.ffmpeg`, and then runs what it produced through the converter's own argument list before accepting it. A container program is what compiles it: the build asks the machine
-for podman, and for docker when podman is not there.
+The version, the source, the configure recipe and the toolchain of every target this build compiles are written once, in `internal/infrastructure/ffmpeg/bundle/manifest.json`. The tool fetches that release from ffmpeg.org, checks it against the sha256 the manifest records — ffmpeg.org signs its releases and publishes no checksum, so the pinned digest is what this build trusts — compiles the recipe in a container built from `Containerfile.ffmpeg`, and then runs what it produced through the converter's own argument list before accepting it. A container program is what compiles it: the build asks the machine for podman, and for docker when podman is not there.
 
 The compile is the check. Before accepting the binaries the build asks them what they register — `ffmpeg -hide_banner -codecs`, read the way the program prints it — and refuses binaries that register a video decoder or a video encoder, naming them. That question is asked in the same code for every ffmpeg binary: the compiled ones answer it inside the container that can run them, under qemu for the 386 and ARM targets and under wine for Windows, and the binaries a host compiled, and the binaries it adopts, answer it on the host that compiled them. Two gates would be two standards, and the release adopting on the weaker one is not visible from outside the build.
 
@@ -57,9 +117,7 @@ What it fetches and compiles is build output: `.build/ffmpeg` holds the source t
 
 ### The ffmpeg binaries compiled on a machine that runs their operating system
 
-A macOS ffmpeg and a FreeBSD ffmpeg are compiled on a Mac and on a FreeBSD machine: the machine that produces the releases runs neither program, so a release run there compiles the five it can, skips these three, and says what would have made the rest buildable. On the Mac, and on the FreeBSD box, the build does this compile itself:
-
-        go run ./cmd/build ffmpeg   # on a machine that runs the target's operating system: macos-amd64, macos-arm64, freebsd-amd64
+A macOS ffmpeg and a FreeBSD ffmpeg are compiled on a Mac and on a FreeBSD machine: the machine that produces the releases runs neither program, so a release run there compiles the five it can, skips these three, and says what would have made the rest buildable. On the Mac, and on the FreeBSD box, `go run ./cmd/build ffmpeg` does this compile itself.
 
 It fetches the same source release the manifest pins, checks it against the pinned digest, unpacks it, runs the same trimmed configure recipe with the record's flags, runs the make program the record names, strips the two programs, and on macOS signs them ad-hoc after the strip, because strip rewrites the bytes the signature is computed over. There is no container: the host's own compiler and linker produce the binaries, which is the whole reason they are compiled there and not shipped from a cross-compiler.
 
@@ -79,7 +137,7 @@ A server built with plain `go build`, without the tool, carries no ffmpeg at all
 
 The licence the ffmpeg is under, the release it comes from, and the recipe it was built with are written next to the bundle and travel into every release archive as `FFMPEG.txt` — the notice naming the recipe, the source digest and the command that produced the binaries for the five this build compiles in a container, and the notice naming the host that compiled them, the command that built them there, and the codecs the run that adopted them recorded, for the other three. The notice states the posture the recipe keeps — this program is compiled for audio, no video codec, video decoder, video encoder, and no network protocol is compiled in — and that sentence is composed from the recipe, so a recipe that drops a switch stops promising the build that switch backs and the notice cannot promise what the recipe does not produce. The licence text of adopted binaries is written into the cache entry by the run that adopted them, and a run reusing that entry publishes the words that run wrote: the host it ran them on, the codecs they reported, and the conversions it performed. A cache entry older than that habit says only what the manifest says, and names this machine's cache as where the binaries came from.
 
-## Say what version you are building
+### Say what version you are building
 
 `VERSION.txt` at the repository root is the one place a version is declared. The tool reads it, asks git what it says about the commit being built, and passes the result to the applications through the environment and to the binary through the linker. No source file is rewritten to carry a version.
 
@@ -92,19 +150,11 @@ A repository with no `VERSION.txt` builds as `0.0.0`, which is a version no rele
 
 A server built with plain `go build`, without the tool, reports `dev` — in its banner as well as in `-version` — so nobody mistakes it for a release.
 
-The release matrix is the tool's, and it reads the same file:
-
-        go run ./cmd/build dist              # the archive of the platform this machine is
-        go run ./cmd/build dist --all        # the precompiled versions for every platform, and their archives
-        go run ./cmd/build dist linux-arm64  # one target, which is how the matrix is built one at a time
-        go run ./cmd/build container         # the container image, built locally and never pushed
-        go run ./cmd/build clean             # the release output, the client dependencies, and both bundle contents
+### The release matrix, and what a release run refuses
 
 `dist` alone builds the one archive the machine running it can run, which is what a developer builds to try what they just built. The eight-target matrix is a release, and asking for it is a deliberate act: `--all` is the flag that asks for it, and it belongs to `dist` and to nothing else. `--all` beside a named target is refused, and a machine whose platform is in no release target is refused naming `--all`.
 
-A phase that has nothing to do does not run. A bundle is rebuilt when a file it is built from is newer
-than the bundle, and a server binary is rebuilt when a Go file or an embedded bundle file is newer than
-it. A second run over unchanged sources compiles nothing.
+A phase that has nothing to do does not run. A bundle is rebuilt when a file it is built from is newer than the bundle, and a server binary is rebuilt when a Go file or an embedded bundle file is newer than it. A second run over unchanged sources compiles nothing.
 
 When finished, you will find the precompiled versions for various platforms in the `dist` folder.
 

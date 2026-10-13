@@ -62,6 +62,10 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 			return true
 		},
 
+		// The operator's standard error is where a failure goes. A test that reads the run's own lines
+		// is not the operator, and says so by naming the stream it wants the failure written to.
+		errout: io.Discard,
+
 		// The container image's build time is a fact the run reads off the clock, so the stand-in says
 		// what the clock said: a test that reads the command line the run composed has to know the
 		// moment it was composed at.
@@ -219,6 +223,10 @@ func TestACommandTheToolDoesNotKnowIsRejectedBeforeAnythingRuns(t *testing.T) {
 func TestAStepThatFailsEndsTheRunAndStopsTheStepsAfterIt(t *testing.T) {
 	tl, out, ran := fakeRun(released, "admin")
 
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
 	if code := tl.run(nil, out); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
@@ -227,8 +235,8 @@ func TestAStepThatFailsEndsTheRunAndStopsTheStepsAfterIt(t *testing.T) {
 		t.Errorf("%d steps ran after the administration build failed, want only the scanner build", len(*ran))
 	}
 
-	if !strings.Contains(out.String(), "admin") {
-		t.Errorf("the failure %q does not say which step failed", out.String())
+	if !strings.Contains(errout.String(), "admin") {
+		t.Errorf("the failure %q does not say which step failed", errout.String())
 	}
 }
 
@@ -550,13 +558,17 @@ var theTargetNames = map[string]string{
 func TestADistRunRefusesATreeWithUncommittedChanges(t *testing.T) {
 	tl, out, ran := fakeRun(uncommitted, "")
 
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
 	if code := tl.run([]string{"dist"}, out); code != 1 {
 		t.Fatalf("exit code = %d, want 1: a release run asked to build a tree that is not committed", code)
 	}
 
 	for _, want := range []string{"cmd/build/build.go", "--allow-dirty"} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("the refusal %q does not name %s, which is what the operator needs to fix it", out.String(), want)
+		if !strings.Contains(errout.String(), want) {
+			t.Errorf("the refusal %q does not name %s, which is what the operator needs to fix it", errout.String(), want)
 		}
 	}
 
@@ -970,12 +982,16 @@ func TestATestRunEndsNonZeroWhenASuiteFails(t *testing.T) {
 		return nil
 	}
 
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
 	if code := tl.run([]string{"test"}, out); code != 1 {
 		t.Fatalf("exit code = %d, want 1: a suite failed", code)
 	}
 
-	if !strings.Contains(out.String(), "npm") {
-		t.Errorf("the failure %q does not name the suite that failed", out.String())
+	if !strings.Contains(errout.String(), "npm") {
+		t.Errorf("the failure %q does not name the suite that failed", errout.String())
 	}
 
 	if len(*ran) != 1 {
@@ -1002,12 +1018,16 @@ func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 		return false, nil
 	}
 
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
 	if code := tl.run([]string{"dist", "--all"}, out); code != 1 {
 		t.Fatalf("exit code = %d, want 1", code)
 	}
 
-	if !strings.Contains(out.String(), "linux-arm") {
-		t.Errorf("the run's output %q does not name the target it stopped at", out.String())
+	if !strings.Contains(errout.String(), "linux-arm") {
+		t.Errorf("the failure %q does not name the target it stopped at", errout.String())
 	}
 
 	got := []string{}
@@ -1422,6 +1442,7 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 		repo:      repo,
 		resolve:   func(name string) (string, error) { return "/usr/bin/" + name, nil },
 		installed: func(string) bool { return true },
+		errout:    io.Discard,
 
 		// The harness is the build standing on the host the binaries are compiled on, which is the one
 		// fact that makes the plan compile them instead of skipping the target.
@@ -1695,5 +1716,53 @@ func TestTheNativeRunRefusesBinariesThatRegisterVideoCodecs(t *testing.T) {
 
 	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
 		t.Error("the licence text names binaries that register video codecs")
+	}
+}
+
+// A failure is the one line the operator has to see on a machine whose output is being captured, and
+// the one line a log of the run should not carry as if it were progress. It reaches the operator's
+// standard error; the writer the run was given carries the run's own lines.
+func TestAFailureReachesTheOperatorsStandardErrorAndNotTheRunsWriter(t *testing.T) {
+	tl, out, _ := fakeRun(released, "server")
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"server"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: a step said no", code)
+	}
+
+	if !strings.Contains(errout.String(), "error  server:") {
+		t.Errorf("the operator's standard error carries %q, want the error line", errout.String())
+	}
+
+	if strings.Contains(out.String(), "error  server:") {
+		t.Errorf("the failure reached the writer the run was given, which carries the run's own lines: %q",
+			out.String())
+	}
+}
+
+// The run's own lines — the version it resolved, the notes, and every label and result — reach the
+// writer the run was given, and a run that succeeded leaves the operator's standard error empty.
+func TestTheRunsOwnLinesReachTheWriterItWasGiven(t *testing.T) {
+	tl, out, _ := fakeRun(released, "")
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"server"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	for _, want := range []string{"version 8.0.0", "server  "} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the writer the run was given carries %q, which does not name %s", out.String(), want)
+		}
+	}
+
+	if errout.Len() != 0 {
+		t.Errorf("a run that succeeded wrote %q to the operator's standard error, want nothing", errout.String())
 	}
 }

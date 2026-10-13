@@ -21,6 +21,8 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -106,13 +108,28 @@ func changedPaths(status string) []string {
 }
 
 // git runs one git command in one directory and returns its trimmed output.
+//
+// git's own complaint is kept. git says why a tree cannot answer — it is not a repository, the
+// ownership looks dubious, the commit no tag names — and an error that says only "exit status 128"
+// sends the operator to run git themselves to learn what the tool already knew. The program, the
+// command, and the directory the tool asked in are named, because the directory the tool asked in is
+// not always the directory the operator is standing in.
 func git(repo string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repo
 
+	var errout bytes.Buffer
+
+	cmd.Stderr = &errout
+
 	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		why := strings.TrimSpace(errout.String())
+		if why == "" {
+			why = err.Error()
+		}
+
+		return "", fmt.Errorf("git %s in %s: %s", strings.Join(args, " "), repo, why)
 	}
 
 	return strings.TrimSpace(string(out)), nil

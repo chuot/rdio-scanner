@@ -33,7 +33,10 @@ import (
 func main() {
 	repo, err := repositoryRoot()
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "error  %v\n", err)
+		// The line that says the run stopped reaches the operator's standard error: a tree the tool cannot
+		// even locate is a failure, and a failure written where the progress goes is a failure a log of the
+		// build reads as progress.
+		fmt.Fprintf(os.Stderr, "error  %v\n", err)
 		os.Exit(1)
 	}
 

@@ -389,10 +389,27 @@ func parseArgs(args []string) (options, error) {
 // isKnownCommand reports whether a word names one of the tool's commands. The checks that look ahead
 // in the command line need to know which words name a command, so that a refusal names the command the
 // operator typed and not the order the words happened to arrive in.
+// knownCommands is every subcommand the tool accepts. The compile guide names them, and a test pins the
+// guide to this list, so a subcommand added to the tool without a line in the guide is a failing test
+// and not a document an operator has to discover the hard way.
+var knownCommands = []string{
+	subClient,
+	subScanner,
+	subAdmin,
+	subFFmpeg,
+	subServer,
+	subDist,
+	subContainer,
+	subClean,
+	subTest,
+	subVersion,
+}
+
 func isKnownCommand(word string) bool {
-	switch word {
-	case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer, subTest:
-		return true
+	for _, name := range knownCommands {
+		if word == name {
+			return true
+		}
 	}
 
 	return false

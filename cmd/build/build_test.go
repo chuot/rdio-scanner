@@ -586,3 +586,74 @@ func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) 
 		t.Errorf("the run printed %q, which is what a run that converted the recordings says", out.String())
 	}
 }
+
+// A step's own output is the program's words and not the tool's: they reach the operator's streams, so
+// the compiler's explanation and the container's log arrive as they were written. A step whose output
+// the tool folded into its own log would put the tool's summary in front of the explanation the
+// operator needs, and a step whose complaint the tool swallowed would leave the operator reading a
+// failure with no reason in it.
+//
+// git is a prerequisite of this build, and it writes to both streams: its version to standard output,
+// and its complaint about a tree that is not a repository to standard error.
+func TestAStepsOwnOutputReachesTheOperator(t *testing.T) {
+	dir := t.TempDir()
+
+	out, errout, restore := theOperatorsStreams(t)
+
+	defer restore()
+
+	if err := runStep(step{label: "probe", dir: dir, name: "git", args: []string{"--version"}}); err != nil {
+		t.Fatalf("runStep: %v", err)
+	}
+
+	if !strings.Contains(theContents(t, out), "git version") {
+		t.Errorf("git's own words did not reach the operator's standard output: %q", theContents(t, out))
+	}
+
+	// The complaint is what is being looked for; the exit status is git's business.
+	_ = runStep(step{label: "probe", dir: dir, name: "git", args: []string{"rev-parse", "--show-toplevel"}})
+
+	if !strings.Contains(theContents(t, errout), "not a git repository") {
+		t.Errorf("git's complaint did not reach the operator's standard error: %q", theContents(t, errout))
+	}
+}
+
+// theOperatorsStreams stands in for the streams the process was started with, and gives back the way
+// to put them back. The tool writes its own lines to the writer it is given, so a test that asks where
+// a program's output lands has to be the process's standard output and standard error.
+func theOperatorsStreams(t *testing.T) (*os.File, *os.File, func()) {
+	t.Helper()
+
+	out, err := os.CreateTemp(t.TempDir(), "standard-output")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+
+	errout, err := os.CreateTemp(t.TempDir(), "standard-error")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+
+	oldOut, oldErr := os.Stdout, os.Stderr
+
+	os.Stdout, os.Stderr = out, errout
+
+	return out, errout, func() {
+		os.Stdout, os.Stderr = oldOut, oldErr
+
+		out.Close()
+		errout.Close()
+	}
+}
+
+// theContents reads what a stream the test is holding has been given.
+func theContents(t *testing.T, f *os.File) string {
+	t.Helper()
+
+	body, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	return string(body)
+}

@@ -23,6 +23,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -536,7 +537,7 @@ func TestTheFfmpegCheckIsNotACommandThisToolAccepts(t *testing.T) {
 func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 	out := &bytes.Buffer{}
 
-	if code := (&tool{}).run([]string{"nonsense"}, out); code == 0 {
+	if code := (&tool{errout: io.Discard}).run([]string{"nonsense"}, out); code == 0 {
 		t.Fatal("a run naming no command succeeded")
 	}
 
@@ -858,4 +859,75 @@ func theFlagValue(args []string, flag string) string {
 	}
 
 	return ""
+}
+
+// The compile guide is what an operator reads before they type, and the tool is what answers them. A
+// guide naming nine of the ten commands the tool accepts is a guide an operator trusts and a tool
+// contradicts, and a guide that never says how to check what it built leaves the checking to guesswork.
+// The guide's command section is pinned to the commands the tool accepts, and its verification section
+// to the suites a build is verified with.
+func TestTheCompileGuideNamesEveryCommandTheToolAccepts(t *testing.T) {
+	section := theGuideSection(t, "## What to type")
+
+	for _, name := range knownCommands {
+		if !strings.Contains(section, "cmd/build "+name) {
+			t.Errorf("the compile guide's command section does not name cmd/build %s, which the tool accepts", name)
+		}
+	}
+}
+
+// The guide separates what to type from why it is this way, and says how to verify a build: the suites
+// the tool runs, and the suites the tool runs when it is asked to run nothing but them.
+func TestTheCompileGuideSaysHowToVerifyABuild(t *testing.T) {
+	section := theGuideSection(t, "## How to verify a build")
+
+	for _, want := range []string{"go test ./...", "npm test", "cmd/build test"} {
+		if !strings.Contains(section, want) {
+			t.Errorf("the compile guide's verification section does not name %s, which is how a build is verified", want)
+		}
+	}
+}
+
+// theGuideSection reads one section of the compile guide: the lines under the heading named, up to the
+// next heading of the same level. A test that read the whole document could pass on a sentence in the
+// rationale, which is not where the operator looks for the command they type.
+func theGuideSection(t *testing.T, heading string) string {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "COMPILING.md")
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", path, err)
+	}
+
+	lines := strings.Split(string(body), "\n")
+
+	start := -1
+
+	for i, line := range lines {
+		if strings.TrimSpace(line) == heading {
+			start = i
+
+			break
+		}
+	}
+
+	if start == -1 {
+		t.Fatalf("%s has no %q section, which is where the operator looks for it", path, heading)
+	}
+
+	level := strings.HasPrefix(heading, "## ")
+
+	var section []string
+
+	for _, line := range lines[start+1:] {
+		if level && strings.HasPrefix(line, "## ") {
+			break
+		}
+
+		section = append(section, line)
+	}
+
+	return strings.Join(section, "\n")
 }

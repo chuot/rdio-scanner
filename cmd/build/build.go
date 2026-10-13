@@ -56,6 +56,11 @@ type tool struct {
 	installed func(string) bool
 	execute   func(step) error
 
+	// errout is the operator's own standard error. The run's lines go to the writer the run was given,
+	// and a failure goes here: the line that says the run stopped has to reach the operator even when
+	// the run's progress is being written somewhere else.
+	errout io.Writer
+
 	// archive writes the release archive. It is not an external command.
 	archive func(path string, files []archiveFile) error
 
@@ -145,6 +150,7 @@ func newTool(repo string) tool {
 		machine: thisMachine,
 		theRun:  onThisMachine(),
 		now:     time.Now,
+		errout:  os.Stderr,
 	}
 
 	t.prove = t.proveSuppliedBinaries
@@ -165,12 +171,12 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 	src, err := t.read(t.repo)
 	if err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	version, err := buildinfo.Derive(src.core, src.tag, src.commit, o.pre)
 	if err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	// The version subcommand answers one question and answers nothing else.
@@ -190,7 +196,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	// which of the two the binary came from. The refusal comes before anything is built, so a release
 	// run asked to release an uncommitted tree builds nothing.
 	if o.sub == subDist && src.dirty && !o.allowDirty {
-		return fail(stdout, fmt.Errorf("dist releases the tree as it is committed, and this tree has uncommitted work: %s\ncommit it, or say --allow-dirty to release the tree as it stands", strings.Join(src.changed, ", ")))
+		return fail(t.errout, fmt.Errorf("dist releases the tree as it is committed, and this tree has uncommitted work: %s\ncommit it, or say --allow-dirty to release the tree as it stands", strings.Join(src.changed, ", ")))
 	}
 
 	// The override is a maintainer releasing work in progress, and the log says so on every run that
@@ -205,7 +211,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	if o.sub == subClean {
 		removed, err := t.clean(t.repo)
 		if err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", subClean, err))
+			return fail(t.errout, fmt.Errorf("%s: %w", subClean, err))
 		}
 
 		for _, path := range removed {
@@ -225,13 +231,13 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 	state, err := t.state(t.repo, o)
 	if err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	// The web applications come first: the server embeds both bundles, so a bundle built in this
 	// run has to be on disk before the binary that embeds it is compiled.
 	if err := t.runWebapps(o, version, stdout, state); err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	// The release matrix builds the applications once, because the bundles are the same for every
@@ -245,7 +251,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	if o.buildsFFmpeg() {
 		skipped, err := t.ffmpeg(o, stdout)
 		if err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", subFFmpeg, err))
+			return fail(t.errout, fmt.Errorf("%s: %w", subFFmpeg, err))
 		}
 
 		// The ffmpeg binaries this target carries are compiled on their own platform and were not
@@ -264,13 +270,13 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	if o.sub == subContainer {
 		program, err := resolveContainerProgram(t.resolve, os.LookupEnv)
 		if err != nil {
-			return fail(stdout, err)
+			return fail(t.errout, err)
 		}
 
 		s := containerStep(o, t.repo, version, t.now(), program)
 
 		if err := t.execute(s); err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", s.label, err))
+			return fail(t.errout, fmt.Errorf("%s: %w", s.label, err))
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
@@ -280,7 +286,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 	if o.buildsServer() {
 		if err := t.runServer(o, version, stdout); err != nil {
-			return fail(stdout, fmt.Errorf("%s: %w", subServer, err))
+			return fail(t.errout, fmt.Errorf("%s: %w", subServer, err))
 		}
 	}
 
@@ -293,11 +299,11 @@ func (t tool) run(args []string, stdout io.Writer) int {
 func (t tool) runTest(o options, stdout io.Writer) int {
 	for _, s := range testSteps(o, t.repo) {
 		if _, err := t.resolve(s.name); err != nil {
-			return fail(stdout, fmt.Errorf("%s needs %s, which is not installed here: %w", subTest, s.name, err))
+			return fail(t.errout, fmt.Errorf("%s needs %s, which is not installed here: %w", subTest, s.name, err))
 		}
 
 		if err := t.execute(s); err != nil {
-			return fail(stdout, fmt.Errorf("%s (%s): %w", s.label, s.result, err))
+			return fail(t.errout, fmt.Errorf("%s (%s): %w", s.label, s.result, err))
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
@@ -352,7 +358,7 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	// standing on is refused before a single application is built, and not after the first archive.
 	targets, err := distTargets(o, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	// A run asked for one target writes one target's lines, and those lines need no owner: the log of a
@@ -385,7 +391,7 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 
 		skipped, err := t.ffmpeg(o, log(o.target))
 		if err != nil {
-			return fail(stdout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
+			return fail(t.errout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
 		}
 
 		// The message the ffmpeg phase printed for this target says which host compiles the binaries,
@@ -402,7 +408,7 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 
 	workers, err := distWorkers(len(ready), os.LookupEnv)
 	if err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	// The server compiles and the archive writes run at once. Each target's binary is a different file,
@@ -469,7 +475,7 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	// is the same answer however the work was scheduled.
 	for _, w := range work {
 		if w.err != nil {
-			return fail(stdout, w.err)
+			return fail(t.errout, w.err)
 		}
 
 		written = append(written, w.path)
@@ -479,7 +485,7 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	// are removed as soon as its own are written, and each removal is named.
 	pruned, err := pruneReleaseFolder(t.repo, version.String())
 	if err != nil {
-		return fail(stdout, err)
+		return fail(t.errout, err)
 	}
 
 	for _, path := range pruned {
@@ -600,8 +606,8 @@ func targetsWord(n int) string {
 }
 
 // fail says what stopped the build and returns the exit code that says a step did not do its job.
-func fail(stdout io.Writer, err error) int {
-	fmt.Fprintf(stdout, "error  %v\n", err)
+func fail(errout io.Writer, err error) int {
+	fmt.Fprintf(errout, "error  %v\n", err)
 
 	return 1
 }

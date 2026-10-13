@@ -327,3 +327,22 @@ func TestReadSourceRefusesAVersionFileItCannotReadBeforeAskingGit(t *testing.T) 
 		t.Errorf("the refusal %q does not name the file at fault", err)
 	}
 }
+
+// A tree git cannot answer for is the failure the operator can do something about, and the message has
+// to say who was asked, where the tool asked, and what was asked. git's own complaint is the part that
+// says what to do — a tree that is not a repository, a commit no tag names — and an error that says
+// only "exit status 128" sends the operator to run git themselves to learn what the tool already knew.
+func TestATreeGitCannotAnswerForNamesGitTheDirectoryAndTheCommand(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := git(dir, "rev-parse", "--show-toplevel")
+	if err == nil {
+		t.Fatal("a tree git cannot answer for was accepted, and the run has nothing to tell the operator")
+	}
+
+	for _, want := range []string{"git", "rev-parse --show-toplevel", dir, "not a git repository"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the message %q does not name %s", err, want)
+		}
+	}
+}
