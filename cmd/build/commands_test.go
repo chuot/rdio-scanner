@@ -155,6 +155,49 @@ func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing
 	}
 }
 
+// The release is built from a commit, and a tree with uncommitted changes is not that commit. The flag
+// that says "release it anyway" is an instruction about the release, so it belongs to the release run
+// and to nothing else.
+func TestTheAllowDirtyFlagIsAcceptedOnlyByTheReleaseRun(t *testing.T) {
+	for _, args := range [][]string{
+		{"dist", "--allow-dirty"},
+		{"--allow-dirty", "dist"},
+		{"dist", "--all", "--allow-dirty"},
+	} {
+		o, err := parseArgs(args)
+		if err != nil {
+			t.Errorf("parseArgs(%v): %v, want the release run to accept the override", args, err)
+			continue
+		}
+
+		if !o.allowDirty {
+			t.Errorf("parseArgs(%v) does not record the override", args)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"--allow-dirty"},
+		{"client", "--allow-dirty"},
+		{"--allow-dirty", "client"},
+		{"scanner", "--allow-dirty"},
+		{"server", "--allow-dirty"},
+		{"ffmpeg", "--allow-dirty"},
+		{"container", "--allow-dirty"},
+		{"clean", "--allow-dirty"},
+		{"version", "--allow-dirty"},
+	} {
+		_, err := parseArgs(args)
+		if err == nil {
+			t.Errorf("%v was accepted, want a refusal naming the release run", args)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "dist") {
+			t.Errorf("the refusal of %v is %q, which does not name the release run", args, err)
+		}
+	}
+}
+
 // A server binary a release ships has to run on machines the release machine has never seen. With cgo
 // enabled, the target equal to the machine running the release is compiled against that machine's C
 // library and every cross-compiled target is static, which makes the most-downloaded archive the one

@@ -149,7 +149,7 @@ func newTool(repo string) tool {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch]|container|clean|version] [--pre <name>] [-o <path>]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
 		return 2
 	}
 
@@ -173,6 +173,21 @@ func (t tool) run(args []string, stdout io.Writer) int {
 
 	if src.dirty {
 		fmt.Fprintln(stdout, "note   working tree is dirty; the version does not say so")
+	}
+
+	// The release is built from a commit, and the archive a release writes is named for it. A tree with
+	// uncommitted work in it is not that commit, and the person who downloads the archive cannot tell
+	// which of the two the binary came from. The refusal comes before anything is built, so a release
+	// run asked to release an uncommitted tree builds nothing.
+	if o.sub == subDist && src.dirty && !o.allowDirty {
+		return fail(stdout, fmt.Errorf("dist releases the tree as it is committed, and this tree has uncommitted work: %s\ncommit it, or say --allow-dirty to release the tree as it stands", strings.Join(src.changed, ", ")))
+	}
+
+	// The override is a maintainer releasing work in progress, and the log says so on every run that
+	// used it: an archive built from a tree that is not the commit it names is only honest when the run
+	// that wrote it said so out loud.
+	if o.sub == subDist && src.dirty && o.allowDirty {
+		fmt.Fprintln(stdout, "note   dist --allow-dirty: this release is built from an uncommitted tree")
 	}
 
 	// A clean run removes what a release and a client build leave behind, and builds nothing. It needs
@@ -287,7 +302,9 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 // A target whose ffmpeg binaries are compiled on its own platform is not compiled, and not dropped for
 // it, by the machine running a matrix run: they are produced on a machine the release machine does not
 // control,
-// and a run that stopped for it would ship nothing at all. It is skipped, and the run ships the rest.
+// and a run that stopped for it would ship nothing at all. It is skipped, the run ships the rest, and
+// the run's last line names the targets that wrote no archive and says, by its exit status, that the
+// release it was asked for is not the release it wrote.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
 	// The list is decided once, before any of it runs, so that a run asked for the machine it is
 	// standing on is refused before a single application is built, and not after the first archive.
@@ -295,6 +312,11 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	if err != nil {
 		return fail(stdout, err)
 	}
+
+	// The run keeps what it wrote and what wrote none, because the release's last line is the answer to
+	// the question the operator asked: is the release I asked for the release I have.
+	var written []string
+	var none []string
 
 	for _, tr := range targets {
 		// The target each iteration is building for is written into the options the server step and the
@@ -312,8 +334,10 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 
 		// The message the ffmpeg phase printed for this target says which host compiles the binaries,
 		// the command that compiles them there, and the directory to drop them in. The run carries on to
-		// the targets whose ffmpeg it can produce, and ends successfully with the archives it wrote.
+		// the targets whose ffmpeg it can produce, and says at the end which targets wrote none.
 		if skipped {
+			none = append(none, o.target)
+
 			continue
 		}
 
@@ -338,9 +362,42 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		}
 
 		fmt.Fprintf(stdout, "%-7s %s\n", subArchive, path)
+
+		written = append(written, path)
 	}
 
-	return 0
+	// The release says what it wrote, and what it wrote none for, and its exit status says whether the
+	// release it was asked for is the release it wrote. A target whose binaries are compiled on its own
+	// platform is not a failure, and a run that ships the archives it can produce is doing its job; it is
+	// an incomplete release, which is a fact a script has to be able to tell from a step that broke.
+	if len(none) == 0 {
+		fmt.Fprintf(stdout, "%-7s %s written\n", subDist, archivesWord(len(written)))
+
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "%-7s %s written, %s wrote none: %s\n",
+		subDist, archivesWord(len(written)), targetsWord(len(none)), strings.Join(none, ", "))
+
+	return 3
+}
+
+// archivesWord and targetsWord say a count and its noun the way the release log reads: one archive,
+// five archives, one target, three targets.
+func archivesWord(n int) string {
+	if n == 1 {
+		return "1 archive"
+	}
+
+	return fmt.Sprintf("%d archives", n)
+}
+
+func targetsWord(n int) string {
+	if n == 1 {
+		return "1 target"
+	}
+
+	return fmt.Sprintf("%d targets", n)
 }
 
 // fail says what stopped the build and returns the exit code that says a step did not do its job.

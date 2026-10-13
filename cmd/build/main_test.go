@@ -110,6 +110,9 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 var released = source{core: "8.0.0", declared: true, tag: "v8.0.0", commit: "db79311"}
 var development = source{core: "8.0.0", declared: true, commit: "db79311"}
 
+// uncommitted is a tree git says is dirty: work that is not in the commit the version names.
+var uncommitted = source{core: "8.0.0", declared: true, commit: "db79311", dirty: true, changed: []string{"cmd/build/build.go"}}
+
 func TestRunningWithNoSubcommandBuildsBothApplicationsAndThenTheServer(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -432,6 +435,104 @@ func theOutputPathOf(s step) string {
 	return ""
 }
 
+// A release run refuses a tree with uncommitted changes. The archive is named for the commit it was
+// built from, and a tree with work in it is not that commit: the person who downloads the archive has
+// no way to know which of the two the binary came from. The refusal comes before anything is built, and
+// names the paths and the override.
+func TestADistRunRefusesATreeWithUncommittedChanges(t *testing.T) {
+	tl, out, ran := fakeRun(uncommitted, "")
+
+	if code := tl.run([]string{"dist"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: a release run asked to build a tree that is not committed", code)
+	}
+
+	for _, want := range []string{"cmd/build/build.go", "--allow-dirty"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the refusal %q does not name %s, which is what the operator needs to fix it", out.String(), want)
+		}
+	}
+
+	if len(*ran) != 0 {
+		t.Errorf("the run built %d steps after refusing the tree: %v", len(*ran), *ran)
+	}
+}
+
+// The override is a maintainer building a pre-release from work in progress, and it is only worth
+// having because the log says, on the run that used it, that the release is built from an uncommitted
+// tree.
+func TestADistRunBuiltFromAnUncommittedTreeSaysSo(t *testing.T) {
+	tl, out, _ := fakeRun(uncommitted, "")
+
+	if code := tl.run([]string{"dist", "--allow-dirty"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	if !strings.Contains(out.String(), "uncommitted") {
+		t.Errorf("the run's log %q does not say the release is built from an uncommitted tree", out.String())
+	}
+}
+
+// A release run says what it wrote and what it wrote none for, and its exit status says whether the
+// release it was asked for is complete. A matrix that ships five of eight archives is doing what this
+// machine can do, and that is a different fact from "something broke".
+func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing.T) {
+	tl, out, _ := fakeRun(released, "")
+
+	if code := tl.run([]string{"dist", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0: every archive the run was asked for was written", code)
+	}
+
+	if !strings.Contains(out.String(), "8 archives written") {
+		t.Errorf("the run's log %q does not say 8 archives written", out.String())
+	}
+
+	tl, out, _ = fakeRun(released, "")
+
+	if code := tl.run([]string{"dist", "linux-arm64"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	if !strings.Contains(out.String(), "1 archive written") {
+		t.Errorf("the run's log %q does not say 1 archive written", out.String())
+	}
+}
+
+// An incomplete matrix is not a release, and the run that wrote it says so with its exit status, so a
+// script can tell "the five archives are the whole release this machine can make" from "the release is
+// missing archives".
+func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	skipsSuppliedTargets(tl, ran)
+
+	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: three of the eight targets the run was asked for wrote no archive", code)
+	}
+
+	for _, want := range []string{"5 archives written", "3 targets wrote none", "freebsd-amd64", "macos-amd64", "macos-arm64"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the run's log %q does not say %q", out.String(), want)
+		}
+	}
+}
+
+// A release run asked for one target it cannot build wrote none of the one archive it was asked for.
+func TestADistRunAskedForOneTargetItCannotBuildExitsNonZero(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	skipsSuppliedTargets(tl, ran)
+
+	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3", code)
+	}
+
+	for _, s := range *ran {
+		if s.label == subArchive || s.label == subServer {
+			t.Errorf("%s ran for %s, a target whose binaries were never supplied", s.label, s.result)
+		}
+	}
+}
+
 // A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
 // after it are not built: a half matrix is not a release, and a run that carried on would leave an
 // archive directory with a server in it and no ffmpeg to embed. This is the promise the compiled targets
@@ -533,15 +634,15 @@ func skipsSuppliedTargets(tl *tool, ran *[]step) {
 // Binaries that were not dropped are not a failure. The three supplied targets are built on three machines
 // the release machine does not control, and a run that stopped for the one it does not have would ship
 // nothing at all — not the five archives it could have shipped, and not the two it was told to build. The
-// run says which target it skipped and what would have made it buildable, ships the rest, and ends
-// successfully.
+// run says which target it skipped and what would have made it buildable, ships the rest, and ends with
+// the summary that says the release is incomplete: five of the eight archives it was asked for.
 func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
 	skipsSuppliedTargets(tl, ran)
 
-	if code := tl.run([]string{"dist", "--all"}, out); code != 0 {
-		t.Fatalf("exit code = %d, want 0: a release run missing one supplied target's binaries ships the rest", code)
+	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: a release run missing three supplied targets' binaries ships the five it can and says the release is incomplete", code)
 	}
 
 	for _, target := range []string{"freebsd-amd64", "macos-amd64", "macos-arm64"} {
@@ -577,14 +678,15 @@ func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
 
 // A release run asked for one supplied target with nothing dropped for it warns, skips, and writes no
 // archive: an archive whose server carries no ffmpeg is the thing the bundle exists to prevent, and the
-// operator is told what would have made it buildable.
+// operator is told what would have made it buildable. The run was asked for one archive and wrote none,
+// which is the incomplete release the exit status names.
 func TestADistRunForASuppliedTargetWithNothingDroppedProducesNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
 	skipsSuppliedTargets(tl, ran)
 
-	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
+	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: the one archive the run was asked for was not written", code)
 	}
 
 	for _, s := range *ran {

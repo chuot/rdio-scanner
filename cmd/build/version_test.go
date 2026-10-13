@@ -31,6 +31,32 @@ import (
 	"rdio-scanner/cmd/build/buildinfo"
 )
 
+// The release run names the paths it refused to release, so the operator sees the work to commit. git
+// writes its porcelain status with the two status characters first, and the tool reads git's output
+// trimmed, which takes the leading space off the first line: a rule that counted characters from the
+// start of the line loses the first character of the first path.
+func TestTheChangedPathsAreThePathsGitSaysAreNotCommitted(t *testing.T) {
+	status := strings.TrimSpace(strings.Join([]string{
+		" M cmd/build/build.go",
+		"?? cmd/build/a_file_nobody_committed.go",
+		"M  cmd/build/a_staged_file.go",
+		"R  cmd/build/the_old_name.go -> cmd/build/the_new_name.go",
+	}, "\n"))
+
+	got := changedPaths(status)
+
+	want := []string{
+		"cmd/build/build.go",
+		"cmd/build/a_file_nobody_committed.go",
+		"cmd/build/a_staged_file.go",
+		"cmd/build/the_new_name.go",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the changed paths are\n  %v\nwant\n  %v", got, want)
+	}
+}
+
 // readSource is the only part of the tool that talks to git, so these tests ask it the questions in
 // the two places the answers matter: this repository, which is what gets built, and a scratch
 // repository that can be made to be the states this one is not — tagged, and tagged with something

@@ -69,6 +69,10 @@ type options struct {
 	// the one their own machine runs, and the eight-target matrix is a release, which is a deliberate act.
 	all bool
 
+	// allowDirty is the release run's override: it says the tree is being released with uncommitted
+	// work in it, deliberately, and the run says so on every line the override is used for.
+	allowDirty bool
+
 	// installClients is decided by the tool looking at the tree, not by the operator: a first run
 	// on a fresh clone has no esbuild to build with.
 	installClients bool
@@ -183,6 +187,35 @@ func parseArgs(args []string) (options, error) {
 
 			o.all = true
 
+		case "--allow-dirty":
+			// The release is built from a commit, and this flag says the tree is being released with
+			// work in it that is not committed. That is a decision about a release, so the flag belongs
+			// to the release run: a client build, a container image, and a clean run are one machine's
+			// business and release nothing. The command the flag belongs to can arrive on either side of
+			// it, so the check looks ahead as well as behind, and the refusal names the command line the
+			// operator typed and not the order the words happened to arrive in.
+			next := ""
+			if i+1 < len(args) {
+				next = args[i+1]
+			}
+
+			if o.sub == subDist || next == subDist {
+				o.allowDirty = true
+
+				continue
+			}
+
+			who := o.sub
+			if who == "" && isKnownCommand(next) {
+				who = next
+			}
+
+			if who != "" {
+				return options{}, fmt.Errorf("--allow-dirty is a release run saying it releases a tree that is not committed, and %s releases nothing: go run ./cmd/build dist --allow-dirty releases the tree as it stands", who)
+			}
+
+			return options{}, fmt.Errorf("--allow-dirty is a release run saying it releases a tree that is not committed, and a run that names no command builds this machine's whole tree: go run ./cmd/build dist --allow-dirty releases the tree as it stands")
+
 		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
@@ -250,6 +283,18 @@ func parseArgs(args []string) (options, error) {
 	}
 
 	return o, nil
+}
+
+// isKnownCommand reports whether a word names one of the tool's commands. The checks that look ahead
+// in the command line need to know which words name a command, so that a refusal names the command the
+// operator typed and not the order the words happened to arrive in.
+func isKnownCommand(word string) bool {
+	switch word {
+	case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer:
+		return true
+	}
+
+	return false
 }
 
 // isTarget reports whether a word names a platform this tool can be asked to build for: a Go operating

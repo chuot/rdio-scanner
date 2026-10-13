@@ -37,6 +37,10 @@ type source struct {
 	tag      string
 	commit   string
 	dirty    bool
+
+	// changed is the work git says is not in the commit: the paths a release run names when it refuses
+	// to release a tree that is not committed.
+	changed []string
 }
 
 // readSource asks the repository those questions. Every git call is an argument array, so a version
@@ -71,7 +75,34 @@ func readSource(repo string) (source, error) {
 		tag:      tag,
 		commit:   commit,
 		dirty:    status != "",
+		changed:  changedPaths(status),
 	}, nil
+}
+
+// changedPaths reads the paths out of git's porcelain status: the work that is not in the commit the
+// release is named for. A rename names the file it became, and git quotes a path that needs quoting.
+// The status characters are the first two characters of the line after the leading space git pads them
+// with, and the tool reads git's output trimmed, which takes that space off the first line — so the
+// status is skipped from the left, not counted from the start.
+func changedPaths(status string) []string {
+	var paths []string
+
+	for _, line := range strings.Split(status, "\n") {
+		rest := strings.TrimLeft(line, " ")
+		if len(rest) <= 2 {
+			continue
+		}
+
+		path := strings.TrimSpace(rest[2:])
+
+		if _, renamed, found := strings.Cut(path, " -> "); found {
+			path = renamed
+		}
+
+		paths = append(paths, strings.Trim(path, "\""))
+	}
+
+	return paths
 }
 
 // git runs one git command in one directory and returns its trimmed output.
