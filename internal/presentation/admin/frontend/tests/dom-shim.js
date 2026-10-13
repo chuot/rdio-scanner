@@ -2,6 +2,23 @@
 // browser: createElement, customElements, append/replaceChildren, textContent, dataset,
 // attributes, and click listeners. innerHTML is stored as the string it is, never
 // parsed, so a component that wants its test to see inside it builds real child nodes.
+//
+// The form field primitive is the one custom element the shim builds and connects for real,
+// at every route a component uses to create it: createElement, append, replaceChildren, and
+// the innerHTML parser. Its rule — show a message only once the operator has reached the
+// field — is what the section proofs read, and a stub that records a string cannot carry it.
+// The other primitives stay as the plain nodes the tests connect by hand today.
+
+const FORM_FIELD = 'rdio-form-field';
+
+// connectFormField runs the primitive's own connectedCallback the moment a component appends
+// the field to a row, which is the moment a browser runs it: the field already carries its
+// label and its control, and it is connected before the render writes messages into it.
+function connectFormField(node) {
+  if (node && node.tag === FORM_FIELD && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
+    node.connectedCallback();
+  }
+}
 
 class ShimNode {
   constructor(tag) {
@@ -17,14 +34,24 @@ class ShimNode {
 
   append(...nodes) {
     // The builders append bare strings as well as nodes; only the nodes have a parent.
-    for (const node of nodes) if (node && typeof node === 'object') node.parent = this;
+    for (const node of nodes) {
+      if (node && typeof node === 'object') {
+        node.parent = this;
+        connectFormField(node);
+      }
+    }
 
     this.children.push(...nodes);
   }
 
   replaceChildren(...nodes) {
     for (const node of this.children) if (node && typeof node === 'object') node.parent = null;
-    for (const node of nodes) if (node && typeof node === 'object') node.parent = this;
+    for (const node of nodes) {
+      if (node && typeof node === 'object') {
+        node.parent = this;
+        connectFormField(node);
+      }
+    }
 
     this.children = [...nodes];
   }
@@ -92,6 +119,27 @@ class ShimNode {
     return this.attributes[name] ?? null;
   }
 
+  // The form field marks its control invalid with these two; the sections that clear a row's
+  // warning icon take the icon off the page with remove().
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
+  toggleAttribute(name, on) {
+    if (on) this.setAttribute(name, '');
+    else this.removeAttribute(name);
+
+    return on;
+  }
+
+  remove() {
+    const parent = this.parent;
+
+    if (parent) parent.children = parent.children.filter((node) => node !== this);
+
+    this.parent = null;
+  }
+
   // classList is the class view the drag handlers use to mark the row being moved.
   // It reads and writes the same className the components set.
   get classList() {
@@ -120,8 +168,9 @@ class ShimNode {
     (this.listeners[type] ??= []).push(fn);
   }
 
-  // rdio-form-field.setError is the admin form primitive: the shim records the
-  // message so a test can assert the field was flagged.
+  // The form field primitive defines its own setError when it is connected, and that is the one
+  // the section proofs read. This is the fallback for a field that was never connected: the shim
+  // records the message so a test can still see the field was flagged.
   setError(error) {
     this.error = error;
   }
@@ -137,9 +186,13 @@ class ShimNode {
   }
 
   // Forms are driven by dispatching their submit event, the way a browser does:
-  // the listener receives the event object the test hands in.
+  // the listener receives the event object the test hands in. The event bubbles the way a
+  // browser bubbles it: a section's handler sits on the control, the form field's own handler
+  // sits on the field that owns the control, and a change typed into a control reaches both.
   dispatchEvent(event) {
-    for (const fn of this.listeners[event.type] ?? []) fn(event);
+    for (let node = this; node; node = node.parent) {
+      for (const fn of node.listeners?.[event.type] ?? []) fn(event);
+    }
   }
 
   // form.elements is the control list the login form disables while submitting:
@@ -260,7 +313,15 @@ function parseHTML(html) {
       continue;
     }
 
-    const node = new ShimNode(token.match(/^<([a-zA-Z][\w-]*)/)[1]);
+    // The form field is built through its own class, the way createElement builds it, so a
+    // component that lays out a form through innerHTML gets the primitive's rule and not a node
+    // that only records what it was told.
+    const tag = token.match(/^<([a-zA-Z][\w-]*)/)[1];
+    const ctor = tag === FORM_FIELD ? globalThis.customElements.registry.get(tag) : undefined;
+
+    const node = ctor ? new ctor() : new ShimNode(tag);
+
+    node.tag = tag;
 
     for (const attr of token.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)) {
       node.attributes[attr[1]] = attr[2];
@@ -316,4 +377,31 @@ export function findAll(root, predicate) {
 
 export function texts(nodes) {
   return nodes.map((node) => node.textContent);
+}
+
+// connectFields runs the form field primitive's connectedCallback on every field under a root,
+// for the tests that drive a component whose markup arrived through innerHTML: a browser connects
+// those fields when the tree is inserted, and the shim inserts them by parsing, not by appending.
+export function connectFields(root) {
+  const fields = findAll(root, (node) => node.tag === FORM_FIELD);
+
+  for (const field of fields) connectFormField(field);
+
+  return fields;
+}
+
+// fieldMessage is the text the operator sees under the control — the successor of mat-error.
+// A field whose primitive is not connected has no message element, which is itself a reading:
+// the message the section handed over was never written on the page.
+export function fieldMessage(field) {
+  const node = findAll(field, (child) => child.className?.split(/\s+/).includes('rdio-form-error'))[0];
+
+  return node?.textContent ?? '';
+}
+
+// reachField is the operator editing a field and walking away from it: the change the browser fires
+// when the value leaves the control, bubbling to the field that owns it. Walking across a field
+// without editing it is not a reading — the rule Material's error matcher used.
+export function reachField(control) {
+  control.dispatchEvent({ type: 'change' });
 }

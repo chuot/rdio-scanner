@@ -9,8 +9,16 @@ import test from 'node:test';
 
 import { getAdminContext } from '../application/admin-context.js';
 
+// The form field primitive is part of every bundle the administration application builds; a
+// test that reads a field's message needs it defined before the form markup is parsed.
+import '../../../common/frontend/presentation/ui/primitives.js';
+
 import '../presentation/admin/rdio-admin-login.js';
 
+import { connectFields, fieldMessage, findAll } from './dom-shim.js';
+
+// The form markup arrives through innerHTML, the way a browser inserts it: the fields under the
+// root are connected here, which is the moment the browser runs the primitive's own setup.
 function loginForm(result) {
   const context = getAdminContext();
 
@@ -19,11 +27,15 @@ function loginForm(result) {
   const el = new (customElements.get('rdio-admin-login'))();
 
   el.connectedCallback();
+  connectFields(el);
 
   const form = el.querySelector('form');
   const input = el.querySelector('input[name="password"]');
 
+  // The operator types: the value lands in the control and the input event bubbles out of it,
+  // which is what makes the field one the operator has reached.
   input.value = 'secret';
+  input.dispatchEvent({ type: 'input' });
 
   form.dispatchEvent({ type: 'submit', preventDefault: () => {} });
 
@@ -32,9 +44,24 @@ function loginForm(result) {
   });
 }
 
+// The message is the text under the control, written by the form field primitive itself.
 function errorText(el) {
-  return el.querySelector('rdio-form-field').error;
+  return fieldMessage(el.querySelector('rdio-form-field'));
 }
+
+test('the login form carries the form field primitive, not a node that only records a message', () => {
+  const el = new (customElements.get('rdio-admin-login'))();
+
+  el.connectedCallback();
+  connectFields(el);
+
+  const field = el.querySelector('rdio-form-field');
+
+  assert.equal(field.tag, 'rdio-form-field');
+  assert.equal(field.dataset.bound, '1');
+  assert.equal(typeof field.isReached, 'function');
+  assert.equal(fieldMessage(field), '');
+});
 
 test('a wrong password shows Invalid password', async () => {
   const el = await loginForm('invalid');
