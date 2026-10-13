@@ -21,6 +21,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"fmt"
@@ -76,9 +77,9 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		},
 
 		// The archive is not an external command. The stand-in records that it was written, and what it
-		// does is tested in archive_test.go. The archive reads what the release wrote into the tree, so
-		// the run's order is what is under test here.
-		releaseFiles: func(repo string, tr releaseTarget) ([]archiveFile, error) {
+		// does is tested in archive_test.go. The archive reads the program the release wrote into the
+		// tree, so the run's order is what is under test here.
+		releaseFiles: func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 			return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
 		},
 
@@ -306,6 +307,129 @@ func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("the release run ran\n  %v\nwant\n  %v", got, want)
 	}
+}
+
+// The archive is read from the path the server step writes to. A release run that read the program from
+// a path it chose for itself shipped whatever was standing at that path.
+func TestADistRunReadsTheArchiveFromThePathTheServerStepWritesTo(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	var read []string
+
+	tl.releaseFiles = func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
+		read = append(read, output)
+
+		return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
+	}
+
+	if code := tl.run([]string{"dist", "--all"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	var built []string
+
+	for _, s := range *ran {
+		if s.label == subServer {
+			built = append(built, theOutputPathOf(s))
+		}
+	}
+
+	if strings.Join(read, " ") != strings.Join(built, " ") {
+		t.Errorf("the release read its programs from\n  %v\nand the server steps wrote them to\n  %v", read, built)
+	}
+}
+
+// A release run's archive carries the bytes of the binary that run compiled, written by the real archive
+// writer into a real tree: the binary standing at the path from an earlier build is replaced by the one
+// this run compiled before anything reads it.
+func TestADistRunArchivesTheBinaryItCompiled(t *testing.T) {
+	repo := t.TempDir()
+
+	target := "linux-arm64"
+
+	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary from an earlier build")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeArchiveLicence(t, repo, target, "the licence")
+
+	tl, _, _ := fakeRun(released, "")
+
+	tl.repo = repo
+	tl.releaseFiles = archiveFiles
+
+	// The tool runs with the repository as its working directory, so the archive path a run names is a
+	// path inside it.
+	tl.archive = func(path string, files []archiveFile) error {
+		return writeArchive(filepath.Join(repo, path), files)
+	}
+
+	// The stand-in compiles the way the compiler does: it writes the binary where the step says it
+	// writes it, and nowhere else.
+	tl.execute = func(s step) error {
+		if s.label != subServer {
+			return nil
+		}
+
+		path := filepath.Join(repo, theOutputPathOf(s))
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("making %s: %v", filepath.Dir(path), err)
+		}
+
+		if err := os.WriteFile(path, []byte("the binary this run compiled"), 0o755); err != nil {
+			t.Fatalf("writing %s: %v", path, err)
+		}
+
+		return nil
+	}
+
+	if code := tl.run([]string{"dist", target}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	body, err := os.ReadFile(filepath.Join(repo, archivePath(target, "8.0.0")))
+	if err != nil {
+		t.Fatalf("the release archive was not written: %v", err)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatalf("a standard zip reader cannot open the archive: %v", err)
+	}
+
+	var program string
+
+	for _, f := range reader.File {
+		if f.Name != "rdio-scanner" {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("cannot open %s in the archive: %v", f.Name, err)
+		}
+
+		got, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("reading %s in the archive: %v", f.Name, err)
+		}
+
+		program = string(got)
+	}
+
+	if program != "the binary this run compiled" {
+		t.Errorf("the archive carries %q, want the binary this run compiled", program)
+	}
+}
+
+// theOutputPathOf is the path a step was told to write to: the word after `-o` on its command line.
+func theOutputPathOf(s step) string {
+	for i, arg := range s.args {
+		if arg == "-o" && i+1 < len(s.args) {
+			return s.args[i+1]
+		}
+	}
+
+	return ""
 }
 
 // A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets

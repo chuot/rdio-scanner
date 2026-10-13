@@ -64,7 +64,7 @@ func TestTheArchiveCarriesTheProgramTheGuideAndTheLicenceOfTheFfmpegItCarries(t 
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	files, err := archiveFiles(repo, releaseTargets[4])
+	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	files, err := archiveFiles(repo, releaseTargets[4])
+	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -116,6 +116,39 @@ func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 		if strings.HasSuffix(f.name, ".md") {
 			t.Errorf("the archive carries %s, a markdown file", f.name)
 		}
+	}
+}
+
+// The archive carries the binary the run compiled. Reading the program from a path the tool chose for
+// itself, instead of from the path the run wrote to, is how a release ships a binary the release never
+// built: what stands at that path is whatever the last build, or the last hand that typed there, left
+// behind.
+func TestTheArchiveCarriesTheBinaryTheRunWroteAndNotTheFileStandingAtThePathItReadsFrom(t *testing.T) {
+	repo := t.TempDir()
+
+	target := releaseTargets[4].targetWord()
+
+	// The file standing at the path the archive used to read from, before the run wrote anywhere.
+	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run never compiled")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeArchiveLicence(t, repo, target, "the licence")
+
+	// The binary the run wrote, at the path the run wrote to.
+	output := filepath.Join("build", "scratch", "rdio-scanner")
+
+	writeRepoFile(t, repo, output, "the binary the run compiled")
+
+	files, err := archiveFiles(repo, releaseTargets[4], output)
+	if err != nil {
+		t.Fatalf("archiveFiles: %v", err)
+	}
+
+	if files[0].name != "rdio-scanner" {
+		t.Errorf("the archive carries its program under %q, want rdio-scanner", files[0].name)
+	}
+
+	if string(files[0].body) != "the binary the run compiled" {
+		t.Errorf("the archive carries %q, the file that was standing at the path it reads from, and not the binary the run wrote to %q", string(files[0].body), output)
 	}
 }
 
@@ -133,7 +166,7 @@ func TestTheGuideInTheArchiveCarriesEveryPictureInsideItself(t *testing.T) {
 	writeRepoFile(t, repo, "docs/admin-guide.html", guide)
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	files, err := archiveFiles(repo, releaseTargets[4])
+	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -175,7 +208,7 @@ func TestTheGuideInTheArchiveIsTheGuideTheRepositoryHas(t *testing.T) {
 	writeRepoFile(t, repo, "docs/admin-guide.html", string(body))
 	writeArchiveLicence(t, repo, target, "the ffmpeg licence")
 
-	files, err := archiveFiles(repo, releaseTargets[4])
+	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -208,7 +241,7 @@ func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	_, err := archiveFiles(repo, releaseTargets[4])
+	_, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err == nil {
 		t.Fatal("the release accepted an archive with no guide")
 	}
@@ -233,7 +266,7 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 		writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 		writeArchiveLicence(t, repo, target, "the licence of the ffmpeg "+target+" carries")
 
-		files, err := archiveFiles(repo, tr)
+		files, err := archiveFiles(repo, tr, defaultOutputPath(tr.targetWord()))
 		if err != nil {
 			t.Fatalf("%s: archiveFiles: %v", target, err)
 		}
@@ -286,7 +319,7 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 	writeArchiveLicence(t, repo, "macos-arm64", licence)
 
-	files, err := archiveFiles(repo, tr)
+	files, err := archiveFiles(repo, tr, defaultOutputPath(tr.targetWord()))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -338,7 +371,7 @@ func TestAMissingFfmpegLicenceStopsTheRelease(t *testing.T) {
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 
-	_, err := archiveFiles(repo, releaseTargets[4])
+	_, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err == nil {
 		t.Fatal("the release accepted an ffmpeg with no licence to carry")
 	}
@@ -357,7 +390,7 @@ func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) 
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, "windows-amd64", "the licence")
 
-	files, err := archiveFiles(repo, releaseTargets[7])
+	files, err := archiveFiles(repo, releaseTargets[7], defaultOutputPath("windows-amd64"))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -378,7 +411,7 @@ func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	files, err := archiveFiles(repo, releaseTargets[4])
+	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}
@@ -424,7 +457,7 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	files, err := archiveFiles(repo, releaseTargets[4])
+	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err != nil {
 		t.Fatalf("archiveFiles: %v", err)
 	}

@@ -73,9 +73,9 @@ type options struct {
 	// on a fresh clone has no esbuild to build with.
 	installClients bool
 
-	// outputNamed says the operator said where the server binary goes. A release run writes one binary
-	// per target, so the default path is decided again for each target, and a path the operator named
-	// is not overwritten by the matrix.
+	// outputNamed says the operator said where the server binary goes. Only the runs that compile one
+	// server binary are asked that question, so a release run writes one binary per target and decides
+	// the path it writes to again for each of them.
 	outputNamed bool
 }
 
@@ -121,7 +121,13 @@ func defaultOutputPath(target string) string {
 //
 // The default output path is decided after the whole command line is read, because the target that
 // decides it can be named before or after the flag: the path a run writes to is a fact about the
-// target it is building for, and a target named after `-o` still decides it.
+// target it is building for, and a target named after `-o` still decides it. The flag itself is
+// accepted for the runs that write a server binary, and for those alone, which is a check made after
+// the line is read because the command it belongs to arrives on either side of it.
+//
+// A release run writes archives, and an archive carries the binary the run wrote to, so a release run
+// that honoured a named path would write every archive from one binary and read each one from wherever
+// that path happened to point.
 func parseArgs(args []string) (options, error) {
 	o := options{}
 
@@ -229,6 +235,14 @@ func parseArgs(args []string) (options, error) {
 		default:
 			return options{}, fmt.Errorf("%s is not something this tool builds or a flag it knows", arg)
 		}
+	}
+
+	// `-o` is where a run writes the server binary it compiles. The whole-tree run and the server run
+	// compile one, and every other run compiles none, so the path it names is a path nothing is written
+	// to. The check is made here, after the line is read, because `-o` and the command it belongs to
+	// arrive in either order.
+	if o.outputNamed && o.sub != "" && o.sub != subServer {
+		return options{}, fmt.Errorf("-o is where a run writes the server binary it compiles, and %s compiles none: go run ./cmd/build -o <path> and go run ./cmd/build server -o <path> are the runs that write one", o.sub)
 	}
 
 	if !o.outputNamed {

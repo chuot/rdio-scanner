@@ -58,9 +58,9 @@ type tool struct {
 	// answers it: what the checks do is tested in build_test.go.
 	state func(repo string, o options) (planState, error)
 
-	// releaseFiles reads what the archive carries. It reads the tree, so the stand-in answers it: what it
-	// does is tested in archive_test.go.
-	releaseFiles func(repo string, tr releaseTarget) ([]archiveFile, error)
+	// releaseFiles reads what the archive carries, including the program the run wrote to. It reads the
+	// tree, so the stand-in answers it: what it does is tested in archive_test.go.
+	releaseFiles func(repo string, tr releaseTarget, output string) ([]archiveFile, error)
 
 	// ffmpeg produces the ffmpeg a server binary built here is going to carry. It is not one external
 	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
@@ -297,11 +297,9 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		// archive path are read from, because each target's binary is a different file.
 		o.target = tr.targetWord()
 
-		// The matrix writes one binary per target, so the default path is decided again for each one. A
-		// path the operator named is not overwritten.
-		if !o.outputNamed {
-			o.output = defaultOutputPath(o.target)
-		}
+		// The matrix writes one binary per target, so the path it is written to is decided again for
+		// each one, and the archive of that target is read from the same path.
+		o.output = defaultOutputPath(o.target)
 
 		skipped, err := t.ffmpeg(o, stdout)
 		if err != nil {
@@ -322,9 +320,9 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subServer, o.target, err))
 		}
 
-		// The archive carries the binary, the documentation as the files it is written in, the pictures
-		// those files point at, and the ffmpeg licence when the target carries an ffmpeg.
-		files, err := t.releaseFiles(t.repo, tr)
+		// The archive carries the binary this run wrote, the documentation as the files it is written
+		// in, the pictures those files point at, and the ffmpeg licence when the target carries an ffmpeg.
+		files, err := t.releaseFiles(t.repo, tr, o.output)
 		if err != nil {
 			return fail(stdout, fmt.Errorf("%s for %s: %w", subArchive, o.target, err))
 		}

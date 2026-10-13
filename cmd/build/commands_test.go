@@ -108,6 +108,53 @@ func TestTheOutputPathIsTheOneTheOperatorNamed(t *testing.T) {
 	}
 }
 
+// `-o` is where a run writes the one server binary it compiles. A run that builds the web applications,
+// an ffmpeg, a container image, a release archive, or nothing at all compiles no server binary, so the
+// path it names is a path nothing is written to — and a release run that honoured one wrote its archive
+// from a binary the run never compiled.
+func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing.T) {
+	for _, args := range [][]string{
+		{"-o", "./built"},
+		{"server", "-o", "./built"},
+		{"-o", "./built", "server"},
+	} {
+		o, err := parseArgs(args)
+		if err != nil {
+			t.Errorf("parseArgs(%v): %v, want the named path accepted", args, err)
+			continue
+		}
+
+		if o.output != "./built" {
+			t.Errorf("parseArgs(%v) writes to %q, want ./built", args, o.output)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"client", "-o", "./built"},
+		{"-o", "./built", "client"},
+		{"scanner", "-o", "./built"},
+		{"admin", "-o", "./built"},
+		{"ffmpeg", "-o", "./built"},
+		{"ffmpeg", "linux-arm64", "-o", "./built"},
+		{"dist", "-o", "./built"},
+		{"-o", "./built", "dist"},
+		{"dist", "--all", "-o", "./built"},
+		{"container", "-o", "./built"},
+		{"clean", "-o", "./built"},
+		{"version", "-o", "./built"},
+	} {
+		_, err := parseArgs(args)
+		if err == nil {
+			t.Errorf("%v was accepted, want a refusal naming the runs that write a server binary", args)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "server") {
+			t.Errorf("the refusal of %v is %q, which does not name the runs that write a server binary", args, err)
+		}
+	}
+}
+
 // A prerelease is an instruction about the version, so a name that does not fit the grammar is a
 // command line the tool cannot honour rather than a build that fails halfway through.
 func TestAPreReleaseNameThatIsNotAPrereleaseIsRejected(t *testing.T) {

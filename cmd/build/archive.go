@@ -50,8 +50,12 @@ type archiveFile struct {
 // picture folder and the reader needs no network.
 const guideSource = "docs/admin-guide.html"
 
-// archiveFiles reads what a target's archive carries: the program, the guide that operates it, and the
-// licence of the ffmpeg the build embeds.
+// archiveFiles reads what a target's archive carries: the program the run wrote to `output`, the guide
+// that operates it, and the licence of the ffmpeg the build embeds.
+//
+// The program is read from the path the run wrote it to, and not from a path the archive chose for
+// itself: a release that reads a path it picked ships whatever was standing there, which is a binary the
+// release did not build.
 //
 // Every target the release matrix ships carries an ffmpeg inside its binary, so every one of these
 // archives carries a licence: the five this build compiles carry the notice naming the recipe, the source
@@ -68,12 +72,10 @@ const guideSource = "docs/admin-guide.html"
 // The archive's layout is the repository's own layout, so the path the guide states for itself resolves
 // inside the archive. The tool renders nothing, converts nothing, inlines nothing, and rewrites nothing:
 // the guide the archive carries is the guide the repository has, byte for byte.
-func archiveFiles(repo string, tr releaseTarget) ([]archiveFile, error) {
-	dir := filepath.Join(repo, "dist", tr.targetWord())
-
+func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 	name := "rdio-scanner" + programSuffix(tr.targetWord())
 
-	body, err := os.ReadFile(filepath.Join(dir, name))
+	body, err := os.ReadFile(filepath.Join(repo, output))
 	if err != nil {
 		return nil, fmt.Errorf("the release has no %s for %s: %w", name, tr.targetWord(), err)
 	}
