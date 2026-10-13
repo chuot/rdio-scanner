@@ -461,11 +461,17 @@ rdio-admin .rdio-admin-content > .rdio-admin-todos-banner {
   display: flex;
   flex-direction: column;
   gap: var(--rdio-space-2);
-  // A margin equal to the card's own padding reads as the card's edge, not as room
-  // between two cards, so the banner steps past it: the section card below keeps
-  // clear space of its own.
+
+  /* The width cap carries the card's own padding, so the banner's outer edge lands on the
+     section card's outer edge: the content width is what the card holds inside its padding,
+     and the banner is measured from border to border. */
+  max-width: calc(var(--rdio-content-width) + (2 * var(--rdio-card-padding)));
+
+  /* A margin equal to the card's own padding reads as the card's edge, not as room between
+     two cards, so the banner steps past it: the section card below keeps clear space of its
+     own, and `auto` on the sides centres the banner in the content column. */
   margin: 0 auto var(--rdio-space-5);
-  max-width: var(--rdio-content-width);
+
   padding: var(--rdio-space-3);
   width: 100%;
 }
