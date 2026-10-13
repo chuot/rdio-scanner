@@ -533,6 +533,61 @@ func TestADistRunAskedForOneTargetItCannotBuildExitsNonZero(t *testing.T) {
 	}
 }
 
+// The verification run runs the two suites and builds nothing: the same command a developer runs before
+// pushing is the command a release is gated on, and a run that built something first reported the
+// build's result and not the suites'.
+func TestATestRunRunsTheTwoSuitesAndBuildsNothing(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"test"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	var got []string
+
+	for _, s := range *ran {
+		got = append(got, s.label+" "+strings.Join(s.args, " "))
+	}
+
+	want := []string{
+		subTest + " test ./...",
+		subTest + " test",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the test run ran\n  %v\nwant\n  %v", got, want)
+	}
+}
+
+// A suite that fails ends the run, and the run names the suite that failed. The release is gated on
+// this command, so a run that carried on past a failing suite would report success to whatever gates on
+// it.
+func TestATestRunEndsNonZeroWhenASuiteFails(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	tl.execute = func(s step) error {
+		if s.name == "npm" {
+			return errors.New("the client suite said no")
+		}
+
+		*ran = append(*ran, s)
+
+		return nil
+	}
+
+	if code := tl.run([]string{"test"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: a suite failed", code)
+	}
+
+	if !strings.Contains(out.String(), "npm") {
+		t.Errorf("the failure %q does not name the suite that failed", out.String())
+	}
+
+	if len(*ran) != 1 {
+		t.Errorf("%d steps ran after the client suite failed, want only the Go suite", len(*ran))
+	}
+}
+
 // A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
 // after it are not built: a half matrix is not a release, and a run that carried on would leave an
 // archive directory with a server in it and no ffmpeg to embed. This is the promise the compiled targets

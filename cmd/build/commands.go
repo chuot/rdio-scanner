@@ -40,6 +40,7 @@ const (
 	subDist      = "dist"
 	subClean     = "clean"
 	subContainer = "container"
+	subTest      = "test"
 )
 
 // The container image is linux-amd64, because that is the architecture the Containerfile's guard checks
@@ -152,6 +153,14 @@ func parseArgs(args []string) (options, error) {
 
 			o.pre = args[i]
 
+			// A prerelease name is the version a build stamps into what it compiles. A test run compiles
+			// nothing, so the name has nothing to stamp, and the suites are the same suites whatever the
+			// version says. The command arrives on either side of the flag, so the check looks ahead as
+			// well as behind.
+			if o.sub == subTest || (i+1 < len(args) && args[i+1] == subTest) {
+				return options{}, fmt.Errorf("--pre %s is the version a build stamps into what it compiles, and a test run compiles nothing: go run ./cmd/build test runs this project's suites", args[i])
+			}
+
 		case "-o", "--output":
 			if i+1 >= len(args) {
 				return options{}, fmt.Errorf("%s needs a path to write the server binary to", arg)
@@ -167,11 +176,19 @@ func parseArgs(args []string) (options, error) {
 			// for it belongs to the release run and to nothing else: a client run, a clean run, and a
 			// container image are all one machine's business, and have no matrix to walk.
 			if o.sub != subDist {
-				if o.sub == "" {
+				// The flag and the command arrive in either order, so the refusal names the command the
+				// operator typed and not the order the words happened to arrive in.
+				who := o.sub
+
+				if who == "" && i+1 < len(args) && isKnownCommand(args[i+1]) {
+					who = args[i+1]
+				}
+
+				if who == "" {
 					return options{}, fmt.Errorf("--all is the release matrix, and a run that names no command builds this machine's whole tree: go run ./cmd/build dist --all builds every platform this project releases")
 				}
 
-				return options{}, fmt.Errorf("--all is the release matrix, and %s is not it: go run ./cmd/build dist --all builds every platform this project releases", o.sub)
+				return options{}, fmt.Errorf("--all is the release matrix, and %s is not it: go run ./cmd/build dist --all builds every platform this project releases", who)
 			}
 
 			// The flag names every platform and a target names one, and the two are not one request.
@@ -216,7 +233,7 @@ func parseArgs(args []string) (options, error) {
 
 			return options{}, fmt.Errorf("--allow-dirty is a release run saying it releases a tree that is not committed, and a run that names no command builds this machine's whole tree: go run ./cmd/build dist --allow-dirty releases the tree as it stands")
 
-		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer:
+		case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer, subTest:
 			if o.sub != "" {
 				return options{}, fmt.Errorf("%s and %s are not one command: name one thing to build", o.sub, arg)
 			}
@@ -226,11 +243,16 @@ func parseArgs(args []string) (options, error) {
 			// A clean run builds nothing, so a target after it is a word lying at the end of a command
 			// line. The container image is one architecture: the Containerfile's guard checks for the
 			// ffmpeg compiled for linux-amd64, and a target named after it is a run that would build an
-			// ffmpeg the image never embeds.
-			if arg == subClean || arg == subContainer {
+			// ffmpeg the image never embeds. A test run builds nothing at all: it runs the suites, and
+			// the suites are the whole tree's, not one platform's.
+			if arg == subClean || arg == subContainer || arg == subTest {
 				if i+1 < len(args) && isTarget(args[i+1]) {
 					if arg == subClean {
 						return options{}, fmt.Errorf("a clean run builds nothing, so %s is not a target it is asked for", args[i+1])
+					}
+
+					if arg == subTest {
+						return options{}, fmt.Errorf("a test run builds nothing, so %s is not a target it is asked for: go run ./cmd/build test runs this project's suites on this machine", args[i+1])
 					}
 
 					return options{}, fmt.Errorf("the container image is %s, so %s is not a target a container run builds for", containerTarget, args[i+1])
@@ -290,7 +312,7 @@ func parseArgs(args []string) (options, error) {
 // operator typed and not the order the words happened to arrive in.
 func isKnownCommand(word string) bool {
 	switch word {
-	case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer:
+	case subClient, subScanner, subAdmin, subFFmpeg, subServer, subVersion, subDist, subClean, subContainer, subTest:
 		return true
 	}
 
@@ -381,6 +403,32 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 // Containerfile reads into the linker flag: an image built without it reports the development fallback,
 // which is the sign that nobody said what the image is. The server binary is compiled inside the image,
 // so the run that prepares it builds no binary of its own.
+// testSteps are the two suites this project's automated verification is made of: the Go suite over the
+// whole repository, and the client suite the two applications' sources are tested by. They are composed
+// here, like every other command line the tool runs, so what each suite is told to run, and in what
+// directory, is something a test can read.
+//
+// The Go suite comes first: it is the suite the release is gated on, and a run whose Go suite fails has
+// nothing to gain from spending the client suite's time on top of it.
+func testSteps(o options, repo string) []step {
+	return []step{
+		{
+			label:  subTest,
+			result: "go test ./...",
+			dir:    repo,
+			name:   "go",
+			args:   []string{"test", "./..."},
+		},
+		{
+			label:  subTest,
+			result: "npm test",
+			dir:    filepath.Join(repo, presentationDir),
+			name:   "npm",
+			args:   []string{"test"},
+		},
+	}
+}
+
 func containerStep(o options, repo string, version buildinfo.Version) step {
 	return step{
 		label:  subContainer,

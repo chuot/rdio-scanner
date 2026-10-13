@@ -142,6 +142,7 @@ func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing
 		{"container", "-o", "./built"},
 		{"clean", "-o", "./built"},
 		{"version", "-o", "./built"},
+		{"test", "-o", "./built"},
 	} {
 		_, err := parseArgs(args)
 		if err == nil {
@@ -151,6 +152,71 @@ func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing
 
 		if !strings.Contains(err.Error(), "server") {
 			t.Errorf("the refusal of %v is %q, which does not name the runs that write a server binary", args, err)
+		}
+	}
+}
+
+// The verification run runs the two suites this project's checks are made of and builds nothing: a
+// release is gated on them, and a run that built something first reports the build's result and not the
+// suites'. The command lines are composed as data, so what each suite is told to run, and where it runs,
+// is something a test can read.
+func TestTheTestRunComposesTheTwoSuitesOfThisProject(t *testing.T) {
+	o, err := parseArgs([]string{"test"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	steps := testSteps(o, "/repo")
+
+	if len(steps) != 2 {
+		t.Fatalf("the test run composes %d steps, want the Go suite and the client suite", len(steps))
+	}
+
+	goStep := steps[0]
+
+	if goStep.name != "go" || !contains(goStep.args, "test") || !contains(goStep.args, "./...") {
+		t.Errorf("the Go suite is run as %s %v, want go test ./...", goStep.name, goStep.args)
+	}
+
+	if goStep.dir != "/repo" {
+		t.Errorf("the Go suite runs in %q, want the repository root", goStep.dir)
+	}
+
+	npmStep := steps[1]
+
+	if npmStep.name != "npm" || !contains(npmStep.args, "test") {
+		t.Errorf("the client suite is run as %s %v, want npm test", npmStep.name, npmStep.args)
+	}
+
+	if npmStep.dir != filepath.Join("/repo", presentationDir) {
+		t.Errorf("the client suite runs in %q, want %s, where the client suites are", npmStep.dir, presentationDir)
+	}
+}
+
+// A test run builds nothing, so the words that decide what a build builds, for which platform, where it
+// writes, which version it stamps, whether it walks the matrix, and whether it releases an uncommitted
+// tree have nothing to decide on it. Each refusal names the test run, whichever side of the flag the
+// command arrived on.
+func TestTheTestRunRefusesWhatItCannotRun(t *testing.T) {
+	for _, args := range [][]string{
+		{"test", "linux-amd64"},
+		{"test", "-o", "./built"},
+		{"-o", "./built", "test"},
+		{"test", "--all"},
+		{"--all", "test"},
+		{"test", "--pre", "beta1"},
+		{"--pre", "beta1", "test"},
+		{"test", "--allow-dirty"},
+		{"--allow-dirty", "test"},
+	} {
+		_, err := parseArgs(args)
+		if err == nil {
+			t.Errorf("%v was accepted, want a refusal naming the test run", args)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "test") {
+			t.Errorf("the refusal of %v is %q, which does not name the test run", args, err)
 		}
 	}
 }

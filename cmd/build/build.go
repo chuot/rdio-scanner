@@ -149,7 +149,7 @@ func newTool(repo string) tool {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
+		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
 		return 2
 	}
 
@@ -203,6 +203,14 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		}
 
 		return 0
+	}
+
+	// The verification run runs the suites and builds nothing: the command a developer runs before
+	// pushing is the command a release is gated on, and a run that built something first reported the
+	// build's result and not the suites'. It needs no build output, no installed client dependencies,
+	// and no podman: the suites read the sources.
+	if o.sub == subTest {
+		return t.runTest(o, stdout)
 	}
 
 	state, err := t.state(t.repo, o)
@@ -259,6 +267,25 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		if err := t.runServer(o, version, stdout); err != nil {
 			return fail(stdout, fmt.Errorf("%s: %w", subServer, err))
 		}
+	}
+
+	return 0
+}
+
+// runTest runs the two suites this project's verification is made of. A suite that fails ends the run,
+// and names the suite that failed: the release is gated on this command, and a run that carried on past
+// a failing suite would report success to whatever gates on it.
+func (t tool) runTest(o options, stdout io.Writer) int {
+	for _, s := range testSteps(o, t.repo) {
+		if _, err := t.resolve(s.name); err != nil {
+			return fail(stdout, fmt.Errorf("%s needs %s, which is not installed here: %w", subTest, s.name, err))
+		}
+
+		if err := t.execute(s); err != nil {
+			return fail(stdout, fmt.Errorf("%s (%s): %w", s.label, s.result, err))
+		}
+
+		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 	}
 
 	return 0
