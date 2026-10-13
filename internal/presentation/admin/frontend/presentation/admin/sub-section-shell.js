@@ -173,7 +173,10 @@ export function renderSubSection(component) {
 
   rows.forEach((row, index) => list.append(buildRow(component, row, index, rows)));
 
-  attachDragSort(list, (from, to) => commitSubRows(component, reorderAfterDrag(rows, from, to)));
+  // The drop commits the rows the store holds at the moment of the move, the way the
+  // Systems section does: a field edit the operator made after this render is not in
+  // the rows above, and a move must not drop what they typed.
+  attachDragSort(list, (from, to) => commitSubRows(component, reorderAfterDrag(subWorking(level, component.systemId) ?? [], from, to)));
 
   root.append(list);
 

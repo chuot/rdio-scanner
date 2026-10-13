@@ -143,6 +143,20 @@ function typeIn(input, value) {
   input.dispatchEvent({ type: 'change' });
 }
 
+// The drag handle's own events: the row being moved starts the drag, the row it lands
+// on takes it. The list carries the drag listeners the rows are sorted by.
+function dragRow(el, from, to) {
+  const list = findAll(el, (node) => node.className === 'rdio-admin-rows')[0];
+  const moved = list.querySelectorAll(':scope > [data-drag]');
+  const dataTransfer = {};
+  const fire = (node, type) => list.dispatchEvent({ type, target: node, dataTransfer, preventDefault() {} });
+
+  fire(moved[from], 'dragstart');
+  fire(moved[to], 'dragover');
+  fire(moved[to], 'drop');
+  fire(moved[from], 'dragend');
+}
+
 function pushRows(store, level, systemId, rows) {
   const slice = sliceFor(store, level, systemId);
   store.setState({
@@ -320,4 +334,45 @@ test('editing a unit label keeps the row and the field the operator is in on the
   assert.equal(input.focused, true, 'the operator keeps the focus they had in the field');
   assert.equal(sliceFor(store, 'units', 2).working[0].label, 'Car 1', 'the section holds what the operator typed');
   assert.equal(saveButton(el).disabled, false, 'Save is enabled for the change the operator made');
+});
+
+// The drag handler is installed by the render that built the rows on the page, and a field
+// edit deliberately does not rebuild them. The move must therefore commit the rows as the
+// operator left them in the fields, not the rows the render captured.
+test('dragging a site after editing it keeps what the operator typed', () => {
+  const store = seed();
+  const el = attach('rdio-admin-sites');
+
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewSite', 'East']);
+
+  const row = rows(el)[0];
+  typeIn(fieldInput(row, 'Id'), '999');
+  typeIn(fieldInput(row, 'Label'), 'Depot');
+
+  dragRow(el, 0, 1);
+
+  assert.deepEqual(rowTitles(el), ['East', 'Depot'],
+    'the row the operator moved keeps the label they typed, and lands below the saved row');
+  assert.deepEqual(sliceFor(store, 'sites', 2).working.map((site) => [site.siteRef, site.label]), [[40, 'East'], [999, 'Depot']],
+    'the move commits the rows as the operator left them');
+});
+
+test('dragging a talkgroup after editing it keeps what the operator typed', () => {
+  const store = seed();
+  const el = attach('rdio-admin-talkgroups');
+
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewTalkgroup', 'Fire']);
+
+  const row = rows(el)[0];
+  typeIn(fieldInput(row, 'Id'), '888');
+  typeIn(fieldInput(row, 'Label'), 'Dispatch');
+
+  dragRow(el, 0, 1);
+
+  assert.deepEqual(rowTitles(el), ['Fire', 'Dispatch'],
+    'the row the operator moved keeps the label they typed, and lands below the saved row');
+  assert.deepEqual(sliceFor(store, 'talkgroups', 2).working.map((talkgroup) => [talkgroup.talkgroupRef, talkgroup.label]), [[70, 'Fire'], [888, 'Dispatch']],
+    'the move commits the rows as the operator left them');
 });

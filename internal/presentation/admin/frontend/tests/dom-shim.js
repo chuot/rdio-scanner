@@ -16,10 +16,16 @@ class ShimNode {
   }
 
   append(...nodes) {
+    // The builders append bare strings as well as nodes; only the nodes have a parent.
+    for (const node of nodes) if (node && typeof node === 'object') node.parent = this;
+
     this.children.push(...nodes);
   }
 
   replaceChildren(...nodes) {
+    for (const node of this.children) if (node && typeof node === 'object') node.parent = null;
+    for (const node of nodes) if (node && typeof node === 'object') node.parent = this;
+
     this.children = [...nodes];
   }
 
@@ -39,19 +45,31 @@ class ShimNode {
   querySelectorAll(selector) {
     const parts = selector.split(',').map((s) => s.trim());
 
+    // `:scope >` is the child combinator the row lists use to name their own rows:
+    // only the direct children of the element asked are candidates.
+    const scoped = parts.map((part) => part.match(/^:scope\s*>\s*(.+)$/));
+
     const found = [];
 
-    walk(this, (node) => {
-      if (node.tag === '#text') return;
+    const visit = (node) => {
+      if (node && typeof node === 'object' && node.tag !== '#text') {
+        parts.forEach((part, i) => {
+          if (matches(node, scoped[i] ? scoped[i][1] : part)) {
+            found.push(node);
 
-      for (const part of parts) {
-        if (matches(node, part)) {
-          found.push(node);
-
-          break;
-        }
+            return;
+          }
+        });
       }
-    });
+
+      for (const child of node?.children ?? []) visit(child);
+    };
+
+    if (scoped.every((part) => part)) {
+      for (const child of this.children) visit(child);
+    } else {
+      visit(this);
+    }
 
     return found;
   }
@@ -72,6 +90,30 @@ class ShimNode {
 
   getAttribute(name) {
     return this.attributes[name] ?? null;
+  }
+
+  // classList is the class view the drag handlers use to mark the row being moved.
+  // It reads and writes the same className the components set.
+  get classList() {
+    const node = this;
+
+    const names = () => node.className.split(/\s+/).filter(Boolean);
+
+    return {
+      add: (...added) => (node.className = [...new Set([...names(), ...added])].join(' ')),
+      remove: (...removed) => (node.className = names().filter((name) => !removed.includes(name)).join(' ')),
+      contains: (name) => names().includes(name),
+    };
+  }
+
+  // closest walks the node and its parents, the way a browser does: the drag handlers
+  // name the row a control inside the row belongs to.
+  closest(selector) {
+    for (let node = this; node; node = node.parent) {
+      if (node.tag !== '#text' && matches(node, selector)) return node;
+    }
+
+    return null;
   }
 
   addEventListener(type, fn) {
@@ -207,6 +249,8 @@ function parseHTML(html) {
 
       (stack.length ? stack[stack.length - 1].children : roots).push(node);
 
+    if (stack.length) node.parent = stack[stack.length - 1];
+
       continue;
     }
 
@@ -226,6 +270,8 @@ function parseHTML(html) {
 
     (stack.length ? stack[stack.length - 1].children : roots).push(node);
 
+    if (stack.length) node.parent = stack[stack.length - 1];
+
     if (!token.endsWith('/>')) stack.push(node);
   }
 
@@ -244,6 +290,16 @@ function matches(node, selector) {
   const attr = selector.match(/\[([a-zA-Z-]+)="([^"]*)"\]/);
 
   if (attr && node.attributes[attr[1]] !== attr[2]) return false;
+
+  // A bare [attr] is the presence test the row lists use to name their rows. The
+  // builders mark them through dataset, the browser's data-* view, so both spellings count.
+  const has = selector.match(/\[([a-zA-Z-]+)\]/);
+
+  if (has) {
+    const camel = has[1].replace(/^data-/, '').replace(/-(.)/g, (m, c) => c.toUpperCase());
+
+    return node.attributes[has[1]] !== undefined || node.dataset[camel] !== undefined;
+  }
 
   return true;
 }
