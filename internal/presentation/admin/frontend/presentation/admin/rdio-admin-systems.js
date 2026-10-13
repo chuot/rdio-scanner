@@ -19,6 +19,7 @@ import {
 } from './section-shell.js';
 import {
   deleteRow,
+  markRowIdentity,
   numberField,
   parseNumber,
   rowContext,
@@ -259,7 +260,7 @@ function bindSectionSlices(callback) {
 }
 
 function newSystemRow() {
-  return {
+  return markRowIdentity({
     id: 0,
     order: 0,
     alert: '',
@@ -273,5 +274,5 @@ function newSystemRow() {
     talkgroups: [],
     type: '',
     units: [],
-  };
+  });
 }

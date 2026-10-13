@@ -24,18 +24,18 @@ import {
   subSlice,
   subWorking,
 } from './section-shell.js';
-import { rowKey, setRowMarker } from './row-builders.js';
+import { markRowIdentity, rowKey, setRowMarker } from './row-builders.js';
 
 export function newRow(level) {
   const base = { id: 0, order: 0 };
 
-  if (level === 'sites') return { ...base, label: '', siteRef: null };
+  if (level === 'sites') return markRowIdentity({ ...base, label: '', siteRef: null });
 
   if (level === 'talkgroups') {
-    return { ...base, alert: '', delay: null, frequency: null, groupIds: [], label: '', led: '', name: '', tagId: null, talkgroupRef: null, type: '' };
+    return markRowIdentity({ ...base, alert: '', delay: null, frequency: null, groupIds: [], label: '', led: '', name: '', tagId: null, talkgroupRef: null, type: '' });
   }
 
-  return { ...base, label: '', unitFrom: null, unitRef: null, unitTo: null };
+  return markRowIdentity({ ...base, label: '', unitFrom: null, unitRef: null, unitTo: null });
 }
 
 // The panel key the scaffold's open state and the section's row builders share:

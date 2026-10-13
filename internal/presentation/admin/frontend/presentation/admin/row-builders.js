@@ -214,6 +214,32 @@ export function titleCase(value) {
   return value.replace(/[_-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// A row the operator added and has not saved is remembered by a mark the client gives it. The mark is
+// the client's own bookkeeping: it rides the row through every copy the section makes (an object
+// spread carries symbol-keyed properties), and it is invisible to everything that leaves the client —
+// a structured clone, a JSON stringify, and the store's structural comparison all read string keys
+// only. A saved payload therefore never carries it, and a row that differs from the server's copy by
+// the mark alone is not a change.
+export const ROW_IDENTITY = Symbol('rdio-admin-row-identity');
+
+let nextRowIdentity = 1;
+
+// The row the add control creates takes its mark as it is created, so the row is itself from its
+// first moment: the position a later render happens to leave it in is not what it is remembered by.
+export function markRowIdentity(row) {
+  row[ROW_IDENTITY] = nextRowIdentity++;
+
+  return row;
+}
+
+export function rowIdentity(row) {
+  return row[ROW_IDENTITY] ?? null;
+}
+
 export function rowKey(row, index) {
-  return typeof row.id === 'number' && row.id > 0 ? `id${row.id}` : `i${index}`;
+  if (typeof row.id === 'number' && row.id > 0) return `id${row.id}`;
+
+  const identity = rowIdentity(row);
+
+  return identity === null ? `i${index}` : `new${identity}`;
 }
