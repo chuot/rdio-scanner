@@ -49,6 +49,29 @@ function errorText(el) {
   return fieldMessage(el.querySelector('rdio-form-field'));
 }
 
+// The browser filled the password in: the value is in the control and no event ever left it, so
+// the field is one the operator has not reached by typing. Pressing Enter submits it.
+function pastedForm(result, password) {
+  const context = getAdminContext();
+
+  context.useCases.login = async () => result;
+
+  const el = new (customElements.get('rdio-admin-login'))();
+
+  el.connectedCallback();
+  connectFields(el);
+
+  const input = el.querySelector('input[name="password"]');
+
+  input.value = password;
+
+  el.querySelector('form').dispatchEvent({ type: 'submit', preventDefault: () => {} });
+
+  return new Promise((resolve) => {
+    setImmediate(() => resolve(el));
+  });
+}
+
 test('the login form carries the form field primitive, not a node that only records a message', () => {
   const el = new (customElements.get('rdio-admin-login'))();
 
@@ -79,4 +102,10 @@ test('a successful login shows no error', async () => {
   const el = await loginForm('ok');
 
   assert.equal(errorText(el), '');
+});
+
+test('a submit that never left the field tells the operator the code was refused', async () => {
+  const el = await pastedForm('invalid', 'hunter2');
+
+  assert.equal(errorText(el), 'Invalid password', 'submitting the form reaches the field it submits');
 });

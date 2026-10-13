@@ -228,10 +228,11 @@ class RdioFormField extends HTMLElement {
       label.htmlFor = field.id;
     }
 
-    // Typing, picking, and walking away all bubble out of the control to the field that owns it.
-    // A select reports its value through an event that does not bubble, and a form submit reaches
-    // no control at all: those two tell the field themselves, through markReached.
-    for (const type of ['input', 'change', 'focusout']) {
+    // Typing and picking bubble out of the control to the field that owns it: the value changing is
+    // the reaching. Walking across a field changes nothing, and reveals nothing — Material's matcher
+    // read a touched control as silent. A form submit reaches no control at all: the form that is
+    // submitted tells its fields themselves, through markReached.
+    for (const type of ['input', 'change']) {
       this.addEventListener(type, () => this.markReached());
     }
   }

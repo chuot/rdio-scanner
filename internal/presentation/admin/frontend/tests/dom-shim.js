@@ -300,9 +300,9 @@ function parseHTML(html) {
       const node = new ShimNode('#text');
       node._text = text;
 
-      (stack.length ? stack[stack.length - 1].children : roots).push(node);
+      if (stack.length) node.parent = stack[stack.length - 1];
 
-    if (stack.length) node.parent = stack[stack.length - 1];
+      (stack.length ? stack[stack.length - 1].children : roots).push(node);
 
       continue;
     }

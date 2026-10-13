@@ -8,11 +8,23 @@
 // A component test is about what the component shows, and nothing here is meant to behave like a
 // browser beyond the nodes a test reads.
 
+const FORM_FIELD = 'rdio-form-field';
+
+// connectFormField runs the primitive's own connectedCallback the moment a component appends the
+// field, which is the moment a browser runs it: the field already carries its control, and it is
+// connected before anything writes a message into it.
+function connectFormField(node) {
+  if (node && node.tag === FORM_FIELD && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
+    node.connectedCallback();
+  }
+}
+
 class ShimNode {
   constructor(tag) {
     this.tag = tag;
     this.children = [];
     this.attributes = {};
+    this.dataset = {};
     this.listeners = {};
     this.className = '';
     this._html = '';
@@ -20,16 +32,39 @@ class ShimNode {
   }
 
   append(...nodes) {
+    for (const node of nodes) {
+      if (node && typeof node === 'object') {
+        node.parent = this;
+        connectFormField(node);
+      }
+    }
+
     this.children.push(...nodes);
   }
 
   replaceChildren(...nodes) {
+    for (const node of this.children) if (node && typeof node === 'object') node.parent = null;
+
+    for (const node of nodes) {
+      if (node && typeof node === 'object') {
+        node.parent = this;
+        connectFormField(node);
+      }
+    }
+
     this.children = [...nodes];
   }
 
   set innerHTML(html) {
     this._html = html;
     this.children = parseHTML(html);
+
+    // A browser connects every custom element the moment the tree it parsed is inserted, and the
+    // components write into those fields from their own connectedCallback. The roots of a parsed
+    // tree hang under the node that was given the markup, and are connected with it.
+    for (const node of this.children) if (node && typeof node === 'object') node.parent = this;
+
+    connectFields(this);
   }
 
   get innerHTML() {
@@ -78,6 +113,45 @@ class ShimNode {
     return this.attributes[name] ?? null;
   }
 
+  // The form field marks its control invalid with these two, and takes the mark off again.
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
+  toggleAttribute(name, on) {
+    if (on) this.setAttribute(name, '');
+    else this.removeAttribute(name);
+
+    return on;
+  }
+
+  remove() {
+    const parent = this.parent;
+
+    if (parent) parent.children = parent.children.filter((node) => node !== this);
+
+    this.parent = null;
+  }
+
+  // classList is the class view the components toggle to show and hide a panel, light a flag, and
+  // mark the control being moved. It reads and writes the same className the components set.
+  get classList() {
+    const node = this;
+
+    const names = () => node.className.split(/\s+/).filter(Boolean);
+
+    return {
+      add: (...added) => (node.className = [...new Set([...names(), ...added])].join(' ')),
+      remove: (...removed) => (node.className = names().filter((name) => !removed.includes(name)).join(' ')),
+      contains: (name) => names().includes(name),
+      toggle: (name, force) => {
+        const on = force === undefined ? !names().includes(name) : !!force;
+
+        return on ? this.classList.add(name) : this.classList.remove(name);
+      },
+    };
+  }
+
   addEventListener(type, fn) {
     (this.listeners[type] ??= []).push(fn);
   }
@@ -86,8 +160,27 @@ class ShimNode {
     this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
   }
 
+  click() {
+    for (const fn of this.listeners.click ?? []) fn();
+  }
+
+  // The auth panel refocuses the unlock code field after a refused code; the shim records the
+  // focus so a test can see it happened.
+  focus() {
+    this.focused = true;
+  }
+
+  blur() {
+    this.focused = false;
+  }
+
+  // Events bubble the way a browser bubbles them: the panel's handler sits on the form, the form
+  // field's own handler sits on the field that owns the control, and a change typed into a control
+  // reaches both.
   dispatchEvent(event) {
-    for (const fn of this.listeners[event.type] ?? []) fn(event);
+    for (let node = this; node; node = node.parent) {
+      for (const fn of node.listeners?.[event.type] ?? []) fn(event);
+    }
   }
 }
 
@@ -181,6 +274,17 @@ globalThis.AudioContext = class {
   }
 };
 
+// The primitives re-dispatch a CustomEvent carrying the value a control picked, and the controls
+// announce their presses as CustomEvents; a test that drives a component needs the constructor the
+// browser hands them.
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, init = {}) {
+    this.type = type;
+    this.detail = init.detail;
+    this.bubbles = !!init.bubbles;
+  }
+};
+
 // walk visits every node under a root, so a test can find a node by a predicate without depending on
 // the order the component builds its children in.
 export function walk(root, visit) {
@@ -204,6 +308,8 @@ function parseHTML(html) {
       const node = new ShimNode('#text');
       node._text = text;
 
+      if (stack.length) node.parent = stack[stack.length - 1];
+
       (stack.length ? stack[stack.length - 1].children : roots).push(node);
 
       continue;
@@ -215,13 +321,23 @@ function parseHTML(html) {
       continue;
     }
 
-    const node = new ShimNode(token.match(/^<([a-zA-Z][\w-]*)/)[1]);
+    // The form field is built through its own class, the way createElement builds it, so a panel
+    // that lays out its form through innerHTML gets the primitive's rule and not a node that only
+    // records what it was told.
+    const tag = token.match(/^<([a-zA-Z][\w-]*)/)[1];
+    const ctor = tag === FORM_FIELD ? globalThis.customElements.registry.get(tag) : undefined;
+
+    const node = ctor ? new ctor() : new ShimNode(tag);
+
+    node.tag = tag;
 
     for (const attr of token.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)) {
       node.attributes[attr[1]] = attr[2];
 
       if (attr[1] === 'class') node.className = attr[2];
     }
+
+    if (stack.length) node.parent = stack[stack.length - 1];
 
     (stack.length ? stack[stack.length - 1].children : roots).push(node);
 
@@ -232,8 +348,40 @@ function parseHTML(html) {
 }
 
 function matches(node, selector) {
+  // A descendant selector — `.auth form`, `.history tbody` — names the control by the panel it sits
+  // in: the node answers the last part, one of its ancestors answers the part before it.
+  const parts = selector.trim().split(/\s+/);
+
+  if (parts.length > 1) {
+    if (node.tag === '#text' || !matches(node, parts[parts.length - 1])) return false;
+
+    let ancestor = node.parent;
+
+    for (let i = parts.length - 2; i >= 0; i--) {
+      let found = null;
+
+      for (let walk = ancestor; walk; walk = walk.parent) {
+        if (walk.tag !== '#text' && matches(walk, parts[i])) {
+          found = walk.parent;
+          break;
+        }
+      }
+
+      if (!found) return false;
+
+      ancestor = found;
+    }
+
+    return true;
+  }
+
   if (selector.startsWith('.')) {
     return node.className.split(/\s+/).includes(selector.slice(1));
+  }
+
+  // `#id` names the control by its id, the way the panels pick their controls out of their markup.
+  if (selector.startsWith('#')) {
+    return node.attributes.id === selector.slice(1);
   }
 
   const tag = selector.match(/^([a-zA-Z][\w-]*)/)?.[0];
@@ -259,4 +407,24 @@ export function findAll(root, predicate) {
 
 export function texts(nodes) {
   return nodes.map((node) => node.textContent);
+}
+
+// connectFields runs the form field primitive's connectedCallback on every field under a root, for
+// the tests that drive a panel whose markup arrived through innerHTML: a browser connects those
+// fields when the tree is inserted, and the shim inserts them by parsing, not by appending.
+export function connectFields(root) {
+  const fields = findAll(root, (node) => node.tag === FORM_FIELD);
+
+  for (const field of fields) connectFormField(field);
+
+  return fields;
+}
+
+// fieldMessage is the text the listener sees under the control — the successor of mat-error. A
+// field whose primitive is not connected has no message element, which is itself a reading: the
+// message was never written on the page.
+export function fieldMessage(field) {
+  const node = findAll(field, (child) => child.className?.split(/\s+/).includes('rdio-form-error'))[0];
+
+  return node?.textContent ?? '';
 }

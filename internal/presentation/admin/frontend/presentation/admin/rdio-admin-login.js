@@ -28,6 +28,10 @@ class RdioAdminLogin extends HTMLElement {
     this.form.addEventListener('submit', async (event) => {
       event.preventDefault();
 
+      // A submit reaches the field it submits: the operator may have pressed Enter without ever
+      // leaving the field, and the failure the server answers has to be said out loud.
+      this.field.markReached();
+
       const password = this.input.value;
 
       if (!password) return;

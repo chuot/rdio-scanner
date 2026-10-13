@@ -190,6 +190,21 @@ test('leaving a field of a new talkgroup row reveals the message its empty value
   assert.equal(fieldMessage(field(row, 'Id')), 'Id is required');
 });
 
+test('walking across a field of a new talkgroup row reveals nothing', () => {
+  seed(getAdminContext().store);
+
+  const row = addRow(attach('rdio-admin-talkgroups'));
+
+  // The operator tabbed through the row: the field took the focus and gave it up, and its value
+  // never changed. Material's matcher read that as touched, not dirty, and showed no message.
+  const control = controlOf(row, 'Label');
+
+  control.focus();
+  control.dispatchEvent({ type: 'focusout' });
+
+  assert.deepEqual(messages(row), [], 'a field the operator only walked over says nothing');
+});
+
 test('picking in the Tag select of a new talkgroup row reveals that a tag is required', () => {
   seed(getAdminContext().store);
 

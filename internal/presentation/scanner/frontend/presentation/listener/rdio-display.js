@@ -120,6 +120,12 @@ class RdioDisplay extends HTMLElement {
 
     this.el.authForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
+
+      // A submit reaches the field it submits: the code may have arrived without the listener ever
+      // leaving the field — pasted in, filled in by the browser, pressed with Enter — and the
+      // server's answer to it is written on that field.
+      this.el.auth.querySelector('rdio-form-field')?.markReached();
+
       this.authenticate();
     });
 
