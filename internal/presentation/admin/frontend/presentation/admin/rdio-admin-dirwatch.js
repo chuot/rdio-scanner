@@ -15,7 +15,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { captionBlock, markField, markRowIdentity, rowKey } from './row-builders.js';
+import { captionBlock, markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
@@ -211,7 +211,7 @@ class RdioAdminDirwatch extends HTMLElement {
     const directoryInput = directoryField.querySelector('input');
     directoryInput.value = row.directory ?? '';
     directoryInput.required = true;
-    directoryInput.addEventListener('change', () => this.updateRow(index, { directory: directoryInput.value }));
+    onFieldEdit(directoryInput, () => this.updateRow(index, { directory: directoryInput.value }));
     view.fields.set('directory', directoryField);
 
     panel.append(this.fieldRow('Directory', this.directoryCaption(type), directoryField));
@@ -220,7 +220,7 @@ class RdioAdminDirwatch extends HTMLElement {
       const extensionField = this.field('Extension');
       const extensionInput = extensionField.querySelector('input');
       extensionInput.value = row.extension ?? '';
-      extensionInput.addEventListener('change', () => this.updateRow(index, { extension: extensionInput.value }));
+      onFieldEdit(extensionInput, () => this.updateRow(index, { extension: extensionInput.value }));
       view.fields.set('extension', extensionField);
 
       panel.append(this.fieldRow('Extension', 'The audio call extension to monitor without the period. Ex.: "mp3", "wav".', extensionField));
@@ -258,7 +258,7 @@ class RdioAdminDirwatch extends HTMLElement {
       const maskField = this.field('Mask');
       const maskInput = maskField.querySelector('input');
       maskInput.value = row.mask ?? '';
-      maskInput.addEventListener('change', () => this.updateRow(index, { mask: maskInput.value }));
+      onFieldEdit(maskInput, () => this.updateRow(index, { mask: maskInput.value }));
       view.fields.set('mask', maskField);
 
       panel.append(this.fieldRow('Mask', this.maskCaption(), maskField));
@@ -268,7 +268,7 @@ class RdioAdminDirwatch extends HTMLElement {
       frequencyInput.type = 'number';
       frequencyInput.min = '1';
       frequencyInput.value = row.frequency ?? '';
-      frequencyInput.addEventListener('change', () => {
+      onFieldEdit(frequencyInput, () => {
         this.updateRow(index, { frequency: frequencyInput.value === '' ? undefined : Number(frequencyInput.value) });
       });
       view.fields.set('frequency', frequencyField);
@@ -280,7 +280,7 @@ class RdioAdminDirwatch extends HTMLElement {
       delayInput.type = 'number';
       delayInput.min = '2000';
       delayInput.value = row.delay ?? '';
-      delayInput.addEventListener('change', () => {
+      onFieldEdit(delayInput, () => {
         this.updateRow(index, { delay: delayInput.value === '' ? undefined : Number(delayInput.value) });
       });
       view.fields.set('delay', delayField);

@@ -16,6 +16,7 @@ import {
   setSectionWorking,
 } from './section-shell.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
+import { onFieldEdit } from './row-builders.js';
 
 const NAME = 'options';
 
@@ -250,7 +251,7 @@ class RdioAdminOptions extends HTMLElement {
 
       input.value = options[control.key] ?? '';
       input.setAttribute('aria-label', control.title);
-      input.addEventListener('change', () => {
+      onFieldEdit(input, () => {
         const value = control.type === 'number' ? (input.value === '' ? undefined : Number(input.value)) : input.value;
         field.setError(this.update(control.key, value)[control.key] ?? '');
       });

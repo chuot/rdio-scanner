@@ -3,13 +3,19 @@
 // attributes, and click listeners. innerHTML is stored as the string it is, never
 // parsed, so a component that wants its test to see inside it builds real child nodes.
 //
-// The form field primitive is the one custom element the shim builds and connects for real,
-// at every route a component uses to create it: createElement, append, replaceChildren, and
-// the innerHTML parser. Its rule — show a message only once the operator has reached the
-// field — is what the section proofs read, and a stub that records a string cannot carry it.
-// The other primitives stay as the plain nodes the tests connect by hand today.
+// The form field primitive is the custom element the shim builds and connects for real at every
+// route a component uses to create it: createElement, append, replaceChildren, and the innerHTML
+// parser. Its rule — show a message only once the operator has reached the field — is what the
+// section proofs read, and a stub that records a string cannot carry it. Markup laid out through
+// innerHTML carries every registered primitive the browser would upgrade, connected in document
+// order, so a panel built that way is exercised as it is on screen. The other primitives stay as
+// the plain nodes the tests connect by hand today.
 
 const FORM_FIELD = 'rdio-form-field';
+
+// The controls a browser hands the operator text in: their value is the empty string before
+// anything is typed, and the components read them as text from the first render.
+const CONTROL_TAGS = new Set(['input', 'textarea', 'select']);
 
 // connectFormField runs the primitive's own connectedCallback the moment a component appends
 // the field to a row, which is the moment a browser runs it: the field already carries its
@@ -18,6 +24,18 @@ function connectFormField(node) {
   if (node && node.tag === FORM_FIELD && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
     node.connectedCallback();
   }
+}
+
+// connectCustom runs the connectedCallback of every custom element under a root, in the order a
+// browser runs them: the element first, then what it builds into its children. Markup a component
+// lays out through innerHTML is inserted as one tree, so every primitive in it is connected at that
+// moment — the section's own setup then reads the controls its primitives build.
+function connectCustom(node) {
+  if (node.tag === '#text') return;
+
+  if (node.tag.includes('-') && typeof node.connectedCallback === 'function') node.connectedCallback();
+
+  for (const child of node.children ?? []) connectCustom(child);
 }
 
 class ShimNode {
@@ -44,6 +62,13 @@ class ShimNode {
     this.children.push(...nodes);
   }
 
+  // appendChild is the older spelling the primitives use to place a host on the page.
+  appendChild(node) {
+    this.append(node);
+
+    return node;
+  }
+
   replaceChildren(...nodes) {
     for (const node of this.children) if (node && typeof node === 'object') node.parent = null;
     for (const node of nodes) {
@@ -59,6 +84,11 @@ class ShimNode {
   set innerHTML(html) {
     this._html = html;
     this.children = parseHTML(html);
+
+    // Inserting markup in a browser upgrades every custom element in it and runs their
+    // connectedCallback in document order; a section that lays its panel out through innerHTML
+    // then reads the controls its own primitives built.
+    for (const node of this.children) connectCustom(node);
   }
 
   get innerHTML() {
@@ -115,8 +145,26 @@ class ShimNode {
     this.attributes[name] = String(value);
   }
 
+  // A control's value is the text in it, and a browser answers a control nobody has typed in
+  // with the empty string, never with nothing. The controls the components read before the
+  // operator reaches them — the log filters, the number fields — are read through this.
+  get value() {
+    if (this._value !== undefined) return this._value;
+
+    return CONTROL_TAGS.has(this.tag) ? '' : undefined;
+  }
+
+  set value(value) {
+    this._value = String(value);
+  }
+
   getAttribute(name) {
     return this.attributes[name] ?? null;
+  }
+
+  // hasAttribute is the presence test the primitives use to pick the shape they render.
+  hasAttribute(name) {
+    return this.attributes[name] !== undefined;
   }
 
   // The form field marks its control invalid with these two; the sections that clear a row's
@@ -151,6 +199,15 @@ class ShimNode {
       add: (...added) => (node.className = [...new Set([...names(), ...added])].join(' ')),
       remove: (...removed) => (node.className = names().filter((name) => !removed.includes(name)).join(' ')),
       contains: (name) => names().includes(name),
+      // toggle(name, force) is the slide toggle's switch: the class is put on or taken off by
+      // the value the caller passes, and the resulting state is what the caller reads back.
+      toggle: (name, force) => {
+        const on = force === undefined ? !names().includes(name) : !!force;
+
+        node.className = on ? [...new Set([...names(), name])].join(' ') : names().filter((n) => n !== name).join(' ');
+
+        return on;
+      },
     };
   }
 
@@ -236,6 +293,14 @@ globalThis.document = {
 
     return node;
   },
+
+  // document.body and document.querySelector are the two views the snackbar primitive uses to
+  // place itself: a root node the components append to, and the lookup of what is in it.
+  body: new ShimNode('body'),
+
+  querySelector(selector) {
+    return this.body.querySelectorAll(selector)[0] ?? null;
+  },
 };
 
 globalThis.customElements = {
@@ -313,11 +378,11 @@ function parseHTML(html) {
       continue;
     }
 
-    // The form field is built through its own class, the way createElement builds it, so a
-    // component that lays out a form through innerHTML gets the primitive's rule and not a node
-    // that only records what it was told.
+    // Every custom element in the markup is built through its own class, the way createElement
+    // builds it, so a component that lays out a form through innerHTML gets the primitive's own
+    // rule and not a node that only records what it was told.
     const tag = token.match(/^<([a-zA-Z][\w-]*)/)[1];
-    const ctor = tag === FORM_FIELD ? globalThis.customElements.registry.get(tag) : undefined;
+    const ctor = globalThis.customElements.registry.get(tag);
 
     const node = ctor ? new ctor() : new ShimNode(tag);
 

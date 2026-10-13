@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'access';
@@ -253,7 +253,7 @@ class RdioAdminAccess extends HTMLElement {
 
     // index (not row identity): updateRow replaces the row object with a
     // patched copy, so a captured row would no longer be found in the store.
-    input.addEventListener('change', () => {
+    onFieldEdit(input, () => {
       this.updateRow(index, { [key]: input.value });
 
       // The message the field carries is the one its row has now, read from the rows as the

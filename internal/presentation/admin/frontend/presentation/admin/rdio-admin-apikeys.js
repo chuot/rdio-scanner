@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -178,7 +178,7 @@ class RdioAdminApikeys extends HTMLElement {
 
     markField(this, keyField, rowKey(row, index), 'key');
 
-    keyInput.addEventListener('change', () => {
+    onFieldEdit(keyInput, () => {
       this.updateRow(index, { key: keyInput.value });
 
       // The message the field carries is the one its row has now, read from the rows as the
@@ -198,7 +198,7 @@ class RdioAdminApikeys extends HTMLElement {
 
     markField(this, identField, rowKey(row, index), 'ident');
 
-    identInput.addEventListener('change', () => {
+    onFieldEdit(identInput, () => {
       this.updateRow(index, { ident: identInput.value });
 
       const rows = this.rows;

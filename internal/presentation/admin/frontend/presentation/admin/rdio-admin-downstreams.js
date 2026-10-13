@@ -16,7 +16,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'downstreams';
@@ -166,7 +166,7 @@ class RdioAdminDownstreams extends HTMLElement {
 
     markField(this, urlField, rowKey(row, index), 'url');
 
-    urlInput.addEventListener('change', () => {
+    onFieldEdit(urlInput, () => {
       this.updateRow(index, { url: urlInput.value });
 
       // The message the field carries is the one its row has now, read from the rows as the
@@ -187,7 +187,7 @@ class RdioAdminDownstreams extends HTMLElement {
 
     markField(this, apikeyField, rowKey(row, index), 'apikey');
 
-    apikeyInput.addEventListener('change', () => {
+    onFieldEdit(apikeyInput, () => {
       this.updateRow(index, { apikey: apikeyInput.value });
 
       const rows = this.rows;

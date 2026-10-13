@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, rowKey } from './row-builders.js';
+import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'tags';
@@ -154,7 +154,7 @@ class RdioAdminTags extends HTMLElement {
     labelInput.value = row.label ?? '';
     labelInput.required = true;
     labelInput.setAttribute('aria-label', 'Label');
-    labelInput.addEventListener('change', () => {
+    onFieldEdit(labelInput, () => {
       this.updateRow(index, { label: labelInput.value });
       labelField.setError(labelInput.value ? '' : 'Label is required');
       title.textContent = labelInput.value || 'NewTag';
