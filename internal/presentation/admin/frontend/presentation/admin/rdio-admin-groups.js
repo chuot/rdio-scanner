@@ -109,7 +109,7 @@ class RdioAdminGroups extends HTMLElement {
 
     rows.forEach((row, index) => list.append(this.rowElement(row, index, alerts, errorFields)));
 
-    attachDragSort(list, (from, to) => setSectionWorking(NAME, reorderAfterDrag(rows, from, to)));
+    attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
     root.append(list);
 
@@ -211,7 +211,7 @@ class RdioAdminGroups extends HTMLElement {
     remove.className = 'rdio-button-mini delete warn';
     remove.textContent = 'Delete Group';
     remove.addEventListener('click', () => {
-      setSectionWorking(NAME, this.rows.filter((_, i) => i !== index));
+      this.commitRows(this.rows.filter((_, i) => i !== index));
     });
 
     bottom.append(remove);
@@ -249,19 +249,22 @@ class RdioAdminGroups extends HTMLElement {
   }
 
   updateRow(index, patch) {
-    const rows = this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
+    this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
+  }
 
-    this.internalEdit = rows;
+  // Every commit of this section's rows carries the section's validity: the Save control answers the
+  // rows the section holds, and adding, deleting, and moving a row change them. The move reads the
+  // rows as the store holds them at the moment of the drop, so a value the operator typed in a row
+  // that is deliberately not rebuilt is not left behind.
+  commitRows(rows, selfEdit = false) {
+    if (selfEdit) this.internalEdit = rows;
 
     setSectionWorking(NAME, rows);
-    setSectionInvalid(NAME, rows.some((row) => !row.label));
+    setSectionInvalid(NAME, rows.some((row) => Object.keys(groupRowErrors(row)).length > 0));
   }
 
   add() {
-    const rows = [markRowIdentity({ alert: '', label: '', led: '', order: 0 }), ...this.rows];
-
-    setSectionWorking(NAME, rows);
-    setSectionInvalid(NAME, rows.some((row) => !row.label));
+    this.commitRows([markRowIdentity({ alert: '', label: '', led: '', order: 0 }), ...this.rows]);
   }
 }
 
