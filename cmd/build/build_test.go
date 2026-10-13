@@ -231,6 +231,102 @@ func TestTheServerBinaryIsCurrentWhenItIsNewerThanEveryGoFileItIsBuiltFrom(t *te
 	}
 }
 
+// The ffmpeg phase writes two kinds of thing: the configured source trees it compiles in, the tarball it
+// extracted them from, the container context it built in, and the working copy of the binaries it ran —
+// all of it read by no later build — and the compiled programs, which every later build reads. A clean
+// run that threw away the reusable 41 MB to keep the disposable 1.1 GB has the split backwards.
+func TestACleanRunRemovesTheFfmpegScratchAndLeavesTheCacheStanding(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest := bundle.ReadManifest()
+
+	scratch := filepath.Join(".build", "ffmpeg", "scratch", "linux-amd64", "ffmpeg-9.0.2", "config.h")
+	tarball := filepath.Join(".build", "ffmpeg", "src", sourceName(manifest))
+	context := filepath.Join(".build", "ffmpeg", "context", "Dockerfile")
+	working := filepath.Join(".build", "ffmpeg", "run", "macos-arm64", "ffmpeg")
+
+	cache := filepath.Join(".build", "ffmpeg", manifest.FFmpeg, cacheKey(manifest, "linux-amd64"), "linux-amd64", "ffmpeg")
+
+	for _, path := range []string{scratch, tarball, context, working, cache} {
+		writeTreeFile(t, repo, path, "the file a build wrote")
+	}
+
+	removed, err := cleanTree(repo)
+	if err != nil {
+		t.Fatalf("cleanTree: %v", err)
+	}
+
+	for _, path := range []string{scratch, tarball, context, working} {
+		if _, err := os.Stat(filepath.Join(repo, path)); err == nil {
+			t.Errorf("%s survived a clean run, and it is what no later build reads", path)
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, cache)); err != nil {
+		t.Errorf("the clean run removed the compiled ffmpeg a later build reads: %v", err)
+	}
+
+	for _, name := range []string{"scratch", "src", "context", "run"} {
+		if !carriesAPath(removed, filepath.Join(".build", "ffmpeg", name)) {
+			t.Errorf("the clean run named %v and did not name %s", removed, name)
+		}
+	}
+}
+
+// The cache key is a digest of the release, the pinned source, the target, the recipe, the toolchain, and
+// the check environment. An entry whose key no target the manifest records computes is an entry the
+// manifest as it is now cannot ask for, and deleting it costs nothing a build would have reused. An
+// entry kept because it is old, or deleted because it is old, is a rule that guesses.
+func TestACleanRunPrunesTheCacheEntriesTheManifestCannotProduce(t *testing.T) {
+	repo := t.TempDir()
+
+	manifest := bundle.ReadManifest()
+
+	live := filepath.Join(".build", "ffmpeg", manifest.FFmpeg, cacheKey(manifest, "linux-amd64"), "linux-amd64", "ffmpeg")
+
+	// The entry a manifest edit replaced: the same release, a key nothing computes now.
+	staleKey := filepath.Join(".build", "ffmpeg", manifest.FFmpeg, "a-key-the-manifest-replaced")
+
+	// The whole cache of a release the manifest no longer pins.
+	older := filepath.Join(".build", "ffmpeg", "8.9.0")
+
+	writeTreeFile(t, repo, live, "the ffmpeg the manifest asks for")
+	writeTreeFile(t, repo, filepath.Join(staleKey, "linux-amd64", "ffmpeg"), "the ffmpeg an older manifest produced")
+	writeTreeFile(t, repo, filepath.Join(older, "a-key-of-that-release", "linux-amd64", "ffmpeg"), "the ffmpeg an older release compiled")
+
+	removed, err := cleanTree(repo)
+	if err != nil {
+		t.Fatalf("cleanTree: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, live)); err != nil {
+		t.Errorf("the clean run removed the cache entry the manifest asks for: %v", err)
+	}
+
+	for _, path := range []string{staleKey, older} {
+		if _, err := os.Stat(filepath.Join(repo, path)); err == nil {
+			t.Errorf("%s survived a clean run, and the manifest cannot produce it", path)
+		}
+
+		if !carriesAPath(removed, path) {
+			t.Errorf("the clean run named %v and did not name %s", removed, path)
+		}
+	}
+}
+
+// carriesAPath says whether a list of removed paths names a path, repo-relative names included: the
+// clean run reports what it removed, and a removal nobody is told about is a tree that changed in
+// silence.
+func carriesAPath(paths []string, want string) bool {
+	for _, path := range paths {
+		if path == want || strings.HasSuffix(path, string(filepath.Separator)+want) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // The version a server binary reports is stamped from the file the release declares its core version
 // in, and the binary is compiled from the module files its dependencies are resolved from. A binary
 // that is not rebuilt when one of those files changes reports a version the release does not ship,

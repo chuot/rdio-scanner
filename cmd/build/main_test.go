@@ -533,6 +533,80 @@ func TestADistRunAskedForOneTargetItCannotBuildExitsNonZero(t *testing.T) {
 	}
 }
 
+// The release folder is where the archives sit side by side until they are uploaded by hand. The
+// archives of the version a run released, sitting next to the archives of the versions it did not
+// release, is how the wrong file gets uploaded.
+func TestADistRunRemovesTheArchivesOfTheVersionsItDidNotRelease(t *testing.T) {
+	repo := t.TempDir()
+
+	// The release folder a run of an older version left behind, an archive of the version this run
+	// releases for a target it is not building, an archive whose prerelease name carries a second `-v`,
+	// and a file that is not an archive.
+	writeRepoFile(t, repo, "dist/rdio-scanner-linux-amd64-v7.9.0.zip", "the archive of a release that happened before")
+	writeRepoFile(t, repo, "dist/rdio-scanner-linux-arm64-v8.0.0.zip", "the archive of this version, for a target this run is not building")
+	writeRepoFile(t, repo, "dist/rdio-scanner-windows-amd64-v8.0.0-v1+g1.zip", "a prerelease archive whose name carries a second -v")
+	writeRepoFile(t, repo, "dist/notes.txt", "a file the release folder holds")
+
+	tl, out, _ := fakeRun(released, "")
+
+	tl.repo = repo
+	tl.releaseFiles = func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
+		return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
+	}
+	tl.archive = func(path string, files []archiveFile) error {
+		return writeArchive(filepath.Join(repo, path), files)
+	}
+
+	if code := tl.run([]string{"dist", "linux-amd64"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	for _, path := range []string{"dist/rdio-scanner-linux-amd64-v7.9.0.zip", "dist/rdio-scanner-windows-amd64-v8.0.0-v1+g1.zip"} {
+		if _, err := os.Stat(filepath.Join(repo, path)); err == nil {
+			t.Errorf("%s survived the release run, and it is not an archive of the version the run released", path)
+		}
+
+		if !strings.Contains(out.String(), path) {
+			t.Errorf("the run's log %q does not name the removal of %s", out.String(), path)
+		}
+	}
+
+	for _, path := range []string{
+		"dist/rdio-scanner-linux-arm64-v8.0.0.zip",
+		"dist/rdio-scanner-linux-amd64-v8.0.0.zip",
+		"dist/notes.txt",
+	} {
+		if _, err := os.Stat(filepath.Join(repo, path)); err != nil {
+			t.Errorf("the release run removed %s, and it is not an archive of a version it did not release: %v", path, err)
+		}
+	}
+}
+
+// The version in an archive's name is what the release folder's pruning compares. The name is
+// `rdio-scanner-<target>-v<version>.zip`, and the target is the part whose shape the tool knows, so the
+// separator between them is found by the target's shape and not by the last hyphen a prerelease name
+// happens to carry.
+func TestTheVersionInAnArchiveNameIsReadByTheTargetTheNameNames(t *testing.T) {
+	for name, want := range map[string]string{
+		"rdio-scanner-linux-amd64-v8.0.0.zip":              "8.0.0",
+		"rdio-scanner-windows-amd64-v8.0.0+g1885b7e2.zip":  "8.0.0+g1885b7e2",
+		"rdio-scanner-linux-arm64-v8.0.0-v1+g1885b7e2.zip": "8.0.0-v1+g1885b7e2",
+	} {
+		got, found := archiveVersionOf(name)
+		if !found || got != want {
+			t.Errorf("%s reads version %q, found %v, want %q", name, got, found, want)
+		}
+	}
+
+	if _, found := archiveVersionOf("notes.txt"); found {
+		t.Error("notes.txt was read as a release archive name, and it is not one")
+	}
+
+	if _, found := archiveVersionOf("rdio-scanner-nonsense-v8.0.0.zip"); found {
+		t.Error("an archive named for no target this tool builds was read as one it knows the version of")
+	}
+}
+
 // The verification run runs the two suites and builds nothing: the same command a developer runs before
 // pushing is the command a release is gated on, and a run that built something first reported the
 // build's result and not the suites'.

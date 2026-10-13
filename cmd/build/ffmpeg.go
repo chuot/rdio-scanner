@@ -237,6 +237,100 @@ func sourceDir(manifest bundle.Manifest) string {
 	return strings.TrimSuffix(sourceName(manifest), ".tar.xz")
 }
 
+// ffmpegScratch is what the ffmpeg phase writes and no later build reads: the configured source trees it
+// compiles in, the tarball it extracted them from, the container context it built in, and the working
+// copy of the binaries it ran. The cache beside them is what every later build reads, and a clean run
+// leaves it standing: the scratch is the bulk that is worth a rebuild and nothing else, and the cache is
+// the part that turns a rebuild into a copy.
+func ffmpegScratch(repo string) []string {
+	root := filepath.Join(repo, ".build", "ffmpeg")
+
+	names := []string{"scratch", "src", "context", "run"}
+
+	paths := make([]string, 0, len(names))
+
+	for _, name := range names {
+		paths = append(paths, filepath.Join(root, name))
+	}
+
+	return paths
+}
+
+// pruneFFMpegCache removes the cache entries the manifest the build reads cannot produce. The cache key
+// is a digest of the release, the pinned source, the target, the recipe, the toolchain, and the check
+// environment, so an entry whose key no target the manifest records computes is an entry the manifest as
+// it is now cannot ask for, and removing it costs nothing a build would have reused. An age rule guesses
+// about an entry a build is about to read, and the cost of a wrong guess is a full compile of a target.
+//
+// The cache is kept under the directory named for the release the manifest pins. A directory under the
+// cache root named for another release is the whole cache of a manifest that no longer exists, and goes
+// with it.
+func pruneFFMpegCache(repo string) ([]string, error) {
+	manifest := bundle.ReadManifest()
+
+	root := filepath.Join(repo, ".build", "ffmpeg")
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("the build cannot read %s: %w", root, err)
+	}
+
+	// The scratch is the clean run's own removal, named by itself, and is not a cache entry.
+	scratch := map[string]bool{}
+
+	for _, path := range ffmpegScratch(repo) {
+		scratch[path] = true
+	}
+
+	// The keys the manifest computes now, one per target it records.
+	computed := map[string]bool{}
+
+	for target := range manifest.Targets {
+		computed[manifest.FFmpeg+string(filepath.Separator)+cacheKey(manifest, target)] = true
+	}
+
+	var removed []string
+
+	for _, entry := range entries {
+		path := filepath.Join(root, entry.Name())
+
+		if scratch[path] {
+			continue
+		}
+
+		if entry.Name() != manifest.FFmpeg {
+			removed = append(removed, path)
+
+			continue
+		}
+
+		keys, err := os.ReadDir(path)
+		if err != nil {
+			return nil, fmt.Errorf("the build cannot read %s: %w", path, err)
+		}
+
+		for _, key := range keys {
+			if computed[entry.Name()+string(filepath.Separator)+key.Name()] {
+				continue
+			}
+
+			removed = append(removed, filepath.Join(path, key.Name()))
+		}
+	}
+
+	for _, path := range removed {
+		if err := os.RemoveAll(path); err != nil {
+			return nil, fmt.Errorf("the clean run cannot remove %s: %w", path, err)
+		}
+	}
+
+	return removed, nil
+}
+
 // cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the source this
 // project pinned, the target, the configure recipe, and that target's toolchain and check environment.
 //

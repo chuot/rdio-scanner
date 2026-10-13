@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
@@ -34,6 +35,76 @@ import (
 // not name is a release a reader cannot follow.
 func archivePath(target string, version string) string {
 	return filepath.Join("dist", fmt.Sprintf("rdio-scanner-%s-v%s.zip", target, version))
+}
+
+// archiveVersionOf reads the version out of a release archive's name: the name is
+// `rdio-scanner-<target>-v<version>.zip`, and the target is the part whose shape the tool knows, so the
+// separator between the two is found by the target's shape and not by the last hyphen a prerelease name
+// happens to carry. A name the tool did not write is not an archive of this release, and a file the
+// release folder happens to hold is left to the operator who put it there.
+func archiveVersionOf(name string) (string, bool) {
+	rest, found := strings.CutSuffix(strings.TrimPrefix(name, "rdio-scanner-"), ".zip")
+	if !found {
+		return "", false
+	}
+
+	for i := 0; i < len(rest); i++ {
+		if !strings.HasPrefix(rest[i:], "-v") {
+			continue
+		}
+
+		if !isTarget(rest[:i]) {
+			continue
+		}
+
+		return rest[i+2:], true
+	}
+
+	return "", false
+}
+
+// pruneReleaseFolder removes the release archives of the versions this run did not release. The release
+// folder is where the archives sit side by side until they are uploaded by hand, and the archives of an
+// older version sitting next to the new ones is how the wrong file gets uploaded. The version a run
+// resolved is derived from the declared core and git, so the run knows exactly which archive names are
+// current, and names each removal it makes.
+//
+// A file in the release folder whose name is not an archive name is left to the operator who put it
+// there.
+func pruneReleaseFolder(repo string, version string) ([]string, error) {
+	dir := filepath.Join(repo, "dist")
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("the build cannot read %s: %w", dir, err)
+	}
+
+	var removed []string
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name, found := archiveVersionOf(entry.Name())
+		if !found || name == version {
+			continue
+		}
+
+		path := filepath.Join(dir, entry.Name())
+
+		if err := os.RemoveAll(path); err != nil {
+			return nil, fmt.Errorf("the release run cannot remove %s: %w", path, err)
+		}
+
+		removed = append(removed, filepath.Join("dist", entry.Name()))
+	}
+
+	return removed, nil
 }
 
 // archiveFile is one file in a release archive.

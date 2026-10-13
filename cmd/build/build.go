@@ -393,6 +393,17 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		written = append(written, path)
 	}
 
+	// The release folder is the set to upload, so the archives of the versions this run did not release
+	// are removed as soon as its own are written, and each removal is named.
+	pruned, err := pruneReleaseFolder(t.repo, version.String())
+	if err != nil {
+		return fail(stdout, err)
+	}
+
+	for _, path := range pruned {
+		fmt.Fprintf(stdout, "%-7s removed %s\n", subDist, path)
+	}
+
 	// The release says what it wrote, and what it wrote none for, and its exit status says whether the
 	// release it was asked for is the release it wrote. A target whose binaries are compiled on its own
 	// platform is not a failure, and a run that ships the archives it can produce is doing its job; it is
@@ -469,14 +480,22 @@ func directoryExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// cleanTree removes what a clean run removes: the release output, the client dependencies, and the
-// contents of both bundles. The `.gitkeep` file in each bundle is left standing, because it is the
-// placeholder that keeps a plain go build compiling: the bundle directory has to exist for the Go
-// package that embeds it, and the contents are what a build puts there.
+// cleanTree removes what a clean run removes: the release output, the client dependencies, the contents
+// of both bundles, and the ffmpeg phase's disposable scratch — the configured source trees it compiled
+// in, the tarball it extracted them from, the container context it built in, and the working copy of the
+// binaries it ran. It leaves the compiled ffmpeg standing, because every later build reads it, and
+// prunes it to the entries the manifest the build reads can produce, because an entry no target computes
+// is an entry no build reads.
+//
+// The `.gitkeep` file in each bundle is left standing, because it is the placeholder that keeps a plain
+// go build compiling: the bundle directory has to exist for the Go package that embeds it, and the
+// contents are what a build puts there.
 //
 // The run names what it removed, so a tree that was already clean says so by naming nothing.
 func cleanTree(repo string) ([]string, error) {
 	targets := []string{filepath.Join(repo, "dist"), filepath.Join(repo, presentationDir, "node_modules")}
+
+	targets = append(targets, ffmpegScratch(repo)...)
 
 	for _, app := range []string{subScanner, subAdmin} {
 		bundle := filepath.Join(repo, presentationDir, app, "frontend", "bundle")
@@ -513,6 +532,15 @@ func cleanTree(repo string) ([]string, error) {
 
 		removed = append(removed, path)
 	}
+
+	// The cache is pruned after the scratch is gone, so the tree it is read from is the tree a clean
+	// run left.
+	pruned, err := pruneFFMpegCache(repo)
+	if err != nil {
+		return nil, err
+	}
+
+	removed = append(removed, pruned...)
 
 	return removed, nil
 }
