@@ -185,6 +185,10 @@ func TestEachSubcommandRunsOnlyTheStepsItNames(t *testing.T) {
 func TestAPreReleaseNameThatIsNotAPrereleaseIsRejectedBeforeAnythingIsBuilt(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
 	if code := tl.run([]string{"--pre", "beta 1"}, out); code != 2 {
 		t.Errorf("exit code = %d, want 2", code)
 	}
@@ -193,8 +197,13 @@ func TestAPreReleaseNameThatIsNotAPrereleaseIsRejectedBeforeAnythingIsBuilt(t *t
 		t.Errorf("%d steps ran after a rejected command line", len(*ran))
 	}
 
-	if !strings.Contains(out.String(), "beta 1") {
-		t.Errorf("the refusal %q does not name the prerelease it rejected", out.String())
+	if !strings.Contains(errout.String(), "beta 1") {
+		t.Errorf("the refusal %q does not name the prerelease it rejected", errout.String())
+	}
+
+	if out.Len() != 0 {
+		t.Errorf("a rejected command line wrote %q to the writer the run was given, which carries the run's progress",
+			out.String())
 	}
 }
 

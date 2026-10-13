@@ -69,7 +69,7 @@ The release run's bound is the machine's cores, the targets it is ready to build
 
 ### Where the lines go
 
-The run's own lines — the version it resolved, the notes, and every `label  result` line — reach standard output, and a program the run started writes its own output there too. A failure, and a program's own complaints, reach standard error: the line that says the build stopped is not a line of the build's progress, and a log of progress that carries it reads as if the build got there.
+The run's own lines — the version it resolved, the notes, and every `label  result` line — reach standard output, and a program the run started writes its own output there too. A failure, and a program's own complaints, reach standard error: the line that says the build stopped is not a line of the build's progress, and a log of progress that carries it reads as if the build got there. A command line the tool does not accept is refused there too, with the usage line naming the commands the tool has, and the run builds nothing.
 
 ## How to verify a build
 

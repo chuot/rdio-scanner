@@ -165,7 +165,12 @@ func newTool(repo string) tool {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		fmt.Fprintf(stdout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
+		// A command line the tool does not accept is a failure, and a failure reaches the operator's
+		// standard error. The word that was refused and the line naming the commands the tool has are
+		// the explanation of that failure, not a line of the run's progress, and a refused command line
+		// builds nothing: the writer the run was given carries no progress at all.
+		fmt.Fprintf(t.errout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
+
 		return 2
 	}
 

@@ -23,7 +23,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -533,17 +532,22 @@ func TestTheFfmpegCheckIsNotACommandThisToolAccepts(t *testing.T) {
 }
 
 // The usage line is what an operator reads when they type something the tool does not do. It names the
-// commands the tool has, and a command that no longer exists in it is not in that line.
+// commands the tool has, and a command that no longer exists in it is not in that line. It reaches the
+// operator's standard error beside the word it was refused for: a command line the tool does not accept
+// is a failure, and it builds nothing, so the writer carrying the run's progress has nothing in it.
 func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 	out := &bytes.Buffer{}
+	errout := &bytes.Buffer{}
 
-	if code := (&tool{errout: io.Discard}).run([]string{"nonsense"}, out); code == 0 {
+	tl := &tool{errout: errout}
+
+	if code := tl.run([]string{"nonsense"}, out); code == 0 {
 		t.Fatal("a run naming no command succeeded")
 	}
 
-	line := out.String()
+	line := errout.String()
 
-	for _, want := range []string{"client", "scanner", "admin", "ffmpeg", "server", "dist", "container", "clean", "version"} {
+	for _, want := range []string{"nonsense", "client", "scanner", "admin", "ffmpeg", "server", "dist", "container", "clean", "version"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the usage line %q does not name %s", line, want)
 		}
@@ -551,6 +555,11 @@ func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 
 	if strings.Contains(line, "ffmpeg-check") {
 		t.Errorf("the usage line offers a command the tool does not have: %q", line)
+	}
+
+	if out.Len() != 0 {
+		t.Errorf("a refused command line wrote %q to the writer the run was given, which carries the run's progress",
+			out.String())
 	}
 }
 
