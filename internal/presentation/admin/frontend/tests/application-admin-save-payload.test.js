@@ -212,3 +212,20 @@ test('a saved row is remembered by the identifier the server gave it', async () 
   assert.equal(rowIdentity(slice.working[0]), null, 'the saved row carries no client mark');
   assert.equal(rowKey(slice.working[0], 0), 'id7', 'the row is remembered by the identifier the server gave it');
 });
+
+// The mask the add control creates is the row's own configuration key: it rides into the body the
+// server reads, and the row the save answers carries the mask the section's rule accepts — the row
+// means the same thing on both sides of its save.
+test('the dirwatch row the add control creates is saved carrying its mask', async () => {
+  const { api, useCases } = await setup();
+
+  useCases.setSectionWorking('dirwatch', withNewRow(CONFIG.dirwatch, { delay: 2000, deleteAfter: true, directory: '/var/spool/payload', disabled: false, mask: '#SYS_#TG', order: 0, type: 'default' }));
+
+  assert.equal(await useCases.saveSection('dirwatch'), true);
+
+  const body = api.calls.find((call) => call[0] === 'saveSection')[2];
+
+  assert.deepEqual(body, [
+    { delay: 2000, deleteAfter: true, directory: '/var/spool/payload', disabled: false, mask: '#SYS_#TG', order: 0, type: 'default' },
+  ], 'the body carries the mask among the configuration keys the row owns, and no key the client added');
+});
