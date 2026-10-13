@@ -405,3 +405,12 @@ export function fieldMessage(field) {
 export function reachField(control) {
   control.dispatchEvent({ type: 'change' });
 }
+
+// keystroke is the operator typing in the control and staying in it: the input event the browser
+// fires as the value changes. The change reachField fires comes only when the operator leaves, so
+// a reading taken here is the state of the page while the operator is in the field, with the value
+// in the control and the section holding whatever was there before this keystroke.
+export function keystroke(control, value) {
+  control.value = value;
+  control.dispatchEvent({ type: 'input' });
+}
