@@ -139,6 +139,45 @@ func TestConfigPayloadGivesOnlyTheGroupsAndTagsThisListenerCanSee(t *testing.T) 
 	}
 }
 
+// The alert and colour rules a listener's call is measured against walk the groups the listener is
+// given, so a group a talkgroup belongs to has to be in that listing whatever position it holds in the
+// talkgroup. A group that is never the first group of any talkgroup this listener can see is the case
+// the listing used to miss.
+func TestConfigPayloadListsEveryGroupATalkgroupBelongsTo(t *testing.T) {
+	snapshot := captureSnapshot()
+
+	// EMS is the third group of talkgroup 1514100 and the first group of no talkgroup this
+	// listener can see. The administrator gave it an alert tone and a colour.
+	snapshot.Systems[0].Talkgroups[1].GroupIDs = []uint64{3, 7, 2}
+	snapshot.Groups[1].Alert = "alert5"
+	snapshot.Groups[1].LED = "red"
+
+	config := decodeConfig(t, ConfigPayload{Snapshot: snapshot})
+
+	groupsData := listOf(t, config, "groupsData")
+
+	if len(groupsData) != 5 {
+		t.Fatalf("the listing carries %d groups, want Air, Ground, Fire, EMS and Unknown", len(groupsData))
+	}
+
+	if got, want := jsonOf(t, groupsData), `[{"id":1,"label":"Air"},{"id":7,"label":"Ground"},{"id":3,"label":"Fire"},{"alert":"alert5","id":2,"label":"EMS","led":"red"},{"id":6,"label":"Unknown"}]`; got != want {
+		t.Errorf("the listing =\n  %s\nwant\n  %s", got, want)
+	}
+
+	// A group no talkgroup belongs to is still not in the listing: the widening is about the
+	// groups a listener's talkgroups carry, not about every group the server has.
+	for _, entry := range groupsData {
+		if label := objectOf(t, entry)["label"]; label == "Interop" || label == "Law" {
+			t.Errorf("the listing carries %v, a group no talkgroup of this listener belongs to", label)
+		}
+	}
+
+	// The group map already carried every label, and the widening leaves it as it is.
+	if got, want := jsonOf(t, config["groups"]), `{"Air":{"10001":[1514200]},"EMS":{"10001":[1514100]},"Fire":{"10001":[1514100]},"Ground":{"10001":[1514000,1514100]},"Unknown":{"10002":[1515000]}}`; got != want {
+		t.Errorf("the group map =\n  %s\nwant\n  %s", got, want)
+	}
+}
+
 // The alert tones are a table the server carries and not something an administrator configures, and
 // the keypad beeps are one of three tables picked by an option. An option naming a brand the server
 // does not know is answered with three empty lists rather than with somebody else's beeps.

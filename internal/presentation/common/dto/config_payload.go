@@ -248,21 +248,25 @@ func unitEntries(units domain.Units) []map[string]any {
 }
 
 // groupList is the groups this listener's talkgroups actually use, in the order the listener was shown
-// them, each one named once. A group is in this list only when it is the first group of some talkgroup
-// the listener can see — the group map below carries every group a visible talkgroup belongs to, and
-// the two are not the same set.
+// them, each one named once. Every group a visible talkgroup belongs to is in this list, in the position
+// the listener first saw it, so a group that is only ever the second group of a talkgroup is in it too:
+// the alert tone and the colour a call is measured against are picked from this listing, and a group
+// missing from it can never win. The group map below carries the same labels with the talkgroups that
+// use them.
 func groupList(systems []visibleSystem, groups domain.Groups) []map[string]any {
 	out := []domain.Group{}
 
 	for _, system := range systems {
 		for _, talkgroup := range system.Talkgroups {
-			group, ok := groups.ByLabel(talkgroup.Group)
-			if !ok {
-				continue
-			}
+			for _, label := range talkgroup.Groups {
+				group, ok := groups.ByLabel(label)
+				if !ok {
+					continue
+				}
 
-			if !containsGroup(out, group) {
-				out = append(out, group)
+				if !containsGroup(out, group) {
+					out = append(out, group)
+				}
 			}
 		}
 	}
