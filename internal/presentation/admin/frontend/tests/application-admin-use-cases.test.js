@@ -39,7 +39,7 @@ function sectionConfig() {
   };
 }
 
-function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, config = { config: sectionConfig(), passwordNeedChange: true }, fetchedSections = {}, saveError = false, changePasswordError = false, storage } = {}) {
+function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, config = { config: sectionConfig(), passwordNeedChange: true }, fetchedSections = {}, saveError = false, changePasswordError = false, dirwatchDelayClamp = false, storage } = {}) {
   const calls = [];
 
   return {
@@ -73,6 +73,12 @@ function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, c
       calls.push(['saveSection', section, structuredClone(value)]);
 
       if (saveError) throw new Error('Admin API PUT /config/groups: 417');
+
+      // The real server clamps every stored dirwatch delay to one day: 1440. The fake answers the
+      // way the server does, so the reading sees the shape the round-trip really carries.
+      if (dirwatchDelayClamp && section === 'dirwatch') {
+        return value.map((row) => ({ ...row, delay: Math.min(row.delay, 1440) }));
+      }
 
       return structuredClone(value);
     },
@@ -494,4 +500,50 @@ test('the section that answered the request leaves nothing standing for the next
   useCases.clearFocus();
 
   assert.equal(store.getState().focus, null);
+});
+
+// The server clamps every stored dirwatch delay to one day: 1440, below the section's floor of 2000.
+// The legacy form loaded the stored delay as Math.max(2000, delay) — the row read valid and the form
+// was not dirty, because an initial control value is not a change. The application loads the server's
+// rows through the same clamp, on the baseline and the working copy together, so the saved row means
+// the same thing on both sides of its save.
+test('a dirwatch row the server answers with its clamped delay loads as the floor the rule accepts, and is not a change', async () => {
+  const { store, useCases } = setup({
+    token: 'jwt-0',
+    apiOptions: {
+      config: {
+        config: { ...sectionConfig(), dirwatch: [{ id: 1, order: 1, directory: '/var/spool/first', delay: 1440, deleteAfter: true, disabled: false, extension: 'mp3', frequency: 1, mask: '#SYS_#TG', type: 'default' }] },
+        passwordNeedChange: true,
+      },
+    },
+  });
+
+  await useCases.boot();
+
+  const slice = store.getState()['section:dirwatch'];
+
+  assert.equal(slice.baseline[0].delay, 2000, 'the delay the server clamps to one day loads as the floor the rule accepts');
+  assert.equal(slice.working[0].delay, 2000, 'the working copy carries the same delay, so the row is not a change');
+  assert.equal(slice.dirty, false, 'a row loaded with the server clamped delay is not dirty');
+});
+
+test('saving a dirwatch row the server answers with its clamped delay leaves the section reading the floor, quiet, and not dirty', async () => {
+  const { store, useCases } = setup({
+    token: 'jwt-0',
+    apiOptions: { dirwatchDelayClamp: true },
+  });
+
+  await useCases.boot();
+
+  useCases.setSectionWorking('dirwatch', [{ directory: '/var/spool/first', delay: 2000, deleteAfter: true, disabled: false, frequency: 1, mask: '#SYS_#TG', order: 0, type: 'default' }]);
+
+  const ok = await useCases.saveSection('dirwatch');
+
+  assert.equal(ok, true);
+
+  const slice = store.getState()['section:dirwatch'];
+
+  assert.equal(slice.baseline[0].delay, 2000, 'the delay the server clamps to one day re-baselines as the floor the rule accepts');
+  assert.equal(slice.working[0].delay, 2000, 'the working copy carries the same delay, so the saved row is not a change');
+  assert.equal(slice.dirty, false, 'the section is quiet after its save');
 });

@@ -4,6 +4,7 @@
 // { baseline, working, dirty, invalid, conflict }.
 
 import { computeTodos } from '../domain/todos.js';
+import { normalizeDirwatchRow } from '../domain/dirwatch.js';
 import {
   ADMIN_CONFIG_SECTIONS,
   SYSTEM_SUB_LEVELS,
@@ -17,6 +18,13 @@ import { deepEqual } from '../../../common/frontend/application/store.js';
 const sliceKey = (name) => `section:${name}`;
 
 const subSliceKey = (level, systemId) => `subsection:${level}:${systemId}`;
+
+// The dirwatch rows the server answers carry the shape the server stores: a delay clamped to one
+// day, below the floor the section's rule accepts. They load through the legacy form's own clamp,
+// so a saved row reads valid and is not a change. Every other section loads as it is.
+function loadSectionRows(name, rows) {
+  return name === 'dirwatch' && rows ? rows.map(normalizeDirwatchRow) : rows;
+}
 
 function freshSectionState(name, baseline) {
   return {
@@ -89,7 +97,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     for (const name of ADMIN_CONFIG_SECTIONS) {
       const key = sliceKey(name);
       const current = store.getState()[key];
-      const baseline = config?.[name] ?? null;
+      const baseline = loadSectionRows(name, config?.[name] ?? null);
 
       if (current && (current.dirty || current.conflict)) {
         // Local edits are preserved; the section is flagged as a conflict
@@ -124,11 +132,12 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
   }
 
   function updateSectionAndConfig(name, baseline) {
-    const patch = { [sliceKey(name)]: freshSectionState(name, baseline) };
+    const loaded = loadSectionRows(name, baseline);
+    const patch = { [sliceKey(name)]: freshSectionState(name, loaded) };
 
     const config = store.getState().config;
 
-    if (config) patch.config = { ...config, [name]: baseline };
+    if (config) patch.config = { ...config, [name]: loaded };
 
     store.setState(patch);
   }

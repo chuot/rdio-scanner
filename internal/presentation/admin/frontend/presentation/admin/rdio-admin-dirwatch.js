@@ -466,8 +466,9 @@ class RdioAdminDirwatch extends HTMLElement {
       // The mask the section's rule accepts, and the server's reader uses to pull the system and
       // talkgroup ids out of a recording's filename. A row created without one is saved with an empty
       // mask, and the rule rejects the empty string the server answers for it: the row would mean one
-      // thing as a new row and another as a saved row.
-      markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, mask: '#SYS_#TG', order: 0, type: 'default' }),
+      // thing as a new row and another as a saved row. The frequency carries the same care: the server
+      // answers an unset one as the zero the rule rejects.
+      markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, frequency: 1, mask: '#SYS_#TG', order: 0, type: 'default' }),
       ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
     ]);
   }

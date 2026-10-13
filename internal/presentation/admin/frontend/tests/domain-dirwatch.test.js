@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   maskHasToken,
+  normalizeDirwatchRow,
   validDirectory,
   validExtension,
   validateDirwatchRow,
@@ -184,5 +185,34 @@ describe('domain/dirwatch — helpers', () => {
         assert.equal(validDirectory('', rows), false);
         assert.equal(validDirectory('\\\\server\\share', rows), false);
         assert.equal(validDirectory('/var/rdio/ingest', rows), false);
+    });
+});
+
+// The server clamps every stored delay to one day: 1440. The section's rule rejects a delay below
+// 2000. No delay value passes both sides, so the row must be loaded the way the legacy form loaded
+// it — Math.max(2000, delay) at form creation — and the loader is that clamp.
+describe('normalizeDirwatchRow (the legacy form-creation delay clamp)', () => {
+    it('loads the delay the server clamps to one day as the floor the rule accepts', () => {
+        const row = normalizeDirwatchRow({ ...validRow(), delay: 1440 });
+
+        assert.equal(row.delay, 2000);
+    });
+
+    it('loads a delay above the floor as it is', () => {
+        const row = normalizeDirwatchRow({ ...validRow(), delay: 2500 });
+
+        assert.equal(row.delay, 2500);
+    });
+
+    it('loads an absent delay as it is', () => {
+        const row = normalizeDirwatchRow({ ...validRow(), delay: undefined });
+
+        assert.equal(row.delay, undefined);
+    });
+
+    it('leaves the rest of the row exactly as it is', () => {
+        const row = normalizeDirwatchRow({ ...validRow(), delay: 1440 });
+
+        assert.deepEqual({ ...row, delay: validRow().delay }, validRow());
     });
 });

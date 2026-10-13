@@ -263,9 +263,12 @@ test('the dirwatch row the add control creates carries the mask the section need
   const row = rows(el)[0];
 
   assert.equal(controlOf(row, 'Mask').value, '#SYS_#TG', 'the Mask field carries the mask the add control creates');
+  assert.equal(String(controlOf(row, 'Frequency').value), '1', 'the Frequency field carries the floor the rule accepts, the value the server answers for a row saved without one is below');
 
   const maskMessage = findAll(field(row, 'Mask'), (node) => node.className?.split(/\s+/).includes('rdio-form-error'))[0]?.textContent ?? '';
+  const frequencyMessage = findAll(field(row, 'Frequency'), (node) => node.className?.split(/\s+/).includes('rdio-form-error'))[0]?.textContent ?? '';
 
   assert.equal(maskMessage, '', 'the Mask field says nothing about the mask the row carries');
+  assert.equal(frequencyMessage, '', 'the Frequency field says nothing about the frequency the row carries');
   assert.ok(marker(row), 'the row shows its warning icon for the Directory nobody filled in');
 });

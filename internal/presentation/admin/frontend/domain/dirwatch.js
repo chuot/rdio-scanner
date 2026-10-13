@@ -51,6 +51,17 @@ export function validDirectory(value, allRows) {
   return (allRows ?? []).filter((row) => row.directory === value).length <= 1;
 }
 
+// The server clamps every stored delay to one day: 1440, below the floor this section's rule
+// accepts — no delay value passes both sides. The legacy admin form loaded the stored delay as
+// Math.max(2000, delay) at form creation, so the row read valid and the form was not dirty (an
+// initial control value is not a change). The row loader is that clamp: applied to the server's
+// rows as they load, baseline and working copy together, so a saved row means the same thing on
+// both sides of its save. The rule itself is untouched — a value the operator types below 2000
+// still reports.
+export function normalizeDirwatchRow(row) {
+  return typeof row.delay === 'number' ? { ...row, delay: Math.max(2000, row.delay) } : row;
+}
+
 // Field → error-message map (empty object when the row is valid). Messages are
 // the exact legacy mat-error texts.
 export function validateDirwatchRow(row, allRows = [row]) {
