@@ -21,6 +21,7 @@ import {
   deleteRow,
   markRowIdentity,
   numberField,
+  onFieldEdit,
   parseNumber,
   rowContext,
   rowKey,
@@ -199,10 +200,10 @@ class RdioAdminSystems extends HTMLElement {
     const refField = numberField(ctx, details, 'systemRef', 'Id', 'System identifier in decimal format.', system.systemRef, errors.systemRef);
     refField.input.min = '1';
     refField.input.step = '1';
-    refField.input.addEventListener('change', () => update({ systemRef: parseNumber(refField.input.value) }, refField.field, 'systemRef'));
+    onFieldEdit(refField.input, () => update({ systemRef: parseNumber(refField.input.value) }, refField.field, 'systemRef'));
 
     const labelField = textField(ctx, details, 'label', 'Label', 'System label displayed on the main screen and on the search panel.', system.label, errors.label);
-    labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
+    onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
     const alertOptions = [['', 'No Alert'], ...Object.keys(alerts).map((alert) => [alert, titleCase(alert)])];
 
@@ -223,7 +224,7 @@ class RdioAdminSystems extends HTMLElement {
     selectField(ctx, details, 'led', 'Led Color', LED_CAPTION, LEDS, system.led ?? '', (value) => update({ led: value }));
 
     const blacklistsField = textareaField(ctx, details, 'blacklists', 'Blacklists', 'A comma separated list of talkgroup Ids to blacklist from this system. This only has an effect if the auto populate option is enabled.', system.blacklists ?? '', errors.blacklists);
-    blacklistsField.textarea.addEventListener('change', () => update({ blacklists: blacklistsField.textarea.value }, blacklistsField.field, 'blacklists'));
+    onFieldEdit(blacklistsField.textarea, () => update({ blacklists: blacklistsField.textarea.value }, blacklistsField.field, 'blacklists'));
 
     selectField(ctx, details, 'type', 'Type', null, TYPES, system.type ?? '', (value) => update({ type: value }), TYPE_CAPTION);
 

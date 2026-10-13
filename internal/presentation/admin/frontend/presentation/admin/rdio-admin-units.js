@@ -5,7 +5,7 @@
 import { getAdminContext } from '../../application/admin-context.js';
 import { unitErrors } from '../../domain/systems-validation.js';
 import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
-import { deleteRow, numberField, parseNumber, rowContext, setRowMarker, textField, makePanel } from './row-builders.js';
+import { deleteRow, numberField, onFieldEdit, parseNumber, rowContext, setRowMarker, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'units';
 
@@ -45,22 +45,22 @@ function unitRow(component, unit, index, rows) {
   const refField = numberField(ctx, details, 'unitRef', 'Id', 'Unit identifier in decimal format. You can define a unique unit identifier here.', unit.unitRef, errors.unitRef);
   refField.input.min = '1';
   refField.input.step = '1';
-  refField.input.addEventListener('change', () => update({ unitRef: parseNumber(refField.input.value) }, refField.field, 'unitRef'));
+  onFieldEdit(refField.input, () => update({ unitRef: parseNumber(refField.input.value) }, refField.field, 'unitRef'));
 
   const fromField = numberField(ctx, details, 'unitFrom', 'Range from', 'Unit identifier range from.', unit.unitFrom, errors.unitFrom);
   fromField.input.min = '1';
   fromField.input.step = '1';
   fromField.input.placeholder = 'From';
-  fromField.input.addEventListener('change', () => update({ unitFrom: parseNumber(fromField.input.value) }, fromField.field, 'unitFrom'));
+  onFieldEdit(fromField.input, () => update({ unitFrom: parseNumber(fromField.input.value) }, fromField.field, 'unitFrom'));
 
   const toField = numberField(ctx, details, 'unitTo', 'Range to', 'Unit identifier range to.', unit.unitTo, errors.unitTo);
   toField.input.min = '1';
   toField.input.step = '1';
   toField.input.placeholder = 'To';
-  toField.input.addEventListener('change', () => update({ unitTo: parseNumber(toField.input.value) }, toField.field, 'unitTo'));
+  onFieldEdit(toField.input, () => update({ unitTo: parseNumber(toField.input.value) }, toField.field, 'unitTo'));
 
   const labelField = textField(ctx, details, 'label', 'Label', 'Unit label.', unit.label, errors.label);
-  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
+  onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   deleteRow(details, 'Delete unit', () => {
     commitSubRows(component, freshRows(component).filter((_, i) => i !== index));

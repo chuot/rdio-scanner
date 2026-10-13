@@ -6,7 +6,7 @@
 import { getAdminContext } from '../../application/admin-context.js';
 import { siteErrors } from '../../domain/systems-validation.js';
 import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
-import { deleteRow, numberField, parseNumber, rowContext, setRowMarker, textField, makePanel } from './row-builders.js';
+import { deleteRow, numberField, onFieldEdit, parseNumber, rowContext, setRowMarker, textField, makePanel } from './row-builders.js';
 
 const LEVEL = 'sites';
 
@@ -46,10 +46,10 @@ function siteRow(component, site, index, rows) {
   const refField = numberField(ctx, details, 'siteRef', 'Id', 'Site identifier in decimal format.', site.siteRef, errors.siteRef);
   refField.input.min = '1';
   refField.input.step = '1';
-  refField.input.addEventListener('change', () => update({ siteRef: parseNumber(refField.input.value) }, refField.field, 'siteRef'));
+  onFieldEdit(refField.input, () => update({ siteRef: parseNumber(refField.input.value) }, refField.field, 'siteRef'));
 
   const labelField = textField(ctx, details, 'label', 'Label', 'Site label.', site.label, errors.label);
-  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
+  onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   deleteRow(details, 'Delete site', () => {
     commitSubRows(component, freshRows(component).filter((_, i) => i !== index));

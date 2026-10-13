@@ -12,6 +12,7 @@ import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, r
 import {
   deleteRow,
   numberField,
+  onFieldEdit,
   parseNumber,
   rowContext,
   selectField,
@@ -112,13 +113,13 @@ function talkgroupRow(component, talkgroup, index, rows) {
   const refField = numberField(ctx, details, 'talkgroupRef', 'Id', 'Talkgroup identifier in decimal format.', talkgroup.talkgroupRef, errors.talkgroupRef);
   refField.input.min = '1';
   refField.input.step = '1';
-  refField.input.addEventListener('change', () => update({ talkgroupRef: parseNumber(refField.input.value) }, refField.field, 'talkgroupRef'));
+  onFieldEdit(refField.input, () => update({ talkgroupRef: parseNumber(refField.input.value) }, refField.field, 'talkgroupRef'));
 
   const labelField = textField(ctx, details, 'label', 'Label', 'Talkgroup label displayed on the main screen and on buttons.', talkgroup.label, errors.label);
-  labelField.input.addEventListener('change', () => update({ label: labelField.input.value }, labelField.field, 'label'));
+  onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   const nameField = textField(ctx, details, 'name', 'Name', 'Talkgroup name displayed on the main screen.', talkgroup.name, errors.name);
-  nameField.input.addEventListener('change', () => update({ name: nameField.input.value }, nameField.field, 'name'));
+  onFieldEdit(nameField.input, () => update({ name: nameField.input.value }, nameField.field, 'name'));
 
   // groupIds — checkbox list of the saved groups (multi-select). The list is a field of its own:
   // the row under it is marked only once the operator has reached the list, the same rule the
@@ -198,7 +199,7 @@ function talkgroupRow(component, talkgroup, index, rows) {
 
   const frequencyField = numberField(ctx, details, 'frequency', 'Frequency', 'Fake frequency in hertz displayed on the main screen.', talkgroup.frequency, errors.frequency);
   frequencyField.input.min = '0';
-  frequencyField.input.addEventListener('change', () => update({ frequency: parseNumber(frequencyField.input.value) }, frequencyField.field, 'frequency'));
+  onFieldEdit(frequencyField.input, () => update({ frequency: parseNumber(frequencyField.input.value) }, frequencyField.field, 'frequency'));
 
   selectField(ctx, details, 'led', 'Led Color', LED_CAPTION, LEDS, talkgroup.led ?? '', (value) => update({ led: value }));
 

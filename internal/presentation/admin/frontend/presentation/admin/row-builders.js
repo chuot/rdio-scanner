@@ -210,6 +210,21 @@ export function parseNumber(value) {
   return value === '' || value === null ? null : Number(value);
 }
 
+// The message a field carries is recomputed on the keystroke, not only when the operator leaves.
+//
+// The form field reveals its message the moment the value in the control changes. A message computed
+// when the operator leaves is therefore the message of the value the keystroke typed over: the first
+// digit of a valid identifier shows the complaint the empty field earned. Attaching the section's
+// commit to the keystroke as well makes the page answer the value the operator is typing.
+//
+// The handler sits on the control, so it runs before the form field's own reach listener on the field
+// that owns the control, and the message is recomputed before the field paints.
+export function onFieldEdit(control, handler) {
+  for (const type of ['input', 'change']) {
+    control.addEventListener(type, handler);
+  }
+}
+
 export function titleCase(value) {
   return value.replace(/[_-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
