@@ -18,6 +18,20 @@ export function resolveAlert(call, config) {
   return undefined;
 }
 
+// The tone the winning level names, looked up in the tone table the server sends. A name the table
+// does not carry, or a table entry that is not a sequence, is no tone at all.
+export function resolveAlertSequence(call, config) {
+  if (!call || !config) return undefined;
+
+  const name = resolveAlert(call, config);
+
+  if (!name) return undefined;
+
+  const sequence = config?.alerts?.[name];
+
+  return Array.isArray(sequence) && sequence.length > 0 ? sequence : undefined;
+}
+
 export const LED_COLORS = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
 
 export function resolveLedColor(call, colors = LED_COLORS) {

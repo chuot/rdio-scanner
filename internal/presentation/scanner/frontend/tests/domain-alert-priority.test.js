@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { resolveAlert, resolveLedColor } from '../domain/alert-priority.js';
+import { resolveAlert, resolveAlertSequence, resolveLedColor } from '../domain/alert-priority.js';
 
 describe('domain/alert-priority — group → tag → system → talkgroup', () => {
     const config = {
@@ -92,5 +92,114 @@ describe('domain/alert-priority — LED color resolution', () => {
     it('falls back to green for missing or invalid colors', () => {
         assert.equal(resolveLedColor({ groupsData: [] }, colors), 'green');
         assert.equal(resolveLedColor({ talkgroupData: { led: 'pink' } }, colors), 'green');
+    });
+});
+
+describe('domain/alert-priority — the tone sequence the call carries', () => {
+    const tone = [{ begin: 0, end: 0.05, frequency: 3000, type: 'square' }];
+
+    const config = {
+        alerts: { group: [tone[0]], tag: tone, system: tone, talkgroup: tone },
+        groupsData: [{ id: 1, label: 'G1', alert: 'group' }, { id: 2, label: 'G2' }],
+        tagsData: [{ id: 3, label: 'T1', alert: 'tag' }, { id: 4, label: 'T2' }],
+    };
+
+    it('the tone of a group wins over every other level', () => {
+        const call = {
+            groupsData: [{ label: 'G2' }, { label: 'G1' }],
+            tagData: { label: 'T1' },
+            systemData: { alert: 'system' },
+            talkgroupData: { alert: 'talkgroup' },
+        };
+
+        assert.deepEqual(resolveAlertSequence(call, config), config.alerts.group);
+    });
+
+    it('the tone is read from the group listing the configuration carries, not from the call', () => {
+        // The call carries the group's label only; the listing is where its alert lives.
+        const call = { groupsData: [{ label: 'G1' }] };
+
+        assert.deepEqual(resolveAlertSequence(call, config), config.alerts.group);
+    });
+
+    it('the tone of a tag wins when no group carries one', () => {
+        const call = {
+            groupsData: [{ label: 'G2' }],
+            tagData: { label: 'T1' },
+            systemData: { alert: 'system' },
+            talkgroupData: { alert: 'talkgroup' },
+        };
+
+        assert.deepEqual(resolveAlertSequence(call, config), config.alerts.tag);
+    });
+
+    it('the tone of a system wins over the tone of a talkgroup', () => {
+        const call = {
+            groupsData: [{ label: 'G2' }],
+            tagData: { label: 'T2' },
+            systemData: { alert: 'system' },
+            talkgroupData: { alert: 'talkgroup' },
+        };
+
+        assert.deepEqual(resolveAlertSequence(call, config), config.alerts.system);
+    });
+
+    it('the tone of a talkgroup is last in the assignment order', () => {
+        const call = {
+            groupsData: [{ label: 'G2' }],
+            tagData: { label: 'T2' },
+            systemData: {},
+            talkgroupData: { alert: 'talkgroup' },
+        };
+
+        assert.deepEqual(resolveAlertSequence(call, config), config.alerts.talkgroup);
+    });
+
+    it('no tone when no level carries an alert', () => {
+        const call = {
+            groupsData: [{ label: 'G2' }],
+            tagData: { label: 'T2' },
+            systemData: {},
+            talkgroupData: {},
+        };
+
+        assert.equal(resolveAlertSequence(call, config), undefined);
+    });
+
+    it('no tone when the configured name is not one the server carries', () => {
+        const call = { talkgroupData: { alert: 'alert10' } };
+
+        assert.equal(resolveAlertSequence(call, config), undefined);
+    });
+
+    it('no tone when the table entry is not a sequence', () => {
+        const table = {
+            ...config,
+            alerts: { ...config.alerts, talkgroup: [] },
+        };
+
+        assert.equal(resolveAlertSequence({ talkgroupData: { alert: 'talkgroup' } }, table), undefined);
+
+        assert.equal(
+            resolveAlertSequence({ talkgroupData: { alert: 'talkgroup' } }, {
+                ...config,
+                alerts: { ...config.alerts, talkgroup: null },
+            }),
+            undefined,
+        );
+
+        assert.equal(
+            resolveAlertSequence({ talkgroupData: { alert: 'talkgroup' } }, {
+                ...config,
+                alerts: { ...config.alerts, talkgroup: 'square' },
+            }),
+            undefined,
+        );
+    });
+
+    it('no tone when the call carries no levels at all', () => {
+        assert.equal(resolveAlertSequence(undefined, config), undefined);
+        assert.equal(resolveAlertSequence({}, config), undefined);
+        assert.equal(resolveAlertSequence({}, undefined), undefined);
     });
 });
