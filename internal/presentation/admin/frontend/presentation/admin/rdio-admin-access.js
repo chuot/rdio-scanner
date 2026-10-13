@@ -97,7 +97,7 @@ class RdioAdminAccess extends HTMLElement {
 
     rows.forEach((row, index) => list.append(this.rowElement(row, index, rows)));
 
-    attachDragSort(list, (from, to) => setSectionWorking(NAME, reorderAfterDrag(rows, from, to)));
+    attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
     root.append(list);
 
@@ -200,9 +200,8 @@ class RdioAdminAccess extends HTMLElement {
 
       if (value === null) return;
 
-      setSectionWorking(NAME, this.rows.map((r, i) => (i === index ? { ...r, systems: value } : r)));
+      this.commitRows(this.rows.map((r, i) => (i === index ? { ...r, systems: value } : r)));
     });
-
     systemsRow.append(systemsSummary, systemsButton);
 
     const bottom = document.createElement('div');
@@ -213,7 +212,7 @@ class RdioAdminAccess extends HTMLElement {
     remove.className = 'rdio-button-mini delete warn';
     remove.textContent = 'Delete access';
     remove.addEventListener('click', () => {
-      setSectionWorking(NAME, this.rows.filter((_, i) => i !== index));
+      this.commitRows(this.rows.filter((_, i) => i !== index));
     });
 
     bottom.append(remove);
@@ -284,18 +283,21 @@ class RdioAdminAccess extends HTMLElement {
   }
 
   updateRow(index, patch) {
-    const rows = this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
+    this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
+  }
 
-    this.internalEdit = rows;
+  // Every commit of this section's rows carries the section's validity: the Save control answers
+  // the rows the section holds, and adding, deleting, moving a row, and picking its systems all
+  // change them.
+  commitRows(rows, selfEdit = false) {
+    if (selfEdit) this.internalEdit = rows;
 
     setSectionWorking(NAME, rows);
     setSectionInvalid(NAME, rows.some((row, i) => Object.keys(accessRowErrors(row, i, rows)).length > 0));
   }
 
   add() {
-    const rows = [{ code: '', ident: '', systems: '*', order: 0 }, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
-
-    setSectionWorking(NAME, rows);
+    this.commitRows([{ code: '', ident: '', systems: '*', order: 0 }, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))]);
   }
 }
 

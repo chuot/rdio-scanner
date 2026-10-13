@@ -97,7 +97,7 @@ class RdioAdminApikeys extends HTMLElement {
 
     rows.forEach((row, index) => list.append(this.rowElement(row, index, rows)));
 
-    attachDragSort(list, (from, to) => setSectionWorking(NAME, reorderAfterDrag(rows, from, to)));
+    attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
     root.append(list);
 
@@ -222,7 +222,7 @@ class RdioAdminApikeys extends HTMLElement {
 
       if (value === null) return;
 
-      setSectionWorking(NAME, this.rows.map((r, i) => (i === index ? { ...r, systems: value } : r)));
+      this.commitRows(this.rows.map((r, i) => (i === index ? { ...r, systems: value } : r)));
     });
 
     systemsRow.append(systemsSummary, systemsButton);
@@ -237,7 +237,7 @@ class RdioAdminApikeys extends HTMLElement {
     remove.className = 'rdio-button-mini delete warn';
     remove.textContent = 'Delete API key';
     remove.addEventListener('click', () => {
-      setSectionWorking(NAME, this.rows.filter((_, i) => i !== index));
+      this.commitRows(this.rows.filter((_, i) => i !== index));
     });
 
     bottom.append(remove);
@@ -286,9 +286,14 @@ class RdioAdminApikeys extends HTMLElement {
   }
 
   updateRow(index, patch) {
-    const rows = this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
+    this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
+  }
 
-    this.internalEdit = rows;
+  // Every commit of this section's rows carries the section's validity: the Save control answers
+  // the rows the section holds, and adding, deleting, moving a row, and picking its systems all
+  // change them.
+  commitRows(rows, selfEdit = false) {
+    if (selfEdit) this.internalEdit = rows;
 
     setSectionWorking(NAME, rows);
     setSectionInvalid(NAME, rows.some((row, i) => Object.keys(apiKeyRowErrors(row, i, rows)).length > 0));
@@ -297,12 +302,10 @@ class RdioAdminApikeys extends HTMLElement {
   add() {
     // Legacy generates a v4-shaped UUID seeded from the timestamp; the
     // standard crypto.randomUUID() produces the same shape.
-    const rows = [
+    this.commitRows([
       { id: 0, order: 0, disabled: false, key: crypto.randomUUID(), ident: '', systems: '*' },
       ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
-    ];
-
-    setSectionWorking(NAME, rows);
+    ]);
   }
 }
 
