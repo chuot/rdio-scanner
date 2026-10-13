@@ -155,6 +155,25 @@ describe('domain/config — admin round-trip', () => {
         assert.deepEqual(merged.groups, baseline.groups);
     });
 
+    // The administration sections mark a row the operator added and has not saved, so the row keeps
+    // its open panel and its revealed field messages across a rebuild. The mark is the client's own
+    // bookkeeping, and the configuration the administrator saves is the product's data: a mark that
+    // rode out on a save would be stored, and read back forever.
+    it('drops the mark a client row carries through the whole-config round-trip', () => {
+        const clientMark = Symbol('the key a client puts on a row it added');
+        const working = createAdminWorkingCopy(baseline);
+
+        working.systems[0].talkgroups[0][clientMark] = 1;
+        working.groups = [...baseline.groups, { id: 0, label: 'New', order: 2, [clientMark]: 2 }];
+
+        const saved = serializeAdminConfig(mergeAdminConfig(baseline, working));
+
+        assert.deepEqual(saved.groups, [...baseline.groups, { id: 0, label: 'New', order: 2 }],
+            'the row the operator added is saved with its configuration keys and no client key');
+        assert.deepEqual(saved.systems[0].talkgroups[0], { id: 100, talkgroupRef: 100, label: 'TG1', name: 'N', order: 3, serverOnlyField: 42 },
+            'a row the client marked keeps the configuration keys, the order key written under its saved name');
+    });
+
     it('does not mutate the baseline', () => {
         const working = createAdminWorkingCopy(baseline);
         working.groups.push({ id: 2, label: 'G2' });
