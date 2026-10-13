@@ -27,6 +27,7 @@ export function apiKeyRowErrors(row, index, rows) {
   else if (rows.some((other, i) => i !== index && other.key === row.key)) errors.key = 'Key is already defined';
 
   if (!row.ident) errors.ident = 'Ident is required';
+  else if (rows.some((other, i) => i !== index && other.ident === row.ident)) errors.ident = 'Ident is already defined';
 
   if (row.systems === undefined || row.systems === null) errors.systems = 'Systems is required';
 

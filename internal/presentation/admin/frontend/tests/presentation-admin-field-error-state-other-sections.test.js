@@ -134,6 +134,11 @@ function barButton(el, className) {
   return findAll(bar, (node) => node.tag === 'button' && node.className.split(/\s+/).includes(className))[0];
 }
 
+// The warning icon a row carries beside its title: the icon the row is showing, not the node behind it.
+function marker(row) {
+  return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid') && node.hidden !== true)[0] ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // The rows the operator adds in the six row sections.
 // ---------------------------------------------------------------------------
@@ -213,6 +218,7 @@ for (const [name, tag, addLabel, title, goodValue] of ROW_SECTIONS) {
 const DUPLICATES = [
   ['Access', 'rdio-admin-access', 'Code', 'alpha', 'Code is already defined'],
   ['API keys', 'rdio-admin-apikeys', 'Key', 'first-key', 'Key is already defined'],
+  ['API keys', 'rdio-admin-apikeys', 'Ident', 'K1', 'Ident is already defined'],
   ['Downstreams', 'rdio-admin-downstreams', 'URL', 'https://first.example', 'URL is already defined'],
   ['Dirwatch', 'rdio-admin-dirwatch', 'Directory', '/var/spool/first', 'Directory is already defined'],
 ];
@@ -228,6 +234,28 @@ for (const [name, tag, title, taken, message] of DUPLICATES) {
     assert.equal(fieldMessage(field(row, title)), message);
   });
 }
+
+// The Ident names the key the listener authenticates with: two rows under the same Ident are two keys
+// nobody can tell apart. The rule is the one Access answers for its Code, and it stands until the
+// operator leaves a value that is the row's own.
+test('the API keys section keeps a duplicate Ident reported, marked, and unsavable until the value is unique', () => {
+  seed(getAdminContext().store);
+
+  const el = attach('rdio-admin-apikeys');
+  const row = addRow(el);
+
+  typeIn(row, 'Ident', 'K1');
+
+  assert.equal(fieldMessage(field(row, 'Ident')), 'Ident is already defined', 'the field names the rule the value breaks');
+  assert.ok(marker(row), 'the row carries its warning icon while the Ident collides');
+  assert.equal(barButton(el, 'save').disabled, true, 'the section is unsavable while the Ident collides');
+
+  typeIn(row, 'Ident', 'K2');
+
+  assert.equal(fieldMessage(field(row, 'Ident')), '', 'a unique Ident clears the message');
+  assert.equal(marker(row), null, 'the row loses its warning icon with the collision');
+  assert.equal(barButton(el, 'save').disabled, false, 'Save answers the section again');
+});
 
 // ---------------------------------------------------------------------------
 // The Options section: one form, no rows.
