@@ -285,6 +285,133 @@ test('the section falls back to another system when the one it shows is deleted'
     'after falling back, the add control renders its row on the system now showing');
 });
 
+// CA-002, the other two levels: the section follows its own slice, whatever the level is.
+test('the talkgroup section shows the rows the server pushes for the system it is showing', () => {
+  const store = seed();
+  const el = attach('rdio-admin-talkgroups');
+  assert.deepEqual(rowTitles(el), ['Fire']);
+
+  pushRows(store, 'talkgroups', 2, [
+    { id: 7, label: 'Fire', name: 'Fire dispatch', talkgroupRef: 70, order: 1, groupIds: [1], tagId: 3, alert: '', delay: null, frequency: null, led: '', type: '' },
+    { id: 12, label: 'Talk', name: 'Talk dispatch', talkgroupRef: 12, order: 2, groupIds: [1], tagId: 3, alert: '', delay: null, frequency: null, led: '', type: '' },
+  ]);
+
+  assert.deepEqual(rowTitles(el), ['Fire', 'Talk'], 'rows the server added must appear without a reload');
+});
+
+test('picking another system shows that system’s talkgroups, and the add control works there', () => {
+  seed();
+  const el = attach('rdio-admin-talkgroups');
+  assert.deepEqual(rowTitles(el), ['Fire']);
+
+  pickSystem(el, 1);
+  assert.deepEqual(rowTitles(el), [], 'Metro has no saved talkgroups');
+
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewTalkgroup'], 'the new row belongs to the system now showing');
+
+  const { store } = getAdminContext();
+  assert.deepEqual(sliceFor(store, 'talkgroups', 1).working.map((row) => row.id), [0],
+    'the empty row lands in the slice of the system now showing');
+  assert.deepEqual(sliceFor(store, 'talkgroups', 2).working.map((row) => row.label), ['Fire'],
+    'the system left behind keeps its own rows');
+});
+
+test('pressing Delete talkgroup removes the row from the rendered list', () => {
+  seed();
+  const el = attach('rdio-admin-talkgroups');
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewTalkgroup', 'Fire']);
+
+  rowButton(rows(el)[0], 'Delete talkgroup').click();
+
+  assert.deepEqual(rowTitles(el), ['Fire'], 'the row the operator deleted must leave the page');
+});
+
+test('the talkgroup section falls back to another system when the one it shows is deleted', () => {
+  const store = seed();
+  const el = attach('rdio-admin-talkgroups');
+  assert.deepEqual(rowTitles(el), ['Fire']);
+
+  store.setState({
+    'section:systems': {
+      baseline: [METRO],
+      working: [METRO],
+      dirty: false,
+      invalid: false,
+      conflict: false,
+    },
+  });
+
+  assert.deepEqual(rowTitles(el), [], 'the section re-renders on the system it falls back to');
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewTalkgroup'],
+    'after falling back, the add control renders its row on the system now showing');
+});
+
+test('the unit section shows the rows the server pushes for the system it is showing', () => {
+  const store = seed();
+  const el = attach('rdio-admin-units');
+  assert.deepEqual(rowTitles(el), ['Car']);
+
+  pushRows(store, 'units', 2, [
+    { id: 9, label: 'Car', unitRef: 100, unitFrom: 100, unitTo: 199, order: 1 },
+    { id: 13, label: 'Truck', unitRef: 13, unitFrom: 130, unitTo: 139, order: 2 },
+  ]);
+
+  assert.deepEqual(rowTitles(el), ['Car', 'Truck'], 'rows the server added must appear without a reload');
+});
+
+test('picking another system shows that system’s units, and the add control works there', () => {
+  seed();
+  const el = attach('rdio-admin-units');
+  assert.deepEqual(rowTitles(el), ['Car']);
+
+  pickSystem(el, 1);
+  assert.deepEqual(rowTitles(el), [], 'Metro has no saved units');
+
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewUnit'], 'the new row belongs to the system now showing');
+
+  const { store } = getAdminContext();
+  assert.deepEqual(sliceFor(store, 'units', 1).working.map((row) => row.id), [0],
+    'the empty row lands in the slice of the system now showing');
+  assert.deepEqual(sliceFor(store, 'units', 2).working.map((row) => row.label), ['Car'],
+    'the system left behind keeps its own rows');
+});
+
+test('pressing Delete unit removes the row from the rendered list', () => {
+  seed();
+  const el = attach('rdio-admin-units');
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewUnit', 'Car']);
+
+  rowButton(rows(el)[0], 'Delete unit').click();
+
+  assert.deepEqual(rowTitles(el), ['Car'], 'the row the operator deleted must leave the page');
+});
+
+test('the unit section falls back to another system when the one it shows is deleted', () => {
+  const store = seed();
+  const el = attach('rdio-admin-units');
+  assert.deepEqual(rowTitles(el), ['Car']);
+
+  store.setState({
+    'section:systems': {
+      baseline: [METRO],
+      working: [METRO],
+      dirty: false,
+      invalid: false,
+      conflict: false,
+    },
+  });
+
+  assert.deepEqual(rowTitles(el), [], 'the section re-renders on the system it falls back to');
+  addRow(el);
+  assert.deepEqual(rowTitles(el), ['NewUnit'],
+    'after falling back, the add control renders its row on the system now showing');
+});
+
 // CA-003: a field edit is the operator's own typing, not a reason to rebuild the
 // rows they are working on. The Systems section already behaves this way; these
 // three cases hold the per-level sections to it.
