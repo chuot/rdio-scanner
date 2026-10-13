@@ -53,11 +53,17 @@ func bundleOutput(repo string, app string) string {
 	return filepath.Join(repo, presentationDir, app, "frontend", "bundle", "index.html")
 }
 
-// clientSources is every file a bundle is built from: the build script and its lock file, which build
-// both bundles, and the frontend sources of the application the bundle belongs to and the sources the two
-// applications share. The built bundle is not one of its own sources: a rule that watched its own output
-// would rebuild on every run.
-func clientSources(repo string) ([]string, error) {
+// clientSources is every file the bundle of one application is built from: the build script and the
+// manifests that build both bundles, the frontend sources of the application the bundle belongs to, the
+// sources the two applications share, and — for the administration application alone — the OpenAPI
+// contract its bundle carries as a static file. The built bundle is not one of its own sources: a rule
+// that watched its own output would rebuild on every run.
+//
+// Watching both applications' sources for both bundles rebuilt the administration bundle every time a
+// scanner source changed, and watching the contract for both rebuilt a scanner bundle that carries no
+// contract: a release run rebuilt bundles it was not asked for, and the log said it had built things
+// nobody changed.
+func clientSources(repo string, app string) ([]string, error) {
 	var files []string
 
 	root := filepath.Join(repo, presentationDir)
@@ -79,8 +85,8 @@ func clientSources(repo string) ([]string, error) {
 		}
 	}
 
-	for _, app := range []string{subScanner, subAdmin, "common"} {
-		if err := walkFiles(filepath.Join(root, app, "frontend"), func(path string) {
+	for _, source := range []string{app, "common"} {
+		if err := walkFiles(filepath.Join(root, source, "frontend"), func(path string) {
 			if isBundleContent(path) {
 				return
 			}
@@ -91,10 +97,13 @@ func clientSources(repo string) ([]string, error) {
 		}
 	}
 
-	// The administration bundle carries the OpenAPI contract as a static file, and the
-	// OpenAPI section renders from it: a contract edit must make the bundle stale, or the
-	// section ships endpoints the server no longer answers.
-	files = append(files, filepath.Join(repo, "docs", "openapi.json"))
+	// The administration bundle carries the OpenAPI contract as a static file, and the OpenAPI section
+	// renders from it: a contract edit must make that bundle stale, or the section ships endpoints the
+	// server no longer answers. The scanner bundle carries no contract, so a contract edit has nothing
+	// to make stale there.
+	if app == subAdmin {
+		files = append(files, filepath.Join(repo, "docs", "openapi.json"))
+	}
 
 	return files, nil
 }
@@ -116,7 +125,9 @@ func isBundleContent(path string) bool {
 // bundleIsCurrent reports whether a built bundle is newer than every file it is built from. A bundle
 // that is not there is not current.
 func bundleIsCurrent(repo string, app string) (bool, error) {
-	return newerThan(repo, bundleOutput(repo, app), clientSources)
+	return newerThan(repo, bundleOutput(repo, app), func(string) ([]string, error) {
+		return clientSources(repo, app)
+	})
 }
 
 // clientSteps is the pair of applications a run builds: the ones the command line named, and the ones

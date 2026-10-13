@@ -231,6 +231,44 @@ func TestTheServerBinaryIsCurrentWhenItIsNewerThanEveryGoFileItIsBuiltFrom(t *te
 	}
 }
 
+// The version a server binary reports is stamped from the file the release declares its core version
+// in, and the binary is compiled from the module files its dependencies are resolved from. A binary
+// that is not rebuilt when one of those files changes reports a version the release does not ship,
+// under an archive named for the version the release does ship.
+func TestTheVersionFileAndTheModuleFilesAreSourcesOfTheServerBinary(t *testing.T) {
+	repo := t.TempDir()
+
+	writeTreeFile(t, repo, filepath.Join("cmd", "rdio-scanner", "main.go"), "the source")
+	setMTime(t, repo, filepath.Join("cmd", "rdio-scanner", "main.go"), date(2026, 1, 1))
+
+	output := filepath.Join("dist", "linux-amd64", "rdio-scanner")
+
+	writeTreeFile(t, repo, output, "the binary")
+	setMTime(t, repo, output, date(2026, 1, 2))
+
+	paths := []string{"VERSION.txt", "go.mod", "go.sum"}
+
+	for _, path := range paths {
+		writeTreeFile(t, repo, path, "the declared version")
+		setMTime(t, repo, path, date(2026, 1, 1))
+	}
+
+	if current, err := serverIsCurrent(repo, output); err != nil || !current {
+		t.Fatalf("a binary newer than every file it is built from is reported as not current: current %v, err %v", current, err)
+	}
+
+	for _, path := range paths {
+		// The release moved, and the binary standing here was compiled before it moved.
+		setMTime(t, repo, path, date(2026, 1, 3))
+
+		if current, err := serverIsCurrent(repo, output); err != nil || current {
+			t.Errorf("%s newer than the binary is not noticed: current %v, err %v", path, current, err)
+		}
+
+		setMTime(t, repo, path, date(2026, 1, 1))
+	}
+}
+
 // A tree the test made is not a tree git has ever seen, and the tool asks git for the repository root.
 // The dates the tests set are the dates the files have, so the suite does not depend on the clock.
 func setMTime(t *testing.T, repo string, path string, when time.Time) {

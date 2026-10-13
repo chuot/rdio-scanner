@@ -259,6 +259,75 @@ func TestABundleIsCurrentWhenItIsNewerThanEverySourceItIsBuiltFrom(t *testing.T)
 	}
 }
 
+// Each application is judged by its own sources and the sources the two applications share. A rule that
+// watched both applications' sources rebuilt the administration bundle every time a scanner source
+// changed, and a rule that watched the contract the administration bundle carries rebuilt a scanner
+// bundle that carries no contract.
+func TestEachApplicationIsJudgedByItsOwnSourcesAndTheSourcesTheTwoShare(t *testing.T) {
+	repo := t.TempDir()
+
+	scannerSource := filepath.Join(presentationDir, "scanner", "frontend", "main.js")
+	adminSource := filepath.Join(presentationDir, "admin", "frontend", "main.js")
+	sharedSource := filepath.Join(presentationDir, "common", "frontend", "application", "app.js")
+	contract := filepath.Join("docs", "openapi.json")
+	script := filepath.Join(presentationDir, "build.mjs")
+
+	for _, path := range []string{scannerSource, adminSource, sharedSource, contract, script} {
+		writeTreeFile(t, repo, path, "the source")
+		setMTime(t, repo, path, date(2026, 1, 1))
+	}
+
+	for _, app := range []string{subScanner, subAdmin} {
+		bundle := filepath.Join(presentationDir, app, "frontend", "bundle", "index.html")
+
+		writeTreeFile(t, repo, bundle, "the bundle")
+		setMTime(t, repo, bundle, date(2026, 1, 2))
+	}
+
+	// One application's own source, touched after both bundles were built.
+	setMTime(t, repo, scannerSource, date(2026, 1, 3))
+
+	if current, err := bundleIsCurrent(repo, subScanner); err != nil || current {
+		t.Errorf("a scanner source newer than the scanner bundle is not noticed: current %v, err %v", current, err)
+	}
+
+	if current, err := bundleIsCurrent(repo, subAdmin); err != nil || !current {
+		t.Errorf("a scanner source made the administration bundle stale, and the administration bundle is not built from it: current %v, err %v", current, err)
+	}
+
+	// A source the two applications share, touched after both bundles were built.
+	setMTime(t, repo, scannerSource, date(2026, 1, 2))
+	setMTime(t, repo, sharedSource, date(2026, 1, 3))
+
+	for _, app := range []string{subScanner, subAdmin} {
+		if current, err := bundleIsCurrent(repo, app); err != nil || current {
+			t.Errorf("a shared source newer than the %s bundle is not noticed: current %v, err %v", app, current, err)
+		}
+	}
+
+	// The OpenAPI contract is carried by the administration bundle, and by nothing the scanner builds.
+	setMTime(t, repo, sharedSource, date(2026, 1, 2))
+	setMTime(t, repo, contract, date(2026, 1, 3))
+
+	if current, err := bundleIsCurrent(repo, subAdmin); err != nil || current {
+		t.Errorf("the OpenAPI contract newer than the administration bundle is not noticed: current %v, err %v", current, err)
+	}
+
+	if current, err := bundleIsCurrent(repo, subScanner); err != nil || !current {
+		t.Errorf("the OpenAPI contract made the scanner bundle stale, and the scanner bundle carries no contract: current %v, err %v", current, err)
+	}
+
+	// The build script builds both bundles, so it is a source of both.
+	setMTime(t, repo, contract, date(2026, 1, 2))
+	setMTime(t, repo, script, date(2026, 1, 3))
+
+	for _, app := range []string{subScanner, subAdmin} {
+		if current, err := bundleIsCurrent(repo, app); err != nil || current {
+			t.Errorf("the build script newer than the %s bundle is not noticed: current %v, err %v", app, current, err)
+		}
+	}
+}
+
 // The built bundle is the output of the client build, not a source. Its nested contents are part of the
 // output: a bundle that watched them would rebuild on every run, because the bundle built last is newer
 // than the bundle built first, and the first is then never current.
@@ -285,20 +354,56 @@ func TestTheBuiltBundleIsNotASourceOfEitherBundle(t *testing.T) {
 		writeTreeFile(t, repo, filepath.Join(presentationDir, app, "frontend", "bundle", ".gitkeep"), "")
 	}
 
-	files, err := clientSources(repo)
-	if err != nil {
-		t.Fatalf("clientSources: %v", err)
-	}
-
 	bundle := string(filepath.Separator) + "bundle" + string(filepath.Separator)
 
-	for _, path := range files {
-		if strings.Contains(path, bundle) {
-			t.Errorf("the built bundle's %s is counted as a source", path)
-		}
+	// Each application's sources: its own frontend, the frontend the two applications share, the script
+	// and the manifest that build both bundles, and — for the administration application alone — the
+	// OpenAPI contract its bundle carries.
+	want := map[string][]string{
+		subScanner: {
+			filepath.Join(presentationDir, "build.mjs"),
+			filepath.Join(presentationDir, "package.json"),
+			filepath.Join(presentationDir, "scanner", "frontend", "main.js"),
+			filepath.Join(presentationDir, "common", "frontend", "application", "app.js"),
+		},
+		subAdmin: {
+			filepath.Join(presentationDir, "build.mjs"),
+			filepath.Join(presentationDir, "package.json"),
+			filepath.Join(presentationDir, "admin", "frontend", "main.js"),
+			filepath.Join(presentationDir, "common", "frontend", "application", "app.js"),
+			filepath.Join("docs", "openapi.json"),
+		},
 	}
 
-	if len(files) != len(sources) {
-		t.Errorf("the client build has %d sources, want the %d files it is built from", len(files), len(sources))
+	for _, app := range []string{subScanner, subAdmin} {
+		files, err := clientSources(repo, app)
+		if err != nil {
+			t.Fatalf("clientSources for %s: %v", app, err)
+		}
+
+		got := map[string]bool{}
+
+		for _, path := range files {
+			rel, err := filepath.Rel(repo, path)
+			if err != nil {
+				t.Fatalf("%s is not inside the tree the test made: %v", path, err)
+			}
+
+			got[rel] = true
+
+			if strings.Contains(path, bundle) {
+				t.Errorf("the %s bundle's own output %s is counted as a source", app, rel)
+			}
+		}
+
+		if len(got) != len(want[app]) {
+			t.Errorf("the %s bundle is built from %v, want the %d files it is built from", app, got, len(want[app]))
+		}
+
+		for _, path := range want[app] {
+			if !got[path] {
+				t.Errorf("the %s bundle does not count %s as a source", app, path)
+			}
+		}
 	}
 }

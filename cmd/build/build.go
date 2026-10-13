@@ -39,6 +39,10 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
+// versionFile is the file the release declares its core version in. The version a server binary
+// reports is stamped from it, so the binary is built from it.
+const versionFile = "VERSION.txt"
+
 // tool is the build tool: where the repository is, how it asks that repository what it says about
 // its own version, and how it runs one step. Everything it decides is decided before anything runs.
 type tool struct {
@@ -429,9 +433,10 @@ func cleanTree(repo string) ([]string, error) {
 	return removed, nil
 }
 
-// serverSources is every file the server binary is built from: the Go files, and the contents of both
-// bundles, which the server embeds. A binary that is newer than every Go file and older than the bundle
-// it embeds is a binary that ships the bundle it was built before.
+// serverSources is every file the server binary is built from: the Go files, the contents of both
+// bundles, which the server embeds, the file the release declares its core version in, and the module
+// files its dependencies are resolved from. A binary that is newer than every one of those files is a
+// binary that reports the version the release ships and carries the bundles it was built with.
 func serverSources(repo string) ([]string, error) {
 	var files []string
 
@@ -455,6 +460,29 @@ func serverSources(repo string) ([]string, error) {
 		}); err != nil {
 			return nil, err
 		}
+	}
+
+	// The version a binary reports is stamped from the declared core, and the dependency set is
+	// resolved from the module files: a binary compiled before either of them moved reports and carries
+	// what moved. A tree with no version file says nothing about its version, which the version
+	// derivation answers by itself, and a file that is not there has no date newer than a binary.
+	for _, name := range []string{versionFile, "go.mod", "go.sum"} {
+		path := filepath.Join(repo, name)
+
+		info, err := os.Lstat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+
+			return nil, fmt.Errorf("the build cannot read %s: %w", path, err)
+		}
+
+		if info.IsDir() {
+			continue
+		}
+
+		files = append(files, path)
 	}
 
 	return files, nil

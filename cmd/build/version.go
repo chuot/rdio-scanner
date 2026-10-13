@@ -42,7 +42,7 @@ type source struct {
 // readSource asks the repository those questions. Every git call is an argument array, so a version
 // string never meets a shell that could read it as an option.
 func readSource(repo string) (source, error) {
-	path := filepath.Join(repo, "VERSION.txt")
+	path := filepath.Join(repo, versionFile)
 
 	core, err := buildinfo.ReadCore(path)
 	if err != nil {
