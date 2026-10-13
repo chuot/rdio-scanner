@@ -301,6 +301,14 @@ type step struct {
 // target reaches it through the environment, which is how go is told to cross-compile: a server built
 // for the machine the tool runs on while its ffmpeg was built for another target is a release that
 // ships neither.
+//
+// cgo is turned off, so every target is compiled the same way and no target is linked against the C
+// library of the machine that ran the release. Every dependency of the server is pure Go, so nothing
+// is lost by turning it off, and the binaries the server carries are static for the same reason the
+// recipe that compiles them is written static.
+//
+// The debug information is stripped: it is bytes for a debugger, a quarter of the program's size, and
+// the ffmpeg binaries the same tool produces are stripped by the compile that makes them.
 func serverStep(o options, repo string, version buildinfo.Version) step {
 	target := o.target
 	if target == "" {
@@ -316,11 +324,11 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 		name:   "go",
 		args: []string{
 			"build",
-			"-ldflags", "-X main.Version=" + version.String(),
+			"-ldflags", "-s -w -X main.Version=" + version.String(),
 			"-o", o.output,
 			"./cmd/rdio-scanner",
 		},
-		env: []string{"GOOS=" + serverGoos(target), "GOARCH=" + goarch},
+		env: []string{"CGO_ENABLED=0", "GOOS=" + serverGoos(target), "GOARCH=" + goarch},
 	}
 }
 

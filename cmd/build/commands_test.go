@@ -70,7 +70,7 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 
 	s := serverStep(o, "/repo", theVersion(t))
 
-	want := "go build -ldflags -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner"
+	want := "go build -ldflags -s -w -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner"
 	got := strings.Join(append([]string{s.name}, s.args...), " ")
 	if got != want {
 		t.Errorf("the server is built with\n  %s\nwant\n  %s", got, want)
@@ -151,6 +151,39 @@ func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing
 
 		if !strings.Contains(err.Error(), "server") {
 			t.Errorf("the refusal of %v is %q, which does not name the runs that write a server binary", args, err)
+		}
+	}
+}
+
+// A server binary a release ships has to run on machines the release machine has never seen. With cgo
+// enabled, the target equal to the machine running the release is compiled against that machine's C
+// library and every cross-compiled target is static, which makes the most-downloaded archive the one
+// whose binary stops at the C library of the machine that built it. The debug information is bytes for
+// a debugger, and the ffmpeg binaries the same tool produces are stripped by the compile that makes
+// them.
+func TestTheServerBinaryIsCompiledStaticAndStripped(t *testing.T) {
+	o, err := parseArgs([]string{"server"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+
+	s := serverStep(o, "/repo", theVersion(t))
+
+	if !contains(s.env, "CGO_ENABLED=0") {
+		t.Errorf("the server is built with env %v, which does not turn cgo off", s.env)
+	}
+
+	flags := ""
+
+	for i, arg := range s.args {
+		if arg == "-ldflags" && i+1 < len(s.args) {
+			flags = s.args[i+1]
+		}
+	}
+
+	for _, want := range []string{"-s", "-w", "-X main.Version=8.0.0+gdb79311"} {
+		if !strings.Contains(flags, want) {
+			t.Errorf("the server is linked with %q, which does not carry %s", flags, want)
 		}
 	}
 }
