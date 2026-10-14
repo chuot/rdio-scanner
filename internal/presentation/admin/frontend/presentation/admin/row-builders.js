@@ -7,6 +7,8 @@
 // so the section can hand the field back the state of having been reached when it rebuilds the row,
 // the same way it hands back the open state.
 
+import { rowsToClose, scrollCompensation } from '../../domain/row-open-rule.js';
+
 export function makePanel(openState, key, title, invalid) {
   const details = document.createElement('details');
   details.className = 'rdio-admin-row';
@@ -44,6 +46,89 @@ export function makePanel(openState, key, title, invalid) {
 // The row's warning icon names the row invalid, and follows the row's validity: it is added when
 // the row gains an error and taken away when it loses its last one. The row the operator is editing
 // stays on the page, so the icon is moved on the spot rather than rebuilt.
+// The rows the operator sees open, in the order the list presents them. The page is the state the
+// operator reads; the section's map is what reproduces it on the next render, so the rule reads the
+// rows off the list and keeps the map in step with it.
+function openRowsOf(list) {
+  return list.querySelectorAll(':scope > details[data-key]').filter((row) => row.open);
+}
+
+function openKeysOf(list) {
+  return openRowsOf(list).map((row) => row.dataset.key);
+}
+
+// The container the operator scrolls: the administration content area, the element that moves the rows
+// when the content above them changes. Walking up from the list to the first element that actually
+// scrolls answers nothing when nothing scrolls — outside a browser, and on a page that does not move.
+function scrollableAncestor(list) {
+  const scrolls = (el) => {
+    if (typeof el.scrollHeight !== 'number' || typeof el.clientHeight !== 'number') return false;
+    if (el.scrollHeight <= el.clientHeight) return false;
+
+    const overflow = typeof getComputedStyle === 'function' ? getComputedStyle(el).overflowY : 'visible';
+
+    return overflow === 'auto' || overflow === 'scroll';
+  };
+
+  for (let el = list?.parentElement ?? list?.parent; el; el = el.parentElement ?? el.parent) {
+    if (scrolls(el)) return el;
+  }
+
+  return null;
+}
+
+// One row open at a time. The systems-tree sections mount this on the list that carries their rows, so
+// one listener covers every row the section renders, the rows added later included.
+//
+// The listener answers the toggle event a summary activation produces — the click and the keyboard's
+// Enter and Space leave the same event — and it answers it on the list because the event bubbles from
+// the row. Opening a row closes the rows that were open; closing a row records its own state and
+// closes nothing. The section's map follows the page, so the next render reproduces the one open row
+// the operator is looking at.
+//
+// Nothing here touches the store: reading a row is not a change, and the rows the operator is editing
+// stay on the page. The rows above the opened row are the content that disappears, so the section
+// measures how far the opened row moved and gives that distance back to the container the operator
+// scrolls, which keeps the row they clicked under their eyes.
+export function attachSingleOpenRule(list, openState) {
+  let applying = false;
+
+  list.addEventListener('toggle', (ev) => {
+    const row = ev.target?.closest?.('details[data-key]');
+
+    if (!row || applying) return;
+
+    const key = row.dataset.key;
+
+    if (!row.open) {
+      openState.set(key, false);
+
+      return;
+    }
+
+    const scroller = scrollableAncestor(list);
+    const before = scroller ? row.getBoundingClientRect().top : Number.NaN;
+
+    const open = openRowsOf(list);
+
+    applying = true;
+
+    for (const other of rowsToClose(openKeysOf(list), key)) {
+      const sibling = open.find((candidate) => candidate.dataset.key === other);
+
+      if (sibling) sibling.open = false;
+
+      openState.set(other, false);
+    }
+
+    openState.set(key, true);
+
+    applying = false;
+
+    if (scroller) scroller.scrollTop += scrollCompensation(before, row.getBoundingClientRect().top);
+  });
+}
+
 export function setRowMarker(panel, invalid) {
   const icon = panel.querySelectorAll('.row-invalid')[0];
 

@@ -17,6 +17,7 @@ import {
   sortedByOrder,
 } from './section-shell.js';
 import {
+  attachSingleOpenRule,
   deleteRow,
   markRowIdentity,
   numberField,
@@ -145,6 +146,10 @@ class RdioAdminSystems extends HTMLElement {
     systems.forEach((system, index) => list.append(this.systemElement(system, index, systems, alerts)));
 
     attachDragSort(list, (from, to) => this.commit(reorderAfterDrag(this.systems, from, to), false));
+
+    // One row open at a time: the rows the operator is not working on shrink, so the list stays short
+    // and the save bar below it is reached without scrolling past the rows opened on the way.
+    attachSingleOpenRule(list, this.openState);
 
     root.append(list);
 

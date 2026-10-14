@@ -24,7 +24,7 @@ import {
   subSlice,
   subWorking,
 } from './section-shell.js';
-import { markRowIdentity, rowKey, setRowMarker } from './row-builders.js';
+import { attachSingleOpenRule, markRowIdentity, rowKey, setRowMarker } from './row-builders.js';
 
 export function newRow(level) {
   const base = { id: 0, order: 0 };
@@ -238,6 +238,10 @@ export function renderSubSection(component) {
   // Systems section does: a field edit the operator made after this render is not in
   // the rows above, and a move must not drop what they typed.
   attachDragSort(list, (from, to) => commitSubRows(component, reorderAfterDrag(subWorking(level, component.systemId) ?? [], from, to)));
+
+  // One row open at a time: the rows the operator is not working on shrink, so the list stays short
+  // and the save bar below it is reached without scrolling past the rows opened on the way.
+  attachSingleOpenRule(list, component.openState);
 
   root.append(list);
 
