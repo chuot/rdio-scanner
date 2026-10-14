@@ -160,3 +160,43 @@ test('the save the bar sends, refused, names the system by its reference number'
   assert.ok(snackbarText().includes('Unable to save the talkgroups of system 10001'),
     `the refused save did not name the system by its reference number: "${snackbarText()}"`);
 });
+
+// The number the section names follows the systems the server pushes. The scaffold that resolves the
+// shown system rebuilds the bar when the systems move, so the message carries the number the
+// operator reads now, not the one the bar was first built with.
+test('the number the section names follows the systems the server pushes', async () => {
+  requests.length = 0;
+
+  const store = seed();
+
+  const el = talkgroupsSection();
+
+  blacklistButton(el).click();
+
+  await settled();
+
+  saveControl(el).click();
+
+  await settled();
+
+  assert.ok(snackbarText().includes('Unable to save the talkgroups of system 10001'),
+    `the refused save did not name the system by its reference number: "${snackbarText()}"`);
+
+  // The configuration the server pushes carries the system's reference number moved.
+  const pushed = structuredClone(store.getState()['section:systems'].working);
+
+  pushed[0].systemRef = 10002;
+
+  store.setState({
+    'section:systems': { baseline: structuredClone(pushed), working: pushed, dirty: false, invalid: false, conflict: false },
+  });
+
+  await settled();
+
+  saveControl(el).click();
+
+  await settled();
+
+  assert.ok(snackbarText().includes('Unable to save the talkgroups of system 10002'),
+    `the section kept naming the number it first rendered, and said: "${snackbarText()}"`);
+});
