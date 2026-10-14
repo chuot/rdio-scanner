@@ -503,3 +503,24 @@ test('dragging a talkgroup after editing it keeps what the operator typed', () =
   assert.deepEqual(sliceFor(store, 'talkgroups', 2).working.map((talkgroup) => [talkgroup.talkgroupRef, talkgroup.label]), [[70, 'Fire'], [888, 'Dispatch']],
     'the move commits the rows as the operator left them');
 });
+
+// The row the operator is typing in is the section's one open row, and their own keystroke never
+// closes it: nothing about typing closes a row, and the field they are in stays on the page.
+test('typing in a field of the open row leaves the section with that one row open', () => {
+  const store = seed();
+  const el = attach('rdio-admin-sites');
+
+  addRow(el);
+
+  const open = rows(el)[0];
+
+  assert.equal(rows(el).filter((row) => row.open).length, 1, 'the row the add control created is the section’s one open row');
+
+  typeIn(fieldInput(open, 'Id'), '999');
+  typeIn(fieldInput(open, 'Label'), 'Depot');
+
+  assert.equal(rows(el).filter((row) => row.open).length, 1, 'the keystroke closes no row: the section still shows one open row');
+  assert.equal(rows(el)[0], open, 'the row the operator is typing in stays open on the page');
+  assert.equal(sliceFor(store, 'sites', 2).working[0].label, 'Depot', 'the section holds what the operator typed');
+  assert.equal(saveButton(el).disabled, false, 'Save answers the change the operator made, not the rows they opened');
+});
