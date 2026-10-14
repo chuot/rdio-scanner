@@ -98,6 +98,20 @@ function unstoredTalkgroupFields(rows, groups, tags) {
   return messages.join(', ');
 }
 
+// The list the Systems section holds for this system, and the list it has saved: the operator's draft
+// of the Blacklists field, and the text behind it. The Blacklist action stores a list the server
+// accepts, and the Systems section saves the list it is holding, so a draft that differs from the
+// saved text is a draft the action is about to replace — and the operator has to hear that from the
+// click that replaces it, not find it out from the calls the server stops refusing.
+function systemsBlacklistDraft(systemId) {
+  const systems = getAdminContext().store.getState()['section:systems'] ?? {};
+
+  const draft = (systems.working ?? []).find((system) => system.id === systemId)?.blacklists ?? '';
+  const saved = (systems.baseline ?? []).find((system) => system.id === systemId)?.blacklists ?? '';
+
+  return { draft, saved, replaced: draft !== saved };
+}
+
 function talkgroupRow(component, talkgroup, index, rows) {
   const groups = (sectionWorking('groups') ?? []).filter((group) => typeof group.id === 'number' && group.id > 0);
   const tags = (sectionWorking('tags') ?? []).filter((tag) => typeof tag.id === 'number' && tag.id > 0);
@@ -266,10 +280,20 @@ function talkgroupRow(component, talkgroup, index, rows) {
 
       commitSubRows(component, rows);
 
+      // Taken before anything is written: the Systems section's own draft of this system's list, which
+      // the list about to be stored replaces.
+      const draft = systemsBlacklistDraft(component.systemId);
+
       getAdminContext().useCases.blacklistTalkgroup(component.systemId, talkgroup.talkgroupRef);
 
       if (!await getAdminContext().useCases.saveSubSection(LEVEL, component.systemId)) {
         showSnackbar(`Unable to save the talkgroups of system ${component.systemId}`);
+
+        return;
+      }
+
+      if (draft.replaced) {
+        showSnackbar('The Blacklists field of the Systems section held a list you had not saved. It now holds the list the server stored.');
       }
     });
 
