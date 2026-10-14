@@ -119,7 +119,7 @@ export function markField(component, field, key, name) {
   return field;
 }
 
-export function formField(ctx, details, name, title, caption, control, error, typeList) {
+export function formField(ctx, details, name, title, caption, control, error, typeList, required) {
   const row = document.createElement('div');
   row.className = 'row';
 
@@ -133,6 +133,11 @@ export function formField(ctx, details, name, title, caption, control, error, ty
   field.append(label, control);
   field.dataset.field = `${ctx.key}:${name}`;
 
+  // The mark the operator reads as an asterisk is a declaration the section makes about the field,
+  // stated here once when the field is built: it names the field's own label, and the field host
+  // carries it too, so the primitive can announce the same fact on the control.
+  if (required) markRequired(field, label);
+
   if (error) ctx.targets.push({ field, error });
 
   row.append(field);
@@ -141,30 +146,38 @@ export function formField(ctx, details, name, title, caption, control, error, ty
   return field;
 }
 
-export function textField(ctx, details, name, title, caption, value, error) {
+// The mark on a field whose name is not a label inside it. A hand-built row names its field with a
+// caption built outside the field — the options panel, the Groups list — and the mark rides that
+// caption, with the field host carrying it for the announcement on the control.
+export function markRequired(field, namingEl) {
+  field.dataset.required = 'true';
+  namingEl.dataset.required = 'true';
+}
+
+export function textField(ctx, details, name, title, caption, value, error, required) {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value ?? '';
 
-  return { input, field: formField(ctx, details, name, title, caption, input, error) };
+  return { input, field: formField(ctx, details, name, title, caption, input, error, null, required) };
 }
 
-export function numberField(ctx, details, name, title, caption, value, error) {
+export function numberField(ctx, details, name, title, caption, value, error, required) {
   const input = document.createElement('input');
   input.type = 'number';
   input.value = value === null || value === undefined ? '' : String(value);
 
-  return { input, field: formField(ctx, details, name, title, caption, input, error) };
+  return { input, field: formField(ctx, details, name, title, caption, input, error, null, required) };
 }
 
-export function textareaField(ctx, details, name, title, caption, value, error) {
+export function textareaField(ctx, details, name, title, caption, value, error, required) {
   const textarea = document.createElement('textarea');
   textarea.value = value ?? '';
 
-  return { textarea, field: formField(ctx, details, name, title, caption, textarea, error) };
+  return { textarea, field: formField(ctx, details, name, title, caption, textarea, error, null, required) };
 }
 
-export function selectField(ctx, details, name, title, caption, options, value, onChange, typeList, error) {
+export function selectField(ctx, details, name, title, caption, options, value, onChange, typeList, error, required) {
   const select = document.createElement('rdio-select');
   select.setAttribute('options', JSON.stringify(options));
   select.setAttribute('value', value);
@@ -175,7 +188,7 @@ export function selectField(ctx, details, name, title, caption, options, value, 
     if (typeof ev.detail === 'string') onChange(ev.detail);
   });
 
-  return { select, field: formField(ctx, details, name, title, caption, select, error, typeList) };
+  return { select, field: formField(ctx, details, name, title, caption, select, error, typeList, required) };
 }
 
 export function toggleField(details, title, caption, checked, onChange) {
