@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey, rowMoveButtons, setRowMoveLabels } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'tags';
@@ -139,7 +139,7 @@ class RdioAdminTags extends HTMLElement {
     const title = document.createElement('span');
     title.className = 'row-title';
     title.textContent = row.label || 'NewTag';
-    header.append(title);
+    header.append(title, ...rowMoveButtons(title.textContent, index, this.rows.length));
 
     if (errors.label) this.setRowInvalid(header, true);
 
@@ -158,6 +158,7 @@ class RdioAdminTags extends HTMLElement {
       this.updateRow(index, { label: labelInput.value });
       labelField.setError(labelInput.value ? '' : 'Label is required');
       title.textContent = labelInput.value || 'NewTag';
+      setRowMoveLabels(panel, title.textContent);
       this.setRowInvalid(header, !labelInput.value);
     });
     labelField.append(labelInput);

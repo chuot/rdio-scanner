@@ -187,7 +187,8 @@ class RdioAdminSystems extends HTMLElement {
     const key = `sys:${rowKey(system, index)}`;
     const ctx = rowContext(this, key);
 
-    const details = makePanel(this.openState, key, system.label?.trim() || 'NewSystem', Object.keys(errors).length);
+    const details = makePanel(this.openState, key, system.label?.trim() || 'NewSystem', Object.keys(errors).length,
+      { index, total: systems.length });
 
     const update = (patch, field, name) => {
       const next = this.systems.map((s, i) => (i === index ? { ...s, ...patch } : s));

@@ -311,6 +311,13 @@ rdio-dialog {
   padding: 4px;
 }
 
+/* A control with nothing left to do says so: the same dimming the other buttons carry, so a row at
+   the end of the list shows which of its two move controls cannot be used. */
+.rdio-icon-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 rdio-form-field {
   display: block;
   margin: var(--rdio-space-1) 0;

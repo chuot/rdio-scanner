@@ -129,7 +129,8 @@ function talkgroupRow(component, talkgroup, index, rows) {
   const key = rowPanelKey(component, talkgroup, index);
   const ctx = rowContext(component, key);
 
-  const details = makePanel(component.openState, key, talkgroup.label?.trim() || 'NewTalkgroup', Object.keys(errors).length);
+  const details = makePanel(component.openState, key, talkgroup.label?.trim() || 'NewTalkgroup', Object.keys(errors).length,
+    { index, total: rows.length });
 
   const update = (patch, field, name) => {
     const next = freshRows(component).map((t, i) => (i === index ? { ...t, ...patch } : t));

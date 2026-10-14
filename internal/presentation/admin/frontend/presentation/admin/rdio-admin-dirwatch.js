@@ -15,7 +15,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { captionBlock, markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { captionBlock, markField, markRequired, markRowIdentity, onFieldEdit, rowKey, rowMoveButtons, setRowMoveLabels } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
@@ -180,7 +180,7 @@ class RdioAdminDirwatch extends HTMLElement {
     const title = document.createElement('span');
     title.className = 'row-title';
     title.textContent = row.directory || 'New dirwatch';
-    header.append(title);
+    header.append(title, ...rowMoveButtons(title.textContent, index, rows.length));
 
     const icon = document.createElement('i');
     icon.className = 'material-icons row-invalid';
@@ -191,6 +191,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
     view.title = title;
     view.icon = icon;
+    view.panel = panel;
 
     panel.append(header);
 
@@ -452,6 +453,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
     view.errors = errors;
     view.title.textContent = rows[index].directory || 'New dirwatch';
+    setRowMoveLabels(view.panel, view.title.textContent);
     view.icon.hidden = !Object.keys(errors).length;
 
     for (const [key, field] of view.fields) field.setError(errors[key] ?? '');

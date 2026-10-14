@@ -245,6 +245,29 @@ export function attachDragSort(container, onReorder) {
 
     for (const row of rows()) row.classList.remove('dragging');
   });
+
+  // The keyboard's route to the same reorder: the Move up and Move down buttons a row carries beside
+  // its handle. The click the keyboard's Enter and Space leave on a button lands here, and the move
+  // goes through the same onReorder the drop goes through, so the order the save bar sends is the
+  // same order either way.
+  //
+  // The buttons sit inside the row's own control — the summary line that opens and closes the row —
+  // so the click that moves the row takes that activation away from the browser: moving a row must
+  // not open it.
+  container.addEventListener('click', (ev) => {
+    const button = ev.target?.closest?.('[data-move]');
+
+    if (!button || button.disabled) return;
+
+    ev.preventDefault();
+
+    const from = rows().indexOf(button.closest('[data-drag]'));
+    const to = button.dataset.move === 'up' ? from - 1 : from + 1;
+
+    if (from === -1 || to < 0 || to >= rows().length) return;
+
+    onReorder(from, to);
+  });
 }
 
 // Legacy drop(): move the dropped row inside the sorted list, then rewrite

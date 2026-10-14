@@ -29,7 +29,8 @@ function siteRow(component, site, index, rows) {
   const key = rowPanelKey(component, site, index);
   const ctx = rowContext(component, key);
 
-  const details = makePanel(component.openState, key, site.label?.trim() || 'NewSite', Object.keys(errors).length);
+  const details = makePanel(component.openState, key, site.label?.trim() || 'NewSite', Object.keys(errors).length,
+    { index, total: rows.length });
 
   const update = (patch, field, name) => {
     const next = freshRows(component).map((s, i) => (i === index ? { ...s, ...patch } : s));

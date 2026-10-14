@@ -28,7 +28,8 @@ function unitRow(component, unit, index, rows) {
   const key = rowPanelKey(component, unit, index);
   const ctx = rowContext(component, key);
 
-  const details = makePanel(component.openState, key, unit.label?.trim() || 'NewUnit', Object.keys(errors).length);
+  const details = makePanel(component.openState, key, unit.label?.trim() || 'NewUnit', Object.keys(errors).length,
+    { index, total: rows.length });
 
   const update = (patch, field, name) => {
     const next = freshRows(component).map((u, i) => (i === index ? { ...u, ...patch } : u));

@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey, rowMoveButtons } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -128,7 +128,7 @@ class RdioAdminApikeys extends HTMLElement {
     const title = document.createElement('span');
     title.className = 'row-title';
     title.textContent = row.ident || 'NewAPIKey';
-    header.append(title);
+    header.append(title, ...rowMoveButtons(title.textContent, index, rows.length));
 
     if (Object.keys(errors).length) this.setHeaderInvalid(header, true);
 

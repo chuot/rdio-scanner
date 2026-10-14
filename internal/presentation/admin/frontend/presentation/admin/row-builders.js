@@ -9,7 +9,57 @@
 
 import { rowsToClose, scrollCompensation } from '../../domain/row-open-rule.js';
 
-export function makePanel(openState, key, title, invalid) {
+// The keyboard's route to a row's place in the list.
+//
+// The row's position is set by dragging its handle: a gesture the pointer owns. Two buttons beside
+// the handle give the same move to the keyboard — and to an operator who cannot hold a pointer steady
+// through a drag — and they go through the same reorder the drag goes through, so the save bar sends
+// the same order either way.
+//
+// The buttons name the row they move, in the row's own words: "Move up — Metro". A row the operator
+// renames takes its new name, because the name on the control is the name on the page.
+//
+// The ends of the list have nowhere to move: the first row's Move up and the last row's Move down are
+// disabled, so the keyboard is never left on a control that does nothing.
+//
+// The buttons sit inside the row's own control — the summary line that opens and closes the row — so
+// the click that moves the row has to take the row's activation away from the browser, which the
+// shared wiring in attachDragSort does.
+export function rowMoveButtons(label, index, total) {
+  const buttons = [];
+
+  for (const [direction, glyph] of [['up', 'arrow_upward'], ['down', 'arrow_downward']]) {
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.className = 'rdio-icon-button row-move';
+    button.dataset.move = direction;
+    button.setAttribute('aria-label', `Move ${direction} — ${label}`);
+    button.disabled = direction === 'up' ? index <= 0 : index >= total - 1;
+
+    const icon = document.createElement('i');
+
+    icon.className = 'material-icons';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = glyph;
+
+    button.append(icon);
+    buttons.push(button);
+  }
+
+  return buttons;
+}
+
+// The row the operator renamed carries its new name on the controls that move it: the name on the
+// control is the name on the page, and a control that names a row the operator has just renamed says
+// something the screen does not show.
+export function setRowMoveLabels(panel, label) {
+  for (const button of panel.querySelectorAll('button[data-move]')) {
+    button.setAttribute('aria-label', `Move ${button.dataset.move} — ${label}`);
+  }
+}
+
+export function makePanel(openState, key, title, invalid, position = {}) {
   const details = document.createElement('details');
   details.className = 'rdio-admin-row';
   details.dataset.key = key;
@@ -29,6 +79,8 @@ export function makePanel(openState, key, title, invalid) {
   titleSpan.className = 'row-title';
   titleSpan.textContent = title;
   summary.append(titleSpan);
+
+  summary.append(...rowMoveButtons(title, position.index ?? 0, position.total ?? 1));
 
   if (invalid) {
     const icon = document.createElement('i');
