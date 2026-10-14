@@ -42,3 +42,23 @@ func TestBlacklistsMatchExactlyAsWritten(t *testing.T) {
 		t.Error("an empty blacklist must accept everything")
 	}
 }
+
+// TestBlacklistsCountNamesTheReferencesTheyList: the count an operator is shown is the number of
+// references the list names, not the number of characters its text takes. A padded entry counts as
+// the entry it is, the same entry the gate refuses to match.
+func TestBlacklistsCountNamesTheReferencesTheyList(t *testing.T) {
+	for _, tc := range []struct {
+		blacklists Blacklists
+		want       int
+	}{
+		{blacklists: "", want: 0},
+		{blacklists: "   ", want: 0},
+		{blacklists: "1514000", want: 1},
+		{blacklists: "40000,40001", want: 2},
+		{blacklists: "1514000, 1514100", want: 2},
+	} {
+		if got := tc.blacklists.Count(); got != tc.want {
+			t.Errorf("the list %q counts %d references, want %d", string(tc.blacklists), got, tc.want)
+		}
+	}
+}

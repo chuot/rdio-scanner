@@ -207,7 +207,7 @@ func registerFeedDiagnosis(target *mcp.Server, deps Deps) {
 			answer.Settings = &feedSettings{
 				Delay:        system.Delay,
 				AutoPopulate: system.AutoPopulate,
-				Blacklists:   uint(len(system.Blacklists)),
+				Blacklists:   uint(system.Blacklists.Count()),
 			}
 
 			for _, dirwatch := range configuration.Dirwatches {

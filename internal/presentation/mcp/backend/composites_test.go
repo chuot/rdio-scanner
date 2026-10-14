@@ -23,6 +23,8 @@ package backend
 import (
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/domain"
 )
 
 // The composites: questions an operator asks that no single entry point can answer. Each one
@@ -290,4 +292,123 @@ func sourceCountOf(counts []sourceCountShape, source string) uint64 {
 	}
 
 	return 0
+}
+
+// TestDiagnoseFeedProblemCountsTheBlacklistedTalkgroups: the number the diagnosis gives for a
+// system's blacklisted talkgroups is the number of references the list names. An administrator
+// asking why a talkgroup is refused needs to know how many the system refuses; the length of the
+// text the field holds says nothing an operator can use.
+func TestDiagnoseFeedProblemCountsTheBlacklistedTalkgroups(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		blacklists string
+		want       uint
+	}{
+		{name: "the two references the fixture stores", blacklists: "40000,40001", want: 2},
+		{name: "one reference", blacklists: "1514000", want: 1},
+		{name: "the references with the spaces the field allows", blacklists: "1514000, 1514100", want: 2},
+		{name: "an empty list", blacklists: "", want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := newConfirmingSession(t, "accept")
+
+			call(t, s, "manage_config", map[string]any{
+				"section": "systems",
+				"payload": systemsPayloadWithBlacklists(s.bundle.systems.Stored, systemOneRef, tc.blacklists),
+			})
+
+			answered := call(t, s, "diagnose_feed_problem", map[string]any{
+				"system":    systemOneRef,
+				"talkgroup": 1514000,
+				"date":      fixtureTime.Format("2006-01-02"),
+			})
+
+			var diagnosis feedDiagnosisShape
+			decode(t, answered, &diagnosis)
+
+			if diagnosis.Settings == nil {
+				t.Fatalf("the diagnosis names no settings for the system: %+v", diagnosis)
+			}
+
+			if diagnosis.Settings.Blacklists != tc.want {
+				t.Errorf("the diagnosis counts %d blacklisted talkgroups for a system storing %q, want %d",
+					diagnosis.Settings.Blacklists, tc.blacklists, tc.want)
+			}
+		})
+	}
+}
+
+// systemsPayloadWithBlacklists is the systems section payload as the section's save takes it, with
+// one system's blacklist set to the text given.
+func systemsPayloadWithBlacklists(systems domain.Systems, systemRef uint, blacklists string) []any {
+	rows := []any{}
+
+	for _, system := range systems {
+		text := string(system.Blacklists)
+
+		if system.SystemRef == systemRef {
+			text = blacklists
+		}
+
+		talkgroups := []any{}
+
+		for _, talkgroup := range system.Talkgroups {
+			talkgroups = append(talkgroups, map[string]any{
+				"alert":        talkgroup.Alert,
+				"delay":        float64(talkgroup.Delay),
+				"frequency":    float64(talkgroup.Frequency),
+				"groupIds":     talkgroup.GroupIDs,
+				"id":           float64(talkgroup.ID),
+				"label":        talkgroup.Label,
+				"led":          talkgroup.LED,
+				"name":         talkgroup.Name,
+				"order":        float64(talkgroup.Order),
+				"tagId":        float64(talkgroup.TagID),
+				"talkgroupRef": float64(talkgroup.TalkgroupRef),
+				"type":         talkgroup.Kind,
+			})
+		}
+
+		sites := []any{}
+
+		for _, site := range system.Sites {
+			sites = append(sites, map[string]any{
+				"id":      float64(site.ID),
+				"label":   site.Label,
+				"order":   float64(site.Order),
+				"siteRef": float64(site.SiteRef),
+			})
+		}
+
+		units := []any{}
+
+		for _, unit := range system.Units {
+			units = append(units, map[string]any{
+				"id":       float64(unit.ID),
+				"label":    unit.Label,
+				"order":    float64(unit.Order),
+				"unitFrom": float64(unit.UnitFrom),
+				"unitRef":  float64(unit.UnitRef),
+				"unitTo":   float64(unit.UnitTo),
+			})
+		}
+
+		rows = append(rows, map[string]any{
+			"alert":        system.Alert,
+			"autoPopulate": system.AutoPopulate,
+			"blacklists":   text,
+			"delay":        float64(system.Delay),
+			"id":           float64(system.ID),
+			"label":        system.Label,
+			"led":          system.LED,
+			"order":        float64(system.Order),
+			"sites":        sites,
+			"systemRef":    float64(system.SystemRef),
+			"talkgroups":   talkgroups,
+			"type":         system.Kind,
+			"units":        units,
+		})
+	}
+
+	return rows
 }

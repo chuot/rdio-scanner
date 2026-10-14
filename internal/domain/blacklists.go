@@ -30,6 +30,18 @@ import (
 // which is how the legacy server behaves.
 type Blacklists string
 
+// Count answers how many talkgroup references the list names. An empty list names none;
+// a list of entries names one per entry, the way the field lays them out.
+func (blacklists Blacklists) Count() int {
+	text := string(blacklists)
+
+	if strings.TrimSpace(text) == "" {
+		return 0
+	}
+
+	return len(strings.Split(text, ","))
+}
+
 // IsBlacklisted reports whether a talkgroup reference is refused by the system.
 func (blacklists Blacklists) IsBlacklisted(ref uint) bool {
 	target := strconv.FormatUint(uint64(ref), 10)
