@@ -464,6 +464,16 @@ export function fieldMessage(field) {
   return node?.textContent ?? '';
 }
 
+// requiredMark is the asterisk a field's name carries: the mark the section declares on the element
+// that names the field — the label of a form field, or the caption span a hand-built row names its
+// field with. The glyph is the stylesheet's, so the reading is the mark and not the character: a name
+// keeps its text. Both spellings count, the way the row lists read their own marks.
+export function requiredMark(namingEl) {
+  if (!namingEl) return false;
+
+  return namingEl.dataset?.required === 'true' || namingEl.attributes?.['data-required'] === 'true';
+}
+
 // reachField is the operator editing a field and walking away from it: the change the browser fires
 // when the value leaves the control, bubbling to the field that owns it. Walking across a field
 // without editing it is not a reading — the rule Material's error matcher used.
