@@ -145,9 +145,32 @@ func (handler *UpdateSystemSubSectionHandler) save(ctx context.Context, cmd Upda
 	return fmt.Errorf("unknown system sub-section %s", cmd.Level)
 }
 
-// announce records that one level of one system changed, naming both, so the log line
-// says what the administrator saved.
+// announce records that one level of one system changed, naming the level and the system's reference
+// number. The reference is the number the administrator reads in the section and types into the
+// fields, so it is the number a log line has to carry for the line to be searched for: the identity
+// the store gave the row is reassigned by the server and never appears on the screen. The number is
+// read from the systems the save's own store holds. A system the store no longer has names no
+// identifier, and the line is the sentence a per-section save writes.
 func (handler *UpdateSystemSubSectionHandler) announce(ctx context.Context, cmd UpdateSystemSubSectionCommand) {
+	reference, found := uint(0), false
+
+	if systems, err := handler.saver.repos.Systems.AllSystems(ctx); err == nil {
+		for _, system := range systems {
+			if system.ID == cmd.SystemID {
+				reference, found = system.SystemRef, true
+
+				break
+			}
+		}
+	}
+
+	if !found {
+		handler.saver.writeLog(ctx, domain.LogLevelWarn, domain.LogSourceConfig,
+			fmt.Sprintf("the %s configuration changed", cmd.Level))
+
+		return
+	}
+
 	handler.saver.writeLog(ctx, domain.LogLevelWarn, domain.LogSourceConfig,
-		fmt.Sprintf("the %s configuration of system %d changed", cmd.Level, cmd.SystemID))
+		fmt.Sprintf("the %s configuration of system %d changed", cmd.Level, reference))
 }
