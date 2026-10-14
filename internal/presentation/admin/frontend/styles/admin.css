@@ -156,6 +156,10 @@ rdio-admin .rdio-admin-login h1 {
   margin: 0 0 16px;
 }
 
+rdio-admin .rdio-admin-login .rdio-form-error {
+  margin-top: var(--rdio-space-2);
+}
+
 rdio-admin .rdio-admin-login .rdio-button {
   margin-top: var(--rdio-space-3);
   width: 100%;
