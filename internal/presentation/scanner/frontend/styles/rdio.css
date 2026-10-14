@@ -427,8 +427,11 @@ rdio-status {
   min-height: 1.5rem;
 }
 
+/* The branding line is the device's name, and it is text: 4.5:1 against the surface it sits on.
+ * The engraved look is the light and dark edges of the shadow, and they stay; the grey the legacy
+ * palette used measured 1.6:1 on the dark panel, which is a line an operator cannot read at all. */
 rdio-status .branding {
-  color: rgb(64, 64, 64);
+  color: rgb(150, 150, 150);
   flex: 1;
   font-size: 16px;
   font-weight: normal;
@@ -441,12 +444,48 @@ rdio-status .branding {
   white-space: nowrap;
 }
 
+/* The state the light is in is drawn as a shape as well as a colour: an outline-only circle says
+ * the stream is off, a filled disc says it is live, a triangle says the playback is paused. The
+ * colour says the same thing, and colour is the channel an operator who cannot tell these greens
+ * and reds apart may not get, so the shape is drawn on the light's own face. The glyph is dark on
+ * a lit light and light on the dark one, so it clears 3:1 against the face it sits on in every
+ * state, including the paused light's dark half-cycle — the blink's own keyframe carries the
+ * colour the glyph inherits for that half. */
 rdio-status .led {
   background: rgb(80, 80, 80);
+  color: rgb(230, 230, 230);
   display: block;
+  font-family: "Material Icons";
   height: 12px;
   margin-left: 24px;
+  position: relative;
   width: 24px;
+}
+
+rdio-status .led::after {
+  align-items: center;
+  content: "radio_button_unchecked";
+  display: flex;
+  font-size: 12px;
+  height: 12px;
+  justify-content: center;
+  left: 0;
+  line-height: 12px;
+  position: absolute;
+  top: 0;
+  width: 24px;
+}
+
+rdio-status .led.on {
+  color: rgb(20, 20, 20);
+}
+
+rdio-status .led.on::after {
+  content: "radio_button_checked";
+}
+
+rdio-status .led.paused::after {
+  content: "play_arrow";
 }
 
 rdio-status .led.on {
@@ -502,6 +541,7 @@ rdio-status .led.paused {
   50% {
     background: rgb(80, 80, 80);
     box-shadow: none;
+    color: rgb(230, 230, 230);
   }
 }
 
@@ -1065,9 +1105,12 @@ rdio-search-panel rdio-toggle .material-icons {
   line-height: 24px;
 }
 
+/* The switch's own edge is what says the control is a switch, and the legacy look keeps its light
+ * track: the edge is drawn as a line of its own, at 3:1 against the fill the switch sits on, and
+ * the handle keeps its own contrast against the track. */
 rdio-search-panel rdio-toggle .rdio-toggle {
   background: rgba(0, 0, 0, 0.12);
-  border: none;
+  border: 1px solid rgba(0, 0, 0, 0.62);
   border-radius: 7px;
   cursor: pointer;
   height: 14px;
@@ -1212,10 +1255,14 @@ rdio-display .auth .rdio-field-box {
 }
 
 /* The active indicator is a line of its own in Material, not a border on the
- * box, so it does not take any of the 56px away from the value. */
+ * box, so it does not take any of the 56px away from the value.
+ *
+ * The line is the field's boundary — it is what says the field is a field — so it is measured at
+ * 3:1 against the fill, and the alpha the legacy palette used is raised to the same floor the
+ * label's text is measured at. */
 rdio-search-panel .rdio-filters .rdio-field-box::after,
 rdio-display .auth .rdio-field-box::after {
-  background-color: rgba(0, 0, 0, 0.54);
+  background-color: rgba(0, 0, 0, 0.62);
   bottom: 0;
   content: "";
   height: 1px;
@@ -1225,9 +1272,12 @@ rdio-display .auth .rdio-field-box::after {
 }
 
 /* Material draws the select arrow as an element of its own. The control is a
- * native select, so the arrow belongs to the field rather than to the control. */
+ * native select, so the arrow belongs to the field rather than to the control.
+ * The arrow is the graphic that says the control opens a list, so it is measured
+ * as a graphic: 3:1 against the fill it sits on, on the same alpha the field's
+ * own line and label use. */
 rdio-search-panel .rdio-filters .rdio-field-box::before {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath fill='rgba%280,0,0,0.54%29' d='M0 3l5 5 5-5z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath fill='rgba%280,0,0,0.62%29' d='M0 3l5 5 5-5z'/%3E%3C/svg%3E");
   content: "";
   height: 10px;
   position: absolute;
@@ -1309,7 +1359,7 @@ rdio-display .auth .rdio-field-flex {
 }
 
 rdio-search-panel .rdio-filters rdio-form-field label {
-  color: rgba(0, 0, 0, 0.54);
+  color: rgba(0, 0, 0, 0.62);
   font-size: 12px;
   left: 16px;
   line-height: 16px;
@@ -1339,19 +1389,28 @@ rdio-display .auth rdio-form-field input {
 /* The field's indicator, in the state the keyboard is standing on it. `appearance: none` takes the
  * control's own look away, and the legacy client took the black ring the browser draws around such a
  * control away with it, keeping focus visible by thickening the field's underline. The underline is
- * still here; the accent line and the accent ring the rest of the page draws are added beside it, so
- * the field reads as the same control the keyboard reaches everywhere else. */
+ * still here; the line and the ring the rest of the page draws are added beside it, so the field
+ * reads as the same control the keyboard reaches everywhere else.
+ *
+ * The colour is the field's own caret colour, `#424242`, and not the theme's accent: on the light
+ * fill these fields sit on, the accent green measures 2.6:1 against the fill, under the 3:1 floor an
+ * indicator has to clear, and the dark grey the field's text and its pressed line already use
+ * measures 9.4:1. The ring is the accent's shape at the accent's distance, in the field's own ink. */
 rdio-search-panel .rdio-filters rdio-form-field select:focus-visible,
 rdio-search-panel .rdio-filters rdio-form-field input:focus-visible,
 rdio-display .auth rdio-form-field input:focus-visible {
-  border-bottom: 2px solid var(--rdio-accent);
-  outline: 2px solid var(--rdio-accent);
+  border-bottom: 2px solid #424242;
+  outline: 2px solid #424242;
   outline-offset: 2px;
 }
 
+/* The label and the placeholder are the field's own words, and they are measured as text: 4.5:1 in
+ * every state the field is shown in, including the fill that darkens under the pointer and the
+ * deeper fill the press leaves. The alpha the legacy palette used cleared the bar on the resting
+ * fill and fell under it on the pressed one. */
 rdio-search-panel .rdio-filters rdio-form-field input::placeholder,
 rdio-display .auth rdio-form-field input::placeholder {
-  color: rgba(0, 0, 0, 0.54);
+  color: rgba(0, 0, 0, 0.62);
 }
 
 /* The subscript line is 22px whether or not there is an error, which is what

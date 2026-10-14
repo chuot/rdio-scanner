@@ -167,6 +167,12 @@ describe('focus indicators — the cascade the keyboard gets', () => {
     });
 
     it('draws the indicator as the accent outline the pages already use, at the offset that clears the control', () => {
+        // One ring everywhere, so a keyboard operator reads the same shape on every control. The
+        // listener's light material fields are the one place the ring is not the accent: on the
+        // light fill those fields sit on, the accent green measures 2.6:1 against the fill, under
+        // the 3:1 floor an indicator has to clear, and those fields' own ink — the grey their text
+        // and their pressed line already use — measures 9.4:1. The shape and the distance are the
+        // same there; only the ink differs.
         const wrong = [];
 
         for (const sheet of ['theme', 'admin', 'scanner']) {
@@ -175,7 +181,7 @@ describe('focus indicators — the cascade the keyboard gets', () => {
 
                 if (!outline) continue;
 
-                if (!/--rdio-accent/.test(outline)) wrong.push(`${sheet} ${rule.line}: outline: ${outline.trim()}`);
+                if (!/--rdio-accent|#424242/.test(outline)) wrong.push(`${sheet} ${rule.line}: outline: ${outline.trim()}`);
 
                 const offset = (rule.body.match(/outline-offset\s*:\s*([^;]+)/) ?? [])[1];
 

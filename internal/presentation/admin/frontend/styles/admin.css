@@ -578,8 +578,12 @@ rdio-admin .rdio-admin-todos-banner .todo.warn {
   border: 1px solid var(--rdio-warn);
 }
 
+/* The icon is the banner's own words — a 20px glyph is body text, measured at 4.5:1 — and the warn
+ * red the palette uses measures 3.9:1 on the tint the warn banner paints behind it. The icon takes
+ * the lighter red the tint lets through; the banner's border keeps the palette's red, which clears
+ * the 3:1 floor a boundary is measured at. */
 rdio-admin .rdio-admin-todos-banner .todo.warn .material-icons {
-  color: var(--rdio-warn);
+  color: rgb(255, 138, 128);
 }
 
 rdio-admin .rdio-admin-todos-banner .todo.info {

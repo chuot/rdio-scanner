@@ -158,8 +158,13 @@
 
   /* One border grey, one radius scale, one spacing scale, one content width: the
      admin cards, rows, bars, and boxes all draw from these, so a screen cannot
-     drift into its own greys. */
-  --rdio-border: rgb(60, 60, 60);
+     drift into its own greys.
+
+     The border grey is a boundary a person uses to tell where a card, a row, and a bar end, so it
+     is measured against the surfaces it sits on the same way text is: 3:1, the floor for a boundary
+     that carries information. The grey the legacy palette used measured 1.3:1 on the card and 1.5:1
+     on the page behind it, which is a hairline that reads as a shadow and not as an edge. */
+  --rdio-border: rgb(140, 140, 140);
   --rdio-radius-card: 6px;
   --rdio-radius-row: 4px;
   --rdio-content-width: 900px;
@@ -318,10 +323,14 @@ rdio-form-field label {
   opacity: 0.85;
 }
 
+/* The field's own boundary is what says the field is a field, so it is measured against the fill
+   it sits on: 3:1, the floor for a boundary that carries information. The grey the legacy palette
+   used measured 1.6:1 on the field's fill — a line that reads as a shadow under the field, not as
+   its edge. */
 rdio-form-field input,
 rdio-form-field textarea {
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgb(90, 90, 90);
+  border: 1px solid rgb(150, 150, 150);
   border-radius: 4px;
   color: var(--rdio-foreground);
   font-family: inherit;
@@ -355,9 +364,10 @@ rdio-select select[aria-invalid] {
   display: none;
 }
 
+/* The select's boundary is measured on the same terms as the field's. */
 rdio-select select {
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgb(90, 90, 90);
+  border: 1px solid rgb(150, 150, 150);
   border-radius: 4px;
   color: var(--rdio-foreground);
   font-family: inherit;
@@ -376,8 +386,12 @@ rdio-select select option {
   color: var(--rdio-foreground);
 }
 
+/* The switch's track is the boundary that says the control is a switch, and the knob's end of the
+   track is the state: the track is measured at 3:1 against what the switch sits on, and the state
+   is carried by the knob's position as well as by the track's colour, so an operator who cannot
+   take the colour reads the same answer from the shape. */
 rdio-toggle .rdio-toggle {
-  background: rgb(90, 90, 90);
+  background: rgb(150, 150, 150);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -388,8 +402,12 @@ rdio-toggle .rdio-toggle {
   width: 44px;
 }
 
+/* The knob is the state: it sits at one end of the track or the other. It is measured against the
+   track it rides on, at 3:1, so the end it is standing at is legible to an operator who cannot take
+   the track's colour — and a light knob on a track light enough to clear the page behind it is not
+   reachable: the two floors cannot both be met, so the knob is the dark one. */
 rdio-toggle .rdio-toggle::after {
-  background: rgb(220, 220, 220);
+  background: rgb(40, 40, 40);
   border-radius: 50%;
   content: "";
   height: 18px;
