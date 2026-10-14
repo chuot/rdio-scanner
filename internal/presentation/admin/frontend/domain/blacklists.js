@@ -1,7 +1,7 @@
 // The system's blacklist as the page edits it: a comma-separated list of talkgroup references the
 // server refuses calls on. The list is stored as one text field on the system row, and the page
-// edits it one entry at a time — the Blacklist action adds the talkgroup it is standing on, the
-// entry list takes one out.
+// edits that field: the Blacklist action adds the talkgroup it is standing on, and the operator
+// takes a reference out of the field's own text.
 //
 // An entry names the talkgroup's reference, the number a recording names its channel by and the
 // number the server compares it against. The identifier the store gave the row is a storage detail
@@ -21,10 +21,4 @@ export function appendBlacklistsEntry(text, reference) {
   const entry = String(reference);
 
   return (entries.includes(entry) ? entries : [...entries, entry]).join(',');
-}
-
-export function removeBlacklistsEntry(text, reference) {
-  const entry = String(reference);
-
-  return blacklistsEntries(text).filter((value) => value !== entry).join(',');
 }
