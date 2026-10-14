@@ -258,6 +258,30 @@ for (const [name, tag, key] of SECTIONS) {
   });
 }
 
+// CA-003: the row the add control creates is the row the operator came to fill in, so it is the
+// section's one open row and the rows the operator left open close.
+for (const [name, tag] of [['talkgroup', 'rdio-admin-talkgroups'], ['site', 'rdio-admin-sites'], ['unit', 'rdio-admin-units'], ['system', 'rdio-admin-systems']]) {
+  test(`pressing the new ${name} control opens the row it creates and closes the row that was open`, () => {
+    seed();
+
+    const el = attach(tag);
+
+    const [first] = rows(el);
+
+    activate(first);
+
+    assert.equal(openRows(el).length, 1, 'the operator has one row open before they press the add control');
+
+    const fresh = addRow(el);
+
+    assert.equal(fresh.open, true, 'the row the add control creates is open on its fields');
+    assert.equal(openRows(el).length, 1, `the ${name} list holds exactly one open row after the add`);
+    assert.equal(openRows(el)[0], fresh, 'the open row is the row the add control created');
+    assert.equal(first.open, false, 'the row the operator left open closes');
+    assert.equal(rowTitle(first), rowTitle(rows(el)[1]), 'the row the operator left open keeps its place in the list');
+  });
+}
+
 // CA-004: shrinking is presentation only. Reading a row is not a change to the section's working copy,
 // and the save bar answers the same as it did before the clicks.
 for (const [name, tag, key] of [['talkgroups', 'rdio-admin-talkgroups', 'subsection:talkgroups:2'], ['sites', 'rdio-admin-sites', 'subsection:sites:2'], ['units', 'rdio-admin-units', 'subsection:units:2']]) {

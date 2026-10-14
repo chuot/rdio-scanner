@@ -252,6 +252,15 @@ class RdioAdminSystems extends HTMLElement {
   addSystem() {
     const rows = [newSystemRow(), ...this.systems.map((row, i) => ({ ...row, order: i + 2 }))];
 
+    // The row the add control creates is the row the operator came to fill in, so this section opens
+    // it the way the per-level sections open theirs, and it is the section's one open row. The rows
+    // the operator left open close on the page too: the render that follows reads the open rows off
+    // the page.
+    for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
+
+    this.openState.clear();
+    this.openState.set(`sys:${rowKey(rows[0], 0)}`, true);
+
     this.commit(rows, false);
   }
 }

@@ -164,27 +164,37 @@ function dragRow(el, from, to) {
   fire(moved[from], 'dragend');
 }
 
+// The summary activation the operator performs to reach the fields of a row: the row's open state
+// flips, and the row answers with the toggle event a click and the keyboard's Enter and Space leave.
+function activate(row) {
+  row.open = !row.open;
+  row.dispatchEvent({ type: 'toggle', target: row });
+}
+
+// The rows the operator sees open.
+function openRows(el) {
+  return rows(el).filter((row) => row.open);
+}
+
 // The systems tree: the systems section and the three per-level sections. Each row the operator adds
-// is filled in the same way, and each section's delete control names its own row. The per-level
-// sections open the row their add control creates; the systems section presents a new row closed, and
-// there it is the operator who opens the row they came to fill in.
+// is filled in the same way, and each section's delete control names its own row. Every section opens
+// the row its add control creates, and that row is the section's one open row: the rows the operator
+// left open close with it.
 const TREE = [
-  ['talkgroup', 'rdio-admin-talkgroups', 'Delete talkgroup', true],
-  ['site', 'rdio-admin-sites', 'Delete site', true],
-  ['unit', 'rdio-admin-units', 'Delete unit', true],
-  ['system', 'rdio-admin-systems', 'Delete system', false],
+  ['talkgroup', 'rdio-admin-talkgroups', 'Delete talkgroup'],
+  ['site', 'rdio-admin-sites', 'Delete site'],
+  ['unit', 'rdio-admin-units', 'Delete unit'],
+  ['system', 'rdio-admin-systems', 'Delete system'],
 ];
 
-for (const [name, tag, deleteLabel, opensOnAdd] of TREE) {
+for (const [name, tag, deleteLabel] of TREE) {
   // The reading the operator named: they came to fill in a row, they reached a field of it, and the
   // add control for a second row moved that row's state onto the row they never touched.
-  test(`a second new ${name} row leaves the first new row open, with the message the operator revealed`, () => {
+  test(`a second new ${name} row keeps the message the operator revealed on the first new row`, () => {
     seed(getAdminContext().store);
 
     const el = attach(tag);
     const first = addRow(el);
-
-    if (!opensOnAdd) first.open = true;
 
     leave(first, 'Label');
 
@@ -194,11 +204,11 @@ for (const [name, tag, deleteLabel, opensOnAdd] of TREE) {
 
     const [second, firstRow] = rows(el);
 
-    assert.equal(firstRow.open, true, 'the row the operator left open stays open');
-    assert.equal(fieldMessage(field(firstRow, 'Label')), 'Label is required', 'the message stays on the row the operator reached');
+    assert.equal(firstRow.open, false, 'the row the operator left open closes when the add control creates its row');
+    assert.equal(second.open, true, 'the row the add control creates is the section’s one open row');
+    assert.equal(openRows(el).length, 1, 'the list holds exactly one open row after the add');
+    assert.equal(fieldMessage(field(firstRow, 'Label')), 'Label is required', 'the message stays on the row the operator reached, collapsed as it is');
     assert.deepEqual(messages(second), [], 'the row the second add created says nothing about fields nobody reached');
-
-    if (opensOnAdd) assert.equal(second.open, true, 'the add control opens the row it creates');
   });
 
   // The row the operator deleted was open, and its messages were revealed. The row the add control
@@ -208,8 +218,6 @@ for (const [name, tag, deleteLabel, opensOnAdd] of TREE) {
 
     const el = attach(tag);
     const row = addRow(el);
-
-    if (!opensOnAdd) row.open = true;
 
     leave(row, 'Label');
 
@@ -221,7 +229,8 @@ for (const [name, tag, deleteLabel, opensOnAdd] of TREE) {
     const fresh = addRow(el);
 
     assert.deepEqual(messages(fresh), [], 'the new row inherits no message from the row the operator deleted');
-    assert.equal(fresh.open, opensOnAdd, 'the new row opens as its section opens a row, and inherits nothing');
+    assert.equal(fresh.open, true, 'the new row opens as its section opens a row, and inherits nothing');
+    assert.equal(openRows(el).length, 1, 'the row the add control creates is the section’s one open row');
 
     for (const saved of rows(el).slice(1)) {
       assert.equal(saved.open, false, 'no saved row opens on the state of the row the operator deleted');
@@ -239,6 +248,9 @@ for (const [name, tag, deleteLabel, opensOnAdd] of TREE) {
     addRow(el);
     addRow(el);
 
+    // The row the second add created is the section's one open row, so the operator opens the row
+    // they came to fill in before they reach its fields.
+    activate(rows(el)[1]);
     leave(rows(el)[1], 'Label');
 
     assert.equal(fieldMessage(field(rows(el)[1], 'Label')), 'Label is required', 'the row the operator reached carries its message');

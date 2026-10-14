@@ -205,10 +205,16 @@ export function renderSubSection(component) {
     const rows = subWorking(level, component.systemId) ?? [];
     const fresh = [newRow(level), ...rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    // The row the add control creates is the one the operator came to fill in: the
-    // open state records it before the commit, so the rows the scaffold builds next
-    // open on the new row's fields and keep the rows the operator left open.
-    component.openState.set(rowPanelKey(component, fresh[0], 0), true);
+    // The row the add control creates is the one the operator came to fill in, and it is the section's
+    // one open row: the rows the operator left open close with it, the way they close when the operator
+    // opens a row themselves. They close on the page as well as in the map, because the render that
+    // follows reads the open rows off the page, and a row left open there would come back as open.
+    const opened = rowPanelKey(component, fresh[0], 0);
+
+    for (const row of component.querySelectorAll('details[data-key]')) row.open = false;
+
+    component.openState.clear();
+    component.openState.set(opened, true);
 
     commitSubRows(component, fresh);
   });
