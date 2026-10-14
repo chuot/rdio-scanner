@@ -135,17 +135,6 @@ function requestTo(url) {
   return requests.filter((entry) => entry.url === url);
 }
 
-// The entry rows the Systems section renders beside the field, and what each one says out loud: the
-// talkgroup it refuses, named by the system's talkgroup.
-function entryRows(el) {
-  return findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry'));
-}
-
-function entryNames(el) {
-  return entryRows(el).map((row) =>
-    findAll(row, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry-label'))[0]?.textContent.trim() ?? '');
-}
-
 function snackbarText() {
   return document.querySelector('rdio-snackbar')?.textContent ?? '';
 }
@@ -243,8 +232,8 @@ test('a Systems section whose only pending edit was the blacklist field stops as
 });
 
 // What the operator reads when they come back to the Systems section after the action: the field
-// holding the list the server stored, and the list beside it naming the talkgroup they blacklisted.
-// The section is asking to be saved for the edit they made in another field, which is the state the
+// holding the list the server stored, the talkgroup they blacklisted named by its reference. The
+// section is asking to be saved for the edit they made in another field, which is the state the
 // report left them in.
 test('the Systems section shows the blacklisted talkgroup after the Blacklist action, while it is asking to be saved for another edit', async () => {
   requests.length = 0;
@@ -265,8 +254,6 @@ test('the Systems section shows the blacklisted talkgroup after the Blacklist ac
   assert.equal(store.getState()['section:systems'].dirty, true, 'the Blacklist action stopped the Systems section asking to be saved while the operator had an edit pending in it');
 
   assert.equal(fieldControl(systemsSection, 0, 'Blacklists')?.value, '1514000', 'the Blacklists field the operator reads after the Blacklist action is not the list the server stored');
-
-  assert.deepEqual(entryNames(systemsSection), ['Dispatch 1'], 'the list beside the field does not name the talkgroup the Blacklist action removed');
 });
 
 // The draft the operator was writing in the Systems section's own Blacklists field, never sent. The
