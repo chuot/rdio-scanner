@@ -135,6 +135,28 @@ test('a save the server refuses keeps the blacklisting the operator asked for an
 
   const message = snackbarText();
 
-  assert.ok(message.includes('Unable to save'),
-    `the refused save did not tell the operator it failed, it said "${message}"`);
+  assert.ok(message.includes('Unable to save the talkgroups of system 10001'),
+    `the refused save did not tell the operator which system it failed on, by the number the section shows them: "${message}"`);
+});
+
+// The save the section's own bar sends, refused by the server. The operator is shown the system by
+// the number the section shows them and the number they type into the fields, not by the identity
+// the store gave the row.
+test('the save the bar sends, refused, names the system by its reference number', async () => {
+  requests.length = 0;
+
+  seed();
+
+  const el = talkgroupsSection();
+
+  blacklistButton(el).click();
+
+  await settled();
+
+  saveControl(el).click();
+
+  await settled();
+
+  assert.ok(snackbarText().includes('Unable to save the talkgroups of system 10001'),
+    `the refused save did not name the system by its reference number: "${snackbarText()}"`);
 });
