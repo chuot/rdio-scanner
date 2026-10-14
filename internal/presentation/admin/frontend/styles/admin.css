@@ -1136,3 +1136,162 @@ rdio-systems-selection .indent {
     animation: none;
   }
 }
+
+/* --- forced colours ------------------------------------------------------------ */
+
+/* The administration application draws its surfaces in greys the mode replaces, and its meaning is
+   carried by the shapes those greys make: the card's edge, the row's edge, the line between a row's
+   title and its fields, the mark on the section the keyboard is in, the bar that stays at the foot of
+   the column while the rows scroll past it. Each is drawn again in the system's own colours. The
+   shadows and the striped bar's gradient are taken by the mode, so the bar keeps a face of its own. */
+
+@media (forced-colors: active) {
+  rdio-admin > .rdio-admin-header,
+  rdio-admin .rdio-admin-login,
+  rdio-admin .rdio-admin-card,
+  rdio-admin .rdio-admin-row,
+  rdio-admin .rdio-admin-section-bar,
+  rdio-admin .rdio-admin-conflict,
+  rdio-admin .rdio-admin-todos-banner .todo.warn,
+  rdio-admin .rdio-admin-todos-banner .todo.info,
+  rdio-admin .rdio-admin-card.logs .rdio-log-source,
+  rdio-admin .rdio-admin-openapi-box,
+  rdio-admin .rdio-admin-openapi-box details.endpoint[open],
+  rdio-systems-selection fieldset {
+    border: 1px solid CanvasText;
+  }
+
+  rdio-admin > .rdio-admin-header {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  rdio-admin .rdio-admin-nav {
+    border-right: 1px solid CanvasText;
+  }
+
+  rdio-admin .rdio-admin-row > .row.top {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  rdio-admin .rdio-admin-row > .row.bottom {
+    border-top: 1px solid CanvasText;
+  }
+
+  rdio-admin details.rdio-admin-row[open] > summary {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  /* A row's summary is the control the keyboard lands on, and the row's own edge is the box it sits
+     in: under the mode the control keeps a box of its own, so the control the operator is standing on
+     is the box they see. */
+  rdio-admin details.rdio-admin-row > summary,
+  rdio-admin .rdio-admin-openapi-box details.endpoint > summary {
+    border: 1px solid CanvasText;
+  }
+
+  rdio-admin .rdio-admin-card.options > .row {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  rdio-admin .rdio-admin-card.logs th,
+  rdio-admin .rdio-admin-card.logs td,
+  rdio-admin .rdio-admin-csv-preview th,
+  rdio-admin .rdio-admin-csv-preview td,
+  rdio-admin .rdio-admin-openapi-box .endpoint-detail {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  rdio-systems-selection .rdio-tree-item.everything {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  /* The bar stays at the foot of the column while the rows scroll under it: it needs the system's
+     canvas behind it, or the rows show through the controls it carries. */
+  rdio-admin .rdio-admin-section-bar {
+    background: Canvas;
+  }
+
+  /* The log stream's bar is a striped gradient, and the mode takes gradients away. The bar keeps a
+     face of its own, and its presence — not its motion — is what says the stream is open. */
+  rdio-admin .rdio-admin-card.logs .rdio-progress {
+    background: CanvasText;
+  }
+
+  /* A log source chip that is on says so by its fill today; the mode replaces the fill. The chip's
+     edge is what carries the state. */
+  rdio-admin .rdio-admin-card.logs .rdio-log-source[aria-pressed='true'] {
+    border: 3px solid CanvasText;
+  }
+
+  /* The severity icons, the chevrons, the drag handle, and the captions are drawn in colours the
+     mode replaces; each says what it says by its glyph, its text, or its position. */
+  rdio-admin .rdio-admin-card.logs .material-icons.error,
+  rdio-admin .rdio-admin-card.logs .material-icons.warn,
+  rdio-admin .rdio-admin-card.logs .material-icons.info,
+  rdio-admin .rdio-admin-todos-banner .todo.warn .material-icons,
+  rdio-admin .rdio-admin-todos-banner .todo.info .material-icons,
+  rdio-admin .rdio-admin-todos-banner .todo .todo-step .arrow,
+  rdio-admin details.rdio-admin-row > summary::after,
+  rdio-admin .rdio-admin-openapi-box details.endpoint > summary::after,
+  rdio-admin .drag-handle,
+  rdio-admin .row-caption,
+  rdio-admin .caption,
+  rdio-admin .field-caption,
+  rdio-admin .rdio-admin-empty,
+  rdio-admin .rdio-admin-placeholder,
+  rdio-admin .rdio-admin-card.tools .row.top > .file-name,
+  rdio-admin .rdio-admin-openapi-box .detail-label,
+  rdio-admin .rdio-admin-openapi-box .param-in,
+  rdio-admin .rdio-admin-openapi-box .param-type,
+  rdio-admin .rdio-admin-openapi-box .param-values,
+  rdio-admin .rdio-admin-openapi-box .field-type,
+  rdio-admin .rdio-admin-openapi-box .param-required,
+  rdio-admin .rdio-admin-openapi-box .param-description,
+  rdio-admin .rdio-admin-openapi-box .field-description,
+  rdio-admin .rdio-admin-openapi-box .response-description,
+  rdio-admin .rdio-admin-openapi-box .summary,
+  rdio-admin .rdio-admin-openapi-box .method,
+  rdio-admin .rdio-admin-openapi-box .method.get,
+  rdio-admin .rdio-admin-openapi-box .method.delete,
+  rdio-admin .rdio-admin-openapi-box .method.patch,
+  rdio-admin .rdio-admin-openapi-box .method.post,
+  rdio-admin .rdio-admin-openapi-box .method.put,
+  rdio-admin .rdio-admin-card.openapi code,
+  rdio-admin .rdio-admin-openapi-box .field-name[data-required]:after,
+  rdio-admin rdio-form-field label[data-required]:after,
+  rdio-admin .field-title[data-required]:after,
+  rdio-admin .body[data-required]:after,
+  rdio-admin .row-invalid,
+  rdio-admin .rdio-admin-card.options > .row.highlight,
+  .rdio-form-error {
+    color: CanvasText;
+  }
+
+  rdio-admin .rdio-admin-card.options > .row.highlight {
+    border-left: 3px solid CanvasText;
+  }
+
+  /* The ring the keyboard is standing on, in the colour the system uses to say "here". */
+  rdio-admin .rdio-admin-nav button:focus-visible,
+  rdio-admin .rdio-admin-header .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-login .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-card > .row.top .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-card > .row.top .rdio-button-mini:focus-visible,
+  rdio-admin .rdio-admin-section-bar .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-row .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-row .rdio-button-mini:focus-visible,
+  rdio-admin .rdio-admin-row .rdio-icon-button:focus-visible,
+  rdio-admin .rdio-admin-row rdio-toggle .rdio-toggle:focus-visible,
+  rdio-admin .rdio-admin-row .drag-handle:focus-visible,
+  rdio-admin details.rdio-admin-row > summary:focus-visible,
+  rdio-admin .rdio-admin-card.logs .rdio-filters .actions .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-card.logs .rdio-list a[href]:focus-visible,
+  rdio-admin .rdio-admin-card.openapi .rdio-admin-openapi-box a[href]:focus-visible,
+  rdio-admin .rdio-admin-card.openapi .rdio-admin-openapi-box summary:focus-visible,
+  rdio-admin .rdio-admin-card.tools .row.top .rdio-button:focus-visible,
+  rdio-admin .rdio-admin-card.tools input[type='file']:focus-visible,
+  rdio-admin .rdio-admin-todos-banner .todo .todo-step:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

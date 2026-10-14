@@ -471,3 +471,66 @@ a[href]:focus-visible {
     transition: none;
   }
 }
+
+/* --- forced colours ------------------------------------------------------------ */
+
+/* Under a forced palette the system owns the colours: every grey, accent, and fill in this file is
+   replaced by the colours the operator asked the system for, and the shadows and gradients go with
+   them. What the page has to keep is the shape of its controls, so each one is given its boundary in
+   the system's own colours — `CanvasText` for the line that says a control is a control, `Canvas` for
+   the surface behind it, `Highlight` for the ring the keyboard is standing on. Nothing here overrides
+   the palette: the mode is the point, and these rules only make the shapes survive it. */
+
+@media (forced-colors: active) {
+  .rdio-button,
+  .rdio-button-mini,
+  .rdio-icon-button,
+  rdio-paginator .rdio-button-mini,
+  rdio-form-field input,
+  rdio-form-field textarea,
+  rdio-select select,
+  rdio-toggle .rdio-toggle,
+  rdio-snackbar,
+  .rdio-dialog-box,
+  .skip {
+    border: 1px solid CanvasText;
+  }
+
+  rdio-form-field input,
+  rdio-form-field textarea,
+  rdio-select select,
+  rdio-toggle .rdio-toggle,
+  rdio-snackbar,
+  .rdio-dialog-box,
+  .skip {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  /* The switch's knob is the state: it rides at one end of the track or the other. A track and a knob
+     that are both the system's canvas are a control with no state to read, so the knob is drawn in
+     the system's ink. */
+  rdio-toggle .rdio-toggle::after {
+    background: CanvasText;
+  }
+
+  /* The skip link is painted over the page it skips to: it needs the surface behind it, or its words
+     land on the page's own text. It parks the same way here as everywhere else — clipped until the
+     keyboard reaches it. */
+  a[href] {
+    color: LinkText;
+  }
+
+  /* The ring the keyboard is standing on, in the colour the system uses to say "here". */
+  rdio-form-field input:focus-visible,
+  rdio-form-field textarea:focus-visible,
+  rdio-select select:focus-visible,
+  rdio-toggle .rdio-toggle:focus-visible,
+  rdio-paginator .rdio-button-mini:focus-visible,
+  .rdio-dialog-actions .rdio-button:focus-visible,
+  .rdio-icon-button:focus-visible,
+  a[href]:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

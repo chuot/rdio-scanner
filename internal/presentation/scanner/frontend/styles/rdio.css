@@ -1749,3 +1749,102 @@ rdio-snackbar .rdio-support .countdown {
     transition: none;
   }
 }
+
+/* --- forced colours ------------------------------------------------------------ */
+
+/* The listener's surfaces are drawn in colours the mode replaces: the bevels on the control buttons,
+ * the LCD panel's tint, the light fills the search fields sit on, the line under a field, the
+ * gradient sliding across the query bar, the glow around the status light. The mode takes the
+ * bevels, the tints, the gradients, and the glow, and the page has to keep what each of them says.
+ * The shapes are drawn in the system's own colours; the palette is left to the system, which is the
+ * whole point of the mode.
+ *
+ * The status light is the case that shows why the shape matters: its colour is the state today, and
+ * the mode takes the colour. The light keeps a face of its own ink and the state keeps its glyph —
+ * the outline-only circle, the filled disc, the triangle — in the canvas colour, so the state is
+ * readable in the palette the operator asked for. */
+
+@media (forced-colors: active) {
+  rdio-controls .rdio-button,
+  rdio-select-panel .rdio-button,
+  rdio-select-panel .rdio-button-mini,
+  rdio-app .panel .panel-close,
+  rdio-app .rdio-help button,
+  rdio-search-panel .row-action,
+  rdio-search-panel .rdio-filters .reset button,
+  rdio-search-panel .rdio-filters .rdio-field-box,
+  rdio-display .auth .rdio-field-box,
+  rdio-display .auth form,
+  rdio-search-panel rdio-toggle .rdio-toggle,
+  rdio-search-panel rdio-paginator .rdio-button-mini,
+  rdio-display,
+  .rdio-snackbar-surface {
+    border: 1px solid CanvasText;
+  }
+
+  rdio-search-panel .rdio-filters .rdio-field-box,
+  rdio-display .auth .rdio-field-box,
+  rdio-display .auth form,
+  rdio-search-panel rdio-toggle .rdio-toggle,
+  rdio-display,
+  .rdio-snackbar-surface {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  /* The line under a field is the field's boundary, and the arrow beside a select is the graphic that
+   * says the control opens a list. The mode takes the line's fill and the arrow's image, so the line
+   * is drawn in the system's ink and the arrow is drawn as a glyph. */
+  rdio-search-panel .rdio-filters .rdio-field-box::after,
+  rdio-display .auth .rdio-field-box::after {
+    background: CanvasText;
+  }
+
+  rdio-search-panel .rdio-filters .rdio-field-box::before {
+    background-image: none;
+    color: CanvasText;
+    content: "\25BE";
+    font-size: 10px;
+    text-align: center;
+  }
+
+  /* The switch's handle carries the state — a dash when the mode is off, a check when it is on — and
+   * the mode takes the handle's fill and the track's. The handle keeps a face of its own ink and the
+   * glyph keeps the canvas colour. */
+  rdio-search-panel rdio-toggle .rdio-toggle::after {
+    background: CanvasText;
+    color: Canvas;
+  }
+
+  rdio-status .led {
+    background: CanvasText;
+    border: 1px solid CanvasText;
+  }
+
+  rdio-status .led::after {
+    color: Canvas;
+  }
+
+  /* The query bar slides a gradient across its track; the mode takes the gradient. The bar keeps a
+   * face, and its presence is what says the query is running. */
+  rdio-search-panel .progress-bar.pending::after {
+    background: CanvasText;
+  }
+
+  /* The ring the keyboard is standing on, in the colour the system uses to say "here". The light
+   * material fields take it in the system's ink: the field's own line is the field's indicator, and
+   * the ring sits outside it. */
+  rdio-controls .rdio-button:focus-visible,
+  rdio-select-panel .rdio-button:focus-visible,
+  rdio-select-panel .rdio-button-mini:focus-visible,
+  rdio-app .panel .panel-close:focus-visible,
+  rdio-app .rdio-help button:focus-visible,
+  rdio-search-panel .row-action:focus-visible,
+  rdio-search-panel .rdio-filters .reset button:focus-visible,
+  rdio-search-panel .rdio-filters rdio-form-field select:focus-visible,
+  rdio-search-panel .rdio-filters rdio-form-field input:focus-visible,
+  rdio-display .auth rdio-form-field input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

@@ -173,15 +173,24 @@ describe('focus indicators — the cascade the keyboard gets', () => {
         // the 3:1 floor an indicator has to clear, and those fields' own ink — the grey their text
         // and their pressed line already use — measures 9.4:1. The shape and the distance are the
         // same there; only the ink differs.
+        //
+        // Under a forced palette the ring is drawn in the colour the system uses to say "here",
+        // `Highlight`, at the same shape and the same distance: the accent is a colour the operator
+        // asked the system to replace. A rule inside the mode's own block is allowed the system's
+        // colour, and only there.
         const wrong = [];
 
         for (const sheet of ['theme', 'admin', 'scanner']) {
+            const inForcedMode = new Set(forcedColorRules(sheet).map((rule) => `${rule.selector}|${rule.body}`));
+
             for (const rule of focusVisibleRules(sheet)) {
                 const outline = (rule.body.match(/outline\s*:\s*([^;]+)/) ?? [])[1];
 
                 if (!outline) continue;
 
-                if (!/--rdio-accent|#424242/.test(outline)) wrong.push(`${sheet} ${rule.line}: outline: ${outline.trim()}`);
+                const allowed = inForcedMode.has(`${rule.selector}|${rule.body}`) ? /Highlight/ : /--rdio-accent|#424242/;
+
+                if (!allowed.test(outline)) wrong.push(`${sheet} ${rule.line}: outline: ${outline.trim()}`);
 
                 const offset = (rule.body.match(/outline-offset\s*:\s*([^;]+)/) ?? [])[1];
 
@@ -190,5 +199,93 @@ describe('focus indicators — the cascade the keyboard gets', () => {
         }
 
         assert.deepEqual(wrong, [], `the indicator is not the accent outline at a 2px offset: ${wrong.join(' | ')}`);
+    });
+});
+
+// --- forced colours ---------------------------------------------------------------
+//
+// Under a forced palette the system owns the colours: the page's greys, its accents, and its fills
+// are replaced by the colours the operator asked the system for. What the page has to keep is the
+// shape of its controls — the border that says a card is a card, the line that says a field is a
+// field, the ring that says where the keyboard is standing — drawn in the system's own colours. A
+// stylesheet with no block for the mode is a stylesheet whose shapes are painted in the colours the
+// system was asked to replace, and a stylesheet that sets `forced-color-adjust: none` is the same
+// stylesheet opting out of the mode entirely.
+//
+// The blocks are read the way the browser reads them: comments blanked, a media block's own rules
+// read from inside it.
+
+function blocksAtOneLevel(css) {
+    const stripped = css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+
+    const found = [];
+
+    let at = 0;
+
+    while (at < stripped.length) {
+        const open = stripped.indexOf('{', at);
+
+        if (open === -1) break;
+
+        let depth = 1;
+        let close = open + 1;
+
+        while (close < stripped.length && depth > 0) {
+            if (stripped[close] === '{') depth += 1;
+            else if (stripped[close] === '}') depth -= 1;
+
+            close += 1;
+        }
+
+        found.push({ selector: stripped.slice(at, open).trim(), body: stripped.slice(open + 1, close - 1) });
+
+        at = close;
+    }
+
+    return found;
+}
+
+function declarationsOnly(body) {
+    let text = '';
+    let depth = 0;
+
+    for (const char of body) {
+        if (char === '{') depth += 1;
+        else if (char === '}') depth -= 1;
+        else if (depth === 0) text += char;
+    }
+
+    return text.split(';').map((decl) => decl.trim()).filter(Boolean);
+}
+
+function forcedColorRules(name) {
+    const css = readFileSync(STYLESHEETS[name], 'utf8');
+
+    return blocksAtOneLevel(css)
+        .filter((block) => block.selector.startsWith('@media') && /forced-colors\s*:\s*active/.test(block.selector))
+        .flatMap((block) => blocksAtOneLevel(block.body));
+}
+
+function everyDeclaration(name) {
+    const walk = (blocks) => blocks.flatMap((block) => [...declarationsOnly(block.body), ...walk(blocksAtOneLevel(block.body))]);
+
+    return walk(blocksAtOneLevel(readFileSync(STYLESHEETS[name], 'utf8')));
+}
+
+describe('forced colours — the cascade the system palette gets', () => {
+    it('carries a forced-colors: active block in every stylesheet the applications ship', () => {
+        const silent = ['theme', 'admin', 'scanner'].filter((name) => forcedColorRules(name).length === 0);
+
+        assert.deepEqual(silent, [], `no forced-colors: active block in: ${silent.join(' | ')}`);
+    });
+
+    it('never opts out of the mode the operator asked the system for', () => {
+        const opted = ['theme', 'admin', 'scanner'].flatMap((name) =>
+            everyDeclaration(name)
+                .filter((decl) => /^forced-color-adjust\s*:\s*none\b/.test(decl))
+                .map((decl) => `${name}: ${decl}`),
+        );
+
+        assert.deepEqual(opted, [], `forced-color-adjust: none in: ${opted.join(' | ')}`);
     });
 });
