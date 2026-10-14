@@ -7,6 +7,7 @@
 import { getAdminContext } from '../../application/admin-context.js';
 import { validatePasswordChange } from '../../domain/password.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
+import { markRequired } from './row-builders.js';
 
 const FIELDS = [
   ['currentPassword', 'Current password', 'current-password'],
@@ -56,6 +57,12 @@ export function passwordPanel() {
     if (name === 'newPassword') input.setAttribute('minlength', '8');
 
     field.append(labelEl, input);
+
+    // The server takes the current and the new password and nothing else: every box of this form
+    // is one the webapp insists on, so each name carries the marker and the field host carries the
+    // other half of the pair, which is what the control announces.
+    markRequired(field, labelEl);
+
     form.append(field);
 
     fields[name] = { input, field };

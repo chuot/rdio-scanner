@@ -16,7 +16,7 @@ import {
   setSectionWorking,
 } from './section-shell.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
-import { onFieldEdit } from './row-builders.js';
+import { markRequired, onFieldEdit } from './row-builders.js';
 
 const NAME = 'options';
 
@@ -68,6 +68,7 @@ const CONTROLS = [
     type: 'select',
     title: 'Keypad Beep Style',
     description: 'Provide audio feedback when pressing buttons.',
+    required: true,
     options: [
       ['uniden', 'Uniden'],
       ['whistler', 'Whistler'],
@@ -78,6 +79,7 @@ const CONTROLS = [
     type: 'number',
     title: 'Max Clients',
     description: 'Max number of simultaneous clients.',
+    required: true,
     min: 1,
   },
   {
@@ -85,6 +87,7 @@ const CONTROLS = [
     type: 'number',
     title: 'Prune Days',
     description: 'Prune the database for data older than the specified number of days. Set to 0 to disable.',
+    required: true,
     min: 0,
   },
   {
@@ -226,6 +229,10 @@ class RdioAdminOptions extends HTMLElement {
     }
 
     const field = document.createElement('rdio-form-field');
+
+    // The caption is the name this row gives the control, so the marker rides it, and the field
+    // host carries the other half of the pair so the control announces it.
+    if (control.required) markRequired(field, description.querySelector('.field-title'));
 
     if (control.type === 'select') {
       const select = document.createElement('rdio-select');
