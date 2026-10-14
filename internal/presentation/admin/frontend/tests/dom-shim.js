@@ -43,11 +43,36 @@ class ShimNode {
     this.tag = tag;
     this.children = [];
     this.attributes = {};
-    this.dataset = {};
     this.listeners = {};
     this.className = '';
     this._html = '';
     this._text = '';
+  }
+
+  // dataset and the data-* attributes are one thing in a browser: the builders write a row's key, a
+  // field's key, and the mark that says a row is sortable through dataset, the markup the components
+  // lay out carries the same facts as attributes, and the handlers read them back through dataset.
+  // The shim keeps them as one thing, so a control marked through dataset and a control marked in
+  // markup answer the same reading.
+  get dataset() {
+    const node = this;
+
+    const attribute = (key) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+
+    return new Proxy({}, {
+      get: (_target, key) => (typeof key === 'string' ? node.attributes[attribute(key)] : undefined),
+      set: (_target, key, value) => {
+        if (typeof key === 'string') node.attributes[attribute(key)] = String(value);
+
+        return true;
+      },
+      has: (_target, key) => typeof key === 'string' && node.attributes[attribute(key)] !== undefined,
+      deleteProperty: (_target, key) => {
+        delete node.attributes[attribute(key)];
+
+        return true;
+      },
+    });
   }
 
   append(...nodes) {
@@ -241,6 +266,12 @@ class ShimNode {
     (this.listeners[type] ??= []).push(fn);
   }
 
+  // The dialog takes its own key handler off when it closes; a shim without this leaves the handler
+  // on the element and the page.
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
+  }
+
   // The form field primitive defines its own setError when it is connected, and that is the one
   // the section proofs read. This is the fallback for a field that was never connected: the shim
   // records the message so a test can still see the field was flagged.
@@ -248,14 +279,23 @@ class ShimNode {
     this.error = error;
   }
 
+  // A click is answered with the event the browser hands the handler: the control the pointer was on
+  // is the event's target, and the handler that answers a control inside a bigger control — a move
+  // button inside a row's summary line — names the row through that target and takes the activation
+  // the browser would otherwise give the surrounding control.
   click() {
-    for (const fn of this.listeners.click ?? []) fn();
+    this.dispatchEvent({ type: 'click', target: this, bubbles: true });
   }
 
   // Forms refocus their input after a failed submit; the shim records the focus
   // so a test can see it happened.
+  //
+  // The focus lands where a browser puts it: on the element the keyboard is standing on, which the
+  // page reads back through document.activeElement — the trap's ends, the tree that keeps focus
+  // through a rebuild, and the panel that takes the keyboard in are all read through it.
   focus() {
     this.focused = true;
+    document.activeElement = this;
   }
 
   // Forms are driven by dispatching their submit event, the way a browser does:
@@ -322,10 +362,16 @@ globalThis.document = {
   // place itself: a root node the components append to, and the lookup of what is in it.
   body: new ShimNode('body'),
 
+  // The control the keyboard is standing on. A browser always has one: the page reads it back to
+  // decide where its own focus rules have to put the keyboard next.
+  activeElement: null,
+
   querySelector(selector) {
     return this.body.querySelectorAll(selector)[0] ?? null;
   },
 };
+
+globalThis.document.activeElement = globalThis.document.body;
 
 globalThis.customElements = {
   registry: new Map(),

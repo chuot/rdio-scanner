@@ -24,11 +24,36 @@ class ShimNode {
     this.tag = tag;
     this.children = [];
     this.attributes = {};
-    this.dataset = {};
     this.listeners = {};
     this.className = '';
     this._html = '';
     this._text = '';
+  }
+
+  // dataset and the data-* attributes are one thing in a browser: the builders write a row's key, a
+  // field's key, and the mark that says a row is sortable through dataset, the markup the components
+  // lay out carries the same facts as attributes, and the handlers read them back through dataset.
+  // The shim keeps them as one thing, so a control marked through dataset and a control marked in
+  // markup answer the same reading.
+  get dataset() {
+    const node = this;
+
+    const attribute = (key) => `data-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+
+    return new Proxy({}, {
+      get: (_target, key) => (typeof key === 'string' ? node.attributes[attribute(key)] : undefined),
+      set: (_target, key, value) => {
+        if (typeof key === 'string') node.attributes[attribute(key)] = String(value);
+
+        return true;
+      },
+      has: (_target, key) => typeof key === 'string' && node.attributes[attribute(key)] !== undefined,
+      deleteProperty: (_target, key) => {
+        delete node.attributes[attribute(key)];
+
+        return true;
+      },
+    });
   }
 
   append(...nodes) {
@@ -183,18 +208,28 @@ class ShimNode {
     this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
   }
 
+  // A click is answered with the event the browser hands the handler: the control the pointer was on
+  // is the event's target, and a handler sitting on a container — the shell's panel close buttons,
+  // the controls that open a panel — names the control through that target.
   click() {
-    for (const fn of this.listeners.click ?? []) fn();
+    this.dispatchEvent({ type: 'click', target: this, bubbles: true });
   }
 
   // The auth panel refocuses the unlock code field after a refused code; the shim records the
   // focus so a test can see it happened.
+  //
+  // The focus lands where a browser puts it: on the control the keyboard is standing on, which the
+  // page reads back through document.activeElement — the panel that takes the keyboard in, and the
+  // control that gets it back when the panel closes, are both read through it.
   focus() {
     this.focused = true;
+    document.activeElement = this;
   }
 
   blur() {
     this.focused = false;
+
+    if (document.activeElement === this) document.activeElement = document.body;
   }
 
   // Events bubble the way a browser bubbles them: the panel's handler sits on the form, the form
@@ -236,7 +271,31 @@ globalThis.document = {
   querySelector(selector) {
     return this.body.querySelectorAll(selector)[0] ?? null;
   },
+
+  // The control the keyboard is standing on. A browser always has one: the page reads it back to
+  // decide where its own focus rules have to put the keyboard next.
+  activeElement: null,
+
+  // The document is an event target of its own: the fullscreen state the browser moves the page into
+  // is announced on the document, and the page listens there.
+  listeners: {},
+
+  addEventListener(type, fn) {
+    (this.listeners ??= {})[type] = [...(this.listeners?.[type] ?? []), fn];
+  },
+
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
+  },
+
+  dispatchEvent(event) {
+    for (const fn of this.listeners?.[event.type] ?? []) fn(event);
+
+    return true;
+  },
 };
+
+globalThis.document.activeElement = globalThis.document.body;
 
 globalThis.customElements = {
   registry: new Map(),
