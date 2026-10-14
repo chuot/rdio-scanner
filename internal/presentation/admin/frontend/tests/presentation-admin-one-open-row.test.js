@@ -22,6 +22,8 @@ import '../presentation/admin/rdio-admin-systems.js';
 import '../presentation/admin/rdio-admin-sites.js';
 import '../presentation/admin/rdio-admin-talkgroups.js';
 import '../presentation/admin/rdio-admin-units.js';
+import '../presentation/admin/rdio-admin-tools.js';
+import '../presentation/admin/openapi-box.js';
 
 import { connectFields, fieldMessage, findAll, reachField, texts } from './dom-shim.js';
 
@@ -338,3 +340,88 @@ for (const [name, tag] of [['talkgroup', 'rdio-admin-talkgroups'], ['site', 'rdi
   });
 }
 
+// CA-009: the rule mounts on the systems-tree lists, and reaches nothing else. The Tools panels are
+// five actions the operator reads together — they open *Import talkgroups CSV* while *Export config*
+// stays open. The OpenAPI endpoint rows are a table of contents the operator reads down: collapsing
+// every endpoint when one opens turns a reference into a single-item lookup.
+const TOOLS_SEED = {
+  auth: { authenticated: true, docker: false, passwordNeedChange: false },
+  alerts: {},
+};
+
+function seedTools() {
+  const { store } = getAdminContext();
+
+  const state = { ...TOOLS_SEED };
+
+  for (const name of ['systems', 'groups', 'tags', 'access', 'apikeys', 'dirwatch', 'downstreams']) {
+    state[`section:${name}`] = slice([]);
+  }
+
+  state['section:options'] = { baseline: null, working: null, dirty: false, invalid: false, conflict: false };
+
+  store.setState(state);
+
+  return attach('rdio-admin-tools');
+}
+
+function panelByTitle(el, title) {
+  return findAll(el, (node) => node.tag === 'details').find((panel) => rowTitle(panel) === title);
+}
+
+const ENDPOINTS = {
+  title: 'Systems',
+  icon: 'settings',
+  endpoints: [
+    { method: 'GET', path: '/api/systems', summary: 'List the systems' },
+    { method: 'GET', path: '/api/config', summary: 'Read the configuration' },
+    { method: 'GET', path: '/api/systems/{id}', summary: 'Read one system' },
+  ],
+};
+
+function endpointRow(box, path) {
+  return findAll(box, (node) => node.tag === 'details').find(
+    (row) => texts(findAll(row, (node) => node.className === 'endpoint-path')).map((text) => text.replace(/\u200B/g, '')).includes(path),
+  );
+}
+
+test('the Tools panels keep opening side by side', () => {
+  const el = seedTools();
+
+  const exportPanel = panelByTitle(el, 'Export config');
+  const importPanel = panelByTitle(el, 'Import config');
+
+  activate(exportPanel);
+  activate(importPanel);
+
+  assert.equal(exportPanel.open, true, 'Export config stays open while the operator opens the panel beside it');
+  assert.equal(importPanel.open, true, 'Import config opens beside it, not in place of it');
+
+  const panels = findAll(el, (node) => node.tag === 'details');
+
+  assert.equal(panels.filter((panel) => panel.open).length, 2, 'the Tools card holds every panel the operator opened');
+
+  for (const panel of panels) {
+    assert.equal(panel.dataset.key, undefined, 'a Tools panel is not a systems-tree row: the rule has no key to read');
+  }
+});
+
+test('the OpenAPI endpoint rows keep opening side by side', () => {
+  const box = new (customElements.get('rdio-admin-openapi-box'))();
+
+  box.group = ENDPOINTS;
+  box.connectedCallback();
+
+  const [first, second, third] = ['/api/systems', '/api/config', '/api/systems/{id}'].map((path) => endpointRow(box, path));
+
+  activate(first);
+  activate(third);
+
+  assert.equal(first.open, true, 'the endpoint the operator opened first stays open');
+  assert.equal(third.open, true, 'the endpoint the operator opened last is open beside it');
+  assert.equal(findAll(box, (node) => node.tag === 'details').filter((row) => row.open).length, 2, 'the endpoint list keeps every row the operator opened');
+
+  for (const row of [first, second, third]) {
+    assert.equal(row.dataset.key, undefined, 'an endpoint row is not a systems-tree row: the rule has no key to read');
+  }
+});
