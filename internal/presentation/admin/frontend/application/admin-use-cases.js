@@ -365,7 +365,23 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
       if (blacklists !== undefined) {
         patch.config.systems = patch.config.systems.map((system) => (system.id === systemId ? { ...system, blacklists } : system));
-      }    }
+      }
+    }
+
+    // The system's blacklist is a field of the system row, and the Systems section shows that field.
+    // A level save that stored the entry has to leave that section holding the list the server now
+    // holds, or the operator who opens the Systems section after the action reads a list the server
+    // no longer has. A section the operator is editing keeps its own text: the conflict the server
+    // reports is what tells them the section they are standing in moved.
+    const systems = store.getState()[sliceKey('systems')];
+
+    if (systems && blacklists !== undefined && !systems.dirty) {
+      patch[sliceKey('systems')] = {
+        ...systems,
+        baseline: (systems.baseline ?? []).map((system) => (system.id === systemId ? { ...system, blacklists } : system)),
+        working: (systems.working ?? []).map((system) => (system.id === systemId ? { ...system, blacklists } : system)),
+      };
+    }
 
     store.setState(patch);
   }

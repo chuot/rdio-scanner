@@ -6,7 +6,8 @@
 
 import { playAlert } from './play-alert.js';
 import { getAdminContext } from '../../application/admin-context.js';
-import { talkgroupErrors } from '../../domain/systems-validation.js';
+import { subSectionInvalid, talkgroupErrors } from '../../domain/systems-validation.js';
+import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 import { sectionWorking } from './section-shell.js';
 import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import {
@@ -78,6 +79,23 @@ const LED_CAPTION = 'The default LED color is green but it can be changed at sev
 
 function freshRows(component) {
   return getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
+}
+
+// The fields the section refuses to save, said in the words the section marks its fields with. The
+// Blacklist action names them when it refuses, because the operator has to know which rows to finish
+// before the action can store anything.
+function unstoredTalkgroupFields(rows, groups, tags) {
+  const knownIds = { groupIds: groups.map((group) => group.id), tagIds: tags.map((tag) => tag.id) };
+
+  const messages = [];
+
+  for (const row of rows) {
+    for (const message of Object.values(talkgroupErrors(row, rows, knownIds))) {
+      if (!messages.includes(message)) messages.push(message);
+    }
+  }
+
+  return messages.join(', ');
 }
 
 function talkgroupRow(component, talkgroup, index, rows) {
@@ -227,12 +245,32 @@ function talkgroupRow(component, talkgroup, index, rows) {
     blacklist.type = 'button';
     blacklist.className = 'rdio-button-mini blacklist';
     blacklist.textContent = 'Blacklist talkgroup';
-    blacklist.addEventListener('click', () => {
-      // The entry names the reference the server compares a recording against, and it is saved with
-      // the rows of this section: the two halves of the action leave in one save.
+    blacklist.addEventListener('click', async () => {
+      // The action stores what it means, in the click: the row goes away and the system refuses that
+      // talkgroup, and both leave in the save the section's Save button makes. The entry names the
+      // reference the server compares a recording against.
+      //
+      // The rows the click is about to store are composed first, because the section's own validation
+      // has to answer before anything is written. A section holding a row the page will not save cannot
+      // be saved by this click, and an entry queued in such a section is one the operator can never
+      // store: the same invalid row keeps the section's Save disabled.
+      const rows = freshRows(component).filter((_, i) => i !== index);
+      const groups = sectionWorking('groups') ?? [];
+      const tags = sectionWorking('tags') ?? [];
+
+      if (subSectionInvalid(LEVEL, rows, groups, tags)) {
+        showSnackbar(`Blacklisting needs the talkgroups saved first: ${unstoredTalkgroupFields(rows, groups, tags)}`);
+
+        return;
+      }
+
+      commitSubRows(component, rows);
+
       getAdminContext().useCases.blacklistTalkgroup(component.systemId, talkgroup.talkgroupRef);
 
-      commitSubRows(component, freshRows(component).filter((_, i) => i !== index));
+      if (!await getAdminContext().useCases.saveSubSection(LEVEL, component.systemId)) {
+        showSnackbar(`Unable to save the talkgroups of system ${component.systemId}`);
+      }
     });
 
     bottom.append(blacklist);

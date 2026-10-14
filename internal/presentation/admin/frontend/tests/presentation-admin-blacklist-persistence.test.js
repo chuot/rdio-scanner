@@ -18,7 +18,7 @@ import '../presentation/admin/rdio-admin-talkgroups.js';
 
 import { sectionWorking } from '../presentation/admin/section-shell.js';
 
-import { findAll } from './dom-shim.js';
+import { findAll, keystroke, reachField } from './dom-shim.js';
 
 // The page reaches the server through fetch. Recording what fetch is asked to send shows the request
 // a save of the section makes — the request the browser sends, through the page's own api adapter —
@@ -115,16 +115,6 @@ function blacklistButton(el) {
   return findAll(el, (node) => node.tag === 'button' && node.textContent === 'Blacklist talkgroup')[0];
 }
 
-// The save bar is its own element that renders when it is attached to the page; the shim attaches
-// it here so the test can press the Save control the operator sees.
-function saveButton(el) {
-  const bar = findAll(el, (node) => node.tag === 'rdio-admin-section-bar')[0];
-
-  bar.connectedCallback();
-
-  return findAll(bar, (node) => node.tag === 'button' && node.className.split(/\s+/).includes('save'))[0];
-}
-
 // The text the page is holding as this system's blacklist: the systems section's own field today,
 // the per-system slice the talkgroups level saves with from this feature on. The reading asks what
 // the page is holding for this system, not where it keeps it.
@@ -151,25 +141,6 @@ function settled() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-// Blacklist the first talkgroup of the first system, then press Save in that level's save bar:
-// the two clicks the operator makes, in the order they make them.
-async function blacklistAndSave() {
-  requests.length = 0;
-
-  const store = seed();
-  const el = talkgroupsSection();
-
-  blacklistButton(el).click();
-  saveButton(el).click();
-
-  await settled();
-
-  const level = requests.filter((entry) => entry.url === '/api/admin/config/systems/1/talkgroups');
-  const body = level.length === 1 ? JSON.parse(level[0].options.body) : null;
-
-  return { store, level, body };
-}
-
 test('blacklisting a talkgroup writes the reference the server compares, not the identifier the store gave the row', () => {
   const store = seed();
 
@@ -184,25 +155,62 @@ test('blacklisting a talkgroup writes the reference the server compares, not the
   assert.equal(blacklistText(store, 1), '1514000', 'the blacklist entry the action wrote names the row identifier, not the talkgroup reference');
 });
 
-test('one save of the talkgroups level stores the rows and the blacklist together', async () => {
-  const { level, body } = await blacklistAndSave();
+// The action as the operator counts it: one click on a saved talkgroup's Blacklist action stores the
+// row removal and the blacklist entry. The reading is taken with the section's Save control untouched,
+// so what it finds is what the click alone leaves stored.
+async function blacklistOneTalkgroup({ edit } = {}) {
+  requests.length = 0;
 
-  assert.equal(level.length, 1, 'the save of the talkgroups level did not send exactly one request to the level');
-  assert.ok(body, 'the save of the talkgroups level sent a body the test can read');
+  const store = seed();
+  const el = talkgroupsSection();
 
-  assert.deepEqual(rowsOf(body).map((row) => row.talkgroupRef), [1514100], 'the rows the level save sent are not the rows left after the blacklisting');
-  assert.equal(blacklistsOf(body), '1514000', 'the save of the talkgroups level did not carry the blacklist with the rows it saved');
-});
+  if (edit) edit(el);
 
-test('the save of the talkgroups level leaves nothing unsaved behind', async () => {
-  const { store, body } = await blacklistAndSave();
+  blacklistButton(el).click();
 
-  assert.ok(body, 'the save of the talkgroups level sent a body the test can read');
+  await settled();
+
+  const level = requests.filter((entry) => entry.url === '/api/admin/config/systems/1/talkgroups');
+  const body = level.length === 1 ? JSON.parse(level[0].options.body) : null;
+
+  return { store, level, body };
+}
+
+// The Label control of one talkgroup row: the field an operator edits in a row they are not
+// blacklisting, which is the edit the click is expected to store along with its own two halves.
+function labelControl(el, index) {
+  const row = el.querySelectorAll('.rdio-admin-row')[index];
+  const field = row.querySelectorAll('rdio-form-field').find((f) => f.querySelector('label')?.textContent === 'Label');
+
+  return field?.querySelector('input');
+}
+
+test('blacklisting a talkgroup stores the row removal and the blacklist entry in the click, with no save of the section', async () => {
+  const { store, level, body } = await blacklistOneTalkgroup();
+
+  assert.equal(level.length, 1, 'the Blacklist action stored nothing: it sent no request to the talkgroups level');
+
+  assert.ok(body, 'the Blacklist action sent a body the test cannot read');
+  assert.deepEqual(rowsOf(body).map((row) => row.talkgroupRef), [1514100], 'the rows the Blacklist action stored are not the rows left after the talkgroup was blacklisted');
+  assert.equal(blacklistsOf(body), '1514000', 'the Blacklist action did not store the blacklist entry naming the talkgroup reference');
 
   const slice = store.getState()['subsection:talkgroups:1'];
 
-  assert.equal(slice.dirty, false, 'the level save left the talkgroups marked as unsaved');
-  assert.deepEqual(slice.working.map((row) => row.talkgroupRef), [1514100], 'the stored talkgroups still name the blacklisted row');
-  assert.equal(blacklistText(store, 1), '1514000', 'after the save the page does not hold the blacklist it just stored');
-  assert.equal(store.getState()['section:systems'].dirty, false, 'the talkgroups level save left the Systems section marked as unsaved');
+  assert.equal(slice.dirty, false, 'the Blacklist action left the talkgroups marked as unsaved');
+  assert.equal(store.getState()['blacklists:1'].working, '1514000', 'after the Blacklist action the page does not hold the blacklist entry it stored');
+  assert.equal(store.getState()['blacklists:1'].dirty, false, 'the Blacklist action left the blacklist entry marked as unsaved');
+});
+
+test('blacklisting a talkgroup stores the talkgroup edits the operator already made in the same section', async () => {
+  const { body } = await blacklistOneTalkgroup({
+    edit: (el) => {
+      const label = labelControl(el, 1);
+
+      keystroke(label, 'Dispatch 2 renamed');
+      reachField(label);
+    },
+  });
+
+  assert.ok(body, 'the Blacklist action stored nothing: it sent no request to the talkgroups level');
+  assert.deepEqual(rowsOf(body).map((row) => row.label), ['Dispatch 2 renamed'], 'the Blacklist action did not store the talkgroup label the operator had already edited');
 });
