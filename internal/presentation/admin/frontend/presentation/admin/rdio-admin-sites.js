@@ -43,12 +43,12 @@ function siteRow(component, site, index, rows) {
     setRowMarker(details, Object.keys(nextErrors).length > 0);
   };
 
-  const refField = numberField(ctx, details, 'siteRef', 'Id', 'Site identifier in decimal format.', site.siteRef, errors.siteRef);
+  const refField = numberField(ctx, details, 'siteRef', 'Id', 'Site identifier in decimal format.', site.siteRef, errors.siteRef, true);
   refField.input.min = '1';
   refField.input.step = '1';
   onFieldEdit(refField.input, () => update({ siteRef: parseNumber(refField.input.value) }, refField.field, 'siteRef'));
 
-  const labelField = textField(ctx, details, 'label', 'Label', 'Site label.', site.label, errors.label);
+  const labelField = textField(ctx, details, 'label', 'Label', 'Site label.', site.label, errors.label, true);
   onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   deleteRow(details, 'Delete site', () => {

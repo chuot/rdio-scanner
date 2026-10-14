@@ -17,6 +17,7 @@ import {
   rowContext,
   selectField,
   setRowMarker,
+  markRequired,
   textField,
   titleCase,
   makePanel,
@@ -110,15 +111,15 @@ function talkgroupRow(component, talkgroup, index, rows) {
     setRowMarker(details, Object.keys(nextErrors).length > 0);
   };
 
-  const refField = numberField(ctx, details, 'talkgroupRef', 'Id', 'Talkgroup identifier in decimal format.', talkgroup.talkgroupRef, errors.talkgroupRef);
+  const refField = numberField(ctx, details, 'talkgroupRef', 'Id', 'Talkgroup identifier in decimal format.', talkgroup.talkgroupRef, errors.talkgroupRef, true);
   refField.input.min = '1';
   refField.input.step = '1';
   onFieldEdit(refField.input, () => update({ talkgroupRef: parseNumber(refField.input.value) }, refField.field, 'talkgroupRef'));
 
-  const labelField = textField(ctx, details, 'label', 'Label', 'Talkgroup label displayed on the main screen and on buttons.', talkgroup.label, errors.label);
+  const labelField = textField(ctx, details, 'label', 'Label', 'Talkgroup label displayed on the main screen and on buttons.', talkgroup.label, errors.label, true);
   onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
-  const nameField = textField(ctx, details, 'name', 'Name', 'Talkgroup name displayed on the main screen.', talkgroup.name, errors.name);
+  const nameField = textField(ctx, details, 'name', 'Name', 'Talkgroup name displayed on the main screen.', talkgroup.name, errors.name, true);
   onFieldEdit(nameField.input, () => update({ name: nameField.input.value }, nameField.field, 'name'));
 
   // groupIds — checkbox list of the saved groups (multi-select). The list is a field of its own:
@@ -130,7 +131,20 @@ function talkgroupRow(component, talkgroup, index, rows) {
   groupsRow.className = 'row';
 
   const groupsHelp = document.createElement('p');
-  groupsHelp.innerHTML = '<span class="body">Groups</span><br><span class="caption">Groups to which this talkgroups belongs.</span>';
+  const groupsTitle = document.createElement('span');
+  groupsTitle.className = 'body';
+  groupsTitle.textContent = 'Groups';
+
+  const groupsCaption = document.createElement('span');
+  groupsCaption.className = 'caption';
+  groupsCaption.textContent = 'Groups to which this talkgroups belongs.';
+
+  groupsHelp.append(groupsTitle, document.createElement('br'), groupsCaption);
+
+  // The list is required on every row, and the caption naming it carries the marker. The list is
+  // built outside a form field, so the declaration rides the pair the stylesheet reads: the naming
+  // element and the block holding the fields it names.
+  markRequired(groupsRow, groupsTitle);
 
   const groupsList = document.createElement('div');
   groupsList.className = 'rdio-checkbox-list';
@@ -181,7 +195,7 @@ function talkgroupRow(component, talkgroup, index, rows) {
 
   const tagOptions = tags.map((tag) => [String(tag.id), tag.label]);
 
-  const tagField = selectField(ctx, details, 'tagId', 'Tag', 'Tag to which this talkgroups belongs.', tagOptions, talkgroup.tagId === null || talkgroup.tagId === undefined ? '' : String(talkgroup.tagId), (value) => update({ tagId: value === '' ? null : Number(value) }, tagField.field, 'tagId'), null, errors.tagId);
+  const tagField = selectField(ctx, details, 'tagId', 'Tag', 'Tag to which this talkgroups belongs.', tagOptions, talkgroup.tagId === null || talkgroup.tagId === undefined ? '' : String(talkgroup.tagId), (value) => update({ tagId: value === '' ? null : Number(value) }, tagField.field, 'tagId'), null, errors.tagId, true);
 
   const alertOptions = [['', 'No Alert'], ...Object.keys(alerts).map((alert) => [alert, titleCase(alert)])];
 

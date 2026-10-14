@@ -197,12 +197,12 @@ class RdioAdminSystems extends HTMLElement {
       setRowMarker(details, Object.keys(nextErrors).length > 0);
     };
 
-    const refField = numberField(ctx, details, 'systemRef', 'Id', 'System identifier in decimal format.', system.systemRef, errors.systemRef);
+    const refField = numberField(ctx, details, 'systemRef', 'Id', 'System identifier in decimal format.', system.systemRef, errors.systemRef, true);
     refField.input.min = '1';
     refField.input.step = '1';
     onFieldEdit(refField.input, () => update({ systemRef: parseNumber(refField.input.value) }, refField.field, 'systemRef'));
 
-    const labelField = textField(ctx, details, 'label', 'Label', 'System label displayed on the main screen and on the search panel.', system.label, errors.label);
+    const labelField = textField(ctx, details, 'label', 'Label', 'System label displayed on the main screen and on the search panel.', system.label, errors.label, true);
     onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
     const alertOptions = [['', 'No Alert'], ...Object.keys(alerts).map((alert) => [alert, titleCase(alert)])];

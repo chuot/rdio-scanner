@@ -59,7 +59,7 @@ function unitRow(component, unit, index, rows) {
   toField.input.placeholder = 'To';
   onFieldEdit(toField.input, () => update({ unitTo: parseNumber(toField.input.value) }, toField.field, 'unitTo'));
 
-  const labelField = textField(ctx, details, 'label', 'Label', 'Unit label.', unit.label, errors.label);
+  const labelField = textField(ctx, details, 'label', 'Label', 'Unit label.', unit.label, errors.label, true);
   onFieldEdit(labelField.input, () => update({ label: labelField.input.value }, labelField.field, 'label'));
 
   deleteRow(details, 'Delete unit', () => {
