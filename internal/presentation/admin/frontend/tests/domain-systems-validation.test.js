@@ -37,15 +37,15 @@ test('system: label required, systemRef required/min/duplicate', () => {
   });
 });
 
-test('system: blacklists must be a comma separated list of talkgroup ids', () => {
+test('system: blacklists must be a comma separated list of talkgroup references', () => {
   const base = { systemRef: 10, label: 'A' };
 
   assert.deepEqual(systemErrors({ ...base, blacklists: '12,34,56' }, [base]), {});
   assert.deepEqual(systemErrors({ ...base, blacklists: '12, 34' }, [base]), {
-    blacklists: 'Comma separated list of talkgroup Ids',
+    blacklists: 'Comma separated list of talkgroup references',
   });
   assert.deepEqual(systemErrors({ ...base, blacklists: 'abc' }, [base]), {
-    blacklists: 'Comma separated list of talkgroup Ids',
+    blacklists: 'Comma separated list of talkgroup references',
   });
   assert.deepEqual(systemErrors({ ...base, blacklists: '' }, [base]), {});
   assert.deepEqual(systemErrors(base, [base]), {});

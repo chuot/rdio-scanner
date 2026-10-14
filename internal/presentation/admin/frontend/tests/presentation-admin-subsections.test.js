@@ -1,7 +1,7 @@
 // The per-level sections: each section shows the
 // saved systems in display order in its dropdown, edits the rows of the selected
 // system in its own slice, and the talkgroups section carries the Blacklist
-// action that appends the talkgroup id to the system's blacklists.
+// action that adds the talkgroup's reference to the system's blacklist and saves it with the rows.
 
 import './dom-shim.js';
 
@@ -54,6 +54,19 @@ function seed() {
         conflict: false,
       };
     }
+  }
+
+  // The state a loaded configuration leaves the page holding, blacklist slice included: the list the
+  // talkgroups section edits beside its rows and saves with them.
+  for (const system of systems()) {
+    state[`blacklists:${system.id}`] = {
+      systemId: system.id,
+      baseline: system.blacklists ?? '',
+      working: system.blacklists ?? '',
+      dirty: false,
+      invalid: false,
+      conflict: false,
+    };
   }
 
   store.setState({
@@ -124,7 +137,7 @@ test('the units section shows the unit rows of the selected system', () => {
   assert.deepEqual(rowTitles(el), ['Car 1']);
 });
 
-test('blacklisting a talkgroup appends its id to the system blacklists and removes the row', () => {
+test('blacklisting a talkgroup adds its reference to the system blacklist and removes the row', () => {
   const store = seed();
 
   const el = section('rdio-admin-talkgroups');
@@ -135,8 +148,11 @@ test('blacklisting a talkgroup appends its id to the system blacklists and remov
 
   blacklist.click();
 
-  const systems = store.getState()['section:systems'].working;
-
-  assert.equal(systems.find((s) => s.id === 2).blacklists, '7,10');
-  assert.equal(store.getState()['subsection:talkgroups:2'].working.length, 0);
+  // The entry names the reference the server compares a recording against, and it joins the list the
+  // talkgroups section saves with its rows — not the Systems section's copy, which the action leaves
+  // alone so that section is never left holding a change nobody was told about.
+  assert.equal(store.getState()['blacklists:2'].working, '7,1514', 'the entry the Blacklist action wrote is not the reference the server compares');
+  assert.equal(store.getState()['section:systems'].working.find((s) => s.id === 2).blacklists, '7', 'the Blacklist action wrote the Systems section, which does not save the talkgroups it is edited beside');
+  assert.equal(store.getState()['section:systems'].dirty, false, 'the Blacklist action left the Systems section asking to be saved');
+  assert.equal(store.getState()['subsection:talkgroups:2'].working.length, 0, 'the blacklisted talkgroup is still in the rows');
 });

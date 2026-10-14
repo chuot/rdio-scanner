@@ -5,6 +5,8 @@
 
 import { computeTodos } from '../domain/todos.js';
 import { normalizeDirwatchRow } from '../domain/dirwatch.js';
+import { blacklistsTextInvalid } from '../domain/systems-validation.js';
+import { appendBlacklistsEntry } from '../domain/blacklists.js';
 import {
   ADMIN_CONFIG_SECTIONS,
   SYSTEM_SUB_LEVELS,
@@ -18,6 +20,11 @@ import { deepEqual } from '../../../common/frontend/application/store.js';
 const sliceKey = (name) => `section:${name}`;
 
 const subSliceKey = (level, systemId) => `subsection:${level}:${systemId}`;
+
+// The blacklist a system's talkgroups section edits beside its rows. It is stored on the system row,
+// and it is saved with the talkgroups that were edited next to it, so it travels as its own slice
+// keyed by the system rather than riding in the Systems section's working copy.
+const blacklistsSliceKey = (systemId) => `blacklists:${systemId}`;
 
 // The dirwatch rows the server answers carry the shape the server stores: a delay clamped to one
 // day, below the floor the section's rule accepts. They load through the legacy form's own clamp,
@@ -42,6 +49,19 @@ function freshSubState(level, systemId, baseline) {
     working: createSubSectionWorkingCopy(level, baseline),
     dirty: false,
     invalid: false,
+    conflict: false,
+  };
+}
+
+function freshBlacklistsState(systemId, baseline) {
+  const text = baseline ?? '';
+
+  return {
+    systemId,
+    baseline: text,
+    working: text,
+    dirty: false,
+    invalid: blacklistsTextInvalid(text),
     conflict: false,
   };
 }
@@ -111,7 +131,9 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     }
 
     // Every level of every system gets its own slice, with the same
-    // dirty/conflict preservation the sections use.
+    // dirty/conflict preservation the sections use. The blacklist the talkgroups section edits
+    // beside its rows gets one too, keyed by the system it belongs to: it is stored on the system
+    // row and saved with the rows it was edited next to.
     for (const system of config?.systems ?? []) {
       for (const level of SYSTEM_SUB_LEVELS) {
         const key = subSliceKey(level, system.id);
@@ -126,14 +148,40 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
           patch[key] = freshSubState(level, system.id, baseline);
         }
       }
+
+      patch[blacklistsSliceKey(system.id)] = blacklistsState(system, store.getState()[blacklistsSliceKey(system.id)]);
     }
 
     store.setState(patch);
   }
 
+  // The systems section answers a save with the systems as the store holds them, blacklist text
+  // included. The talkgroups section edits that text beside its rows, so a systems save re-seeds
+  // each system's blacklist slice the way a server broadcast does: a slice the operator has not
+  // changed follows the stored text, and a slice holding their own edit is flagged as a conflict.
+  function blacklistsState(system, current) {
+    const baseline = system.blacklists ?? '';
+
+    if (current && (current.dirty || current.conflict)) {
+      const dirty = current.working !== baseline;
+
+      return { ...current, baseline, dirty, conflict: dirty };
+    }
+
+    return freshBlacklistsState(system.id, baseline);
+  }
+
   function updateSectionAndConfig(name, baseline) {
     const loaded = loadSectionRows(name, baseline);
     const patch = { [sliceKey(name)]: freshSectionState(name, loaded) };
+
+    if (name === 'systems') {
+      for (const system of loaded ?? []) {
+        const key = blacklistsSliceKey(system.id);
+
+        patch[key] = blacklistsState(system, store.getState()[key]);
+      }
+    }
 
     const config = store.getState().config;
 
@@ -289,8 +337,23 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     });
   }
 
-  function updateSubSectionAndConfig(level, systemId, baseline) {
-    const patch = { [subSliceKey(level, systemId)]: freshSubState(level, systemId, baseline) };
+  function updateSubSectionAndConfig(level, systemId, baseline, blacklists) {
+    const key = subSliceKey(level, systemId);
+
+    const patch = { [key]: freshSubState(level, systemId, baseline) };
+
+    if (blacklists !== undefined) {
+      const current = store.getState()[blacklistsSliceKey(systemId)];
+
+      patch[blacklistsSliceKey(systemId)] = {
+        ...current,
+        baseline: blacklists,
+        working: blacklists,
+        dirty: false,
+        invalid: blacklistsTextInvalid(blacklists),
+        conflict: false,
+      };
+    }
 
     const config = store.getState().config;
 
@@ -299,7 +362,10 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
         ...config,
         systems: (config.systems ?? []).map((system) => (system.id === systemId ? { ...system, [level]: baseline } : system)),
       };
-    }
+
+      if (blacklists !== undefined) {
+        patch.config.systems = patch.config.systems.map((system) => (system.id === systemId ? { ...system, blacklists } : system));
+      }    }
 
     store.setState(patch);
   }
@@ -325,10 +391,16 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
     if (!current || current.invalid) return false;
 
-    try {
-      const saved = await api.saveSubSection(systemId, level, serializeSubSection(level, current.working));
+    // The talkgroups level is edited beside the system's blacklist, and the save that drops a
+    // talkgroup stores the entry that refuses it: the two halves of one action leave in one request.
+    const blacklists = level === 'talkgroups' ? store.getState()[blacklistsSliceKey(systemId)] : null;
 
-      updateSubSectionAndConfig(level, systemId, saved);
+    if (blacklists?.invalid) return false;
+
+    try {
+      const saved = await api.saveSubSection(systemId, level, serializeSubSection(level, current.working), blacklists?.working);
+
+      updateSubSectionAndConfig(level, systemId, saved, blacklists?.working);
 
       return true;
     } catch {
@@ -341,7 +413,9 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     try {
       const value = await api.getSubSection(systemId, level);
 
-      updateSubSectionAndConfig(level, systemId, value);
+      // The level answers its rows. The blacklist saved with them is the text the last save of this
+      // level stored, so a reload starts from that text and drops an entry the operator has not saved.
+      updateSubSectionAndConfig(level, systemId, value, store.getState()[blacklistsSliceKey(systemId)]?.baseline);
 
       return true;
     } catch {
@@ -353,7 +427,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     const current = store.getState()[subSliceKey(level, systemId)];
     if (!current) return;
 
-    store.setState({
+    const patch = {
       [subSliceKey(level, systemId)]: {
         ...current,
         working: createSubSectionWorkingCopy(level, current.baseline),
@@ -361,7 +435,50 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
         invalid: false,
         conflict: false,
       },
+    };
+
+    // The blacklist an entry was added to is part of the same unsaved change: Discard in the
+    // talkgroups section takes the entry back out with the row it put back.
+    if (level === 'talkgroups') {
+      const key = blacklistsSliceKey(systemId);
+      const blacklists = store.getState()[key];
+
+      if (blacklists) {
+        patch[key] = {
+          ...blacklists,
+          working: blacklists.baseline,
+          dirty: false,
+          invalid: blacklistsTextInvalid(blacklists.baseline),
+          conflict: false,
+        };
+      }
+    }
+
+    store.setState(patch);
+  }
+
+  function setBlacklistsWorking(systemId, value) {
+    const current = store.getState()[blacklistsSliceKey(systemId)];
+    if (!current) return;
+
+    const text = value ?? '';
+
+    store.setState({
+      [blacklistsSliceKey(systemId)]: {
+        ...current,
+        working: text,
+        dirty: text !== current.baseline,
+        invalid: blacklistsTextInvalid(text),
+      },
     });
+  }
+
+  // Blacklisting a talkgroup: the entry joins the system's blacklist and the row leaves the
+  // talkgroups. Both are unsaved until the talkgroups section is saved, which stores them together.
+  function blacklistTalkgroup(systemId, talkgroupRef) {
+    const current = store.getState()[blacklistsSliceKey(systemId)];
+
+    setBlacklistsWorking(systemId, appendBlacklistsEntry(current?.working, talkgroupRef));
   }
 
   async function changePassword(currentPassword, newPassword) {
@@ -390,6 +507,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     discardSection,
     setSubSectionWorking,
     setSubSectionInvalid,
+    setBlacklistsWorking,
+    blacklistTalkgroup,
     saveSubSection,
     reloadSubSection,
     discardSubSection,

@@ -49,6 +49,12 @@ function sliceKey(component) {
   return `subsection:${component.subSection.level}:${component.systemId}`;
 }
 
+// The blacklist slice of the system the scaffold shows: the talkgroups level edits it beside its
+// rows, so the section follows the system it shows and its rows follow the blacklist with it.
+function blacklistsKey(component) {
+  return component.subSection.level === 'talkgroups' ? `blacklists:${component.systemId}` : null;
+}
+
 function bind(component) {
   for (const unsubscribe of component.unsubscribes ?? []) unsubscribe();
 
@@ -60,10 +66,13 @@ function bind(component) {
 
   const { store } = getAdminContext();
 
-  component.unsubscribes = [store.subscribe(
-    ['section:systems', ...component.subSection.listen, component.boundKey],
-    () => component.render(),
-  )];
+  const keys = ['section:systems', ...component.subSection.listen, component.boundKey];
+
+  const blacklists = blacklistsKey(component);
+
+  if (blacklists) keys.push(blacklists);
+
+  component.unsubscribes = [store.subscribe(keys, () => component.render())];
 }
 
 // `spec` is the section's description: its level, caption, add control label,

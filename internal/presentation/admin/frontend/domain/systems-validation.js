@@ -9,6 +9,13 @@
 
 const BLACKLISTS_PATTERN = /^[0-9]+(,[0-9]+)*$/;
 
+// The one rule a system's blacklist is held to, wherever the list is edited: the Systems section's
+// field and the talkgroups section's blacklist both answer through this, so a list the section shows
+// as valid is a list the server will accept.
+export function blacklistsTextInvalid(text) {
+  return typeof text === 'string' && text.length > 0 && !BLACKLISTS_PATTERN.test(text);
+}
+
 export function systemErrors(system, systems) {
   const errors = {};
 
@@ -26,8 +33,8 @@ export function systemErrors(system, systems) {
 
   if (!system.label) errors.label = 'Label is required';
 
-  if (typeof system.blacklists === 'string' && system.blacklists.length && !BLACKLISTS_PATTERN.test(system.blacklists)) {
-    errors.blacklists = 'Comma separated list of talkgroup Ids';
+  if (blacklistsTextInvalid(system.blacklists)) {
+    errors.blacklists = 'Comma separated list of talkgroup references';
   }
 
   return errors;

@@ -1,13 +1,13 @@
 // rdio-admin-talkgroups: the talkgroups of one system, saved on
 // their own. Same scaffold as the sites and units sections, plus the fields a
 // talkgroup carries (groups, tag, alert, delay, frequency, led, type) and the
-// Blacklist action, which appends the talkgroup id to the system's blacklists
-// and removes the row, like the legacy tool.
+// Blacklist action, which adds the talkgroup's reference to the system's blacklist and removes the
+// row, so one save of this section stores both.
 
 import { playAlert } from './play-alert.js';
 import { getAdminContext } from '../../application/admin-context.js';
 import { talkgroupErrors } from '../../domain/systems-validation.js';
-import { sectionWorking, setSectionWorking } from './section-shell.js';
+import { sectionWorking } from './section-shell.js';
 import { commitSubRows, connectSubSection, disconnectSubSection, refreshField, renderSubSection, rowPanelKey } from './sub-section-shell.js';
 import {
   deleteRow,
@@ -228,17 +228,9 @@ function talkgroupRow(component, talkgroup, index, rows) {
     blacklist.className = 'rdio-button-mini blacklist';
     blacklist.textContent = 'Blacklist talkgroup';
     blacklist.addEventListener('click', () => {
-      // The blacklists live on the system row, which the Systems section saves;
-      // the row removal lives in this level's slice.
-      const systems = sectionWorking('systems') ?? [];
-
-      setSectionWorking('systems', systems.map((system) => {
-        if (system.id !== component.systemId) return system;
-
-        const blacklists = system.blacklists?.trim() ? `${system.blacklists},${talkgroup.id}` : `${talkgroup.id}`;
-
-        return { ...system, blacklists };
-      }));
+      // The entry names the reference the server compares a recording against, and it is saved with
+      // the rows of this section: the two halves of the action leave in one save.
+      getAdminContext().useCases.blacklistTalkgroup(component.systemId, talkgroup.talkgroupRef);
 
       commitSubRows(component, freshRows(component).filter((_, i) => i !== index));
     });

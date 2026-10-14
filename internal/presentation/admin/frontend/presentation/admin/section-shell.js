@@ -74,6 +74,23 @@ export function setSubInvalid(level, systemId, invalid) {
   getAdminContext().useCases.setSubSectionInvalid(level, systemId, invalid);
 }
 
+// The system's blacklist, edited by the talkgroups section beside its rows and saved with them.
+export function blacklistsSlice(systemId) {
+  return getAdminContext().store.getState()[`blacklists:${systemId}`];
+}
+
+export function bindBlacklistsSlice(systemId, callback) {
+  return getAdminContext().store.subscribe([`blacklists:${systemId}`], () => callback(blacklistsSlice(systemId)));
+}
+
+export function blacklistsWorking(systemId) {
+  return blacklistsSlice(systemId)?.working ?? '';
+}
+
+export function setBlacklistsWorking(systemId, value) {
+  getAdminContext().useCases.setBlacklistsWorking(systemId, value);
+}
+
 class RdioAdminSectionBar extends HTMLElement {
   connectedCallback() {
     if (this.dataset.bound) return;
@@ -88,6 +105,10 @@ class RdioAdminSectionBar extends HTMLElement {
       this.systemId = Number(systemId);
 
       this.unsubscribe = bindSubSlice(level, this.systemId, () => this.render());
+
+      // The talkgroups level is saved together with the system's blacklist, so its bar answers the
+      // two as the one change the operator is standing in.
+      if (level === 'talkgroups') this.unsubscribeBlacklists = bindBlacklistsSlice(this.systemId, () => this.render());
     } else {
       this.unsubscribe = bindSectionSlice(this.dataset.section, () => this.render());
     }
@@ -97,6 +118,7 @@ class RdioAdminSectionBar extends HTMLElement {
 
   disconnectedCallback() {
     this.unsubscribe?.();
+    this.unsubscribeBlacklists?.();
   }
 
   render() {
@@ -106,12 +128,18 @@ class RdioAdminSectionBar extends HTMLElement {
 
     if (!slice) return;
 
+    const blacklists = this.level === 'talkgroups' ? blacklistsSlice(this.systemId) : null;
+
+    const dirty = slice.dirty || blacklists?.dirty === true;
+    const invalid = slice.invalid || blacklists?.invalid === true;
+    const conflict = slice.conflict || blacklists?.conflict === true;
+
     const label = this.level ? `the ${this.level} of system ${this.systemId}` : sectionLabel(name);
 
     const bar = document.createElement('div');
     bar.className = 'rdio-admin-section-bar';
 
-    if (slice.conflict) {
+    if (conflict) {
       const banner = document.createElement('div');
       banner.className = 'rdio-admin-conflict';
       banner.setAttribute('role', 'alert');
@@ -134,7 +162,7 @@ class RdioAdminSectionBar extends HTMLElement {
     save.type = 'button';
     save.className = 'rdio-button save';
     save.textContent = 'Save';
-    save.disabled = !slice.dirty || slice.invalid;
+    save.disabled = !dirty || invalid;
     save.addEventListener('click', async () => {
       const ok = this.level
         ? await getAdminContext().useCases.saveSubSection(this.level, this.systemId)
@@ -147,7 +175,7 @@ class RdioAdminSectionBar extends HTMLElement {
     discard.type = 'button';
     discard.className = 'rdio-button-mini discard';
     discard.textContent = 'Discard';
-    discard.disabled = !slice.dirty && !slice.conflict;
+    discard.disabled = !dirty && !conflict;
     discard.addEventListener('click', () =>
       this.level ? getAdminContext().useCases.discardSubSection(this.level, this.systemId) : getAdminContext().useCases.discardSection(name));
 

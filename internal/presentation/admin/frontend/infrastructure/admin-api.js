@@ -73,10 +73,16 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('GET', `/config/systems/${systemId}/${level}`);
     },
 
-    async saveSubSection(systemId, level, value) {
+    // The talkgroups level of a system is saved as the list of its rows. It is also saved as the
+    // object that carries those rows beside the system's blacklist, so the save that drops a
+    // talkgroup stores the entry that refuses it in the same request. A level save that names no
+    // blacklist sends the list it has always sent.
+    async saveSubSection(systemId, level, value, blacklists) {
       assertSubLevel(level);
 
-      return request('PUT', `/config/systems/${systemId}/${level}`, value);
+      const body = typeof blacklists === 'string' ? { [level]: value, blacklists } : value;
+
+      return request('PUT', `/config/systems/${systemId}/${level}`, body);
     },
 
     getAlerts() {
