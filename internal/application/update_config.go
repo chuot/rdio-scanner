@@ -211,10 +211,23 @@ func newConfigurationSaver(configuration ConfigurationPorts) configurationSaver 
 	}
 }
 
-// save stores one section. A section the payload did not name is a request to save nothing,
-// which is a refusal rather than a no-op: it means the caller and the server disagree about
-// what was submitted.
+// save stores one section, writing the section's whole aggregate: the systems section together
+// with the sites, talkgroups, and units under each system. A section the payload did not name is a
+// request to save nothing, which is a refusal rather than a no-op: it means the caller and the
+// server disagree about what was submitted.
 func (saver configurationSaver) save(ctx context.Context, section ConfigSection, changes ConfigurationChanges) error {
+	return saver.saveSystemsSection(ctx, section, changes, saver.repos.Systems.SaveSystems)
+}
+
+// saveSection stores one section of a per-section save. The systems section is the one section
+// whose parts are saved on their own, elsewhere: its sites, talkgroups, and units are written by
+// the save of that level, for the system that level shows, so the section save writes the system
+// rows and leaves every level as the store holds it.
+func (saver configurationSaver) saveSection(ctx context.Context, section ConfigSection, changes ConfigurationChanges) error {
+	return saver.saveSystemsSection(ctx, section, changes, saver.repos.Systems.SaveSystemSettings)
+}
+
+func (saver configurationSaver) saveSystemsSection(ctx context.Context, section ConfigSection, changes ConfigurationChanges, saveSystems func(context.Context, domain.Systems) error) error {
 	if !changes.names(section) {
 		return ErrNoConfigurationChange
 	}
@@ -254,7 +267,7 @@ func (saver configurationSaver) save(ctx context.Context, section ConfigSection,
 	case OptionsSection:
 		return saver.repos.Options.WriteOptions(ctx, *changes.Options)
 	case SystemsSection:
-		return saver.repos.Systems.SaveSystems(ctx, *changes.Systems)
+		return saveSystems(ctx, *changes.Systems)
 	case TagsSection:
 		return saver.repos.Tags.SaveTags(ctx, *changes.Tags)
 	}
@@ -421,7 +434,7 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 
 	handler.saver.dirwatchers.Stop(ctx)
 
-	failure := handler.saver.save(ctx, cmd.Section, cmd.Changes)
+	failure := handler.saver.saveSection(ctx, cmd.Section, cmd.Changes)
 	if failure != nil {
 		if !errors.Is(failure, ErrNoConfigurationChange) {
 			handler.saver.reportFailure(ctx, failure)

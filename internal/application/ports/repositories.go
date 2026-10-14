@@ -126,14 +126,21 @@ type SystemRepository interface {
 	// their talkgroups, sites, and units.
 	SaveSystems(ctx context.Context, systems domain.Systems) error
 
+	// SaveSystemSettings reconciles the stored systems with the given ones and writes
+	// nothing under a system. The sites, talkgroups, and units of a system are stored
+	// by the save of that level, for the system that level shows, so a save of the
+	// system row's own fields leaves every level as the store holds it.
+	SaveSystemSettings(ctx context.Context, systems domain.Systems) error
+
 	// SaveSystemSites reconciles the stored sites of one system with the given ones,
 	// renumbering their order. A system the store does not have reports ErrNotFound.
 	SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error
 
 	// SaveSystemTalkgroups reconciles the stored talkgroups of one system with the
-	// given ones, renumbering their order. A system the store does not have reports
-	// ErrNotFound.
-	SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups) error
+	// given ones, renumbering their order, and stores the blacklist that was edited
+	// beside them in the same save. A nil blacklist leaves the stored text alone. A
+	// system the store does not have reports ErrNotFound.
+	SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups, blacklists *domain.Blacklists) error
 
 	// SaveSystemUnits reconciles the stored units of one system with the given ones,
 	// renumbering their order. A system the store does not have reports ErrNotFound.

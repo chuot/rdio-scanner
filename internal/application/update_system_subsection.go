@@ -55,12 +55,17 @@ func IsSystemSubSection(name string) bool {
 
 // UpdateSystemSubSectionCommand replaces one level of one system. The level decides
 // which of the three payloads is read; the others are ignored.
+//
+// Blacklists is the blacklist the talkgroups level edits beside its rows, saved with them.
+// A command that names none — the sites and units levels, and a talkgroups save that did
+// not touch the field — leaves the stored text alone.
 type UpdateSystemSubSectionCommand struct {
 	SystemID   uint64
 	Level      SystemSubSection
 	Sites      domain.Sites
 	Talkgroups domain.Talkgroups
 	Units      domain.Units
+	Blacklists *domain.Blacklists
 }
 
 // UpdateSystemSubSectionHandler saves one level of one system, then announces the
@@ -125,13 +130,14 @@ func (handler *UpdateSystemSubSectionHandler) Handle(ctx context.Context, cmd Up
 }
 
 // save writes the level's rows through the system repository, which renumbers their
-// order and refuses a system it does not store.
+// order and refuses a system it does not store. The talkgroups level carries the blacklist
+// that was edited beside the rows, and the repository stores both in one save.
 func (handler *UpdateSystemSubSectionHandler) save(ctx context.Context, cmd UpdateSystemSubSectionCommand) error {
 	switch cmd.Level {
 	case SitesSubSection:
 		return handler.saver.repos.Systems.SaveSystemSites(ctx, cmd.SystemID, cmd.Sites)
 	case TalkgroupsSubSection:
-		return handler.saver.repos.Systems.SaveSystemTalkgroups(ctx, cmd.SystemID, cmd.Talkgroups)
+		return handler.saver.repos.Systems.SaveSystemTalkgroups(ctx, cmd.SystemID, cmd.Talkgroups, cmd.Blacklists)
 	case UnitsSubSection:
 		return handler.saver.repos.Systems.SaveSystemUnits(ctx, cmd.SystemID, cmd.Units)
 	}

@@ -351,25 +351,74 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 	return nil
 }
 
+// SaveSystemSettings records the submitted systems and, like the stored systems table, writes
+// nothing under a system: the levels keep the rows the fake holds for them.
+func (systems *Systems) SaveSystemSettings(ctx context.Context, next domain.Systems) error {
+	if systems.Err != nil {
+		return systems.Err
+	}
+
+	if systems.SaveErr != nil {
+		systems.Stored = next
+
+		return systems.SaveErr
+	}
+
+	out := append(domain.Systems{}, next...)
+
+	systemID := uint64(0)
+
+	for _, system := range out {
+		if system.ID > systemID {
+			systemID = system.ID
+		}
+	}
+
+	for i := range out {
+		if out[i].ID == 0 {
+			systemID++
+			out[i].ID = systemID
+		}
+
+		// The levels under a system are written by the save of that level. A systems-section
+		// save keeps the rows the store holds for a system it stores, and a system the store
+		// does not have starts with none, as the stored tables do.
+		if stored, ok := systems.Stored.ByID(out[i].ID); ok {
+			out[i].Sites = stored.Sites
+			out[i].Talkgroups = stored.Talkgroups
+			out[i].Units = stored.Units
+		} else {
+			out[i].Sites = nil
+			out[i].Talkgroups = nil
+			out[i].Units = nil
+		}
+	}
+
+	systems.Stored = out
+
+	return nil
+}
+
 // SaveSystemSites records the sites of one system, renumbering their order the way the
 // stored table renumbers them. A system the fake does not store reports ErrNotFound.
 func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error {
-	return systems.saveSubSection("sites", systemID, sites)
+	return systems.saveSubSection("sites", systemID, sites, nil)
 }
 
-// SaveSystemTalkgroups records the talkgroups of one system, renumbering their order.
-func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups) error {
-	return systems.saveSubSection("talkgroups", systemID, talkgroups)
+// SaveSystemTalkgroups records the talkgroups of one system, renumbering their order, and the
+// blacklist that was edited beside them. A nil blacklist leaves the stored text alone.
+func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups, blacklists *domain.Blacklists) error {
+	return systems.saveSubSection("talkgroups", systemID, talkgroups, blacklists)
 }
 
 // SaveSystemUnits records the units of one system, renumbering their order.
 func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, units domain.Units) error {
-	return systems.saveSubSection("units", systemID, units)
+	return systems.saveSubSection("units", systemID, units, nil)
 }
 
 // saveSubSection performs the shared part of the three per-level saves: the store
 // checks the system, renumbers the submitted rows 1-based, and keeps them.
-func (systems *Systems) saveSubSection(level string, systemID uint64, rows any) error {
+func (systems *Systems) saveSubSection(level string, systemID uint64, rows any, blacklists *domain.Blacklists) error {
 	if systems.Err != nil {
 		return systems.Err
 	}
@@ -462,6 +511,12 @@ func (systems *Systems) saveSubSection(level string, systemID uint64, rows any) 
 			}
 
 			systems.Stored[i].Units = typed
+		}
+
+		// The blacklist the talkgroups section edits beside its rows is stored by the same
+		// save. A save that names none leaves the text the stored system holds.
+		if blacklists != nil {
+			systems.Stored[i].Blacklists = *blacklists
 		}
 	}
 

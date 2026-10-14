@@ -148,9 +148,41 @@ func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, si
 	return nil
 }
 
+// SaveSystemSettings reconciles the systems table with the given systems and leaves the reconciled
+// result as what the server runs with, exactly as the whole-catalog save does, and writes nothing
+// under a system.
+//
+// The sites, talkgroups, and units under a system are written by the save of that level, for the
+// system that level shows. A save of the Systems section carries the system row's own fields and
+// leaves every level as the store holds it, so the section cannot answer for a level the operator
+// changed somewhere else — and cannot store back the rows that level deleted.
+func (systems *Systems) SaveSystemSettings(ctx context.Context, next domain.Systems) error {
+	systems.mutex.Lock()
+	defer systems.mutex.Unlock()
+
+	systems.live = next
+	systems.known = true
+
+	if err := writeSystemSettings(ctx, systems.store, next); err != nil {
+		return err
+	}
+
+	loaded, err := readSystems(ctx, systems.store)
+	if err != nil {
+		return err
+	}
+
+	systems.live = loaded
+
+	return nil
+}
+
 // SaveSystemTalkgroups replaces the talkgroups of one system, renumbering their order
-// and reconciling their group memberships.
-func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups) error {
+// and reconciling their group memberships. The blacklist the talkgroups section edits beside its
+// rows is stored in the same transaction: the save that drops a talkgroup stores the entry that
+// refuses it. A save that names no blacklist — the sites and units levels, and a talkgroups save
+// that did not touch the field — leaves the stored text alone.
+func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups, blacklists *domain.Blacklists) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
@@ -163,7 +195,11 @@ func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint6
 	}
 
 	if err := saveSystemLevel(ctx, systems.store, systemID, func(tx transaction) error {
-		return writeTalkgroups(ctx, tx, systems.store.dialect, systemID, talkgroups)
+		if err := writeTalkgroups(ctx, tx, systems.store.dialect, systemID, talkgroups); err != nil {
+			return err
+		}
+
+		return writeSystemBlacklists(ctx, tx, systemID, blacklists)
 	}); err != nil {
 		return err
 	}
@@ -464,35 +500,9 @@ func writeSystems(ctx context.Context, s store, next domain.Systems) error {
 	}
 
 	for _, system := range next {
-		var (
-			id    = system.ID
-			count uint64
-		)
-
-		if id > 0 {
-			const query = `SELECT COUNT(*) FROM "systems" WHERE "systemId" = ?`
-
-			if err := tx.queryRow(ctx, query, id).Scan(&count); err != nil {
-				return statementError("systems", "write", err, query)
-			}
-		}
-
-		if count == 0 {
-			const query = `INSERT INTO "systems" ("alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
-			id, err = insertAssignedID(ctx, tx, s.dialect, query, `RETURNING "systemId"`,
-				system.Alert, system.AutoPopulate, string(system.Blacklists), system.Delay, system.Label, system.LED, system.Order, system.SystemRef, system.Kind)
-			if err != nil {
-				return statementError("systems", "write", err, query)
-			}
-
-		} else {
-			const query = `UPDATE "systems" SET "alert" = ?, "autoPopulate" = ?, "blacklists" = ?, "delay" = ?, "label" = ?, "led" = ?, "order" = ?, "systemRef" = ?, "type" = ? WHERE "systemId" = ?`
-
-			if _, err := tx.exec(ctx, query,
-				system.Alert, system.AutoPopulate, string(system.Blacklists), system.Delay, system.Label, system.LED, system.Order, system.SystemRef, system.Kind, id); err != nil {
-				return statementError("systems", "write", err, query)
-			}
+		id, err := writeSystemRow(ctx, tx, s, system)
+		if err != nil {
+			return err
 		}
 
 		if err := writeSites(ctx, tx, id, system.Sites); err != nil {
@@ -510,6 +520,97 @@ func writeSystems(ctx context.Context, s store, next domain.Systems) error {
 
 	if err := tx.commit(); err != nil {
 		return operationError("systems", "write", err)
+	}
+
+	return nil
+}
+
+// writeSystemSettings is the systems-section save: the same reconcile of the systems table that
+// the whole-catalog save performs, and nothing under a system. The levels keep the rows the store
+// holds for them, which is what the level sections write.
+func writeSystemSettings(ctx context.Context, s store, next domain.Systems) error {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return operationError("systems", "writesystemsettings", err)
+	}
+
+	defer tx.rollback()
+
+	stored, err := readColumnIDs(ctx, tx, "systems", "writesystemsettings", `SELECT "systemId" FROM "systems"`)
+	if err != nil {
+		return err
+	}
+
+	if removed := droppedIdentifiers(idsOfSystems(next), stored); len(removed) > 0 {
+		query := `DELETE FROM "systems" WHERE "systemId" IN (` + placeholders(len(removed)) + `)`
+
+		if _, err := tx.exec(ctx, query, valuesOf(removed)...); err != nil {
+			return statementError("systems", "writesystemsettings", err, query)
+		}
+	}
+
+	for _, system := range next {
+		if _, err := writeSystemRow(ctx, tx, s, system); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.commit(); err != nil {
+		return operationError("systems", "writesystemsettings", err)
+	}
+
+	return nil
+}
+
+// writeSystemRow inserts or updates one system row and answers with the identity the table holds
+// for it. Both the whole-catalog save and the systems-section save write the row this way.
+func writeSystemRow(ctx context.Context, tx transaction, s store, system domain.System) (uint64, error) {
+	var (
+		id    = system.ID
+		count uint64
+	)
+
+	if id > 0 {
+		const query = `SELECT COUNT(*) FROM "systems" WHERE "systemId" = ?`
+
+		if err := tx.queryRow(ctx, query, id).Scan(&count); err != nil {
+			return 0, statementError("systems", "write", err, query)
+		}
+	}
+
+	if count == 0 {
+		const query = `INSERT INTO "systems" ("alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+		id, err := insertAssignedID(ctx, tx, s.dialect, query, `RETURNING "systemId"`,
+			system.Alert, system.AutoPopulate, string(system.Blacklists), system.Delay, system.Label, system.LED, system.Order, system.SystemRef, system.Kind)
+		if err != nil {
+			return 0, statementError("systems", "write", err, query)
+		}
+
+		return id, nil
+	}
+
+	const query = `UPDATE "systems" SET "alert" = ?, "autoPopulate" = ?, "blacklists" = ?, "delay" = ?, "label" = ?, "led" = ?, "order" = ?, "systemRef" = ?, "type" = ? WHERE "systemId" = ?`
+
+	if _, err := tx.exec(ctx, query,
+		system.Alert, system.AutoPopulate, string(system.Blacklists), system.Delay, system.Label, system.LED, system.Order, system.SystemRef, system.Kind, id); err != nil {
+		return 0, statementError("systems", "write", err, query)
+	}
+
+	return id, nil
+}
+
+// writeSystemBlacklists stores a system's blacklist text, in the transaction that writes the
+// talkgroups it was edited beside. A save that names no blacklist leaves the column as it is.
+func writeSystemBlacklists(ctx context.Context, tx transaction, systemID uint64, blacklists *domain.Blacklists) error {
+	if blacklists == nil {
+		return nil
+	}
+
+	const query = `UPDATE "systems" SET "blacklists" = ? WHERE "systemId" = ?`
+
+	if _, err := tx.exec(ctx, query, string(*blacklists), systemID); err != nil {
+		return statementError("systems", "savetalkgroups", err, query)
 	}
 
 	return nil

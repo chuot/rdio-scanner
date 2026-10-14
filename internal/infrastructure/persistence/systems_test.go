@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1293,7 +1294,7 @@ func TestSaveSystemTalkgroupsReplacesTheTalkgroupsOfOneSystem(t *testing.T) {
 		{TalkgroupRef: 1514100, Label: "Fire", Name: "Dispatch 2", TagID: 6, GroupIDs: []uint64{3}},
 	}
 
-	if err := repo.SaveSystemTalkgroups(context.Background(), 1, talkgroups); err != nil {
+	if err := repo.SaveSystemTalkgroups(context.Background(), 1, talkgroups, nil); err != nil {
 		t.Fatalf("SaveSystemTalkgroups: %v", err)
 	}
 
@@ -1402,7 +1403,7 @@ func TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched(t *testing.T) {
 		t.Fatalf("SaveSystemSites: %v", err)
 	}
 
-	if err := repo.SaveSystemTalkgroups(context.Background(), 1, talkgroups); err != nil {
+	if err := repo.SaveSystemTalkgroups(context.Background(), 1, talkgroups, nil); err != nil {
 		t.Fatalf("SaveSystemTalkgroups: %v", err)
 	}
 
@@ -1421,4 +1422,244 @@ func TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched(t *testing.T) {
 	if !reflect.DeepEqual(units, unitsWant) {
 		t.Errorf("SaveSystemUnits renumbered the caller's slice:\n  got  %v\n  want %v", units, unitsWant)
 	}
+}
+
+// TestSaveSystemSettingsWritesTheSystemRowAndLeavesTheLevels is the per-section save of the Systems
+// section: it writes the system row's own columns. The sites, talkgroups, and units under a system
+// are written by the save of that level, for the system that level shows. A save of the Systems
+// section leaves them as the store holds them — including a row the level deleted after the page
+// loaded its copy, which writing the whole aggregate used to put back.
+func TestSaveSystemSettingsWritesTheSystemRowAndLeavesTheLevels(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	// The copy the Systems section is editing: the systems as the page loaded them.
+	loaded, err := repo.AllSystems(ctx)
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	page := append(domain.Systems{}, loaded...)
+
+	first, ok := page.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	sitesWant := append(domain.Sites{}, first.Sites...)
+	unitsWant := append(domain.Units{}, first.Units...)
+
+	// The operator deletes a talkgroup in the Talkgroups section and saves that level.
+	remaining := domain.Talkgroups{}
+
+	for _, talkgroup := range first.Talkgroups {
+		if talkgroup.ID != 1 {
+			remaining = append(remaining, talkgroup)
+		}
+	}
+
+	if err := repo.SaveSystemTalkgroups(ctx, 1, remaining, nil); err != nil {
+		t.Fatalf("SaveSystemTalkgroups: %v", err)
+	}
+
+	// The operator renames the system and saves the Systems section, from the copy the page loaded.
+	page[0].Label = "Grand Metro Renamed"
+
+	if err := repo.SaveSystemSettings(ctx, page); err != nil {
+		t.Fatalf("SaveSystemSettings: %v", err)
+	}
+
+	stored, err := repo.AllSystems(ctx)
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok = stored.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if first.Label != "Grand Metro Renamed" {
+		t.Errorf("the stored system is labelled %q, want the label the Systems section saved", first.Label)
+	}
+
+	if len(first.Talkgroups) != len(remaining) {
+		t.Fatalf("the system has %d talkgroups after the systems-section save, want the %d the talkgroups save left", len(first.Talkgroups), len(remaining))
+	}
+
+	if _, found := first.Talkgroups.ByID(1); found {
+		t.Errorf("talkgroup 1, which the talkgroups save deleted, is stored again as %+v", first.Talkgroups)
+	}
+
+	if !reflect.DeepEqual(first.Sites, sitesWant) {
+		t.Errorf("the systems-section save rewrote the sites:\n  got  %v\n  want %v", first.Sites, sitesWant)
+	}
+
+	if !reflect.DeepEqual(first.Units, unitsWant) {
+		t.Errorf("the systems-section save rewrote the units:\n  got  %v\n  want %v", first.Units, unitsWant)
+	}
+}
+
+// TestSaveSystemTalkgroupsStoresTheBlacklistWithTheRows: the Talkgroups section saves the rows and
+// the system's blacklist together. The blacklist is what the server compares a recording's talkgroup
+// reference against, so the save that drops the row has to store the entry that refuses it.
+func TestSaveSystemTalkgroupsStoresTheBlacklistWithTheRows(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	// The blacklisted row is gone from the list, and its reference is the entry the list carries.
+	talkgroups := domain.Talkgroups{
+		{ID: 2, TalkgroupRef: 1514001, Label: "Interop 9", Name: "Interop 9", TagID: 6, GroupIDs: []uint64{1}},
+		{ID: 3, TalkgroupRef: 1514002, Label: "Delayed Talk", Name: "Delayed Talk", TagID: 6, GroupIDs: []uint64{1}},
+	}
+
+	blacklists := domain.Blacklists("1514000")
+
+	if err := repo.SaveSystemTalkgroups(ctx, 1, talkgroups, &blacklists); err != nil {
+		t.Fatalf("SaveSystemTalkgroups: %v", err)
+	}
+
+	stored, err := repo.AllSystems(ctx)
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := stored.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if first.Blacklists != domain.Blacklists("1514000") {
+		t.Errorf("the stored blacklist is %q, want the entry the talkgroups save carried with the rows", first.Blacklists)
+	}
+
+	if len(first.Talkgroups) != 2 {
+		t.Fatalf("the system has %d talkgroups, want the 2 submitted rows", len(first.Talkgroups))
+	}
+
+	if _, found := first.Talkgroups.ByID(1); found {
+		t.Errorf("talkgroup 1 is stored, want the row the submitted list dropped to be removed")
+	}
+}
+
+// TestSaveSystemTalkgroupsLeavesTheStoredBlacklistWhenTheSaveNamesNone: a level save that carries
+// rows only leaves the system's stored blacklist where it is. The sites and units levels never carry
+// a blacklist, and a talkgroups save without one is one of them.
+func TestSaveSystemTalkgroupsLeavesTheStoredBlacklistWhenTheSaveNamesNone(t *testing.T) {
+	db := openLegacyDatabase(t)
+	repo := NewSystems(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	talkgroups := domain.Talkgroups{
+		{ID: 1, TalkgroupRef: 1514000, Label: "Dispatch 1", Name: "Dispatch 1", TagID: 3, GroupIDs: []uint64{1}},
+	}
+
+	if err := repo.SaveSystemTalkgroups(ctx, 1, talkgroups, nil); err != nil {
+		t.Fatalf("SaveSystemTalkgroups: %v", err)
+	}
+
+	stored, err := repo.AllSystems(ctx)
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	first, ok := stored.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if first.Blacklists != domain.Blacklists("40000,40001") {
+		t.Errorf("the stored blacklist is %q, want the text the store held: a level save that names no blacklist does not clear it", first.Blacklists)
+	}
+}
+
+// TestSaveSystemSettingsKeepsTheStoredBlacklistTextAcrossAStart: the blacklist text a system
+// already stores survives a systems-section save that says nothing about it, and is read back by
+// the next start over the same database. The text the store holds is not the systems section's to
+// rewrite when the operator changed only the system's own fields.
+func TestSaveSystemSettingsKeepsTheStoredBlacklistTextAcrossAStart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
+
+	ctx := context.Background()
+
+	db := openDatabaseAt(t, path, append(append([]string{}, legacySchema...), legacyRows...))
+
+	repo := NewSystems(db, DialectSqlite)
+
+	loaded, err := repo.AllSystems(ctx)
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	next := append(domain.Systems{}, loaded...)
+
+	first, ok := next.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored")
+	}
+
+	if first.Blacklists != domain.Blacklists("40000,40001") {
+		t.Fatalf("the fixture stores blacklist %q, want the text the legacy server wrote", first.Blacklists)
+	}
+
+	for i := range next {
+		if next[i].ID == 1 {
+			next[i].Label = "Grand Metro Renamed"
+		}
+	}
+
+	if err := repo.SaveSystemSettings(ctx, next); err != nil {
+		t.Fatalf("SaveSystemSettings: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("closing the database: %v", err)
+	}
+
+	restarted := NewSystems(openDatabaseAt(t, path, nil), DialectSqlite)
+
+	stored, err := restarted.AllSystems(ctx)
+	if err != nil {
+		t.Fatalf("AllSystems after the start: %v", err)
+	}
+
+	first, ok = stored.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored after the start")
+	}
+
+	if first.Blacklists != domain.Blacklists("40000,40001") {
+		t.Errorf("the system reads back blacklist %q after the start, want the text that was stored", first.Blacklists)
+	}
+
+	if first.Label != "Grand Metro Renamed" {
+		t.Errorf("the system reads back label %q after the start, want the label the systems-section save stored", first.Label)
+	}
+}
+
+// openDatabaseAt opens a database at a path the caller names and runs the statements given, so a
+// test can close the file, open it again the way the next start does, and read what is in it
+// without laying the fixture down a second time.
+func openDatabaseAt(t *testing.T, path string, statements []string) *sql.DB {
+	t.Helper()
+
+	db, err := Open(Settings{Dialect: DialectSqlite, FilePath: path})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	t.Cleanup(func() { db.Close() })
+
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("the recorded statement %s does not run: %v", firstLineOf(statement), err)
+		}
+	}
+
+	return db
 }
