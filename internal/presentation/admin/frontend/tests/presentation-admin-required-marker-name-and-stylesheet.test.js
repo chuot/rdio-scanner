@@ -212,8 +212,8 @@ test('the mark is drawn by one rule for the config sections, beside the OpenAPI 
 
   for (const shape of ['rdio-form-field label', '.field-title', '.body']) {
     assert.ok(
-      selectors.some((part) => part.startsWith(`${shape}[data-required]::after`)),
-      `the rule draws the mark on the name a section names its field with as ${shape}`,
+      selectors.some((part) => part.startsWith('rdio-admin ') && part.endsWith(`${shape}[data-required]::after`)),
+      `the rule draws the mark on the name a section names its field with as ${shape}, inside the admin page`,
     );
   }
 });

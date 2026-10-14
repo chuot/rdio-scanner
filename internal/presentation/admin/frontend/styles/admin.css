@@ -879,6 +879,19 @@ rdio-admin .rdio-admin-openapi-box .field-name[data-required]::after {
   content: " *";
 }
 
+/* The same mark on the fields the configuration sections insist on. A section declares the field, the
+   declaration rides the name, and the mark is drawn here: the name keeps its text, so the operator, the
+   screen reader, and a search all read the same word. The three naming shapes are the label inside a
+   form field, the caption a hand-built row names its field with, and the caption the systems tree
+   builds above its controls. */
+
+rdio-admin rdio-form-field label[data-required]::after,
+rdio-admin .field-title[data-required]::after,
+rdio-admin .body[data-required]::after {
+  color: var(--rdio-warn);
+  content: " *";
+}
+
 /* The method chip carries the colour: reads in the accent, writes in the primary,
    removals in the warning. The administrator sees what a row does before opening
    it, and no new colour enters the theme. */
