@@ -23,7 +23,7 @@ import '../presentation/admin/rdio-admin-dirwatch.js';
 import '../presentation/admin/rdio-admin-options.js';
 import '../presentation/admin/rdio-admin-tools.js';
 
-import { connectFields, findAll, requiredMark, texts } from './dom-shim.js';
+import { connectFields, fieldMessage, findAll, reachField, requiredMark, texts } from './dom-shim.js';
 
 const METRO = { id: 1, label: 'Metro', order: 2, systemRef: 1, blacklists: '', sites: [], talkgroups: [], units: [] };
 const COUNTY = { id: 2, label: 'County', order: 1, systemRef: 2, blacklists: '', sites: [], talkgroups: [], units: [] };
@@ -88,6 +88,11 @@ function rows(el) {
   return findAll(el, (node) => node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row'));
 }
 
+// The Tools panels are `details` elements carrying the same row class the config rows use.
+function panels(el) {
+  return findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-row'));
+}
+
 function addRow(el) {
   control(el, 'add').click();
   connectFields(el);
@@ -116,6 +121,30 @@ function markedNames(row) {
 
 function spanClass(node) {
   return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
+}
+
+function fieldOf(row, title) {
+  // The label inside the field, and the caption beside the control: both live inside the form field,
+  // so the field is the one whose own text names the title.
+  return findAll(row, (node) => node.tag === 'rdio-form-field')
+    .find((node) => findAll(node, (child) => child.tag === 'label' || spanClass(child))
+      .some((el) => el.textContent === title));
+}
+
+// The control the operator types in or picks in, under the name the row gives it.
+function controlOf(row, title) {
+  return findAll(fieldOf(row, title), (node) => ['input', 'textarea', 'rdio-select'].includes(node.tag))[0];
+}
+
+// The operator types in the field and the change fires the way leaving the field fires it.
+function typeIn(row, title, value) {
+  const control = controlOf(row, title);
+
+  control.value = value;
+  control.dispatchEvent({ type: 'change' });
+  connectFields(row);
+
+  return control;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,13 +202,46 @@ test('the change password panel names the fields the webapp insists on', () => {
   seed(getAdminContext().store);
 
   const tools = attach('rdio-admin-tools');
-  const panel = rows(tools).find((row) => texts(findAll(row, (child) => child.className?.split(/\s+/).includes('row-title')))[0] === 'Change password');
+  const panel = panels(tools).find((row) => texts(findAll(row, (child) => child.className?.split(/\s+/).includes('row-title')))[0] === 'Change password');
 
   assert.deepEqual(
     markedNames(panel),
     ['Current password', 'New password', 'Verify new password'],
     'the three password boxes carry the mark on their name, as Material showed them',
   );
+});
+
+// ---------------------------------------------------------------------------
+// The conditional requirements: System and Talkgroup stay plain, and their rules report.
+//
+// A row the operator added carries no system and no talkgroup at all, and the rule lets an absent id
+// pass: the row that can put the two selects in front of the operator is a saved row whose mask names
+// neither id. That is the row these readings are taken on.
+// ---------------------------------------------------------------------------
+
+test('the dirwatch row leaves System and Talkgroup plain while their rules report them', () => {
+  seed(getAdminContext().store, {
+    'section:dirwatch': slice([{ id: 1, order: 1, directory: '/var/spool/first', extension: 'mp3', mask: '', type: 'default', systemId: null, siteId: null, talkgroupId: null, frequency: 1, delay: 2000, disabled: false }]),
+  });
+
+  const row = rows(attach('rdio-admin-dirwatch'))[0];
+
+  // The operator reaches the two selects the row leaves empty: both rules report, and neither name
+  // carries a mark, because the row does not insist on them the way it insists on the directory.
+  reachField(controlOf(row, 'System'));
+  reachField(controlOf(row, 'Talkgroup'));
+  connectFields(row);
+
+  assert.equal(fieldMessage(fieldOf(row, 'System')), 'System is required', 'the empty select the operator left reports');
+  assert.equal(fieldMessage(fieldOf(row, 'Talkgroup')), 'Talkgroup is required', 'the empty select the operator left reports');
+  assert.ok(!markedNames(row).includes('System') && !markedNames(row).includes('Talkgroup'), 'the two fields the row asks for in this state carry no mark');
+
+  // The mask token answers the System rule: the report goes away, and the name stays plain.
+  typeIn(row, 'Mask', '#SYS');
+
+  assert.equal(fieldMessage(fieldOf(row, 'System')), '', 'the system token in the mask answers the System field');
+  assert.equal(fieldMessage(fieldOf(row, 'Talkgroup')), 'Talkgroup is required', 'the talkgroup token is not in the mask yet');
+  assert.ok(!markedNames(row).includes('System') && !markedNames(row).includes('Talkgroup'), 'the marks do not arrive with the state that makes the rule bite');
 });
 
 // ---------------------------------------------------------------------------

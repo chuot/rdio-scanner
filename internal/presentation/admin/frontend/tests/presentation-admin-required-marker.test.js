@@ -22,7 +22,7 @@ import '../presentation/admin/rdio-admin-sites.js';
 import '../presentation/admin/rdio-admin-talkgroups.js';
 import '../presentation/admin/rdio-admin-units.js';
 
-import { connectFields, findAll, requiredMark, texts } from './dom-shim.js';
+import { connectFields, fieldMessage, findAll, requiredMark, texts } from './dom-shim.js';
 
 const METRO = { id: 1, label: 'Metro', order: 2, systemRef: 1, blacklists: '', sites: [], talkgroups: [], units: [] };
 const COUNTY = { id: 2, label: 'County', order: 1, systemRef: 2, blacklists: '', sites: [], talkgroups: [], units: [] };
@@ -130,9 +130,18 @@ function shownNames(row) {
   return [...names].sort();
 }
 
+// The caption span a row names its field with: the systems tree writes it as `.body`, the hand-built
+// sections as `.field-title`. A label inside a form field is the other shape, and is read by its tag.
+function spanClass(node) {
+  return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
+}
+
 function fieldOf(row, title) {
+  // The label inside the field, and the caption beside the control: both live inside the form field,
+  // so the field is the one whose own text names the title.
   return findAll(row, (node) => node.tag === 'rdio-form-field')
-    .find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title);
+    .find((node) => findAll(node, (child) => child.tag === 'label' || spanClass(child))
+      .some((el) => el.textContent === title));
 }
 
 function controlOf(row, title) {
@@ -219,6 +228,28 @@ test('the mark on a label does not move when the field is filled and broken', ()
   typeIn(row, 'Label', '');
 
   assert.deepEqual(markedNames(row), ['Id', 'Label'], 'an emptied label keeps both marks');
+});
+
+// ---------------------------------------------------------------------------
+// The conditional requirement: the name stays plain, the rule reports.
+// ---------------------------------------------------------------------------
+
+test('the unit row leaves its identifier plain while the rule reports it', () => {
+  seed(getAdminContext().store);
+
+  const row = addRow(attach('rdio-admin-units'));
+
+  // No identifier and no range: the rule insists, and the name carries no mark.
+  typeIn(row, 'Id', '');
+
+  assert.equal(fieldMessage(fieldOf(row, 'Id')), 'Id value is required', 'the rule reports the field its name does not mark');
+  assert.ok(!markedNames(row).includes('Id'), 'the identifier is required only in this state, so its name stays plain');
+
+  // The identifier the operator types in answers its own rule: the report goes away, the name stays plain.
+  typeIn(row, 'Id', '12');
+
+  assert.equal(fieldMessage(fieldOf(row, 'Id')), '', 'the identifier the operator typed says nothing');
+  assert.deepEqual(markedNames(row), ['Label'], 'the marks name the label and nothing else, in this state too');
 });
 
 // ---------------------------------------------------------------------------
