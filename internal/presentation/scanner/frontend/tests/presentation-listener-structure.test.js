@@ -32,7 +32,7 @@ import '../presentation/listener/rdio-status.js';
 
 import { findAll } from './dom-shim.js';
 
-const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const INDEX_HTML = join(presentationDir, 'scanner', 'frontend', 'index.html');
 const STYLESHEET = join(presentationDir, 'scanner', 'frontend', 'styles', 'rdio.css');
@@ -110,12 +110,18 @@ describe('listener structure — the route into the page', () => {
   it('brings the skip link on screen when the keyboard reaches it', () => {
     const css = readFileSync(STYLESHEET, 'utf8');
 
-    assert.match(css, /\.skip:focus\b[^{]*\{/, 'the stylesheet has no rule that reveals the skip link on focus');
-
     const base = css.match(/(^|\n)\.skip\s*\{([^}]*)\}/);
+    const focus = css.match(/\.skip:focus\b[^{]*\{([^}]*)\}/);
 
     assert.ok(base, 'the stylesheet has no resting rule for the skip link');
-    assert.match(base[2], /left:\s*-9{3,}px/, 'the skip link is not parked off screen at rest, so it is on the page before the operator asks for it');
+    assert.ok(focus, 'the stylesheet has no rule that reveals the skip link on focus');
+
+    // Parked by clipping itself, and revealed by taking the clip off. A link moved outside the
+    // page's scrollable area is dropped from the keyboard's route — the browser will not land on a
+    // control it cannot scroll into view — and this is the control the keyboard has to reach first.
+    assert.match(base[2], /clip-path:\s*inset\(\s*50%\s*\)/,
+      'the skip link is not parked out of sight at rest, so it is on the page before the operator asks for it');
+    assert.match(focus[1], /clip-path:\s*none/, 'the rule that reveals the skip link does not bring it back on screen');
   });
 
   it('lands in the region the listener works in', () => {

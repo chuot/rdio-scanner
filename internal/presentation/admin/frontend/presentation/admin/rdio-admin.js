@@ -41,6 +41,10 @@ const SECTIONS = [
   { name: 'units', label: 'Units', icon: 'directions_car' },
 ];
 
+// The label the operator reads in the navigation, for the section the shell is putting on the page.
+// The navigation list above is the one place the labels are written.
+const sectionLabel = (name) => SECTIONS.find((section) => section.name === name)?.label ?? name;
+
 class RdioAdmin extends HTMLElement {
   connectedCallback() {
     if (this.dataset.bound) return;
@@ -96,21 +100,48 @@ class RdioAdmin extends HTMLElement {
     nav.className = 'rdio-admin-nav';
     nav.setAttribute('aria-label', 'Admin sections');
 
+    // The sections are a list: a screen reader entering the navigation says how many items it
+    // holds and reads them one by one, the way the operator scans the column with their eyes. Bare
+    // buttons in the navigation announce a bar of controls with no count and no shape.
+    const list = document.createElement('ul');
+
     for (const section of SECTIONS) {
       if (section.hiddenWhenDocker && docker) continue;
 
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.dataset.section = section.name;
-      item.setAttribute('aria-current', section.name === this.current ? 'page' : 'false');
-      item.innerHTML = `<i class="material-icons" aria-hidden="true">${section.icon}</i><span>${section.label}</span>`;
-      item.addEventListener('click', () => this.openSection(section.name));
+      const item = document.createElement('li');
 
-      nav.append(item);
+      const control = document.createElement('button');
+      control.type = 'button';
+      control.dataset.section = section.name;
+
+      // Only the section the operator is standing on is current. The others say nothing: an item
+      // that announces aria-current="false" is a screen reader naming every section as part of a
+      // route the operator is not on, thirteen times over.
+      if (section.name === this.current) control.setAttribute('aria-current', 'page');
+
+      control.innerHTML = `<i class="material-icons" aria-hidden="true">${section.icon}</i><span>${section.label}</span>`;
+      control.addEventListener('click', () => this.openSection(section.name));
+
+      item.append(control);
+      list.append(item);
     }
+
+    nav.append(list);
 
     const content = document.createElement('section');
     content.className = 'rdio-admin-content';
+    content.id = 'content';
+    content.setAttribute('aria-labelledby', 'rdio-admin-section-heading');
+
+    // The heading names the section the operator is on, and the content region takes its name from
+    // it: a screen reader entering the region by landmark says the section, and the heading list the
+    // operator jumps through carries every section the shell can put on the page. The shell renders
+    // it because the shell is the one place that knows which section is on the page.
+    const heading = document.createElement('h2');
+    heading.id = 'rdio-admin-section-heading';
+    heading.textContent = sectionLabel(this.current);
+
+    content.append(heading);
 
     if (banner) content.append(banner);
 

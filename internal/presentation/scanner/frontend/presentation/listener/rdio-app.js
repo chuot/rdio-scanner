@@ -10,8 +10,14 @@ class RdioApp extends HTMLElement {
   connectedCallback() {
     const { store } = getAppContext();
 
+    // The content the listener works in is a named region, and the name it carries is the
+    // application's own heading: a screen reader entering the page by landmark says the application
+    // name, and the heading list the operator jumps through names the page and both panels. The
+    // heading is off screen because the listener's screen shows the call, not a title line; it is
+    // the heading for the person who navigates by headings, and it is the region's name.
     this.innerHTML = `
       <aside class="panel search" hidden>
+        <h2 class="rdio-visually-hidden">Search</h2>
         <div class="toolbar">
           <div>
             <button class="panel-close" type="button" aria-label="Close search panel">
@@ -22,6 +28,7 @@ class RdioApp extends HTMLElement {
         <div class="scroll"><rdio-search-panel></rdio-search-panel></div>
       </aside>
       <aside class="panel select" hidden>
+        <h2 class="rdio-visually-hidden">Select</h2>
         <div class="toolbar">
           <div>
             <button class="panel-close" type="button" aria-label="Close select panel">
@@ -31,16 +38,19 @@ class RdioApp extends HTMLElement {
         </div>
         <div class="scroll"><rdio-select-panel></rdio-select-panel></div>
       </aside>
-      <section class="content">
-        <rdio-status></rdio-status>
-        <rdio-display></rdio-display>
-        <rdio-controls></rdio-controls>
-        <div class="rdio-help" hidden>
-          <button type="button" aria-label="Help">
-            <i class="material-icons">help_center</i>
-          </button>
-        </div>
-      </section>
+      <main id="content" aria-labelledby="rdio-app-heading">
+        <h1 id="rdio-app-heading" class="rdio-visually-hidden">Rdio Scanner</h1>
+        <section class="content">
+          <rdio-status></rdio-status>
+          <rdio-display></rdio-display>
+          <rdio-controls></rdio-controls>
+          <div class="rdio-help" hidden>
+            <button type="button" aria-label="Help">
+              <i class="material-icons">help_center</i>
+            </button>
+          </div>
+        </section>
+      </main>
     `;
 
     this.panels = {

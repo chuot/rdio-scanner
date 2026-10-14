@@ -188,6 +188,22 @@ body {
   box-shadow: 0 3px 5px -1px rgba(0, 0, 0, 0.2), 0 6px 10px 0 rgba(0, 0, 0, 0.14), 0 1px 18px 0 rgba(0, 0, 0, 0.12);
 }
 
+/* The heading a page carries for the person who navigates by headings, and for the region named by
+ * it: in the accessibility tree, off the screen. Both applications use it for the heading that names
+ * a region — the listener's application name, the listener's panel names — because the name has to
+ * be there for a screen reader, and neither screen has room for a title line. */
+.rdio-visually-hidden {
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 /*
  * Shared UI primitives: snackbar, dialog, buttons, form
  * fields, select, toggle, paginator. Page-specific looks (beveled listener

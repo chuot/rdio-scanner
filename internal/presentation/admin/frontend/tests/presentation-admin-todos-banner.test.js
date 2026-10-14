@@ -52,8 +52,17 @@ test('the banner shows the open todos in the content column, above the section c
   const contents = findAll(el, (node) => node.className.includes('rdio-admin-content'));
 
   assert.equal(contents.length, 1, 'the shell has one content column');
-  assert.equal(contents[0].children[0], banners[0],
-    'the banner must sit in the content column, above the section card');
+
+  // The column opens with the heading naming the section, and the banner sits under it, above the
+  // section card: the operator reads what is wrong before reading the section it belongs to.
+  const siblings = contents[0].children;
+
+  assert.ok(siblings.includes(banners[0]), 'the banner must sit in the content column');
+
+  const section = siblings.filter((node) => node.tag.startsWith('rdio-admin-'))[0];
+
+  assert.ok(section, 'the section page is not in the content column');
+  assert.ok(siblings.indexOf(banners[0]) < siblings.indexOf(section), 'the banner must sit above the section card');
 });
 
 test('the topbar carries the brand and the logout control, and no role text', () => {
@@ -102,7 +111,7 @@ test('todos is not a section in the navigation', () => {
 
   assert.equal(navs.length, 1);
 
-  const sections = navs[0].children.map((button) => button.dataset.section);
+  const sections = findAll(navs[0], (node) => node.tag === 'button').map((button) => button.dataset.section);
 
   assert.ok(!sections.includes('todos'), 'the navigation still carries a todos item');
   assert.equal(sections[0], 'access', 'the first section is the one the page opens on');

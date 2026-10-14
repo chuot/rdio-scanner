@@ -163,6 +163,17 @@ class ShimNode {
     this._value = String(value);
   }
 
+  // An element's id is the attribute the page writes it as: `el.id = 'content'` is how a browser
+  // gives an element the name a skip link points at and a region is labelled by, and the tests read
+  // that name back through getAttribute, the way the accessibility tree does.
+  get id() {
+    return this.attributes.id ?? '';
+  }
+
+  set id(value) {
+    this.attributes.id = String(value);
+  }
+
   getAttribute(name) {
     return this.attributes[name] ?? null;
   }

@@ -25,6 +25,33 @@
  * theme.css (buttons, form fields, dialog, paginator, ...) are never touched.
  */
 
+/* --- skip link ------------------------------------------------------------- */
+
+/* The route past the page's own controls: parked out of sight at rest, brought on screen the moment
+ * the keyboard reaches it, so the control the operator is standing on is the one they can see. White
+ * on dark and dark on white, because the link is revealed over whatever the page is showing.
+ *
+ * Parked by clipping itself, not by a far negative `left` or a transform: a link moved outside the
+ * page's scrollable area is dropped from the keyboard's route altogether — the browser will not land
+ * on a control it cannot scroll into view — and this is the control the keyboard has to reach first.
+ * Clipped in place, the link keeps its place in the page's layout and in the keyboard's route, and
+ * paints nothing until the keyboard reaches it. */
+
+.skip {
+  background: rgb(255, 255, 255);
+  clip-path: inset(50%);
+  color: rgb(30, 30, 30);
+  left: 8px;
+  padding: 8px 12px;
+  position: absolute;
+  top: 8px;
+  z-index: 20;
+}
+
+.skip:focus {
+  clip-path: none;
+}
+
 /* --- shell ---------------------------------------------------------------- */
 
 rdio-admin {
@@ -84,6 +111,19 @@ rdio-admin .rdio-admin-nav {
   gap: var(--rdio-space-1);
   overflow-y: auto;
   padding: var(--rdio-space-3) var(--rdio-space-2);
+}
+
+rdio-admin .rdio-admin-nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rdio-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+rdio-admin .rdio-admin-nav li {
+  min-width: 0;
 }
 
 rdio-admin .rdio-admin-nav button {
@@ -1003,6 +1043,16 @@ rdio-systems-selection .indent {
     flex-wrap: wrap;
     overflow-y: visible;
     padding: var(--rdio-space-2);
+  }
+
+  rdio-admin .rdio-admin-nav ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  rdio-admin .rdio-admin-nav li {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   rdio-admin .rdio-admin-nav button {

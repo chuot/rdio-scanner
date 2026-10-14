@@ -39,6 +39,37 @@
  */
 
 /* ---------------------------------------------------------------------------
+ * Skip link (the administration guide's pattern, kept identical here so the
+ * guide, the administration application, and the listener reveal the same
+ * control the same way)
+ * ------------------------------------------------------------------------ */
+
+/* Parked out of sight at rest, brought on screen the moment the keyboard reaches it: the control the
+ * operator is standing on is the one they can see. White on dark and dark on white, because the link
+ * is revealed over whatever the page is showing.
+ *
+ * Parked by clipping itself, not by a far negative `left` or a transform: a link moved outside the
+ * page's scrollable area is dropped from the keyboard's route altogether — the browser will not land
+ * on a control it cannot scroll into view — and this is the control the keyboard has to reach first.
+ * Clipped in place, the link keeps its place in the page's layout and in the keyboard's route, and
+ * paints nothing until the keyboard reaches it. */
+
+.skip {
+  background: rgb(255, 255, 255);
+  clip-path: inset(50%);
+  color: rgb(30, 30, 30);
+  left: 8px;
+  padding: 8px 12px;
+  position: absolute;
+  top: 8px;
+  z-index: 20;
+}
+
+.skip:focus {
+  clip-path: none;
+}
+
+/* ---------------------------------------------------------------------------
  * App shell (legacy rdio-scanner.component.scss :host + .panel)
  * ------------------------------------------------------------------------ */
 
@@ -60,14 +91,20 @@ rdio-app {
   position: relative;
 }
 
-/* Legacy mat-sidenav-content centering + rdio-scanner-main :host box. */
-rdio-app > section.content {
+/* Legacy mat-sidenav-content centering + rdio-scanner-main :host box. The box is the main region
+ * the shell names by the application heading; the section inside it is the content itself, and it
+ * keeps the legacy stack of status, display, and controls exactly as the shell lays them out. */
+rdio-app > main {
   box-sizing: border-box;
   max-height: 100%;
   max-width: 640px;
   min-width: 0;
   padding: 24px;
   user-select: none;
+}
+
+rdio-app > main > section.content {
+  min-width: 0;
 }
 
 /* Legacy mat-sidenav panels (position start/end, width 100%): full-area
