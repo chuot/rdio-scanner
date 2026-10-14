@@ -439,3 +439,17 @@ a[href]:focus-visible {
   outline: 2px solid var(--rdio-accent);
   outline-offset: 2px;
 }
+
+/* --- reduced motion ------------------------------------------------------------ */
+
+/* The operator's own preference, read from the platform. The toggle's knob slides to the other end
+   of its track and the track fades; with the preference on, both land on the state they were
+   heading to and nothing travels there. The knob's position and the track's colour are the state,
+   and both are still there. */
+
+@media (prefers-reduced-motion: reduce) {
+  rdio-toggle .rdio-toggle,
+  rdio-toggle .rdio-toggle::after {
+    transition: none;
+  }
+}

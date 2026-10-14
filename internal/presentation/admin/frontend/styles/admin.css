@@ -1119,3 +1119,16 @@ rdio-systems-selection .indent {
     padding: var(--rdio-card-padding);
   }
 }
+
+/* --- reduced motion ------------------------------------------------------------ */
+
+/* The log stream's progress bar slides across its track while the stream is open. With the
+   operator's motion preference set to reduce, the slide stops and the bar keeps its track and its
+   colour: the bar's presence is what says the stream is open, and the sliding is only how it says
+   it. */
+
+@media (prefers-reduced-motion: reduce) {
+  rdio-admin .rdio-admin-card.logs .rdio-progress {
+    animation: none;
+  }
+}

@@ -42,6 +42,13 @@ class ShimNode {
     this.children.push(...nodes);
   }
 
+  // appendChild is the older spelling the primitives use to place a host on the page.
+  appendChild(node) {
+    this.append(node);
+
+    return node;
+  }
+
   replaceChildren(...nodes) {
     for (const node of this.children) if (node && typeof node === 'object') node.parent = null;
 
@@ -122,6 +129,11 @@ class ShimNode {
 
   getAttribute(name) {
     return this.attributes[name] ?? null;
+  }
+
+  // hasAttribute is the presence test the primitives use to pick the shape they render.
+  hasAttribute(name) {
+    return this.attributes[name] !== undefined;
   }
 
   // The form field marks its control invalid with these two, and takes the mark off again.
@@ -217,6 +229,12 @@ globalThis.document = {
     node._text = String(text);
 
     return node;
+  },
+
+  // document.body and document.querySelector are the two views the snackbar primitive uses to place
+  // itself: a root node the components append to, and the lookup of what is in it.
+  querySelector(selector) {
+    return this.body.querySelectorAll(selector)[0] ?? null;
   },
 };
 

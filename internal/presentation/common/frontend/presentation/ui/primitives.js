@@ -42,6 +42,17 @@ class RdioSnackbar extends HTMLElement {
     if (!message) {
       if (this.hidden || this.classList.contains('rdio-snackbar-exit')) return;
 
+      // The exit is a promise about an animation running: the box leaves when that animation ends.
+      // An operator who asked the platform for less motion gets the animation taken away, and the
+      // notification still has to leave, so in that state the box goes straight to the state the
+      // animation ends in — the same terminal state the plain branch reaches.
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        this.hidden = true;
+        this.replaceChildren();
+
+        return;
+      }
+
       this.classList.remove('rdio-snackbar-enter');
       this.classList.add('rdio-snackbar-exit');
 

@@ -1638,3 +1638,55 @@ rdio-snackbar .rdio-support .countdown {
     transform: translateX(100%);
   }
 }
+
+/* --- reduced motion ------------------------------------------------------------ */
+
+/* The operator's own preference, read from the platform. Everything on this page that moves on its
+ * own moves to say something: a control lamp blinking says the state is live, a lamp in a paused row
+ * says the row is paused, a spinning icon says the row is loading, a bar sliding across its track
+ * says the query is running. Stopping them takes the moving away and leaves the saying: the lamp
+ * keeps its colour and its label, the paused row keeps its mark, the loading row keeps its disabled
+ * control, the running query keeps its bar.
+ *
+ * The animations are taken away, not frozen: a paused animation stops wherever it happens to be,
+ * which freezes a lamp half-lit and an icon mid-turn. `animation: none` lands on the end state.
+ *
+ * The notification's enter and exit are in here too. The box leaves when its exit animation ends,
+ * and the preference takes that animation away, so the component hides the box in this state
+ * without waiting for an animation event — see the notification's own component test. */
+
+@media (prefers-reduced-motion: reduce) {
+  rdio-controls .rdio-button.off::after,
+  rdio-controls .rdio-button.on::after,
+  rdio-controls .rdio-button.partial::after,
+  rdio-select-panel .rdio-button.off::after,
+  rdio-select-panel .rdio-button.on::after,
+  rdio-select-panel .rdio-button.partial::after,
+  rdio-select-panel .rdio-button.blink::after,
+  rdio-controls .rdio-button.off.blink::after,
+  rdio-select-panel .rdio-button.off.blink::after,
+  rdio-select-panel .rdio-button.blink::after,
+  rdio-controls .rdio-button.on.blink::after,
+  rdio-select-panel .rdio-button.on.blink::after,
+  rdio-controls .rdio-button.partial.blink::after,
+  rdio-select-panel .rdio-button.partial.blink::after,
+  rdio-status .led.paused,
+  rdio-search-panel .spin,
+  rdio-search-panel .progress-bar.pending::after,
+  rdio-snackbar.rdio-snackbar-enter,
+  rdio-snackbar.rdio-snackbar-exit {
+    animation: none;
+  }
+
+  /* The transitions land on the state they were heading to: the panel is open or closed, the knob
+   * is at the far end of its track, the field's line is thick, the arrow points the other way. */
+  rdio-app > .panel,
+  rdio-search-panel .progress-bar,
+  rdio-search-panel rdio-toggle .rdio-toggle,
+  rdio-search-panel rdio-toggle .rdio-toggle::after,
+  rdio-search-panel .rdio-filters .rdio-field-box,
+  rdio-search-panel .rdio-filters .rdio-field-box::before,
+  rdio-search-panel .rdio-filters .reset button {
+    transition: none;
+  }
+}
