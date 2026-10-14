@@ -202,6 +202,13 @@ class RdioFormField extends HTMLElement {
     // is not under the field yet at connect time.
     const control = () => this.querySelector('input, select, textarea');
 
+    // A section declares, when it builds the field, that the webapp insists on a value there. The
+    // declaration is a fact about the field and not about its current state, and it is the fact the
+    // operator reads as an asterisk on the field's name: the assistive technology reading the page
+    // needs the same fact on the control it announces, so the control answers required while the
+    // field declares it, and answers nothing at all when the field does not.
+    const declares = () => this.dataset.required === 'true' || this.getAttribute('data-required') === 'true';
+
     const paint = () => {
       const shown = reached && !!message;
       const input = control();
@@ -215,6 +222,12 @@ class RdioFormField extends HTMLElement {
 
       if (shown) input.setAttribute('aria-invalid', 'true');
       else input.removeAttribute('aria-invalid');
+
+      // The announcement is written the same way, and follows the declaration: a field the section
+      // accepts empty leaves the control unannounced, and a field that insists on a value announces
+      // it whatever the row's state happens to be.
+      if (declares()) input.setAttribute('aria-required', 'true');
+      else input.removeAttribute('aria-required');
     };
 
     this.setError = (text) => {
@@ -243,6 +256,14 @@ class RdioFormField extends HTMLElement {
     for (const type of ['input', 'change']) {
       this.addEventListener(type, () => this.markReached());
     }
+
+    // A pick list builds the select it answers with after this field is connected, so the field
+    // paints once at connect, for the control that is already under it, and again when the control
+    // a pick list builds appears: that select is the element the label is attached to and the
+    // screen reader announces, and it is the one carrying the field's declarations.
+    this.addEventListener('rdio-control', () => paint());
+
+    paint();
   }
 }
 
@@ -271,6 +292,12 @@ class RdioSelect extends HTMLElement {
 
     this.append(select);
     this.select = select;
+
+    // The select built here is the control the field owning this pick list resolves to, and the
+    // element a label is attached to and a screen reader announces. It appears after the field is
+    // connected, so the field is told the control it answers with is there, and paints what the
+    // field declares onto it.
+    this.dispatchEvent(new CustomEvent('rdio-control', { bubbles: true }));
   }
 
   set options(pairs) {
