@@ -579,6 +579,37 @@ func TestIngestCallRefusesABlacklistedTalkgroup(t *testing.T) {
 	}
 }
 
+// TestIngestCallRefusesABlacklistedTalkgroupWithAutoPopulateOff: the gate is on every call whose
+// talkgroup resolves, not only on the calls auto populate would create. The system already stores
+// the talkgroup, and neither the system nor the server auto-populates: the call the blacklist names
+// is refused all the same.
+func TestIngestCallRefusesABlacklistedTalkgroupWithAutoPopulateOff(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.options.Stored.AutoPopulate = false
+
+	system := fixture.seedKnownSystem()
+	system.AutoPopulate = false
+	system.Blacklists = "123"
+	fixture.systems.Stored[0] = system
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallBlacklisted {
+		t.Errorf("outcome = %q, want %q", result.Outcome, IngestCallBlacklisted)
+	}
+
+	if len(fixture.calls.Saved) != 0 {
+		t.Error("a blacklisted call is stored, and neither the system nor the server auto-populates: the gate is not only for auto-populated talkgroups")
+	}
+}
+
 func TestIngestCallReportsUnknownAggregatesWhenAutoPopulateIsOff(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.options.Stored.AutoPopulate = false
