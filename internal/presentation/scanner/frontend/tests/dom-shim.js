@@ -244,6 +244,17 @@ globalThis.window = {
       globalThis.window.location.href = href;
     },
   },
+
+  // The listener shell registers the guard a browser asks the page before it leaves, and takes it
+  // off again when the shell is taken off the page. The shim keeps the listeners it is given, so a
+  // test can render the shell and disconnect it the way the page does, and read what it registered.
+  addEventListener(type, fn) {
+    (this.listeners ??= {})[type] = [...(this.listeners?.[type] ?? []), fn];
+  },
+
+  removeEventListener(type, fn) {
+    this.listeners = { ...this.listeners, [type]: (this.listeners?.[type] ?? []).filter((f) => f !== fn) };
+  },
 };
 
 // The socket adapter opens one of these the moment the context is built. Nothing arrives, and
@@ -375,8 +386,12 @@ function matches(node, selector) {
     return true;
   }
 
+  // A class selector can name more than one class at once — `.panel.search` is how the listener
+  // shell names its own search drawer — so every class the selector lists has to be on the node.
   if (selector.startsWith('.')) {
-    return node.className.split(/\s+/).includes(selector.slice(1));
+    const classes = selector.match(/\.[A-Za-z0-9_-]+/g) ?? [];
+
+    return classes.every((name) => node.className.split(/\s+/).includes(name.slice(1)));
   }
 
   // `#id` names the control by its id, the way the panels pick their controls out of their markup.

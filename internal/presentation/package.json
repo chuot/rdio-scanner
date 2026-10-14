@@ -11,7 +11,7 @@
     "build:scanner": "node build.mjs --production --scanner",
     "build:admin": "node build.mjs --production --admin",
     "watch": "node build.mjs --watch",
-    "test": "node --test"
+    "test": "node --test --import ./common/frontend/tests/svg-loader.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
