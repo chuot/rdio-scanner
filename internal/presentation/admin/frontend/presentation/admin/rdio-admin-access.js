@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'access';
@@ -154,7 +154,7 @@ class RdioAdminAccess extends HTMLElement {
       reveal.innerHTML = `<i class="material-icons" aria-hidden="true">${hidden ? 'visibility_off' : 'visibility'}</i>`;
     });
 
-    const codeField = this.field('Code', reveal);
+    const codeField = this.field('Code', reveal, true);
     const codeInput = codeField.querySelector('input');
     codeInput.type = 'password';
     codeInput.value = row.code ?? '';
@@ -162,7 +162,7 @@ class RdioAdminAccess extends HTMLElement {
 
     this.bindText(codeInput, codeField, index, 'code', errors.code, refreshMarker);
 
-    const identField = this.field('Ident');
+    const identField = this.field('Ident', null, true);
     identField.querySelector('input').value = row.ident ?? '';
     this.bindText(identField.querySelector('input'), identField, index, 'ident', errors.ident, refreshMarker);
 
@@ -224,7 +224,7 @@ class RdioAdminAccess extends HTMLElement {
     return panel;
   }
 
-  field(label, trailing) {
+  field(label, trailing, required) {
     const field = document.createElement('rdio-form-field');
 
     const labelEl = document.createElement('label');
@@ -232,6 +232,11 @@ class RdioAdminAccess extends HTMLElement {
 
     const input = document.createElement('input');
     input.type = 'text';
+
+    // The mark the operator reads as an asterisk is this section's declaration that the field
+    // cannot be left empty: it rides the field's own name, and the field host carries the other
+    // half so the control announces it.
+    if (required) markRequired(field, labelEl);
 
     if (trailing) {
       const inline = document.createElement('div');

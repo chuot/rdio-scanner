@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'tags';
@@ -165,6 +165,7 @@ class RdioAdminTags extends HTMLElement {
     panel.append(labelRow);
 
     markField(this, labelField, rowKey(row, index), 'label');
+    markRequired(labelField, labelRow.querySelector('.field-title'));
 
     if (errors.label) errorFields.push({ field: labelField, message: errors.label });
 

@@ -16,7 +16,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'downstreams';
@@ -157,7 +157,7 @@ class RdioAdminDownstreams extends HTMLElement {
 
     disabledRow.append(disabledLabel, disabledToggle);
 
-    const urlField = this.field('URL');
+    const urlField = this.field('URL', true);
     const urlInput = urlField.querySelector('input');
     urlInput.value = row.url ?? '';
     urlInput.required = true;
@@ -178,7 +178,7 @@ class RdioAdminDownstreams extends HTMLElement {
       refreshMarker();
     });
 
-    const apikeyField = this.field('API key');
+    const apikeyField = this.field('API key', true);
     const apikeyInput = apikeyField.querySelector('input');
     apikeyInput.value = row.apikey ?? '';
     apikeyInput.required = true;
@@ -237,7 +237,7 @@ class RdioAdminDownstreams extends HTMLElement {
     return panel;
   }
 
-  field(label) {
+  field(label, required) {
     const field = document.createElement('rdio-form-field');
 
     const labelEl = document.createElement('label');
@@ -245,6 +245,11 @@ class RdioAdminDownstreams extends HTMLElement {
 
     const input = document.createElement('input');
     input.type = 'text';
+
+    // The mark the operator reads as an asterisk is this section's declaration that the field
+    // cannot be left empty: it rides the field's own name, and the field host carries the other
+    // half so the control announces it.
+    if (required) markRequired(field, labelEl);
 
     field.append(labelEl, input);
 

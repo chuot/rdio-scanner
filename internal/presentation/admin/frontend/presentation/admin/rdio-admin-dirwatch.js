@@ -15,7 +15,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { captionBlock, markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { captionBlock, markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
@@ -207,7 +207,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
     panel.append(this.typeRow(row, index));
 
-    const directoryField = this.field('Directory');
+    const directoryField = this.field('Directory', true);
     const directoryInput = directoryField.querySelector('input');
     directoryInput.value = row.directory ?? '';
     directoryInput.required = true;
@@ -389,7 +389,7 @@ class RdioAdminDirwatch extends HTMLElement {
     return parts;
   }
 
-  field(label) {
+  field(label, required) {
     const field = document.createElement('rdio-form-field');
 
     const labelEl = document.createElement('label');
@@ -397,6 +397,13 @@ class RdioAdminDirwatch extends HTMLElement {
 
     const input = document.createElement('input');
     input.type = 'text';
+
+    // The mark the operator reads as an asterisk is this section's declaration that the field
+    // cannot be left empty: it rides the field's own name, and the field host carries the other
+    // half so the control announces it. A field this section requires only for some rows — the
+    // system and talkgroup picks — is left plain, because the marker names what is required on
+    // every row.
+    if (required) markRequired(field, labelEl);
 
     field.append(labelEl, input);
 

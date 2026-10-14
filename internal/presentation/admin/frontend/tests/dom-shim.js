@@ -85,6 +85,11 @@ class ShimNode {
     this._html = html;
     this.children = parseHTML(html);
 
+    // A browser links the nodes it inserts to the element they are inserted into: a section that
+    // names a field with a caption in markup walks up from that caption to the row holding it, and
+    // the links have to be there for the page to answer.
+    for (const node of this.children) node.parent = this;
+
     // Inserting markup in a browser upgrades every custom element in it and runs their
     // connectedCallback in document order; a section that lays its panel out through innerHTML
     // then reads the controls its own primitives built.
@@ -450,7 +455,14 @@ export function texts(nodes) {
 export function connectFields(root) {
   const fields = findAll(root, (node) => node.tag === FORM_FIELD);
 
-  for (const field of fields) connectFormField(field);
+  for (const field of fields) {
+    connectFormField(field);
+
+    // The primitives a field carries connect after the field itself, the way a browser runs them:
+    // the pick list builds the select the field answers with, and that select is the control a
+    // label is attached to and a screen reader announces.
+    for (const child of field.children ?? []) connectCustom(child);
+  }
 
   return fields;
 }

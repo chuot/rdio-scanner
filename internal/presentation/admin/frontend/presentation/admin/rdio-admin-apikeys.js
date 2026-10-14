@@ -14,7 +14,7 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
+import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -163,7 +163,7 @@ class RdioAdminApikeys extends HTMLElement {
     copy.setAttribute('aria-label', 'Copy key to clipboard');
     copy.innerHTML = '<i class="material-icons" aria-hidden="true">content_copy</i>';
 
-    const keyField = this.field('Key', copy);
+    const keyField = this.field('Key', copy, true);
     const keyInput = keyField.querySelector('input');
     keyInput.value = row.key ?? '';
     keyInput.required = true;
@@ -190,7 +190,7 @@ class RdioAdminApikeys extends HTMLElement {
       refreshMarker();
     });
 
-    const identField = this.field('Ident');
+    const identField = this.field('Ident', null, true);
     const identInput = identField.querySelector('input');
     identInput.value = row.ident ?? '';
 
@@ -248,7 +248,7 @@ class RdioAdminApikeys extends HTMLElement {
     return panel;
   }
 
-  field(label, trailing) {
+  field(label, trailing, required) {
     const field = document.createElement('rdio-form-field');
 
     const labelEl = document.createElement('label');
@@ -256,6 +256,11 @@ class RdioAdminApikeys extends HTMLElement {
 
     const input = document.createElement('input');
     input.type = 'text';
+
+    // The mark the operator reads as an asterisk is this section's declaration that the field
+    // cannot be left empty: it rides the field's own name, and the field host carries the other
+    // half so the control announces it.
+    if (required) markRequired(field, labelEl);
 
     if (trailing) {
       const inline = document.createElement('div');

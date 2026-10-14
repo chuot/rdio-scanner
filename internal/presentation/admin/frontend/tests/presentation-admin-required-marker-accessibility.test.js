@@ -116,23 +116,26 @@ function spanClass(node) {
   return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
 }
 
-// The field a name belongs to. A field built with a label inside it answers for its own name; a field
-// a hand-built row names with a caption beside it is the field that sits in the same row as that
-// caption, which is the shape the options panel and the hand-built rows use.
-function fieldForName(root, name) {
+// The name a field answers for, and the field carrying it. A field built with a label inside it
+// answers for the label in it; a field a hand-built row names with a caption beside it is the field
+// that sits in the same row as that caption, which is the shape the options panel and the hand-built
+// rows use, and the caption is the name the mark rides.
+function namedField(root, name) {
   const fields = findAll(root, (node) => node.tag === 'rdio-form-field');
 
-  const named = fields.find((field) => findAll(field, (child) => child.tag === 'label' || spanClass(child))
-    .some((el) => el.textContent === name));
+  for (const field of fields) {
+    const naming = findAll(field, (child) => child.tag === 'label' || spanClass(child))
+      .find((el) => el.textContent === name);
 
-  if (named) return named;
+    if (naming) return { field, naming };
+  }
 
   const caption = findAll(root, (child) => spanClass(child)).find((el) => el.textContent === name);
 
   for (let node = caption?.parent; node; node = node.parent) {
     const field = findAll(node, (child) => child.tag === 'rdio-form-field')[0];
 
-    if (field) return field;
+    if (field) return { field, naming: caption };
   }
 
   return undefined;
@@ -142,12 +145,12 @@ function fieldForName(root, name) {
 // primitive builds inside the field, which is the element a label is attached to and a screen reader
 // announces.
 function controlFor(root, name) {
-  const field = fieldForName(root, name);
+  const found = namedField(root, name);
 
-  if (!field) return undefined;
+  if (!found) return undefined;
 
-  return findAll(field, (child) => child.tag === 'select')[0]
-    ?? findAll(field, (child) => ['input', 'textarea', 'rdio-select'].includes(child.tag))[0];
+  return findAll(found.field, (child) => child.tag === 'select')[0]
+    ?? findAll(found.field, (child) => ['input', 'textarea', 'rdio-select'].includes(child.tag))[0];
 }
 
 function ariaRequired(root, name) {
@@ -158,12 +161,7 @@ function ariaRequired(root, name) {
 // the attribute on the control, so a field whose name carries no mark cannot answer with a required
 // control, and a marked name cannot leave its control unannounced.
 function nameCarriesMark(root, name) {
-  const field = fieldForName(root, name);
-
-  if (!field) return false;
-
-  return findAll(field, (child) => child.tag === 'label' || spanClass(child))
-    .some((el) => el.textContent === name && requiredMark(el));
+  return requiredMark(namedField(root, name)?.naming);
 }
 
 // ---------------------------------------------------------------------------
