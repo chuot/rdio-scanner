@@ -368,18 +368,26 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       }
     }
 
-    // The system's blacklist is a field of the system row, and the Systems section shows that field.
-    // A level save that stored the entry has to leave that section holding the list the server now
-    // holds, or the operator who opens the Systems section after the action reads a list the server
-    // no longer has. A section the operator is editing keeps its own text: the conflict the server
-    // reports is what tells them the section they are standing in moved.
+    // The system's blacklist is a field of the system row, and the Systems section saves every row it
+    // holds, so the list that section is holding is the list the server ends up storing. A level save
+    // that stored the entry therefore has to leave that section holding the list the server now holds,
+    // in the saved copy and in the copy the operator is working on: a section that kept the text it was
+    // showing would write that text back over the entry the operator just asked for, and the talkgroup
+    // row the entry names is already gone. The section keeps asking to be saved for the edits the
+    // operator made in the other fields, which is what the copy they are working on still carries.
     const systems = store.getState()[sliceKey('systems')];
 
-    if (systems && blacklists !== undefined && !systems.dirty) {
+    if (systems && blacklists !== undefined) {
+      const carried = (rows) => (rows ?? []).map((system) => (system.id === systemId ? { ...system, blacklists } : system));
+
+      const baseline = carried(systems.baseline);
+      const working = carried(systems.working);
+
       patch[sliceKey('systems')] = {
         ...systems,
-        baseline: (systems.baseline ?? []).map((system) => (system.id === systemId ? { ...system, blacklists } : system)),
-        working: (systems.working ?? []).map((system) => (system.id === systemId ? { ...system, blacklists } : system)),
+        baseline,
+        working,
+        dirty: !deepEqual(working, baseline),
       };
     }
 
