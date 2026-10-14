@@ -1,12 +1,11 @@
-// The blacklist the operator reads. The field holds a comma separated list of talkgroup references,
-// and a reference on its own tells the operator little: the number a system refuses is the number a
-// recording carries, and the talkgroup it belongs to is the name the operator knows. The list beside
-// the field names each entry by the talkgroup it refuses, and falls back to the reference when the
-// system has no talkgroup for it — the reference stays blacklisted either way.
+// The blacklist the operator edits. The field holds a comma separated list of talkgroup references,
+// and it is the only place the operator edits that list: the section writes what the field holds when
+// the system is saved, and nothing else takes a reference out. A reference the system has no talkgroup
+// for is blacklisted the same way as one it has — the server compares the reference.
 //
 // The fixture lays the system out the way the conformance fixture does: the first talkgroup of the
-// first system is reference 1514000, and the blacklist names that reference beside one the system
-// has no talkgroup for.
+// first system is reference 1514000, and the blacklist names that reference beside one the system has
+// no talkgroup for.
 
 import './dom-shim.js';
 
@@ -80,80 +79,38 @@ function systemsSection() {
   return el;
 }
 
-// The field the list of entries belongs to.
+// The field the operator edits the blacklist in.
 function blacklistsControl(el) {
   return findAll(el, (node) => node.tag === 'textarea')[0];
 }
 
-// The entry rows the section renders beside the field: one per reference the list names.
+// The rows a per-reference editor would render, and the control it would take a reference out with.
+// Neither belongs on the page: the field is the editor.
 function entryRows(el) {
   return findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry'));
 }
 
-// What an entry row says out loud: the talkgroup it refuses, or the reference when the system has
-// no talkgroup for it. The row also carries its Remove control, which is not part of what the entry
-// names, so the reading takes the name the row gives the entry.
-function entryText(entry) {
-  return findAll(entry, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry-label'))[0].textContent.trim();
-}
-
-function removeControl(entry) {
-  return findAll(entry, (node) => node.tag === 'button' && node.textContent === 'Remove')[0];
-}
-
-function saveButton(el) {
-  const bar = findAll(el, (node) => node.tag === 'rdio-admin-section-bar')[0];
-
-  bar.connectedCallback();
-
-  return findAll(bar, (node) => node.tag === 'button' && node.className.split(/\s+/).includes('save'))[0];
+function removeControls(el) {
+  return findAll(el, (node) => node.tag === 'button' && node.textContent === 'Remove');
 }
 
 function settled() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-test('the systems section names each blacklisted talkgroup beside the field', () => {
+test('the systems section edits the blacklist through the field alone', () => {
   seed();
 
   const el = systemsSection();
 
-  const entries = entryRows(el);
+  assert.equal(blacklistsControl(el).value, '1514000,40001',
+    'the field does not hold the list the server stores, references the system has talkgroups for and one it has none for alike');
 
-  assert.ok(entries.length === 2, `the section names ${entries.length} blacklisted entries, want one row per reference the list names`);
+  assert.equal(entryRows(el).length, 0,
+    'the section renders a line beside the field, where the operator was told the field is the editor');
 
-  assert.deepEqual(entries.map(entryText), ['Dispatch 1', '40001'], 'the entries are not named by the talkgroup they refuse, falling back to the reference the system has no talkgroup for');
-});
-
-test('removing an entry shortens the list to the entries that remain', async () => {
-  const store = seed();
-
-  const el = systemsSection();
-
-  const [entry] = entryRows(el);
-
-  assert.ok(entry, 'the systems section renders no entry row to remove');
-
-  removeControl(entry).click();
-
-  assert.equal(blacklistsControl(el).value, '40001', 'the field does not hold the entries that remain');
-
-  assert.deepEqual(entryRows(el).map(entryText), ['40001'], 'the entry list did not follow the field');
-
-  const slice = store.getState()['section:systems'];
-
-  assert.equal(slice.dirty, true, 'removing an entry left the section not asking to be saved');
-  assert.equal(slice.invalid, false, 'removing an entry made the section unsaveable');
-
-  saveButton(el).click();
-
-  await settled();
-
-  const saved = requests.filter((request) => request.url === '/api/admin/config/systems');
-
-  assert.equal(saved.length, 1, 'the section did not save the shortened list');
-
-  assert.equal(JSON.parse(saved[0].options.body)[0].blacklists, '40001', 'the shortened list the section saved is not the list the operator was shown');
+  assert.equal(removeControls(el).length, 0,
+    'the section renders a control that takes a reference out of the list, where the field is the editor');
 });
 
 // The reading the operator's report is made of. The system's blacklist starts empty, the operator
@@ -243,6 +200,4 @@ test('the systems section shows the blacklist entry the talkgroups action stored
 
   assert.equal(blacklistsControl(systems).value, '1514000',
     'the systems section does not show the blacklist entry the talkgroups action stored');
-  assert.deepEqual(entryRows(systems).map(entryText), ['Dispatch 1'],
-    'the systems section does not name the blacklisted talkgroup the talkgroups action stored');
 });
