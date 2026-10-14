@@ -131,12 +131,22 @@ export function serializeSubSection(level, working) {
   return structuredClone(working);
 }
 
-// Per-section save payload: deep clone with the serialization-side
+// Per-section save payload: the fields of the system row, with the serialization-side
 // normalization (systems section only).
+//
+// The sites, talkgroups, and units under a system are saved by the section that shows them, for the
+// system it shows. The systems section carries the rows its screen is holding, and sending them
+// would make it answer for levels it does not edit: the rows it loaded are older than a level the
+// operator saved somewhere else, so the save would store back rows that section deleted, and refuse
+// talkgroups the system's blacklist has just taken.
 export function serializeSection(section, working) {
-  if (section === 'systems') return serializeAdminConfig({ systems: working }).systems;
+  if (section !== 'systems') return structuredClone(working);
 
-  return structuredClone(working);
+  return serializeAdminConfig({ systems: working }).systems.map((system) => {
+    for (const level of SYSTEM_SUB_LEVELS) delete system[level];
+
+    return system;
+  });
 }
 
 function deepMerge(target, source) {

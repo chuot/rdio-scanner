@@ -140,7 +140,11 @@ test('a per-level save sends the rows with the keys the configuration defines', 
   ], 'the level of the system the operator saved carries its configuration keys and nothing else');
 });
 
-test('the systems save sends the whole array with its nested sub-lists, and no client key in any row', async () => {
+// The Systems section edits the system row's own fields. The sites, talkgroups, and units under a
+// system are saved by the section for that level, which shows one system at a time: the Systems
+// payload carries no copy of them, so a save there cannot answer for a level the operator changed
+// somewhere else — and cannot put back rows that level deleted.
+test('the systems save sends the fields of the system row, and no copy of the levels', async () => {
   const { api, useCases } = await setup();
 
   useCases.setSectionWorking('systems', withNewRow([COUNTY], {
@@ -173,14 +177,40 @@ test('the systems save sends the whole array with its nested sub-lists, and no c
       label: 'West',
       led: '',
       order: 0,
-      sites: [],
       systemRef: null,
-      talkgroups: [],
       type: '',
-      units: [],
     },
-    COUNTY,
-  ], 'the systems array the section saves is the configuration, nested sub-lists included');
+    {
+      alert: '',
+      autoPopulate: false,
+      blacklists: '',
+      delay: null,
+      id: 2,
+      label: 'County',
+      led: '',
+      order: 1,
+      systemRef: 2,
+      type: '',
+    },
+  ], 'the systems save sends the fields of the system row, and no copy of the sites, talkgroups, and units the level sections save');
+});
+
+// The row the server holds has a site under it. The Systems section does not show sites, and its
+// save does not carry them: what the server stores for the level is the level section's to write.
+test('the systems save leaves the stored sites, talkgroups, and units to the sections that save them', async () => {
+  const { api, useCases } = await setup();
+
+  useCases.setSectionWorking('systems', [COUNTY, { ...COUNTY, id: 3, label: 'River', systemRef: 3 }]);
+
+  assert.equal(await useCases.saveSection('systems'), true);
+
+  const body = api.calls.find((call) => call[0] === 'saveSection')[2];
+
+  for (const entry of body) {
+    for (const level of ['sites', 'talkgroups', 'units']) {
+      assert.equal(entry[level], undefined, `the systems save sends ${level}, which the ${level} section saves for the system it shows`);
+    }
+  }
 });
 
 // The store compares the working copy with the server's copy structurally. The client's mark is not a

@@ -372,20 +372,35 @@ test('saveSection sends the working copy, then re-baselines from the saved secti
   assert.deepEqual(slice.working, [{ id: 1, label: 'Renamed' }]);
 });
 
-test('saveSection serializes the systems section with the "order" key (round-trip contract)', async () => {
+// The systems section saves the fields of the system row. The sites, talkgroups, and units under it
+// are saved by the section that shows them, for the system it shows: the rows this section loaded
+// are older than a level the operator saved there, so sending them would store back rows that
+// section deleted, and refuse talkgroups the system's blacklist has just taken.
+test('saveSection sends the system row and leaves its levels to the sections that save them', async () => {
   const { api, useCases } = setup({ token: 'jwt-0' });
 
   await useCases.boot();
 
-  useCases.setSectionWorking('systems', [{ id: 1, label: 'S', talkgroups: [{ id: 10, label: 'T', order: 7 }] }]);
+  useCases.setSectionWorking('systems', [{
+    id: 1,
+    label: 'S',
+    sites: [{ id: 3, label: 'Site', order: 1, siteRef: 30 }],
+    systemRef: 1,
+    talkgroups: [{ id: 10, label: 'T', order: 7, talkgroupRef: 1514 }],
+    units: [{ id: 8, label: 'Unit', order: 1, unitRef: 80 }],
+  }]);
 
   await useCases.saveSection('systems');
 
   const call = api.calls.find((c) => c[0] === 'saveSection');
-  const talkgroup = call[2][0].talkgroups[0];
+  const system = call[2][0];
 
-  assert.equal(talkgroup.order, 7);
-  assert.equal('talkgroup' in talkgroup, false);
+  assert.equal(system.label, 'S', 'the fields of the system row are the systems section to save');
+  assert.equal(system.systemRef, 1);
+
+  for (const level of ['sites', 'talkgroups', 'units']) {
+    assert.equal(system[level], undefined, `the systems save sends ${level}, which the ${level} section saves for the system it shows`);
+  }
 });
 
 test('a failed save keeps the dirty working copy intact', async () => {
