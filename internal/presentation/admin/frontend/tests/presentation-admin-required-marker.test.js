@@ -135,6 +135,92 @@ function fieldOf(row, title) {
     .find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title);
 }
 
+function controlOf(row, title) {
+  return findAll(fieldOf(row, title), (node) => ['input', 'textarea', 'rdio-select'].includes(node.tag))[0];
+}
+
+// The operator types in the field and the change fires the way leaving the field fires it.
+function typeIn(row, title, value) {
+  const control = controlOf(row, title);
+
+  control.value = value;
+  control.dispatchEvent({ type: 'change' });
+  connectFields(row);
+
+  return control;
+}
+
+// The names a row carries, marked or not, minus the marked ones: the fields the webapp accepts empty.
+function unmarkedNames(row) {
+  const marked = new Set(markedNames(row));
+
+  return shownNames(row).filter((name) => !marked.has(name));
+}
+
+// ---------------------------------------------------------------------------
+// The fields the webapp accepts empty carry no mark, in the sections built by the row builders.
+// ---------------------------------------------------------------------------
+
+const UNMARKED = [
+  ['rdio-admin-systems', ['Audio alert', 'Blacklists', 'Delay', 'Led Color', 'Type']],
+  ['rdio-admin-sites', []],
+  ['rdio-admin-talkgroups', ['Audio alert', 'Delay', 'Frequency', 'Led Color', 'Type']],
+  ['rdio-admin-units', ['Id', 'Range from', 'Range to']],
+];
+
+for (const [tag, expected] of UNMARKED) {
+  test(`a new ${tag} row leaves the fields the webapp accepts empty unmarked`, () => {
+    seed(getAdminContext().store);
+
+    const row = addRow(attach(tag));
+
+    for (const name of expected) {
+      assert.ok(unmarkedNames(row).includes(name), `${name} is not insisted on and carries no mark`);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The mark names the rule, not the value: it does not move through valid, invalid, and empty.
+// ---------------------------------------------------------------------------
+
+test('the mark on an identifier stays while the row is filled in, broken, and emptied', () => {
+  seed(getAdminContext().store);
+
+  const el = attach('rdio-admin-talkgroups');
+  const row = addRow(el);
+
+  assert.deepEqual(markedNames(row).includes('Id'), true, 'the new row marks the identifier');
+
+  typeIn(row, 'Id', '71');
+
+  assert.deepEqual(markedNames(row), ['Groups', 'Id', 'Label', 'Name', 'Tag'], 'a valid identifier keeps every mark');
+
+  // The identifier a saved row already has: the whole-list rule names itself on the row.
+  typeIn(row, 'Id', '70');
+
+  assert.deepEqual(markedNames(row), ['Groups', 'Id', 'Label', 'Name', 'Tag'], 'a duplicate identifier keeps every mark');
+
+  typeIn(row, 'Id', '');
+
+  assert.deepEqual(markedNames(row), ['Groups', 'Id', 'Label', 'Name', 'Tag'], 'an emptied identifier keeps its mark: the mark names the rule, not the value');
+});
+
+test('the mark on a label does not move when the field is filled and broken', () => {
+  seed(getAdminContext().store);
+
+  const el = attach('rdio-admin-sites');
+  const row = addRow(el);
+
+  typeIn(row, 'Label', 'Depot');
+
+  assert.deepEqual(markedNames(row), ['Id', 'Label'], 'a valid label keeps both marks');
+
+  typeIn(row, 'Label', '');
+
+  assert.deepEqual(markedNames(row), ['Id', 'Label'], 'an emptied label keeps both marks');
+});
+
 // ---------------------------------------------------------------------------
 // The row the operator just added, read before they reach anything.
 // ---------------------------------------------------------------------------
