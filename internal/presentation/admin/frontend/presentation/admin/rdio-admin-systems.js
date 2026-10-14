@@ -1,10 +1,10 @@
 // rdio-admin-systems: systems section (legacy config/systems).
 // The system level only: sites, talkgroups and units are saved on their own in
-// the per-level sections, so the nested sub-lists are gone. Validation lives in
-// domain/systems-validation.js; the systems section still saves the whole
-// systems array, sub-levels included, exactly as the section endpoint does.
+// the per-level sections, so the section submits and saves the fields of the system row and leaves
+// every level to the section that shows it. Validation lives in domain/systems-validation.js.
 
 import { playAlert } from './play-alert.js';
+import { blacklistsEntries, removeBlacklistsEntry } from '../../domain/blacklists.js';
 import { systemErrors, systemsSectionInvalid } from '../../domain/systems-validation.js';
 import { getAdminContext } from '../../application/admin-context.js';
 import {
@@ -223,8 +223,10 @@ class RdioAdminSystems extends HTMLElement {
 
     selectField(ctx, details, 'led', 'Led Color', LED_CAPTION, LEDS, system.led ?? '', (value) => update({ led: value }));
 
-    const blacklistsField = textareaField(ctx, details, 'blacklists', 'Blacklists', 'A comma separated list of talkgroup Ids to blacklist from this system. This only has an effect if the auto populate option is enabled.', system.blacklists ?? '', errors.blacklists);
+    const blacklistsField = textareaField(ctx, details, 'blacklists', 'Blacklists', 'A comma separated list of talkgroup references. The server refuses every call on a talkgroup whose reference is in the list. The Blacklist action of the Talkgroups section adds a talkgroup to this list, and saving that section stores it with the talkgroups.', system.blacklists ?? '', errors.blacklists);
     onFieldEdit(blacklistsField.textarea, () => update({ blacklists: blacklistsField.textarea.value }, blacklistsField.field, 'blacklists'));
+
+    details.append(blacklistsEntryList(system, (list) => this.commit(this.systems.map((s, i) => (i === index ? { ...s, blacklists: list } : s)), false)));
 
     selectField(ctx, details, 'type', 'Type', null, TYPES, system.type ?? '', (value) => update({ type: value }), TYPE_CAPTION);
 
@@ -253,6 +255,38 @@ class RdioAdminSystems extends HTMLElement {
 }
 
 customElements.define('rdio-admin-systems', RdioAdminSystems);
+
+// The system's blacklist, named. The field holds the references the server refuses, and a bare
+// reference tells the operator little: the talkgroup it belongs to is the name they know. Each entry
+// is named by the system's talkgroup with that reference, and by the reference alone when the system
+// has no talkgroup for it — the reference stays refused either way, and the row the Blacklist action
+// removed is in that case exactly the entry the operator wants to read.
+function blacklistsEntryList(system, removeEntry) {
+  const box = document.createElement('div');
+  box.className = 'rdio-admin-blacklist-entries';
+
+  for (const entry of blacklistsEntries(system.blacklists)) {
+    const talkgroup = (system.talkgroups ?? []).find((candidate) => String(candidate.talkgroupRef) === entry);
+
+    const row = document.createElement('div');
+    row.className = 'rdio-admin-blacklist-entry';
+
+    const label = document.createElement('span');
+    label.className = 'rdio-admin-blacklist-entry-label';
+    label.textContent = talkgroup?.label?.trim() ? talkgroup.label : entry;
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'rdio-button-mini';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => removeEntry(removeBlacklistsEntry(system.blacklists, entry)));
+
+    row.append(label, remove);
+    box.append(row);
+  }
+
+  return box;
+}
 
 function bindSectionSlices(callback) {
   const { store } = getAdminContext();
