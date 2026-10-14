@@ -57,6 +57,13 @@ func TestTheServerLogViewNamesThePartOfTheServerThatWroteEachEntry(t *testing.T)
 		t.Fatalf("saving the options was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
+	// One level of one system, saved the way the Sites section of the administration form saves it, with
+	// the sites the store already holds. The entry this writes names the system by the number the
+	// operator reads in the section and types into the fields, not by the identity the store gave the row.
+	if rec := srv.put("/api/admin/config/systems/1/sites", token, `[{"id":1,"label":"Metro East","siteRef":101},{"id":2,"label":"Metro West","siteRef":102}]`); rec.Code != http.StatusOK {
+		t.Fatalf("saving the sites of a system was answered %d: %s", rec.Code, rec.Body.String())
+	}
+
 	// A recording the server accepts, posted the way an uploader posts one. The upload is stamped with the
 	// current instant so that the retention pass this journey runs afterwards has nothing to discard.
 	answered := srv.uploadRecording(t, uploadedRecording{
@@ -110,6 +117,7 @@ func TestTheServerLogViewNamesThePartOfTheServerThatWroteEachEntry(t *testing.T)
 	}{
 		{domain.LogSourceLogin, "a login attempt from " + testRequestAddress + " was refused"},
 		{domain.LogSourceConfig, "the options configuration changed"},
+		{domain.LogSourceConfig, "the sites configuration of system 10001 changed"},
 		{domain.LogSourceIngest, "call from system 10001 talkgroup 1514000 success, wording.wav"},
 		{domain.LogSourceAccess, "a listener from 127.0.0.1 presented an access code that is not valid"},
 		{domain.LogSourceLivefeed, "there is 1 listener"},
