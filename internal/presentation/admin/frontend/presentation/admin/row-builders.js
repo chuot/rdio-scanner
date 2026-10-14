@@ -49,8 +49,11 @@ export function makePanel(openState, key, title, invalid) {
 // The rows the operator sees open, in the order the list presents them. The page is the state the
 // operator reads; the section's map is what reproduces it on the next render, so the rule reads the
 // rows off the list and keeps the map in step with it.
+//
+// A browser hands back a NodeList from a query: it carries its rows by index, `forEach`, and
+// iteration, and it carries no `filter`. The rows are put in an array before they are picked over.
 function openRowsOf(list) {
-  return list.querySelectorAll(':scope > details[data-key]').filter((row) => row.open);
+  return Array.from(list.querySelectorAll(':scope > details[data-key]')).filter((row) => row.open);
 }
 
 function openKeysOf(list) {
@@ -77,14 +80,15 @@ function scrollableAncestor(list) {
   return null;
 }
 
-// One row open at a time. The systems-tree sections mount this on the list that carries their rows, so
-// one listener covers every row the section renders, the rows added later included.
+// One row open at a time. The systems-tree sections mount this on the rows of the list they build in
+// a render, so one handler covers every row the section renders, the rows added later included.
 //
-// The listener answers the toggle event a summary activation produces — the click and the keyboard's
-// Enter and Space leave the same event — and it answers it on the list because the event bubbles from
-// the row. Opening a row closes the rows that were open; closing a row records its own state and
-// closes nothing. The section's map follows the page, so the next render reproduces the one open row
-// the operator is looking at.
+// The handler answers the toggle event a summary activation produces — the click and the keyboard's
+// Enter and Space leave the same event — and it answers it on the row, because the browser leaves
+// that event on the row the operator activated and does not bubble it up to the list. Opening a row
+// closes the rows that were open; closing a row records its own state and closes nothing. The
+// section's map follows the page, so the next render reproduces the one open row the operator is
+// looking at.
 //
 // Nothing here touches the store: reading a row is not a change, and the rows the operator is editing
 // stay on the page. The rows above the opened row are the content that disappears, so the section
@@ -93,7 +97,7 @@ function scrollableAncestor(list) {
 export function attachSingleOpenRule(list, openState) {
   let applying = false;
 
-  list.addEventListener('toggle', (ev) => {
+  const onActivation = (ev) => {
     const row = ev.target?.closest?.('details[data-key]');
 
     if (!row || applying) return;
@@ -126,7 +130,11 @@ export function attachSingleOpenRule(list, openState) {
     applying = false;
 
     if (scroller) scroller.scrollTop += scrollCompensation(before, row.getBoundingClientRect().top);
-  });
+  };
+
+  for (const row of Array.from(list.querySelectorAll(':scope > details[data-key]'))) {
+    row.addEventListener('toggle', onActivation);
+  }
 }
 
 export function setRowMarker(panel, invalid) {

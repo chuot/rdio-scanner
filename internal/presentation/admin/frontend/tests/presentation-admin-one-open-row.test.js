@@ -113,11 +113,12 @@ function rowTitle(row) {
 }
 
 // The summary activation: the row's open state flips, and the row answers with the toggle event a
-// click and the keyboard's Enter and Space both produce. The event bubbles to the list the section
-// carries the row handlers on, the way it bubbles in a browser.
+// click and the keyboard's Enter and Space both produce. The browser leaves that event on the row the
+// operator activated — it does not bubble it up to the list the rows sit on — so whatever answers it
+// has to answer it on the row.
 function activate(row) {
   row.open = !row.open;
-  row.dispatchEvent({ type: 'toggle', target: row });
+  row.dispatchEvent({ type: 'toggle', target: row, bubbles: false });
 }
 
 function control(el, className) {
@@ -187,6 +188,35 @@ const SECTIONS = [
   ['units', 'rdio-admin-units', 'subsection:units:2'],
   ['systems', 'rdio-admin-systems', 'section:systems'],
 ];
+
+// The list a browser hands the section is a NodeList: it carries its rows by index, `forEach`, and
+// iteration, and it carries no `filter`, `map`, or `find`. The shim answers with an array, so the
+// shape the operator's browser has is stated here for the reading to reach the rule the way it
+// reaches it on the page.
+function asBrowserRowList(found) {
+  return {
+    length: found.length,
+    item: (i) => found[i] ?? null,
+    forEach: (fn, thisArg) => found.forEach(fn, thisArg),
+    [Symbol.iterator]: () => found[Symbol.iterator](),
+  };
+}
+
+function listTheBrowserHands(el) {
+  const list = findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-rows'))[0];
+
+  assert.ok(list, 'the section carries the list its rows sit on');
+
+  const read = list.querySelectorAll.bind(list);
+
+  list.querySelectorAll = (selector) => {
+    const found = read(selector);
+
+    return selector.includes('details[data-key]') ? asBrowserRowList(found) : found;
+  };
+
+  return list;
+}
 
 // CA-001, CA-008: opening a row closes the rows that were open, and the row the operator opened is
 // the one row the section shows open.
@@ -425,3 +455,26 @@ test('the OpenAPI endpoint rows keep opening side by side', () => {
     assert.equal(row.dataset.key, undefined, 'an endpoint row is not a systems-tree row: the rule has no key to read');
   }
 });
+
+// CA-001, CA-008, on the list the operator's browser hands the section. The rule reads the rows the
+// operator left open off the page; the page answers with a NodeList, and a NodeList that is asked for
+// `filter` answers nothing, which leaves every row the operator opened sitting open on the screen.
+for (const [name, tag] of SECTIONS) {
+  test(`a ${name} row opened on the list a browser hands the section closes the rows that were open`, () => {
+    seed();
+
+    const el = attach(tag);
+
+    listTheBrowserHands(el);
+
+    const [first, second] = rows(el);
+
+    activate(first);
+    activate(second);
+
+    assert.equal(first.open, false, 'the row the operator left open closes: the rule read the open rows off a browser list');
+    assert.equal(second.open, true, 'the row the operator opened is open');
+    assert.equal(openRows(el).length, 1, `the ${name} list holds exactly one open row`);
+    assert.equal(openRows(el)[0], second);
+  });
+}

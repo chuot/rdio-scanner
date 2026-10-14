@@ -251,9 +251,17 @@ class ShimNode {
   // the listener receives the event object the test hands in. The event bubbles the way a
   // browser bubbles it: a section's handler sits on the control, the form field's own handler
   // sits on the field that owns the control, and a change typed into a control reaches both.
+  //
+  // An event the browser does not bubble stays on the element it was left on: the `toggle` event a
+  // details element leaves when its summary is activated is one of them, so a handler on the list
+  // under the rows never hears it.
   dispatchEvent(event) {
+    const bubbles = event.bubbles !== false;
+
     for (let node = this; node; node = node.parent) {
       for (const fn of node.listeners?.[event.type] ?? []) fn(event);
+
+      if (!bubbles) break;
     }
   }
 
