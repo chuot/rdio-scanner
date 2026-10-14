@@ -223,7 +223,7 @@ class RdioAdminSystems extends HTMLElement {
 
     selectField(ctx, details, 'led', 'Led Color', LED_CAPTION, LEDS, system.led ?? '', (value) => update({ led: value }));
 
-    const blacklistsField = textareaField(ctx, details, 'blacklists', 'Blacklists', 'A comma separated list of talkgroup references. The server refuses every call on a talkgroup whose reference is in the list. The Blacklist action of the Talkgroups section adds a talkgroup to this list, and saving that section stores it with the talkgroups.', system.blacklists ?? '', errors.blacklists);
+    const blacklistsField = textareaField(ctx, details, 'blacklists', 'Blacklists', 'A comma separated list of talkgroup references. The server refuses every call on a talkgroup whose reference is in the list. The Blacklist action of the Talkgroups section adds a talkgroup to this list, and the click stores it with that talkgroup\'s rows.', system.blacklists ?? '', errors.blacklists);
     onFieldEdit(blacklistsField.textarea, () => update({ blacklists: blacklistsField.textarea.value }, blacklistsField.field, 'blacklists'));
 
     details.append(blacklistsEntryList(system, (list) => this.commit(this.systems.map((s, i) => (i === index ? { ...s, blacklists: list } : s)), false)));

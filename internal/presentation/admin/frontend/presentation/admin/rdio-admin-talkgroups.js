@@ -26,7 +26,7 @@ import {
 
 const LEVEL = 'talkgroups';
 
-const CAPTION = 'System talkgroups, you can drag and drop talkgroups to rearrange them. They will appear with the same order on the talkgroup selection panel unless the sort talkgroups option is enabled. Pick the system the talkgroups belong to.';
+const CAPTION = 'System talkgroups, you can drag and drop talkgroups to rearrange them. They will appear with the same order on the talkgroup selection panel unless the sort talkgroups option is enabled. Pick the system the talkgroups belong to. Blacklisting a talkgroup removes its row and stores the system\'s blacklist entry with the rows, in the click.';
 
 const SPEC = {
   level: LEVEL,

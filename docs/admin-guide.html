@@ -1992,8 +1992,9 @@ rm -f ${basename}.*</code></pre>
     accepted for the call that invents it — nothing in the list is configured yet for that call to be
     matched against — and refused from the next call on. The Talkgroups section carries a
     <strong>Blacklist talkgroup</strong> button that appends the talkgroup's reference to its system's
-    list, so the list is edited where the talkgroup is, and saving that section stores the list together
-    with the talkgroups.
+    list and removes its row, so the list is edited where the talkgroup is: the click stores the rows that
+    are left together with the list, and the Systems section shows the entry after it. A section holding a
+    talkgroup row the page will not save is refused, and says which fields to fix.
   </p>
 
   <p>
@@ -2031,7 +2032,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td>Led Color</td><td>The colour a listener's display shows for this system's calls. The default is green.</td></tr>
       <tr><td>Auto Populate</td><td>Creates this system's talkgroups and units when a recording names ones you have not configured. It works beside the server-wide option: see <a href="#ch-10-getting-audio-in">auto populate</a>.</td></tr>
       <tr><td>Delay</td><td>Minutes this system's calls are held before they are propagated to listeners.</td></tr>
-      <tr><td>Blacklists</td><td>A comma-separated list of talkgroup references this system refuses: every call whose system and talkgroup resolve is refused when the talkgroup's reference is in the list, auto populate enabled or not. The <strong>Blacklist talkgroup</strong> action of the Talkgroups section appends a reference here, and saving that section stores the list with its talkgroups.</td></tr>
+      <tr><td>Blacklists</td><td>A comma-separated list of talkgroup references this system refuses: every call whose system and talkgroup resolve is refused when the talkgroup's reference is in the list, auto populate enabled or not. The <strong>Blacklist talkgroup</strong> action of the Talkgroups section appends a reference here and stores it with that talkgroup's rows in the click.</td></tr>
     </tbody>
   </table>
 
@@ -2080,7 +2081,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td>Type</td><td>The talkgroup's channel type, shown to listeners.</td></tr>
       <tr><td>Frequency</td><td>A fake frequency in hertz shown on the main screen, for a talkgroup the recorder reports no frequency for.</td></tr>
       <tr><td>Delay</td><td>Minutes this talkgroup's calls are held before they are propagated to listeners.</td></tr>
-      <tr><td>Blacklist talkgroup</td><td>Appends this talkgroup's reference to its system's blacklist and removes the row from the section, so the server stops taking calls on it: saving the Talkgroups section stores the removal and the new entry in the same save. The list itself lives on the system row, where the Systems section shows it as text and names the references it holds.</td></tr>
+      <tr><td>Blacklist talkgroup</td><td>Appends this talkgroup's reference to its system's blacklist and removes the row from the section, so the server stops taking calls on it: the click stores the removal and the new entry in one save, and the Systems section shows the entry after it. A section holding a talkgroup row the page will not save is refused, and says which fields to fix. The list itself lives on the system row, where the Systems section shows it as text and names the references it holds.</td></tr>
     </tbody>
   </table>
 
