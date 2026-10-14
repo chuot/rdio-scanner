@@ -134,7 +134,12 @@ class RdioAdminSectionBar extends HTMLElement {
     const invalid = slice.invalid || blacklists?.invalid === true;
     const conflict = slice.conflict || blacklists?.conflict === true;
 
-    const label = this.level ? `the ${this.level} of system ${this.systemId}` : sectionLabel(name);
+    // The system is named by its reference number, the number the operator reads in the section and
+    // types into the fields. The scaffold that resolves the shown system hands it to the bar; a bar
+    // built without it falls back to the identity the store gave the row.
+    const label = this.level
+      ? `the ${this.level} of system ${this.dataset.systemRef || this.systemId}`
+      : sectionLabel(name);
 
     const bar = document.createElement('div');
     bar.className = 'rdio-admin-section-bar';

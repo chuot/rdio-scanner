@@ -160,6 +160,11 @@ export function renderSubSection(component) {
   // The rows follow it, so the binding follows with them.
   if (component.boundKey !== sliceKey(component)) bind(component);
 
+  // The number the operator reads for the system this section shows: the reference they type into
+  // the fields and search the log by. The scaffold is what resolves the shown system, so it is
+  // what carries that number to the bar and to the section's own messages.
+  component.systemRef = systems.find((system) => system.id === component.systemId)?.systemRef ?? null;
+
   // The operator's own field edit is what reaches here as a store change; the rows
   // they are working on stay where they are. See commitSubRows.
   const slice = subSlice(level, component.systemId);
@@ -238,6 +243,9 @@ export function renderSubSection(component) {
 
   const bar = document.createElement('rdio-admin-section-bar');
   bar.dataset.subsection = `${level}:${component.systemId}`;
+
+  if (component.systemRef) bar.dataset.systemRef = String(component.systemRef);
+
   root.append(bar);
 
   component.replaceChildren(root);

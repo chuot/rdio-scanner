@@ -287,7 +287,7 @@ function talkgroupRow(component, talkgroup, index, rows) {
       getAdminContext().useCases.blacklistTalkgroup(component.systemId, talkgroup.talkgroupRef);
 
       if (!await getAdminContext().useCases.saveSubSection(LEVEL, component.systemId)) {
-        showSnackbar(`Unable to save the talkgroups of system ${component.systemId}`);
+        showSnackbar(`Unable to save the talkgroups of system ${component.systemRef ?? component.systemId}`);
 
         return;
       }
