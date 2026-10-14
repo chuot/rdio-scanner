@@ -195,16 +195,22 @@ func TestSectionSaveOfAnotherSectionKeepsTheWatchedDirectoriesRunning(t *testing
 	}
 }
 
-// A system carries its talkgroups, sites, and units inside it, and a save of the systems section is where
-// all of them are replaced. A save that only read the system's own fields would quietly drop the
-// talkgroups an administrator just named, and the calls that arrive for them would find nowhere to go.
-func TestSectionSaveSystemsKeepsWhatEachSystemCarriesInsideIt(t *testing.T) {
+// The Systems section edits the system row's own fields, and its save stores those fields. The
+// sites, talkgroups, and units under a system are saved by the section for that level, which shows
+// one system at a time, so the systems-section save leaves them as the store holds them — and the
+// answer carries them as the store holds them, which is what the page that saved reads back.
+func TestSectionSaveSystemsWritesTheSystemRowAndAnswersTheLevelsAsTheStoreHoldsThem(t *testing.T) {
 	fixture := newAdminFixture()
 
-	fixture.tags.Stored = domain.Tags{{ID: 3, Label: "Law"}}
+	seedCaptures(t, fixture)
+
+	stored, ok := fixture.systems.Stored.ByID(1)
+	if !ok {
+		t.Fatalf("system 1 is not stored by the capture")
+	}
 
 	rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems",
-		`[{"label":"Test System","systemRef":10,"talkgroups":[{"label":"TG1","talkgroupRef":101,"order":1,"tagId":3}]}]`)
+		`[{"id":1,"label":"Renamed Metro","systemRef":10001,"order":1,"autoPopulate":true,"blacklists":"1514000"}]`)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("systems save status = %d, want 200: %s", rec.Code, rec.Body.String())
@@ -216,12 +222,18 @@ func TestSectionSaveSystemsKeepsWhatEachSystemCarriesInsideIt(t *testing.T) {
 
 	system := fixture.systems.Stored[0]
 
-	if system.Label != "Test System" || system.SystemRef != 10 {
-		t.Errorf("the system is %#v, want the label and reference the submitted list names", system)
+	if system.Label != "Renamed Metro" || system.SystemRef != 10001 || system.Blacklists != domain.Blacklists("1514000") {
+		t.Errorf("the system is %#v, want the fields the submitted list names", system)
 	}
 
-	if len(system.Talkgroups) != 1 || system.Talkgroups[0].Label != "TG1" || system.Talkgroups[0].TalkgroupRef != 101 {
-		t.Errorf("the system carries %v, want the one talkgroup it names", system.Talkgroups)
+	if len(system.Talkgroups) != len(stored.Talkgroups) {
+		t.Errorf("the system carries %d talkgroups, want the %d the store held: the systems-section save wrote the levels",
+			len(system.Talkgroups), len(stored.Talkgroups))
+	}
+
+	if len(system.Sites) != len(stored.Sites) {
+		t.Errorf("the system carries %d sites, want the %d the store held: the systems-section save wrote the levels",
+			len(system.Sites), len(stored.Sites))
 	}
 
 	entries := decodedSection(t, rec)
@@ -231,8 +243,8 @@ func TestSectionSaveSystemsKeepsWhatEachSystemCarriesInsideIt(t *testing.T) {
 	}
 
 	talkgroups, ok := entries[0]["talkgroups"].([]any)
-	if !ok || len(talkgroups) != 1 {
-		t.Errorf("the answer carries %v, want the talkgroup the saved system names", entries[0]["talkgroups"])
+	if !ok || len(talkgroups) != len(stored.Talkgroups) {
+		t.Errorf("the answer carries %v, want the talkgroups as the store holds them", entries[0]["talkgroups"])
 	}
 }
 
@@ -666,6 +678,90 @@ func TestSubSectionSaveReportsAPersistenceFailure(t *testing.T) {
 
 	if rec.Code != http.StatusExpectationFailed {
 		t.Errorf("status = %d, want 417 for a save that could not be stored", rec.Code)
+	}
+}
+
+// The talkgroups level takes the bare array of rows it has always taken, and the object that
+// carries its rows beside the blacklist the section edits with them. Both are answered with the
+// level as the store holds it, and the object's blacklist is stored by the same save.
+func TestSubSectionSaveOfTalkgroupsAnswersTheLevelForBothBodies(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "the bare array of rows", body: `[{"id":2,"label":"Ground","name":"Dispatch 2","tagId":4,"talkgroupRef":1514100,"groupIds":[3,7]}]`},
+		{name: "the object carrying the blacklist", body: `{"talkgroups":[{"id":2,"label":"Ground","name":"Dispatch 2","tagId":4,"talkgroupRef":1514100,"groupIds":[3,7]}],"blacklists":"1514000"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newAdminFixture()
+
+			seedCaptures(t, fixture)
+
+			rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems/1/talkgroups", tc.body)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 for the talkgroups of a stored system: %s", rec.Code, rec.Body.String())
+			}
+
+			answered := fixture.authorized(http.MethodGet, "/api/admin/config/systems/1/talkgroups", "")
+
+			if compactJSON(t, rec.Body.String()) != compactJSON(t, answered.Body.String()) {
+				t.Errorf("the save answered %s, want the level as the store holds it: %s",
+					rec.Body.String(), answered.Body.String())
+			}
+
+			if len(fixture.systems.Stored) == 0 {
+				t.Fatalf("no system is stored")
+			}
+
+			if len(fixture.systems.Stored[0].Talkgroups) != 1 {
+				t.Errorf("the system carries %v, want the one talkgroup the submitted list names",
+					fixture.systems.Stored[0].Talkgroups)
+			}
+
+			want := domain.Blacklists("")
+
+			if strings.Contains(tc.body, "blacklists") {
+				want = domain.Blacklists("1514000")
+			}
+
+			if fixture.systems.Stored[0].Blacklists != want {
+				t.Errorf("the system stores blacklist %q, want %q: the save that names a blacklist stores it with the rows",
+					fixture.systems.Stored[0].Blacklists, want)
+			}
+		})
+	}
+}
+
+// A body the level cannot read is refused before the save starts. The object body belongs to the
+// talkgroups level alone: the sites and units levels take the list of their rows, and a body that
+// is neither a list nor the shape this level takes names nothing this endpoint can store.
+func TestSubSectionSaveRejectsABodyItCannotReadForTheShapeItIs(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		level string
+		body  string
+	}{
+		{name: "an object at the talkgroups level with no rows", level: "talkgroups", body: `{"blacklists":"1514000"}`},
+		{name: "a string at the talkgroups level", level: "talkgroups", body: `"1514000"`},
+		{name: "rows that are not a list", level: "talkgroups", body: `{"talkgroups":"1514000"}`},
+		{name: "the object body at the sites level", level: "sites", body: `{"talkgroups":[],"blacklists":"1514000"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newAdminFixture()
+
+			seedCaptures(t, fixture)
+
+			rec := fixture.authorized(http.MethodPut, "/api/admin/config/systems/1/"+tc.level, tc.body)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d for body %s, want 400 for a body this endpoint cannot read", rec.Code, tc.body)
+			}
+
+			if len(fixture.sessions.Announced) != 0 {
+				t.Error("a body that was refused never began a save, and must not reach the open administrator connections")
+			}
+		})
 	}
 }
 

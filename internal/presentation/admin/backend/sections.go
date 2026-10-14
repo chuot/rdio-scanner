@@ -300,7 +300,7 @@ func (admin *Admin) SubSection(w http.ResponseWriter, r *http.Request) {
 // not have is answered with 404, a save that could not be stored with 417, and a save
 // that worked with the level as re-read from the store.
 func (admin *Admin) saveSubSection(w http.ResponseWriter, r *http.Request, systemID uint64, level application.SystemSubSection) {
-	var submitted []any
+	var submitted any
 
 	if err := json.NewDecoder(r.Body).Decode(&submitted); err != nil {
 		admin.reportUnreadableRequest(r, err)
@@ -310,15 +310,25 @@ func (admin *Admin) saveSubSection(w http.ResponseWriter, r *http.Request, syste
 		return
 	}
 
-	cmd := application.UpdateSystemSubSectionCommand{SystemID: systemID, Level: level}
+	rows, blacklists, readable := levelBody(level, submitted)
+
+	if !readable {
+		admin.reportUnreadableRequest(r, fmt.Errorf("the %s level of a system is saved as the list of its rows", level))
+
+		w.WriteHeader(http.StatusBadRequest)
+
+		return
+	}
+
+	cmd := application.UpdateSystemSubSectionCommand{SystemID: systemID, Level: level, Blacklists: blacklists}
 
 	switch level {
 	case application.SitesSubSection:
-		cmd.Sites = domain.ParseSites(submitted)
+		cmd.Sites = domain.ParseSites(rows)
 	case application.TalkgroupsSubSection:
-		cmd.Talkgroups = domain.ParseTalkgroups(submitted)
+		cmd.Talkgroups = domain.ParseTalkgroups(rows)
 	case application.UnitsSubSection:
-		cmd.Units = domain.ParseUnits(submitted)
+		cmd.Units = domain.ParseUnits(rows)
 	}
 
 	_, failure := admin.systemSubSection.Handle(r.Context(), cmd)
@@ -336,6 +346,38 @@ func (admin *Admin) saveSubSection(w http.ResponseWriter, r *http.Request, syste
 	}
 
 	admin.sendSubSection(r.Context(), w, systemID, level)
+}
+
+// levelBody is the body a level save sends. Every level has always taken the bare array of its
+// rows. The talkgroups level also takes the object that carries its rows beside the blacklist the
+// section edits with them, so the save that drops a talkgroup stores the entry that refuses it in
+// the same request. A body that is neither is a body this endpoint cannot read.
+func levelBody(level application.SystemSubSection, submitted any) ([]any, *domain.Blacklists, bool) {
+	switch body := submitted.(type) {
+	case []any:
+		return body, nil, true
+
+	case map[string]any:
+		if level != application.TalkgroupsSubSection {
+			return nil, nil, false
+		}
+
+		rows, ok := body["talkgroups"].([]any)
+		if !ok {
+			return nil, nil, false
+		}
+
+		text, ok := body["blacklists"].(string)
+		if !ok {
+			return rows, nil, true
+		}
+
+		blacklists := domain.Blacklists(text)
+
+		return rows, &blacklists, true
+	}
+
+	return nil, nil, false
 }
 
 // sendSubSection answers with one level of one system, as an administrator is shown it.
