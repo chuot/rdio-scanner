@@ -62,8 +62,8 @@ function systems() {
       blacklists: '',
       sites: [{ id: 4, label: 'Metro East', order: 1, siteRef: 101 }],
       talkgroups: [
-        { id: 1, label: 'Ground', name: 'Dispatch 1', talkgroupRef: 1514000, order: 1, groupIds: [1], tagId: 2 },
-        { id: 2, label: 'Ground', name: 'Dispatch 2', talkgroupRef: 1514100, order: 2, groupIds: [1], tagId: 2 },
+        { id: 1, label: 'Dispatch 1', name: 'Dispatch 1', talkgroupRef: 1514000, order: 1, groupIds: [1], tagId: 2 },
+        { id: 2, label: 'Dispatch 2', name: 'Dispatch 2', talkgroupRef: 1514100, order: 2, groupIds: [1], tagId: 2 },
       ],
       units: [{ id: 7, label: 'Car 1', order: 1, unitRef: 1001 }],
     },
@@ -135,6 +135,31 @@ function requestTo(url) {
   return requests.filter((entry) => entry.url === url);
 }
 
+// The entry rows the Systems section renders beside the field, and what each one says out loud: the
+// talkgroup it refuses, named by the system's talkgroup.
+function entryRows(el) {
+  return findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry'));
+}
+
+function entryNames(el) {
+  return entryRows(el).map((row) =>
+    findAll(row, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry-label'))[0]?.textContent.trim() ?? '');
+}
+
+function snackbarText() {
+  return document.querySelector('rdio-snackbar')?.textContent ?? '';
+}
+
+// The control of the section's save bar: Save, Discard. The bar is a component of its own, and it
+// answers the way the page's bar answers once it is connected.
+function barControl(el, name) {
+  const bar = findAll(el, (node) => node.tag === 'rdio-admin-section-bar')[0];
+
+  bar.connectedCallback();
+
+  return findAll(bar, (node) => node.tag === 'button' && node.className.split(/\s+/).includes(name))[0];
+}
+
 // The control of one field of one row of the Systems section, the way the operator reaches it: the
 // row's field carrying that name, and the control inside it.
 function fieldControl(el, rowIndex, title) {
@@ -185,6 +210,136 @@ async function editASystemFieldThenBlacklist({ saveSystems = true } = {}) {
 
   return { store, saved, afterClick, systemsSection };
 }
+
+// The operator's only pending edit in the Systems section is the blacklist field itself. The click
+// stores the list the server accepts, and the section is left holding it: nothing is pending any
+// more, and the section says so by not asking to be saved.
+test('a Systems section whose only pending edit was the blacklist field stops asking to be saved when the Blacklist action stores its entry', async () => {
+  requests.length = 0;
+
+  const store = seed();
+
+  const systemsSection = new (customElements.get('rdio-admin-systems'))();
+
+  systemsSection.connectedCallback();
+
+  const field = fieldControl(systemsSection, 0, 'Blacklists');
+
+  assert.ok(field, 'the Systems section renders no Blacklists control for the system row');
+
+  keystroke(field, '40001');
+  reachField(field);
+
+  assert.equal(store.getState()['section:systems'].dirty, true, 'the Systems section did not mark the draft of its blacklist field as unsaved');
+
+  blacklistButton(talkgroupsSection()).click();
+
+  await settled();
+
+  const section = store.getState()['section:systems'];
+
+  assert.equal(section.dirty, false, 'the Systems section is still asking to be saved after the Blacklist action stored the list it holds');
+  assert.equal(systemsRow(store, 1)?.blacklists, '1514000', 'the Blacklist action left the section holding the draft the operator typed, not the list the server stored');
+});
+
+// What the operator reads when they come back to the Systems section after the action: the field
+// holding the list the server stored, and the list beside it naming the talkgroup they blacklisted.
+// The section is asking to be saved for the edit they made in another field, which is the state the
+// report left them in.
+test('the Systems section shows the blacklisted talkgroup after the Blacklist action, while it is asking to be saved for another edit', async () => {
+  requests.length = 0;
+
+  const store = seed();
+
+  const systemsSection = new (customElements.get('rdio-admin-systems'))();
+
+  systemsSection.connectedCallback();
+
+  keystroke(fieldControl(systemsSection, 0, 'Label'), 'Grand Metro renamed');
+  reachField(fieldControl(systemsSection, 0, 'Label'));
+
+  blacklistButton(talkgroupsSection()).click();
+
+  await settled();
+
+  assert.equal(store.getState()['section:systems'].dirty, true, 'the Blacklist action stopped the Systems section asking to be saved while the operator had an edit pending in it');
+
+  assert.equal(fieldControl(systemsSection, 0, 'Blacklists')?.value, '1514000', 'the Blacklists field the operator reads after the Blacklist action is not the list the server stored');
+
+  assert.deepEqual(entryNames(systemsSection), ['Dispatch 1'], 'the list beside the field does not name the talkgroup the Blacklist action removed');
+});
+
+// The draft the operator was writing in the Systems section's own Blacklists field, never sent. The
+// click stores the list the server accepts, the field ends up holding that list, and the click says
+// what it replaced. The section's Save then stores the list the server already holds.
+test('the Blacklist action replaces an unsaved draft of the Blacklists field with the list it stores, and says so', async () => {
+  requests.length = 0;
+
+  const store = seed();
+
+  const systemsSection = new (customElements.get('rdio-admin-systems'))();
+
+  systemsSection.connectedCallback();
+
+  keystroke(fieldControl(systemsSection, 0, 'Blacklists'), '40001');
+  reachField(fieldControl(systemsSection, 0, 'Blacklists'));
+
+  blacklistButton(talkgroupsSection()).click();
+
+  await settled();
+
+  const message = snackbarText();
+
+  assert.ok(message.includes('Blacklists'), `the Blacklist action replaced the operator's draft of the field without saying so, it said "${message}"`);
+
+  assert.equal(fieldControl(systemsSection, 0, 'Blacklists')?.value, '1514000', 'the field the operator reads after the Blacklist action is not the list the server stored');
+
+  const saved = await getAdminContext().useCases.saveSection('systems');
+
+  await settled();
+
+  assert.equal(saved, true, 'the Systems section refused to save');
+
+  const body = JSON.parse(requestTo('/api/admin/config/systems').at(-1).options.body);
+
+  assert.equal(body.find((system) => system.id === 1)?.blacklists, '1514000', 'the Systems section saved the draft the operator had typed, over the list the Blacklist action stored');
+
+  assert.equal(store.getState()['blacklists:1'].working, '1514000', 'the list the page holds after the Systems section saved is not the list the server holds');
+});
+
+// The operator decides not to finish the edit they started. Discard in the Systems section takes the
+// edit back out, and the list the Blacklist action stored stays: it is the server's, not part of the
+// edit being thrown away.
+test('Discard in the Systems section, after the Blacklist action, leaves the field holding the list the server stored', async () => {
+  requests.length = 0;
+
+  const store = seed();
+
+  const systemsSection = new (customElements.get('rdio-admin-systems'))();
+
+  systemsSection.connectedCallback();
+
+  keystroke(fieldControl(systemsSection, 0, 'Label'), 'Grand Metro renamed');
+  reachField(fieldControl(systemsSection, 0, 'Label'));
+
+  blacklistButton(talkgroupsSection()).click();
+
+  await settled();
+
+  const discard = barControl(systemsSection, 'discard');
+
+  assert.ok(discard && !discard.disabled, 'the Systems section is not offering to discard the edit the operator made');
+
+  discard.click();
+
+  await settled();
+
+  const section = store.getState()['section:systems'];
+
+  assert.equal(section.dirty, false, 'the Systems section is asking to be saved after the operator discarded their edit');
+  assert.equal(systemsRow(store, 1)?.blacklists, '1514000', 'Discard in the Systems section took back the entry the Blacklist action stored');
+  assert.equal(fieldControl(systemsSection, 0, 'Blacklists')?.value, '1514000', 'the field the operator reads after Discard is not the list the server holds');
+});
 
 test('the Systems section saves the list the Blacklist action stored, when the section was asking to be saved for another field', async () => {
   const { store, saved, afterClick } = await editASystemFieldThenBlacklist();
