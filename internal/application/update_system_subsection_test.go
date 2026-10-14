@@ -245,3 +245,25 @@ func TestUpdateSystemSubSectionReportsAPersistenceFailure(t *testing.T) {
 		t.Error("the directory watchers must be restarted even when the save failed")
 	}
 }
+
+// The system the save was aimed at is deleted under the save: the level is stored, and the
+// announcement runs after it, with the system no longer in the store. The line says the level
+// changed and names no identifier, because the number it would name belongs to a row that is gone.
+func TestUpdateSystemSubSectionNamesNoSystemWhenTheSaveOutlivesTheSystem(t *testing.T) {
+	fixture := newSubSectionFixture()
+
+	fixture.systems.SubSectionDeletesSystem = true
+
+	result, err := fixture.saveSubSection(1, SitesSubSection, domain.Sites{{SiteRef: 101, Label: "Metro East"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	if result.Outcome != ConfigurationSaved {
+		t.Errorf("outcome = %q, want the save to have worked", result.Outcome)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceConfig, "the sites configuration changed") {
+		t.Errorf("logs = %v, want the announcement naming the level and no identifier, the system it was aimed at being gone from the store", fixture.subSectionLogMessages())
+	}
+}

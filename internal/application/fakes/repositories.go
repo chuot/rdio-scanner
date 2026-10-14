@@ -298,6 +298,11 @@ type Systems struct {
 	SubSectionLevel    string
 	SubSectionSystemID uint64
 	SubSectionSaved    []any
+
+	// SubSectionDeletesSystem models the system being deleted under a per-level save:
+	// the level is stored, and the system the save was aimed at is gone from the store
+	// by the time the save is announced.
+	SubSectionDeletesSystem bool
 }
 
 var _ ports.SystemRepository = (*Systems)(nil)
@@ -518,6 +523,20 @@ func (systems *Systems) saveSubSection(level string, systemID uint64, rows any, 
 		if blacklists != nil {
 			systems.Stored[i].Blacklists = *blacklists
 		}
+	}
+
+	// The system is deleted under the save: the level is stored, and by the time the save is
+	// announced the system it was aimed at is no longer in the store.
+	if systems.SubSectionDeletesSystem {
+		kept := domain.Systems{}
+
+		for _, system := range systems.Stored {
+			if system.ID != systemID {
+				kept = append(kept, system)
+			}
+		}
+
+		systems.Stored = kept
 	}
 
 	return nil
