@@ -22,10 +22,13 @@ package acceptance
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestWatchedRecordingsPopulateTheConfigurationTheyName is the same path as the end-to-end run with the
@@ -172,6 +175,91 @@ const (
   "timestamp": 1791288120000
 }
 `
+)
+
+// TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsName is the half of auto
+// populate the systems-section save could have broken: the section writes the system row, and the
+// flag that lets the server invent a talkgroup for a recording that names one lives in that row. The
+// save submits the row's own fields, the flag is saved with them, and the recording that arrives
+// afterwards still gets its talkgroup.
+func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsName(t *testing.T) {
+	srv := journeyServerIn(t, t.TempDir())
+
+	seed(t, srv.db,
+		seedStatement{
+			query: `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (1, 1, '', 0, 'Grand Metro', '', 1, 10001, '')`,
+		},
+		seedStatement{
+			query: `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (1, 0, 'auto populate upload', ?, 0, '"*"')`,
+			args:  []any{autoPopulateUploadKey},
+		},
+		seedStatement{
+			query: `INSERT INTO "options" ("key", "value") VALUES ('audioConversion', '0')`,
+		},
+	)
+
+	if err := srv.server.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	token := administratorToken(t, srv)
+
+	// The Systems section, as the page submits it: the fields of the system row, and no copy of the
+	// levels. The label is what the operator came to change.
+	if rec := srv.put("/api/admin/config/systems", token, `[{
+		"alert": "",
+		"autoPopulate": true,
+		"blacklists": "",
+		"delay": 0,
+		"id": 1,
+		"label": "Grand Metro Renamed",
+		"led": "",
+		"order": 1,
+		"systemRef": 10001,
+		"type": ""
+	}]`); rec.Code != http.StatusOK {
+		t.Fatalf("saving the Systems section was answered %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// A recording naming a talkgroup the system has never heard of. The server invents it, under the
+	// labels a recording that names nothing is filed with, and keeps the call.
+	answered := srv.uploadRecording(t, uploadedRecording{
+		key:       autoPopulateUploadKey,
+		systemRef: 10001,
+		talkgroup: inventedTalkgroupRef,
+		filename:  "invented.wav",
+		audio:     recording(2048),
+		at:        time.Now().Add(-30 * time.Second),
+	})
+
+	if answered.Code != http.StatusOK {
+		t.Fatalf("the recording naming an unconfigured talkgroup was answered %d: %s",
+			answered.Code, answered.Body.String())
+	}
+
+	if rows := countRows(t, srv.db, fmt.Sprintf(`SELECT COUNT(*) FROM "talkgroups" WHERE "talkgroupRef" = %d`, inventedTalkgroupRef)); rows != 1 {
+		t.Fatalf("the store holds %d talkgroups for the reference the recording named, want the one auto populate invents", rows)
+	}
+
+	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "calls"`); rows != 1 {
+		t.Errorf("the server kept %d calls, want the one it invented a talkgroup for", rows)
+	}
+
+	// The label the Systems section saved is the label the invented talkgroup is filed under, which is
+	// the system row the save wrote and not a copy of it.
+	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "systems" WHERE "label" = 'Grand Metro Renamed'`); rows != 1 {
+		t.Errorf("the store holds %d systems carrying the label the Systems section saved, want the one", rows)
+	}
+
+	assertEveryServerLogEntry(t, srv.db)
+}
+
+// autoPopulateUploadKey is the credential the auto populate reading posts its recording with, and
+// inventedTalkgroupRef is a reference no seeded row carries: it is the one the server has to invent.
+const (
+	autoPopulateUploadKey = "a-key-that-refuses-nothing-here"
+
+	inventedTalkgroupRef = 1514500
 )
 
 // dropTrunkRecording puts a trunk-recorder pair into a watched directory and waits for the server to have

@@ -23,9 +23,11 @@ package acceptance
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -253,6 +255,11 @@ func TestAnAdministratorRequestTheServerCannotReadIsInTheLogView(t *testing.T) {
 // The capture's answer says every site belongs to no system, because the legacy server's query for sites
 // never asks for that column. This server reports the system the site is stored under, which is the approved
 // divergence Q58, so the comparison states it by rewriting the capture rather than by loosening itself.
+//
+// The section-by-section path saves each system's sites, talkgroups, and units through the level that shows
+// them, because the Systems section saves the system row and leaves those rows to their own sections. That
+// is the path the administration page takes, and it is the reason the two paths are not answered with the
+// same bytes: see the comparison below.
 func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguration(t *testing.T) {
 	fixture := readCaptureFixture(t)
 
@@ -277,7 +284,10 @@ func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguratio
 		t.Errorf("the whole-configuration save left\n  %s\nwant\n  %s", got.Body.String(), want)
 	}
 
-	// The same configuration, section by section, in the order a whole-configuration save performs them.
+	// The same configuration, section by section, in the order a whole-configuration save performs
+	// them, and with each system's levels saved by the level section that shows them: the Systems
+	// section saves the system row, so the rows under a system arrive through the sites, talkgroups,
+	// and units saves, which is where an operator edits them.
 	sections := startedJourneyServer(t)
 
 	token = administratorToken(t, sections)
@@ -290,14 +300,31 @@ func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguratio
 		}
 	}
 
+	saveEachSystemLevel(t, sections, token, fixture.section["systems"])
+
 	got = authorizedRequest(t, sections, http.MethodGet, "/api/admin/config", token, "")
 
 	if got.Code != http.StatusOK {
 		t.Fatalf("reading the configuration back was answered %d: %s", got.Code, got.Body.String())
 	}
 
-	if got.Body.String() != want {
-		t.Errorf("the section-by-section save left\n  %s\nwant\n  %s", got.Body.String(), want)
+	// The same answer, once it is given the display orders the per-level saves assign to the rows they
+	// store. A whole-configuration save takes each row's display order from the payload, and the
+	// capture's payload names none, so its answer writes none; a per-level save numbers the rows it
+	// stores from one, and its answer writes that number. The rows, and the order they are shown in,
+	// are the same through both paths — only the number the answer writes beside them is not — so the
+	// capture is rewritten to say the number, and the comparison stays byte for byte.
+	//
+	// The capture is written the way the server writes an answer, so the rewrite adds only the keys it
+	// names, and the comparison below is of the bytes the answers carry.
+	if written := canonicalConfiguration(t, want); written != want {
+		t.Fatalf("the captured answer is not written the way the server writes one:\n  %s\nfrom\n  %s", written, want)
+	}
+
+	want = captureWithLevelDisplayOrders(t, want)
+
+	if left := canonicalConfiguration(t, got.Body.String()); left != want {
+		t.Errorf("the section-by-section save left\n  %s\nwant\n  %s", left, want)
 	}
 }
 
@@ -493,4 +520,147 @@ func replaceExactly(t *testing.T, text, from, to string, want int) string {
 	}
 
 	return strings.ReplaceAll(text, from, to)
+}
+
+// saveEachSystemLevel stores each system's sites, talkgroups, and units through the level endpoint that
+// shows them, with the rows the capture's payload nests under that system. The capture's rows carry no
+// identifiers — they are the rows a form submits before the store has named them — so each system is
+// matched to the store by the order the systems section answers them in, which is the order the save
+// stored them in.
+func saveEachSystemLevel(t *testing.T, srv *journeyServer, token string, systemsBody []byte) {
+	t.Helper()
+
+	stored := systemsSection(t, readAuthorized(t, srv, token, "/api/admin/config/systems"))
+
+	var nested []map[string]any
+
+	if err := json.Unmarshal(systemsBody, &nested); err != nil {
+		t.Fatalf("the capture's systems payload is not the list of systems it installs: %v\n%s", err, systemsBody)
+	}
+
+	if len(stored) != len(nested) {
+		t.Fatalf("the systems section save stored %d systems, want the %d the capture's payload names",
+			len(stored), len(nested))
+	}
+
+	for i, system := range stored {
+		id, ok := system["id"].(float64)
+
+		if !ok {
+			t.Fatalf("the systems section answers a system with no identifier: %v", system)
+		}
+
+		for _, level := range []string{"sites", "talkgroups", "units"} {
+			body, err := json.Marshal(nested[i][level])
+
+			if err != nil {
+				t.Fatalf("writing the %s rows the capture nests under system %d: %v", level, uint64(id), err)
+			}
+
+			path := fmt.Sprintf("/api/admin/config/systems/%d/%s", uint64(id), level)
+
+			if rec := srv.put(path, token, string(body)); rec.Code != http.StatusOK {
+				t.Fatalf("saving the %s of system %d was answered %d: %s", level, uint64(id), rec.Code, rec.Body.String())
+			}
+		}
+	}
+}
+
+// canonicalConfiguration writes a configuration answer back the way the server writes it: the keys in the
+// order the server writes them, the numbers as they were written, and no spacing. Both sides of a
+// byte-for-byte comparison pass through it, so the comparison is of the bytes the answers carry while the
+// shape of an answer is stated once.
+func canonicalConfiguration(t *testing.T, answer string) string {
+	t.Helper()
+
+	return writeConfiguration(t, readConfigurationAnswer(t, answer))
+}
+
+// captureWithLevelDisplayOrders is the captured answer with the display orders the per-level saves assign
+// to the rows they store, numbered from one the way those saves number them, and written under the key
+// each level's answer uses for that number.
+func captureWithLevelDisplayOrders(t *testing.T, answer string) string {
+	t.Helper()
+
+	body := readConfigurationAnswer(t, answer)
+
+	config, ok := body["config"].(map[string]any)
+
+	if !ok {
+		t.Fatalf("the captured answer carries no configuration: %s", answer)
+	}
+
+	systems, ok := config["systems"].([]any)
+
+	if !ok {
+		t.Fatalf("the captured configuration carries no systems: %s", answer)
+	}
+
+	for _, entry := range systems {
+		system, ok := entry.(map[string]any)
+
+		if !ok {
+			t.Fatalf("the captured configuration answers a system that is not a system: %v", entry)
+		}
+
+		numberLevelRows(t, system, "sites", "order")
+		numberLevelRows(t, system, "talkgroups", "talkgroup")
+		numberLevelRows(t, system, "units", "order")
+	}
+
+	return writeConfiguration(t, body)
+}
+
+// numberLevelRows numbers one level's rows from one, the way the save of that level numbers the rows it
+// stores, under the key the answer writes a row's display order under.
+func numberLevelRows(t *testing.T, system map[string]any, level, key string) {
+	t.Helper()
+
+	rows, ok := system[level].([]any)
+
+	if !ok {
+		t.Fatalf("the captured configuration carries no %s under a system: %v", level, system)
+	}
+
+	for i, entry := range rows {
+		row, ok := entry.(map[string]any)
+
+		if !ok {
+			t.Fatalf("the captured configuration answers a %s row that is not a row: %v", level, entry)
+		}
+
+		row[key] = json.Number(strconv.Itoa(i + 1))
+	}
+}
+
+// readConfigurationAnswer reads a configuration answer keeping every number as the bytes it was written
+// with, so that writing it back cannot turn 1514000 into 1.514e+06.
+func readConfigurationAnswer(t *testing.T, answer string) map[string]any {
+	t.Helper()
+
+	reading := json.NewDecoder(strings.NewReader(answer))
+
+	reading.UseNumber()
+
+	var body map[string]any
+
+	if err := reading.Decode(&body); err != nil {
+		t.Fatalf("the configuration answer is not the answer the server writes: %v\n%s", err, answer)
+	}
+
+	return body
+}
+
+// writeConfiguration writes a configuration answer out. Marshalling a map writes its keys in sorted order,
+// which is the order the server writes an answer's keys in.
+func writeConfiguration(t *testing.T, body map[string]any) string {
+	t.Helper()
+
+	written, err := json.Marshal(body)
+
+	if err != nil {
+		t.Fatalf("writing the configuration answer back: %v", err)
+	}
+
+	return string(written)
 }
