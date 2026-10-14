@@ -49,6 +49,11 @@ class RdioApp extends HTMLElement {
               <i class="material-icons">help_center</i>
             </button>
           </div>
+          <div class="rdio-fullscreen">
+            <button type="button" aria-label="Fullscreen" aria-pressed="false">
+              <i class="material-icons" aria-hidden="true">fullscreen</i>
+            </button>
+          </div>
         </section>
       </main>
     `;
@@ -58,6 +63,8 @@ class RdioApp extends HTMLElement {
       select: this.querySelector('.panel.select'),
     };
     this.closings = new Map();
+    // The control each panel was opened from: the keyboard goes back there when the panel leaves.
+    this.openers = new Map();
 
     const display = this.querySelector('rdio-display');
     const controls = this.querySelector('rdio-controls');
@@ -77,6 +84,16 @@ class RdioApp extends HTMLElement {
     this.helpButton = this.querySelector('.rdio-help button');
     this.helpButton.addEventListener('click', () => showHelp(store.getState().config?.email));
 
+    // The keyboard's route into the fullscreen the display takes on a double-click. A double-click is
+    // a pointer gesture with no keyboard equivalent, so the state needs a control the keyboard can
+    // stop on, and it needs to say which way it will move the page. The double-click route stays.
+    this.fullscreenButton = this.querySelector('.rdio-fullscreen button');
+    this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
+
+    this.fullscreenChangeHandler = () => this.renderFullscreen();
+    document.addEventListener('fullscreenchange', this.fullscreenChangeHandler);
+    this.renderFullscreen();
+
     this.beforeUnloadHandler = (event) => {
       if (store.getState().livefeedMode !== 'offline') {
         event.preventDefault();
@@ -95,10 +112,16 @@ class RdioApp extends HTMLElement {
   disconnectedCallback() {
     this.unsubscribe?.();
     window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+    document.removeEventListener('fullscreenchange', this.fullscreenChangeHandler);
   }
 
   openPanel(name) {
     const panel = this.panels[name];
+
+    // The control the operator pressed to open the panel: the keyboard goes back there when the panel
+    // leaves, because a focus left standing on a control that has just left the page puts the operator
+    // at the top of the document.
+    this.openers.set(panel, document.activeElement);
 
     this.cancelClosing(panel);
 
@@ -113,9 +136,21 @@ class RdioApp extends HTMLElement {
     setTimeout(() => panel.querySelector('.scroll').scrollTo(0, 0));
 
     if (name === 'search') this.querySelector('rdio-search-panel').open();
+
+    // The keyboard travels with the panel it opened. A drawer that slides out under the pointer and
+    // leaves the keyboard on the button that opened it puts the panel the operator is looking at
+    // behind them in the tab order, and every Tab key walks the page to reach it. The landing place
+    // is the first control of the panel's own content; a panel with nothing to work in takes the
+    // control that closes it.
+    const landing = panel.querySelector('.scroll button, .scroll input, .scroll select, .scroll textarea, .scroll a[href], .scroll [tabindex]')
+      ?? panel.querySelector('.panel-close');
+
+    landing?.focus();
   }
 
   closePanel(panel) {
+    this.openers.get(panel)?.focus?.();
+
     panel.classList.remove('open');
 
     // A drawer leaves the page when it has finished sliding out, not before:
@@ -159,6 +194,24 @@ class RdioApp extends HTMLElement {
     } else {
       (el.requestFullscreen ?? el.mozRequestFullScreen ?? el.msRequestFullscreen ?? el.webkitRequestFullscreen)?.call(el);
     }
+  }
+
+  // The control names the move it will make, not the state it sits in: "Fullscreen" while the page is
+  // in the window, "Exit fullscreen" once it is not. The pressed state says where the page is, so the
+  // control also reads correctly after the pointer put the page into fullscreen with a double-click.
+  renderFullscreen() {
+    const button = this.fullscreenButton;
+
+    if (!button) return;
+
+    const active = !!document.fullscreenElement;
+
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Fullscreen');
+
+    const glyph = button.querySelector('i');
+
+    if (glyph) glyph.textContent = active ? 'fullscreen_exit' : 'fullscreen';
   }
 }
 

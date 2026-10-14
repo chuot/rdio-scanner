@@ -33,6 +33,14 @@ class RdioSystemsSelection extends HTMLElement {
   render() {
     const model = this.model;
 
+    // The tree answers every activation by painting itself again — the cascade runs through the rows
+    // above and below — and a rebuild throws away the control the keyboard was standing on. A browser
+    // puts the focus on the page when the control it was on leaves, so the operator who checks a
+    // talkgroup with the keyboard is back at the top of the dialog, and the next Tab key walks the
+    // tree from its beginning. The row the operator activated is recorded before the rebuild, and the
+    // keyboard is put back on that same row after it.
+    const activated = document.activeElement?.dataset?.node;
+
     const root = document.createElement('div');
     root.className = 'rdio-systems-selection';
 
@@ -40,6 +48,7 @@ class RdioSystemsSelection extends HTMLElement {
       this.checkbox({
         label: 'Everything',
         className: 'everything',
+        node: 'everything',
         checked: model.all,
         indeterminate: model.indeterminate.everything,
         onChange: (checked) => {
@@ -51,6 +60,7 @@ class RdioSystemsSelection extends HTMLElement {
 
     root.append(this.listBlock('Groups', model.groups.map((group, index) => ({
       label: group.label ?? String(group.id),
+      node: `group:${group.id}`,
       checked: group.checked,
       indeterminate: model.indeterminate.groups[index],
       onChange: (checked) => {
@@ -61,6 +71,7 @@ class RdioSystemsSelection extends HTMLElement {
 
     root.append(this.listBlock('Tags', model.tags.map((tag, index) => ({
       label: tag.label ?? String(tag.id),
+      node: `tag:${tag.id}`,
       checked: tag.checked,
       indeterminate: model.indeterminate.tags[index],
       onChange: (checked) => {
@@ -81,6 +92,7 @@ class RdioSystemsSelection extends HTMLElement {
         this.checkbox({
           label: system.label ?? String(system.id),
           className: 'system',
+          node: `system:${system.id}`,
           checked: system.all,
           indeterminate: model.indeterminate.systems[systemIndex],
           onChange: (checked) => {
@@ -97,6 +109,7 @@ class RdioSystemsSelection extends HTMLElement {
         talkgroups.append(
           this.checkbox({
             label: `${talkgroup.id} ${talkgroup.label ?? ''}`.trim(),
+            node: `talkgroup:${talkgroup.id}`,
             checked: talkgroup.checked,
             onChange: (checked) => {
               setTalkgroup(model, systemIndex, talkgroupIndex, checked);
@@ -112,9 +125,11 @@ class RdioSystemsSelection extends HTMLElement {
     root.append(systemsBlock);
 
     this.replaceChildren(root);
+
+    if (activated) root.querySelector(`[data-node="${activated}"]`)?.focus();
   }
 
-  checkbox({ label, className = '', checked, indeterminate = false, onChange }) {
+  checkbox({ label, className = '', node, checked, indeterminate = false, onChange }) {
     const wrapper = document.createElement('label');
     wrapper.className = `rdio-tree-item ${className}`.trim();
 
@@ -123,6 +138,10 @@ class RdioSystemsSelection extends HTMLElement {
     input.checked = !!checked;
     input.indeterminate = !!indeterminate;
     input.addEventListener('change', () => onChange(input.checked));
+
+    // The row's own identity, carried on the control: the row is what the operator is looking at, and
+    // it is what the rebuild hands the keyboard back to.
+    if (node) input.setAttribute('data-node', node);
 
     const text = document.createElement('span');
     text.textContent = label;

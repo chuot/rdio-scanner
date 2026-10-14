@@ -63,14 +63,21 @@ function shell() {
 
   const el = document.createElement('rdio-app');
 
+  // The promo the shell schedules is a ten second timer the browser owns, and the display keeps the
+  // clock and the progress bar moving on intervals of its own: the shim does not model the clock, so
+  // the timers are handed to the test during the render and left unrun, and the real clock is put
+  // back before the reading is taken.
   const realSetTimeout = globalThis.setTimeout;
+  const realSetInterval = globalThis.setInterval;
 
   globalThis.setTimeout = () => 0;
+  globalThis.setInterval = () => 0;
 
   try {
     el.connectedCallback();
   } finally {
     globalThis.setTimeout = realSetTimeout;
+    globalThis.setInterval = realSetInterval;
   }
 
   document.body.append(el);

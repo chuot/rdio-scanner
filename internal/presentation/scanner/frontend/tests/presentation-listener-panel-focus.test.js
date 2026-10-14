@@ -29,11 +29,35 @@ import '../presentation/listener/rdio-status.js';
 
 import { findAll } from './dom-shim.js';
 
-// The shell, rendered the way the page renders it. The promo the shell schedules is a ten second
-// timer the browser owns; the shim does not model the clock, so the timer is handed to the test
-// during the render and left unrun, and the real clock is put back before the reading is taken.
+// The shell, rendered the way the page renders it: the shim connects every element the shell's markup
+// carries, as a browser does, so the control bar's buttons and the panels' content are the ones the
+// page builds. The promo the shell schedules is a ten second timer the browser owns, and the display
+// keeps the clock and the progress bar moving on intervals of its own; the shim does not model the
+// clock, so the timers are handed to the test during the render and left unrun, and the real clock is
+// put back before the reading is taken.
 function shell() {
   document.body.replaceChildren();
+
+  // The control bar answers its buttons only when the listener has a configuration to work with —
+  // the same rule the page has: a listener with no systems has no call to search. The config the
+  // reading needs is the one the panels work in: a system with talkgroups to select, calls to
+  // search, and no contact address, so the help control stays off the page.
+  getAppContext().store.setState({
+    ...getAppContext().store.getState(),
+    config: {
+      email: '',
+      groups: { Dispatch: {}, Interop: {} },
+      tags: { Fire: {} },
+      systems: [{
+        id: 1,
+        label: 'Metro',
+        talkgroups: [
+          { id: 10, label: 'Fire dispatch', groups: ['Dispatch'], tag: 'Fire' },
+          { id: 11, label: 'Tac dispatch', groups: ['Interop'], tag: 'Fire' },
+        ],
+      }],
+    },
+  });
 
   // Opening the search panel asks the listener to search the recorded calls: the shim has no network,
   // and the reading is about where the keyboard ends up, not about what the search answers.
@@ -42,24 +66,21 @@ function shell() {
   const el = document.createElement('rdio-app');
 
   const realSetTimeout = globalThis.setTimeout;
+  const realSetInterval = globalThis.setInterval;
 
   globalThis.setTimeout = () => 0;
+  globalThis.setInterval = () => 0;
 
   try {
     el.connectedCallback();
   } finally {
     globalThis.setTimeout = realSetTimeout;
+    globalThis.setInterval = realSetInterval;
   }
 
   document.body.append(el);
 
   return el;
-}
-
-function control(el, selector) {
-  return findAll(el, (node) => node.tag === 'button' && node.className?.split(/\s+/).includes(selector))[0]
-    ?? findAll(el, (node) => node.tag === 'button' && node.dataset.action === selector)[0]
-    ?? null;
 }
 
 // The control the listener's own control bar uses to open a panel.

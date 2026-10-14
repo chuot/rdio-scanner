@@ -21,12 +21,18 @@ import '../presentation/admin/rdio-systems-selection.js';
 
 import { findAll } from './dom-shim.js';
 
+// The config the sections hand the tree: the systems carry their `systemRef`, the talkgroups their
+// `talkgroupRef`, and those are the identifiers the tree's rows are built from.
 const CONFIG = {
   groups: [{ id: 1, label: 'Dispatch' }, { id: 2, label: 'Interop' }],
   tags: [{ id: 3, label: 'Fire' }],
   systems: [
-    { id: 10, label: 'Metro', talkgroups: [{ id: 100, label: 'Fire dispatch' }, { id: 101, label: 'Tac dispatch' }] },
-    { id: 11, label: 'County', talkgroups: [{ id: 110, label: 'Sheriff' }] },
+    {
+      systemRef: 10,
+      label: 'Metro',
+      talkgroups: [{ talkgroupRef: 100, label: 'Fire dispatch' }, { talkgroupRef: 101, label: 'Tac dispatch' }],
+    },
+    { systemRef: 11, label: 'County', talkgroups: [{ talkgroupRef: 110, label: 'Sheriff' }] },
   ],
 };
 
@@ -44,7 +50,7 @@ function tree() {
 
 // The tree's checkboxes, in the order the page presents them.
 function boxes(el) {
-  return findAll(el, (node) => node.tag === 'input' && node.attributes.type === 'checkbox');
+  return findAll(el, (node) => node.tag === 'input' && node.type === 'checkbox');
 }
 
 // The checkbox naming a row of the tree: the row is what the operator is looking at, and the control

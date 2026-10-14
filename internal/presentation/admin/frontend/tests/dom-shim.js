@@ -75,6 +75,18 @@ class ShimNode {
     });
   }
 
+  // hidden is one fact in a browser: the attribute the markup carries and the property the page
+  // sets are the same state. A panel hidden in markup and opened by property, and a control the page
+  // takes off the screen, have to answer the same reading.
+  get hidden() {
+    return this.attributes.hidden !== undefined;
+  }
+
+  set hidden(value) {
+    if (value) this.attributes.hidden = '';
+    else delete this.attributes.hidden;
+  }
+
   append(...nodes) {
     // The builders append bare strings as well as nodes; only the nodes have a parent.
     for (const node of nodes) {

@@ -19,6 +19,19 @@ function connectFormField(node) {
   }
 }
 
+// connectCustom runs the connectedCallback of every custom element under a root, in the order a
+// browser runs them: the element first, then what it builds into its children. Markup a component
+// lays out through innerHTML is inserted as one tree, so every element in it is connected at that
+// moment — the shell that lays out its panels then reads the controls its own elements build inside
+// them.
+function connectCustom(node) {
+  if (node.tag === '#text') return;
+
+  if (node.tag.includes('-') && typeof node.connectedCallback === 'function') node.connectedCallback();
+
+  for (const child of node.children ?? []) connectCustom(child);
+}
+
 class ShimNode {
   constructor(tag) {
     this.tag = tag;
@@ -56,6 +69,18 @@ class ShimNode {
     });
   }
 
+  // hidden is one fact in a browser: the attribute the markup carries and the property the page
+  // sets are the same state. A panel hidden in markup and opened by property, and a control the page
+  // takes off the screen, have to answer the same reading.
+  get hidden() {
+    return this.attributes.hidden !== undefined;
+  }
+
+  set hidden(value) {
+    if (value) this.attributes.hidden = '';
+    else delete this.attributes.hidden;
+  }
+
   append(...nodes) {
     for (const node of nodes) {
       if (node && typeof node === 'object') {
@@ -91,12 +116,12 @@ class ShimNode {
     this._html = html;
     this.children = parseHTML(html);
 
-    // A browser connects every custom element the moment the tree it parsed is inserted, and the
-    // components write into those fields from their own connectedCallback. The roots of a parsed
-    // tree hang under the node that was given the markup, and are connected with it.
+    // A browser connects every custom element the moment the tree it parsed is inserted, in document
+    // order: the element first, then what it builds into its children. The roots of a parsed tree
+    // hang under the node that was given the markup, and are connected with it.
     for (const node of this.children) if (node && typeof node === 'object') node.parent = this;
 
-    connectFields(this);
+    for (const node of this.children) connectCustom(node);
   }
 
   get innerHTML() {
@@ -198,6 +223,45 @@ class ShimNode {
         return on ? this.classList.add(name) : this.classList.remove(name);
       },
     };
+  }
+
+  // closest walks the node and its parents, the way a browser does: the control bar names the button
+  // a click landed on, and the row a control inside a row belongs to.
+  closest(selector) {
+    for (let node = this; node; node = node.parent) {
+      if (node.tag !== '#text' && matches(node, selector)) return node;
+    }
+
+    return null;
+  }
+
+  // A scroll container answers the page's request to move to a place inside it. The shim has no
+  // viewport: the position is recorded, which is all a reading can read.
+  scrollTo(x, y) {
+    this.scrollLeft = x;
+    this.scrollTop = y;
+  }
+
+  // The layout question the drawers ask to force a reflow before the open position is applied. The
+  // shim has no layout: the answer is the empty box a node that is not laid out has.
+  getBoundingClientRect() {
+    return { bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0, x: 0, y: 0 };
+  }
+
+  // A form's elements are the controls it carries, named by their `name`, the way a browser hands
+  // them to the page: the search panel reads the filters the operator set through them.
+  get elements() {
+    if (this.tag !== 'form') return undefined;
+
+    const named = {};
+
+    for (const control of findAll(this, (node) => ['input', 'select', 'textarea', 'button'].includes(node.tag))) {
+      const name = control.attributes.name ?? control.name;
+
+      if (name) named[name] = control;
+    }
+
+    return named;
   }
 
   addEventListener(type, fn) {
@@ -420,11 +484,12 @@ function parseHTML(html) {
       continue;
     }
 
-    // The form field is built through its own class, the way createElement builds it, so a panel
-    // that lays out its form through innerHTML gets the primitive's rule and not a node that only
-    // records what it was told.
+    // Every registered custom element is built through its own class, the way createElement builds
+    // it: a panel that lays its content out through innerHTML gets the primitives' own behaviour, as
+    // a browser upgrades what it inserts. The form field is the case the primitives write into from
+    // their own connectedCallback, and it is built the same way as the rest.
     const tag = token.match(/^<([a-zA-Z][\w-]*)/)[1];
-    const ctor = tag === FORM_FIELD ? globalThis.customElements.registry.get(tag) : undefined;
+    const ctor = globalThis.customElements.registry.get(tag);
 
     const node = ctor ? new ctor() : new ShimNode(tag);
 
@@ -494,6 +559,17 @@ function matches(node, selector) {
   const attr = selector.match(/\[([a-zA-Z-]+)="([^"]*)"\]/);
 
   if (attr && node.attributes[attr[1]] !== attr[2]) return false;
+
+  // A bare [attr] is the presence test the page uses to name the controls that carry a mark: the
+  // builders write it through dataset, the browser's data-* view, so both spellings count. Without
+  // it, a selector naming an attribute a control carries matches every node.
+  const has = selector.match(/\[([a-zA-Z-]+)\]/);
+
+  if (has) {
+    const camel = has[1].replace(/^data-/, '').replace(/-(.)/g, (m, c) => c.toUpperCase());
+
+    return node.attributes[has[1]] !== undefined || node.dataset[camel] !== undefined;
+  }
 
   return true;
 }

@@ -101,6 +101,25 @@ export function dismissSnackbar() {
   }
 }
 
+// A control the page has taken off the screen: the browser's Tab route walks past it, and a trap
+// that counts it names an end the keyboard cannot stand on. A control is out of sight when the page
+// hides it, when a block it sits in is hidden, and when the stylesheet takes it out of the layout.
+function isOutOfSight(el) {
+  for (let node = el; node; node = node.parentElement ?? node.parent) {
+    if (node.hidden === true) return true;
+
+    // The page's own answer for what the stylesheet leaves on the screen. A DOM that is not a
+    // browser reports nothing, and the page's own `hidden` is what it can say.
+    if (typeof globalThis.getComputedStyle !== 'function') continue;
+
+    const style = globalThis.getComputedStyle(node);
+
+    if (style.display === 'none' || style.visibility === 'hidden') return true;
+  }
+
+  return false;
+}
+
 class RdioDialog extends HTMLElement {
   static open({ title, content, actions = [] }) {
     const dialog = document.createElement('rdio-dialog');
@@ -150,8 +169,16 @@ class RdioDialog extends HTMLElement {
 
     this.previousFocus = document.activeElement;
 
-    const focusables = this.querySelectorAll('button, input, select, textarea, [tabindex]');
-    focusables[0]?.focus();
+    // The controls the browser's Tab route stops on, read at the moment the key is pressed. A dialog
+    // whose content rebuilds — the selection tree paints itself again on every checkbox the operator
+    // activates — carries controls the dialog was not opened with, and a control the page has hidden
+    // or disabled is a control the browser refuses to stop on. The ends have to be the ends of the
+    // route as it is now: a snapshot taken at open time wraps the keyboard at places the keyboard
+    // never reaches, and leaves the Tab key to the browser at the ends that moved.
+    const focusables = () => [...this.querySelectorAll('button, input, select, textarea, [tabindex]')]
+      .filter((el) => !el.disabled && !isOutOfSight(el));
+
+    focusables()[0]?.focus();
 
     this.keyHandler = (ev) => {
       if (ev.key === 'Escape') {
@@ -159,9 +186,10 @@ class RdioDialog extends HTMLElement {
         return;
       }
 
-      if (ev.key === 'Tab' && focusables.length) {
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
+      if (ev.key === 'Tab') {
+        const reachable = focusables();
+        const first = reachable[0];
+        const last = reachable[reachable.length - 1];
 
         if (ev.shiftKey && document.activeElement === first) {
           ev.preventDefault();

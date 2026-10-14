@@ -275,6 +275,7 @@ rdio-select-panel .rdio-button:focus-visible,
 rdio-select-panel .rdio-button-mini:focus-visible,
 rdio-app .panel .panel-close:focus-visible,
 rdio-app .rdio-help button:focus-visible,
+rdio-app .rdio-fullscreen button:focus-visible,
 rdio-search-panel .row-action:focus-visible,
 rdio-search-panel .rdio-filters .reset button:focus-visible {
   outline: 2px solid var(--rdio-accent);
@@ -781,6 +782,49 @@ rdio-app .rdio-help button {
   padding: 12px;
   position: relative;
   width: 48px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Fullscreen control — the keyboard's route into the state the display takes on a double-click
+ * ------------------------------------------------------------------------ */
+
+rdio-app .rdio-fullscreen {
+  bottom: 24px;
+  opacity: 0.3;
+  position: absolute;
+  right: 84px;
+}
+
+rdio-app .rdio-fullscreen button {
+  background: none;
+  border: none;
+  border-radius: 50%;
+  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
+  font-size: 24px;
+  height: 48px;
+  padding: 12px;
+  position: relative;
+  width: 48px;
+}
+
+/* The two floating controls rest dimmed so the screen they float over stays the thing the operator
+ * is looking at; the pointer's hover and the keyboard's press lift them to full weight. */
+rdio-app .rdio-help:hover,
+rdio-app .rdio-fullscreen:hover {
+  opacity: 1;
+}
+
+/* The control says where the page is: the fullscreen state lifts the control out of the dimmed
+ * corner and gives it a face and an edge, so the state is not carried by colour alone. */
+rdio-app .rdio-fullscreen:has(button[aria-pressed="true"]) {
+  opacity: 1;
+}
+
+rdio-app .rdio-fullscreen button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.3);
+  outline: 1px solid rgba(255, 255, 255, 0.75);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1770,6 +1814,7 @@ rdio-snackbar .rdio-support .countdown {
   rdio-select-panel .rdio-button-mini,
   rdio-app .panel .panel-close,
   rdio-app .rdio-help button,
+  rdio-app .rdio-fullscreen button,
   rdio-search-panel .row-action,
   rdio-search-panel .rdio-filters .reset button,
   rdio-search-panel .rdio-filters .rdio-field-box,
@@ -1812,6 +1857,13 @@ rdio-snackbar .rdio-support .countdown {
    * the mode takes the handle's fill and the track's. The handle keeps a face of its own ink and the
    * glyph keeps the canvas colour. */
   rdio-search-panel rdio-toggle .rdio-toggle::after {
+    background: CanvasText;
+    color: Canvas;
+  }
+
+  /* The fullscreen control says where the page is by its face: the mode takes the pressed fill, so
+   * the pressed control is drawn in the system's ink with the glyph in the canvas colour. */
+  rdio-app .rdio-fullscreen button[aria-pressed="true"] {
     background: CanvasText;
     color: Canvas;
   }
