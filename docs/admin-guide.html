@@ -1355,7 +1355,7 @@ bcrypt_cost = 12</code></pre>
       <tr><td>OpenAPI</td><td>Every endpoint the server answers, read from the contract the server publishes.</td><td><a href="#ch-16-rest-api">16</a></td></tr>
       <tr><td>Options</td><td>The server's behaviour options.</td><td><a href="#ch-13-options">13</a></td></tr>
       <tr><td>Sites</td><td>The sites of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
-      <tr><td>Systems</td><td>The systems, and inside each one its sites, talkgroups, and units.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Systems</td><td>The systems: each row's own fields, and the system's list of blacklisted talkgroup references.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
       <tr><td>Tags</td><td>Tags, the labels a listener filters by.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
       <tr><td>Talkgroups</td><td>The talkgroups of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
       <tr><td>Tools</td><td>Export and import the configuration, import talkgroups and units from CSV, change the password.</td><td><a href="#ch-15-tools">15</a></td></tr>
@@ -1985,10 +1985,15 @@ rm -f ${basename}.*</code></pre>
   <p>
     Each creation is a <em>Configuration</em> log entry naming the recording that caused it, so a system
     that appeared on its own is traceable to the file that named it. A system's <em>Blacklists</em> field is
-    the counterweight: a comma-separated list of talkgroup identifiers that system refuses, which has an
-    effect only when auto populate is enabled. The Talkgroups section carries a
-    <strong>Blacklist talkgroup</strong> button that appends the talkgroup to its system's list, so the
-    list is edited where the talkgroup is, and saved with the Systems section.
+    the counterweight: a comma-separated list of talkgroup references whose calls that system refuses. The
+    refusal is not part of auto populate and does not depend on it: every call whose system and talkgroup
+    resolve is refused when the talkgroup's reference is in the list, auto populate enabled or not. A
+    talkgroup the operator configured is therefore refused outright, and one auto populate invents is
+    accepted for the call that invents it — nothing in the list is configured yet for that call to be
+    matched against — and refused from the next call on. The Talkgroups section carries a
+    <strong>Blacklist talkgroup</strong> button that appends the talkgroup's reference to its system's
+    list, so the list is edited where the talkgroup is, and saving that section stores the list together
+    with the talkgroups.
   </p>
 
   <p>
@@ -2026,7 +2031,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td>Led Color</td><td>The colour a listener's display shows for this system's calls. The default is green.</td></tr>
       <tr><td>Auto Populate</td><td>Creates this system's talkgroups and units when a recording names ones you have not configured. It works beside the server-wide option: see <a href="#ch-10-getting-audio-in">auto populate</a>.</td></tr>
       <tr><td>Delay</td><td>Minutes this system's calls are held before they are propagated to listeners.</td></tr>
-      <tr><td>Blacklists</td><td>A comma-separated list of talkgroup identifiers this system refuses. It has an effect only where auto populate is enabled.</td></tr>
+      <tr><td>Blacklists</td><td>A comma-separated list of talkgroup references this system refuses: every call whose system and talkgroup resolve is refused when the talkgroup's reference is in the list, auto populate enabled or not. The <strong>Blacklist talkgroup</strong> action of the Talkgroups section appends a reference here, and saving that section stores the list with its talkgroups.</td></tr>
     </tbody>
   </table>
 
@@ -2075,7 +2080,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td>Type</td><td>The talkgroup's channel type, shown to listeners.</td></tr>
       <tr><td>Frequency</td><td>A fake frequency in hertz shown on the main screen, for a talkgroup the recorder reports no frequency for.</td></tr>
       <tr><td>Delay</td><td>Minutes this talkgroup's calls are held before they are propagated to listeners.</td></tr>
-      <tr><td>Blacklist talkgroup</td><td>Appends this talkgroup's identifier to its system's blacklist, so auto populate stops creating it. The list lives on the system row and is saved with the Systems section.</td></tr>
+      <tr><td>Blacklist talkgroup</td><td>Appends this talkgroup's reference to its system's blacklist and removes the row from the section, so the server stops taking calls on it: saving the Talkgroups section stores the removal and the new entry in the same save. The list itself lives on the system row, where the Systems section shows it as text and names the references it holds.</td></tr>
     </tbody>
   </table>
 
@@ -2645,7 +2650,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td><code>GET /api/admin/config/systems/{systemId}/sites</code></td><td>session</td><td>The sites of one system.</td></tr>
       <tr><td><code>PUT /api/admin/config/systems/{systemId}/sites</code></td><td>session</td><td>Saves the sites of one system.</td></tr>
       <tr><td><code>GET /api/admin/config/systems/{systemId}/talkgroups</code></td><td>session</td><td>The talkgroups of one system.</td></tr>
-      <tr><td><code>PUT /api/admin/config/systems/{systemId}/talkgroups</code></td><td>session</td><td>Saves the talkgroups of one system.</td></tr>
+      <tr><td><code>PUT /api/admin/config/systems/{systemId}/talkgroups</code></td><td>session</td><td>Saves the talkgroups of one system, and the system's blacklist with them when the body carries it.</td></tr>
       <tr><td><code>GET /api/admin/config/systems/{systemId}/units</code></td><td>session</td><td>The units of one system.</td></tr>
       <tr><td><code>PUT /api/admin/config/systems/{systemId}/units</code></td><td>session</td><td>Saves the units of one system.</td></tr>
       <tr><td><code>GET /api/admin/alerts</code></td><td>session</td><td>The named alert oscillator sequences the alert selects list.</td></tr>
