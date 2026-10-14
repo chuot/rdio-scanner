@@ -20,6 +20,8 @@ import '../presentation/admin/rdio-admin-access.js';
 import '../presentation/admin/rdio-admin-apikeys.js';
 import '../presentation/admin/rdio-admin-downstreams.js';
 import '../presentation/admin/rdio-admin-dirwatch.js';
+import '../presentation/admin/rdio-admin-options.js';
+import '../presentation/admin/rdio-admin-tools.js';
 
 import { connectFields, findAll, requiredMark, texts } from './dom-shim.js';
 
@@ -136,6 +138,49 @@ for (const [name, tag, marked] of MARKED_ROWS) {
     assert.deepEqual(markedNames(addRow(attach(tag))), marked, `the new ${name} row carries the mark on its name and nowhere else`);
   });
 }
+
+// ---------------------------------------------------------------------------
+// The Options panel is one form, not a list of rows: the marks are read on the panel as it renders.
+// ---------------------------------------------------------------------------
+
+test('the options panel names the fields the webapp insists on', () => {
+  seed(getAdminContext().store);
+
+  const el = attach('rdio-admin-options');
+
+  assert.deepEqual(
+    markedNames(el),
+    ['Keypad Beep Style', 'Max Clients', 'Prune Days'],
+    'the three fields the options rules require carry the mark on their name',
+  );
+});
+
+test('the options panel leaves the fields it accepts empty plain', () => {
+  seed(getAdminContext().store);
+
+  const el = attach('rdio-admin-options');
+
+  for (const title of ['Audio Conversion', 'Auto Populate', 'Branding Label', 'Disable Duplicate Call Detection', 'Email Support', 'Show Listeners Count', 'Sort Talkgroups']) {
+    assert.ok(!markedNames(el).includes(title), `${title} is not insisted on and carries no mark`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tools → Change password: the panel where Material showed its asterisks.
+// ---------------------------------------------------------------------------
+
+test('the change password panel names the fields the webapp insists on', () => {
+  seed(getAdminContext().store);
+
+  const tools = attach('rdio-admin-tools');
+  const panel = rows(tools).find((row) => texts(findAll(row, (child) => child.className?.split(/\s+/).includes('row-title')))[0] === 'Change password');
+
+  assert.deepEqual(
+    markedNames(panel),
+    ['Current password', 'New password', 'Verify new password'],
+    'the three password boxes carry the mark on their name, as Material showed them',
+  );
+});
 
 // ---------------------------------------------------------------------------
 // A saved row carries the same marks as a new one.
