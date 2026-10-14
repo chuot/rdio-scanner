@@ -134,8 +134,8 @@ func TestUpdateSystemSubSectionSavesTheSitesOfOneSystem(t *testing.T) {
 		t.Error("the save did not notify the open administrator connections")
 	}
 
-	if !fixture.loggedAs(domain.LogSourceConfig, "the sites configuration of system 1 changed") {
-		t.Errorf("logs = %v, want the announcement naming the level and the system", fixture.subSectionLogMessages())
+	if !fixture.loggedAs(domain.LogSourceConfig, "the sites configuration of system 4 changed") {
+		t.Errorf("logs = %v, want the announcement naming the level and the system's reference number, the number the operator reads and types, not the identity the store gave the row", fixture.subSectionLogMessages())
 	}
 }
 
