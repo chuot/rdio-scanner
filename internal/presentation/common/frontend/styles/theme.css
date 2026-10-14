@@ -331,6 +331,15 @@ rdio-form-field textarea {
   box-sizing: border-box;
 }
 
+/* The field's own line, in the state the keyboard is standing on it: the accent border is the
+   field's indicator, and the outline above it is the ring the keyboard sees. The border is the
+   field's resting indicator, so it is the same measurement — 1px of the field's own line, against
+   what the field sits on. */
+rdio-form-field input:focus-visible,
+rdio-form-field textarea:focus-visible {
+  border-color: var(--rdio-accent);
+}
+
 rdio-form-field input[aria-invalid],
 rdio-select select[aria-invalid] {
   border-color: var(--rdio-warn);
@@ -356,6 +365,10 @@ rdio-select select {
   padding: 7px 10px;
   width: 100%;
   box-sizing: border-box;
+}
+
+rdio-select select:focus-visible {
+  border-color: var(--rdio-accent);
 }
 
 rdio-select select option {
@@ -401,4 +414,28 @@ rdio-paginator {
   gap: 10px;
   justify-content: center;
   margin: 10px 0;
+}
+
+/* --- the focus indicator ------------------------------------------------------- */
+
+/* Where the keyboard is standing. Every control the shared primitives draw — a field, a select, a
+   toggle, a paginator's arrows, a dialog's buttons, a link — takes the same ring: the theme's accent,
+   2px wide, drawn 2px off the control's edge. The offset is what makes the ring readable on the
+   surfaces these controls sit on: a ring drawn into the edge of a field disappears into the field's
+   own border, and a ring drawn into a button disappears into its fill.
+
+   The ring is drawn on the control the keyboard is on, not on the field's wrapper: the wrapper is
+   not what the operator is standing on, and a ring around a box that holds a label, a control, and a
+   message line says where the group is, not where the keyboard is. */
+
+rdio-form-field input:focus-visible,
+rdio-form-field textarea:focus-visible,
+rdio-select select:focus-visible,
+rdio-toggle .rdio-toggle:focus-visible,
+rdio-paginator .rdio-button-mini:focus-visible,
+.rdio-dialog-actions .rdio-button:focus-visible,
+.rdio-icon-button:focus-visible,
+a[href]:focus-visible {
+  outline: 2px solid var(--rdio-accent);
+  outline-offset: 2px;
 }

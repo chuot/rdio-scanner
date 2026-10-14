@@ -169,6 +169,12 @@ rdio-admin > .rdio-admin-layout > .rdio-admin-content {
   min-height: 0;
   overflow-y: auto;
   padding: var(--rdio-space-4);
+
+  /* The save bar sticks to the bottom of this column, so the bottom of the column is not a place a
+     control can be seen in. Scrolling a control into view — which is what the keyboard does at every
+     Tab stop — leaves the bar's own height clear, so the control and its focus ring land above the
+     bar and not under it. */
+  scroll-padding-block-end: calc(var(--rdio-space-3) + var(--rdio-space-3) + 40px);
 }
 
 /* --- login ------------------------------------------------------------------- */
@@ -289,6 +295,45 @@ rdio-admin .rdio-admin-row p ul {
   font-size: 13px;
   margin: 6px 0 0;
   padding-left: 18px;
+}
+
+/* --- the focus indicator ------------------------------------------------------- */
+
+/* The keyboard operator sees where they are standing by seeing what the page draws around the
+   control they are on. The accent outline at a 2px offset is the ring the administration
+   application already draws on the todo it sends the operator to, and on the listener's beveled
+   buttons; every control the keyboard reaches gets the same ring, from the same colour, at the same
+   distance off the control. The offset is what keeps it readable on a row: a ring drawn into the
+   control's own edge disappears into the row's border and into the control's fill. */
+
+rdio-admin .rdio-admin-nav button:focus-visible,
+rdio-admin .rdio-admin-header .rdio-button:focus-visible,
+rdio-admin .rdio-admin-login .rdio-button:focus-visible,
+rdio-admin .rdio-admin-card > .row.top .rdio-button:focus-visible,
+rdio-admin .rdio-admin-card > .row.top .rdio-button-mini:focus-visible,
+rdio-admin .rdio-admin-section-bar .rdio-button:focus-visible,
+rdio-admin .rdio-admin-row .rdio-button:focus-visible,
+rdio-admin .rdio-admin-row .rdio-button-mini:focus-visible,
+rdio-admin .rdio-admin-row .rdio-icon-button:focus-visible,
+rdio-admin .rdio-admin-row rdio-toggle .rdio-toggle:focus-visible,
+rdio-admin .rdio-admin-row .drag-handle:focus-visible,
+rdio-admin details.rdio-admin-row > summary:focus-visible,
+rdio-admin .rdio-admin-card.logs .rdio-filters .actions .rdio-button:focus-visible,
+rdio-admin .rdio-admin-card.logs .rdio-list a[href]:focus-visible,
+rdio-admin .rdio-admin-card.openapi .rdio-admin-openapi-box a[href]:focus-visible,
+rdio-admin .rdio-admin-card.openapi .rdio-admin-openapi-box summary:focus-visible,
+rdio-admin .rdio-admin-card.tools .row.top .rdio-button:focus-visible,
+rdio-admin .rdio-admin-card.tools input[type="file"]:focus-visible {
+  outline: 2px solid var(--rdio-accent);
+  outline-offset: 2px;
+}
+
+/* The summary is the row's own control, and it is the one control that carries no visible chrome of
+   its own: it is a line of text with a chevron. Its ring is drawn on the row's edge, which is the
+   shape the operator is looking at. */
+
+rdio-admin details.rdio-admin-row > summary:focus-visible {
+  border-radius: var(--rdio-radius-row);
 }
 
 rdio-admin .rdio-admin-row .row > rdio-form-field,

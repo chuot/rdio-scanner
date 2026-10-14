@@ -1332,9 +1332,21 @@ rdio-display .auth rdio-form-field input {
   height: 56px;
   letter-spacing: 0.5px;
   line-height: 24px;
-  outline: none;
   padding: 24px 0 8px;
   width: 100%;
+}
+
+/* The field's indicator, in the state the keyboard is standing on it. `appearance: none` takes the
+ * control's own look away, and the legacy client took the black ring the browser draws around such a
+ * control away with it, keeping focus visible by thickening the field's underline. The underline is
+ * still here; the accent line and the accent ring the rest of the page draws are added beside it, so
+ * the field reads as the same control the keyboard reaches everywhere else. */
+rdio-search-panel .rdio-filters rdio-form-field select:focus-visible,
+rdio-search-panel .rdio-filters rdio-form-field input:focus-visible,
+rdio-display .auth rdio-form-field input:focus-visible {
+  border-bottom: 2px solid var(--rdio-accent);
+  outline: 2px solid var(--rdio-accent);
+  outline-offset: 2px;
 }
 
 rdio-search-panel .rdio-filters rdio-form-field input::placeholder,
