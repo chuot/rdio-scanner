@@ -2658,14 +2658,16 @@ func assertOrderedByLabel(t *testing.T, db *sql.DB, v6Table, v6Identity, v8Table
 
 // assertCarriedTimes compares the datetime text a v6 row holds with the integer the v8 table holds for it,
 // in the unit the data model's rule names. v6 wrote these as text in the layout Go's time package prints;
-// no dialect converts that text to an epoch count the same way, so the audit converts it here.
+// no dialect converts that text to an epoch count the same way, so the audit converts it here. The query
+// reads the two columns side by side so that a failure can name both: the reader of a datetime failure
+// sees which pair the audit compared, not only the v6 side of it.
 func assertCarriedTimes(t *testing.T, db *sql.DB, table, v6Column, v8Column, unitName string, unit time.Duration, query string) {
 	t.Helper()
 
 	rows := readRows(t, db, query)
 
 	if len(rows) == 0 {
-		t.Fatalf("the %s %s comparison read no rows, so it proves nothing: %s", table, v6Column, query)
+		t.Fatalf("the %s comparison of v6 %q to v8 %q read no rows, so it proves nothing: %s", table, v6Column, v8Column, query)
 	}
 
 	for _, row := range rows {
@@ -2678,8 +2680,8 @@ func assertCarriedTimes(t *testing.T, db *sql.DB, table, v6Column, v8Column, uni
 		want := strconv.FormatInt(when.UnixNano()/int64(unit), 10)
 
 		if row[2] != want {
-			t.Errorf("%s row %s: %q is %q in the v6 table and %q in the v8 table, want %q counted in %s",
-				table, row[0], v6Column, row[1], row[2], want, unitName)
+			t.Errorf("%s row %s: v6 %q is %q and v8 %q is %q, want %q counted in %s",
+				table, row[0], v6Column, row[1], v8Column, row[2], want, unitName)
 		}
 	}
 }
