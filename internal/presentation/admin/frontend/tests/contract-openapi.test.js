@@ -55,6 +55,32 @@ test('all 8 per-section GET/PUT pairs are documented', () => {
   }
 });
 
+// The Systems section saves the system row: its own fields, its blacklist included. The sites,
+// talkgroups, and units under a system are saved by the level that shows them, so the section's
+// body names the row and its answer carries the levels as the store holds them.
+test('the systems section body is the system row, and its answer is the system with its levels', () => {
+  const item = doc.paths?.['/api/admin/config/{section}'];
+
+  const submitted = item.put.requestBody.content['application/json'].schema.oneOf;
+  const answered = item.put.responses['200'].content['application/json'].schema.oneOf;
+
+  assert.ok(submitted.some((branch) => branch.items?.$ref === '#/components/schemas/SystemRow'),
+    'the systems section body does not name the system row');
+
+  assert.ok(answered.some((branch) => branch.items?.$ref === '#/components/schemas/System'),
+    'the systems section answer does not name the system with what is stored under it');
+
+  const row = doc.components?.schemas?.SystemRow;
+
+  assert.ok(row?.properties?.blacklists, 'the system row carries no blacklist to save');
+
+  for (const level of ['sites', 'talkgroups', 'units']) {
+    assert.ok(!row?.properties?.[level], `the system row carries the ${level} that the ${level} section saves`);
+    assert.ok(doc.components?.schemas?.System?.properties?.[level],
+      `the system answer carries no ${level} read back from the store`);
+  }
+});
+
 // The systems tree saves each level of one system on its own, so the document must
 // carry the three per-level pairs with the system path parameter and the entity schema
 // the level is made of.
@@ -83,8 +109,30 @@ test('the six per-level system GET/PUT pairs are documented', () => {
 
     const body = item.put.requestBody.content['application/json'].schema;
 
-    assert.equal(body.items?.$ref, `#/components/schemas/${schema}`,
-      `PUT ${path} body does not reference ${schema}`);
+    // The body is the list of the level's rows. The talkgroups level takes one shape more: the
+    // object that names the rows beside the system's whole blacklist, so the save that drops a
+    // talkgroup stores the entry that refuses it in the same request.
+    const branches = body.oneOf ?? [body];
+    const list = branches.find((branch) => branch.items?.$ref === `#/components/schemas/${schema}`);
+
+    assert.ok(list, `PUT ${path} body does not reference ${schema}`);
+
+    if (level === 'talkgroups') {
+      const carrier = branches.find((branch) => branch.$ref === '#/components/schemas/TalkgroupsSave');
+
+      assert.ok(carrier, `PUT ${path} body does not name the object carrying the blacklist`);
+
+      const save = doc.components?.schemas?.TalkgroupsSave;
+
+      assert.deepEqual(save?.required, ['talkgroups'], 'the object body does not require the rows it carries');
+      assert.equal(save?.properties?.talkgroups?.items?.$ref, '#/components/schemas/Talkgroup',
+        'the object body does not carry the talkgroups as the level carries them');
+      assert.equal(save?.properties?.blacklists?.type, 'string',
+        'the object body does not carry the blacklist as the text the system row uses');
+      assert.equal(branches.length, 2, 'the talkgroups body names more shapes than the list of rows and the object');
+    } else {
+      assert.equal(branches.length, 1, `PUT ${path} body names more shapes than the list of its rows`);
+    }
 
     for (const status of ['400', '401', '404', '417']) {
       assert.ok(item.put.responses[status], `PUT ${path} missing response ${status}`);

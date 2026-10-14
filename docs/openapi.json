@@ -303,7 +303,7 @@
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "#/components/schemas/System"
+                      "$ref": "#/components/schemas/SystemRow"
                     }
                   },
                   {
@@ -391,7 +391,7 @@
             "description": "Persistence failure"
           }
         },
-        "description": "Save one configuration section. A section that changed on the server since it was read is refused with 417."
+        "description": "Save one configuration section. A section that changed on the server since it was read is refused with 417. The systems section submits the system row's own fields, including its blacklist of talkgroup references: the sites, talkgroups, and units under a system belong to their own per-level endpoints, and a submitted entry that names them is read and ignored. The answer is the section as an administrator is shown it, so it carries each system's stored levels."
       }
     },
     "/api/admin/config/systems/{systemId}/sites": {
@@ -545,7 +545,7 @@
         "description": "Read the talkgroups of one system."
       },
       "put": {
-        "summary": "Save the talkgroups of one system",
+        "summary": "Save the talkgroups of one system, and its blacklist with them",
         "security": [
           {
             "adminJwt": []
@@ -556,17 +556,24 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Talkgroup"
-                }
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Talkgroup"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/TalkgroupsSave"
+                  }
+                ]
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "The talkgroups as re-read from the database, order renumbered 1-based",
+            "description": "The talkgroups as re-read from the database, order renumbered 1-based. The blacklist the body carried is stored in the same save.",
             "content": {
               "application/json": {
                 "schema": {
@@ -579,7 +586,7 @@
             }
           },
           "400": {
-            "description": "Undecodable body (array expected)"
+            "description": "Undecodable body (the list of rows, or the object naming them, expected)"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized",
@@ -595,7 +602,7 @@
             "description": "Persistence failure"
           }
         },
-        "description": "Save the talkgroups of one system. A level that changed on the server since it was read is refused with 417."
+        "description": "Save the talkgroups of one system. The body is the list of rows, or the object naming the rows beside the system's whole blacklist: the rows and that list are stored in one save, so the talkgroup a section drops and the entry that refuses it cannot be saved apart. A level that changed on the server since it was read is refused with 417."
       }
     },
     "/api/admin/config/systems/{systemId}/units": {
@@ -1985,6 +1992,44 @@
         },
         "additionalProperties": true
       },
+      "SystemRow": {
+        "type": "object",
+        "description": "One system as the systems section saves it: the system row's own fields, its blacklist included. The sites, talkgroups, and units under a system belong to their own per-level endpoints; an entry that names them is read and ignored.",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "systemRef": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "alert": {
+            "type": "string"
+          },
+          "led": {
+            "$ref": "#/components/schemas/LedColor"
+          },
+          "type": {
+            "type": "string"
+          },
+          "autoPopulate": {
+            "type": "boolean"
+          },
+          "blacklists": {
+            "type": "string",
+            "description": "The talkgroup references this system refuses: decimal references separated by commas, no spaces, empty for none. Saving the talkgroups level of this system stores the same field with the talkgroups."
+          },
+          "delay": {
+            "type": "integer"
+          },
+          "order": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
       "Site": {
         "type": "object",
         "properties": {
@@ -2047,6 +2092,26 @@
           }
         },
         "additionalProperties": true
+      },
+      "TalkgroupsSave": {
+        "type": "object",
+        "description": "The talkgroups of one system saved beside that system's blacklist: the rows, and the whole list as the section shows it. The rows and the list are stored in one save.",
+        "properties": {
+          "talkgroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Talkgroup"
+            }
+          },
+          "blacklists": {
+            "type": "string",
+            "description": "The whole list, not a delta: decimal references separated by commas, no spaces, empty for none. A body that names it writes it; a body that does not, leaves the stored list alone."
+          }
+        },
+        "required": [
+          "talkgroups"
+        ],
+        "additionalProperties": false
       },
       "Unit": {
         "type": "object",
