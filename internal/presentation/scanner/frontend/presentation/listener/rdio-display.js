@@ -264,13 +264,15 @@ class RdioDisplay extends HTMLElement {
 
     const last = this.lastAnnounced;
 
+    // The queue sentence goes first: when a call starts, the queue empties in the same paint,
+    // and the talkgroup being played is the sentence the operator needs to hear last.
+    if (queue !== last.queue) announce(`Queue: ${queue}`);
+
     if (playing && (call.id !== last.id || !!pause !== last.pause)) {
       announce(`${pause ? 'Paused' : 'Playing'} ${playing}`);
     } else if (!call && last.id !== null) {
       announce(`Stopped ${last.name}`);
     }
-
-    if (queue !== last.queue) announce(`Queue: ${queue}`);
 
     this.lastAnnounced = { id: call?.id ?? null, pause: !!pause, queue, name: playing ?? last.name };
   }
