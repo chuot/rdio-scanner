@@ -33,7 +33,7 @@ class RdioSearchPanel extends HTMLElement {
       </div>
       <div class="rdio-filters">
         <form autocomplete="off">
-          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Sort order</label><select name="sort"><option value="1">Ascending</option><option value="-1" selected>Descending</option></select></div></div></rdio-form-field>
+          <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Sort order</label><select name="sort" data-landing><option value="1">Ascending</option><option value="-1" selected>Descending</option></select></div></div></rdio-form-field>
           <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Date</label><input name="date" type="datetime-local" /></div></div></rdio-form-field>
           <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>System</label><select name="system"><option value="">All Systems</option></select></div></div></rdio-form-field>
           <rdio-form-field><div class="rdio-field-box"><div class="rdio-field-flex"><label>Talkgroup</label><select name="talkgroup"><option value="">All Talkgroups</option></select></div></div></rdio-form-field>

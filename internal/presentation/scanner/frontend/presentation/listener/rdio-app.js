@@ -141,9 +141,16 @@ class RdioApp extends HTMLElement {
     // The keyboard travels with the panel it opened. A drawer that slides out under the pointer and
     // leaves the keyboard on the button that opened it puts the panel the operator is looking at
     // behind them in the tab order, and every Tab key walks the page to reach it. The landing place
-    // is the first control of the panel's own content; a panel with nothing to work in takes the
-    // control that closes it.
-    const landing = panel.querySelector('.scroll button, .scroll input, .scroll select, .scroll textarea, .scroll a[href], .scroll [tabindex]')
+    // is the control the panel itself marks; a panel that marks nothing takes the first control of
+    // its own content, and a panel with nothing to work in takes the control that closes it.
+    //
+    // The panel's own mark matters because a panel rebuilds its content as the page answers: the
+    // search panel repaints every row of its table on each answer, so a keyboard landed on a row is
+    // standing on a control the answer takes away, and the browser puts the operator at the top of
+    // the document. The control a panel marks as its landing place is one its own answers leave
+    // standing.
+    const landing = panel.querySelector('[data-landing]')
+      ?? panel.querySelector('.scroll button, .scroll input, .scroll select, .scroll textarea, .scroll a[href], .scroll [tabindex]')
       ?? panel.querySelector('.panel-close');
 
     landing?.focus();

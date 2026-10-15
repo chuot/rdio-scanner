@@ -132,6 +132,8 @@ class ShimNode {
   }
 
   replaceChildren(...nodes) {
+    this.dropFocusUnder();
+
     for (const node of this.children) if (node && typeof node === 'object') node.parent = null;
 
     for (const node of nodes) {
@@ -144,7 +146,29 @@ class ShimNode {
     this.children = [...nodes];
   }
 
+  // A browser puts the keyboard at the top of the document when the control it was standing on leaves
+  // the page. Rebuilding a subtree that holds the focused control is that: the control is gone, and
+  // the focus has nowhere to stand. A shim that keeps the keyboard on a node that is no longer on the
+  // page lets a test read a keyboard position no operator ever has.
+  dropFocusUnder() {
+    const active = globalThis.document.activeElement;
+
+    if (!active || active === globalThis.document.body) return;
+
+    for (let at = active; at; at = at.parent) {
+      if (at === this) {
+        active.focused = false;
+
+        globalThis.document.activeElement = globalThis.document.body;
+
+        return;
+      }
+    }
+  }
+
   set innerHTML(html) {
+    this.dropFocusUnder();
+
     this._html = html;
     this.children = parseHTML(html);
 

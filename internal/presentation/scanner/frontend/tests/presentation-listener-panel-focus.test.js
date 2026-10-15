@@ -115,6 +115,38 @@ function activate(el) {
   el.dispatchEvent({ type: 'click', target: el, bubbles: true });
 }
 
+// A search that answered: the panel paints its rows from the answer, and rebuilds the whole table on
+// the next one. The rows are the calls the history holds, in the shape the answer carries them.
+const CALLS = [
+  {
+    id: 101,
+    system: 1,
+    talkgroup: 10,
+    dateTime: new Date(2026, 9, 6, 9, 15).toISOString(),
+    audioLength: 12,
+    systemData: { label: 'Metro' },
+    talkgroupData: { label: 'Fire dispatch', name: 'Fire fire ground' },
+  },
+  {
+    id: 102,
+    system: 1,
+    talkgroup: 11,
+    dateTime: new Date(2026, 9, 6, 10, 30).toISOString(),
+    audioLength: 30,
+    systemData: { label: 'Metro' },
+    talkgroupData: { label: 'Tac dispatch', name: 'Metro tac' },
+  },
+];
+
+function answered(rows) {
+  const state = getAppContext().store.getState();
+
+  getAppContext().store.setState({
+    playbackList: { count: rows.length, options: { limit: 200, offset: 0 }, results: rows },
+    playbackListSeq: state.playbackListSeq + 1,
+  });
+}
+
 describe('listener panels — the keyboard travels with the panel', () => {
   it('takes the keyboard into the search panel when the panel opens', () => {
     const el = shell();
@@ -210,5 +242,30 @@ describe('listener panels — the keyboard travels with the panel', () => {
     activate(closeControl(opened));
 
     assert.equal(document.activeElement, button, 'the keyboard did not come back to the control it opened the panel from');
+  });
+
+  it('keeps the keyboard inside the search panel when the panels own answer repaints the list', () => {
+    const el = shell();
+    const button = opener(el, 'search');
+
+    // The panel answers once, so its table holds rows, and the place the keyboard is taken to when
+    // the panel opens is chosen from the controls the panel is showing.
+    button.focus();
+    activate(button);
+
+    const opened = panel(el, 'search');
+
+    answered(CALLS);
+
+    closeControl(opened).click();
+
+    button.focus();
+    activate(button);
+
+    // Opening the panel asks for a search, and the answer rebuilds every row of the table.
+    answered(CALLS.slice(1));
+
+    assert.ok(inside(opened, document.activeElement),
+      `the panel's own answer took the keyboard out of the panel it opened: ${document.activeElement?.tag}`);
   });
 });
