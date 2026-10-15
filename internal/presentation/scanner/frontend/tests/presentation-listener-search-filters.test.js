@@ -107,8 +107,11 @@ function matching(options) {
   });
 }
 
+// The two ends of a match, as the server names them. A search that matches nothing reports the Unix
+// epoch at both ends and not an absent span: that is what the history's own read leaves behind when
+// no call matches, and what the empty answer frame carries.
 function endsOf(matched) {
-  if (!matched.length) return { dateStart: '0001-01-01T00:00:00Z', dateStop: '0001-01-01T00:00:00Z' };
+  if (!matched.length) return { dateStart: '1970-01-01T00:00:00Z', dateStop: '1970-01-01T00:00:00Z' };
 
   const times = matched.map((row) => row.dateTime).sort();
 

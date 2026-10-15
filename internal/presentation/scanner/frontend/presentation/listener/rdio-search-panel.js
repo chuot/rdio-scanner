@@ -235,10 +235,16 @@ class RdioSearchPanel extends HTMLElement {
 
     // The date field is bounded to the window the search is answering with: a date the operator
     // types outside it is a date the list has no calls for. The two ends the server names are the
-    // ends of the whole match, not of the page shown, and an empty match names the zero time - not
-    // a date a person can be shown, so an empty match leaves the field open.
-    this.form.elements.date.min = toLocalInputValue(list?.dateStart);
-    this.form.elements.date.max = toLocalInputValue(list?.dateStop);
+    // ends of the whole match, not of the page shown.
+    //
+    // A search that answered with no calls has no window to bound the field to. It names the epoch
+    // at both ends - the shape the history's own read leaves behind when nothing matches - and a
+    // field bounded to it is a field bounded to a day the archive has no calls in, which reads as a
+    // search that found nothing because the operator asked for the wrong day.
+    const answered = list && list.count > 0 ? [list.dateStart, list.dateStop] : [];
+
+    this.form.elements.date.min = toLocalInputValue(answered[0]);
+    this.form.elements.date.max = toLocalInputValue(answered[1]);
 
     // The count the search answered with is a number the operator cannot see on a locked screen.
     // The answer counter rides every answer, so the page says the count once per answer — not once
