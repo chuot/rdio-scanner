@@ -19,7 +19,7 @@ import {
 } from '../../domain/log-search.js';
 import { createRefreshSchedule } from '../../domain/log-refresh.js';
 import { clientSlice, needsRefetch } from '../../../../common/frontend/domain/search-pagination.js';
-import { formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
+import { formatMonthDay, formatTime, toLocalInputValue } from '../../../../common/frontend/presentation/display-format.js';
 import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const LEVEL_ICONS = {
@@ -324,15 +324,3 @@ class RdioAdminLogs extends HTMLElement {
 }
 
 customElements.define('rdio-admin-logs', RdioAdminLogs);
-
-function toLocalInputValue(value) {
-  if (!value) return '';
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return '';
-
-  const pad = (n) => String(n).padStart(2, '0');
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}

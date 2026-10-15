@@ -89,8 +89,7 @@ export function activeFrequency(call, elapsed) {
 }
 
 // Unit label resolution (legacy sources.src → system units ranges).
-export function resolveUnit(call, elapsed) {
-  if (Array.isArray(call.sources) && call.sources.length) {
+export function resolveUnit(call, elapsed) {  if (Array.isArray(call.sources) && call.sources.length) {
     const source = call.sources.reduce((p, v) => ((v.pos || 0) <= elapsed ? v : p), {});
 
     if (typeof source.src === 'number') {
@@ -111,4 +110,26 @@ export function resolveUnit(call, elapsed) {
   }
 
   return call.systemData?.units?.find((u) => u.id === call.source)?.label ?? `${call.source ?? ''}`;
+}
+
+// The bound a date field is given, written the way the field reads it.
+//
+// A datetime-local field reads its min and max as a wall-clock minute — `YYYY-MM-DDTHH:MM`, in the
+// time of the machine the page runs on, because the value the operator types into the field is read
+// as that same wall-clock time. An instant in any other shape is a bound the field ignores, so a
+// bound written from a Date's own string form is a bound that looks set and constrains nothing.
+//
+// A search that answered with no calls names the zero time for the two ends of its match. That is
+// not a date a person can be shown, and a field bounded to it offers no date at all, so no bound is
+// invented for it.
+export function toLocalInputValue(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1) return '';
+
+  const pad = (n) => String(n).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

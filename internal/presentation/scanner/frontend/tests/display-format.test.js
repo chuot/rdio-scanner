@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { formatDuration, formatTime } from '../../../common/frontend/presentation/display-format.js';
+import { formatDuration, formatTime, toLocalInputValue } from '../../../common/frontend/presentation/display-format.js';
 
 test('a 12-hour locale renders the clock with the AM/PM suffix', () => {
   const date = new Date(2026, 9, 10, 13, 5);
@@ -41,4 +41,31 @@ test('a length never measured renders blank', () => {
   assert.equal(formatDuration(undefined), '');
   assert.equal(formatDuration(null), '');
   assert.equal(formatDuration('12'), '');
+});
+
+// The bounds a date field is given from the two ends of what a search answered with. The field is
+// a datetime-local field, so it reads its bound as a wall-clock minute and nothing else: a value
+// written in any other shape is a bound the field ignores.
+
+test('an instant becomes the wall-clock minute the date field reads', () => {
+  const local = new Date(2026, 9, 6, 23, 41, 7);
+
+  assert.equal(toLocalInputValue(local.toISOString()), '2026-10-06T23:41');
+});
+
+test('the seconds an instant carries are not part of the bound', () => {
+  const local = new Date(2026, 9, 6, 8, 0, 59, 999);
+
+  assert.equal(toLocalInputValue(local.toISOString()), '2026-10-06T08:00');
+});
+
+test('a bound is not invented for an instant that is not there', () => {
+  assert.equal(toLocalInputValue(''), '');
+  assert.equal(toLocalInputValue(null), '');
+  assert.equal(toLocalInputValue(undefined), '');
+  assert.equal(toLocalInputValue('not an instant'), '');
+});
+
+test('a bound is not invented for the zero time an empty search answers with', () => {
+  assert.equal(toLocalInputValue('0001-01-01T00:00:00Z'), '');
 });
