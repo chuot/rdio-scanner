@@ -17,7 +17,7 @@ import { deriveCategories, toggleCategory as toggleCategoryMap } from '../domain
 import { expireAvoid, nextAvoidStep } from '../domain/avoid.js';
 import { resolveAlertSequence } from '../domain/alert-priority.js';
 import { holdSystemMap, holdTalkgroupMap } from '../domain/hold.js';
-import { enqueue, filterActive } from '../domain/playback-queue.js';
+import { enqueue, filterActive, playbackQueueCount as playbackQueueCountOf } from '../domain/playback-queue.js';
 import { initialAuthState, nextAuthState, readPin } from '../domain/pin.js';
 import { PLAYBACK_GAP_MS } from '../infrastructure/audio-engine.js';
 
@@ -151,12 +151,7 @@ export function createListenerUseCases({
   function playbackQueueCount() {
     if (!playbackList || !call) return 0;
 
-    const index = playbackList.results.findIndex((c) => c.id === call.id);
-    if (index < 0) return 0;
-
-    return playbackList.options.sort === -1
-      ? playbackList.options.offset + index
-      : playbackList.count - playbackList.options.offset - index - 1;
+    return playbackQueueCountOf(playbackList, call.id);
   }
 
   function stop(options = {}) {

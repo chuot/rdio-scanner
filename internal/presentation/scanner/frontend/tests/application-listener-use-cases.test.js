@@ -380,6 +380,74 @@ describe('application/listener-use-cases — playback mode (search PLAY)', () =>
     });
 });
 
+// The queue count on a searched playback is the number of calls waiting to play after the one
+// being played. SKIP NEXT stops the current call and starts the next queued one, so each skip
+// hands one call out of the queue and the count steps down. The count must never climb on a
+// skip, whichever way the page is sorted: playback walks forward through the page in both orders.
+describe('application/listener-use-cases — the queue count steps down on every skip', () => {
+    function playback(options) {
+        const { useCases, socket, store } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.loadAndPlay(options.ids[0]);
+
+        socket.inject('LCL', {
+            count: options.ids.length,
+            options: { limit: 200, offset: 0, sort: options.sort },
+            results: options.ids.map((id) => ({ id, system: 10, talkgroup: 100 })),
+        });
+
+        return { useCases, socket, store };
+    }
+
+    function skipThrough(options) {
+        const { useCases, socket, store } = playback(options);
+
+        socket.inject('CAL', { id: options.ids[0], system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
+        const counts = [store.getState().queue];
+
+        for (let i = 1; i < options.ids.length; i += 1) {
+            useCases.skip();
+            socket.inject('CAL', { id: options.ids[i], system: 10, talkgroup: 100, audio: { data: [i] } }, 'play');
+            counts.push(store.getState().queue);
+        }
+
+        return counts;
+    }
+
+    it('three skips on a descending playback step the queue count down, never up', () => {
+        const counts = skipThrough({ sort: -1, ids: [1, 2, 3, 4] });
+
+        assert.deepEqual(counts, [3, 2, 1, 0]);
+    });
+
+    it('three skips on an ascending playback step the queue count down, never up', () => {
+        const counts = skipThrough({ sort: 1, ids: [1, 2, 3, 4] });
+
+        assert.deepEqual(counts, [3, 2, 1, 0]);
+    });
+
+    it('the live feed queue counts the calls waiting: arrivals add, playing a queued call subtracts', () => {
+        const { useCases, socket, store } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        assert.equal(store.getState().queue, 0, 'the first call plays at once and nothing waits behind it');
+
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 101, audio: { data: [2] } });
+        socket.inject('CAL', { id: 3, system: 10, talkgroup: 100, audio: { data: [3] } });
+        assert.equal(store.getState().queue, 2, 'two arrivals wait behind the call being played');
+
+        useCases.skip();
+        assert.equal(store.getState().queue, 1, 'skipping hands the next call out of the queue');
+
+        useCases.skip();
+        assert.equal(store.getState().queue, 0, 'and the skip after it hands out the last one');
+    });
+});
+
 // The search panel's progress bar is cleared by its store subscription on the playback list.
 // The store deep-compares slices, so an answer equal to the list already on screen notifies
 // nobody and the bar runs forever. Every call-list answer must carry a signal that cannot
