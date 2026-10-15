@@ -34,6 +34,11 @@ import { findAll } from './dom-shim.js';
 // The platform's fullscreen, as the page asks for it. The browser answers the page's request with
 // the state it keeps, and tells the page about it with the event the page listens for; the test
 // carries both, and records the calls the page makes.
+//
+// The way in is the element's own request. The way out is the document's: Chrome and Safari carry
+// it on the document, and only Firefox puts it on the element. A page that asks the element to
+// leave is asking a question the browser never put on the element, and the page is left with no
+// way out of the state it entered.
 function fullscreenPlatform() {
   const calls = [];
 
@@ -43,15 +48,16 @@ function fullscreenPlatform() {
       document.fullscreenElement = root;
       document.dispatchEvent({ type: 'fullscreenchange', target: root });
     },
-    exitFullscreen() {
-      calls.push('exit');
-      document.fullscreenElement = null;
-      document.dispatchEvent({ type: 'fullscreenchange', target: root });
-    },
   };
 
   document.documentElement = root;
   document.fullscreenElement = null;
+
+  document.exitFullscreen = () => {
+    calls.push('exit');
+    document.fullscreenElement = null;
+    document.dispatchEvent({ type: 'fullscreenchange', target: root });
+  };
 
   return calls;
 }

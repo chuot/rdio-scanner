@@ -190,7 +190,10 @@ class RdioApp extends HTMLElement {
     const el = document.documentElement;
 
     if (document.fullscreenElement) {
-      (el.exitFullscreen ?? el.mozCancelFullScreen ?? el.msExitFullscreen ?? el.webkitExitFullscreen)?.call(el);
+      // The way out is the document's own: Chrome and Safari carry it on the document, and only
+      // Firefox puts it on the element. Asking the element to leave is asking a question the
+      // browser never put on it, and the page stays in the state with nothing to leave by.
+      (document.exitFullscreen ?? document.webkitExitFullscreen ?? document.mozCancelFullScreen ?? document.msExitFullscreen)?.call(document);
     } else {
       (el.requestFullscreen ?? el.mozRequestFullScreen ?? el.msRequestFullscreen ?? el.webkitRequestFullscreen)?.call(el);
     }
