@@ -71,7 +71,7 @@ class RdioDisplay extends HTMLElement {
         </div>
         <table class="history">
           <thead>
-            <tr><th><span>Time</span></th><th><span>System</span></th><th><span>Talkgroup</span></th><th><span>Name</span></th></tr>
+            <tr><th title="Time"><span>Time</span></th><th title="System"><span>System</span></th><th title="Talkgroup"><span>Talkgroup</span></th><th title="Name"><span>Name</span></th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -277,6 +277,16 @@ class RdioDisplay extends HTMLElement {
     this.lastAnnounced = { id: call?.id ?? null, pause: !!pause, queue, name: playing ?? last.name };
   }
 
+  // The display is a fixed grid, and a long label is truncated by the cell it will not fit. The
+  // full text is the row's accessible name, so the operator who cannot see the truncation — a
+  // screen reader, 400% magnification — has the whole of it, not the part that fits.
+  write(el, text) {
+    el.textContent = text;
+
+    if (text) el.setAttribute('aria-label', text);
+    else el.removeAttribute('aria-label');
+  }
+
   render() {
     const { store } = getAppContext();
     const state = store.getState();
@@ -289,31 +299,31 @@ class RdioDisplay extends HTMLElement {
 
     this.announceState(call, pause, queue);
 
-    this.el.clock.textContent = formatTime(this.clock);
-    this.el.link.textContent = !linked ? 'NO LINK' : config?.showListenersCount ? `L: ${listeners}` : '';
-    this.el.queue.textContent = `Q: ${queue}`;
+    this.write(this.el.clock, formatTime(this.clock));
+    this.write(this.el.link, !linked ? 'NO LINK' : config?.showListenersCount ? `L: ${listeners}` : '');
+    this.write(this.el.queue, `Q: ${queue}`);
 
     if (call) {
       const isAfs = isAfsSystem(call);
       const progress = progressDate(call.dateTime, this.callTime);
 
-      this.el.date.textContent = shouldShowDate(call.dateTime, progress) ? formatMonthDay(call.dateTime) : '';
-      this.el.progress.textContent = formatTime(progress);
+      this.write(this.el.date, shouldShowDate(call.dateTime, progress) ? formatMonthDay(call.dateTime) : '');
+      this.write(this.el.progress, formatTime(progress));
 
-      this.el.system.textContent = call.systemData?.label ?? `${call.system}`;
-      this.el.type.textContent = (call.talkgroupData?.type ?? call.systemData?.type ?? '').toUpperCase();
-      this.el.tag.textContent = call.talkgroupData?.tag ?? '';
+      this.write(this.el.system, call.systemData?.label ?? `${call.system}`);
+      this.write(this.el.type, (call.talkgroupData?.type ?? call.systemData?.type ?? '').toUpperCase());
+      this.write(this.el.tag, call.talkgroupData?.tag ?? '');
 
-      this.el.talkgroup.textContent = call.talkgroupData?.label ?? `${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`;
-      this.el.name.textContent = call.talkgroupData?.name ?? formatFrequency(call.frequency);
+      this.write(this.el.talkgroup, call.talkgroupData?.label ?? `${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`);
+      this.write(this.el.name, call.talkgroupData?.name ?? formatFrequency(call.frequency));
 
       const freq = activeFrequency(call, this.callTime);
-      this.el.frequency.textContent = `F: ${freq.frequency || 0}`;
-      this.el.stats.textContent = `E: ${freq.error || 0} S: ${freq.spike || 0} `;
-      this.el.tgid.textContent = `TGID: ${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`;
+      this.write(this.el.frequency, `F: ${freq.frequency || 0}`);
+      this.write(this.el.stats, `E: ${freq.error || 0} S: ${freq.spike || 0} `);
+      this.write(this.el.tgid, `TGID: ${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`);
 
       const unit = resolveUnit(call, this.callTime);
-      this.el.unit.textContent = unit ? `UID: ${unit}` : '';
+      this.write(this.el.unit, unit ? `UID: ${unit}` : '');
 
       this.lastCall = call;
 
@@ -321,7 +331,7 @@ class RdioDisplay extends HTMLElement {
     } else if (!this.lastCall) {
       // legacy keeps the last call's rows on screen after it ends; only the
       // pristine idle state shows the version line
-      this.el.name.textContent = `Rdio Scanner v${version}`;
+      this.write(this.el.name, `Rdio Scanner v${version}`);
     }
 
     // Legacy evaluates the flags from `call || callPrevious` on every event
@@ -374,7 +384,9 @@ class RdioDisplay extends HTMLElement {
       const name = previousCall.talkgroupData?.name ?? previousCall.frequency;
       const replaying = currentCall && currentCall.id === previousCall.id ? ' class="replaying"' : '';
 
-      rows.push(`<tr${replaying}><td><span>${time}</span></td><td><span>${system}</span></td><td><span>${talkgroup}</span></td><td><span>${name}</span></td></tr>`);
+      // The history rows live in a fixed grid and truncate like the display rows; the full text
+      // rides on the cell that clips it, so magnification and a screen reader get the whole of it.
+      rows.push(`<tr${replaying}><td title="${time}"><span>${time}</span></td><td title="${system}"><span>${system}</span></td><td title="${talkgroup}"><span>${talkgroup}</span></td><td title="${name}"><span>${name}</span></td></tr>`);
     }
 
     this.el.historyBody.innerHTML = rows.join('');

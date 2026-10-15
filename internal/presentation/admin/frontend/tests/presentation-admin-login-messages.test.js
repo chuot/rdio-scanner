@@ -109,3 +109,12 @@ test('a submit that never left the field tells the operator the code was refused
 
   assert.equal(errorText(el), 'Invalid password', 'submitting the form reaches the field it submits');
 });
+
+test('the password field declares the purpose the browser fills it for', async () => {
+  const el = await loginForm('ok');
+
+  const input = el.querySelector('input[name="password"]');
+
+  assert.equal(input.getAttribute('autocomplete'), 'current-password',
+    'the login field names its purpose so the password manager and the browser fill it right');
+});

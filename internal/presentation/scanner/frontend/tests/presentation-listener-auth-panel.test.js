@@ -95,6 +95,20 @@ describe('presentation/listener/rdio-display — the unlock code panel', () => {
       close();
     }
   });
+
+  it('carries the unlock field\'s name and the suppression its purpose asks for', () => {
+    const { input, close } = display();
+
+    try {
+      // The unlock code is user-specific: no generic autofill purpose describes it, so the
+      // field suppresses the browser's purpose (the SC 1.3.5 exception) and carries the words
+      // the panel shows on it as its name.
+      assert.equal(input.getAttribute('aria-label'), 'Unlock code');
+      assert.equal(input.getAttribute('autocomplete'), 'off');
+    } finally {
+      close();
+    }
+  });
 });
 
 describe('presentation/listener/rdio-search-panel — the filters carry no messages', () => {

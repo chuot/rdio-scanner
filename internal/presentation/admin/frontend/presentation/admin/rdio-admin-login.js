@@ -15,7 +15,7 @@ class RdioAdminLogin extends HTMLElement {
         <h1>Rdio Scanner Admin</h1>
         <rdio-form-field>
           <label>Password</label>
-          <input name="password" type="password" required autofocus />
+          <input name="password" type="password" autocomplete="current-password" required autofocus />
         </rdio-form-field>
         <button type="submit" class="rdio-button">Login</button>
       </form>
