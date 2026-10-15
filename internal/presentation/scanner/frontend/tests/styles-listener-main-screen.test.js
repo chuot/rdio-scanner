@@ -193,11 +193,14 @@ describe('the reduced state — the paused light keeps a mark of its own', () =>
   });
 
   it('gives the quieted paused light a ring the live face does not wear', () => {
-    expect('rdio-status .led.paused', 'box-shadow', '0 0 0 2px rgb(20, 20, 20)', REDUCED);
+    // The ring rides the lit face, so its rule must outrank the per-colour glow rules that
+    // dress the same face, and its two bands must read against both neighbours: the dark
+    // band against the lit face, the light band against the surface the light sits on.
+    expect('rdio-status .led.on.paused', 'box-shadow', '0 0 0 2px rgb(20, 20, 20), 0 0 0 4px rgb(160, 160, 160)', REDUCED);
   });
 
   it('carries the ring in the system ink when the system takes the colours', () => {
-    expect('rdio-status .led.paused', 'box-shadow', '0 0 0 2px CanvasText', FORCED);
+    expect('rdio-status .led.on.paused', 'box-shadow', '0 0 0 2px CanvasText', FORCED);
   });
 });
 

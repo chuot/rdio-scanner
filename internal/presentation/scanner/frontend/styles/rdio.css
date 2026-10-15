@@ -1804,9 +1804,13 @@ rdio-snackbar .rdio-support .countdown {
   /* The blink is the paused light's voice. When the operator asks for less motion the quieted
    * paused face lands on the lit face, the same face the live stream wears, so the paused light
    * keeps a ring of its own — a standing mark around the face, drawn on the end state, not a
-   * frozen cycle. The live face keeps its glow and wears no ring; the resting face is dark. */
-  rdio-status .led.paused {
-    box-shadow: 0 0 0 2px rgb(20, 20, 20);
+   * frozen cycle. The live face keeps its glow and wears no ring; the resting face is dark.
+   * The ring rides the lit face, so the rule names the lit face too and outranks the
+   * per-colour glow rules that dress it, and it carries two bands: the dark band reads
+   * against the lit face, the light band against the surface the light sits on, so the
+   * mark clears three-to-one against both of its neighbours on every lit colour. */
+  rdio-status .led.on.paused {
+    box-shadow: 0 0 0 2px rgb(20, 20, 20), 0 0 0 4px rgb(160, 160, 160);
   }
 }
 
@@ -1905,8 +1909,9 @@ rdio-snackbar .rdio-support .countdown {
   /* The light says its state by brightness and motion: the live face keeps its glow, the paused
    * face keeps its blink, and the resting face is the plain block. The mode takes the face's
    * colour, and the glow and the blink are what stay readable. When the operator also asks for
-   * less motion, the paused ring is drawn in the system's ink. */
-  rdio-status .led.paused {
+   * less motion, the paused ring is drawn in the system's ink — on the lit face's rule, so it
+   * outranks the per-colour glow rules the mode is dressing the face with. */
+  rdio-status .led.on.paused {
     box-shadow: 0 0 0 2px CanvasText;
   }
 
