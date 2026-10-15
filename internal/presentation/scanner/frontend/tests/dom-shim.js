@@ -69,11 +69,22 @@ class ShimNode {
     });
   }
 
+  // A control's name is one fact in a browser: the `name` attribute the markup carries is the
+  // property the page reads, and a form's handler that answers "which control changed?" reads it
+  // off the event's target. A shim that leaves it out makes a handler that names its controls
+  // answer nothing, and a test has to hand the control the name the markup already carries.
+  get name() {
+    return this.attributes.name ?? '';
+  }
+
+  set name(value) {
+    this.attributes.name = String(value);
+  }
+
   // hidden is one fact in a browser: the attribute the markup carries and the property the page
   // sets are the same state. A panel hidden in markup and opened by property, and a control the page
   // takes off the screen, have to answer the same reading.
-  get hidden() {
-    return this.attributes.hidden !== undefined;
+  get hidden() {    return this.attributes.hidden !== undefined;
   }
 
   set hidden(value) {

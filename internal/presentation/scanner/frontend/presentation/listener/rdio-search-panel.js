@@ -3,7 +3,7 @@
 // (legacy search.component).
 
 import { getAppContext } from '../../application/context.js';
-import { computeFilterOptions } from '../../domain/search-filters.js';
+import { computeFilterOptions, resolveCallSearchCriteria } from '../../domain/search-filters.js';
 import { clientSlice, needsRefetch, serverOffset } from '../../../../common/frontend/domain/search-pagination.js';
 import { formatDuration, formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
 import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
@@ -148,7 +148,7 @@ class RdioSearchPanel extends HTMLElement {
   }
 
   searchCalls() {
-    const { useCases } = getAppContext();
+    const { store, useCases } = getAppContext();
 
     if (useCases.livefeedMode === 'playback') return;
 
@@ -161,10 +161,15 @@ class RdioSearchPanel extends HTMLElement {
     };
 
     if (selection.date) options.date = new Date(Date.parse(selection.date)).toISOString();
-    if (selection.group) options.group = selection.group;
-    if (selection.system) options.system = selection.system;
-    if (selection.tag) options.tag = selection.tag;
-    if (selection.talkgroup) options.talkgroup = selection.talkgroup;
+
+    // The operator reads labels, and the history is narrowed by reference: a filter sent as the
+    // label the operator read is read as no filter at all, and the answer is the whole history.
+    const criteria = resolveCallSearchCriteria(store.getState().config, selection);
+
+    if (criteria.group) options.group = criteria.group;
+    if (criteria.system) options.system = criteria.system;
+    if (criteria.tag) options.tag = criteria.tag;
+    if (criteria.talkgroup) options.talkgroup = criteria.talkgroup;
 
     this.resultsPending = true;
     this.renderProgress();

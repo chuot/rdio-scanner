@@ -71,8 +71,12 @@ describe('presentation/listener — the shared form field declares nothing here'
   it('the search filters carry no mark and no required control, whatever the listener types in them', () => {
     const el = searchPanel();
 
+    // A date field keeps only what a date field can hold: a browser refuses the text outright and
+    // leaves the field empty, so the value the listener can leave in it is a date.
+    const typedIn = (control) => (control.tag === 'input' && control.attributes.type === 'datetime-local' ? '2026-10-06T09:15' : 'fire');
+
     for (const control of findAll(el, (node) => ['input', 'textarea', 'select'].includes(node.tag))) {
-      control.value = 'fire';
+      control.value = typedIn(control);
 
       // The panel reads the control the change came from, the way the browser reports it.
       control.dispatchEvent({ type: 'input', target: control });
