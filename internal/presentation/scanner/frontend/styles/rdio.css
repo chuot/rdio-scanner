@@ -1363,10 +1363,14 @@ rdio-search-panel .rdio-filters rdio-form-field select {
 
 /* The filter form is unavailable while a search is in flight. The control says so in its own name
  * (aria-disabled), so the visible mark is a shape and not a colour: the field's underline becomes a
- * dash, the fill goes flat, and the arrow goes back to the resting weight a field that is not
- * offering its list carries. The words keep their full strength - a control the operator cannot read
- * is not a control that is merely unavailable - and the dashed underline is drawn in the same
- * strength the resting underline uses, so the boundary keeps its contrast against the fill. */
+ * dash and the fill goes flat.
+ *
+ * Nothing is dimmed to say the lock. The words keep their full strength - a control the operator
+ * cannot read is not a control that is merely unavailable - and the arrow keeps the weight the
+ * resting field carries, because dimming it to the same alpha the lock's other marks use drops the
+ * graphic that says the control opens a list below the 3:1 a graphic has to keep against its fill.
+ * The dashed underline is drawn at the pressed strength the resting underline already uses, so the
+ * boundary keeps its contrast against the flat fill. */
 rdio-search-panel .rdio-filters .rdio-field-box:has(.locked) {
   background-color: #ececec;
 }
@@ -1374,10 +1378,6 @@ rdio-search-panel .rdio-filters .rdio-field-box:has(.locked) {
 rdio-search-panel .rdio-filters .rdio-field-box:has(.locked)::after {
   background-color: transparent;
   background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.87) 0 6px, transparent 6px 12px);
-}
-
-rdio-search-panel .rdio-filters .rdio-field-box:has(.locked)::before {
-  opacity: 0.62;
 }
 
 rdio-search-panel .rdio-filters rdio-form-field select.locked,
@@ -1875,6 +1875,19 @@ rdio-snackbar .rdio-support .countdown {
    * is drawn in the system's ink and the arrow is drawn as a glyph. */
   rdio-search-panel .rdio-filters .rdio-field-box::after,
   rdio-display .auth .rdio-field-box::after {
+    background: CanvasText;
+  }
+
+  /* A locked filter says unavailable by shape: the dashed underline and the flat fill. The mode keeps
+   * the shape's job - the line is the field's boundary - and takes the colours, so the line is the
+   * system's ink and the fill is the system's canvas. The dash is a gradient, and the mode does not
+   * replace gradients: drawing the lock's dash here would keep the page's own black on the system's
+   * canvas, which on a dark palette is black on black. */
+  rdio-search-panel .rdio-filters .rdio-field-box:has(.locked) {
+    background: Canvas;
+  }
+
+  rdio-search-panel .rdio-filters .rdio-field-box:has(.locked)::after {
     background: CanvasText;
   }
 
