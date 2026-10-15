@@ -5,7 +5,7 @@
 import { getAppContext } from '../../application/context.js';
 import { computeFilterOptions, resolveCallSearchCriteria } from '../../domain/search-filters.js';
 import { clientSlice, needsRefetch, serverOffset } from '../../../../common/frontend/domain/search-pagination.js';
-import { formatDuration, formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
+import { formatDuration, formatMonthDay, formatTime, toLocalInputValue } from '../../../../common/frontend/presentation/display-format.js';
 import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const SERVER_PAGE = 200;
@@ -232,6 +232,13 @@ class RdioSearchPanel extends HTMLElement {
     const { store, useCases } = getAppContext();
     const state = store.getState();
     const list = state.playbackList;
+
+    // The date field is bounded to the window the search is answering with: a date the operator
+    // types outside it is a date the list has no calls for. The two ends the server names are the
+    // ends of the whole match, not of the page shown, and an empty match names the zero time - not
+    // a date a person can be shown, so an empty match leaves the field open.
+    this.form.elements.date.min = toLocalInputValue(list?.dateStart);
+    this.form.elements.date.max = toLocalInputValue(list?.dateStop);
 
     // The count the search answered with is a number the operator cannot see on a locked screen.
     // The answer counter rides every answer, so the page says the count once per answer — not once

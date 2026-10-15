@@ -81,10 +81,31 @@ class ShimNode {
     this.attributes.name = String(value);
   }
 
+  // A date field's bounds are one fact in a browser, like its name: the `min` and `max` attributes
+  // the markup carries are the properties the page reads and writes, and the field accepts only the
+  // wall-clock shape they are written in. A shim that keeps them as loose properties lets a test set
+  // a bound the field would have thrown away.
+  get min() {
+    return this.attributes.min ?? '';
+  }
+
+  set min(value) {
+    this.attributes.min = String(value);
+  }
+
+  get max() {
+    return this.attributes.max ?? '';
+  }
+
+  set max(value) {
+    this.attributes.max = String(value);
+  }
+
   // hidden is one fact in a browser: the attribute the markup carries and the property the page
   // sets are the same state. A panel hidden in markup and opened by property, and a control the page
   // takes off the screen, have to answer the same reading.
-  get hidden() {    return this.attributes.hidden !== undefined;
+  get hidden() {
+    return this.attributes.hidden !== undefined;
   }
 
   set hidden(value) {
@@ -515,10 +536,13 @@ function parseHTML(html) {
 
     node.tag = tag;
 
-    for (const attr of token.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)) {
-      node.attributes[attr[1]] = attr[2];
+    for (const attr of token.replace(/^<[a-zA-Z][\w-]*/, '').replace(/\/?>$/, '').matchAll(/([a-zA-Z-]+)(?:="([^"]*)")?/g)) {
+      // A bare attribute is a present attribute with an empty value: `material` on the paginator and
+      // `hidden` on a panel say the same thing to the page that `material=""` says. A parser that
+      // reads only the quoted spelling leaves the page's own markup answering "not present".
+      node.attributes[attr[1]] = attr[2] ?? '';
 
-      if (attr[1] === 'class') node.className = attr[2];
+      if (attr[1] === 'class') node.className = attr[2] ?? '';
     }
 
     if (stack.length) node.parent = stack[stack.length - 1];

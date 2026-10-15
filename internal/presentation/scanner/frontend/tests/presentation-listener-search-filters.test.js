@@ -43,6 +43,9 @@ const CONFIG = {
       talkgroups: [
         { id: 10, label: 'Fire dispatch', groups: ['Dispatch'], tag: 'Fire' },
         { id: 11, label: 'Tac dispatch', groups: ['Interop'], tag: 'Fire' },
+        // A talkgroup the configuration has and the history has no recorded calls for: the filter is
+        // a filter the operator can legitimately pick, and the answer is nothing.
+        { id: 12, label: 'Car dispatch', groups: ['Dispatch'], tag: 'Fire' },
       ],
     },
     {
@@ -435,5 +438,36 @@ describe('the search screen — a search in flight', () => {
 
     assert.equal(sent.length, 2, 'the filter form never came back to the operator');
     assert.equal(sent.at(-1).system, 2);
+  });
+});
+
+describe('the search screen — the dates the date field accepts', () => {
+  it('bounds the date field to the window the search answered with', () => {
+    const { panel } = searchScreen();
+
+    pick(panel, 'system', 'Metro');
+
+    assert.equal(panel.form.elements.date.min, '2026-10-06T09:15', 'the date field does not know the earliest call the search found');
+    assert.equal(panel.form.elements.date.max, '2026-10-06T10:30', 'the date field does not know the latest call the search found');
+  });
+
+  it('leaves the date field unbounded when the search answered with no calls', () => {
+    const { panel } = searchScreen();
+
+    pick(panel, 'system', 'Metro');
+    pick(panel, 'talkgroup', 'Car dispatch');
+
+    assert.equal(rows(panel).length, 0, 'the list kept calls on screen that the filter filtered out');
+    assert.equal(panel.form.elements.date.min, '', 'the date field was bounded to a date that has no calls in it');
+    assert.equal(panel.form.elements.date.max, '', 'the date field was bounded to a date that has no calls in it');
+  });
+
+  it('bounds the date field to the window the operator narrowed', () => {
+    const { panel } = searchScreen();
+
+    pick(panel, 'group', 'Interop');
+
+    assert.equal(panel.form.elements.date.min, '2026-10-06T10:30', 'the bound did not follow the filter the operator chose');
+    assert.equal(panel.form.elements.date.max, '2026-10-06T11:40', 'the bound did not follow the filter the operator chose');
   });
 });
