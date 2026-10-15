@@ -4,7 +4,7 @@
 // native HTML5 drag sorting (legacy CDK drop(): 1-based order rewrite).
 
 import { getAdminContext } from '../../application/admin-context.js';
-import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
+import { announce, showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const SECTION_LABELS = {
   access: 'Access',
@@ -173,7 +173,14 @@ class RdioAdminSectionBar extends HTMLElement {
         ? await getAdminContext().useCases.saveSubSection(this.level, this.systemId)
         : await getAdminContext().useCases.saveSection(name);
 
-      if (!ok) showSnackbar(`Unable to save ${label}`);
+      // The save bar's answer is the operator's question, asked of the server: the polite region
+      // says it in words, for the operator who is not looking at the rows when the answer lands.
+      if (!ok) {
+        showSnackbar(`Unable to save ${label}`);
+        announce(`Save failed: ${label}`);
+      } else {
+        announce('Saved');
+      }
     });
 
     const discard = document.createElement('button');
@@ -197,12 +204,31 @@ export function sortedByOrder(list) {
   return [...(list ?? [])].sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
+// The move a row makes says what it moved and where it landed: the row's own words, and its place
+// in the list the listener plays in. The keyboard's Move buttons and the pointer's drag land in
+// the same reorder, so the operator who cannot see the list shuffling hears the same sentence from
+// either route.
+function announceMove(label, index, total) {
+  announce(`${label}, position ${index + 1} of ${total}`);
+}
+
 // Native HTML5 drag sorting for a container whose direct children carry
 // [data-drag] + draggable. onReorder(from, to) receives display indices.
 export function attachDragSort(container, onReorder) {
   let fromIndex = null;
 
   const rows = () => [...container.querySelectorAll(':scope > [data-drag]')];
+
+  // The reorder both routes go through, with the sentence the page says about it: the row's own
+  // words, and the place it landed on. The keyboard's Move buttons and the pointer's drag land
+  // here, so the operator who cannot see the list shuffling hears the move from either route.
+  const move = (from, to) => {
+    const label = rows()[from]?.querySelector('.row-title')?.textContent.trim() ?? '';
+
+    onReorder(from, to);
+
+    announceMove(label, to, rows().length);
+  };
 
   container.addEventListener('dragstart', (ev) => {
     const row = ev.target.closest('[data-drag]');
@@ -237,7 +263,7 @@ export function attachDragSort(container, onReorder) {
 
     row?.classList.remove('dragging');
 
-    if (to !== -1 && to !== from) onReorder(from, to);
+    if (to !== -1 && to !== from) move(from, to);
   });
 
   container.addEventListener('dragend', () => {
@@ -266,7 +292,7 @@ export function attachDragSort(container, onReorder) {
 
     if (from === -1 || to < 0 || to >= rows().length) return;
 
-    onReorder(from, to);
+    move(from, to);
   });
 }
 

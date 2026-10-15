@@ -141,7 +141,10 @@ class RdioAdmin extends HTMLElement {
     heading.id = 'rdio-admin-section-heading';
     heading.textContent = sectionLabel(this.current);
 
-    content.append(heading);
+    // The polite region the page answers through: the save bar's result and a row's move land in
+    // it, for the operator who is not looking at the rows when the page answers. It rides inside
+    // the content region, below the heading naming it, and carries nothing static.
+    content.append(heading, document.createElement('rdio-live-region'));
 
     if (banner) content.append(banner);
 

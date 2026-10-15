@@ -40,6 +40,7 @@ class RdioApp extends HTMLElement {
       </aside>
       <main id="content" aria-labelledby="rdio-app-heading">
         <h1 id="rdio-app-heading" class="rdio-visually-hidden">Rdio Scanner</h1>
+        <rdio-live-region></rdio-live-region>
         <section class="content">
           <rdio-status></rdio-status>
           <rdio-display></rdio-display>

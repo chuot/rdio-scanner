@@ -101,6 +101,44 @@ export function dismissSnackbar() {
   }
 }
 
+// The page's polite live region: the one place the page writes what changed while the operator was
+// not looking at it. The shell carries it empty — a region that carries static content tells the
+// screen reader the page is answering every time it paints — and the components write one sentence
+// in the page's own words when a state they own changes.
+class RdioLiveRegion extends HTMLElement {
+  connectedCallback() {
+    this.setAttribute('role', 'status');
+    this.setAttribute('aria-live', 'polite');
+    this.setAttribute('aria-atomic', 'true');
+    this.classList.add('rdio-visually-hidden');
+  }
+
+  render(text) {
+    this.textContent = text ?? '';
+  }
+}
+
+customElements.define('rdio-live-region', RdioLiveRegion);
+
+// The page tells the operator through the region its shell carries. A page that carries none gets
+// one on the first announcement: the region belongs to the page, and the components that write into
+// it are not the ones that placed it.
+export function announce(text) {
+  let region = document.querySelector('rdio-live-region');
+
+  if (!region) {
+    region = document.createElement('rdio-live-region');
+
+    document.body.append(region);
+
+    // A browser connects the element as it inserts it; a DOM that does not lay the page out needs
+    // the element to say what it is before the first write lands in it.
+    if (!region.hasAttribute('role')) region.connectedCallback?.();
+  }
+
+  region.render(text);
+}
+
 // A control the page has taken off the screen: the browser's Tab route walks past it, and a trap
 // that counts it names an end the keyboard cannot stand on. A control is out of sight when the page
 // hides it, when a block it sits in is hidden, and when the stylesheet takes it out of the layout.

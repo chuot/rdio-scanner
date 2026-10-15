@@ -6,6 +6,7 @@ import { getAppContext } from '../../application/context.js';
 import { computeFilterOptions } from '../../domain/search-filters.js';
 import { clientSlice, needsRefetch, serverOffset } from '../../../../common/frontend/domain/search-pagination.js';
 import { formatDuration, formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
+import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const SERVER_PAGE = 200;
 const CLIENT_PAGE = 10;
@@ -54,7 +55,13 @@ class RdioSearchPanel extends HTMLElement {
 
     this.form.querySelector('.reset').addEventListener('click', () => this.resetForm());
 
-    this.paginator.addEventListener('page', () => this.refreshResults());
+    this.paginator.addEventListener('page', () => {
+      this.refreshResults();
+
+      // The page the list moved to is the operator's own move; the count rides the server's
+      // answer. Saying it after the results refresh keeps the page the newest word the page says.
+      announce(`Page ${this.paginator.pageIndex + 1}`);
+    });
 
     this.downloadMode.addEventListener('change', () => this.renderResults());
 
@@ -185,6 +192,17 @@ class RdioSearchPanel extends HTMLElement {
 
     this.resultsPending = false;
     this.renderProgress();
+
+    // The count the search answered with is a number the operator cannot see on a locked screen.
+    // The answer counter rides every answer, so the page says the count once per answer — not once
+    // per paint — and says nothing before the first answer arrives.
+    const seq = state.playbackListSeq ?? 0;
+
+    if (seq !== this.lastAnnouncedSeq) {
+      this.lastAnnouncedSeq = seq;
+
+      if (list) announce(`${list.count} calls`);
+    }
 
     if (!list) {
       this.tbody.innerHTML = '';

@@ -17,6 +17,7 @@ import {
   resolveUnit,
   shouldShowDate,
 } from '../../../../common/frontend/presentation/display-format.js';
+import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 class RdioDisplay extends HTMLElement {
   connectedCallback() {
@@ -247,6 +248,33 @@ class RdioDisplay extends HTMLElement {
     this.updateDimmer();
   }
 
+  // The screen the operator is looking at is the listener's state: the talkgroup playing, the
+  // queue filling. The operator who cannot see the screen has only what the page says, so the
+  // display writes the state it shows into the polite region the shell carries, in the page's
+  // own words. The first render is the page introducing itself, not an answer: the region stays
+  // empty until a state the display owns actually changes.
+  announceState(call, pause, queue) {
+    const playing = call ? (call.talkgroupData?.label ?? `${call.talkgroup}`) : null;
+
+    if (this.lastAnnounced === undefined) {
+      this.lastAnnounced = { id: call?.id ?? null, pause: !!pause, queue, name: playing };
+
+      return;
+    }
+
+    const last = this.lastAnnounced;
+
+    if (playing && (call.id !== last.id || !!pause !== last.pause)) {
+      announce(`${pause ? 'Paused' : 'Playing'} ${playing}`);
+    } else if (!call && last.id !== null) {
+      announce(`Stopped ${last.name}`);
+    }
+
+    if (queue !== last.queue) announce(`Queue: ${queue}`);
+
+    this.lastAnnounced = { id: call?.id ?? null, pause: !!pause, queue, name: playing ?? last.name };
+  }
+
   render() {
     const { store } = getAppContext();
     const state = store.getState();
@@ -256,6 +284,8 @@ class RdioDisplay extends HTMLElement {
     // the configuration arriving nor the clock ticking arms the dimmer, which is
     // why the display sits dimmed from the moment the page loads.
     if (call && call !== this.lastCall) this.updateDimmer();
+
+    this.announceState(call, pause, queue);
 
     this.el.clock.textContent = formatTime(this.clock);
     this.el.link.textContent = !linked ? 'NO LINK' : config?.showListenersCount ? `L: ${listeners}` : '';
