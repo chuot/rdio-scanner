@@ -153,4 +153,25 @@ describe('administration announcements — the page says what changed', () => {
     assert.equal(said(el), 'Metro, position 2 of 3',
       `the page did not say the row and its new place: ${JSON.stringify(said(el))}`);
   });
+
+  it('keeps the sentence it wrote when the page repaints under it', () => {
+    const el = shell();
+
+    const button = moveButton('Metro');
+
+    button.click();
+
+    const live = region(el);
+
+    // A configuration push repaints the shell: the todos change, and the page rebuilds the
+    // header, the nav, and the contents. The sentence written for the operator who is not
+    // looking must survive that paint — a region rebuilt empty mid-read throws the page's own
+    // answer away before it is heard.
+    getAdminContext().store.setState({ todos: ['Systems has changes'] });
+
+    assert.equal(region(el), live,
+      'the shell rebuilt the live region, throwing away the sentence it had just written');
+    assert.equal(said(el), 'Metro, position 2 of 3',
+      `the repaint cleared the sentence: ${JSON.stringify(said(el))}`);
+  });
 });

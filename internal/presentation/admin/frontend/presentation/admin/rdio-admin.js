@@ -143,8 +143,13 @@ class RdioAdmin extends HTMLElement {
 
     // The polite region the page answers through: the save bar's result and a row's move land in
     // it, for the operator who is not looking at the rows when the page answers. It rides inside
-    // the content region, below the heading naming it, and carries nothing static.
-    content.append(heading, document.createElement('rdio-live-region'));
+    // the content region, below the heading naming it, and carries nothing static. The shell
+    // keeps one region across every repaint: a store change that rebuilds the page must not
+    // throw away the sentence it wrote a moment ago, before the operator who is not looking has
+    // heard it.
+    if (!this.liveRegion) this.liveRegion = document.createElement('rdio-live-region');
+
+    content.append(heading, this.liveRegion);
 
     if (banner) content.append(banner);
 
