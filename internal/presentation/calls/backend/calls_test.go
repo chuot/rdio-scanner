@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"rdio-scanner/internal/domain"
 )
 
 // The call history endpoints are the GPL HTTP surface for the recorded calls. Today the history is
@@ -558,3 +560,154 @@ var errFixture = fixtureError{}
 type fixtureError struct{}
 
 func (fixtureError) Error() string { return "the fixture's own store refuses" }
+
+// The search screen's System and Talkgroup filters name the label the operator read, and the history
+// is narrowed by reference: the criteria leave the screen as the search reads them, with the system
+// and the talkgroup as numbers, the group and the tag as labels, and the date as an instant.
+//
+// The reading is taken on the published history endpoint, which parses the body with the search's own
+// parser and echoes the body back as it arrived. The shape the screen sends is measured against the
+// shape the search reads, and not against a copy of the rule written in the test.
+func TestSearchEndpointNarrowsByTheShapeEachCriterionIsReadIn(t *testing.T) {
+	fixture := newCallsFixture(t)
+
+	// The configuration as the listener is given it: the labels the operator reads, over the
+	// references the history is stored under. The talkgroups carry the group and the tag the
+	// filters name, and the second system names a group and a tag of its own, so a filter that
+	// stands answers with part of the history and not with all of it.
+	fixture.systems.Stored = domain.Systems{
+		{
+			ID:        1,
+			SystemRef: systemOneRef,
+			Label:     "Grand Metro",
+			Talkgroups: domain.Talkgroups{
+				{ID: 10, TalkgroupRef: talkgroupOneRef, Label: "Fire dispatch", GroupIDs: []uint64{1}, TagID: 3},
+			},
+		},
+		{
+			ID:        2,
+			SystemRef: systemTwoRef,
+			Label:     "Harbour",
+			Talkgroups: domain.Talkgroups{
+				{ID: 20, TalkgroupRef: talkgroupTwoRef, Label: "Marine", GroupIDs: []uint64{2}, TagID: 4},
+			},
+		},
+	}
+
+	fixture.groups.Stored = domain.Groups{{ID: 1, Label: "Fire"}, {ID: 2, Label: "Marine"}}
+	fixture.tags.Stored = domain.Tags{{ID: 3, Label: "Fire Dispatch"}, {ID: 4, Label: "Marine Ops"}}
+
+	type page struct {
+		Count   uint           `json:"count"`
+		Options map[string]any `json:"options"`
+		Results []struct {
+			ID        uint64 `json:"id"`
+			System    uint   `json:"system"`
+			Talkgroup uint   `json:"talkgroup"`
+		} `json:"results"`
+	}
+
+	ask := func(t *testing.T, criteria string) page {
+		t.Helper()
+
+		rec := fixture.serve(callsRequest{
+			method: http.MethodPost,
+			path:   "/api/calls/search",
+			token:  adminToken,
+			body:   criteria,
+		})
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST /api/calls/search %s = %d, want the page: %s", criteria, rec.Code, rec.Body.String())
+		}
+
+		var got page
+
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decoding the answer to %s: %v", criteria, err)
+		}
+
+		return got
+	}
+
+	// The criteria the four filters stand for, sent the way the screen sends them.
+	narrowed := ask(t, `{"limit":200,"offset":0,"sort":-1,"system":10001,"talkgroup":1514000,"group":"Fire","tag":"Fire Dispatch"}`)
+
+	if narrowed.Count != 2 || len(narrowed.Results) != 2 {
+		t.Fatalf("the four criteria together answered with %d calls (%d rows), want the 2 calls the history holds on that talkgroup", narrowed.Count, len(narrowed.Results))
+	}
+
+	for _, row := range narrowed.Results {
+		if row.System != systemOneRef || row.Talkgroup != talkgroupOneRef {
+			t.Errorf("call %d answered under %d/%d, want %d/%d", row.ID, row.System, row.Talkgroup, systemOneRef, talkgroupOneRef)
+		}
+	}
+
+	// The answer names back what it was asked with, in the shape it was asked in.
+	if got := narrowed.Options["system"]; !sameNumber(got, systemOneRef) {
+		t.Errorf("the answer echoes system = %v, want the reference 10001 it was asked with", got)
+	}
+
+	if got := narrowed.Options["talkgroup"]; !sameNumber(got, talkgroupOneRef) {
+		t.Errorf("the answer echoes talkgroup = %v, want the reference 1514000 it was asked with", got)
+	}
+
+	if got := narrowed.Options["group"]; got != "Fire" {
+		t.Errorf("the answer echoes group = %v, want the label Fire it was asked with", got)
+	}
+
+	if got := narrowed.Options["tag"]; got != "Fire Dispatch" {
+		t.Errorf("the answer echoes tag = %v, want the label Fire Dispatch it was asked with", got)
+	}
+
+	// A group and a tag travel as labels, and the server expands them over the talkgroups the
+	// listener can see. The same criterion as a number names nothing the expansion knows, and the
+	// search is left with no filter to run.
+	if got := ask(t, `{"limit":200,"offset":0,"sort":-1,"group":"Marine"}`); got.Count != 1 || got.Results[0].System != systemTwoRef {
+		t.Errorf("the group label Marine answered with %d calls, want the 1 call on the talkgroup in that group", got.Count)
+	}
+
+	if got := ask(t, `{"limit":200,"offset":0,"sort":-1,"tag":"Marine Ops"}`); got.Count != 1 || got.Results[0].Talkgroup != talkgroupTwoRef {
+		t.Errorf("the tag label Marine Ops answered with %d calls, want the 1 call on the talkgroup under that tag", got.Count)
+	}
+
+	if got := ask(t, `{"limit":200,"offset":0,"sort":-1,"group":1}`); got.Count != 3 {
+		t.Errorf("a number sent as a group label answered with %d calls, want the whole history: the search reads a group as a label and takes nothing from a number", got.Count)
+	}
+
+	// A system and a talkgroup arriving as the labels the operator read are read as no filter at
+	// all, and the answer is the whole history with nothing in the echo to say a filter was asked
+	// for. This is the shape the search screen's filters had.
+	labelled := ask(t, `{"limit":200,"offset":0,"sort":-1,"system":"Grand Metro","talkgroup":"Fire dispatch"}`)
+
+	if labelled.Count != 3 {
+		t.Errorf("the labels Grand Metro and Fire dispatch answered with %d calls, want the whole history: the search reads a reference, and a label is not one", labelled.Count)
+	}
+
+	for _, name := range []string{"system", "talkgroup"} {
+		if _, named := labelled.Options[name]; named {
+			t.Errorf("the answer echoes %s = %v, want nothing: the criterion was not read, so it was not asked with", name, labelled.Options[name])
+		}
+	}
+
+	// The date is an instant, which is what the screen writes the wall-clock minute the operator
+	// typed into. A value the parser cannot read leaves the day unfiltered, which is the same
+	// silent answer a label where a reference is read produces.
+	day := fixtureTime.Add(-2 * time.Hour).Format(time.RFC3339)
+
+	if got := ask(t, fmt.Sprintf(`{"limit":200,"offset":0,"sort":-1,"date":%q}`, day)); got.Count != 2 {
+		t.Errorf("the day %s answered with %d calls, want the 2 calls recorded in it", day, got.Count)
+	}
+
+	if got := ask(t, `{"limit":200,"offset":0,"sort":-1,"date":"2026-05-11T07:00"}`); got.Count != 3 {
+		t.Errorf("a wall-clock minute answered with %d calls, want the whole history: the search reads an instant, and a minute without a zone is not one", got.Count)
+	}
+}
+
+// sameNumber reports whether the echoed criterion is the reference the search was asked with. The
+// echo carries the JSON number the body carried, so a reference that arrived as text is not one.
+func sameNumber(got any, want uint) bool {
+	n, ok := got.(float64)
+
+	return ok && uint(n) == want
+}

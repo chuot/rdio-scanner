@@ -495,7 +495,7 @@ func TestCallSearchCriteriaFromTheFilterLabelsTheOperatorRead(t *testing.T) {
 		return system.SystemRef, talkgroup.TalkgroupRef
 	}
 
-// A group label and a tag label are expanded on the server, from the catalog as the listener
+	// A group label and a tag label are expanded on the server, from the catalog as the listener
 	// sees it. A reference sent in their place names nothing the expansion knows.
 	view := systems.Scoped(AccessScope{}, tags)
 
