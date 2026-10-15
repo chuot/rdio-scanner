@@ -1361,6 +1361,37 @@ rdio-search-panel .rdio-filters rdio-form-field select {
   cursor: pointer;
 }
 
+/* The filter form is unavailable while a search is in flight. The control says so in its own name
+ * (aria-disabled), so the visible mark is a shape and not a colour: the field's underline becomes a
+ * dash, the fill goes flat, and the arrow goes back to the resting weight a field that is not
+ * offering its list carries. The words keep their full strength - a control the operator cannot read
+ * is not a control that is merely unavailable - and the dashed underline is drawn in the same
+ * strength the resting underline uses, so the boundary keeps its contrast against the fill. */
+rdio-search-panel .rdio-filters .rdio-field-box:has(.locked) {
+  background-color: #ececec;
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:has(.locked)::after {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.87) 0 6px, transparent 6px 12px);
+}
+
+rdio-search-panel .rdio-filters .rdio-field-box:has(.locked)::before {
+  opacity: 0.62;
+}
+
+rdio-search-panel .rdio-filters rdio-form-field select.locked,
+rdio-search-panel .rdio-filters rdio-form-field input.locked {
+  cursor: default;
+}
+
+/* Reset is part of the form the search is holding, so it says the same thing the filters say. */
+rdio-search-panel .rdio-filters .reset button[aria-disabled="true"] {
+  box-shadow: none;
+  color: rgba(0, 0, 0, 0.62);
+  cursor: default;
+}
+
 /* The native popup is open while the control is focused, so the arrow
  * turns with the focus - the field's own signal that its list is unwrapped. */
 rdio-search-panel .rdio-filters .rdio-field-box::before {

@@ -115,15 +115,31 @@ function endsOf(matched) {
 // The server answers a search with a window of two hundred calls, and the list shows ten of them at
 // a time. A window the test hands the screen stands in for the answer the server already gave, so
 // the readings can be taken with a search in flight on top of an answered list.
+// The store the page runs on is one object shared by every screen in the process, and it only
+// notifies a screen when a slice it declared actually changed. A test that leaves the store holding
+// what the next test is about to write is a test the next test never sees, so every screen the
+// tests render starts from the same known state, and the screen the previous test rendered is taken
+// off the store before the next one is put on it.
+let live = null;
+
+function resetStore() {
+  getAppContext().store.setState({
+    config: CONFIG,
+    playbackList: undefined,
+    playbackListSeq: 0,
+    call: undefined,
+    livefeedMode: 'offline',
+  });
+}
+
 function windowOf(n) {
   return Array.from({ length: n }, (_row, i) => ({ ...ARCHIVE[0], id: 200 + i }));
 }
 
 function answeredWindow(window, count) {
   getAppContext().store.setState({
-    ...getAppContext().store.getState(),
     playbackList: { count, options: { limit: 200, offset: 0 }, results: window },
-    playbackListSeq: (getAppContext().store.getState().playbackListSeq ?? 0) + 1,
+    playbackListSeq: getAppContext().store.getState().playbackListSeq + 1,
   });
 }
 
@@ -138,9 +154,10 @@ function searchScreen({ answers = true } = {}) {
 
   const sent = [];
 
-  const state = getAppContext().store.getState();
+  live?.panel.disconnectedCallback();
+  live?.el.remove();
 
-  getAppContext().store.setState({ ...state, config: CONFIG });
+  resetStore();
 
   getAppContext().useCases.searchCalls = (options) => {
     sent.push(options);
@@ -150,9 +167,8 @@ function searchScreen({ answers = true } = {}) {
     const matched = matching(options);
 
     getAppContext().store.setState({
-      ...getAppContext().store.getState(),
       playbackList: { count: matched.length, options, ...endsOf(matched), results: matched },
-      playbackListSeq: (getAppContext().store.getState().playbackListSeq ?? 0) + 1,
+      playbackListSeq: getAppContext().store.getState().playbackListSeq + 1,
     });
   };
 
@@ -180,6 +196,8 @@ function searchScreen({ answers = true } = {}) {
   panel.form.elements.sort.value = '-1';
 
   panel.open();
+
+  live = { el, panel };
 
   return { el, panel, sent };
 }
@@ -216,7 +234,15 @@ function pageControl(panel, label) {
 }
 
 function filterControls(panel) {
-  return ['sort', 'date', 'system', 'talkgroup', 'group', 'tag'].map((name) => panel.form.elements[name]);
+  return [...['sort', 'date', 'system', 'talkgroup', 'group', 'tag'].map((name) => panel.form.elements[name]), resetButton(panel)];
+}
+
+function resetButton(panel) {
+  const control = findAll(panel, (node) => node.tag === 'button' && node.textContent === 'Reset')[0];
+
+  assert.ok(control, 'the filter form offers no way to clear it');
+
+  return control;
 }
 
 describe('the search screen — the filters the operator picks narrow the list', () => {
@@ -320,5 +346,94 @@ describe('the search screen — the filters the operator picks narrow the list',
 
     assert.equal(sent.at(-1).system, undefined, 'the request sent a label the history cannot be narrowed by');
     assert.equal(rows(panel).length, 3, 'the list emptied itself over a filter the history does not know');
+  });
+});
+
+describe('the search screen — a search in flight', () => {
+  it('says the search is in flight while it waits for the answer', () => {
+    const { panel } = searchScreen({ answers: false });
+
+    assert.equal(panel.progressBar.getAttribute('aria-busy'), 'true', 'the progress bar says nothing about the search it is waiting on');
+  });
+
+  it('says the filter form is unavailable while the search is in flight', () => {
+    const { panel } = searchScreen({ answers: false });
+
+    for (const control of filterControls(panel)) {
+      assert.equal(control.getAttribute('aria-disabled'), 'true', 'a filter control says nothing about being unavailable');
+    }
+  });
+
+  it('starts no second search when the operator changes a filter mid-search', () => {
+    const { panel, sent } = searchScreen({ answers: false });
+
+    const asked = sent.length;
+
+    pick(panel, 'system', 'County');
+    pick(panel, 'talkgroup', 'Sheriff');
+
+    assert.equal(sent.length, asked, 'a filter change during a search asked the server again');
+  });
+
+  it('starts no second search when the operator presses Reset mid-search', () => {
+    const { panel, sent } = searchScreen({ answers: false });
+
+    const asked = sent.length;
+
+    resetButton(panel).click();
+
+    assert.equal(sent.length, asked, 'Reset during a search asked the server again');
+  });
+
+  it('asks for nothing when the operator pages while the search is in flight', () => {
+    const { panel, sent } = searchScreen({ answers: false });
+
+    answeredWindow(windowOf(200), 500);
+
+    pick(panel, 'system', 'County');
+
+    const asked = sent.length;
+
+    pageControl(panel, 'Last page').click();
+
+    assert.equal(sent.length, asked, 'the page the operator turned to asked the server for a page of its own, over the search already in flight');
+  });
+
+  it('lists the calls the server already answered with when the operator pages mid-search', () => {
+    const { panel, sent } = searchScreen({ answers: false });
+
+    answeredWindow(windowOf(200), 500);
+
+    pick(panel, 'system', 'County');
+
+    const asked = sent.length;
+
+    pageControl(panel, 'Next page').click();
+
+    assert.equal(sent.length, asked, 'turning the page inside the answered window asked the server again');
+    assert.equal(rows(panel).length, 10, 'the list stopped showing the calls the server had already answered with');
+  });
+
+  it('gives the filter form back when the answer arrives', () => {
+    const { panel } = searchScreen({ answers: false });
+
+    answeredWindow([ARCHIVE[0]], 1);
+
+    for (const control of filterControls(panel)) {
+      assert.notEqual(control.getAttribute('aria-disabled'), 'true', 'the filter form stayed unavailable after the answer');
+    }
+
+    assert.equal(panel.progressBar.getAttribute('aria-busy'), 'false', 'the progress bar still says the search is in flight');
+  });
+
+  it('lets the operator change a filter again once the answer is in', () => {
+    const { panel, sent } = searchScreen({ answers: false });
+
+    answeredWindow([ARCHIVE[0]], 1);
+
+    pick(panel, 'system', 'County');
+
+    assert.equal(sent.length, 2, 'the filter form never came back to the operator');
+    assert.equal(sent.at(-1).system, 2);
   });
 });

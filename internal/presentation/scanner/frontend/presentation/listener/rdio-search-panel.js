@@ -11,6 +11,10 @@ import { announce } from '../../../../common/frontend/presentation/ui/primitives
 const SERVER_PAGE = 200;
 const CLIENT_PAGE = 10;
 
+// The controls the operator narrows the call list with. They are one group because they are one
+// thing: a search in flight makes the whole set of them unavailable at once.
+const FILTER_CONTROLS = ['sort', 'date', 'system', 'talkgroup', 'group', 'tag'];
+
 class RdioSearchPanel extends HTMLElement {
   connectedCallback() {
     const { store } = getAppContext();
@@ -46,6 +50,7 @@ class RdioSearchPanel extends HTMLElement {
     this.paginator = this.querySelector('rdio-paginator');
     this.downloadMode = this.querySelector('rdio-toggle');
     this.progressBar = this.querySelector('.progress-bar');
+    this.resetButton = this.form.querySelector('.reset button');
 
     this.form.addEventListener('change', (ev) => {
       if (ev.target.name === 'sort' || ev.target.name === 'date' || ['system', 'talkgroup', 'group', 'tag'].includes(ev.target.name)) {
@@ -68,10 +73,23 @@ class RdioSearchPanel extends HTMLElement {
     this.querySelector('tbody').addEventListener('click', (ev) => this.rowClick(ev));
 
     // The counter rides every call-list answer, so the results render - and the progress
-    // bar ends - even when the answer equals the list already on screen.
+    // bar ends, and the form comes back to the operator - even when the answer equals the list
+    // already on screen.
     this.unsubscribe = store.subscribe(['playbackList', 'playbackListSeq', 'call', 'livefeedMode', 'config'], () => {
+      const seq = getAppContext().store.getState().playbackListSeq ?? 0;
+
+      // The search in flight is answered by the answer the server sent, and that answer carries the
+      // counter. When the counter moves, the search that left is over, and the form is the
+      // operator's again. A store change that is not an answer - a call starting, a mode changing -
+      // leaves the search in flight.
+      if (seq !== this.lastAnsweredSeq) {
+        this.lastAnsweredSeq = seq;
+        this.resultsPending = false;
+      }
+
       this.refreshFilters();
       this.refreshResults();
+      this.renderProgress();
     });
 
     this.refreshFilters();
@@ -134,6 +152,10 @@ class RdioSearchPanel extends HTMLElement {
   formChangeHandler() {
     const { useCases } = getAppContext();
 
+    // The form is the operator's while no search is in flight, and is not theirs while one is. A
+    // change that started a search must not start a second one.
+    if (this.resultsPending) return;
+
     if (useCases.livefeedMode === 'playback') useCases.stopPlaybackMode();
 
     this.paginator.firstPage();
@@ -142,6 +164,8 @@ class RdioSearchPanel extends HTMLElement {
   }
 
   resetForm() {
+    if (this.resultsPending) return;
+
     this.form.reset();
     this.paginator.firstPage();
     this.formChangeHandler();
@@ -174,6 +198,10 @@ class RdioSearchPanel extends HTMLElement {
     this.resultsPending = true;
     this.renderProgress();
 
+    // A form that goes quiet for no stated reason is a form the operator cannot trust. The search
+    // says it has left, in the page's own words, and the count says where it landed.
+    announce('Searching calls');
+
     useCases.searchCalls(options);
   }
 
@@ -182,6 +210,16 @@ class RdioSearchPanel extends HTMLElement {
 
     const from = this.paginator.pageIndex * CLIENT_PAGE;
     const list = useCases.playbackList;
+
+    // A page move while a search is in flight asks the server for nothing: the request already
+    // running will answer with the window the list is drawn from. The move itself stands, and the
+    // rows come from the window the server already answered with - the same rule the administration
+    // log screen follows, and the same one the v6.6.3 search screen followed behind its own guard.
+    if (this.resultsPending) {
+      this.renderResults();
+
+      return;
+    }
 
     if (list && needsRefetch(from, list.options?.offset ?? 0, SERVER_PAGE)) {
       this.searchCalls();
@@ -194,9 +232,6 @@ class RdioSearchPanel extends HTMLElement {
     const { store, useCases } = getAppContext();
     const state = store.getState();
     const list = state.playbackList;
-
-    this.resultsPending = false;
-    this.renderProgress();
 
     // The count the search answered with is a number the operator cannot see on a locked screen.
     // The answer counter rides every answer, so the page says the count once per answer — not once
@@ -243,8 +278,32 @@ class RdioSearchPanel extends HTMLElement {
     }).join('');
   }
 
+  // The one place the search's state is painted: the bar that says a search is in flight, and the
+  // form that says whether it is the operator's to use.
+  //
+  // The lock lands as a result of the operator's own change, and the keyboard is standing on the
+  // control that caused it. `disabled` would take that control out of the tab order, the browser
+  // would put the focus on the body, and the operator's next Tab would start at the top of the
+  // document with the place they were working in gone. `aria-disabled` says the same thing to the
+  // operator's assistive technology, keeps the control focusable so the keyboard keeps its place,
+  // and costs nothing to release. The guards in the handlers are what stop the second search.
   renderProgress() {
-    this.progressBar.classList.toggle('pending', !!this.resultsPending);
+    const pending = !!this.resultsPending;
+
+    this.progressBar.classList.toggle('pending', pending);
+    this.progressBar.setAttribute('aria-busy', String(pending));
+
+    for (const control of this.filterControls()) {
+      control.setAttribute('aria-disabled', String(pending));
+      control.classList.toggle('locked', pending);
+    }
+
+    // Reset is part of the form the search is holding: a control that answers nothing has to say so.
+    this.resetButton.setAttribute('aria-disabled', String(pending));
+  }
+
+  filterControls() {
+    return FILTER_CONTROLS.map((name) => this.form.elements[name]);
   }
 
   rowClick(ev) {
