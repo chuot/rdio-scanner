@@ -28,15 +28,13 @@ export function filterActive(queue, livefeedMap) {
   });
 }
 
-// Remaining calls relative to a reference id inside a fetched server page
-// (legacy queueCount): descending sort → offset + index; ascending → count − offset − index − 1.
+// Remaining calls relative to a reference id inside a fetched server page: the calls after the
+// reference in the result set. Playback walks forward through the page in both sort orders, so
+// the calls waiting behind the reference are the ones after it — the same count whichever way
+// the page is sorted.
 export function playbackQueueCount(list, callId) {
   const index = list.results.findIndex((call) => call.id === callId);
   if (index < 0) return 0;
-
-  if (list.options.sort === -1) {
-    return list.options.offset + index;
-  }
 
   return list.count - list.options.offset - index - 1;
 }

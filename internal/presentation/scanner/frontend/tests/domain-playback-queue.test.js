@@ -42,17 +42,17 @@ describe('domain/playback-queue', () => {
         assert.deepEqual(kept.map((c) => c.id), [1, 3]);
     });
 
-    it('playbackQueueCount counts remaining calls after the reference (descending sort)', () => {
+    it('playbackQueueCount counts the calls after the reference (descending sort)', () => {
         const list = {
             count: 25,
             options: { sort: -1, offset: 200, limit: 200 },
             results: [{ id: 5 }, { id: 6 }, { id: 7 }],
         };
 
-        assert.equal(playbackQueueCount(list, 6), 200 + 1);
+        assert.equal(playbackQueueCount(list, 6), 25 - 200 - 1 - 1);
     });
 
-    it('playbackQueueCount counts remaining calls before the reference (ascending sort)', () => {
+    it('playbackQueueCount counts the calls after the reference (ascending sort)', () => {
         const list = {
             count: 25,
             options: { sort: 1, offset: 0, limit: 200 },
@@ -60,6 +60,14 @@ describe('domain/playback-queue', () => {
         };
 
         assert.equal(playbackQueueCount(list, 6), 25 - 0 - 1 - 1);
+    });
+
+    it('playbackQueueCount is 0 at the last call of the result set, in both sort orders', () => {
+        const descending = { count: 3, options: { sort: -1, offset: 0, limit: 200 }, results: [{ id: 5 }, { id: 6 }, { id: 7 }] };
+        const ascending = { count: 3, options: { sort: 1, offset: 0, limit: 200 }, results: [{ id: 5 }, { id: 6 }, { id: 7 }] };
+
+        assert.equal(playbackQueueCount(descending, 7), 0);
+        assert.equal(playbackQueueCount(ascending, 7), 0);
     });
 
     it('playbackQueueCount is 0 for an unknown id', () => {
