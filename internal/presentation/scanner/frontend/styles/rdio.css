@@ -39,6 +39,24 @@
  */
 
 /* ---------------------------------------------------------------------------
+ * The icon font of the main screen
+ * ------------------------------------------------------------------------ */
+
+/* The main screen's icons ride the Material Icons version the v6.6.3 main screen shipped: the
+ * help glyph of that version fills the loop of its question mark, and the newer font the shared
+ * theme carries draws it with a hole. Declared after the theme's rule for the same family, this
+ * rule owns the family on the listener page, where the v6.6.3 look is the look being restored;
+ * the administration page keeps the theme's font, which is the look of its own baseline. */
+
+@font-face {
+  font-display: block;
+  font-family: "Material Icons";
+  font-style: normal;
+  font-weight: 400;
+  src: url(assets/fonts/material-icons-v97.woff2) format("woff2");
+}
+
+/* ---------------------------------------------------------------------------
  * Skip link (the administration guide's pattern, kept identical here so the
  * guide, the administration application, and the listener reveal the same
  * control the same way)
@@ -724,19 +742,35 @@ rdio-app .rdio-help[hidden] {
   display: none;
 }
 
-/* Legacy mat-icon-button. */
-rdio-app .rdio-help button {
+/* Legacy mat-icon-button. The floating controls ride Material's own button box — 40 by 40,
+ * padded to nothing, its glyph riding the 40px line the button carries — which is the box the
+ * baseline's help button carries, so the help glyph lands exactly where the baseline paints it. */
+rdio-app .rdio-help button,
+rdio-app .rdio-fullscreen button {
   background: none;
   border: none;
   border-radius: 50%;
   box-sizing: border-box;
   color: inherit;
   cursor: pointer;
-  font-size: 24px;
-  height: 48px;
-  padding: 12px;
+  display: inline-block;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  height: 40px;
+  line-height: 40px;
+  min-width: 0;
+  padding: 0;
   position: relative;
-  width: 48px;
+  text-align: center;
+  width: 40px;
+}
+
+/* The glyph rides the line the way Material's own icon element rides it: centred on the line's
+ * middle, not sat on its baseline. */
+rdio-app .rdio-help button .material-icons,
+rdio-app .rdio-fullscreen button .material-icons {
+  vertical-align: middle;
 }
 
 /* ---------------------------------------------------------------------------
@@ -748,20 +782,6 @@ rdio-app .rdio-fullscreen {
   opacity: 0.3;
   position: absolute;
   right: 84px;
-}
-
-rdio-app .rdio-fullscreen button {
-  background: none;
-  border: none;
-  border-radius: 50%;
-  box-sizing: border-box;
-  color: inherit;
-  cursor: pointer;
-  font-size: 24px;
-  height: 48px;
-  padding: 12px;
-  position: relative;
-  width: 48px;
 }
 
 /* The two floating controls rest dimmed so the screen they float over stays the thing the operator
