@@ -42,32 +42,42 @@ describe('domain/playback-queue', () => {
         assert.deepEqual(kept.map((c) => c.id), [1, 3]);
     });
 
-    it('playbackQueueCount counts the calls after the reference (descending sort)', () => {
+    it('playbackQueueCount counts the calls that will play up to the newest (descending page)', () => {
         const list = {
             count: 25,
             options: { sort: -1, offset: 200, limit: 200 },
             results: [{ id: 5 }, { id: 6 }, { id: 7 }],
         };
 
-        assert.equal(playbackQueueCount(list, 6), 25 - 200 - 1 - 1);
+        assert.equal(playbackQueueCount(list, 6), 200 + 1 + 1);
     });
 
-    it('playbackQueueCount counts the calls after the reference (ascending sort)', () => {
+    it('playbackQueueCount counts the calls that will play up to the newest (ascending page)', () => {
         const list = {
             count: 25,
             options: { sort: 1, offset: 0, limit: 200 },
             results: [{ id: 5 }, { id: 6 }, { id: 7 }],
         };
 
-        assert.equal(playbackQueueCount(list, 6), 25 - 0 - 1 - 1);
+        assert.equal(playbackQueueCount(list, 6), 25 - 0 - 1);
     });
 
-    it('playbackQueueCount is 0 at the last call of the result set, in both sort orders', () => {
+    it('playbackQueueCount counts the call being played: the newest call of the result set reads 1, in both sort orders', () => {
         const descending = { count: 3, options: { sort: -1, offset: 0, limit: 200 }, results: [{ id: 5 }, { id: 6 }, { id: 7 }] };
         const ascending = { count: 3, options: { sort: 1, offset: 0, limit: 200 }, results: [{ id: 5 }, { id: 6 }, { id: 7 }] };
 
-        assert.equal(playbackQueueCount(descending, 7), 0);
-        assert.equal(playbackQueueCount(ascending, 7), 0);
+        assert.equal(playbackQueueCount(descending, 5), 1, 'the first row of a descending page is its newest call');
+        assert.equal(playbackQueueCount(ascending, 7), 1, 'the last row of an ascending page is its newest call');
+    });
+
+    it('playbackQueueCount counts the calls the search filters left in the history', () => {
+        const filtered = {
+            count: 4,
+            options: { sort: -1, offset: 0, limit: 200, system: 10001, talkgroup: 1514200 },
+            results: [{ id: 12 }, { id: 9 }, { id: 6 }, { id: 3 }],
+        };
+
+        assert.equal(playbackQueueCount(filtered, 9), 2, 'the call being played and the one newer than it');
     });
 
     it('playbackQueueCount is 0 for an unknown id', () => {

@@ -28,13 +28,21 @@ export function filterActive(queue, livefeedMap) {
   });
 }
 
-// Remaining calls relative to a reference id inside a fetched server page: the calls after the
-// reference in the result set. Playback walks forward through the page in both sort orders, so
-// the calls waiting behind the reference are the ones after it — the same count whichever way
-// the page is sorted.
+// Remaining calls of a searched playback, relative to a reference id inside a fetched server
+// page: the calls that will play from the reference up to the newest of the result set, the
+// reference among them. Playback walks toward the newest call in both sort orders — a descending
+// page starts at its oldest row and walks back up to the newest, an ascending page walks forward
+// to it — so the calls left to play are the ones between the reference and the newest end of the
+// page, and the page's own total and offset say how many the search filters left there.
 export function playbackQueueCount(list, callId) {
   const index = list.results.findIndex((call) => call.id === callId);
   if (index < 0) return 0;
 
-  return list.count - list.options.offset - index - 1;
+  const offset = list.options?.offset ?? 0;
+
+  const remaining = list.options?.sort === -1
+    ? offset + index + 1
+    : list.count - offset - index;
+
+  return remaining > 0 ? remaining : 0;
 }

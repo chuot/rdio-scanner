@@ -198,7 +198,11 @@ export function createListenerUseCases({
   function playbackNextCall() {
     if (call || livefeedMode !== LivefeedMode.Playback || !playbackList || playbackPending) return;
 
-    const index = playbackList.results.findIndex((c) => c.id === callPrevious?.id);
+    const { count, options, results } = playbackList;
+    const limit = options?.limit ?? results.length;
+    const offset = options?.offset ?? 0;
+
+    const index = results.findIndex((c) => c.id === callPrevious?.id);
 
     const refresh = () => {
       if (playbackRefreshing) {
@@ -213,10 +217,30 @@ export function createListenerUseCases({
       }
     };
 
-    if (index < 0 || index + 1 >= playbackList.results.length) {
+    // Playback walks toward the newest call of the searched history in both sort orders. A
+    // descending page keeps its newest call in its first row, so the walk runs back through the
+    // page and on to the page of newer calls the server has behind it; an ascending page runs
+    // forward through the page and on to the page of newer calls after it. A reference the page
+    // does not hold — a page the walk stepped into, or one the search redrew — resumes at the
+    // row the walk starts from.
+    if (!results.length) {
       refresh();
+    } else if (options?.sort === -1) {
+      if (index < 0) {
+        loadAndPlay(results[results.length - 1].id);
+      } else if (index === 0) {
+        if (offset < limit) refresh();
+        else searchCalls({ ...options, offset: offset - limit });
+      } else {
+        loadAndPlay(results[index - 1].id);
+      }
+    } else if (index < 0) {
+      loadAndPlay(results[0].id);
+    } else if (index + 1 >= results.length) {
+      if (offset < count - limit) searchCalls({ ...options, offset: offset + limit });
+      else refresh();
     } else {
-      loadAndPlay(playbackList.results[index + 1].id);
+      loadAndPlay(results[index + 1].id);
     }
   }
 

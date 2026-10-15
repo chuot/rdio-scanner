@@ -380,51 +380,58 @@ describe('application/listener-use-cases — playback mode (search PLAY)', () =>
     });
 });
 
-// The queue count on a searched playback is the number of calls waiting to play after the one
-// being played. SKIP NEXT stops the current call and starts the next queued one, so each skip
-// hands one call out of the queue and the count steps down. The count must never climb on a
-// skip, whichever way the page is sorted: playback walks forward through the page in both orders.
+// The queue count on a searched playback is the number of calls that will play from the one
+// being played up to the newest of the searched history, the call being played among them.
+// Playback walks toward the newest call whichever way the page is sorted — a descending page
+// starts at its oldest row and walks back up to the newest, an ascending page walks forward to
+// it — so every SKIP NEXT takes one call off the number and the number never climbs.
 describe('application/listener-use-cases — the queue count steps down on every skip', () => {
-    function playback(options) {
+    // Walks a searched playback from a row of the page the search answered with, `steps` skips
+    // deep. The call each skip asks for is read from the request the use case sent, so the walk
+    // itself is what the test sees.
+    function walkThrough({ sort, page, from, steps, offset = 0, count = page.length, limit = 200 }) {
         const { useCases, socket, store } = setup();
 
         socket.inject('CFG', cfgPayload);
-        useCases.loadAndPlay(options.ids[0]);
+        useCases.loadAndPlay(page[from]);
 
         socket.inject('LCL', {
-            count: options.ids.length,
-            options: { limit: 200, offset: 0, sort: options.sort },
-            results: options.ids.map((id) => ({ id, system: 10, talkgroup: 100 })),
+            count,
+            options: { limit, offset, sort },
+            results: page.map((id) => ({ id, system: 10, talkgroup: 100 })),
         });
 
-        return { useCases, socket, store };
-    }
+        socket.inject('CAL', { id: page[from], system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
 
-    function skipThrough(options) {
-        const { useCases, socket, store } = playback(options);
-
-        socket.inject('CAL', { id: options.ids[0], system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
         const counts = [store.getState().queue];
+        const played = [page[from]];
 
-        for (let i = 1; i < options.ids.length; i += 1) {
+        for (let i = 0; i < steps; i += 1) {
             useCases.skip();
-            socket.inject('CAL', { id: options.ids[i], system: 10, talkgroup: 100, audio: { data: [i] } }, 'play');
+
+            const asked = Number(socket.sent.at(-1)[1]);
+            played.push(asked);
+
+            socket.inject('CAL', { id: asked, system: 10, talkgroup: 100, audio: { data: [i + 1] } }, 'play');
             counts.push(store.getState().queue);
         }
 
-        return counts;
+        return { counts, played };
     }
 
-    it('three skips on a descending playback step the queue count down, never up', () => {
-        const counts = skipThrough({ sort: -1, ids: [1, 2, 3, 4] });
+    it('a descending playback walks to the newer calls and the queue count steps down at every skip', () => {
+        // The page as the operator sees it: newest call in the first row, oldest in the last.
+        const { counts, played } = walkThrough({ sort: -1, page: [4, 3, 2, 1], from: 3, steps: 3 });
 
-        assert.deepEqual(counts, [3, 2, 1, 0]);
+        assert.deepEqual(played, [1, 2, 3, 4], 'each skip plays the call newer than the one it stopped');
+        assert.deepEqual(counts, [4, 3, 2, 1], 'the calls left to play, the one being played among them');
     });
 
-    it('three skips on an ascending playback step the queue count down, never up', () => {
-        const counts = skipThrough({ sort: 1, ids: [1, 2, 3, 4] });
+    it('an ascending playback walks to the newer calls and the queue count steps down at every skip', () => {
+        const { counts, played } = walkThrough({ sort: 1, page: [1, 2, 3, 4], from: 0, steps: 3 });
 
-        assert.deepEqual(counts, [3, 2, 1, 0]);
+        assert.deepEqual(played, [1, 2, 3, 4], 'each skip plays the call newer than the one it stopped');
+        assert.deepEqual(counts, [4, 3, 2, 1], 'the same number the descending page reads, meaning the same thing');
     });
 
     it('the live feed queue counts the calls waiting: arrivals add, playing a queued call subtracts', () => {
