@@ -445,48 +445,17 @@ rdio-status .branding {
   white-space: nowrap;
 }
 
-/* The state the light is in is drawn as a shape as well as a colour: an outline-only circle says
- * the stream is off, a filled disc says it is live, a triangle says the playback is paused. The
- * colour says the same thing, and colour is the channel an operator who cannot tell these greens
- * and reds apart may not get, so the shape is drawn on the light's own face. The glyph is dark on
- * a lit light and light on the dark one, so it clears 3:1 against the face it sits on in every
- * state, including the paused light's dark half-cycle — the blink's own keyframe carries the
- * colour the glyph inherits for that half. */
+/* The light says its state by brightness and motion, as the v6.6.3 light did: the resting face
+ * is dark and unlit, the live face is lit with its glow, and the paused face blinks between the
+ * two on the two-second cycle. Brightness separates off from live and motion separates live from
+ * paused, so the state is readable without telling the hues apart. The face, the eight lit
+ * colours with their glow, and the blink carry the v6.6.3 values. */
 rdio-status .led {
   background: rgb(80, 80, 80);
-  color: rgb(230, 230, 230);
   display: block;
-  font-family: "Material Icons";
   height: 12px;
   margin-left: 24px;
-  position: relative;
   width: 24px;
-}
-
-rdio-status .led::after {
-  align-items: center;
-  content: "radio_button_unchecked";
-  display: flex;
-  font-size: 12px;
-  height: 12px;
-  justify-content: center;
-  left: 0;
-  line-height: 12px;
-  position: absolute;
-  top: 0;
-  width: 24px;
-}
-
-rdio-status .led.on {
-  color: rgb(20, 20, 20);
-}
-
-rdio-status .led.on::after {
-  content: "radio_button_checked";
-}
-
-rdio-status .led.paused::after {
-  content: "play_arrow";
 }
 
 rdio-status .led.on {
@@ -542,7 +511,6 @@ rdio-status .led.paused {
   50% {
     background: rgb(80, 80, 80);
     box-shadow: none;
-    color: rgb(230, 230, 230);
   }
 }
 
@@ -1919,9 +1887,9 @@ rdio-snackbar .rdio-support .countdown {
     border: 1px solid CanvasText;
   }
 
-  rdio-status .led::after {
-    color: Canvas;
-  }
+  /* The light says its state by brightness and motion: the live face keeps its glow, the paused
+   * face keeps its blink, and the resting face is the plain block. The mode takes the face's
+   * colour, and the glow and the blink are what stay readable. */
 
   /* The query bar slides a gradient across its track; the mode takes the gradient. The bar keeps a
    * face, and its presence is what says the query is running. */
