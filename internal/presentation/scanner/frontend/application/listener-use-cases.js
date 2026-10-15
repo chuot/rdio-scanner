@@ -127,7 +127,13 @@ export function createListenerUseCases({
       return;
     }
 
-    const queue = livefeedMode === LivefeedMode.Playback ? playbackQueueCount() : callQueue.length;
+    // The queue number is the operator's live reading of the waiting calls: it moves the moment
+    // the queue moves — a call taken out for its tone has left it — and the number carried when
+    // a recording starts is the queue as it stands then, counting any call that arrived while
+    // the tone was open. Only the recording waits on the tone; the queue never does.
+    const liveQueue = () => (livefeedMode === LivefeedMode.Playback ? playbackQueueCount() : callQueue.length);
+
+    emit({ queue: liveQueue() });
 
     const tone = arrival && livefeedMode === LivefeedMode.Online ? resolveAlertSequence(call, config) : undefined;
 
@@ -141,7 +147,7 @@ export function createListenerUseCases({
 
       audio.playCall(call, { onEnded: () => skip({ delay: true }) });
 
-      emit({ call, queue });
+      emit({ call, queue: liveQueue() });
     };
 
     if (tone) audio.playOscillators(tone).then(start);

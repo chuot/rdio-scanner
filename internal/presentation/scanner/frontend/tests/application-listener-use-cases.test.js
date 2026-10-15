@@ -724,4 +724,64 @@ describe('application/listener-use-cases — the alert tone in front of a live c
         );
         assert.equal(useCases.call?.id, 2);
     });
+
+    // The queue is the number the operator watches while the tone is open: a call taken from
+    // the queue has left it, and a call that arrives during the tone is in it. The number
+    // moves when the queue moves, and the number carried when the recording starts is the
+    // queue as it stands then — not the one captured before the tone. Talkgroup 100 carries
+    // the tone; talkgroup 101 calls queue behind it with no tone of their own.
+    it('a skip behind an open tone decrements the queue count before the tone ends', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket, store } = setup({ audio });
+
+        socket.inject('CFG', talkgroupToneCfg);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        audio.endTone();
+        await settle();
+
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [2] } });
+        socket.inject('CAL', { id: 3, system: 10, talkgroup: 101, audio: { data: [3] } });
+
+        assert.equal(store.getState().queue, 2, 'two calls wait behind the one being played');
+
+        useCases.skip();
+        await settle();
+
+        assert.equal(store.getState().queue, 1, 'the call taken out for its tone has left the queue');
+
+        audio.endTone();
+        await settle();
+
+        assert.equal(store.getState().queue, 1, 'and the tone end carries that same live number');
+        assert.equal(store.getState().call?.id, 2);
+    });
+
+    it('a call arriving while a tone is open is counted in the number the tone end carries', async () => {
+        const audio = createToneAwareAudio();
+        const { useCases, socket, store } = setup({ audio });
+
+        socket.inject('CFG', talkgroupToneCfg);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        audio.endTone();
+        await settle();
+
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [2] } });
+
+        useCases.skip();
+        await settle();
+
+        assert.equal(store.getState().queue, 0, 'the queue is empty while the tone is open, the call having left it');
+
+        socket.inject('CAL', { id: 3, system: 10, talkgroup: 101, audio: { data: [3] } });
+
+        assert.equal(store.getState().queue, 1, 'the arrival joins the queue while the tone is open');
+
+        audio.endTone();
+        await settle();
+
+        assert.equal(store.getState().queue, 1, 'the tone end counts it instead of overwriting it with the pre-tone number');
+        assert.equal(store.getState().call?.id, 2);
+    });
 });
