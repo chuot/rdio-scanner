@@ -55,6 +55,11 @@ class RdioControls extends HTMLElement {
       return;
     }
 
+    // The v6.6.3 control row arms the dimmer on the controls that change what the display is
+    // showing — livefeed, the two holds, replay, skip, pause, and avoid when there is a call to
+    // avoid. The two panel openers leave the dimmer where it is, and so does avoid denied.
+    let armed = true;
+
     switch (action) {
       case 'livefeed':
         useCases.beep(state.livefeedMode === 'offline' ? 'activate' : 'deactivate');
@@ -88,6 +93,7 @@ class RdioControls extends HTMLElement {
 
         if (!call) {
           useCases.beep('denied');
+          armed = false;
           break;
         }
 
@@ -97,6 +103,8 @@ class RdioControls extends HTMLElement {
         break;
       }
       case 'search':
+        armed = false;
+
         if (!state.config) break;
 
         useCases.beep('activate');
@@ -107,6 +115,8 @@ class RdioControls extends HTMLElement {
         useCases.pause();
         break;
       case 'select':
+        armed = false;
+
         if (!state.config) break;
 
         useCases.beep('activate');
@@ -114,7 +124,7 @@ class RdioControls extends HTMLElement {
         break;
     }
 
-    this.dispatchEvent(new CustomEvent('dimmer'));
+    if (armed) this.dispatchEvent(new CustomEvent('dimmer'));
   }
 
   render() {
