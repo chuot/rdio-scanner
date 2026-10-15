@@ -62,3 +62,33 @@ export function computeFilterOptions(config, selection) {
 
   return { systems, talkgroups, groups, tags };
 }
+
+// The criteria the call history is searched by, from the filters the operator chose.
+//
+// The operator reads labels, and the history is stored under references: the search narrows to a
+// system by its reference and to a talkgroup by its reference, and a talkgroup reference is only
+// ever read together with the system it sits under. A group and a tag are the labels the server
+// expands into the talkgroups they name, so they travel as labels.
+//
+// A label that names nothing in the configuration the listener was given contributes no criterion.
+// The server reads a criterion it cannot use as no filter at all, and sending it a label where it
+// reads a reference is exactly that - silently, and with the whole history as the answer. Saying
+// nothing is the same outcome, said on purpose.
+export function resolveCallSearchCriteria(config, selection) {
+  const criteria = {};
+
+  const selectedSystem = config?.systems?.find((system) => system.label === selection.system);
+
+  // A reference of zero is the server's own "unfiltered", so a system the configuration never
+  // numbered is a system the history cannot be narrowed to.
+  if (selectedSystem?.id) criteria.system = selectedSystem.id;
+
+  const selectedTalkgroup = selectedSystem?.talkgroups?.find((talkgroup) => talkgroup.label === selection.talkgroup);
+
+  if (selectedSystem?.id && selectedTalkgroup?.id) criteria.talkgroup = selectedTalkgroup.id;
+
+  if (selection.group) criteria.group = selection.group;
+  if (selection.tag) criteria.tag = selection.tag;
+
+  return criteria;
+}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { computeFilterOptions } from '../domain/search-filters.js';
+import { computeFilterOptions, resolveCallSearchCriteria } from '../domain/search-filters.js';
 
 const config = {
     groups: {
@@ -79,5 +79,67 @@ describe('domain/search-filters — cascading recomputation', () => {
 
         assert.deepEqual(options.groups, ['Fire']);
         assert.deepEqual(options.tags, ['Dispatch']);
+    });
+});
+
+// The criteria the call history is searched by. The operator reads labels; the history is stored
+// under references, so a filter that names a system or a talkgroup has to say which one, and a
+// group or a tag is filtered by its label.
+
+describe('domain/search-filters — the chosen filters become the criteria the history is searched by', () => {
+    it('names the reference of the system the chosen system label stands for', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, { system: 'SYS2' }), { system: 20 });
+    });
+
+    it('names the references of the chosen talkgroup and the system it sits under', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, { system: 'SYS1', talkgroup: 'TG2' }), { system: 10, talkgroup: 101 });
+    });
+
+    it('keeps a group and a tag as the labels the history is filtered by', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, { group: 'Police', tag: 'Dispatch' }), { group: 'Police', tag: 'Dispatch' });
+    });
+
+    it('asks for the whole history when the operator chose nothing', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, {}), {});
+    });
+
+    it('leaves the history unfiltered by system when the chosen label names no system', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, { system: 'Withdrawn system' }), {});
+    });
+
+    it('leaves the history unfiltered when a talkgroup is named with no system standing above it', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, { talkgroup: 'TG1' }), {});
+    });
+
+    it('filters the system alone when the chosen talkgroup is not under it', () => {
+        assert.deepEqual(resolveCallSearchCriteria(config, { system: 'SYS1', talkgroup: 'TG3' }), { system: 10 });
+    });
+
+    it('sends no criterion for a reference of zero', () => {
+        const unnumbered = { systems: [{ id: 0, label: 'No reference', talkgroups: [{ id: 0, label: 'No reference talkgroup', groups: [], tag: 'Dispatch' }] }], groups: {}, tags: {} };
+
+        assert.deepEqual(resolveCallSearchCriteria(unnumbered, { system: 'No reference', talkgroup: 'No reference talkgroup' }), {});
+    });
+
+    it('takes the first system when two systems carry the chosen label', () => {
+        const twins = {
+            systems: [
+                { id: 30, label: 'Dispatch', talkgroups: [{ id: 300, label: 'Ground', groups: [], tag: 'Dispatch' }] },
+                { id: 31, label: 'Dispatch', talkgroups: [{ id: 310, label: 'Ground', groups: [], tag: 'Dispatch' }] },
+            ],
+            groups: {},
+            tags: {},
+        };
+
+        assert.deepEqual(resolveCallSearchCriteria(twins, { system: 'Dispatch', talkgroup: 'Ground' }), { system: 30, talkgroup: 300 });
+    });
+
+    it('carries the date and the sort the operator set alongside the chosen filters', () => {
+        const criteria = resolveCallSearchCriteria(config, { system: 'SYS1', group: 'Fire' });
+
+        assert.equal(criteria.system, 10);
+        assert.equal(criteria.group, 'Fire');
+        assert.equal(criteria.talkgroup, undefined);
+        assert.equal(criteria.tag, undefined);
     });
 });
