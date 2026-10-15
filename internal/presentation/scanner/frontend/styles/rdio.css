@@ -1793,6 +1793,14 @@ rdio-snackbar .rdio-support .countdown {
   rdio-search-panel .rdio-filters .reset button {
     transition: none;
   }
+
+  /* The blink is the paused light's voice. When the operator asks for less motion the quieted
+   * paused face lands on the lit face, the same face the live stream wears, so the paused light
+   * keeps a ring of its own — a standing mark around the face, drawn on the end state, not a
+   * frozen cycle. The live face keeps its glow and wears no ring; the resting face is dark. */
+  rdio-status .led.paused {
+    box-shadow: 0 0 0 2px rgb(20, 20, 20);
+  }
 }
 
 /* --- forced colours ------------------------------------------------------------ */
@@ -1889,7 +1897,11 @@ rdio-snackbar .rdio-support .countdown {
 
   /* The light says its state by brightness and motion: the live face keeps its glow, the paused
    * face keeps its blink, and the resting face is the plain block. The mode takes the face's
-   * colour, and the glow and the blink are what stay readable. */
+   * colour, and the glow and the blink are what stay readable. When the operator also asks for
+   * less motion, the paused ring is drawn in the system's ink. */
+  rdio-status .led.paused {
+    box-shadow: 0 0 0 2px CanvasText;
+  }
 
   /* The query bar slides a gradient across its track; the mode takes the gradient. The bar keeps a
    * face, and its presence is what says the query is running. */

@@ -40,7 +40,7 @@ function cascade(text) {
         }
       }
 
-      rules.push({ selector, declarations, media });
+      rules.push({ selector, declarations, media: media === null ? null : flat(media) });
     }
   };
 
@@ -181,6 +181,23 @@ describe('the status light — the plain v6.6.3 light', () => {
       'the blink\'s dark half does not land on the resting face');
     assert.equal(stops['50%']?.['box-shadow'] && flat(stops['50%']['box-shadow']), 'none',
       'the blink\'s dark half keeps a glow; the dark half is unlit');
+  });
+});
+
+describe('the reduced state — the paused light keeps a mark of its own', () => {
+  const REDUCED = '(prefers-reduced-motion:reduce)';
+  const FORCED = '(forced-colors:active)';
+
+  it('keeps the blink guard that quiets the paused light', () => {
+    expect('rdio-status .led.paused', 'animation', 'none', REDUCED);
+  });
+
+  it('gives the quieted paused light a ring the live face does not wear', () => {
+    expect('rdio-status .led.paused', 'box-shadow', '0 0 0 2px rgb(20, 20, 20)', REDUCED);
+  });
+
+  it('carries the ring in the system ink when the system takes the colours', () => {
+    expect('rdio-status .led.paused', 'box-shadow', '0 0 0 2px CanvasText', FORCED);
   });
 });
 
