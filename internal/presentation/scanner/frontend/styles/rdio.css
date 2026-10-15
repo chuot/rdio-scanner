@@ -568,20 +568,7 @@ rdio-display .row {
   display: flex;
   flex-direction: row;
   height: 20px;
-}
-
-rdio-display .row:not(.full) > * {
-  display: flex;
-  flex: 33%;
-  flex-direction: row;
-}
-
-rdio-display .row:not(.full) > *:nth-child(2) {
-  justify-content: center;
-}
-
-rdio-display .row:not(.full) > *:nth-child(3) {
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
 rdio-display .row.big {

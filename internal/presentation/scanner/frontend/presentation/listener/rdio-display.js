@@ -24,7 +24,7 @@ class RdioDisplay extends HTMLElement {
     const { store, useCases } = getAppContext();
 
     this.innerHTML = `
-      <div class="row three">
+      <div class="row">
         <div><span class="clock"></span></div>
         <div><span class="link"></span></div>
         <div><span class="queue"></span></div>
@@ -40,7 +40,7 @@ class RdioDisplay extends HTMLElement {
         <div></div>
         <div><span class="call-date"></span> <span class="call-progress"></span></div>
       </div>
-      <div class="row big full"><span class="call-name"></span></div>
+      <div class="row big"><span class="call-name"></span></div>
       <div class="row">
         <div><span class="call-frequency"></span></div>
         <div></div>
@@ -52,14 +52,10 @@ class RdioDisplay extends HTMLElement {
         <div><span class="call-unit"></span></div>
       </div>
       <div class="row right small">
-        <div></div>
-        <div></div>
-        <div>
-          <div><span class="flag temp-avoid"></span></div>
-          <div><span class="flag flag-avoid">AVOID</span></div>
-          <div><span class="flag flag-patch">PATCH</span></div>
-          <div><span class="flag flag-delayed">DELAYED</span></div>
-        </div>
+        <div><span class="flag temp-avoid"></span></div>
+        <div><span class="flag flag-avoid">AVOID</span></div>
+        <div><span class="flag flag-patch">PATCH</span></div>
+        <div><span class="flag flag-delayed">DELAYED</span></div>
       </div>
       <div class="wrapper">
         <div class="auth">
