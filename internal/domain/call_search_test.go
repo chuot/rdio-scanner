@@ -40,17 +40,19 @@ func searchCatalog() (Systems, Tags, Groups) {
 		{
 			ID:        1,
 			SystemRef: 4,
+			Label:     "Grand Metro",
 			Talkgroups: Talkgroups{
-				{ID: 100, TalkgroupRef: 1514000, GroupIDs: []uint64{1}, TagID: 11},
-				{ID: 101, TalkgroupRef: 1514001, GroupIDs: []uint64{2}, TagID: 10},
-				{ID: 102, TalkgroupRef: 1514002, GroupIDs: []uint64{1}},
+				{ID: 100, TalkgroupRef: 1514000, Label: "Fire dispatch", GroupIDs: []uint64{1}, TagID: 11},
+				{ID: 101, TalkgroupRef: 1514001, Label: "EMS dispatch", GroupIDs: []uint64{2}, TagID: 10},
+				{ID: 102, TalkgroupRef: 1514002, Label: "Fire car", GroupIDs: []uint64{1}},
 			},
 		},
 		{
 			ID:        2,
 			SystemRef: 5,
+			Label:     "County Trunk",
 			Talkgroups: Talkgroups{
-				{ID: 200, TalkgroupRef: 222000, GroupIDs: []uint64{1}, TagID: 10},
+				{ID: 200, TalkgroupRef: 222000, Label: "Sheriff", GroupIDs: []uint64{1}, TagID: 10},
 			},
 		},
 	}
@@ -462,5 +464,90 @@ func TestParseCallSearchClampsThePageParameters(t *testing.T) {
 			t.Errorf("%s: limit = %d offset = %d, want limit = %d offset = %d",
 				tc.name, search.Limit, search.Offset, tc.wantLimit, tc.wantOffset)
 		}
+	}
+}
+
+// The search screen's System and Talkgroup filters name the label the operator read, and the
+// history is narrowed by reference: ParseCallSearch reads a system and a talkgroup as numbers, and
+// a criterion arriving as text is read as no criterion at all. The screen answers with the whole
+// history, silently.
+//
+// The catalog the screen is given is keyed by the same references the history is stored under, and
+// the group and tag filters are expanded by label on the server. So the label the operator read
+// becomes a reference through the catalog the listener was already given, and a group and a tag
+// travel as labels.
+func TestCallSearchCriteriaFromTheFilterLabelsTheOperatorRead(t *testing.T) {
+	systems, tags, groups := searchCatalog()
+
+	criteria := func(t *testing.T, systemLabel, talkgroupLabel string) (uint, uint) {
+		t.Helper()
+
+		system, ok := systems.ByLabel(systemLabel)
+		if !ok {
+			t.Fatalf("the catalog names no system labelled %q", systemLabel)
+		}
+
+		talkgroup, ok := system.Talkgroups.ByLabel(talkgroupLabel)
+		if !ok {
+			t.Fatalf("system %q names no talkgroup labelled %q", systemLabel, talkgroupLabel)
+		}
+
+		return system.SystemRef, talkgroup.TalkgroupRef
+	}
+
+// A group label and a tag label are expanded on the server, from the catalog as the listener
+	// sees it. A reference sent in their place names nothing the expansion knows.
+	view := systems.Scoped(AccessScope{}, tags)
+
+	if len(ScopeForGroup(groups, view, "4")) != 0 {
+		t.Error("a reference sent as a group label found talkgroups, want none")
+	}
+
+	if len(ScopeForTag(tags, view, "11")) != 0 {
+		t.Error("a reference sent as a tag label found talkgroups, want none")
+	}
+
+	if len(ScopeForGroup(groups, view, "Fire")) == 0 {
+		t.Error("the group label the operator read expanded to nothing, want the talkgroups it names")
+	}
+
+	if len(ScopeForTag(tags, view, "Fire")) == 0 {
+		t.Error("the tag label the operator read expanded to nothing, want the talkgroups it names")
+	}
+
+	// The criteria the labels stand for, read the way the search reads them.
+	search := ParseCallSearch(map[string]any{
+		"system":    float64(4),
+		"talkgroup": float64(1514000),
+		"group":     "Fire",
+		"tag":       "Untagged",
+	})
+
+	if !search.HasGroup() || !search.HasTag() {
+		t.Errorf("ParseCallSearch = %+v, want the labels the operator read to stand", search)
+	}
+
+	if search.System != 4 || search.Talkgroup != 1514000 {
+		t.Errorf("ParseCallSearch = %+v, want the references the labels stand for", search)
+	}
+
+	if ref, tg := criteria(t, "Grand Metro", "Fire dispatch"); ref != search.System || tg != search.Talkgroup {
+		t.Errorf("the labels stand for %d/%d, the criteria carry %d/%d", ref, tg, search.System, search.Talkgroup)
+	}
+
+	// A filter arriving as the label the operator read is read as no filter at all.
+	labelled := ParseCallSearch(map[string]any{
+		"system":    "Grand Metro",
+		"talkgroup": "Fire dispatch",
+		"group":     "Fire",
+		"tag":       "Untagged",
+	})
+
+	if labelled.System != 0 || labelled.Talkgroup != 0 {
+		t.Errorf("ParseCallSearch = %+v, want a label where a reference is read to leave the search unfiltered", labelled)
+	}
+
+	if !labelled.HasGroup() || !labelled.HasTag() {
+		t.Errorf("ParseCallSearch = %+v, want the group and the tag to stand as the labels they are", labelled)
 	}
 }
