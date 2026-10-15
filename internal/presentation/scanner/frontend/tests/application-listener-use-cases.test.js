@@ -434,6 +434,25 @@ describe('application/listener-use-cases — the queue count steps down on every
         assert.deepEqual(counts, [4, 3, 2, 1], 'the same number the descending page reads, meaning the same thing');
     });
 
+    it('the queue count reads the filters the operator applied, not the whole archive', () => {
+        // The operator narrowed the history to the four calls of one talkgroup and clicked its
+        // second row. The archive holds far more calls than the filter leaves.
+        const { counts, played } = walkThrough({ sort: 1, page: [3, 6, 9, 12], from: 1, steps: 2, count: 4 });
+
+        assert.deepEqual(played, [6, 9, 12], 'the walk plays the calls the filter left, in the order the list shows them');
+        assert.deepEqual(
+            counts,
+            [3, 2, 1],
+            'the calls the filter matched, the one playing among them — not the calls the archive holds',
+        );
+    });
+
+    it('the queue count reads the page of the filtered search the operator is on', () => {
+        const { counts } = walkThrough({ sort: -1, page: [4, 3, 2, 1], from: 1, steps: 1, offset: 200, count: 250 });
+
+        assert.deepEqual(counts, [202, 201], 'the calls ahead of the row the operator clicked, across the pages of the filtered search');
+    });
+
     it('the live feed queue counts the calls waiting: arrivals add, playing a queued call subtracts', () => {
         const { useCases, socket, store } = setup();
 
@@ -452,6 +471,88 @@ describe('application/listener-use-cases — the queue count steps down on every
 
         useCases.skip();
         assert.equal(store.getState().queue, 0, 'and the skip after it hands out the last one');
+    });
+});
+
+// The searched history is longer than the page the server answered with. The walk toward the
+// newest call runs off the end of the page it is on, and the calls it needs are on the page
+// beside it: the page at the lower offset for a descending page, the page at the higher offset
+// for an ascending one. With no page of newer calls left, the walk is exhausted.
+describe('application/listener-use-cases — the searched playback crosses to the page of newer calls', () => {
+    function playbackOn({ sort, page, from, offset = 0, count = page.length, limit = 200 }) {
+        const { useCases, socket, store } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.loadAndPlay(page[from]);
+
+        socket.inject('LCL', {
+            count,
+            options: { limit, offset, sort },
+            results: page.map((id) => ({ id, system: 10, talkgroup: 100 })),
+        });
+
+        socket.inject('CAL', { id: page[from], system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
+
+        return { useCases, socket, store };
+    }
+
+    const as = (ids) => ids.map((id) => ({ id, system: 10, talkgroup: 100 }));
+
+    it('a descending playback at the newest row of its page asks for the page of newer calls', () => {
+        const { useCases, socket } = playbackOn({ sort: -1, page: [4, 3, 2, 1], from: 0, offset: 200, count: 400 });
+
+        useCases.skip();
+
+        assert.deepEqual(
+            socket.sent.at(-1),
+            ['LCL', { limit: 200, offset: 0, sort: -1 }, undefined],
+            'the newer calls sit at the lower offset of a descending history',
+        );
+
+        socket.inject('LCL', { count: 400, options: { limit: 200, offset: 0, sort: -1 }, results: as([8, 7, 6, 5]) });
+
+        assert.deepEqual(
+            socket.sent.at(-1),
+            ['CAL', '5', 'play'],
+            'the walk resumes at the oldest call of the newer page, the call newer than the one it stopped',
+        );
+    });
+
+    it('an ascending playback past the last row of its page asks for the page of newer calls', () => {
+        const { useCases, socket } = playbackOn({ sort: 1, page: [1, 2, 3, 4], from: 3, offset: 0, count: 250 });
+
+        useCases.skip();
+
+        assert.deepEqual(
+            socket.sent.at(-1),
+            ['LCL', { limit: 200, offset: 200, sort: 1 }, undefined],
+            'the newer calls sit at the higher offset of an ascending history',
+        );
+
+        socket.inject('LCL', { count: 250, options: { limit: 200, offset: 200, sort: 1 }, results: as([5, 6, 7, 8]) });
+
+        assert.deepEqual(
+            socket.sent.at(-1),
+            ['CAL', '5', 'play'],
+            'the walk resumes at the first call of the newer page',
+        );
+    });
+
+    it('a playback with no newer calls left stops the searched playback and returns to the live feed', () => {
+        const { useCases, socket, store } = playbackOn({ sort: -1, page: [4, 3, 2, 1], from: 0, offset: 0, count: 4 });
+
+        useCases.skip();
+
+        assert.deepEqual(
+            socket.sent.at(-1),
+            ['LCL', { limit: 200, offset: 0, sort: -1 }, undefined],
+            'the first ask re-reads the page it is on',
+        );
+
+        socket.inject('LCL', { count: 4, options: { limit: 200, offset: 0, sort: -1 }, results: as([4, 3, 2, 1]) });
+
+        assert.equal(useCases.livefeedMode, 'online', 'the answer carries no newer call, so the listener goes live');
+        assert.equal(store.getState().queue, 0, 'and the number says nothing waits');
     });
 });
 
