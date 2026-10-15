@@ -12,6 +12,7 @@
 // the plain nodes the tests connect by hand today.
 
 const FORM_FIELD = 'rdio-form-field';
+const LIVE_REGION = 'rdio-live-region';
 
 // The controls a browser hands the operator text in: their value is the empty string before
 // anything is typed, and the components read them as text from the first render.
@@ -20,8 +21,12 @@ const CONTROL_TAGS = new Set(['input', 'textarea', 'select']);
 // connectFormField runs the primitive's own connectedCallback the moment a component appends
 // the field to a row, which is the moment a browser runs it: the field already carries its
 // label and its control, and it is connected before the render writes messages into it.
+//
+// The live region is the page-level primitive the shell appends the same way: the shell places
+// it empty and the components write into it without connecting it by hand, so the shim connects
+// it at insertion, as a browser does.
 function connectFormField(node) {
-  if (node && node.tag === FORM_FIELD && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
+  if (node && (node.tag === FORM_FIELD || node.tag === LIVE_REGION) && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
     node.connectedCallback();
   }
 }
@@ -294,9 +299,16 @@ class ShimNode {
   // A click is answered with the event the browser hands the handler: the control the pointer was on
   // is the event's target, and the handler that answers a control inside a bigger control — a move
   // button inside a row's summary line — names the row through that target and takes the activation
-  // the browser would otherwise give the surrounding control.
+  // the browser would otherwise give the surrounding control. The browser's click event carries
+  // preventDefault and stopPropagation; a handler that takes the activation away needs them.
   click() {
-    this.dispatchEvent({ type: 'click', target: this, bubbles: true });
+    this.dispatchEvent({
+      type: 'click',
+      target: this,
+      bubbles: true,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
   }
 
   // Forms refocus their input after a failed submit; the shim records the focus

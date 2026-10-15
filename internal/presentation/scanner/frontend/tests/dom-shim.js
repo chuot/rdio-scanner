@@ -275,8 +275,17 @@ class ShimNode {
   // A click is answered with the event the browser hands the handler: the control the pointer was on
   // is the event's target, and a handler sitting on a container — the shell's panel close buttons,
   // the controls that open a panel — names the control through that target.
+  // The browser's click event carries preventDefault and stopPropagation; a handler that takes
+  // the activation away from a surrounding control needs them, and a click the test leaves on a
+  // control is the click the browser leaves.
   click() {
-    this.dispatchEvent({ type: 'click', target: this, bubbles: true });
+    this.dispatchEvent({
+      type: 'click',
+      target: this,
+      bubbles: true,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
   }
 
   // The auth panel refocuses the unlock code field after a refused code; the shim records the
