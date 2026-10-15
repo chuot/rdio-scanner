@@ -339,6 +339,9 @@ export function selectField(ctx, details, name, title, caption, options, value, 
 export function toggleField(details, title, caption, checked, onChange) {
   const toggle = document.createElement('rdio-toggle');
   toggle.checked = !!checked;
+  // The switch's name is the words the caption block shows beside it; the primitive carries the
+  // name onto the control that holds the switch role.
+  toggle.setAttribute('aria-label', title);
   toggle.addEventListener('change', (ev) => onChange(ev.detail));
 
   const row = document.createElement('div');

@@ -412,6 +412,18 @@ class RdioToggle extends HTMLElement {
     button.className = 'rdio-toggle';
     button.setAttribute('role', 'switch');
 
+    // The name the page puts on the host belongs to the switch the host carries: the button is
+    // the control the operator reaches, and the name has to ride where the role rides. The host
+    // gives it up so the tree carries one name, not two.
+    for (const attr of ['aria-label', 'aria-labelledby']) {
+      const value = this.getAttribute(attr);
+
+      if (value) {
+        button.setAttribute(attr, value);
+        this.removeAttribute(attr);
+      }
+    }
+
     // The listener's toggle is the legacy slide toggle: the icon of the mode it
     // switches, set in a label of its own before the switch. The administration
     // toggle has no icon and renders exactly as it did before.

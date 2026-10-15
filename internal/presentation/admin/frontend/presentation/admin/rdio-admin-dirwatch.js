@@ -343,6 +343,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
     const toggle = document.createElement('rdio-toggle');
     toggle.checked = checked;
+    toggle.setAttribute('aria-label', title);
     toggle.addEventListener('change', (ev) => onChange(ev.detail));
 
     r.append(captionBlock(title, caption), toggle);

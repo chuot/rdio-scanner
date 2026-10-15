@@ -151,6 +151,7 @@ class RdioAdminDownstreams extends HTMLElement {
 
     const disabledToggle = document.createElement('rdio-toggle');
     disabledToggle.checked = !!row.disabled;
+    disabledToggle.setAttribute('aria-label', 'Disabled');
     disabledToggle.addEventListener('change', (ev) => {
       this.updateRow(index, { disabled: ev.detail });
     });

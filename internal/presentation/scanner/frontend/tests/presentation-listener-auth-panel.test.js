@@ -111,6 +111,22 @@ describe('presentation/listener/rdio-display — the unlock code panel', () => {
   });
 });
 
+describe('rdio-toggle — the name rides the switch the operator reaches', () => {
+  it('moves the name the page puts on the host onto the control that carries the switch role', () => {
+    const el = document.createElement('rdio-toggle');
+
+    el.setAttribute('aria-label', 'Download mode');
+    el.connectedCallback();
+
+    const button = el.querySelector('button.rdio-toggle');
+
+    assert.equal(button.getAttribute('role'), 'switch');
+    assert.equal(button.getAttribute('aria-label'), 'Download mode',
+      'the switch the operator reaches carries the name the page put on its host');
+    assert.equal(el.getAttribute('aria-label'), null, 'the host keeps no duplicate name');
+  });
+});
+
 describe('presentation/listener/rdio-search-panel — the filters carry no messages', () => {
   const filterFields = (el) => findAll(el, (node) => node.tag === 'rdio-form-field');
 

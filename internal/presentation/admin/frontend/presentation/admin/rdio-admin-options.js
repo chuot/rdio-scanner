@@ -222,6 +222,7 @@ class RdioAdminOptions extends HTMLElement {
     if (control.type === 'toggle') {
       const toggle = document.createElement('rdio-toggle');
       toggle.setAttribute('checked', String(!!options[control.key]));
+      toggle.setAttribute('aria-label', control.title);
       toggle.addEventListener('change', (ev) => this.update(control.key, ev.detail));
       row.append(toggle);
 
