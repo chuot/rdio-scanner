@@ -71,7 +71,17 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
       () => onEnded?.(),
     );
 
-    return { stop: () => source?.stop() };
+    return {
+      stop: () => {
+        if (!source) return;
+
+        // Browsers fire `ended` on a manual stop too. Disarming it first is what keeps a
+        // silenced recording from triggering the follow-on skip it was wired to.
+        source.onended = null;
+        source.stop();
+        source.disconnect();
+      },
+    };
   }
 
   function playOscillators(sequence) {

@@ -37,7 +37,13 @@ class FakeAudioContext {
             onended: null,
             connect: (target) => source.connections.push(target),
             start: () => (source.started = true),
-            stop: () => (source.stopped = true),
+            stop: () => {
+                source.stopped = true;
+                // Browsers fire `ended` on a manual stop too; a handle that wants the
+                // callback silenced must disarm it before stopping.
+                source.onended?.();
+            },
+            disconnect: () => (source.disconnected = true),
         };
         this.sources.push(source);
         return source;
@@ -153,6 +159,29 @@ describe('infrastructure/audio-engine — call playback', () => {
 
         handle.stop();
         assert.equal(source.stopped, true);
+    });
+
+    it('the stop handle silences the recording and its ended callback never fires afterward', async () => {
+        const { engine, documentImpl } = setup();
+
+        engine.bootstrap();
+        await documentImpl.listeners.touchstart[0]();
+
+        const [playback] = FakeAudioContext.instances;
+
+        const call = { id: 1, audio: { data: [1] } };
+        const ended = [];
+
+        const handle = engine.playCall(call, { onEnded: () => ended.push(true) });
+
+        const [source] = playback.sources;
+        assert.equal(source.started, true);
+
+        handle.stop();
+
+        assert.equal(source.stopped, true, 'the source is stopped');
+        assert.equal(source.disconnected, true, 'and disconnected from the destination');
+        assert.deepEqual(ended, [], 'the handle disarms the ended callback before stopping, so the browser-fired ended never reaches the listener');
     });
 
     it('is a no-op before bootstrap (no audio context yet)', () => {
