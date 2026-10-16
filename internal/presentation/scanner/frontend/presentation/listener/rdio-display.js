@@ -339,7 +339,7 @@ class RdioDisplay extends HTMLElement {
       const minutes = sysMap?.[reference.talkgroup]?.minutes ?? 0;
       const patched = avoided && (reference.patches ?? []).some((tg) => sysMap[tg]?.active || false);
 
-      this.el.tempAvoid.textContent = minutes ? `⌛️ ${minutes}M` : '';
+      this.el.tempAvoid.textContent = minutes ? `⧖ ${minutes}M` : '';
       this.el.tempAvoid.classList.toggle('flaged', avoided || patched);
       this.el.avoid.classList.toggle('flaged', avoided);
       this.el.patch.classList.toggle('flaged', patched);
