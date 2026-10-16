@@ -47,9 +47,13 @@ function createFakeStorage(initial = {}) {
 
 function createFakeAudio() {
     const played = [];
+    const suspends = [];
+    const resumes = [];
 
     return {
         played,
+        suspends,
+        resumes,
         playCall: (call, handlers) => {
             played.push(call);
             call.ended = handlers.onEnded;
@@ -63,6 +67,8 @@ function createFakeAudio() {
             };
         },
         playOscillators: async () => {},
+        suspend: () => suspends.push(true),
+        resume: () => resumes.push(true),
         download: () => {},
     };
 }
@@ -968,5 +974,54 @@ describe('application/listener-use-cases — every action that ends a call silen
         await settle();
 
         assert.deepEqual(audio.played.map((c) => c.id), [1, 2], 'the silenced recording advances the queue no further');
+    });
+});
+
+// The pause reaches the audio port: suspending the playback context is what silences a
+// recording in flight, and the engine's re-arm gate keeps it silenced. Unpausing resumes the
+// context and plays, so the recording continues where it stopped or the queued call starts.
+describe('application/listener-use-cases — pause reaches the audio port', () => {
+    it('PAUSE suspends the playback context; unpausing resumes it and the recording continues', async () => {
+        const { useCases, socket, audio, timers } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        await settle();
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [2] } });
+
+        useCases.pause(true);
+
+        assert.deepEqual(audio.suspends, [true], 'the port is told to suspend the call audio');
+        assert.deepEqual(audio.resumes, []);
+
+        useCases.pause(false);
+
+        assert.deepEqual(audio.resumes, [true], 'the port is told to resume');
+        assert.deepEqual(audio.played.map((c) => c.id), [1], 'the paused recording resumes where it stopped, it is not replaced');
+
+        // The recording in flight ends naturally; only then does the queued call take its turn.
+        audio.played[0].ended();
+        timers.fireAll();
+        await settle();
+
+        assert.deepEqual(audio.played.map((c) => c.id), [1, 2], 'the queued call plays when the recording ends');
+    });
+
+    it('a call that arrives during a pause waits for the unpause', async () => {
+        const { useCases, socket, audio } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+        useCases.pause(true);
+
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+
+        assert.deepEqual(audio.played.map((c) => c.id), [], 'nothing plays while paused');
+
+        useCases.pause(false);
+        await settle();
+
+        assert.deepEqual(audio.played.map((c) => c.id), [1], 'the unpause plays it');
     });
 });

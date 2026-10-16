@@ -417,9 +417,12 @@ export function createListenerUseCases({
   function pause(status = !livefeedPaused) {
     livefeedPaused = status;
 
-    if (status) audio.suspend?.();
+    // Suspending the playback context silences the recording in flight mid-call and freezes
+    // its clock; the engine's re-arm gate keeps the pause standing. Resuming continues the
+    // recording where it stopped.
+    if (status) audio.suspend();
     else {
-      audio.resume?.();
+      audio.resume();
       play();
     }
 
