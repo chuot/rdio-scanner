@@ -564,11 +564,31 @@ rdio-display * {
   white-space: nowrap;
 }
 
+/* The timed-avoid flag draws an hourglass beside the minutes it holds, and that glyph is in none of
+ * the faces the listener ships: the bundled Roboto faces carry latin and latin-ext ranges, and the
+ * hourglass is outside both. Left to the browser's own fallback the glyph is whatever the machine
+ * happens to hold, and the fallback a plain Linux install reaches for holds it not at all — an empty
+ * box where the listener reads how long a talkgroup is out of the feed.
+ *
+ * The family below is offered for that one codepoint, which is what keeps it surgical: the family is
+ * never offered a letter or a digit, so the flag's minutes and the words beside it keep the face
+ * every other line on the screen uses. Its sources are fonts already on the machine — the four that
+ * carry the glyph on the platforms the listener runs on — because downloading a font for a single
+ * character is the wrong trade. Where none of them is installed the face does not load and the
+ * browser falls through to the page's own stack. */
+
+@font-face {
+  font-family: "rdio-symbol";
+  src: local("Noto Sans Symbols 2"), local("Segoe UI Symbol"), local("Apple Symbols"), local("Symbola");
+  unicode-range: U+29D6;
+}
+
 rdio-display .flag {
   background: rgba(0, 0, 0, 0.8);
   border-radius: 3px;
   color: rgb(209, 238, 238);
   display: none;
+  font-family: "rdio-symbol", var(--rdio-font-family);
   margin-left: 4px;
   opacity: 0.87;
   padding: 0 3px;
