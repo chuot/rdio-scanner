@@ -355,6 +355,85 @@ describe('application/listener-use-cases — avoid / hold / category', () => {
     });
 });
 
+// The select panel's talkgroup press is a plain flip: it switches the talkgroup on or off and
+// never arms a timed avoid — the timed windows belong to the control bar's AVOID alone. A flip
+// on a talkgroup the AVOID control left in a timed window clears the window and cancels its
+// expiry, the way the v6.6.3 panel press cleared the timer.
+describe('application/listener-use-cases — the select panel flip', () => {
+    it('toggleTalkgroup flips an active talkgroup off with no minutes and no armed timer', () => {
+        const { useCases, socket, timers } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+
+        useCases.toggleTalkgroup(10, 100);
+
+        assert.equal(useCases.livefeedMap[10][100].active, false);
+        assert.equal(useCases.livefeedMap[10][100].minutes, undefined, 'the panel flip left a timed avoid on the entry the AVOID control alone may arm');
+        assert.equal(timers.scheduled.length, 0, 'the panel flip scheduled a countdown');
+
+        useCases.toggleTalkgroup(10, 100);
+
+        assert.equal(useCases.livefeedMap[10][100].active, true, 'the second flip did not bring the talkgroup back on');
+        assert.equal(timers.scheduled.length, 0, 'the flip back on armed a countdown');
+    });
+
+    it('toggleTalkgroup clears a timed avoid armed by avoid() and cancels its expiry', () => {
+        const { useCases, socket, timers, events } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+
+        useCases.avoid({ system: 10, talkgroup: 100 });
+        useCases.avoid({ system: 10, talkgroup: 100 });
+
+        assert.equal(useCases.livefeedMap[10][100].minutes, 30, 'the timed avoid was not armed as expected');
+        assert.equal(timers.scheduled.length, 1, 'the timed avoid armed no expiry timer');
+
+        useCases.toggleTalkgroup(10, 100);
+
+        assert.equal(useCases.livefeedMap[10][100].active, true, 'the panel flip did not switch the timed-avoided talkgroup back on');
+        assert.equal(useCases.livefeedMap[10][100].minutes, undefined, 'the flip left the timed window on the entry');
+        assert.equal(timers.scheduled.length, 0, 'the flip left the expiry countdown armed');
+
+        const emitted = events.length;
+        timers.fireAll();
+
+        assert.equal(events.length, emitted, 'the cancelled expiry still fired and re-announced the map');
+    });
+
+    it('toggleTalkgroup persists the flipped map and sends it like the other selection presses', () => {
+        const { useCases, socket, storage, events } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+
+        useCases.toggleTalkgroup(10, 100);
+
+        assert.deepEqual(JSON.parse(storage.stored.get('rdio-scanner-lfm-default')), { 10: { 100: false, 101: true }, 20: { 200: true } });
+        assert.deepEqual(socket.sent.at(-1), ['LFM', { 10: { 100: false, 101: true }, 20: { 200: true } }, undefined]);
+
+        const last = events.at(-1);
+        assert.ok('map' in last && 'categories' in last, 'the flip emitted no map and categories to the store');
+        assert.equal(last.map[10][100].active, false);
+    });
+
+    it('toggleTalkgroup drops a queued call on the talkgroup the press switches off', () => {
+        const { useCases, socket } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 101, audio: { data: [2] } });
+
+        assert.equal(useCases.callQueue.length, 1, 'the second call was not queued as expected');
+
+        useCases.toggleTalkgroup(10, 101);
+
+        assert.equal(useCases.callQueue.length, 0, 'the queued call on the switched-off talkgroup stayed queued');
+    });
+});
+
 describe('application/listener-use-cases — playback mode (search PLAY)', () => {
     it('loadAndPlay switches to playback mode and requests the call with play flag', () => {
         const { useCases, socket } = setup();

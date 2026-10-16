@@ -11,7 +11,7 @@ import {
     rebuildMap,
     toggleAll as toggleAllMap,
     setSystemStatus as setSystemStatusMap,
-    toggleTalkgroup,
+    toggleTalkgroup as toggleTalkgroupMap,
 } from '../domain/livefeed-map.js';
 import { deriveCategories, toggleCategory as toggleCategoryMap } from '../domain/categories.js';
 import { expireAvoid, nextAvoidStep } from '../domain/avoid.js';
@@ -84,7 +84,7 @@ export function createListenerUseCases({
   };
 
   function applyMapOptions(systemRef, talkgroupRef, options) {
-    livefeedMap = toggleTalkgroup(livefeedMap, systemRef, talkgroupRef, options);
+    livefeedMap = toggleTalkgroupMap(livefeedMap, systemRef, talkgroupRef, options);
 
     const key = `${systemRef}/${talkgroupRef}`;
     if (avoidTimers.has(key)) {
@@ -329,6 +329,23 @@ export function createListenerUseCases({
     emit({ categories, holdSys: false, holdTg: false, map: livefeedMap, queue: callQueue.length });
 
     return isAvoided(livefeedMap, target.system, target.talkgroup);
+  }
+
+  // Select-panel talkgroup press: the plain flip. It switches the talkgroup on or off and
+  // clears any timed window the control bar's AVOID had armed, cancelling its expiry — the
+  // timed cycle belongs to the AVOID button alone.
+  function toggleTalkgroup(systemRef, talkgroupRef) {
+    clearHoldPriors();
+
+    applyMapOptions(systemRef, talkgroupRef, {});
+
+    if (livefeedMode !== LivefeedMode.Playback) cleanQueue();
+
+    rebuildCategories();
+    saveMap();
+    sendMap();
+
+    emit({ categories, holdSys: false, holdTg: false, map: livefeedMap, queue: callQueue.length });
   }
 
   function holdSystem(callRef) {
@@ -635,6 +652,7 @@ export function createListenerUseCases({
     setSystemStatus,
     toggleAll,
     toggleCategory,
+    toggleTalkgroup,
 
     get auth() {
       return auth;
