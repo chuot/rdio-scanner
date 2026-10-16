@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +48,18 @@ import (
 
 func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 	var ran []step
+
+	// The dist run compiles and archives the ready targets at once, one goroutine per target, and
+	// every step of such a run lands in this recorder. An append to a shared slice from several
+	// workers loses entries, so every recording is taken under one lock.
+	var mu sync.Mutex
+
+	record := func(s step) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		ran = append(ran, s)
+	}
 
 	out := &bytes.Buffer{}
 
@@ -77,7 +90,7 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 				return errors.New(s.label + " said no")
 			}
 
-			ran = append(ran, s)
+			record(s)
 
 			return nil
 		},
@@ -85,7 +98,7 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		// The ffmpeg phase is not one external command, so the stand-in records that it ran rather than
 		// what it ran. What it does is tested in ffmpeg_test.go.
 		ffmpeg: func(o options, stdout io.Writer) (bool, error) {
-			ran = append(ran, step{label: subFFmpeg, result: o.target})
+			record(step{label: subFFmpeg, result: o.target})
 
 			return false, nil
 		},
@@ -98,7 +111,7 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		},
 
 		archive: func(path string, files []archiveFile) error {
-			ran = append(ran, step{label: subArchive, result: path})
+			record(step{label: subArchive, result: path})
 
 			return nil
 		},
@@ -106,7 +119,7 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		// A clean run removes files from the tree. The stand-in records that it ran; what it removes is
 		// tested in build_test.go, in a tree the test made.
 		clean: func(repo string) ([]string, error) {
-			ran = append(ran, step{label: subClean, result: repo})
+			record(step{label: subClean, result: repo})
 
 			return []string{"removed"}, nil
 		},
@@ -409,8 +422,14 @@ func TestADistRunReadsTheArchiveFromThePathTheServerStepWritesTo(t *testing.T) {
 
 	var read []string
 
+	// The archive reads are recorded from the matrix run's workers, one goroutine per target, so
+	// this recorder takes its appends under a lock of its own.
+	var readMu sync.Mutex
+
 	tl.releaseFiles = func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
+		readMu.Lock()
 		read = append(read, tr.targetWord()+" "+output)
+		readMu.Unlock()
 
 		return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
 	}
