@@ -164,9 +164,16 @@ export function createListenerUseCases({
   }
 
   function playbackQueueCount() {
-    if (!playbackList || !call) return 0;
+    if (!playbackList) return 0;
 
-    return playbackQueueCountOf(playbackList, call.id);
+    // While no call is playing — the gap a paused skip opens while the next call is on its
+    // way — the number counts from the call the walk last played. The walk is still at that
+    // call; the number must not read zero.
+    const id = call?.id ?? callPrevious?.id;
+
+    if (!id) return 0;
+
+    return playbackQueueCountOf(playbackList, id);
   }
 
   function stop(options = {}) {

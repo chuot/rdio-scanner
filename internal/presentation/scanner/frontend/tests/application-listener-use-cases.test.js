@@ -1025,3 +1025,64 @@ describe('application/listener-use-cases — pause reaches the audio port', () =
         assert.deepEqual(audio.played.map((c) => c.id), [1], 'the unpause plays it');
     });
 });
+
+// The owner's report: in archive playback mode, PAUSE followed by SKIP NEXT made the queue
+// number read 0 even though the walk was full. While no call is playing — the gap a paused
+// skip opens — the reference counts from the call the walk last played, so the number never
+// zeroes mid-walk. Live mode's number is the queue length and never takes this path.
+describe('application/listener-use-cases — the queue number stays truthful across a paused skip', () => {
+    it('a paused playback skip keeps the walk count and never reads zero', async () => {
+        const { useCases, socket, store } = setup();
+
+        socket.inject('CFG', cfgPayload);
+
+        const page = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+        useCases.loadAndPlay(1);
+        socket.inject('LCL', {
+            count: 11,
+            options: { limit: 200, offset: 0, sort: 1 },
+            results: page.map((id) => ({ id, system: 10, talkgroup: 100 })),
+        });
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
+
+        assert.equal(store.getState().queue, 11, 'the calls left to play, the one playing among them');
+
+        useCases.pause(true);
+        assert.equal(store.getState().queue, 11, 'the pause keeps the number');
+
+        useCases.skip();
+
+        // The call the skip asked for arrives into the gap the paused skip opened.
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [1] } }, 'play');
+
+        assert.equal(store.getState().queue, 11, 'the number counts from the call the walk last played, not from a call that is not playing');
+
+        useCases.pause(false);
+
+        assert.equal(useCases.call?.id, 2, 'the skipped-to call starts');
+        assert.equal(store.getState().queue, 10, 'the number steps down by exactly the one call the skip took');
+    });
+
+    it('live mode keeps its queue length across a paused skip', async () => {
+        const { useCases, socket, store } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+
+        for (let id = 1; id <= 11; id += 1) socket.inject('CAL', { id, system: 10, talkgroup: 100, audio: { data: [id] } });
+        await settle();
+
+        assert.equal(store.getState().queue, 10, 'ten waiting while one plays');
+
+        useCases.pause(true);
+        useCases.skip();
+        socket.inject('CAL', { id: 12, system: 10, talkgroup: 100, audio: { data: [12] } });
+
+        assert.equal(store.getState().queue, 11, 'the arrival counts; the number never zeroes');
+
+        useCases.pause(false);
+        await settle();
+
+        assert.equal(store.getState().queue, 10, 'the resumed call left the queue');
+    });
+});
