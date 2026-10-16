@@ -15,6 +15,7 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
   let playbackContext = null;
   let interactiveContext = null;
   let playbackPaused = false;
+  let sourceStartedAt = null;
 
   function keepResumed(context, isPaused = () => false) {
     const resume = () => {
@@ -70,7 +71,14 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
         source = playbackContext.createBufferSource();
         source.buffer = buffer;
         source.connect(playbackContext.destination);
-        source.onended = () => onEnded?.();
+        source.onended = () => {
+          sourceStartedAt = null;
+          onEnded?.();
+        };
+
+        // The elapsed reading is anchored here, at the instant the recording enters the
+        // graph — the same point the reference recorded its start time.
+        sourceStartedAt = playbackContext.currentTime;
         source.start();
       },
       () => onEnded?.(),
@@ -85,6 +93,7 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
         source.onended = null;
         source.stop();
         source.disconnect();
+        sourceStartedAt = null;
       },
     };
   }
@@ -109,6 +118,15 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
 
     playbackPaused = false;
     playbackContext.resume();
+  }
+
+  // Seconds since the recording in flight entered the graph, or null when nothing is
+  // playing. A suspended context freezes its currentTime, so this reading freezes with
+  // the audio across a pause instead of riding through it on a wall clock.
+  function playbackElapsed() {
+    if (!playbackContext || sourceStartedAt === null) return null;
+
+    return playbackContext.currentTime - sourceStartedAt;
   }
 
   function download(call) {
@@ -136,6 +154,7 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
     playOscillators,
     suspend,
     resume,
+    playbackElapsed,
     download,
     get playbackContext() {
       return playbackContext;

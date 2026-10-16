@@ -10,12 +10,18 @@ class FakeAudioContext {
         this.options = options;
         this.state = 'suspended';
         this.resumeCalls = 0;
+        this.currentTime = 0;
         this.onstatechange = null;
         this.decoded = [];
         this.sources = [];
         this.oscillators = [];
         this.destination = { id: 'destination' };
         FakeAudioContext.instances.push(this);
+    }
+
+    advance(seconds) {
+        // A suspended context freezes its clock; time only moves while it runs.
+        if (this.state === 'running') this.currentTime += seconds;
     }
 
     resume() {
@@ -193,6 +199,50 @@ describe('infrastructure/audio-engine — pause gates the playback context', () 
         engine.resume();
 
         assert.equal(FakeAudioContext.instances.length, 0);
+    });
+});
+
+describe('infrastructure/audio-engine — the recording clock', () => {
+    it('elapsed advances with the context clock, freezes across a pause, and restarts on a new recording', async () => {
+        const { engine, documentImpl } = setup();
+
+        engine.bootstrap();
+        await documentImpl.listeners.touchstart[0]();
+
+        const [playback] = FakeAudioContext.instances;
+
+        assert.equal(engine.playbackElapsed(), null, 'nothing is playing yet');
+
+        const handle = engine.playCall({ id: 1, audio: { data: [1] } }, {});
+
+        playback.advance(3);
+        assert.equal(engine.playbackElapsed(), 3);
+
+        engine.suspend();
+        playback.advance(5);
+        assert.equal(engine.playbackElapsed(), 3, 'a suspended context freezes the clock with the audio');
+
+        engine.resume();
+        playback.advance(2);
+        assert.equal(engine.playbackElapsed(), 5);
+
+        handle.stop();
+        assert.equal(engine.playbackElapsed(), null, 'a stopped recording has no clock');
+
+        engine.playCall({ id: 2, audio: { data: [2] } }, {});
+        assert.equal(engine.playbackElapsed(), 0, 'a new recording restarts the elapsed count at zero');
+
+        playback.advance(1);
+        assert.equal(engine.playbackElapsed(), 1);
+
+        playback.sources[1].onended();
+        assert.equal(engine.playbackElapsed(), null, 'a natural end clears the clock');
+    });
+
+    it('elapsed is null before bootstrap', () => {
+        const { engine } = setup();
+
+        assert.equal(engine.playbackElapsed(), null);
     });
 });
 
