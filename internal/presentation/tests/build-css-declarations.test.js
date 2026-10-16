@@ -69,4 +69,19 @@ describe('build — the administration stylesheet as the build emits it', () => 
 
         assert.ok(!outside.includes('//'), 'the built stylesheet carries a // outside a quoted URL; the browser discards the text that follows it');
     });
+
+    it('carries the logs body row height that levels the filler rows with the filled rows', async () => {
+        const css = await builtStylesheet();
+
+        const at = css.indexOf('.rdio-admin-card.logs tbody tr{');
+
+        assert.ok(at >= 0, 'the built stylesheet carries no logs body row rule; the filler rows of a short logs page have nothing to hold them at the filled rows\' height');
+
+        const rule = css.slice(at, css.indexOf('}', at));
+
+        assert.ok(
+            rule.includes('height:44px'),
+            `the built logs body row rule is ${JSON.stringify(rule)}; the declaration that holds the filler rows at the filled rows' 44 px height did not survive the build`,
+        );
+    });
 });

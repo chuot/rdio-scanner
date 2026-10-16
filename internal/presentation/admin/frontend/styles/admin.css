@@ -661,6 +661,15 @@ rdio-admin .rdio-admin-card.logs td:nth-child(-n + 3) {
   width: 80px;
 }
 
+/* A filled row stands 44 px: the 24 px level glyph's line box against the 14 px text strut,
+   8 px of cell padding top and bottom, and the 1 px collapsed border. A filler row — the row
+   the pager draws when the logs run out before the page is full — has no content to build a
+   line box from, so the body rows are pinned to the filled row's height and every row on the
+   page reads as a row. A filled row whose message wraps still grows past this minimum. */
+rdio-admin .rdio-admin-card.logs tbody tr {
+  height: 44px;
+}
+
 rdio-admin .rdio-admin-card.logs tbody tr:nth-child(even) {
   background: rgba(255, 255, 255, 0.04);
 }
