@@ -178,14 +178,10 @@ class RdioDisplay extends HTMLElement {
         return;
       }
 
-      if (this.audioStart === undefined || this.audioStart !== call.id) {
-        this.audioStart = call.id;
-        this.callStart = Date.now();
-      }
-
-      const { pause } = getAppContext().store.getState();
-
-      if (!pause) this.callTime = Math.floor((Date.now() - this.callStart) / 1000);
+      // The elapsed reading rides the audio clock: the engine anchors it to the instant the
+      // recording entered the graph, so it restarts on every new recording, freezes with the
+      // audio while the playback context is suspended, and answers null when nothing plays.
+      this.callTime = Math.floor(getAppContext().audio.playbackElapsed() ?? 0);
 
       // The legacy re-arms the dimmer on every progress update, so the display
       // stays lit for as long as a call is playing.
