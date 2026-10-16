@@ -43,6 +43,7 @@ export function createListenerUseCases({
   let callQueue = [];
   let skipDelay = null;
   let playbackToken = 0;
+  let activeHandle = null;
 
   let playbackList = null;
   let playbackListSeq = 0;
@@ -145,7 +146,15 @@ export function createListenerUseCases({
       // hearing starts one.
       if (token !== playbackToken) return;
 
-      audio.playCall(call, { onEnded: () => skip({ delay: true }) });
+      // The handle is kept because the stop funnel uses it: a recording only goes silent when
+      // its handle is stopped. The ended closure carries this play's token so a recording that
+      // was silenced — whose `ended` a browser still fires on a manual stop — cannot trigger
+      // the skip it was wired to.
+      activeHandle = audio.playCall(call, {
+        onEnded: () => {
+          if (token === playbackToken) skip({ delay: true });
+        },
+      });
 
       emit({ call, queue: liveQueue() });
     };
@@ -164,6 +173,11 @@ export function createListenerUseCases({
     // Every action that ends a call moves this, including the ones that happen while a tone is
     // still playing, so a recording that was waiting on its tone knows it is no longer wanted.
     playbackToken += 1;
+
+    if (activeHandle) {
+      activeHandle.stop();
+      activeHandle = null;
+    }
 
     if (call) {
       callPrevious = call;

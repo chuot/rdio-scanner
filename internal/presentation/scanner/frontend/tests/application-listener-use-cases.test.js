@@ -53,7 +53,14 @@ function createFakeAudio() {
         playCall: (call, handlers) => {
             played.push(call);
             call.ended = handlers.onEnded;
-            return { stop: () => (call.stopped = true) };
+            return {
+                stop: () => {
+                    call.stopped = true;
+                    // Mirror the engine's contract: a silenced recording never reaches its
+                    // ended callback.
+                    handlers.onEnded = null;
+                },
+            };
         },
         playOscillators: async () => {},
         download: () => {},
@@ -891,5 +898,75 @@ describe('application/listener-use-cases — the alert tone in front of a live c
 
         assert.equal(store.getState().queue, 1, 'the tone end counts it instead of overwriting it with the pre-tone number');
         assert.equal(store.getState().call?.id, 2);
+    });
+});
+
+// Every action that ends a call must silence the recording in flight: the use case keeps the
+// handle the engine hands back and uses it in its stop funnel. And a silenced recording must
+// never trigger the follow-on skip it was wired to — a browser fires `ended` on a manual stop
+// too, so the ended closure is guarded by the play it belongs to.
+describe('application/listener-use-cases — every action that ends a call silences the recording', () => {
+    function playingCall() {
+        const harness = setup();
+        const { useCases, socket } = harness;
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+        socket.inject('CAL', { id: 1, system: 10, talkgroup: 100, audio: { data: [1] } });
+
+        return harness;
+    }
+
+    it('SKIP NEXT stops the recording it skips past', async () => {
+        const { useCases, socket, audio } = playingCall();
+        await settle();
+
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [2] } });
+
+        useCases.skip();
+
+        assert.equal(audio.played[0].stopped, true, 'the skipped recording is silenced');
+    });
+
+    it('LIVE FEED off stops the recording in flight', async () => {
+        const { useCases, audio } = playingCall();
+        await settle();
+
+        useCases.livefeed();
+
+        assert.equal(audio.played[0].stopped, true, 'turning the livefeed off silences the call it was playing');
+    });
+
+    it('a search-row play-instead silences the call it replaces, and ending playback mode silences its own', async () => {
+        const { useCases, socket, audio } = playingCall();
+        await settle();
+
+        useCases.loadAndPlay(7);
+        socket.inject('CAL', { id: 7, system: 10, talkgroup: 100, audio: { data: [7] } }, 'play');
+
+        assert.equal(audio.played[0].stopped, true, 'the live call the search replaced is silenced');
+        assert.equal(audio.played[1].stopped, undefined, 'the replacement plays on');
+
+        useCases.stopPlaybackMode();
+
+        assert.equal(audio.played[1].stopped, true, 'ending playback mode silences the call it retires');
+    });
+
+    it('a silenced recording fires no follow-on skip', async () => {
+        const { useCases, socket, audio, timers } = playingCall();
+        await settle();
+
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [2] } });
+        socket.inject('CAL', { id: 3, system: 10, talkgroup: 100, audio: { data: [3] } });
+
+        useCases.skip();
+        await settle();
+
+        // The browser still fires `ended` on the stopped recording as it winds down.
+        audio.played[0].ended();
+        timers.fireAll();
+        await settle();
+
+        assert.deepEqual(audio.played.map((c) => c.id), [1, 2], 'the silenced recording advances the queue no further');
     });
 });
