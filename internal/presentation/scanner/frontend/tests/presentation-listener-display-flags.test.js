@@ -68,8 +68,8 @@ const span = (name) =>
 
 // The reading the operator takes: the text the flag shows for a call on system 1 / talkgroup 10
 // against a livefeed map, and the classes that say which flags are lit.
-function flagsFor(map) {
-  store().setState({ call: CALL, map });
+function flagsFor(map, call = CALL) {
+  store().setState({ call, map });
 
   return {
     tempAvoid: span('temp-avoid').textContent,
@@ -87,5 +87,41 @@ describe('presentation/listener/rdio-display — the timed-avoid flag', () => {
       'the timed-avoid flag still draws U+231B, the emoji hourglass, instead of the monochrome symbol');
     assert.ok(!tempAvoid.includes(EMOJI_PRESENTATION),
       'the timed-avoid flag still carries U+FE0F, the selector that asks the browser for the colour-emoji face');
+  });
+
+  it('states the window the map holds, whatever length it is', () => {
+    const windows = [30, 60, 120].map((minutes) =>
+      flagsFor({ 1: { 10: { active: false, minutes } } }).tempAvoid);
+
+    assert.deepEqual(windows, [`${HOURGLASS} 30M`, `${HOURGLASS} 60M`, `${HOURGLASS} 120M`],
+      'the timed-avoid flag does not state the window the livefeed map holds');
+  });
+
+  it('says nothing for an avoid the map holds with no window', () => {
+    const { tempAvoid, lit } = flagsFor({ 1: { 10: { active: false } } });
+
+    assert.equal(tempAvoid, '',
+      'the timed-avoid flag states a window for an avoid the livefeed map holds with no window');
+    assert.ok(lit.includes('flag-avoid'),
+      'an avoided talkgroup does not light the AVOID flag');
+  });
+
+  it('keeps the window lit while the avoided talkgroup is patched to an active one', () => {
+    const patchedCall = { ...CALL, patches: [20] };
+    const { tempAvoid, lit } = flagsFor({ 1: { 10: { active: false, minutes: 30 }, 20: { active: true } } }, patchedCall);
+
+    assert.equal(tempAvoid, `${HOURGLASS} 30M`,
+      'the timed-avoid flag loses its window when the avoided talkgroup is patched');
+    assert.ok(lit.includes('temp-avoid'),
+      'the timed-avoid flag goes dark when the avoided talkgroup is patched');
+    assert.ok(lit.includes('flag-patch'),
+      'a patch to an active talkgroup does not light the PATCH flag');
+  });
+
+  it('lights no flag for a system the livefeed map does not hold', () => {
+    const { tempAvoid, lit } = flagsFor(undefined);
+
+    assert.equal(tempAvoid, '', 'the timed-avoid flag states a window for a system the map does not hold');
+    assert.deepEqual(lit, [], 'a call the livefeed map knows nothing about lights a flag');
   });
 });
