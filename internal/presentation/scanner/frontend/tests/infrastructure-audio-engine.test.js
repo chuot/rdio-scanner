@@ -24,6 +24,15 @@ class FakeAudioContext {
         return Promise.resolve();
     }
 
+    suspend() {
+        this.suspendCalls = (this.suspendCalls ?? 0) + 1;
+        this.state = 'suspended';
+        // A real suspension fires a statechange, and that is exactly what an ungated
+        // re-arm loop would seize on to undo the pause.
+        this.onstatechange?.();
+        return Promise.resolve();
+    }
+
     decodeAudioData(arrayBuffer, onsuccess) {
         this.decoded.push(arrayBuffer);
         onsuccess({ duration: 2 });
@@ -130,6 +139,60 @@ describe('infrastructure/audio-engine — dual contexts and gesture bootstrap', 
         await Promise.resolve();
 
         assert.equal(playback.state, 'running');
+    });
+});
+
+describe('infrastructure/audio-engine — pause gates the playback context', () => {
+    it('suspend suspends the playback context and the re-arm loop does not undo it', async () => {
+        const { engine, documentImpl } = setup();
+
+        engine.bootstrap();
+        await documentImpl.listeners.mousedown[0]();
+
+        const [playback, interactive] = FakeAudioContext.instances;
+
+        engine.suspend();
+        await Promise.resolve();
+
+        assert.equal(playback.state, 'suspended', 'the port can suspend the call audio');
+        assert.equal(interactive.state, 'running', 'keypad and alert tones keep playing during a pause');
+
+        const resumeCalls = playback.resumeCalls;
+        playback.onstatechange();
+        await Promise.resolve();
+
+        assert.equal(playback.state, 'suspended', 'the intentional pause survives the re-arm loop');
+        assert.equal(playback.resumeCalls, resumeCalls, 'the loop never resumes a paused context');
+    });
+
+    it('resume re-arms the playback context', async () => {
+        const { engine, documentImpl } = setup();
+
+        engine.bootstrap();
+        await documentImpl.listeners.mousedown[0]();
+
+        const [playback] = FakeAudioContext.instances;
+
+        engine.suspend();
+        engine.resume();
+        await Promise.resolve();
+
+        assert.equal(playback.state, 'running');
+
+        playback.state = 'suspended';
+        playback.onstatechange();
+        await Promise.resolve();
+
+        assert.equal(playback.state, 'running', 'the loop re-arms once the pause is lifted');
+    });
+
+    it('suspend and resume are no-ops before bootstrap', () => {
+        const { engine } = setup();
+
+        engine.suspend();
+        engine.resume();
+
+        assert.equal(FakeAudioContext.instances.length, 0);
     });
 });
 

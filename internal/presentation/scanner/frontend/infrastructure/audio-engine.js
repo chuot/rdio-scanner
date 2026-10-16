@@ -14,9 +14,14 @@ const BOOTSTRAP_EVENTS = ['keydown', 'mousedown', 'touchstart'];
 export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, documentImpl = globalThis.document }) {
   let playbackContext = null;
   let interactiveContext = null;
+  let playbackPaused = false;
 
-  function keepResumed(context) {
+  function keepResumed(context, isPaused = () => false) {
     const resume = () => {
+      // An intentional pause outranks the re-arm loop: without this gate the statechange
+      // a suspension itself fires would resume the paused context right back.
+      if (isPaused()) return;
+
       if (context.state === 'suspended') {
         context.resume().then(() => resume());
       }
@@ -37,7 +42,7 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
         interactiveContext = new AudioContextImpl({ latencyHint: 'interactive' });
       }
 
-      keepResumed(playbackContext);
+      keepResumed(playbackContext, () => playbackPaused);
       keepResumed(interactiveContext);
 
       if (playbackContext && interactiveContext) {
@@ -88,6 +93,24 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
     return scheduleOscillators(interactiveContext, sequence);
   }
 
+  // Pause silences the call audio by suspending the playback context mid-call; the recording
+  // resumes where it stopped because a suspended context freezes its whole graph. The gate in
+  // keepResumed is what keeps the pause standing. The interactive context is never suspended:
+  // keypad and alert tones keep playing during a pause.
+  function suspend() {
+    if (!playbackContext) return;
+
+    playbackPaused = true;
+    playbackContext.suspend();
+  }
+
+  function resume() {
+    if (!playbackContext) return;
+
+    playbackPaused = false;
+    playbackContext.resume();
+  }
+
   function download(call) {
     if (!call?.audio) return;
 
@@ -111,6 +134,8 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
     bootstrap,
     playCall,
     playOscillators,
+    suspend,
+    resume,
     download,
     get playbackContext() {
       return playbackContext;
