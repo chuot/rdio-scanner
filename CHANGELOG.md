@@ -25,6 +25,7 @@ _Entry in progress: Version 8.0 is still being assembled, and this section names
 - The talkgroup, site, and unit sections of the administration webapp now show the row their add control creates: New talkgroup, New site, and New unit put the row above the saved rows, open on its fields, ready to fill in. It used to go into the section's data and stay off the page, so nothing appeared until the page was reloaded.
 - Typing in a field of a talkgroup, site, or unit row no longer pulls that row out from under you: the row and the field stay on the page, and the field keeps the focus, the way the Systems section already did. Dragging a row to a new place keeps what was typed in it, so a row filled in and then moved arrives with its fields filled in.
 - The todo card at the top of the administration page is centred over the section card below it, the same width as that card, with the usual step between the two. It used to sit flush against the left edge of the page.
+- The listener's timed-avoid flag now draws its hourglass as a monochrome symbol in the display's own colour, the way the previous web application drew it, instead of a full-colour emoji pictogram sitting in a row of flat text. The minutes it states are unchanged. The listener's stylesheet now names the system fonts that carry the symbol; on a machine with none of them installed the glyph may not render, and the flag still reads its minutes beside `AVOID`.
 
 ## Version 7.0
 
