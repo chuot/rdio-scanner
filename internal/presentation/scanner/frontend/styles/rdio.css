@@ -1438,22 +1438,35 @@ rdio-display .auth rdio-form-field input {
   width: 100%;
 }
 
-/* The field's indicator, in the state the keyboard is standing on it. `appearance: none` takes the
- * control's own look away, and the legacy client took the black ring the browser draws around such a
- * control away with it, keeping focus visible by thickening the field's underline. The underline is
- * still here; the line and the ring the rest of the page draws are added beside it, so the field
- * reads as the same control the keyboard reaches everywhere else.
+/* The field's indicator, in the state the keyboard is standing on it. The visible field is the box
+ * — its fill, its corner radii, its underline, its arrow — and the control inside it is inset 16px
+ * from the box's sides, so the ring the keyboard gets is drawn on the box and frames the whole
+ * field: the same 2px shape and the same 2px distance every other control on the page keeps, and
+ * the outline follows the box's own corner radii, which a ring on the square-cornered control
+ * could not do.
  *
  * The colour is the field's own caret colour, `#424242`, and not the theme's accent: on the light
- * fill these fields sit on, the accent green measures 2.6:1 against the fill, under the 3:1 floor an
- * indicator has to clear, and the dark grey the field's text and its pressed line already use
- * measures 9.4:1. The ring is the accent's shape at the accent's distance, in the field's own ink. */
+ * surfaces these fields sit on, the accent green measures 2.6:1 against the fill, under the 3:1
+ * floor an indicator has to clear, and the dark grey the field's text and its pressed line already
+ * use measures 9.3:1 against the fill, 10.1:1 against the white card the filter ring is drawn on,
+ * and 8.8:1 against the unlock card. The ring is the accent's shape at the accent's distance, in
+ * the field's own ink. */
+rdio-search-panel .rdio-filters .rdio-field-box:has(:focus-visible),
+rdio-display .auth .rdio-field-box:has(:focus-visible) {
+  outline: 2px solid #424242;
+  outline-offset: 2px;
+}
+
+/* The control inside the field draws no ring and no line of its own. `appearance: none` takes the
+ * control's look away but not the black ring the browser draws around a keyboard-focused control,
+ * so the native ring is taken off the control explicitly — and only because the field's box draws
+ * the replacement above. The field's own line stays the underline: the box's `:focus-within` rule
+ * thickens it to 2px across the field's full width, and no border-bottom rides beside it at the
+ * control's narrower one. */
 rdio-search-panel .rdio-filters rdio-form-field select:focus-visible,
 rdio-search-panel .rdio-filters rdio-form-field input:focus-visible,
 rdio-display .auth rdio-form-field input:focus-visible {
-  border-bottom: 2px solid #424242;
-  outline: 2px solid #424242;
-  outline-offset: 2px;
+  outline: none;
 }
 
 /* The label and the placeholder are the field's own words, and they are measured as text: 4.5:1 in
@@ -1921,19 +1934,23 @@ rdio-snackbar .rdio-support .countdown {
     background: CanvasText;
   }
 
-  /* The ring the keyboard is standing on, in the colour the system uses to say "here". The light
-   * material fields take it in the system's ink: the field's own line is the field's indicator, and
-   * the ring sits outside it. */
+  /* The ring the keyboard is standing on, in the colour the system uses to say "here". */
   rdio-controls .rdio-button:focus-visible,
   rdio-select-panel .rdio-button:focus-visible,
   rdio-select-panel .rdio-button-mini:focus-visible,
   rdio-app .panel .panel-close:focus-visible,
   rdio-app .rdio-help button:focus-visible,
   rdio-search-panel .row-action:focus-visible,
-  rdio-search-panel .rdio-filters .reset button:focus-visible,
-  rdio-search-panel .rdio-filters rdio-form-field select:focus-visible,
-  rdio-search-panel .rdio-filters rdio-form-field input:focus-visible,
-  rdio-display .auth rdio-form-field input:focus-visible {
+  rdio-search-panel .rdio-filters .reset button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  /* The light material fields take the system's "here" colour on the box that frames the field:
+   * the same shape and the same distance the resting cascade draws, beside the box's own ink
+   * border; the control inside keeps no ring in the mode either. */
+  rdio-search-panel .rdio-filters .rdio-field-box:has(:focus-visible),
+  rdio-display .auth .rdio-field-box:has(:focus-visible) {
     outline: 2px solid Highlight;
     outline-offset: 2px;
   }

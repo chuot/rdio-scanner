@@ -12,6 +12,12 @@ import { fileURLToPath } from 'node:url';
 // cascade the browser is given, because both are the cascade's doing; the harness walks the real
 // route and measures the drawn ring against what sits beside it.
 //
+// The light material fields are the one place the ring is not drawn on the control the keyboard is
+// standing on: the field's visible surface is its box, the control sits inset inside it, and the
+// cascade frames the box and takes the browser's native ring off the control. That pairing —
+// suppression on the control beside a drawn ring on the field's own box — is what the readings
+// below allow, and only together.
+//
 // The paths are read from the presentation directory, three directories above this tests' own
 // application directory — the same shape `styles-admin-css.test.js` reads.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -105,8 +111,26 @@ function outlineSuppression(body) {
     return declarations.filter((d) => /^outline(-style)?\s*:\s*(none|0)\b/.test(d));
 }
 
+// A field control's suppression is the field's own arrangement when the field's box draws the
+// ring in its place: the cascade takes the browser's native ring off the control and frames the
+// whole field — fill, corner radii, underline — on the box that holds the control. A suppression
+// with no box-level ring in the same stylesheet is still the operator losing their place, and it
+// is reported.
+function fieldControlSuppression(part) {
+    const last = subject(part);
+
+    return /(^|[,>+~])(select|input)[\s:.,[\w-]*$/.test(last) && part.includes('rdio-form-field');
+}
+
+function boxDrawnRings(name) {
+    return rules(readFileSync(STYLESHEETS[name], 'utf8')).filter((rule) =>
+        /\.rdio-field-box:has\(:focus-visible\)/.test(rule.selector) &&
+        /outline\s*:\s*(?!none\b|0\b)/.test(rule.body));
+}
+
 function suppressions(name) {
     const found = [];
+    const replacedBy = boxDrawnRings(name).length > 0;
 
     for (const rule of rules(readFileSync(STYLESHEETS[name], 'utf8'))) {
         const suppressed = outlineSuppression(rule.body);
@@ -118,6 +142,7 @@ function suppressions(name) {
             // sees while they hold the keyboard on a control.
             if (PRESS_STATES.some((state) => subject(part).includes(state))) continue;
             if (!focusableSubject(part)) continue;
+            if (fieldControlSuppression(part) && replacedBy) continue;
 
             found.push(`${name} ${rule.line}: ${part} { ${suppressed.join('; ')} }`);
         }
@@ -145,6 +170,7 @@ const FAMILIES = [
     { family: 'dialog buttons', sheet: 'theme', part: (p) => p.includes('rdio-dialog') },
     { family: 'links the shared primitives draw', sheet: 'theme', part: (p) => /(^|[\s>+~])a\b/.test(p) },
     { family: "the listener's control buttons", sheet: 'scanner', part: (p) => p.includes('rdio-controls') && p.includes('rdio-button') },
+    { family: "the listener's field boxes", sheet: 'scanner', part: (p) => p.includes('rdio-field-box') && p.includes(':has(:focus-visible)') },
 ];
 
 describe('focus indicators — the cascade the keyboard gets', () => {
@@ -187,6 +213,10 @@ describe('focus indicators — the cascade the keyboard gets', () => {
                 const outline = (rule.body.match(/outline\s*:\s*([^;]+)/) ?? [])[1];
 
                 if (!outline) continue;
+
+                // A suppression is not a drawn ring; the suppression reading owns it and only
+                // allows it where a box-level ring replaces it.
+                if (/^\s*(none|0)\b/.test(outline)) continue;
 
                 const allowed = inForcedMode.has(`${rule.selector}|${rule.body}`) ? /Highlight/ : /--rdio-accent|#424242/;
 
