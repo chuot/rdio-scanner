@@ -92,6 +92,46 @@ function expect(selector, property, want, media = null) {
   );
 }
 
+// The weight a selector carries: ids, then classes, attributes and pseudo-classes, then element
+// names and pseudo-elements. The universal selector and the combinators add nothing.
+const weight = (selector) => {
+  const s = selector.trim();
+  const ids = (s.match(/#[\w-]+/g) ?? []).length;
+  const classes = (s.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) ?? []).length;
+  const bare = s.replace(/#[\w-]+|\.[\w-]+|\[[^\]]+\]|::[\w-]+(\([^)]*\))?|:[\w-]+(\([^)]*\))?/g, ' ');
+  const elements = (bare.match(/[a-z][\w-]*/gi) ?? []).length + (s.match(/::[\w-]+/g) ?? []).length;
+
+  return [ids, classes, elements];
+};
+
+const heavier = (a, b) => {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+
+  return 0;
+};
+
+// What an element actually ends up with when a blanket rule reaches it as well as the rule written
+// for it: the browser takes the more specific rule, and the later one between equals.
+function effective(selector, blanket, media = null) {
+  const hits = RULES()
+    .map((rule, at) => ({ ...rule, at }))
+    .filter((rule) => rule.media === media &&
+      selectors(rule).some((s) => s === flat(selector) || s === flat(blanket)));
+
+  hits.sort((a, b) => heavier(weight(a.selector), weight(b.selector)) || a.at - b.at);
+
+  const out = {};
+
+  for (const rule of hits) {
+    if (selectors(rule).includes(flat(selector))) Object.assign(out, rule.declarations);
+    else for (const [k, v] of Object.entries(rule.declarations)) if (!(k in out)) out[k] = v;
+  }
+
+  return out;
+}
+
 const FILTER_BOX = 'rdio-search-panel .rdio-filters .rdio-field-box:has(:focus-visible)';
 const UNLOCK_BOX = 'rdio-display .auth .rdio-field-box:has(:focus-visible)';
 
@@ -156,4 +196,24 @@ describe('the field\'s other focus behaviour — unchanged while the ring moves'
   it('keeps the select arrow turning while the field holds focus', () => {
     expect('rdio-search-panel .rdio-filters .rdio-field-box:focus-within::before', 'transform', 'rotate(180deg)');
   });
+});
+
+describe('the field\'s keyboard ring — drawn whole, not cut off', () => {
+  // The ring is drawn outside the field box, so it only reads as the field's focus indicator while
+  // nothing nearer paints over it. The display clips everything inside itself to keep its readout
+  // lines tight, and the card carrying the unlock field hugs that field exactly: left, top and
+  // right, the ring would be cut to its bottom edge alone.
+  const BLANKET = 'rdio-display *';
+
+  for (const wrapper of ['rdio-display .auth form', 'rdio-display .auth form rdio-form-field']) {
+    it(`lets the ring out of ${flat(wrapper)} inside the display's own clipping`, () => {
+      assert.equal(BLANKET && declared(BLANKET).overflow, 'hidden',
+        'the display no longer clips what sits inside it, so this guard has nothing to pin');
+
+      const got = effective(wrapper, BLANKET).overflow;
+
+      assert.equal(got === undefined ? undefined : flat(got), 'visible',
+        `${wrapper} clips the field's ring: the cascade leaves it overflow: ${got ?? 'hidden'}`);
+    });
+  }
 });

@@ -1457,6 +1457,17 @@ rdio-display .auth .rdio-field-box:has(:focus-visible) {
   outline-offset: 2px;
 }
 
+/* A ring drawn outside the box only reads as the field's indicator while nothing nearer paints it
+ * away. The display clips everything inside itself to keep its readout lines tight, and that
+ * blanket clipping reaches the card carrying the unlock field and the field's own wrapper — both of
+ * which hug the field box exactly on the left, the top and the right, so the ring would be cut down
+ * to its bottom edge alone. Those two let the ring out; the display keeps its clipping everywhere
+ * else. */
+rdio-display .auth form,
+rdio-display .auth form rdio-form-field {
+  overflow: visible;
+}
+
 /* The control inside the field draws no ring and no line of its own. `appearance: none` takes the
  * control's look away but not the black ring the browser draws around a keyboard-focused control,
  * so the native ring is taken off the control explicitly — and only because the field's box draws
