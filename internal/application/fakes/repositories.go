@@ -1288,3 +1288,106 @@ func (delayed *DelayedCalls) ClearDelayed(ctx context.Context) error {
 
 	return nil
 }
+
+// CallActivity is the fake the status read is tested against. It records the bounds and limits it was
+// asked with, the way Calls records the criteria a search ran with: the window the status read cuts is
+// the use case's own decision, and a test that cannot see the bounds it was handed cannot tell a window
+// from a day from an hour.
+type CallActivity struct {
+	// SinceCount answers every CountCallsSince when SinceAnswers has nothing for the bound.
+	SinceCount uint64
+
+	// SinceAnswers answers a CountCallsSince by the bound it was given, in milliseconds since the Unix
+	// epoch. It is what lets one fake answer the window, the day, and the last hour with three different
+	// numbers.
+	SinceAnswers map[int64]uint64
+
+	// SinceAsked records every bound CountCallsSince was asked with, in the order it was asked.
+	SinceAsked []time.Time
+
+	Hours      []ports.CallHourCount
+	HoursAsked []time.Time
+
+	Busiest      []ports.CallTalkgroupCount
+	BusiestAsked []uint
+
+	Recent      []ports.CallSummary
+	RecentAsked []uint
+
+	// Err is reported by every read, which is how a status read that cannot be read is tested.
+	Err error
+}
+
+var _ ports.CallActivityRepository = (*CallActivity)(nil)
+
+// CountCallsSince counts the calls at or after the given bound.
+func (activity *CallActivity) CountCallsSince(ctx context.Context, from time.Time) (uint64, error) {
+	activity.SinceAsked = append(activity.SinceAsked, from)
+
+	if activity.Err != nil {
+		return 0, activity.Err
+	}
+
+	if count, ok := activity.SinceAnswers[from.UnixMilli()]; ok {
+		return count, nil
+	}
+
+	return activity.SinceCount, nil
+}
+
+// CountCallsByHour answers the hour buckets over the given bound.
+func (activity *CallActivity) CountCallsByHour(ctx context.Context, from time.Time) ([]ports.CallHourCount, error) {
+	activity.HoursAsked = append(activity.HoursAsked, from)
+
+	if activity.Err != nil {
+		return nil, activity.Err
+	}
+
+	return activity.Hours, nil
+}
+
+// CountCallsByTalkgroup answers the busiest talkgroups over the given bound.
+func (activity *CallActivity) CountCallsByTalkgroup(ctx context.Context, from time.Time, limit uint) ([]ports.CallTalkgroupCount, error) {
+	activity.BusiestAsked = append(activity.BusiestAsked, limit)
+
+	if activity.Err != nil {
+		return nil, activity.Err
+	}
+
+	return activity.Busiest, nil
+}
+
+// RecentCalls answers the newest recorded calls.
+func (activity *CallActivity) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSummary, error) {
+	activity.RecentAsked = append(activity.RecentAsked, limit)
+
+	if activity.Err != nil {
+		return nil, activity.Err
+	}
+
+	return activity.Recent, nil
+}
+
+// LogTallies is the fake the log-health card is tested against.
+type LogTallies struct {
+	// Stored are the tallies the read answers with.
+	Stored []ports.LogLevelTally
+
+	// TalliesAsked records every bound the tally was asked with.
+	TalliesAsked []time.Time
+
+	Err error
+}
+
+var _ ports.LogTallyRepository = (*LogTallies)(nil)
+
+// TallyLogLevels counts what the server complained about at or after the given bound.
+func (tallies *LogTallies) TallyLogLevels(ctx context.Context, from time.Time) ([]ports.LogLevelTally, error) {
+	tallies.TalliesAsked = append(tallies.TalliesAsked, from)
+
+	if tallies.Err != nil {
+		return nil, tallies.Err
+	}
+
+	return tallies.Stored, nil
+}
