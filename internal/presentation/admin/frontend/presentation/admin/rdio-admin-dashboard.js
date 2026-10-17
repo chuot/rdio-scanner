@@ -41,6 +41,11 @@ class RdioAdminDashboard extends HTMLElement {
     this.closed = false;
     this.reading = null;
 
+    // Whether the failure the page is in has already been said out loud. The page falls into the failure
+    // state once and says it once; a server that goes on refusing is the same failure it has already told
+    // the operator about.
+    this.failureAnnounced = false;
+
     // The same schedule the log view uses: the next poll is scheduled before this one runs, so a read that
     // fails does not quietly end a refresh the operator asked for, and a read already in flight is not
     // stacked on top of.
@@ -127,17 +132,34 @@ class RdioAdminDashboard extends HTMLElement {
   }
 
   // The operator asked for an answer, so the page answers out loud as well as on the screen. A refresh the
-  // page does by itself says nothing: a sentence every five seconds is a page that never stops talking.
+  // page does by itself says nothing on its own schedule: a sentence every five seconds is a page that never
+  // stops talking. Asking is asking to be told again, so asking sets aside the page's own "already said", and
+  // a refusal the page falls into on the way is said once whichever way it got here.
   async readAgain() {
+    this.failureAnnounced = false;
+
     const status = await this.read();
 
     if (!status) return;
 
-    announce(
-      status.failed
-        ? 'The server did not answer the dashboard read.'
-        : `Read again at ${formatTime(new Date(status.fetchedAt))}.`,
-    );
+    if (status.failed) {
+      this.announceTheFailure();
+
+      return;
+    }
+
+    announce(`Read again at ${formatTime(new Date(status.fetchedAt))}.`);
+  }
+
+  // The failure sentence has one owner, and it is said once for every time the page falls into the failure
+  // state. A server going away is a change of state the operator would find critical, and a change a screen
+  // reader is never told about is a change that happens in silence.
+  announceTheFailure() {
+    if (this.failureAnnounced) return;
+
+    this.failureAnnounced = true;
+
+    announce('The server did not answer the dashboard read.');
   }
 
   // A page in a tab behind another one, or on a laptop with the lid shut, is a page costing the server
@@ -165,6 +187,8 @@ class RdioAdminDashboard extends HTMLElement {
     this.renderReadLine(status);
 
     if (status?.failed) {
+      this.announceTheFailure();
+
       this.strip.textContent = '';
 
       // The numbers the page is holding stay in the page's state and are not put on the screen. A figure
@@ -176,6 +200,10 @@ class RdioAdminDashboard extends HTMLElement {
 
       return;
     }
+
+    // A read that came back ends the failure the page has already said out loud, so the next time the page
+    // loses its server it says so again.
+    this.failureAnnounced = false;
 
     if (!snapshot) {
       this.strip.textContent = '';

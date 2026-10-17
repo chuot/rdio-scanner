@@ -66,6 +66,10 @@ let statusReads = 0;
 let held = false;
 const pending = [];
 
+// The server refusing the read the page's own schedule asked for: the transport's own answer to a status
+// read it could not complete, 417 and nothing in the body.
+let refused = false;
+
 // The moment a status read names. Whether the page thinks the figures it is holding have gone stale is a
 // comparison against the page's own clock, so the fixture names the moment the read is happening rather
 // than an instant copied from a printed page: a fixed one would be current or stale depending on when the
@@ -94,6 +98,16 @@ globalThis.fetch = async (url) => {
 
   if (path.endsWith('/api/admin/status')) {
     statusReads++;
+
+    if (refused) {
+      return {
+        status: 417,
+        ok: false,
+        async json() {
+          throw new Error('no body');
+        },
+      };
+    }
 
     if (held) return new Promise((resolve) => pending.push(resolve));
 
@@ -447,6 +461,126 @@ test('a refresh the page does by itself says nothing out loud, and one the opera
     socket.close();
   } finally {
     clearLiveRegion();
+    clock.release();
+  }
+});
+
+// The page losing its server is a change of state the operator would find critical, and a change a screen
+// reader is never told about is a change that happens in silence. The sentence is the one the page already
+// says when the operator asked and the server refused; what was missing is that nobody had to ask.
+test('a read the page makes on its own and the server refuses is said out loud', async () => {
+  const clock = holdTheRefreshInterval();
+
+  clearLiveRegion();
+
+  try {
+    const { el, socket } = await openDashboard();
+
+    assert.equal(liveRegionText(), '', 'the page said something out loud before anything went wrong');
+
+    refused = true;
+
+    assert.equal(clock.fire(), 1, 'the page did not make the read its own schedule asked for');
+
+    // The refusal the page is waiting on is the read its schedule started, and not a second one.
+    await getAdminContext().useCases.loadStatus();
+
+    assert.match(
+      liveRegionText(),
+      /did not answer/i,
+      `the server stopped answering and the live region says "${liveRegionText()}"`,
+    );
+
+    el.disconnectedCallback();
+    socket.close();
+  } finally {
+    clearLiveRegion();
+    refused = false;
+    clock.release();
+  }
+});
+
+// A status message the operator has already been given is not given again every interval, and it is not
+// given again because something else on the page moved. The page keeps polling a server that is still
+// refusing, and the refusal it already said stays said.
+test('the page says a refusal once, and a repaint that is not a new refusal says it again to nobody', async () => {
+  const clock = holdTheRefreshInterval();
+
+  clearLiveRegion();
+
+  try {
+    const { el, socket } = await openDashboard();
+
+    refused = true;
+
+    clock.fire();
+
+    await getAdminContext().useCases.loadStatus();
+
+    assert.match(liveRegionText(), /did not answer/i, `the page fell into the failure state without saying it: "${liveRegionText()}"`);
+
+    // The next poll lands on a server that is still refusing: the same failure the page has already said.
+    clock.fire();
+
+    await getAdminContext().useCases.loadStatus();
+
+    // A configuration push repaints the section, and a section being repainted is not a new failure.
+    clearLiveRegion();
+
+    socket.onmessage({ data: JSON.stringify({ ...CONFIG, groups: [{ id: 1, label: 'Dispatch' }] }) });
+
+    await getAdminContext().useCases.loadStatus();
+
+    assert.equal(
+      liveRegionText(),
+      '',
+      `the page handed the operator the same refusal again for a repaint that was not a new refusal: "${liveRegionText()}"`,
+    );
+
+    el.disconnectedCallback();
+    socket.close();
+  } finally {
+    clearLiveRegion();
+    refused = false;
+    clock.release();
+  }
+});
+
+// An operator who asks after the page has already lost its server is asking to be told again, and the page
+// answers the question they asked rather than pointing at what it said earlier.
+test('an operator asking again while the server is still refusing is answered again', async () => {
+  const clock = holdTheRefreshInterval();
+
+  clearLiveRegion();
+
+  try {
+    const { el, socket } = await openDashboard();
+
+    refused = true;
+
+    clock.fire();
+
+    await getAdminContext().useCases.loadStatus();
+
+    assert.match(liveRegionText(), /did not answer/i, `the page fell into the failure state without saying it: "${liveRegionText()}"`);
+
+    clearLiveRegion();
+
+    readAgainControl(el).dispatchEvent({ type: 'click' });
+
+    await getAdminContext().useCases.loadStatus();
+
+    assert.match(
+      liveRegionText(),
+      /did not answer/i,
+      `the operator asked again while the server was refusing and the page said "${liveRegionText()}"`,
+    );
+
+    el.disconnectedCallback();
+    socket.close();
+  } finally {
+    clearLiveRegion();
+    refused = false;
     clock.release();
   }
 });
