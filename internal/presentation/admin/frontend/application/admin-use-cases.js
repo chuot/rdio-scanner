@@ -93,7 +93,15 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     socket = createSocket(token);
 
     socket.subscribe((event) => {
-      if (event.type === 'config') applyConfig(event.config);
+      if (event.type === 'config') {
+        applyConfig(event.config);
+
+        // A save changes what the server is running: a watch turned on, a downstream removed, a system
+        // renamed. The dashboard is the page that shows what the server is running, so waiting for the next
+        // interval to show the operator what they just did is showing them a stale answer on purpose.
+        loadStatus();
+      }
+
       if (event.type === 'unauthorized') sessionExpired();
     });
 
@@ -214,6 +222,46 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       // other failures leave the panel usable with an empty config.
       return null;
     }
+  }
+
+  // The live status snapshot the dashboard is built from.
+  //
+  // One read at a time: the dashboard's own schedule and a configuration save can ask in the same moment,
+  // and the read is several statements over a history that can hold years of recorded calls. Two reads of
+  // the same instant are those statements twice, for an answer the page already has.
+  let statusRead = null;
+
+  async function loadStatus() {
+    if (statusRead) return statusRead;
+
+    statusRead = (async () => {
+      const held = store.getState().status ?? { snapshot: null, failed: false, fetchedAt: null };
+
+      try {
+        const snapshot = await api.getStatus();
+
+        // The instant the server says it read is the instant the answer is about, which is the only instant
+        // a page can honestly attach to the figures it is showing.
+        const status = { snapshot, failed: false, fetchedAt: snapshot?.server?.now ?? null };
+
+        store.setState({ status });
+
+        return status;
+      } catch {
+        // A read that failed keeps the numbers the page was already showing and puts the failure beside
+        // them. Dropping them throws away the last thing the operator can act on; keeping them without the
+        // failure presents them as current, which is the lie the failure state exists to prevent.
+        const status = { ...held, failed: true };
+
+        store.setState({ status });
+
+        return status;
+      } finally {
+        statusRead = null;
+      }
+    })();
+
+    return statusRead;
   }
 
   function sessionExpired() {
@@ -523,6 +571,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     logout,
     sessionExpired,
     loadConfig,
+    loadStatus,
     changePassword,
     setSectionWorking,
     setSectionInvalid,

@@ -201,3 +201,51 @@ describe('infrastructure/admin-api — 401 session end', () => {
         assert.equal(unauthorized, 1);
     });
 });
+
+describe('infrastructure/admin-api — the live status read', () => {
+    it('reads the status with the same raw credential the rest of the surface uses', async () => {
+        const fakes = createFakes();
+        fakes.storage.setAdminToken('jwt-1');
+        fakes.respond('/api/admin/status', 200, { server: { uptimeSeconds: 12 }, live: {}, activity: {}, logs: {} });
+
+        const api = createAdminApi(fakes);
+
+        const status = await api.getStatus();
+
+        assert.deepEqual(status, { server: { uptimeSeconds: 12 }, live: {}, activity: {}, logs: {} });
+
+        const [request] = fakes.requests;
+        assert.equal(request.url, '/api/admin/status');
+        assert.equal(request.options.method, 'GET');
+        assert.equal(request.options.body, undefined, 'the status read sends a body');
+        assert.deepEqual(request.options.headers, { Authorization: 'jwt-1' });
+    });
+
+    it('a 417 status read rejects and keeps the session', async () => {
+        const fakes = createFakes();
+        fakes.storage.setAdminToken('jwt-1');
+        fakes.respond('/api/admin/status', 417, undefined);
+
+        let unauthorized = 0;
+        const api = createAdminApi({ ...fakes, onUnauthorized: () => unauthorized++ });
+
+        await assert.rejects(() => api.getStatus());
+
+        assert.equal(fakes.storage.getAdminToken(), 'jwt-1', 'a read the server could not complete ended the session');
+        assert.equal(unauthorized, 0, 'a read the server could not complete was treated as an expired session');
+    });
+
+    it('a 401 status read ends the session the way every other administration read does', async () => {
+        const fakes = createFakes();
+        fakes.storage.setAdminToken('jwt-stale');
+        fakes.respond('/api/admin/status', 401, {});
+
+        let unauthorized = 0;
+        const api = createAdminApi({ ...fakes, onUnauthorized: () => unauthorized++ });
+
+        await assert.rejects(() => api.getStatus());
+
+        assert.equal(fakes.storage.getAdminToken(), '');
+        assert.equal(unauthorized, 1);
+    });
+});

@@ -39,7 +39,7 @@ function sectionConfig() {
   };
 }
 
-function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, config = { config: sectionConfig(), passwordNeedChange: true }, fetchedSections = {}, saveError = false, changePasswordError = false, dirwatchDelayClamp = false, storage } = {}) {
+function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, config = { config: sectionConfig(), passwordNeedChange: true }, fetchedSections = {}, saveError = false, changePasswordError = false, dirwatchDelayClamp = false, status = null, storage } = {}) {
   const calls = [];
 
   return {
@@ -88,6 +88,13 @@ function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, c
       if (changePasswordError) throw new Error('Admin API POST /password: 417');
 
       return { passwordNeedChange: false };
+    },
+    async getStatus() {
+      calls.push(['getStatus']);
+
+      if (status instanceof Error) throw status;
+
+      return structuredClone(status);
     },
   };
 }
@@ -561,4 +568,112 @@ test('saving a dirwatch row the server answers with its clamped delay leaves the
   assert.equal(slice.baseline[0].delay, 2000, 'the delay the server clamps to one day re-baselines as the floor the rule accepts');
   assert.equal(slice.working[0].delay, 2000, 'the working copy carries the same delay, so the saved row is not a change');
   assert.equal(slice.dirty, false, 'the section is quiet after its save');
+});
+
+// The live status snapshot the dashboard is built from (application/admin-use-cases.js's loadStatus). The
+// page asks the server one question and holds the answer, and the two things the page has to get right are
+// which answer it is holding and whether that answer is still current.
+function statusSnapshot(overrides = {}) {
+  return {
+    server: {
+      version: '8.0.0',
+      docker: false,
+      startedAt: '2026-10-17T06:31:03Z',
+      now: '2026-10-17T08:45:11Z',
+      uptimeSeconds: 8048,
+      baseDir: '/data/rdio',
+      databaseBytes: 4831838208,
+      databaseKnown: true,
+    },
+    live: { listeners: 3, administratorSessions: 1, dirwatchersRunning: 2, heldCalls: 2, audioConversion: true, audioProbe: true },
+    activity: { windowStart: '2026-10-16T08:00:00Z', windowEnd: '2026-10-17T08:00:00Z', callsToday: 214, callsLastHour: 37, hours: [], busiest: [], recent: [] },
+    logs: { windowStart: '2026-10-16T08:45:11Z', errors: 3, warnings: 11, sources: [] },
+    ...overrides,
+  };
+}
+
+test('a successful status read writes the snapshot and the instant the server read it', async () => {
+  const { api, store, useCases } = setup({ token: 'jwt-0', apiOptions: { status: statusSnapshot() } });
+
+  await useCases.loadStatus();
+
+  const status = store.getState().status;
+
+  assert.equal(status.failed, false, 'a read that answered is held as a failure');
+  assert.equal(status.snapshot.server.uptimeSeconds, 8048);
+  assert.equal(status.snapshot.live.listeners, 3);
+
+  // The instant the server says it read is the instant the answer is about, which is the only instant a
+  // page can honestly attach to the figures it is showing.
+  assert.equal(status.fetchedAt, '2026-10-17T08:45:11Z');
+
+  assert.deepEqual(api.calls.map((c) => c[0]), ['getStatus']);
+});
+
+test('a status read the server refused sets the failed state and keeps the numbers the page holds', async () => {
+  const { api, store, useCases } = setup({ token: 'jwt-0', apiOptions: { status: statusSnapshot() } });
+
+  await useCases.loadStatus();
+
+  const held = store.getState().status;
+
+  assert.equal(held.failed, false);
+
+  // The server goes away between two reads. Its answer to a status read it could not complete is 417 with
+  // nothing in the body, which the adapter turns into a rejection.
+  api.getStatus = async () => {
+    api.calls.push(['getStatus']);
+
+    throw new Error('Admin API GET /status: 417');
+  };
+
+  await useCases.loadStatus();
+
+  const status = store.getState().status;
+
+  assert.equal(status.failed, true, 'a read the server refused is not held as a read that answered');
+
+  // The numbers are kept, and the failure is kept beside them: a page that drops the figures has thrown
+  // away the only thing the operator can still act on, and a page that keeps them without the failure is
+  // a page presenting them as current.
+  assert.deepEqual(status.snapshot, held.snapshot, 'the page dropped the numbers it was holding');
+  assert.equal(status.fetchedAt, held.fetchedAt, 'the page kept the numbers and lost the moment they were read');
+
+  assert.equal(api.calls.filter((c) => c[0] === 'getStatus').length, 2);
+});
+
+test('a status read that never reached the server sets the failed state', async () => {
+  const { store, useCases } = setup({ token: 'jwt-0', apiOptions: { status: new TypeError('fetch failed') } });
+
+  await useCases.loadStatus();
+
+  assert.equal(store.getState().status.failed, true, 'a read that never reached the server is not held as a success');
+});
+
+test('two status reads asked for in the same moment cost one request', async () => {
+  const { api, useCases } = setup({ token: 'jwt-0', apiOptions: { status: statusSnapshot() } });
+
+  const [first, second] = await Promise.all([useCases.loadStatus(), useCases.loadStatus()]);
+
+  assert.equal(api.calls.length, 1, `the page asked the server ${api.calls.length} times for the same instant`);
+  assert.equal(first, second);
+});
+
+test('a configuration push re-reads the status beside the configuration it applies', async () => {
+  const { api, sockets, store, useCases } = setup({ token: 'jwt-0', apiOptions: { status: statusSnapshot() } });
+
+  await useCases.boot();
+
+  assert.deepEqual(api.calls.map((c) => c[0]), ['getConfig'], 'booting asked the server for a status read nobody has asked for yet');
+
+  api.calls.length = 0;
+
+  sockets.opened[0].emit({ type: 'config', config: { ...sectionConfig(), groups: [{ id: 1, label: 'Dispatch' }] } });
+
+  assert.deepEqual(api.calls.map((c) => c[0]), ['getStatus'], 'a save the server broadcast did not ask for the answer the dashboard shows');
+
+  await useCases.loadStatus();
+
+  assert.equal(store.getState().config.groups.length, 1, 'the push did not apply the configuration it carried');
+  assert.equal(store.getState().status.failed, false);
 });

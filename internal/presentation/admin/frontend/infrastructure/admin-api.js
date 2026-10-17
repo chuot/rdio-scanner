@@ -89,6 +89,13 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('GET', '/alerts');
     },
 
+    // The live status of the server: one read that answers the whole snapshot the dashboard is built from.
+    // A 417 — the server's own answer to a read it could not complete — arrives here as a rejection, which
+    // is what lets the page say the read failed instead of showing a server that looks idle and healthy.
+    getStatus() {
+      return request('GET', '/status');
+    },
+
     searchLogs(options) {
       return request('POST', '/logs', options);
     },

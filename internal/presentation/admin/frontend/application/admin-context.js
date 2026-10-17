@@ -24,6 +24,10 @@ export function createAdminContext({ location, sessionStorage }) {
     config: null,
     todos: [],
     alerts: {},
+    // The live status snapshot the dashboard is built from, and the two things that make it honest: the
+    // instant the server says it read, and whether the read that produced it failed. A failed read keeps
+    // the numbers the page was holding and marks them as not current.
+    status: { snapshot: null, failed: false, fetchedAt: null },
     // A request for the operator's attention on one control of one section, raised by
     // a todo that names the control and consumed by the section that owns it.
     focus: null,
