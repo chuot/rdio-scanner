@@ -1348,6 +1348,7 @@ bcrypt_cost = 12</code></pre>
     <tbody>
       <tr><td>Access</td><td>Listener access codes: who may listen, to which systems and talkgroups, until when.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
       <tr><td>API Keys</td><td>The keys a recorder posts calls with, and a downstream presents.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
+      <tr><td>Dashboard</td><td>What the server is doing right now: how long it has been up, the listener connections it is holding, the directory watchers it started, the calls it recorded in the last 24 hours and the talkgroups busiest among them, and the errors and warnings its own log holds. It reads and never writes, and it is the section you land on after signing in.</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
       <tr><td>Dirwatch</td><td>The directories the server watches for a recorder's files. Removed from the navigation when the server's environment names the container.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>Downstreams</td><td>The other deployments calls are forwarded to.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>Groups</td><td>Groups of talkgroups, the way a listener selects many talkgroups at once.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
@@ -1366,6 +1367,18 @@ bcrypt_cost = 12</code></pre>
   <p>
     Sites, Talkgroups, and Units are the sub-sections of the system you have selected in Systems: they
     carry the system's name at their head, and their rows belong to that system.
+  </p>
+
+  <p>
+    The <strong>Dashboard</strong> is the section you land on after signing in, and it is the one section
+    that reads and never writes: there is nothing on it to save and no field to fill. It shows what the
+    server is doing at the moment you look at it — how long it has been up and what it is serving from, the
+    listener connections it is holding, the directory watchers it started, the calls it recorded in the last
+    24 hours with the talkgroups busiest among them, and the errors and warnings its own log holds — and the
+    line under the cards names the moment the server read them. The page asks the server again every five
+    seconds; <strong>Auto-refresh</strong> turns that off, and <strong>Read again</strong> asks once, at the
+    moment you ask. When the server stops answering, the dashboard takes its figures off the page rather than
+    leave them there looking current, and says so out loud.
   </p>
 
   <h3>Rows, the save bar, and the conflict banner</h3>
