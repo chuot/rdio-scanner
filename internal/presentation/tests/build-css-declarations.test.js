@@ -84,4 +84,38 @@ describe('build — the administration stylesheet as the build emits it', () => 
             `the built logs body row rule is ${JSON.stringify(rule)}; the declaration that holds the filler rows at the filled rows' 44 px height did not survive the build`,
         );
     });
+
+    // The dashboard's two sizes the browser has to receive: the grid's 280 px track decides how many cards
+    // fit across the content column and when they drop to one line each, and the bar's floor is what keeps
+    // an hour with nothing in it a stub on the page instead of a gap an operator has to interpret.
+    it('carries the dashboard card grid and the floor under an empty chart bar', async () => {
+        const css = await builtStylesheet();
+
+        const gridAt = css.indexOf('.rdio-dashboard-cards{');
+
+        assert.ok(gridAt >= 0, 'the built stylesheet carries no dashboard card grid rule; the cards have no width to lay themselves out in');
+
+        const grid = css.slice(gridAt, css.indexOf('}', gridAt));
+
+        assert.ok(
+            grid.includes('repeat(auto-fit,minmax(280px,1fr))'),
+            `the built dashboard grid rule is ${JSON.stringify(grid)}; the track that decides how many cards fit did not survive the build`,
+        );
+
+        const barAt = css.indexOf('.rdio-dashboard-bar{');
+
+        assert.ok(barAt >= 0, 'the built stylesheet carries no dashboard chart bar rule; the 24 hours have no bar to draw');
+
+        const bar = css.slice(barAt, css.indexOf('}', barAt));
+
+        assert.ok(
+            bar.includes('min-width:var(--rdio-space-1)'),
+            `the built dashboard bar rule is ${JSON.stringify(bar)}; the floor that keeps an empty hour visible did not survive the build`,
+        );
+
+        assert.ok(
+            bar.includes('background:var(--rdio-accent)'),
+            `the built dashboard bar rule is ${JSON.stringify(bar)}; the bar has no face of its own`,
+        );
+    });
 });

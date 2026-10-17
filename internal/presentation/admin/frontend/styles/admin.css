@@ -631,6 +631,200 @@ rdio-admin .rdio-admin-todos-banner .todo .todo-step .arrow {
   font-size: 20px;
 }
 
+/* --- dashboard ---------------------------------------------------------------------- */
+
+/* The section an operator lands on. Six cards over the width the content column gives them, in the order
+   the operator reads the deployment: what the server is, whether anything is arriving, who is hearing it,
+   what arrived lately, what arrived most, and what the server had to complain about. The grid takes as many
+   columns as the column can hold at 280px each and drops to one when it cannot, so the cards keep their own
+   line at 200% zoom and at 400% text zoom instead of squeezing their figures into two lines of nothing. */
+
+rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-strip {
+  font-size: 15px;
+  margin: 0 0 var(--rdio-space-1);
+}
+
+/* The moment the answer is about. Every figure on the page is a figure with this attached to it, and the
+   page says when it stopped being able to keep them current. */
+rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-read {
+  color: var(--rdio-border);
+  font-family: var(--rdio-mono);
+  font-size: 13px;
+  margin: 0 0 var(--rdio-space-4);
+}
+
+/* A read the server refused. The numbers the page is holding are not on the page, and this is the sentence
+   that says why they are not. */
+rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-failure {
+  border-left: 4px solid var(--rdio-warn);
+  margin: 0;
+  padding-left: var(--rdio-space-3);
+}
+
+rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-reading {
+  border-left: 4px solid var(--rdio-border);
+  color: var(--rdio-border);
+  margin: 0;
+  padding-left: var(--rdio-space-3);
+}
+
+rdio-admin .rdio-dashboard-cards {
+  display: grid;
+  gap: var(--rdio-space-3);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+rdio-admin .rdio-dashboard-card {
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-card);
+  padding: var(--rdio-space-3);
+}
+
+rdio-admin .rdio-dashboard-card h3 {
+  font-size: 17px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* The state word, with the same word said a second time as a colour and a line. The word is what carries
+   the state; the colour and the line are the same signal for an operator who cannot tell the two colours
+   apart, and neither is ever the only thing a card says. */
+rdio-admin .rdio-dashboard-state {
+  border-left: 4px solid var(--rdio-accent);
+  color: var(--rdio-accent);
+  font-size: 14px;
+  font-weight: 500;
+  margin: var(--rdio-space-2) 0 0;
+  padding-left: var(--rdio-space-2);
+}
+
+rdio-admin .rdio-dashboard-card.attention .rdio-dashboard-state {
+  border-left-color: var(--rdio-warn);
+  color: var(--rdio-warn);
+}
+
+rdio-admin .rdio-dashboard-card.unknown .rdio-dashboard-state {
+  border-left-color: var(--rdio-border);
+}
+
+rdio-admin .rdio-dashboard-reason {
+  font-size: 14px;
+  margin: var(--rdio-space-2) 0 0;
+}
+
+/* A figure and its caption, on one line: the caption names the figure and the figure is the number, read
+   across the card. The figure is set in the mono face so the digits of one card line up with the digits of
+   the card beside it. */
+rdio-admin .rdio-dashboard-figures {
+  display: grid;
+  gap: var(--rdio-space-1);
+  margin: var(--rdio-space-3) 0 0;
+}
+
+rdio-admin .rdio-dashboard-figures div {
+  align-items: baseline;
+  display: flex;
+  gap: var(--rdio-space-2);
+  justify-content: space-between;
+}
+
+rdio-admin .rdio-dashboard-figures dt {
+  color: var(--rdio-border);
+  font-size: 14px;
+}
+
+rdio-admin .rdio-dashboard-figures dd {
+  font-family: var(--rdio-mono);
+  font-size: 14px;
+  margin: 0;
+  text-align: right;
+}
+
+rdio-admin .rdio-dashboard-note {
+  color: var(--rdio-border);
+  font-size: 13px;
+  margin: var(--rdio-space-2) 0 0;
+}
+
+rdio-admin .rdio-dashboard-empty,
+rdio-admin .rdio-dashboard-summary {
+  font-size: 14px;
+  margin: var(--rdio-space-3) 0 0;
+}
+
+/* The 24 hours. The list is the chart: every item names its hour and its count in words, so the chart says
+   what it says to an operator who is not looking at it. The bar is the shape a sighted operator reads
+   across the twenty-four items, and it is hidden from the operator who is reading the list. Its floor is
+   what keeps an empty hour a stub on the page instead of a gap an operator has to interpret, and its
+   outline is what keeps it a bar when the fill is taken away. */
+rdio-admin .rdio-dashboard-hours {
+  display: grid;
+  gap: var(--rdio-space-1);
+  list-style: none;
+  margin: var(--rdio-space-2) 0 0;
+  padding: 0;
+}
+
+rdio-admin .rdio-dashboard-hour-item {
+  align-items: center;
+  display: grid;
+  gap: var(--rdio-space-2);
+  grid-template-columns: 5ch 9ch 1fr;
+}
+
+rdio-admin .rdio-dashboard-hour {
+  font-family: var(--rdio-mono);
+  font-size: 13px;
+  grid-column: 1;
+}
+
+rdio-admin .rdio-dashboard-count {
+  font-size: 13px;
+  grid-column: 2;
+}
+
+rdio-admin .rdio-dashboard-bar {
+  background: var(--rdio-accent);
+  border: 1px solid var(--rdio-border);
+  border-radius: var(--rdio-radius-row);
+  grid-column: 3;
+  height: var(--rdio-space-3);
+  min-width: var(--rdio-space-1);
+  transition: width 120ms ease-out;
+}
+
+/* The busiest talkgroups: three named columns, read across, the count in the mono face so the five rows
+   line up as a ranking. */
+rdio-admin .rdio-dashboard-busiest {
+  border-collapse: collapse;
+  margin-top: var(--rdio-space-3);
+  width: 100%;
+}
+
+rdio-admin .rdio-dashboard-busiest th,
+rdio-admin .rdio-dashboard-busiest td {
+  border-bottom: 1px solid var(--rdio-border);
+  font-size: 14px;
+  padding: var(--rdio-space-1) var(--rdio-space-2);
+  text-align: left;
+}
+
+rdio-admin .rdio-dashboard-busiest th {
+  font-weight: 500;
+}
+
+rdio-admin .rdio-dashboard-busiest td:last-child,
+rdio-admin .rdio-dashboard-busiest th:last-child {
+  font-family: var(--rdio-mono);
+  text-align: right;
+}
+
+rdio-admin .rdio-dashboard-sources {
+  font-size: 14px;
+  margin: var(--rdio-space-1) 0 0;
+  padding-left: var(--rdio-space-4);
+}
+
 /* --- logs table ---------------------------------------------------------------------- */
 
 rdio-admin .rdio-admin-card.logs .rdio-list {
@@ -1131,6 +1325,13 @@ rdio-systems-selection .indent {
   rdio-admin .rdio-admin-card {
     padding: var(--rdio-card-padding);
   }
+
+  /* The dashboard's cards collapse with the navigation: at this width the content column is one column
+     wide, and a card that kept a 280px track beside another would have its figures broken across two
+     lines. */
+  rdio-admin .rdio-dashboard-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* --- reduced motion ------------------------------------------------------------ */
@@ -1143,6 +1344,13 @@ rdio-systems-selection .indent {
 @media (prefers-reduced-motion: reduce) {
   rdio-admin .rdio-admin-card.logs .rdio-progress {
     animation: none;
+  }
+
+  /* The dashboard's bars grow and shrink as each read replaces the last. With the preference set, the bar
+     takes the width the new read gives it at once: the width is what says how busy the hour was, and the
+     motion of it changing is nothing the operator needs. */
+  rdio-admin .rdio-dashboard-bar {
+    transition: none;
   }
 }
 
@@ -1164,6 +1372,7 @@ rdio-systems-selection .indent {
   rdio-admin .rdio-admin-todos-banner .todo.warn,
   rdio-admin .rdio-admin-todos-banner .todo.info,
   rdio-admin .rdio-admin-card.logs .rdio-log-source,
+  rdio-admin .rdio-dashboard-card,
   rdio-admin .rdio-admin-openapi-box,
   rdio-admin .rdio-admin-openapi-box details.endpoint[open],
   rdio-systems-selection fieldset {
@@ -1206,6 +1415,8 @@ rdio-systems-selection .indent {
   rdio-admin .rdio-admin-card.logs td,
   rdio-admin .rdio-admin-csv-preview th,
   rdio-admin .rdio-admin-csv-preview td,
+  rdio-admin .rdio-dashboard-busiest th,
+  rdio-admin .rdio-dashboard-busiest td,
   rdio-admin .rdio-admin-openapi-box .endpoint-detail {
     border-bottom: 1px solid CanvasText;
   }
@@ -1230,6 +1441,22 @@ rdio-systems-selection .indent {
      edge is what carries the state. */
   rdio-admin .rdio-admin-card.logs .rdio-log-source[aria-pressed='true'] {
     border: 3px solid CanvasText;
+  }
+
+  /* The dashboard's state is the word on the card, and the line beside the word is the same state said a
+     second time. The mode replaces the two colours that made the second telling differ from the first; the
+     line keeps its edge, and the word keeps carrying the state on its own. */
+  rdio-admin .rdio-dashboard-state,
+  rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-failure,
+  rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-reading {
+    border-left-color: CanvasText;
+  }
+
+  /* The chart's bars are a fill against the page, and the mode replaces both. The bar keeps a face of its
+     own, and its width — not its colour — is what says how busy the hour was. */
+  rdio-admin .rdio-dashboard-bar {
+    background: CanvasText;
+    border-color: CanvasText;
   }
 
   /* The severity icons, the chevrons, the drag handle, and the captions are drawn in colours the

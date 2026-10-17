@@ -7,7 +7,7 @@
 // taken from the files the build ships. The rest is taken from the rendered shell: the nav, the
 // content region, and the heading the shell puts at its head, read the way an operator reads them.
 //
-// The fourteen section labels are written out here on purpose. They are the words the operator
+// The fifteen section labels are written out here on purpose. They are the words the operator
 // reads in the navigation; a test that takes them from the code under test would pass whatever the
 // code decides to call a section.
 
@@ -35,6 +35,7 @@ const STYLESHEET = join(presentationDir, 'admin', 'frontend', 'styles', 'admin.c
 const SECTIONS = [
   { name: 'access', label: 'Access' },
   { name: 'apikeys', label: 'API Keys' },
+  { name: 'dashboard', label: 'Dashboard' },
   { name: 'dirwatch', label: 'Dirwatch' },
   { name: 'downstreams', label: 'Downstreams' },
   { name: 'groups', label: 'Groups' },
@@ -174,7 +175,7 @@ describe('admin structure — the section the operator is on', () => {
     const heading = headings(el).find((node) => node.getAttribute('id') === headingId);
 
     assert.ok(heading, `the content region names ${headingId}, which is not a heading on the page`);
-    assert.equal(heading.textContent.trim(), 'Access', 'the heading does not name the section the operator is on');
+    assert.equal(heading.textContent.trim(), 'Dashboard', 'the heading does not name the section the operator lands on');
   });
 
   it('names every section it can put on the page', () => {

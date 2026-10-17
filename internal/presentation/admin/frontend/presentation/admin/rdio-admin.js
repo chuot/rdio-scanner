@@ -10,6 +10,7 @@ import './rdio-admin-openapi.js';
 import './rdio-admin-login.js';
 import './rdio-admin-access.js';
 import './rdio-admin-apikeys.js';
+import './rdio-admin-dashboard.js';
 import './rdio-admin-dirwatch.js';
 import './rdio-admin-downstreams.js';
 import './rdio-admin-groups.js';
@@ -27,6 +28,7 @@ import './rdio-admin-units.js';
 const SECTIONS = [
   { name: 'access', label: 'Access', icon: 'vpn_key' },
   { name: 'apikeys', label: 'API Keys', icon: 'key' },
+  { name: 'dashboard', label: 'Dashboard', icon: 'speed' },
   { name: 'dirwatch', label: 'Dirwatch', icon: 'folder', hiddenWhenDocker: true },
   { name: 'downstreams', label: 'Downstreams', icon: 'import_export' },
   { name: 'groups', label: 'Groups', icon: 'group' },
@@ -59,7 +61,11 @@ class RdioAdmin extends HTMLElement {
     const { store, useCases } = getAdminContext();
     const { authenticated, docker } = store.getState().auth;
 
-    if (!this.current) this.current = 'access';
+    // The section an operator lands on is the one that answers the question they arrived with: is this
+    // deployment working. Everything the landing used to be a step towards — the ingestion paths, the
+    // history, the log — is reached from here, and the operator should not have to know that in order to go
+    // looking for it.
+    if (!this.current) this.current = 'dashboard';
 
     if (!authenticated) {
       this.replaceChildren(document.createElement('rdio-admin-login'));

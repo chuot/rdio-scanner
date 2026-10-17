@@ -397,6 +397,38 @@ globalThis.document = {
 
 globalThis.document.activeElement = globalThis.document.body;
 
+// A browser tells a page when it stopped being the page the operator is looking at, and a page that keeps
+// asking the server questions while it is in a tab behind another one is a page that costs the server
+// work for nobody. The shim carries the same two things a page reads: the state, and the event that says
+// it changed.
+globalThis.document.visibilityState = 'visible';
+
+globalThis.document.listeners = new Map();
+
+globalThis.document.addEventListener = function (type, handler) {
+  const handlers = this.listeners.get(type) ?? new Set();
+
+  handlers.add(handler);
+
+  this.listeners.set(type, handlers);
+};
+
+globalThis.document.removeEventListener = function (type, handler) {
+  this.listeners.get(type)?.delete(handler);
+};
+
+globalThis.document.dispatchEvent = function (event) {
+  for (const handler of this.listeners.get(event.type) ?? []) handler(event);
+};
+
+// setPageVisibility is the browser putting the page somewhere else: the state changes and every page that
+// is listening is told, in the order the page registered.
+export function setPageVisibility(state) {
+  globalThis.document.visibilityState = state;
+
+  globalThis.document.dispatchEvent({ type: 'visibilitychange' });
+}
+
 globalThis.customElements = {
   registry: new Map(),
 
