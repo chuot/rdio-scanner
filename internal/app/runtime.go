@@ -99,8 +99,8 @@ func (state *runtimeState) AdministratorSessionCount() int {
 	return state.sessions.Count()
 }
 
-// DirwatchersRunning reports how many directory watchers are watching right now, which is not the number
-// the configuration names and not the number that is enabled.
+// DirwatchersRunning reports how many directory watchers this server has started and has not stopped,
+// which is not the number the configuration names and not the number that is enabled.
 func (state *runtimeState) DirwatchersRunning() int {
 	return state.watches.Running()
 }

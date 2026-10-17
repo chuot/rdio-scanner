@@ -170,12 +170,13 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 	}
 }
 
-// Running reports how many directory watchers are watching right now.
+// Running reports how many directory watchers this server has started and has not stopped.
 //
-// It is not the number configured and not the number enabled: a disabled watch is never started, and a
-// watch whose subscription could not be opened is reported by the log and stays what it is. The status
-// view shows this beside the configured and enabled counts the operator's own page already holds, and
-// the difference between them is what tells the operator that a watch is not doing anything.
+// It is not the number configured and not the number enabled: a disabled watch and a watch naming no
+// directory are never started, and a watch naming a folder this server cannot open is started, watches
+// nothing, and is reported by the log instead of by this count. The status view shows this beside the
+// configured and enabled counts the operator's own page already holds, and the difference between them is
+// what tells the operator that a watch is not doing anything.
 func (watchers *Dirwatchers) Running() int {
 	watchers.mutex.Lock()
 	defer watchers.mutex.Unlock()

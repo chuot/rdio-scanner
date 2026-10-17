@@ -2322,7 +2322,7 @@
               },
               "dirwatchersRunning": {
                 "type": "integer",
-                "description": "The directory watchers actually watching right now: not the number configured, and not the number enabled."
+                "description": "The directory watchers this server has started and has not stopped: not the number configured, and not the number enabled. A watch naming a folder the server cannot open is started and watches nothing, and the log names it."
               },
               "heldCalls": {
                 "type": "integer",

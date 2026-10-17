@@ -46,7 +46,8 @@ type RuntimeState interface {
 	// the one asking.
 	AdministratorSessionCount() int
 
-	// DirwatchersRunning is how many directory watchers are actually watching right now.
+	// DirwatchersRunning is how many directory watchers this server has started and has not stopped:
+	// not the number configured, and not the number enabled.
 	DirwatchersRunning() int
 
 	// HeldCallCount is how many calls are waiting out a hold right now.
