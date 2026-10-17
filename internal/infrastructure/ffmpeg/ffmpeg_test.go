@@ -540,3 +540,18 @@ func TestAFailedConversionReportsNoLength(t *testing.T) {
 		t.Errorf("the kept recording is %v long, want no length: the converter produced nothing here", converted.Duration)
 	}
 }
+
+// The status view reports whether this deployment converts audio at all. It is the same fact the startup
+// warning states, but the warning is said once per server run and this is read again every time the
+// status is asked for.
+func TestTheConverterReportsWhetherItsProgramRanItsProbe(t *testing.T) {
+	if available := NewAt(aProgramIsGiven(t, filtersWithLoudnorm)).Available(); !available {
+		t.Error("Available() = false for a program that answered the filter probe, want true: this deployment converts")
+	}
+
+	missing := NewAt(filepath.Join(t.TempDir(), "ffmpeg-9.0.2"))
+
+	if available := missing.Available(); available {
+		t.Error("Available() = true for a program that is not there, want false: no audio conversion will be performed")
+	}
+}

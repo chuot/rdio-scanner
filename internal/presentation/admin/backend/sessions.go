@@ -401,6 +401,18 @@ func (sessions *Sessions) leave(admin *administrator) {
 	sessions.depart(context.Background(), admin)
 }
 
+// Count reports how many administrator connections the server is holding, including the one asking.
+//
+// The status view shows this as what it is: the connections the administration interface holds open,
+// the page reading this count among them. It is not a count of other people, and it is not a count of
+// who is logged in — an administrator holding the page in two tabs is two connections.
+func (sessions *Sessions) Count() int {
+	sessions.mutex.Lock()
+	defer sessions.mutex.Unlock()
+
+	return len(sessions.conns)
+}
+
 // CloseAll ends every administrator connection the server is holding and reports each one leaving.
 //
 // This is what a server that is stopping needs: shutting an address down does not wait for a connection the

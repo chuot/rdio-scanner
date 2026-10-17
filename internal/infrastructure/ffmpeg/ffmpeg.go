@@ -234,6 +234,18 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 	}, nil
 }
 
+// Available reports whether the program this converter was given ran its probe.
+//
+// It is what the status view shows: whether this deployment converts audio at all. A converter that is
+// not there is the same fact the startup warning states, and the startup warning is said once per
+// server run while this is read again every time the status is asked for.
+func (converter *Converter) Available() bool {
+	converter.mutex.Lock()
+	defer converter.mutex.Unlock()
+
+	return converter.available
+}
+
 // notInstalled reports whether this deployment has no converter, and the reason to say so — which
 // is said once per server run and left unsaid afterwards.
 func (converter *Converter) notInstalled() (bool, error) {

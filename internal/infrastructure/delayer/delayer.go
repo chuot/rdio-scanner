@@ -216,6 +216,19 @@ func (delayer *Delayer) Close() {
 	}
 }
 
+// Holding reports how many calls are waiting out a hold right now.
+//
+// It is the count of the holds that have been armed and have not run yet, which is not the number of
+// rows the delayed table holds: a hold whose time has come and gone is no longer holding anything, and
+// a server that reported it would report a call the operator can find neither in the history nor in
+// the holds.
+func (delayer *Delayer) Holding() int {
+	delayer.mutex.Lock()
+	defer delayer.mutex.Unlock()
+
+	return len(delayer.timers)
+}
+
 // take is the one place the decision is made, for a call that has just been recorded and for a call
 // that was written down by a previous startup alike: a call is held when it names a delay and the
 // moment it happened plus that delay has not arrived yet.

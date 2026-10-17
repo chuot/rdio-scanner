@@ -1052,3 +1052,33 @@ func TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline(t *te
 			"together, inside the shutdown window: %s past", elapsed, elapsed.Round(time.Second))
 	}
 }
+
+// The status view counts the administrator connections the server is holding. It is shown as what it
+// is — the connections the administration interface holds open, the page reading the count among them —
+// and not as a count of other people.
+func TestSessionsCountReportsTheConnectionsTheServerIsHolding(t *testing.T) {
+	fixture := newFixture(t)
+
+	if count := fixture.sessions.Count(); count != 0 {
+		t.Errorf("Count() = %d with no connection open, want 0", count)
+	}
+
+	first := fixture.open(t)
+	defer first.Close()
+
+	second := fixture.open(t)
+	defer second.Close()
+
+	fixture.await(t, func() bool { return fixture.sessions.Count() == 2 },
+		"the server never took its place in the set of connections it is holding")
+
+	if count := fixture.sessions.Count(); count != 2 {
+		t.Errorf("Count() = %d with two connections open, want 2: the connection asking is one of them", count)
+	}
+
+	fixture.sessions.CloseAll(context.Background())
+
+	if count := fixture.sessions.Count(); count != 0 {
+		t.Errorf("Count() = %d after CloseAll, want 0: the server is holding nothing", count)
+	}
+}

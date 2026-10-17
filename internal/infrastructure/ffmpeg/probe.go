@@ -167,6 +167,18 @@ func (prober *Prober) Probe(ctx context.Context, in ports.AudioFile) (time.Durat
 	return time.Duration(math.Round(seconds*1_000_000)) * time.Microsecond, nil
 }
 
+// Available reports whether the program this prober was given ran its probe.
+//
+// It is what the status view shows: whether this deployment measures the length of a recording at all.
+// A prober that is not there is the same fact the startup warning states, and that warning is said once
+// per server run while this is read again every time the status is asked for.
+func (prober *Prober) Available() bool {
+	prober.mutex.Lock()
+	defer prober.mutex.Unlock()
+
+	return prober.available
+}
+
 // notInstalled reports whether this deployment has no prober, and the reason to say so —
 // which is said once per server run and left unsaid afterwards.
 func (prober *Prober) notInstalled() (bool, error) {

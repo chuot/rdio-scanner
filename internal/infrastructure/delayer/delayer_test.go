@@ -472,3 +472,73 @@ type unwritableDelayed struct {
 func (unwritable *unwritableDelayed) ScheduleDelayed(ctx context.Context, callID uint64, until time.Time) error {
 	return errors.New("the row will not be written")
 }
+
+// The status view counts the calls that are waiting out a hold right now. It is not the number of rows
+// the waiting list holds: a hold whose time has come and gone is no longer holding anything, and a
+// server that counted it would report a call the operator can find neither in the history nor in the
+// holds.
+func TestHoldingCountsTheHoldsThatAreArmedAndNotYetRun(t *testing.T) {
+	fixture := newDelayerFixture()
+
+	if holding := fixture.delayer.Holding(); holding != 0 {
+		t.Errorf("Holding() = %d before anything was held, want 0", holding)
+	}
+
+	if held, err := fixture.delayer.Hold(context.Background(), heldCall(7, heldAt, 10)); err != nil || !held {
+		t.Fatalf("the call was not held: held=%v err=%v", held, err)
+	}
+
+	if held, err := fixture.delayer.Hold(context.Background(), heldCall(8, heldAt, 20)); err != nil || !held {
+		t.Fatalf("the second call was not held: held=%v err=%v", held, err)
+	}
+
+	if holding := fixture.delayer.Holding(); holding != 2 {
+		t.Fatalf("Holding() = %d with two calls waiting, want 2", holding)
+	}
+
+	// Both holds run out. A call whose hold is over stops being one of the holds, and the row the
+	// waiting list still carried until this moment is gone with it.
+	fixture.scheduler.RunDue(time.Hour)
+
+	if holding := fixture.delayer.Holding(); holding != 0 {
+		t.Errorf("Holding() = %d after the holds ran out, want 0: a hold whose time has come and gone is not holding anything", holding)
+	}
+
+	if stored := len(fixture.delayed.Stored); stored != 0 {
+		t.Errorf("the waiting list still carries %d rows after the holds ran out, want none", stored)
+	}
+
+	fixture.delayer.Close()
+
+	if holding := fixture.delayer.Holding(); holding != 0 {
+		t.Errorf("Holding() = %d after Close, want 0: the holds were ended with the server", holding)
+	}
+
+	if got := delivered(fixture.delayer); len(got) != 2 {
+		t.Errorf("the delayer handed over %d calls, want the 2 whose holds ran out", len(got))
+	}
+}
+
+// A call with no hold to wait out is not counted, and neither is a call whose hold has already run out
+// by the time it arrives. Counting them would make the status view report a backlog that does not
+// exist.
+func TestHoldingCountsNothingForACallThatIsNotWaiting(t *testing.T) {
+	fixture := newDelayerFixture()
+	defer fixture.delayer.Close()
+
+	plain := heldCall(9, heldAt, 0)
+
+	if held, err := fixture.delayer.Hold(context.Background(), plain); err != nil || held {
+		t.Fatalf("a call with no delay was treated as held: held=%v err=%v", held, err)
+	}
+
+	overdue := heldCall(10, heldAt.Add(-3*time.Hour), 10)
+
+	if held, err := fixture.delayer.Hold(context.Background(), overdue); err != nil || held {
+		t.Fatalf("a call whose hold ran out long ago was treated as held: held=%v err=%v", held, err)
+	}
+
+	if holding := fixture.delayer.Holding(); holding != 0 {
+		t.Errorf("Holding() = %d, want 0: neither call is waiting out anything", holding)
+	}
+}

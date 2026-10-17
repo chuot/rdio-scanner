@@ -1417,3 +1417,78 @@ func TestARenameEventNamingAFileThatIsThereReArmsIt(t *testing.T) {
 		t.Errorf("the watch ingested %q, want the file the rename named", call.AudioFilename)
 	}
 }
+
+// The status view counts the watchers that are actually watching. It is shown beside the configured and
+// enabled counts the operator's own page already holds, and the difference between them is what tells
+// the operator that a watch the configuration names is doing nothing.
+func TestDirwatchersRunningCountsTheWatchersThatAreWatching(t *testing.T) {
+	watchers := watchingSeveral(t)
+
+	watchers.Start(context.Background(), domain.Dirwatches{
+		aWatchOver(t.TempDir()),
+		aWatchOver(t.TempDir()),
+	})
+
+	if running := watchers.Running(); running != 2 {
+		t.Errorf("Running() = %d, want the 2 watchers the server started", running)
+	}
+
+	watchers.Stop(context.Background())
+
+	if running := watchers.Running(); running != 0 {
+		t.Errorf("Running() = %d after Stop, want 0: nothing is watching any more", running)
+	}
+}
+
+// A disabled watch is never started, and a watch with no directory is never started. Counting them
+// would let the status view report a server watching two directories when it is watching one.
+func TestDirwatchersRunningLeavesOutTheWatchesThatWatchNothing(t *testing.T) {
+	watchers := watchingSeveral(t)
+
+	disabled := aWatchOver(t.TempDir())
+	disabled.Disabled = true
+
+	nameless := domain.NewDirwatch()
+
+	watchers.Start(context.Background(), domain.Dirwatches{aWatchOver(t.TempDir()), disabled, nameless})
+
+	if running := watchers.Running(); running != 1 {
+		t.Errorf("Running() = %d, want 1: a disabled watch and a watch naming no directory are never started", running)
+	}
+}
+
+// Starting again replaces what is watching. A count that kept the previous set would report watchers
+// the server stopped a moment ago.
+func TestDirwatchersRunningReportsOnlyTheSetItStartedLast(t *testing.T) {
+	watchers := watchingSeveral(t)
+
+	watchers.Start(context.Background(), domain.Dirwatches{aWatchOver(t.TempDir()), aWatchOver(t.TempDir())})
+
+	watchers.Start(context.Background(), domain.Dirwatches{aWatchOver(t.TempDir())})
+
+	if running := watchers.Running(); running != 1 {
+		t.Errorf("Running() = %d after starting again with one watch, want 1", running)
+	}
+}
+
+// watchingSeveral is the watchers with nothing but a log and an ingest path they will not be asked to
+// use: these tests count what is watching, and never hand it a file.
+func watchingSeveral(t *testing.T) *Dirwatchers {
+	t.Helper()
+
+	return NewDirwatchers(
+		parsers.New(&fakes.Systems{Stored: recordedSystems()}, fakes.NewClock(recordedAt)),
+		&fakes.Logs{},
+		&ingestRecorder{arrived: make(chan domain.Call, 16)},
+		fakes.NewClock(recordedAt),
+	)
+}
+
+// aWatchOver is one enabled watch over a directory the test already has.
+func aWatchOver(directory string) domain.Dirwatch {
+	watch := domain.NewDirwatch()
+	watch.Directory = directory
+	watch.Mask = "#SYS-#TG-#UNIT-#DATE-#TIME"
+
+	return watch
+}

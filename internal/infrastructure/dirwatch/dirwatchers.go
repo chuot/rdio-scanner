@@ -170,6 +170,19 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 	}
 }
 
+// Running reports how many directory watchers are watching right now.
+//
+// It is not the number configured and not the number enabled: a disabled watch is never started, and a
+// watch whose subscription could not be opened is reported by the log and stays what it is. The status
+// view shows this beside the configured and enabled counts the operator's own page already holds, and
+// the difference between them is what tells the operator that a watch is not doing anything.
+func (watchers *Dirwatchers) Running() int {
+	watchers.mutex.Lock()
+	defer watchers.mutex.Unlock()
+
+	return len(watchers.running)
+}
+
 // log writes one line to the administrator's log, which is the only place a watcher ever
 // reports anything. Every line a watcher writes is about the directory watchers, and the lines
 // name the directory they are about because the failure's own text names only the syscall.
