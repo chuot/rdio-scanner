@@ -20,6 +20,7 @@ const GROUPS = [
   { title: 'Authentication', icon: 'vpn_key', match: (path) => path === '/api/admin/login' || path === '/api/admin/logout' },
   { title: 'Config', icon: 'tune', match: (path) => path.startsWith('/api/admin/config') },
   { title: 'Alerts', icon: 'notifications', match: (path) => path.startsWith('/api/admin/alerts') },
+  { title: 'Status', icon: 'speed', match: (path) => path === '/api/admin/status' },
   { title: 'Logs', icon: 'article', match: (path) => path === '/api/admin/logs' },
   { title: 'Calls', icon: 'radio', match: (path) => path.startsWith('/api/calls') },
   { title: 'Password', icon: 'lock', match: (path) => path === '/api/admin/password' },

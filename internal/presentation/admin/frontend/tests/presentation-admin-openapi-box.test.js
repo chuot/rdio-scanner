@@ -118,11 +118,11 @@ function renderBox(group) {
 test('the OpenAPI card renders one box per group, each endpoint naming method, path, and summary', async () => {
   const { boxes } = await openApiCard();
 
-  assert.equal(boxes.length, 9, 'the OpenAPI card does not carry the nine contract groups');
+  assert.equal(boxes.length, 10, 'the OpenAPI card does not carry the ten contract groups');
 
   const titles = boxes.map(boxTitle);
 
-  assert.deepEqual(titles, ['Authentication', 'Config', 'Alerts', 'Logs', 'Calls', 'Password', 'Users', 'Capture', 'Applications']);
+  assert.deepEqual(titles, ['Authentication', 'Config', 'Alerts', 'Status', 'Logs', 'Calls', 'Password', 'Users', 'Capture', 'Applications']);
 
   const login = rowFor(boxes[0], '/api/admin/login', 'POST');
 

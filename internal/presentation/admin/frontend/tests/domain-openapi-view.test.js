@@ -31,6 +31,7 @@ test('the groups carry the admin-facing names of the surface', () => {
     'Authentication',
     'Config',
     'Alerts',
+    'Status',
     'Logs',
     'Calls',
     'Password',
@@ -38,6 +39,18 @@ test('the groups carry the admin-facing names of the surface', () => {
     'Capture',
     'Applications',
   ]);
+});
+
+// The one read the dashboard is built from. It is a read of the server rather than of a saved resource, so
+// it is named by its own group and not folded into the configuration or the log view.
+test('the Status group names the one live status read', () => {
+  const groups = buildOpenApiGroups(contract);
+
+  const status = groups.find((group) => group.title === 'Status');
+
+  assert.ok(status, 'the view names no Status group: the status read lands in no group');
+
+  assert.deepEqual(status.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`), ['GET /api/admin/status']);
 });
 
 // The call history over HTTP. The section shows what the server answers, so the three
