@@ -153,6 +153,11 @@
   --rdio-accent: rgb(76, 175, 80);
   --rdio-accent-dark: rgb(56, 142, 64);
   --rdio-warn: rgb(244, 67, 54);
+
+  /* The same warning, light enough to read. --rdio-warn is the colour of a surface, an icon, or a
+     line: put on a card at body size it measures 4.37:1 against the card, which is under the 4.5:1
+     body text has to clear. This is the red used when the warning is a word an operator reads. */
+  --rdio-warn-text: rgb(255, 138, 128);
   --rdio-font-family: Roboto, "Helvetica Neue", sans-serif;
   --rdio-mono: "Roboto Mono", ui-monospace, "Cascadia Mono", monospace;
 

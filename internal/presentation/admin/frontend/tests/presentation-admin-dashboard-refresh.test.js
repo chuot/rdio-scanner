@@ -15,7 +15,7 @@ import test from 'node:test';
 import { getAdminContext } from '../application/admin-context.js';
 import { ADMIN_TOKEN_KEY } from '../infrastructure/token-storage.js';
 
-import { STATUS_REFRESH_DELAY } from '../domain/dashboard-status.js';
+import { STATUS_REFRESH_DELAY, STATUS_STALE_AFTER_MS } from '../domain/dashboard-status.js';
 
 import '../../../common/frontend/presentation/ui/primitives.js';
 
@@ -66,6 +66,16 @@ let statusReads = 0;
 let held = false;
 const pending = [];
 
+// The moment a status read names. Whether the page thinks the figures it is holding have gone stale is a
+// comparison against the page's own clock, so the fixture names the moment the read is happening rather
+// than an instant copied from a printed page: a fixed one would be current or stale depending on when the
+// test ran.
+let statusNow = new Date().toISOString();
+
+function servedStatus() {
+  return { ...STATUS, server: { ...STATUS.server, now: statusNow } };
+}
+
 function answer(body) {
   return {
     status: 200,
@@ -87,7 +97,7 @@ globalThis.fetch = async (url) => {
 
     if (held) return new Promise((resolve) => pending.push(resolve));
 
-    return answer(STATUS);
+    return answer(servedStatus());
   }
 
   return answer({});
@@ -96,7 +106,7 @@ globalThis.fetch = async (url) => {
 function releaseHeld() {
   held = false;
 
-  for (const resolve of pending.splice(0)) resolve(answer(STATUS));
+  for (const resolve of pending.splice(0)) resolve(answer(servedStatus()));
 }
 
 // The configuration socket, held the same way: the test decides when the server pushed.
@@ -122,6 +132,37 @@ globalThis.WebSocket = class FakeAdminSocket {
 // The dashboard's interval, taken off the clock, so that "the interval arrived" is something the test says
 // rather than something the test waits for.
 const holdTheRefreshInterval = () => holdRefreshInterval(STATUS_REFRESH_DELAY);
+
+// The page's own clock, moved forward. An operator who left this section behind another tab and came back
+// an hour later is a thing no test waits for, and the clock the page measures its figures against is the
+// one thing that moved while they were gone.
+function withPageClockAdvancedBy(offsetMs, moveThePage) {
+  const RealDate = globalThis.Date;
+
+  class AdvancedDate extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) super(RealDate.now() + offsetMs);
+
+      else super(...args);
+    }
+  }
+
+  globalThis.Date = AdvancedDate;
+
+  try {
+    moveThePage();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
+
+function readLineText(el) {
+  const line = findAll(el, (node) => node.classList?.contains('rdio-dashboard-read'))[0];
+
+  const words = (node) => [node._text ?? '', ...(node.children ?? []).map(words)].join('');
+
+  return line ? words(line).trim() : '';
+}
 
 // The page, opened the way the shell opens it: a session the browser holds, the configuration the session
 // starts with, and the section the operator is standing on.
@@ -337,6 +378,39 @@ test('the page stops asking while it is not the page the operator is looking at'
     clock.fire();
 
     assert.equal(statusReads, 1, `coming back asked the server ${statusReads} times, wanting one read`);
+
+    el.disconnectedCallback();
+    socket.close();
+  } finally {
+    setPageVisibility('visible');
+    clock.release();
+  }
+});
+
+// A page that stopped asking has also stopped keeping its figures current, and the figures stay on the
+// screen while it does. The line that attaches a moment to every one of them is re-read at the moment the
+// operator looks at the page again, rather than waiting for the next poll to notice.
+test('the page says the figures it is holding have gone stale when the operator comes back to them', async () => {
+  const clock = holdTheRefreshInterval();
+
+  try {
+    const { el, socket } = await openDashboard();
+
+    assert.doesNotMatch(
+      readLineText(el),
+      /no longer keeping it current/,
+      `the page calls its own figures stale before any of them have aged: "${readLineText(el)}"`,
+    );
+
+    setPageVisibility('hidden');
+
+    withPageClockAdvancedBy(STATUS_STALE_AFTER_MS + 1000, () => setPageVisibility('visible'));
+
+    assert.match(
+      readLineText(el),
+      /no longer keeping it current/,
+      `coming back to a page whose figures have aged says "${readLineText(el)}"`,
+    );
 
     el.disconnectedCallback();
     socket.close();

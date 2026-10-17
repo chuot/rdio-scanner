@@ -148,6 +148,13 @@ class RdioAdminDashboard extends HTMLElement {
 
     if (this.autoRefresh && document.visibilityState !== 'hidden') this.schedule.start();
     else this.schedule.stop();
+
+    // Coming back is the moment the figures on the page are looked at again, and the page's clock has been
+    // moving the whole time it was away. The page re-reads its own claim about them here rather than leaving
+    // an operator looking at an hour-old answer under a line that says nothing about it, and rather than
+    // waiting for the next poll to notice: the first poll lands an interval after the operator is already
+    // reading.
+    this.render();
   }
 
   render() {
@@ -199,7 +206,13 @@ class RdioAdminDashboard extends HTMLElement {
 
     // The page's own clock against the instant the answer was read. Past three intervals the page can no
     // longer assume it is keeping the numbers current, and saying so is the only honest thing left.
-    const stale = isStale(status.fetchedAt, new Date().toISOString());
+    //
+    // A read the server refused is that state already: the figures on the page are the ones from the last
+    // read that answered, and the read that would have replaced them is the one that did not. The store
+    // sees the second refusal as the same failure as the first and tells nobody about it, so a page that
+    // only rewrites this line when something tells it to would go on claiming its figures are current.
+    // The page knows it has not read the server, and says so from the first refusal onward.
+    const stale = status.failed || isStale(status.fetchedAt, new Date().toISOString());
 
     this.readLine.textContent = stale
       ? `Read at ${at}, and this page is no longer keeping it current.`

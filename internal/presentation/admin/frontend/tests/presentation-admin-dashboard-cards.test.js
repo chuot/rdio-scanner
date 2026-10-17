@@ -174,6 +174,19 @@ function figure(el, key, label) {
   return term ? text(term.parent).trim() : null;
 }
 
+function readLineText(el) {
+  return text(findAll(el, (node) => node.classList?.contains('rdio-dashboard-read'))[0]).trim();
+}
+
+// A snapshot whose read is happening now: whether the page considers the figures it holds current is a
+// comparison against the page's own clock, and a fixture that names an instant from a printed page is
+// current or stale depending on when the test ran.
+function readNow() {
+  const now = new Date().toISOString();
+
+  return { ...STATUS, server: { ...STATUS.server, now } };
+}
+
 // The whole point of the section is that the state of the deployment is the first thing on the page, and
 // the operator reads the cards in that order.
 test('the dashboard shows the six cards in the order the operator reads the deployment', () => {
@@ -464,4 +477,52 @@ test('the page says when it last read the server', () => {
   assert.match(text(read), /read at \d{2}:\d{2}/i, `the last-read line says "${text(read).trim()}"`);
 
   el.disconnectedCallback();
+});
+
+// The failure panel says the numbers are not on the page. The line that attaches a moment to every figure
+// has to say the other half: the moment the page is holding is not being kept up to date any more, because
+// the read that would have kept it current is the one the server refused.
+test('a refused read says the figures the page is holding are no longer being kept current', async () => {
+  const context = getAdminContext();
+
+  const el = openDashboard(readNow());
+
+  try {
+    // The read the section makes when it opens, settled first: the refusal has to be a read the page makes
+    // after the server started refusing, and not the one it had already asked for.
+    await context.useCases.loadStatus();
+
+    assert.doesNotMatch(
+      readLineText(el),
+      /no longer keeping it current/,
+      `the page calls its own figures stale before anything has gone wrong: "${readLineText(el)}"`,
+    );
+
+    refused = true;
+
+    await context.useCases.loadStatus();
+
+    assert.match(readLineText(el), /read at \d{2}:\d{2}/i, `the read line stopped naming the moment: "${readLineText(el)}"`);
+    assert.match(
+      readLineText(el),
+      /no longer keeping it current/,
+      `the read line says "${readLineText(el)}" while the server is refusing reads`,
+    );
+
+    // The next refusal is, as far as the store can see, the same failure as the one before it, and a page
+    // that only rewrites its own words when something tells it to would go on claiming its figures are
+    // current. It is the page that knows it has not read the server, and it says so however long the reads
+    // stay refused.
+    await context.useCases.loadStatus();
+
+    assert.match(
+      readLineText(el),
+      /no longer keeping it current/,
+      `the read line says "${readLineText(el)}" after the third refused read in a row`,
+    );
+  } finally {
+    refused = false;
+
+    el.disconnectedCallback();
+  }
 });

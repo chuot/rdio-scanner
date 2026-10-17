@@ -698,13 +698,19 @@ rdio-admin .rdio-dashboard-state {
   padding-left: var(--rdio-space-2);
 }
 
+/* The word is read, so it takes the readable red; the line beside it is looked at, not read, and
+   keeps the warning's own colour. */
 rdio-admin .rdio-dashboard-card.attention .rdio-dashboard-state {
   border-left-color: var(--rdio-warn);
-  color: var(--rdio-warn);
+  color: var(--rdio-warn-text);
 }
 
+/* A state the page cannot answer is not a state that is working: the word stays the operator's own
+   colour and only the line beside it goes neutral, so a card that does not know is never the green of a
+   card that is fine. */
 rdio-admin .rdio-dashboard-card.unknown .rdio-dashboard-state {
   border-left-color: var(--rdio-border);
+  color: var(--rdio-foreground);
 }
 
 rdio-admin .rdio-dashboard-reason {
