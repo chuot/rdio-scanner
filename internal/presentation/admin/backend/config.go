@@ -84,6 +84,14 @@ type AdminDeps struct {
 	// composition root asks once and hands the answer here.
 	Docker bool
 
+	// BaseDir is the folder the server was told to serve, which the status read names beside the version
+	// and the container answer. An empty string is the operator naming none, and is answered as one.
+	BaseDir string
+
+	// Status answers what this server is doing right now: the whole of what the administrator's landing
+	// page is built from. It is the only read in the server that answers live state, and it is read-only.
+	Status *application.GetRuntimeStatusHandler
+
 	Version string
 }
 
@@ -103,8 +111,10 @@ type Admin struct {
 	configurationSection *application.UpdateConfigurationSectionHandler
 	systemSubSection     *application.UpdateSystemSubSectionHandler
 	docker               bool
+	baseDir              string
 	logout               *application.AdminLogoutHandler
 	searchLogs           *application.SearchLogsHandler
+	status               *application.GetRuntimeStatusHandler
 	login                *application.AdminLoginHandler
 	password             *application.ChangeAdminPasswordHandler
 	removeUser           *application.RemoveAccessUserHandler
@@ -131,8 +141,10 @@ func NewAdmin(deps AdminDeps) *Admin {
 		configurationSection: deps.ConfigurationSection,
 		systemSubSection:     deps.SystemSubSection,
 		docker:               deps.Docker,
+		baseDir:              deps.BaseDir,
 		logout:               deps.Logout,
 		searchLogs:           deps.SearchLogs,
+		status:               deps.Status,
 		login:                deps.Login,
 		password:             deps.Password,
 		removeUser:           deps.RemoveUser,
@@ -169,6 +181,7 @@ func (admin *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/logs", admin.Logs)
 	mux.HandleFunc("/api/admin/logout", admin.Logout)
 	mux.HandleFunc("/api/admin/password", admin.Password)
+	mux.HandleFunc("/api/admin/status", admin.Status)
 	mux.HandleFunc("/api/admin/user-add", admin.UserAdd)
 	mux.HandleFunc("/api/admin/user-remove", admin.UserRemove)
 }
@@ -383,6 +396,44 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// Status reads what this server is doing right now, which is the whole of what the administrator's
+// landing page is built from.
+//
+// The credential is settled before the method, and the method before anything is read. The status read is
+// several statements over a database that can hold years of recorded calls, and an anonymous request that
+// cost them would be a way for anyone to make this server work.
+//
+// This path is not a websocket path. The whole-configuration path hands a request that asks to become a
+// connection to the administrator's socket; this one answers such a request as the ordinary read it is,
+// because a status read that quietly became a connection would leave the page polling a socket it never
+// asked for.
+//
+// A read that failed is answered with 417 and nothing in the body. A zeroed snapshot would be read as a
+// server that is healthy and idle, which is the one thing this view must never say about a server it could
+// not read.
+func (admin *Admin) Status(w http.ResponseWriter, r *http.Request) {
+	if !admin.sessionIsOpen(r) {
+		w.WriteHeader(http.StatusUnauthorized)
+
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	status, err := admin.status.Handle(r.Context(), application.GetRuntimeStatusQuery{})
+	if err != nil {
+		w.WriteHeader(http.StatusExpectationFailed)
+
+		return
+	}
+
+	writeJSON(w, dto.AdminStatus(status, admin.version, admin.docker, admin.baseDir))
 }
 
 // Password changes the credential an administrator logs in with.

@@ -143,6 +143,12 @@ type Server struct {
 	adminSessions  *adminbackend.Sessions
 	listenerCounts *application.ListenerCountDebouncer
 
+	// runtime is the composition root's own answer to what it is running, for the status read. It is
+	// built while the server is wired and marked started when the start sequence runs, so that a server
+	// that was assembled and never started reports no uptime instead of an uptime counted backwards from
+	// the Unix epoch.
+	runtime *runtimeState
+
 	// mcpSurface is the Model Context Protocol endpoint, built only when the configuration names it. An
 	// assistant holding a session is a connection the server took over and has to end itself, the same
 	// reason the listener and the administrator's configuration sockets are ended here.
@@ -432,6 +438,21 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	s.adminSessions = adminSessions
 
+	// The status read asks what this server is running, and only the composition root is holding all of
+	// it at once: the hub's connections, the watchers, the holds, the administrator connections, the two
+	// audio programs, and the file the database is written into.
+	s.runtime = &runtimeState{
+		hub:       hub,
+		watches:   watches,
+		held:      held,
+		sessions:  adminSessions,
+		converter: converter,
+		prober:    prober,
+
+		dialect: s.dialect,
+		dbPath:  s.config.GetDbFilePath(),
+	}
+
 	configurationPorts := application.ConfigurationPorts{
 		ConfigurationRepositories: s.repos,
 		Admin:                     adminSessions,
@@ -455,6 +476,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Configuration:        application.NewUpdateConfigurationHandler(configurationPorts),
 		ConfigurationSection: application.NewUpdateConfigurationSectionHandler(configurationPorts),
 		SystemSubSection:     application.NewUpdateSystemSubSectionHandler(configurationPorts),
+		BaseDir:              s.config.BaseDir,
 		Docker:               os.Getenv("DOCKER") != "",
 		Logout:               application.NewAdminLogoutHandler(tokensAdapter, s.logs, s.clock),
 		Logs:                 s.logs,
@@ -464,8 +486,13 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Password:             application.NewChangeAdminPasswordHandler(options, credentials, credentials, s.logs, s.clock),
 		RemoveUser:           application.NewRemoveAccessUserHandler(accessUserPorts),
 		Session:              application.NewCheckAdminSessionHandler(tokensAdapter),
-		Version:              s.config.Version,
-		Trusted:              s.trusted,
+
+		// Status answers what this server is doing right now, which is the whole of what the
+		// administrator's landing page is built from.
+		Status: application.NewGetRuntimeStatusHandler(s.runtime, calls, logs, s.clock),
+
+		Version: s.config.Version,
+		Trusted: s.trusted,
 	})
 
 	uploads := upload.New(upload.Deps{
@@ -580,6 +607,12 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 // sessions, and the listener-count debouncer is the thing the hub tells when the count of listeners
 // changes. The administrator's socket has nothing to start: it starts when an administrator connects.
 func (s *Server) Start(ctx context.Context) error {
+	// The instant this server's start sequence ran is what the status read counts an uptime from. It is
+	// recorded here and not read back out of the log line the start writes: the log is something the
+	// operator prunes, and an uptime is not a thing that should depend on how much of the past this
+	// deployment keeps.
+	s.runtime.markStarted(s.clock.Now())
+
 	// The legacy server ignores a startup notice it cannot store, and the line has already reached the
 	// console by the time the log view is asked for it.
 	_ = s.logs.AppendLog(ctx, domain.LogEntry{

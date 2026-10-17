@@ -3110,3 +3110,231 @@ func TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin(t *testing
 		t.Errorf("after a proven login the stored credential is %q, want it renewed at the configured cost 12", renewed.AdminPasswordHash)
 	}
 }
+
+// The status read asks the composition root what it is running, because no single part of the server holds
+// the whole answer: the hub holds the listener connections, the watchers hold the directories, the delayer
+// holds the calls, and the administrator socket holds the administrator connections.
+func TestTheCompositionRootAnswersWhatItIsRunning(t *testing.T) {
+	srv := testServer(t)
+
+	if started := srv.runtime.ServerStarted(); !started.IsZero() {
+		t.Errorf("a server that was assembled and never started reports %s as its start, want nothing: an uptime "+
+			"counted from an instant that never happened is a number no operator can use", started)
+	}
+
+	if count := srv.runtime.ListenerCount(); count != 0 {
+		t.Errorf("ListenerCount() = %d, want 0: no listener has connected", count)
+	}
+
+	if count := srv.runtime.AdministratorSessionCount(); count != 0 {
+		t.Errorf("AdministratorSessionCount() = %d, want 0: no administrator has connected", count)
+	}
+
+	if running := srv.runtime.DirwatchersRunning(); running != 0 {
+		t.Errorf("DirwatchersRunning() = %d, want 0: the configuration names no directory to watch", running)
+	}
+
+	if held := srv.runtime.HeldCallCount(); held != 0 {
+		t.Errorf("HeldCallCount() = %d, want 0: nothing is waiting out a hold", held)
+	}
+}
+
+// The instant the start sequence ran is what an uptime is counted from, and it is recorded by the start and
+// not read back out of the log line the start writes: the log is something the operator prunes, and an
+// uptime is not a thing that should depend on how much of the past this deployment keeps.
+func TestTheStartedServerReportsWhenItStarted(t *testing.T) {
+	before := time.Now()
+
+	srv := startedTestServer(t)
+
+	started := srv.runtime.ServerStarted()
+
+	if started.IsZero() {
+		t.Fatal("a server that has started reports no start, want the instant its start sequence ran")
+	}
+
+	if started.Before(before) || started.After(time.Now()) {
+		t.Errorf("the server reports it started at %s, want an instant between %s and now", started, before)
+	}
+}
+
+// A deployment writing its database into a file it owns can state how big that file is. It is the size of
+// the thing the operator is running out of, which is why the status view names it.
+func TestTheServerStatesTheSizeOfTheDatabaseFileItWritesInto(t *testing.T) {
+	srv := startedTestServer(t)
+
+	bytes, known := srv.runtime.DatabaseSize()
+
+	if !known {
+		t.Fatal("the server reports it cannot state the size of its own database, want the answer a deployment " +
+			"writing into a file it owns gives")
+	}
+
+	info, err := os.Stat(srv.config.GetDbFilePath())
+	if err != nil {
+		t.Fatalf("the database file the server writes into: %v", err)
+	}
+
+	if bytes != info.Size() {
+		t.Errorf("the server reports %d bytes, want the %d bytes the file it is writing into holds", bytes, info.Size())
+	}
+}
+
+// A deployment whose data lives inside a database server process it does not own cannot state the size of
+// its own database. A number read out of that process means something different on each backend — the size
+// of a data directory, of a tablespace, of nothing at all — and a number whose meaning depends on the
+// backend is worse on a status page than no number.
+func TestTheServerCannotStateTheSizeOfADatabaseItDoesNotOwn(t *testing.T) {
+	for _, dialect := range []persistence.Dialect{
+		persistence.DialectMariadb,
+		persistence.DialectMysql,
+		persistence.DialectPostgresql,
+	} {
+		state := &runtimeState{dialect: dialect, dbPath: filepath.Join(t.TempDir(), "rdio-scanner.db")}
+
+		bytes, known := state.DatabaseSize()
+
+		if known {
+			t.Errorf("%s: the server claims it can state the size of a database it does not own", dialect)
+		}
+
+		if bytes != 0 {
+			t.Errorf("%s: the server reports %d bytes, want 0", dialect, bytes)
+		}
+	}
+}
+
+// A SQLite deployment whose file is not there has no size to report either. The answer is the same one the
+// deployment on another backend gets, and not a size of zero that reads as an empty database.
+func TestTheServerReportsNoDatabaseSizeForAFileThatIsNotThere(t *testing.T) {
+	state := &runtimeState{
+		dialect: persistence.DialectSqlite,
+		dbPath:  filepath.Join(t.TempDir(), "rdio-scanner.db"),
+	}
+
+	bytes, known := state.DatabaseSize()
+
+	if known {
+		t.Error("the server reports it knows the size of a database file that is not there, want it to say it cannot know")
+	}
+
+	if bytes != 0 {
+		t.Errorf("the server reports %d bytes for a database file that is not there, want 0", bytes)
+	}
+}
+
+// The status read is wired into the composition root, and the snapshot it answers is this server's own:
+// the instant its start sequence ran, the connections it is holding, the folders and files it is serving,
+// and the twenty-four whole hours the chart is drawn over.
+func TestTheWiredServerAnswersItsOwnStatus(t *testing.T) {
+	srv := startedTestServer(t)
+
+	token := administratorToken(t, srv)
+
+	rec := authorizedRequest(t, srv, http.MethodGet, "/api/admin/status", token, "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the status read answered %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var status struct {
+		Server struct {
+			Version       string    `json:"version"`
+			Docker        bool      `json:"docker"`
+			StartedAt     time.Time `json:"startedAt"`
+			Now           time.Time `json:"now"`
+			UptimeSeconds int64     `json:"uptimeSeconds"`
+			BaseDir       string    `json:"baseDir"`
+			DatabaseBytes int64     `json:"databaseBytes"`
+			DatabaseKnown bool      `json:"databaseKnown"`
+		} `json:"server"`
+
+		Live struct {
+			Listeners             int  `json:"listeners"`
+			AdministratorSessions int  `json:"administratorSessions"`
+			DirwatchersRunning    int  `json:"dirwatchersRunning"`
+			HeldCalls             int  `json:"heldCalls"`
+			AudioConversion       bool `json:"audioConversion"`
+			AudioProbe            bool `json:"audioProbe"`
+		} `json:"live"`
+
+		Activity struct {
+			WindowStart time.Time `json:"windowStart"`
+			WindowEnd   time.Time `json:"windowEnd"`
+			Hours       []struct {
+				Start time.Time `json:"start"`
+				Count uint64    `json:"count"`
+			} `json:"hours"`
+			Busiest []any `json:"busiest"`
+			Recent  []any `json:"recent"`
+		} `json:"activity"`
+
+		Logs struct {
+			Errors   uint64 `json:"errors"`
+			Warnings uint64 `json:"warnings"`
+			Sources  []any  `json:"sources"`
+		} `json:"logs"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("the status answer is not a status snapshot: %v\n%s", err, rec.Body.String())
+	}
+
+	if status.Server.Version != theTestVersion {
+		t.Errorf("the status answer names %q as the version, want the version this server reports", status.Server.Version)
+	}
+
+	if status.Server.BaseDir != srv.config.BaseDir {
+		t.Errorf("the status answer names %q as the folder the server serves, want %q", status.Server.BaseDir, srv.config.BaseDir)
+	}
+
+	if !status.Server.StartedAt.Equal(srv.runtime.ServerStarted()) {
+		t.Errorf("the status answer names %s as the start, want the instant the start sequence ran, %s",
+			status.Server.StartedAt, srv.runtime.ServerStarted())
+	}
+
+	if status.Server.UptimeSeconds < 0 {
+		t.Errorf("the status answer reports an uptime of %d seconds, want never a negative number", status.Server.UptimeSeconds)
+	}
+
+	// A server that started a moment ago has been up for nothing yet, and the answer says so in whole
+	// seconds: the page decides how to say a length, and the payload states the count.
+	if want := int64(status.Server.Now.Sub(status.Server.StartedAt) / time.Second); status.Server.UptimeSeconds != want {
+		t.Errorf("the status answer reports an uptime of %d seconds, want %d: the whole seconds between the start "+
+			"it names and the instant it names as now", status.Server.UptimeSeconds, want)
+	}
+
+	if !status.Server.DatabaseKnown || status.Server.DatabaseBytes <= 0 {
+		t.Errorf("the status answer reports %d bytes known=%v, want the size of the file this server is writing into",
+			status.Server.DatabaseBytes, status.Server.DatabaseKnown)
+	}
+
+	// Nothing has connected to this server, and the live block says so rather than repeating what the
+	// configuration names.
+	if status.Live.Listeners != 0 || status.Live.AdministratorSessions != 0 || status.Live.DirwatchersRunning != 0 || status.Live.HeldCalls != 0 {
+		t.Errorf("the live block reports %d listeners, %d administrator connections, %d watchers, %d held calls, "+
+			"want none of each: nothing has connected and the configuration names no directory to watch",
+			status.Live.Listeners, status.Live.AdministratorSessions, status.Live.DirwatchersRunning, status.Live.HeldCalls)
+	}
+
+	// The chart's window is always the whole window, whatever the history holds.
+	if len(status.Activity.Hours) != application.StatusHourBuckets {
+		t.Errorf("the status answer carries %d hour buckets, want the %d of the window",
+			len(status.Activity.Hours), application.StatusHourBuckets)
+	}
+
+	for i, hour := range status.Activity.Hours {
+		if want := status.Activity.WindowStart.Add(time.Duration(i) * time.Hour); !hour.Start.Equal(want) {
+			t.Errorf("bucket %d begins at %s, want %s", i, hour.Start, want)
+		}
+	}
+
+	if status.Activity.WindowEnd.Sub(status.Activity.WindowStart) != application.StatusWindow {
+		t.Errorf("the activity window is %s, want %s", status.Activity.WindowEnd.Sub(status.Activity.WindowStart), application.StatusWindow)
+	}
+
+	if status.Activity.Busiest == nil || status.Activity.Recent == nil || status.Logs.Sources == nil {
+		t.Errorf("the status answer carries a list as null: busiest=%v recent=%v sources=%v, want empty lists",
+			status.Activity.Busiest, status.Activity.Recent, status.Logs.Sources)
+	}
+}

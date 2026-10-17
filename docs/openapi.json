@@ -789,6 +789,39 @@
         "description": "Search the log view: one page of entries with the filters the administrator log panel sends."
       }
     },
+    "/api/admin/status": {
+      "get": {
+        "summary": "Live status of this server",
+        "security": [
+          {
+            "adminJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStatus"
+                }
+              }
+            },
+            "description": "What this server is, what it is running, what it recorded in the last 24 hours, and what it complained about."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "No valid session token in the Authorization header."
+          },
+          "405": {
+            "description": "Method not answered by this endpoint."
+          },
+          "417": {
+            "description": "Status read failure."
+          }
+        },
+        "description": "Read the live status of this server. The administrator's landing page is built from this read alone. It answers GET and nothing else: it reads, and a page that could write through it would be a page that could stop the server."
+      }
+    },
     "/api/admin/password": {
       "post": {
         "summary": "Change the admin password",
@@ -2229,6 +2262,224 @@
             "items": {
               "$ref": "#/components/schemas/Log"
             }
+          }
+        }
+      },
+      "AdminStatus": {
+        "type": "object",
+        "description": "What this server is, what it is running right now, what it recorded over the last 24 hours, and what it lately complained about. Every list is answered as a list even when nothing was recorded.",
+        "properties": {
+          "server": {
+            "type": "object",
+            "description": "The deployment and what this server can measure about itself.",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "docker": {
+                "type": "boolean",
+                "description": "Whether the server thinks it is running in a container. The same answer the configuration read gives."
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant this server's start sequence ran, or the Unix epoch when it has not recorded one."
+              },
+              "now": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant the read ran, so that a page can tell how fresh the snapshot is."
+              },
+              "uptimeSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Whole seconds since startedAt, never negative, and 0 when no start was recorded."
+              },
+              "baseDir": {
+                "type": "string",
+                "description": "The folder the server was told to serve, or an empty string when the operator named none."
+              },
+              "databaseBytes": {
+                "type": "integer",
+                "description": "The size of the file this server writes its database into. 0 when this deployment cannot state it."
+              },
+              "databaseKnown": {
+                "type": "boolean",
+                "description": "Whether this deployment can state the size at all. False on a backend whose data lives in a database server this one does not own."
+              }
+            }
+          },
+          "live": {
+            "type": "object",
+            "description": "What exists at the instant the read ran, and not what the configuration says should exist.",
+            "properties": {
+              "listeners": {
+                "type": "integer"
+              },
+              "administratorSessions": {
+                "type": "integer",
+                "description": "The open administrator connections, the page reading this count among them."
+              },
+              "dirwatchersRunning": {
+                "type": "integer",
+                "description": "The directory watchers actually watching right now: not the number configured, and not the number enabled."
+              },
+              "heldCalls": {
+                "type": "integer",
+                "description": "The calls waiting out a hold right now."
+              },
+              "audioConversion": {
+                "type": "boolean",
+                "description": "Whether this deployment converts audio at all."
+              },
+              "audioProbe": {
+                "type": "boolean",
+                "description": "Whether this deployment measures the length of a recording at all."
+              }
+            }
+          },
+          "activity": {
+            "type": "object",
+            "description": "What this server recorded over the 24-hour window.",
+            "properties": {
+              "windowStart": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "windowEnd": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The end of the whole hour the read ran in, and not the instant it ran: two dashboards opened a second apart see the same buckets."
+              },
+              "callsToday": {
+                "type": "integer",
+                "description": "Calls recorded since this server's own local midnight."
+              },
+              "callsLastHour": {
+                "type": "integer",
+                "description": "Calls recorded in the rolling hour before the read ran. It can start mid-hour, and is not the current bucket."
+              },
+              "lastCallAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant of the most recent recorded call. Absent when the history is empty."
+              },
+              "hours": {
+                "type": "array",
+                "description": "The whole window, cut into 24 whole hours, oldest first. An hour with nothing in it is a zero and not a gap.",
+                "items": {
+                  "$ref": "#/components/schemas/AdminStatusHour"
+                }
+              },
+              "busiest": {
+                "type": "array",
+                "description": "The five talkgroups with the most calls in the window, most first.",
+                "items": {
+                  "$ref": "#/components/schemas/AdminStatusTalkgroup"
+                }
+              },
+              "recent": {
+                "type": "array",
+                "description": "The five most recent recorded calls, newest first, as summaries: never with the audio.",
+                "items": {
+                  "$ref": "#/components/schemas/AdminStatusCall"
+                }
+              }
+            }
+          },
+          "logs": {
+            "type": "object",
+            "description": "What this server complained about over the last 24 hours.",
+            "properties": {
+              "windowStart": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The instant 24 hours before the read ran."
+              },
+              "errors": {
+                "type": "integer"
+              },
+              "warnings": {
+                "type": "integer"
+              },
+              "sources": {
+                "type": "array",
+                "description": "The subsystems that wrote an error or a warning, most trouble first. A subsystem that wrote neither is not named.",
+                "items": {
+                  "$ref": "#/components/schemas/AdminStatusLogSource"
+                }
+              }
+            }
+          }
+        }
+      },
+      "AdminStatusHour": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The instant the whole hour begins."
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "AdminStatusTalkgroup": {
+        "type": "object",
+        "description": "One talkgroup's share of the window, named the way the configuration names it: the operator reads a talkgroup, and not a pair of references.",
+        "properties": {
+          "systemRef": {
+            "type": "integer"
+          },
+          "talkgroupRef": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "AdminStatusCall": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "integer"
+          },
+          "systemRef": {
+            "type": "integer"
+          },
+          "talkgroupRef": {
+            "type": "integer"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "audioLengthSeconds": {
+            "type": "number",
+            "description": "How long the recording lasts. The recording itself is not here: this read is asked every few seconds, and audio is the heaviest thing this server keeps."
+          }
+        }
+      },
+      "AdminStatusLogSource": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "integer"
+          },
+          "warnings": {
+            "type": "integer"
           }
         }
       },

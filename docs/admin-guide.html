@@ -2662,6 +2662,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td><code>PUT /api/admin/config/systems/{systemId}/units</code></td><td>session</td><td>Saves the units of one system.</td></tr>
       <tr><td><code>GET /api/admin/alerts</code></td><td>session</td><td>The named alert oscillator sequences the alert selects list.</td></tr>
       <tr><td><code>POST /api/admin/logs</code></td><td>session</td><td>Searches the log: sort order, date, level, subsystem, text, and paging.</td></tr>
+      <tr><td><code>GET /api/admin/status</code></td><td>session</td><td>Reads what the server is doing right now: uptime, open connections, the watchers actually running, the calls waiting out a hold, the last 24 hours of calls, and the errors and warnings the log holds. The dashboard is built from this read.</td></tr>
       <tr><td><code>POST /api/admin/password</code></td><td>session</td><td>Changes the administrator password. The current password is verified.</td></tr>
       <tr><td><code>POST /api/admin/user-add</code></td><td>session</td><td>Adds a listener access code, with its ident, expiration, limit, and scope.</td></tr>
       <tr><td><code>POST /api/admin/user-remove</code></td><td>session</td><td>Removes every access code sharing the user name the body names.</td></tr>

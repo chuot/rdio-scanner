@@ -161,6 +161,56 @@ test('the user management and capture endpoints are documented', () => {
   }
 });
 
+// The status read is the only boundary in the server that answers what the server is doing right now,
+// and the administrator's landing page is built out of it alone. It answers GET and nothing else: it
+// reads, and a page that could write through it would be a page that could stop the server.
+test('the status read is documented as the one read that answers the whole snapshot', () => {
+  const item = doc.paths?.['/api/admin/status'];
+
+  assert.ok(item?.get, 'missing GET /api/admin/status');
+
+  for (const method of ['post', 'put', 'patch', 'delete']) {
+    assert.ok(!item[method], `the status read must not document ${method.toUpperCase()}: it reads and never writes`);
+  }
+
+  assert.deepEqual(item.get.security, [{ adminJwt: [] }], 'the status read is not open to an anonymous caller');
+
+  const answered = item.get.responses['200'].content['application/json'].schema;
+
+  assert.equal(answered.$ref, '#/components/schemas/AdminStatus',
+    'the status read does not answer the status snapshot');
+
+  const status = doc.components?.schemas?.AdminStatus;
+
+  assert.ok(status, 'missing the AdminStatus schema');
+
+  for (const block of ['server', 'live', 'activity', 'logs']) {
+    assert.ok(status.properties?.[block], `the status snapshot carries no ${block} block`);
+  }
+
+  // The lists are lists even when the server has recorded nothing, because a page that has to check
+  // each of them for being absent is a page that will eventually stop checking.
+  for (const list of ['hours', 'busiest', 'recent']) {
+    assert.equal(status.properties?.activity?.properties?.[list]?.type, 'array',
+      `activity.${list} is not a list`);
+  }
+
+  assert.equal(status.properties?.logs?.properties?.sources?.type, 'array', 'logs.sources is not a list');
+
+  // The page already holds the whole configuration, so the counts that come out of it are derived
+  // there; the status read carries no configuration of any kind.
+  for (const absent of ['config', 'options', 'systems', 'dirwatch', 'downstreams', 'alerts']) {
+    assert.ok(!status.properties?.[absent], `the status snapshot carries ${absent}, which is configuration and not status`);
+  }
+
+  for (const code of ['401', '405', '417']) {
+    assert.ok(item.get.responses[code], `the status read documents no ${code} answer`);
+  }
+
+  assert.ok(item.get.responses['401'].$ref || item.get.responses['401'].description,
+    'the status read\'s 401 answer says nothing');
+});
+
 test('raw-JWT bearer-less security scheme is declared and applied', () => {
   const scheme = doc.components?.securitySchemes?.adminJwt;
 

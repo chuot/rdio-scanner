@@ -84,6 +84,16 @@ type adminFixture struct {
 	hashes   *fakes.PasswordHasher
 	clock    *fakes.Clock
 
+	// runtime, activity, and tallies are the three reads the status view is built from: what the server
+	// is running, what it recorded, and what it complained about.
+	runtime  *fakes.Runtime
+	activity *fakes.CallActivity
+	tallies  *fakes.LogTallies
+
+	// BaseDir is the folder the server was told to serve, which the status read names beside the version
+	// and the container answer.
+	BaseDir string
+
 	// Docker is whether the server thinks it is running in a container, which is the one thing the
 	// configuration answer reports that is not configuration.
 	Docker bool
@@ -117,6 +127,10 @@ func newAdminFixture() *adminFixture {
 		password: fakes.NewPasswordVerifier(),
 		hashes:   fakes.NewPasswordHasher(),
 		clock:    fakes.NewClock(captureTime),
+
+		runtime:  &fakes.Runtime{},
+		activity: &fakes.CallActivity{},
+		tallies:  &fakes.LogTallies{},
 	}
 
 	// The capture's administrator is already logged in: the captures of the configuration and the log
@@ -150,6 +164,8 @@ func (fixture *adminFixture) buildRoutes() http.Handler {
 		Logs:                 fixture.logs,
 		Clock:                fixture.clock,
 		SearchLogs:           application.NewSearchLogsHandler(fixture.logs, fixture.clock),
+		Status:               application.NewGetRuntimeStatusHandler(fixture.runtime, fixture.activity, fixture.tallies, fixture.clock),
+		BaseDir:              fixture.BaseDir,
 		Login:                application.NewAdminLoginHandler(fixture.options, fixture.logs, fixture.tokens, fixture.password, fixture.hashes, fixture.password, fixture.clock),
 		Password:             application.NewChangeAdminPasswordHandler(fixture.options, fixture.password, fixture.hashes, fixture.logs, fixture.clock),
 		RemoveUser:           application.NewRemoveAccessUserHandler(application.AccessUserPorts{ConfigurationRepositories: fixture.repositories(), Logs: fixture.logs, Admin: fixture.sessions, Clock: fixture.clock}),
