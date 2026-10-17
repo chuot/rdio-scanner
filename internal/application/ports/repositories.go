@@ -55,6 +55,41 @@ type CallRepository interface {
 	DeleteCallsBefore(ctx context.Context, before time.Time) (int, error)
 }
 
+// CallActivityRepository reads the tallies and the newest rows a status view draws. It is kept apart
+// from CallRepository: the history view pages through calls for a caller who has a scope, and the status
+// view counts calls for the operator who administers the whole server. Neither should depend on the
+// other's method, and neither is handed the audio the history's one full read carries.
+type CallActivityRepository interface {
+	// CountCallsSince counts the recorded calls at or after the given instant.
+	CountCallsSince(ctx context.Context, from time.Time) (uint64, error)
+
+	// CountCallsByHour counts the recorded calls grouped into whole hours, oldest first. An hour with
+	// nothing in it is not reported; the query handler fills it.
+	CountCallsByHour(ctx context.Context, from time.Time) ([]CallHourCount, error)
+
+	// CountCallsByTalkgroup counts the recorded calls per talkgroup, most first, cut at limit.
+	CountCallsByTalkgroup(ctx context.Context, from time.Time, limit uint) ([]CallTalkgroupCount, error)
+
+	// RecentCalls returns the newest recorded calls, newest first, as summaries — never with audio.
+	RecentCalls(ctx context.Context, limit uint) ([]CallSummary, error)
+}
+
+// CallHourCount is one whole hour of the activity window and how many calls fall in it.
+type CallHourCount struct {
+	Hour  time.Time
+	Count uint64
+}
+
+// CallTalkgroupCount is one talkgroup's share of the window, named the way the configuration names it
+// so that the status view can show a talkgroup instead of a pair of references.
+type CallTalkgroupCount struct {
+	SystemRef    uint
+	TalkgroupRef uint
+	Name         string
+	Label        string
+	Count        uint64
+}
+
 // CallSearch is the resolved criteria a call-history search runs with. The presentation
 // layer submits raw criteria, the query handler resolves them — paging, sort direction,
 // the caller's access scope, and group and tag labels expanded into concrete
@@ -252,6 +287,26 @@ type LogRepository interface {
 	// DeleteLogsBefore removes the log entries older than the given instant and reports
 	// how many went.
 	DeleteLogsBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// LogTallyRepository counts what the server complained about. It is apart from LogRepository for the
+// same reason CallActivityRepository is apart from CallRepository: the log view pages and filters
+// entries for an operator reading them, and the status view tallies severities for an operator watching
+// a page.
+type LogTallyRepository interface {
+	// TallyLogLevels counts the error and warning entries written at or after the given instant, per
+	// severity and per subsystem. A severity with nothing written under it is not reported.
+	TallyLogLevels(ctx context.Context, from time.Time) ([]LogLevelTally, error)
+}
+
+// LogLevelTally is how many entries one subsystem wrote at one severity over the window.
+//
+// The severity is the plain string the domain carries it as (internal/domain/log.go:177): the three
+// names are the constants the log view filters on, and a level is not a thing with its own identity.
+type LogLevelTally struct {
+	Level  string
+	Source domain.LogSource
+	Count  uint64
 }
 
 // DirwatchRepository stores the watched directories.

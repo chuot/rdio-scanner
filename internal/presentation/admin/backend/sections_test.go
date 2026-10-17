@@ -63,6 +63,40 @@ func TestSectionEndpointRejectsASectionThisServerDoesNotHave(t *testing.T) {
 	}
 }
 
+// The dashboard is a section of the administrator's page and not of the configuration: it reads the
+// server and replaces nothing. So the configuration path answers it exactly as it answers a name it has
+// never heard of, and an administrator's page that ever tried to save it is told there is nothing there
+// to save rather than being handed an empty list it would then write over the server's own state.
+func TestSectionEndpointRefusesTheDashboardBecauseItSavesNothing(t *testing.T) {
+	fixture := newAdminFixture()
+
+	seedCaptures(t, fixture)
+
+	rec := fixture.authorized(http.MethodPut, "/api/admin/config/dashboard", `[]`)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 for a name that is not a configuration section: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = fixture.authorized(http.MethodGet, "/api/admin/config/dashboard", "")
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404: the dashboard has no configuration list to answer with", rec.Code)
+	}
+
+	// Refused before the credential and before the method, exactly as an unknown name is: the
+	// dashboard is not a section this server knows, and that is decided before anything else is.
+	rec = fixture.serve(adminRequest{method: http.MethodPut, path: "/api/admin/config/dashboard", body: `[]`})
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 and not 401: the name is decided before the credential", rec.Code)
+	}
+
+	if len(fixture.sessions.Announced) != 0 {
+		t.Error("a name that is not a section never began a save, and must not reach the open administrator connections")
+	}
+}
+
 // A section is only shown to a request carrying a credential the server accepts.
 func TestSectionEndpointRequiresACredentialTheServerAccepts(t *testing.T) {
 	fixture := newAdminFixture()

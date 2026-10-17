@@ -148,7 +148,11 @@ func TestIsConfigSectionKnowsTheEightSections(t *testing.T) {
 	// "dirwatch" is the section name; the plural is what the stored collection is called, and
 	// an administrator asking for "dirwatches" is asking for something the server has no such
 	// section for.
-	for _, name := range []string{"", "dirwatches", "delayed", "calls", "Access"} {
+	//
+	// "dashboard" is a section of the administrator's page and not of the configuration: it reads
+	// the server and saves nothing, so it has no list to replace and no path under the
+	// configuration to answer.
+	for _, name := range []string{"", "dirwatches", "delayed", "calls", "Access", "dashboard"} {
 		if IsConfigSection(name) {
 			t.Errorf("IsConfigSection(%q) = true, want false", name)
 		}
