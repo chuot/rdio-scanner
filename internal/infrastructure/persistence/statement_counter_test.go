@@ -84,6 +84,15 @@ func (c *statementCounter) count(prefix string) int {
 	return found
 }
 
+// total answers how many statements have been recorded since the last reset: the whole cost of one
+// piece of work, rather than the cost of one kind of statement inside it.
+func (c *statementCounter) total() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return len(c.queries)
+}
+
 // reset forgets what has been counted, so a test counts only the statements of the
 // work it is measuring.
 func (c *statementCounter) reset() {

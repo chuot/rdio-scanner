@@ -2159,7 +2159,9 @@ func testConfigIn(baseDir string, out io.Writer) Config {
 }
 
 // startedTestServerIn is a server that has been through the start sequence on a directory the test chose.
-func startedTestServerIn(t *testing.T, baseDir string) *Server {
+// It takes testing.TB rather than a test, so that a benchmark can start the same server
+// the tests start and time the work on it.
+func startedTestServerIn(t testing.TB, baseDir string) *Server {
 	t.Helper()
 
 	srv, err := New(testConfigIn(baseDir, io.Discard))

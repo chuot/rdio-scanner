@@ -240,7 +240,9 @@ type seedStatement struct {
 	args  []any
 }
 
-func seed(t *testing.T, db *sql.DB, statements ...seedStatement) {
+// seed takes testing.TB rather than a test: a benchmark seeds the same history a test
+// seeds, and the history is what makes the thing being timed worth timing.
+func seed(t testing.TB, db *sql.DB, statements ...seedStatement) {
 	t.Helper()
 
 	for _, statement := range statements {
