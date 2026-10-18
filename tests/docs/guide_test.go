@@ -590,6 +590,93 @@ func tabulatedFlags(t *testing.T, body, chapter string) map[string]string {
 	return rows
 }
 
+// The navigation is the map an administrator works from, and the guide's table of sections is that map with a
+// chapter beside every item. A table sorted one way while the column is ordered another leaves the reader to
+// match the two up by hand, and a row pointing at the wrong chapter describes a section as if it were
+// documented somewhere it is not. The order is read out of the administration frontend's own declaration, the
+// way the flag defaults are read out of the composition root.
+func TestTheGuideTabulatesTheSectionsInTheOrderTheNavigationListsThem(t *testing.T) {
+	body := guidePath(t)
+
+	want := navigationSections(t)
+
+	table := tableWithCaption(t, body, "The sections, and what each one configures")
+
+	var got []string
+
+	chapters := map[string]string{}
+
+	for _, m := range regexp.MustCompile(`(?is)<tr><td>([^<]+)</td><td>[^<]*</td><td><a href="#([a-z0-9-]+)">\d+</a></td></tr>`).FindAllStringSubmatch(table, -1) {
+		label := stripTags(m[1])
+
+		got = append(got, label)
+		chapters[label] = m[2]
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("the guide's section table names %d sections, the administration navigation lists %d: %v", len(got), len(want), got)
+	}
+
+	for i, label := range want {
+		if got[i] != label {
+			t.Errorf("the navigation lists %s as its item %d, the guide's table names %s there: %v", label, i+1, got[i], got)
+		}
+	}
+
+	for label, wantChapter := range sectionGuideChapters {
+		gotChapter, ok := chapters[label]
+		if !ok {
+			t.Errorf("the guide's section table does not name %s, which the navigation lists", label)
+
+			continue
+		}
+
+		if gotChapter != wantChapter {
+			t.Errorf("the guide's section table sends %s to %q, not to the chapter that describes it, %q", label, gotChapter, wantChapter)
+		}
+	}
+}
+
+// navigationSections reads the sections the administration navigation declares, in the order it declares them.
+// The declaration is one array of name and label entries; a navigation that stops declaring itself this way is
+// a navigation the guide can no longer be checked against, and that is named rather than guessed at.
+func navigationSections(t *testing.T) []string {
+	t.Helper()
+
+	source := repoFile(t, "internal", "presentation", "admin", "frontend", "presentation", "admin", "rdio-admin.js")
+
+	var labels []string
+
+	for _, m := range regexp.MustCompile(`\{\s*name:\s*'([a-z]+)',\s*label:\s*'([^']+)'`).FindAllStringSubmatch(source, -1) {
+		labels = append(labels, m[2])
+	}
+
+	if len(labels) < 14 {
+		t.Fatalf("the administration navigation declares %d sections in its own source: the declaration is not readable from it", len(labels))
+	}
+
+	return labels
+}
+
+// The chapter that describes each section the navigation lists.
+var sectionGuideChapters = map[string]string{
+	"Dashboard":   "ch-08-administration-interface",
+	"Systems":     "ch-11-systems-sites-talkgroups-units",
+	"Sites":       "ch-11-systems-sites-talkgroups-units",
+	"Talkgroups":  "ch-11-systems-sites-talkgroups-units",
+	"Units":       "ch-11-systems-sites-talkgroups-units",
+	"Groups":      "ch-12-groups-and-tags",
+	"Tags":        "ch-12-groups-and-tags",
+	"Dirwatch":    "ch-10-getting-audio-in",
+	"Downstreams": "ch-10-getting-audio-in",
+	"API Keys":    "ch-09-access-and-api-keys",
+	"Access":      "ch-09-access-and-api-keys",
+	"Options":     "ch-13-options",
+	"Logs":        "ch-14-logs",
+	"Tools":       "ch-15-tools",
+	"OpenAPI":     "ch-16-rest-api",
+}
+
 // A flag the guide tabulates that the server does not accept is a flag an administrator types and the
 // server refuses. A default the guide states wrongly is a setting the administrator believes they have.
 // Both tables are checked, because a reader looks the flags up in the appendix as often as they read

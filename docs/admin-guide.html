@@ -1337,30 +1337,35 @@ bcrypt_cost = 12</code></pre>
   <h3>The navigation</h3>
 
   <p>
-    The navigation lists the sections in alphabetical order, because an administrator looking for a
-    section knows where to scan. On a narrow viewport the navigation sits above the content and the
-    sections are a row of icons.
+    The navigation lists the sections in the order an administrator works through a deployment: the
+    Dashboard you land on, then the system and the sites, talkgroups, and units that belong to it, then the
+    groups and tags a listener browses by, then the directory watches and downstreams that carry audio, then
+    the API keys and access codes that say who may post calls and who may listen, then Options, then the Logs
+    you watch while the first calls arrive, then the Tools, and the OpenAPI contract last because it is
+    reference. Sections that answer the same question sit next to each other, so the sibling of what you are
+    looking at is where you are already looking. On a narrow viewport the navigation sits above the content
+    and the sections are a row of icons.
   </p>
 
   <table>
     <caption>The sections, and what each one configures</caption>
     <thead><tr><th scope="col">Section</th><th scope="col">What it carries</th><th scope="col">Chapter</th></tr></thead>
     <tbody>
-      <tr><td>Access</td><td>Listener access codes: who may listen, to which systems and talkgroups, until when.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
-      <tr><td>API Keys</td><td>The keys a recorder posts calls with, and a downstream presents.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
       <tr><td>Dashboard</td><td>What the server is doing right now: how long it has been up, the listener connections it is holding, the directory watchers it started, the calls it recorded in the last 24 hours and the talkgroups busiest among them, and the errors and warnings its own log holds. It reads and never writes, and it is the section you land on after signing in.</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
+      <tr><td>Systems</td><td>The systems: each row's own fields, and the system's list of blacklisted talkgroup references.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Sites</td><td>The sites of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Talkgroups</td><td>The talkgroups of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Units</td><td>The units of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Groups</td><td>Groups of talkgroups, the way a listener selects many talkgroups at once.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
+      <tr><td>Tags</td><td>Tags, the labels a listener filters by.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
       <tr><td>Dirwatch</td><td>The directories the server watches for a recorder's files. Removed from the navigation when the server's environment names the container.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>Downstreams</td><td>The other deployments calls are forwarded to.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
-      <tr><td>Groups</td><td>Groups of talkgroups, the way a listener selects many talkgroups at once.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
-      <tr><td>Logs</td><td>The server's own log, filtered and paged.</td><td><a href="#ch-14-logs">14</a></td></tr>
-      <tr><td>OpenAPI</td><td>Every endpoint the server answers, read from the contract the server publishes.</td><td><a href="#ch-16-rest-api">16</a></td></tr>
+      <tr><td>API Keys</td><td>The keys a recorder posts calls with, and a downstream presents.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
+      <tr><td>Access</td><td>Listener access codes: who may listen, to which systems and talkgroups, until when.</td><td><a href="#ch-09-access-and-api-keys">9</a></td></tr>
       <tr><td>Options</td><td>The server's behaviour options.</td><td><a href="#ch-13-options">13</a></td></tr>
-      <tr><td>Sites</td><td>The sites of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
-      <tr><td>Systems</td><td>The systems: each row's own fields, and the system's list of blacklisted talkgroup references.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
-      <tr><td>Tags</td><td>Tags, the labels a listener filters by.</td><td><a href="#ch-12-groups-and-tags">12</a></td></tr>
-      <tr><td>Talkgroups</td><td>The talkgroups of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>Logs</td><td>The server's own log, filtered and paged.</td><td><a href="#ch-14-logs">14</a></td></tr>
       <tr><td>Tools</td><td>Export and import the configuration, import talkgroups and units from CSV, change the password.</td><td><a href="#ch-15-tools">15</a></td></tr>
-      <tr><td>Units</td><td>The units of the system you have selected.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a></td></tr>
+      <tr><td>OpenAPI</td><td>Every endpoint the server answers, read from the contract the server publishes.</td><td><a href="#ch-16-rest-api">16</a></td></tr>
     </tbody>
   </table>
 
