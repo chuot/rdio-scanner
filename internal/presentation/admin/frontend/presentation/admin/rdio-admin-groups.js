@@ -1,7 +1,7 @@
-// rdio-admin-groups: groups section (legacy config/groups). Rows are
-// drag-sortable panels: label, audio alert select with audition, led color
-// select. New Group inserts first; hidden id/order round-trip; per-section
-// Save lives in the shared bar.
+// rdio-admin-groups: groups section (legacy config/groups). Rows are collapsible panels, one row
+// open at a time, and drag-sortable: label, audio alert select with audition, led color select.
+// New Group inserts first and opens alone; hidden id/order round-trip; per-section Save lives in
+// the shared bar.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { playAlert } from './play-alert.js';
@@ -14,10 +14,24 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey, rowMoveButtons, setRowMoveLabels } from './row-builders.js';
+import {
+  attachSingleOpenRule,
+  makePanel,
+  markField,
+  markRequired,
+  markRowIdentity,
+  onFieldEdit,
+  rowKey,
+  setRowMarker,
+  setRowMoveLabels,
+} from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'groups';
+
+// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
+// the open row follows the row the section remembers, not the place a render leaves it in.
+const PANEL_PREFIX = 'grp';
 
 const LEDS = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
 
@@ -47,6 +61,10 @@ class RdioAdminGroups extends HTMLElement {
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
+    // Which rows of this section the operator holds open, carried across the rebuilds the store
+    // causes, exactly as the systems tree carries its open row.
+    this.openState = new Map();
+
     this.unsubscribe = store.subscribe([`section:${NAME}`, 'alerts'], () => this.render());
 
     this.render();
@@ -68,6 +86,13 @@ class RdioAdminGroups extends HTMLElement {
     const slice = sectionSlice(NAME);
 
     if (!slice || slice.working === this.internalEdit) return;
+
+    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
+    // and the section's map is what reproduces it, so the open rows are read off the page before
+    // the rows are built again.
+    for (const details of this.querySelectorAll('details[data-key]')) {
+      this.openState.set(details.dataset.key, details.open);
+    }
 
     harvestReached(this);
 
@@ -111,6 +136,10 @@ class RdioAdminGroups extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
+    // One row open at a time: the rows the operator is not working on shrink, so the list stays
+    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    attachSingleOpenRule(list, this.openState);
+
     root.append(list);
 
     const bar = document.createElement('rdio-admin-section-bar');
@@ -125,25 +154,15 @@ class RdioAdminGroups extends HTMLElement {
   }
 
   rowElement(row, index, alerts, errorFields) {
-    const panel = document.createElement('div');
-    panel.className = 'rdio-admin-row';
-    panel.dataset.drag = '';
-    panel.draggable = true;
-
     const errors = groupRowErrors(row);
 
-    const header = document.createElement('div');
-    header.className = 'row top';
-    header.innerHTML = '<i class="material-icons drag-handle" aria-hidden="true">drag_indicator</i>';
+    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
+    // the open row follows the row the operator works on, not the place a render leaves it in.
+    const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
-    const title = document.createElement('span');
-    title.className = 'row-title';
-    title.textContent = row.label || 'NewGroup';
-    header.append(title, ...rowMoveButtons(title.textContent, index, this.rows.length));
+    const panel = makePanel(this.openState, key, row.label || 'NewGroup', Object.keys(errors).length, { index, total: this.rows.length });
 
-    if (errors.label) this.setRowInvalid(header, true);
-
-    panel.append(header);
+    const title = panel.querySelector('.row-title');
 
     // label
     const labelRow = this.descriptionRow('Label', 'Group label displayed on the main screen, on the search panel and on the select panel.');
@@ -159,7 +178,7 @@ class RdioAdminGroups extends HTMLElement {
       labelField.setError(labelInput.value ? '' : 'Label is required');
       title.textContent = labelInput.value || 'NewGroup';
       setRowMoveLabels(panel, title.textContent);
-      this.setRowInvalid(header, !labelInput.value);
+      setRowMarker(panel, !labelInput.value);
     });
     labelField.append(labelInput);
     labelRow.append(labelField);
@@ -236,20 +255,6 @@ class RdioAdminGroups extends HTMLElement {
     return row;
   }
 
-  setRowInvalid(header, invalid) {
-    const existing = header.querySelector('.row-invalid');
-
-    if (invalid && !existing) {
-      const icon = document.createElement('i');
-      icon.className = 'material-icons row-invalid';
-      icon.setAttribute('aria-label', 'Invalid row');
-      icon.textContent = 'error';
-      header.append(icon);
-    }
-
-    if (!invalid && existing) existing.remove();
-  }
-
   updateRow(index, patch) {
     this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
   }
@@ -266,7 +271,18 @@ class RdioAdminGroups extends HTMLElement {
   }
 
   add() {
-    this.commitRows([markRowIdentity({ alert: '', label: '', led: '', order: 0 }), ...this.rows]);
+    const fresh = markRowIdentity({ alert: '', label: '', led: '', order: 0 });
+
+    // The row the add control creates is the row the operator came to fill in, so it opens, and it
+    // is the section's one open row. The rows the operator left open close on the page as well as
+    // in the map: the render that follows reads the open rows off the page, and a row left open
+    // there would come back open.
+    for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
+
+    this.openState.clear();
+    this.openState.set(`${PANEL_PREFIX}:${rowKey(fresh, 0)}`, true);
+
+    this.commitRows([fresh, ...this.rows]);
   }
 }
 

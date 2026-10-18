@@ -1,8 +1,10 @@
-// The rule the systems-tree sections apply to their rows: one row open at a time.
+// The rule the administration webapp's row-list sections apply to their rows: one row open at a time.
 //
-// The sections show lists the operator edits row by row — the systems, the sites, the talkgroups, the
-// units. Opening a row shrinks the rows that were open, so the list stays short and the operator
-// reaches the save bar without scrolling past the rows they opened on the way.
+// The sections show lists the operator edits row by row — the systems tree the systems, the sites,
+// the talkgroups, the units; the hand-built list sections the access codes, the API keys, the
+// dirwatches, the downstreams, the groups, the tags. Opening a row shrinks the rows that were open,
+// so the list stays short and the operator reaches the save bar without scrolling past the rows they
+// opened on the way.
 //
 // Both functions are arithmetic over the section's own state. The open rows are the keys the section
 // remembers its rows by; the measurements are the opened row's position in the page before and after

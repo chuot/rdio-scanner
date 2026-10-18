@@ -85,7 +85,10 @@ function control(el, className) {
 }
 
 function rows(el) {
-  return findAll(el, (node) => node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row'));
+  // The row locators take the panels the sections build: the collapsible details rows and the
+  // plain rows alike, so a section's row is the same row whichever shape it carries.
+  return findAll(el, (node) => node.tag === 'details'
+    || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
 }
 
 // The Tools panels are `details` elements carrying the same row class the config rows use.

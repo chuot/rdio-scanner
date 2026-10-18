@@ -1,5 +1,6 @@
 // rdio-admin-downstreams: downstream connections section (legacy
-// config/downstreams). Rows: disabled toggle, url, apikey, systems selection
+// config/downstreams). Rows are collapsible panels, one row open at a time:
+// disabled toggle, url, apikey, systems selection
 // dialog. The systems payload may carry `id_as` remote-id mappings (see
 // legacy admin.service.ts Downstream type) — no UI for it; the deep-cloned
 // working copy preserves those keys untouched.
@@ -16,10 +17,14 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { markField, markRequired, markRowIdentity, onFieldEdit, rowKey, rowMoveButtons } from './row-builders.js';
+import { attachSingleOpenRule, makePanel, markField, markRequired, markRowIdentity, onFieldEdit, rowKey, setRowMarker } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
 
 const NAME = 'downstreams';
+
+// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
+// the open row follows the row the section remembers, not the place a render leaves it in.
+const PANEL_PREFIX = 'dwn';
 
 export function downstreamRowErrors(row, index, rows) {
   const errors = {};
@@ -47,6 +52,10 @@ class RdioAdminDownstreams extends HTMLElement {
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
+    // Which rows of this section the operator holds open, carried across the rebuilds the store
+    // causes, exactly as the systems tree carries its open row.
+    this.openState = new Map();
+
     this.render();
   }
 
@@ -62,6 +71,13 @@ class RdioAdminDownstreams extends HTMLElement {
     const slice = sectionSlice(NAME);
 
     if (!slice || slice.working === this.internalEdit) return;
+
+    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
+    // and the section's map is what reproduces it, so the open rows are read off the page before
+    // the rows are built again.
+    for (const details of this.querySelectorAll('details[data-key]')) {
+      this.openState.set(details.dataset.key, details.open);
+    }
 
     harvestReached(this);
 
@@ -101,6 +117,10 @@ class RdioAdminDownstreams extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
+    // One row open at a time: the rows the operator is not working on shrink, so the list stays
+    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    attachSingleOpenRule(list, this.openState);
+
     root.append(list);
 
     const bar = document.createElement('rdio-admin-section-bar');
@@ -115,32 +135,20 @@ class RdioAdminDownstreams extends HTMLElement {
   }
 
   rowElement(row, index, rows) {
-    const panel = document.createElement('div');
-    panel.className = 'rdio-admin-row';
-    panel.dataset.drag = '';
-    panel.draggable = true;
-
     const errors = downstreamRowErrors(row, index, rows);
 
-    const header = document.createElement('div');
-    header.className = 'row top';
-    header.innerHTML = '<i class="material-icons drag-handle" aria-hidden="true">drag_indicator</i>';
+    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
+    // the open row follows the row the operator works on, not the place a render leaves it in.
+    const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
-    const title = document.createElement('span');
-    title.className = 'row-title';
-    title.textContent = row.url || 'NewDownstream';
-    header.append(title, ...rowMoveButtons(title.textContent, index, rows.length));
-
-    if (Object.keys(errors).length) this.setHeaderInvalid(header, true);
-
-    panel.append(header);
+    const panel = makePanel(this.openState, key, row.url || 'NewDownstream', Object.keys(errors).length, { index, total: rows.length });
 
     // The row's warning icon follows the row's validity, recomputed from the rows as the section
     // holds them: the row the operator is editing stays on the page, so the icon moves on the spot.
     const refreshMarker = () => {
       const rows = this.rows;
 
-      this.setHeaderInvalid(header, Object.keys(downstreamRowErrors(rows[index], index, rows)).length > 0);
+      setRowMarker(panel, Object.keys(downstreamRowErrors(rows[index], index, rows)).length > 0);
     };
 
     const disabledRow = document.createElement('div');
@@ -257,22 +265,6 @@ class RdioAdminDownstreams extends HTMLElement {
     return field;
   }
 
-  setHeaderInvalid(header, invalid) {
-    if (!header) return;
-
-    const existing = header.querySelector('.row-invalid');
-
-    if (invalid && !existing) {
-      const icon = document.createElement('i');
-      icon.className = 'material-icons row-invalid';
-      icon.setAttribute('aria-label', 'Invalid row');
-      icon.textContent = 'error';
-      header.append(icon);
-    }
-
-    if (!invalid && existing) existing.remove();
-  }
-
   updateRow(index, patch) {
     this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
   }
@@ -288,10 +280,19 @@ class RdioAdminDownstreams extends HTMLElement {
   }
 
   add() {
-    this.commitRows([
-      markRowIdentity({ id: 0, order: 0, apikey: '', disabled: false, systems: '*', url: '' }),
-      ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
-    ]);
+    const fresh = markRowIdentity({ id: 0, order: 0, apikey: '', disabled: false, systems: '*', url: '' });
+    const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
+
+    // The row the add control creates is the row the operator came to fill in, so it opens, and it
+    // is the section's one open row. The rows the operator left open close on the page as well as
+    // in the map: the render that follows reads the open rows off the page, and a row left open
+    // there would come back open.
+    for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
+
+    this.openState.clear();
+    this.openState.set(`${PANEL_PREFIX}:${rowKey(fresh, 0)}`, true);
+
+    this.commitRows(rows);
   }
 }
 

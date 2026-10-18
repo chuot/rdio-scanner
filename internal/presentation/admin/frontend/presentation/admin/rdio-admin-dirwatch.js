@@ -1,9 +1,9 @@
 // rdio-admin-dirwatch: dirwatch section (legacy config/dirwatch).
-// Rows: disabled / deleteAfter toggles, type select driving conditional field
-// visibility, directory, extension, system / site / talkgroup selects fed by
-// the systems working copy, mask with token help, frequency, delay. Drag
-// sorting, Add inserts first, per-row delete; hidden id/order round-trip and
-// the per-section Save live in the shared bar.
+// Rows are collapsible panels, one row open at a time: disabled / deleteAfter toggles, type select
+// driving conditional field visibility, directory, extension, system / site / talkgroup selects fed
+// by the systems working copy, mask with token help, frequency, delay. Drag sorting, Add inserts
+// first and opens the row it creates, per-row delete; hidden id/order round-trip and the
+// per-section Save live in the shared bar.
 
 import {
   attachDragSort,
@@ -15,11 +15,15 @@ import {
   setSectionWorking,
   sortedByOrder,
 } from './section-shell.js';
-import { captionBlock, markField, markRequired, markRowIdentity, onFieldEdit, rowKey, rowMoveButtons, setRowMoveLabels } from './row-builders.js';
+import { attachSingleOpenRule, captionBlock, makePanel, markField, markRequired, markRowIdentity, onFieldEdit, rowKey, setRowMarker, setRowMoveLabels } from './row-builders.js';
 import { clearReached, harvestReached, restoreReached } from './sub-section-shell.js';
 import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch.js';
 
 const NAME = 'dirwatch';
+
+// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
+// the open row follows the row the section remembers, not the place a render leaves it in.
+const PANEL_PREFIX = 'dw';
 
 const TYPE_OPTIONS = [
   ['default', 'Default'],
@@ -79,6 +83,10 @@ class RdioAdminDirwatch extends HTMLElement {
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
+    // Which rows of this section the operator holds open, carried across the rebuilds the store
+    // causes, exactly as the systems tree carries its open row.
+    this.openState = new Map();
+
     this.render();
   }
 
@@ -97,6 +105,13 @@ class RdioAdminDirwatch extends HTMLElement {
     if (!slice) return;
 
     if (!force && slice.working === this.internalEdit && systemsSlice?.working === this.systemsRef) return;
+
+    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
+    // and the section's map is what reproduces it, so the open rows are read off the page before
+    // the rows are built again.
+    for (const details of this.querySelectorAll('details[data-key]')) {
+      this.openState.set(details.dataset.key, details.open);
+    }
 
     harvestReached(this);
 
@@ -144,6 +159,10 @@ class RdioAdminDirwatch extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
+    // One row open at a time: the rows the operator is not working on shrink, so the list stays
+    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    attachSingleOpenRule(list, this.openState);
+
     root.append(list);
 
     const bar = document.createElement('rdio-admin-section-bar');
@@ -165,35 +184,17 @@ class RdioAdminDirwatch extends HTMLElement {
   }
 
   rowElement(row, index, rows, errors) {
-    const panel = document.createElement('div');
-    panel.className = 'rdio-admin-row';
-    panel.dataset.drag = '';
-    panel.draggable = true;
-
     const type = row.type ?? 'default';
     const view = { errors, fields: new Map() };
 
-    const header = document.createElement('div');
-    header.className = 'row top';
-    header.innerHTML = '<i class="material-icons drag-handle" aria-hidden="true">drag_indicator</i>';
+    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
+    // the open row follows the row the operator works on, not the place a render leaves it in.
+    const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
-    const title = document.createElement('span');
-    title.className = 'row-title';
-    title.textContent = row.directory || 'New dirwatch';
-    header.append(title, ...rowMoveButtons(title.textContent, index, rows.length));
+    const panel = makePanel(this.openState, key, row.directory || 'New dirwatch', Object.keys(errors).length, { index, total: rows.length });
 
-    const icon = document.createElement('i');
-    icon.className = 'material-icons row-invalid';
-    icon.setAttribute('aria-label', 'Invalid row');
-    icon.textContent = 'error';
-    icon.hidden = !Object.keys(errors).length;
-    header.append(icon);
-
-    view.title = title;
-    view.icon = icon;
+    view.title = panel.querySelector('.row-title');
     view.panel = panel;
-
-    panel.append(header);
 
     panel.append(this.toggleRow('Disabled', 'Disable the dirwatch.', !!row.disabled, (value) => {
       this.updateRow(index, { disabled: value });
@@ -455,7 +456,7 @@ class RdioAdminDirwatch extends HTMLElement {
     view.errors = errors;
     view.title.textContent = rows[index].directory || 'New dirwatch';
     setRowMoveLabels(view.panel, view.title.textContent);
-    view.icon.hidden = !Object.keys(errors).length;
+    setRowMarker(view.panel, Object.keys(errors).length > 0);
 
     for (const [key, field] of view.fields) field.setError(errors[key] ?? '');
   }
@@ -472,15 +473,24 @@ class RdioAdminDirwatch extends HTMLElement {
   }
 
   add() {
-    this.commitRows([
-      // The mask the section's rule accepts, and the server's reader uses to pull the system and
-      // talkgroup ids out of a recording's filename. A row created without one is saved with an empty
-      // mask, and the rule rejects the empty string the server answers for it: the row would mean one
-      // thing as a new row and another as a saved row. The frequency carries the same care: the server
-      // answers an unset one as the zero the rule rejects.
-      markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, frequency: 1, mask: '#SYS_#TG', order: 0, type: 'default' }),
-      ...this.rows.map((row, i) => ({ ...row, order: i + 2 })),
-    ]);
+    // The mask the section's rule accepts, and the server's reader uses to pull the system and
+    // talkgroup ids out of a recording's filename. A row created without one is saved with an empty
+    // mask, and the rule rejects the empty string the server answers for it: the row would mean one
+    // thing as a new row and another as a saved row. The frequency carries the same care: the server
+    // answers an unset one as the zero the rule rejects.
+    const fresh = markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, frequency: 1, mask: '#SYS_#TG', order: 0, type: 'default' });
+    const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
+
+    // The row the add control creates is the row the operator came to fill in, so it opens, and it
+    // is the section's one open row. The rows the operator left open close on the page as well as
+    // in the map: the render that follows reads the open rows off the page, and a row left open
+    // there would come back open.
+    for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
+
+    this.openState.clear();
+    this.openState.set(`${PANEL_PREFIX}:${rowKey(fresh, 0)}`, true);
+
+    this.commitRows(rows);
   }
 }
 

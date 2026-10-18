@@ -1,7 +1,8 @@
-// Shared row builders for the systems tree sections: the systems section and the three per-level
-// sections (sites, talkgroups, units) build the same panels, captions, fields and delete rows, so
-// the builders live once. The openState map keeps a row's details open across re-renders, exactly as
-// each section component did before.
+// Shared row builders for the administration webapp's row-list sections: the systems tree (the
+// systems section and the three per-level sections — sites, talkgroups, units) and the six
+// hand-built list sections (access, apikeys, dirwatch, downstreams, groups, tags) build the same
+// panels, captions, fields and delete rows, so the builders live once. The openState map keeps a
+// row's details open across re-renders, exactly as each section component did before.
 //
 // A field carries the key its section remembers it by — the row's panel key and the field's name —
 // so the section can hand the field back the state of having been reached when it rebuilds the row,
