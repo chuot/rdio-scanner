@@ -78,7 +78,11 @@ test('the topbar carries the brand and the logout control, and no role text', ()
   assert.ok(texts(findAll(headers[0], (node) => node.tag === 'h1')).includes('Rdio Scanner'), 'the header must carry the brand');
 });
 
-test('the navigation lists the sections alphabetically by label', () => {
+// The order the column shows its sections in is proven once, in the structure test, where the fifteen labels
+// are written out as the operator reads them. What belongs here is that the shell paints exactly one
+// navigation column, and that it carries the sections this product has and not the ones the legacy
+// application had.
+test('the shell has one navigation column, carrying the sections this product has', () => {
   const { el } = shell();
 
   const navs = findAll(el, (node) => node.className.includes('rdio-admin-nav'));
@@ -86,8 +90,6 @@ test('the navigation lists the sections alphabetically by label', () => {
   assert.equal(navs.length, 1, 'the shell has one navigation column');
 
   const labels = texts(findAll(navs[0], (node) => node.tag === 'span'));
-
-  assert.deepEqual(labels, [...labels].sort((a, b) => a.localeCompare(b, 'en')), 'the navigation is not alphabetical by label');
 
   assert.ok(!labels.includes('Ingestion'), 'the navigation still carries the Ingestion section');
   assert.ok(labels.includes('OpenAPI'), 'the navigation does not carry the OpenAPI section');
@@ -114,7 +116,6 @@ test('todos is not a section in the navigation', () => {
   const sections = findAll(navs[0], (node) => node.tag === 'button').map((button) => button.dataset.section);
 
   assert.ok(!sections.includes('todos'), 'the navigation still carries a todos item');
-  assert.equal(sections[0], 'access', 'the first section is the one the page opens on');
 });
 
 test('a todo that names the control clearing it is a control the operator can follow', () => {

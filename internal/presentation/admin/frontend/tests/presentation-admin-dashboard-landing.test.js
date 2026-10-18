@@ -197,44 +197,62 @@ test('an operator who is not signed in is not shown the dashboard', () => {
   assert.equal(requests.length, asked, `the sign-in page asked the server for ${requests.length - asked} thing(s) it has not earned`);
 });
 
-// The navigation is the operator's map of the sections, and the landing is on it like every other section:
-// the operator who lands on the dashboard has to be able to see that is where they are, and to come back to
-// it after visiting somewhere else.
-test('the dashboard is in the navigation, in the alphabetical place its label puts it', async () => {
+// The navigation is the operator's map of the sections, and the landing heads it: the operator who lands on
+// the dashboard has to be able to see that is where they are standing, and has to find it at the head of the
+// column when they come back from anywhere in it. Both ways a session starts are read, because the landing is
+// the same section reached either way.
+test('the dashboard heads the navigation, whichever way the session started', async () => {
+  const opensWithTheLanding = (items, how) => {
+    const sections = items.map((button) => button.dataset.section);
+
+    assert.equal(sections[0], 'dashboard', `the navigation opens with ${navLabel(items[0]) ?? 'nothing'}, not with the landing, on ${how}`);
+    assert.equal(navLabel(items[0]), 'Dashboard', `the first item in the navigation is not labelled Dashboard, on ${how}`);
+    assert.equal(sections[1], 'systems', `the section at the top of the hierarchy is not the one after the landing, on ${how}`);
+  };
+
   window.sessionStorage.setItem(ADMIN_TOKEN_KEY, 'a-token-the-browser-is-holding');
 
-  const el = openShell();
+  const booted = openShell();
 
   await getAdminContext().useCases.boot();
 
-  const items = navButtons(el);
+  opensWithTheLanding(navButtons(booted), 'the session the browser was already holding');
 
-  const sections = items.map((button) => button.dataset.section);
+  signOut();
 
-  assert.ok(sections.includes('dashboard'), `the navigation carries ${sections.join(', ')}, and the dashboard is not among it`);
+  const signedIn = openShell();
 
-  const labels = items.map((button) => navLabel(button));
+  assert.equal(await getAdminContext().useCases.login('the-operator-typed-this'), 'ok', 'the sign-in did not succeed on this fixture');
 
-  assert.deepEqual(labels, [...labels].sort((a, b) => a.localeCompare(b)), `the navigation is not in the order its labels sort in: ${labels.join(', ')}`);
-
-  assert.equal(sections.indexOf('dashboard'), sections.indexOf('apikeys') + 1, 'Dashboard does not sit after API Keys');
-  assert.equal(sections.indexOf('dirwatch'), sections.indexOf('dashboard') + 1, 'Dashboard does not sit before Dirwatch');
+  opensWithTheLanding(navButtons(signedIn), 'the sign-in the operator just finished');
 });
 
 // Only the section the operator is standing on is current. The landing is the section they are standing on
-// until they choose another, and the navigation has to say so.
+// until they choose another, and the navigation has to say so, whichever way they got there.
 test('the landing is the item the navigation marks as current', async () => {
+  const marksOnlyTheLanding = (el, how) => {
+    const currents = navButtons(el).filter((button) => button.getAttribute('aria-current') !== null);
+
+    assert.equal(currents.length, 1, `the navigation marks ${currents.length} items as current, on ${how}`);
+    assert.equal(currents[0].getAttribute('aria-current'), 'page');
+    assert.equal(currents[0].dataset.section, 'dashboard', 'the item marked current is not the dashboard the operator landed on');
+  };
+
   window.sessionStorage.setItem(ADMIN_TOKEN_KEY, 'a-token-the-browser-is-holding');
 
-  const el = openShell();
+  const booted = openShell();
 
   await getAdminContext().useCases.boot();
 
-  const currents = navButtons(el).filter((button) => button.getAttribute('aria-current') !== null);
+  marksOnlyTheLanding(booted, 'the session the browser was already holding');
 
-  assert.equal(currents.length, 1, `the navigation marks ${currents.length} items as current`);
-  assert.equal(currents[0].getAttribute('aria-current'), 'page');
-  assert.equal(currents[0].dataset.section, 'dashboard', 'the item marked current is not the dashboard the operator landed on');
+  signOut();
+
+  const signedIn = openShell();
+
+  assert.equal(await getAdminContext().useCases.login('the-operator-typed-this'), 'ok', 'the sign-in did not succeed on this fixture');
+
+  marksOnlyTheLanding(signedIn, 'the sign-in the operator just finished');
 });
 
 // The landing is a section like every other section: the operator can leave it and come back to it, and

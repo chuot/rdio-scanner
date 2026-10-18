@@ -23,24 +23,33 @@ import './rdio-admin-tags.js';
 import './rdio-admin-tools.js';
 import './rdio-admin-units.js';
 
-// The navigation is alphabetical by label: an operator looking for a section
-// knows where to scan. Keep this list sorted.
+// The navigation is ordered by the work an administrator works through, not by
+// the labels: the landing that answers whether the deployment is working; the
+// system at the top of the hierarchy a listener browses and the three levels
+// filled in with it; the labels a listener selects and filters by; how audio
+// arrives and where it is forwarded on; who may post calls and who may listen;
+// how the server behaves; the log a problem is diagnosed in; the maintenance
+// tools; and the published contract last, because it is reference. Sections
+// that answer the same question sit next to each other, so the sibling of what
+// the operator is already looking at is where they are already looking. Keep
+// this list in that order: the order is what lets the column be read by meaning
+// instead of searched alphabetically.
 const SECTIONS = [
-  { name: 'access', label: 'Access', icon: 'vpn_key' },
-  { name: 'apikeys', label: 'API Keys', icon: 'key' },
   { name: 'dashboard', label: 'Dashboard', icon: 'speed' },
+  { name: 'systems', label: 'Systems', icon: 'settings' },
+  { name: 'sites', label: 'Sites', icon: 'place' },
+  { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
+  { name: 'units', label: 'Units', icon: 'directions_car' },
+  { name: 'groups', label: 'Groups', icon: 'group' },
+  { name: 'tags', label: 'Tags', icon: 'label' },
   { name: 'dirwatch', label: 'Dirwatch', icon: 'folder', hiddenWhenDocker: true },
   { name: 'downstreams', label: 'Downstreams', icon: 'import_export' },
-  { name: 'groups', label: 'Groups', icon: 'group' },
-  { name: 'logs', label: 'Logs', icon: 'article' },
-  { name: 'openapi', label: 'OpenAPI', icon: 'api' },
+  { name: 'apikeys', label: 'API Keys', icon: 'key' },
+  { name: 'access', label: 'Access', icon: 'vpn_key' },
   { name: 'options', label: 'Options', icon: 'tune' },
-  { name: 'sites', label: 'Sites', icon: 'place' },
-  { name: 'systems', label: 'Systems', icon: 'settings' },
-  { name: 'tags', label: 'Tags', icon: 'label' },
-  { name: 'talkgroups', label: 'Talkgroups', icon: 'group_work' },
+  { name: 'logs', label: 'Logs', icon: 'article' },
   { name: 'tools', label: 'Tools', icon: 'build' },
-  { name: 'units', label: 'Units', icon: 'directions_car' },
+  { name: 'openapi', label: 'OpenAPI', icon: 'api' },
 ];
 
 // The label the operator reads in the navigation, for the section the shell is putting on the page.

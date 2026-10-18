@@ -7,9 +7,9 @@
 // taken from the files the build ships. The rest is taken from the rendered shell: the nav, the
 // content region, and the heading the shell puts at its head, read the way an operator reads them.
 //
-// The fifteen section labels are written out here on purpose. They are the words the operator
-// reads in the navigation; a test that takes them from the code under test would pass whatever the
-// code decides to call a section.
+// The fifteen section labels are written out here on purpose, in the order the navigation must show them.
+// They are the words the operator reads in the navigation; a test that takes them from the code under test
+// would pass whatever the code decides to call a section, or to order them by.
 
 import './dom-shim.js';
 
@@ -33,21 +33,21 @@ const INDEX_HTML = join(presentationDir, 'admin', 'frontend', 'index.html');
 const STYLESHEET = join(presentationDir, 'admin', 'frontend', 'styles', 'admin.css');
 
 const SECTIONS = [
-  { name: 'access', label: 'Access' },
-  { name: 'apikeys', label: 'API Keys' },
   { name: 'dashboard', label: 'Dashboard' },
+  { name: 'systems', label: 'Systems' },
+  { name: 'sites', label: 'Sites' },
+  { name: 'talkgroups', label: 'Talkgroups' },
+  { name: 'units', label: 'Units' },
+  { name: 'groups', label: 'Groups' },
+  { name: 'tags', label: 'Tags' },
   { name: 'dirwatch', label: 'Dirwatch' },
   { name: 'downstreams', label: 'Downstreams' },
-  { name: 'groups', label: 'Groups' },
-  { name: 'logs', label: 'Logs' },
-  { name: 'openapi', label: 'OpenAPI' },
+  { name: 'apikeys', label: 'API Keys' },
+  { name: 'access', label: 'Access' },
   { name: 'options', label: 'Options' },
-  { name: 'sites', label: 'Sites' },
-  { name: 'systems', label: 'Systems' },
-  { name: 'tags', label: 'Tags' },
-  { name: 'talkgroups', label: 'Talkgroups' },
+  { name: 'logs', label: 'Logs' },
   { name: 'tools', label: 'Tools' },
-  { name: 'units', label: 'Units' },
+  { name: 'openapi', label: 'OpenAPI' },
 ];
 
 const OPTIONS = {
@@ -73,10 +73,11 @@ function slice(value) {
 
 // The shell, on the section it starts on. Every section the operator can reach is seeded with the
 // empty list the server answers with when nothing is defined, so the reading is taken on a page the
-// operator can actually be on.
-function shell() {
+// operator can actually be on. `docker` puts the shell on a server whose environment names the
+// container, which is the state that takes the directory watches out of the navigation.
+function shell({ docker = false } = {}) {
   getAdminContext().store.setState({
-    auth: { authenticated: true, docker: false, passwordNeedChange: false },
+    auth: { authenticated: true, docker, passwordNeedChange: false },
     todos: [],
     'section:access': slice([]),
     'section:apikeys': slice([]),
@@ -112,6 +113,21 @@ function navLists(el) {
 
 function navButtons(nav) {
   return findAll(nav, (node) => node.tag === 'button' && node.dataset.section !== undefined);
+}
+
+// The word the operator reads on a navigation item: the span, not the whole button. The icon beside it is
+// the icon font's own ligature text, which the markup hides from the operator who reads rather than looks.
+function navLabel(button) {
+  const label = findAll(button, (node) => node.tag === 'span')[0];
+
+  return (label?.textContent ?? button.textContent ?? '').trim();
+}
+
+// The column's items, in the order a keyboard reaches them.
+function navOrder(el) {
+  const { nav } = navLists(el);
+
+  return navButtons(nav).map((button) => ({ name: button.dataset.section, label: navLabel(button) }));
 }
 
 // The body's own children, in the order the page ships them: the skip link has to be the first of
@@ -255,5 +271,57 @@ describe('admin structure — the list of sections', () => {
       assert.equal(noise.length, 0, `the ${name} section page leaves ${noise.length} items announcing aria-current="${noise[0]?.getAttribute('aria-current')}"`);
       assert.equal(pages[0].dataset.section, name, 'the item marked current is not the section on the page');
     }
+  });
+
+  // The column is the operator's map of the deployment, and a map is only worth scanning in the order the
+  // work runs in: look at the server, build the system and the levels that belong to it, name what a
+  // listener browses, get audio in, say who may send and who may listen, set how the server behaves, read
+  // what it did, maintain the deployment, and read the published contract last because it is reference.
+  it('shows the sections in the order the administrator works through the deployment', () => {
+    const items = navOrder(shell());
+
+    assert.deepEqual(
+      items.map((item) => `${item.name}:${item.label}`),
+      SECTIONS.map(({ name, label }) => `${name}:${label}`),
+      `the navigation shows ${items.map((item) => item.label).join(', ')}`,
+    );
+  });
+
+  it('keeps a system and the three levels that belong to it together', () => {
+    const names = navOrder(shell()).map((item) => item.name);
+
+    const start = names.indexOf('systems');
+
+    assert.ok(start >= 0, 'the navigation does not carry the systems section at all');
+
+    assert.deepEqual(names.slice(start, start + 4), ['systems', 'sites', 'talkgroups', 'units'],
+      `the four items that follow Systems are not its own levels: ${names.join(', ')}`);
+  });
+
+  // Sections that answer one question belong side by side, so the operator finds the sibling of what they
+  // are already looking at instead of scanning the whole column again.
+  it('keeps the sections that answer the same question side by side', () => {
+    const names = navOrder(shell()).map((item) => item.name);
+
+    for (const [first, second] of [['groups', 'tags'], ['dirwatch', 'downstreams'], ['apikeys', 'access'], ['tools', 'openapi']]) {
+      assert.equal(names.indexOf(second), names.indexOf(first) + 1,
+        `${second} does not sit directly after ${first}: ${names.join(', ')}`);
+    }
+
+    assert.equal(names[names.length - 1], 'openapi', `the column ends with ${names[names.length - 1]}, not with the contract`);
+  });
+
+  // A container has no directory for the server to watch, so the item is gone from the column. Everything
+  // else keeps the place it was given.
+  it('leaves the container without its directory watches and keeps the rest of the column', () => {
+    const items = navOrder(shell({ docker: true }));
+
+    assert.equal(items.length, SECTIONS.length - 1,
+      `the container's navigation holds ${items.length} items, want ${SECTIONS.length - 1}`);
+
+    assert.ok(!items.some((item) => item.name === 'dirwatch'), "the container's navigation still carries Dirwatch");
+
+    assert.deepEqual(items.map((item) => item.name), SECTIONS.map((section) => section.name).filter((name) => name !== 'dirwatch'),
+      "removing Dirwatch moved something else in the column");
   });
 });
