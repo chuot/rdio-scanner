@@ -2078,6 +2078,191 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-07-access-codes">7 · Access codes and the unlock screen</h2>
+
+  <p class="lead">
+    An access code is the operator's way of deciding who may watch a server. A listener does not choose a code, does
+    not extend it, and cannot give themselves a different one. What a listener can do is present the code they were
+    given, and understand what the screen is telling them when it refuses.
+  </p>
+
+  <h3>When the screen asks, and when it does not</h3>
+
+  <p>
+    A server with no access codes configured never asks. On that kind of server the listening screen opens straight
+    into the live feed and nothing else in this chapter applies to you. A server with one or more codes is a
+    restricted server, and on a restricted server the page connects, is turned away, and puts the unlock form over the
+    history area at the bottom of the display. The display rows above it are still there, still showing what they
+    were built with. The nine control buttons stay where they are and are all marked unavailable: they are not taken
+    off the screen, and they are not something you can press through. While the page is waiting, the server reads
+    nothing else the page sends it.
+  </p>
+
+  <p>
+    The form is a single field, and the words on it are <code>Unlock code</code>. There is no button to press: the
+    code is presented when you press Enter in the field, and nothing else on the screen will do it for you.
+  </p>
+
+  <figure data-shot="unlock-code">
+    <img alt="The listening screen's display area showing the unlock form with a single field labelled Unlock code, and the nine control buttons below it.">
+    <figcaption>The unlock screen: the code field is the only thing the page will accept until the server knows the listener.</figcaption>
+  </figure>
+
+  <h3>The three sentences the field can carry</h3>
+
+  <table>
+    <caption>What the unlock field says, what the server actually answered, and what is worth doing about it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The field says</th>
+        <th scope="col">What actually happened</th>
+        <th scope="col">What to do</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>Invalid unlock code</code></td>
+        <td>The code is not one the server has. The same sentence also appears when the code is right and the tries
+          have run out: running out is answered exactly as a wrong guess is.</td>
+        <td>Check the code against what you were given. If you have tried several times, stop trying — the sentence
+          will not change, and nothing you type can tell you which of the two it is.</td>
+      </tr>
+      <tr>
+        <td><code>This unlock code has expired</code></td>
+        <td>The code is known and its date has passed. A code the operator gave no date never expires.</td>
+        <td>Ask the operator to extend it or replace it. Presenting it again cannot help, because the date is the
+          problem rather than the code.</td>
+      </tr>
+      <tr>
+        <td><code>Too many connections</code></td>
+        <td>This code is already open on as many listeners as it is allowed to be. The limit belongs to the code, and
+          the operator sets it.</td>
+        <td>Somebody else is holding the places your code has. If a shared code is always full, ask for a code of your
+          own.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="unlock-expired">
+    <img alt="The unlock form with the field outlined in red and the error sentence This unlock code has expired written under it.">
+    <figcaption>A code the server no longer accepts: the field carries the sentence the application says about it, and the code stays put for the listener to fix.</figcaption>
+  </figure>
+
+  <p>
+    Whichever sentence appears, the code you typed stays in the field. The screen does not clear it, which is the
+    right choice: a code with one character wrong is corrected rather than retyped. The field is also given back the
+    keyboard, so the correction is ready to make.
+  </p>
+
+  <h3>The five tries, and what spending them feels like</h3>
+
+  <p>
+    A listener may present a code five times on one connection. Five more are counted against the address that
+    connection came from, over a window of ten minutes, and that second counter is shared by everything else
+    presenting codes from the same place — another tab, a phone on the same network, the administration page on the
+    same browser. Either counter running out ends the tries. And the fifth attempt is refused <em>even when the code
+    it presents is the correct one</em>: the count is a limit on trying, not a record of whether the last try was
+    right.
+  </p>
+
+  <p>
+    Spending the budget feels exactly like being wrong. There is no sentence anywhere on the screen that says the
+    tries are gone; the field goes on saying <code>Invalid unlock code</code> and nothing about it changes. A refused
+    try is not forgiven afterwards, whichever reason refused it. A code that is accepted clears both counters — the
+    connection's and the address's — and starts the budget again, the way a successful sign-in renews a login budget.
+    Reloading the page does not buy a fresh start, because the reload shares the address counter with the page it
+    replaces. Waiting for the window to pass is the only move that costs nothing.
+  </p>
+
+  <aside class="caution">
+    <span class="label">If the sentence will not change</span>
+    <p>
+      Stop presenting the code. Every presentation is one of the five that the address has, so a listener who keeps
+      trying a code they are not sure of uses up the tries of everyone else working from the same place, and can lock
+      out a colleague who was doing nothing wrong. Confirm the code with the operator instead of testing it: the
+      operator can see the attempts in the server's own log, and can tell you in one look whether the code is wrong
+      or the tries are gone.
+    </p>
+  </aside>
+
+  <h3>The code the page keeps</h3>
+
+  <p>
+    A code that was accepted is kept in the browser, and the next time the page opens it presents that code again
+    without asking. It is kept in an encoded form rather than a protected one: anyone with access to the machine can
+    read it back. A code kept in a browser on a shared or public machine is not a secret that machine is keeping for
+    you.
+  </p>
+
+  <p>
+    Nothing in the ordinary running of the page ever forgets it. An expired code is not forgotten, a wrong code is not
+    forgotten, and the stored one is offered again on every reconnect. That has one consequence a listener should
+    know about: a code the server no longer accepts can spend the address's five tries by itself, one attempt per
+    reconnect, with nobody typing anything. If the field starts refusing a code you know is right, on a machine that
+    has been left open, this is a thing to check, and <code>/reset</code> at the end of the page's address is the way
+    to clear it.
+  </p>
+
+  <h3>What a code gives, and what it holds back</h3>
+
+  <p>
+    A code is not only a door. The deployment attaches a scope to it: the systems that code may see. A code scoped to
+    two systems gives the listener a screen with two systems on it, and the systems it was not given are not on the
+    screen at all — not greyed out, not folded away, not findable by searching. A listener who was told to listen to
+    a talkgroup and cannot find it is usually holding a code that does not name that talkgroup's system, and no
+    choice made on the selection panel will bring it back. The same limit runs through a search of recorded calls,
+    and through fetching a recording: a code cannot reach past its own systems in either.
+  </p>
+
+  <p>
+    Before a code has been accepted there is no configuration, no live calls, and no search. The page is connected to
+    the server and is being shown nothing. On the screen that looks like a server that is not answering, and it is not
+    the same thing; the chapter on <a href="#ch-11-when-something-does-not-work">when something does not work</a>
+    takes the two apart.
+  </p>
+
+  <h3>When the server itself is full</h3>
+
+  <p>
+    A deployment caps how many connections it will hold at once. The setting is <code>Max Clients</code>, it starts at
+    200, and it counts every connection the server is holding — including ones that never got as far as becoming a
+    listener. Over the cap the server closes the connection and sends nothing at all. No sentence appears on any
+    field: the display keeps <code>NO LINK</code> and behaves as though the network had failed, which is why a full
+    server is usually mistaken for a broken one. The field's <code>Too many connections</code> sentence is not this
+    cap; it is the limit on your own code.
+  </p>
+
+  <h3>Several listeners on one machine</h3>
+
+  <p>
+    The page remembers its selection under a name taken from the address it was opened at, and the address carries a
+    profile: adding <code>?id=</code> and a word of your choosing gives that page its own profile. Two pages opened
+    with different <code>?id=</code> values keep separate saved selections, so two radios on one machine stop
+    overwriting each other's choices, and what you change in one does not appear in the other.
+  </p>
+
+  <p>
+    A profile covers the saved selection and nothing else. The stored access code is not per profile: every profile on
+    one browser shares the same single stored code, and so does the administration page on that browser. Two profiles
+    are a way of keeping two selections apart, not a way of keeping two codes apart, and not a way of getting past the
+    attempt budget, which counts the address rather than the profile.
+  </p>
+
+  <h3>Starting over</h3>
+
+  <p>
+    Putting <code>/reset</code> at the end of the page's address clears what the application kept in the browser — the
+    stored access code, the saved selection, all of it — and returns you to the plain address with nothing
+    remembered. It is the move to make when a stored code is causing trouble, or when a saved selection has to be
+    abandoned rather than corrected.
+  </p>
+
+  <p>
+    Two things about it are worth knowing first. It clears the browser's stored data for that site rather than only
+    the entries this application wrote, so anything else that site had stored there goes with it. And it changes
+    nothing on the server: an address that has spent its tries has still spent them, and an expired code is still
+    expired. If you have locked an address out, <code>/reset</code> gets you a clean page and you still have to wait,
+    or get the code from the operator.
+  </p>
 </section>
 
 <section>

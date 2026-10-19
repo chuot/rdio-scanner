@@ -539,6 +539,52 @@ func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
 	}
 }
 
+// The seventh chapter deals with access. What the server answers and what the listener's field says are two
+// different things, and the difference is the chapter's subject: a locked-out listener is answered exactly as a
+// wrong code is, the sentence about too many connections belongs to a code's own limit and not to the server's
+// cap, and the code the page kept in the browser is presented again without the listener doing anything. Each of
+// those is one of the things a reader who runs out of luck needs to know before calling someone.
+func TestTheUserGuideHandlesAccessCodesAsTheServerAnswersThem(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-07-access-codes")
+
+	spoken := guideSpoken(chapter)
+
+	for _, name := range []string{
+		"Unlock code", "Invalid unlock code", "This unlock code has expired", "Too many connections",
+		"Max Clients", "NO LINK",
+	} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on access codes never names %q, which is a word the unlock screen or the server's settings put on the screen", name)
+		}
+	}
+
+	for _, fact := range []string{
+		"five", "fifth", "ten minutes", "200", "without asking", "operator", "profile", "?id=", "/reset",
+	} {
+		if !strings.Contains(spoken, fact) {
+			t.Errorf("the chapter on access codes never gives %q, which is a number, a route, or a behaviour the shipped access rules apply", fact)
+		}
+	}
+
+	for _, id := range []string{"unlock-code", "unlock-expired"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">.*?</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 1 {
+			t.Errorf("the chapter on access codes does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[0])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[0], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {
