@@ -898,6 +898,219 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 	}
 }
 
+// Every list the guide asks a reader to scan is a table, and a table whose rows are named by ordinary cells leaves a
+// screen reader nothing to hold a row together with: each value reads as one of a string of unrelated things, and the
+// reader has to work out which column it belongs to. The guide's own contract states the shape — a caption, a header
+// row of column headers, and a row header wherever the first column names the row — so this reads every table in the
+// document, not only the ones the reference chapter adds. A caption is checked too, because a caption is what a
+// screen reader announces before the reader is inside the table, and two tables with the same caption are two tables
+// a reader cannot tell apart.
+func TestEveryTableInTheGuideNamesItsRowsAndColumns(t *testing.T) {
+	tables := regexp.MustCompile(`(?is)<table\b.*?</table>`).FindAllString(userGuidePath(t), -1)
+
+	if len(tables) == 0 {
+		t.Fatalf("the guide carries no table at all, so this check proves nothing")
+	}
+
+	seen := map[string]int{}
+
+	for _, table := range tables {
+		caption := regexp.MustCompile(`(?is)<caption\b[^>]*>(.*?)</caption>`).FindStringSubmatch(table)
+
+		if caption == nil {
+			label := strings.Join(strings.Fields(stripTags(table)), " ")
+
+			if runes := []rune(label); len(runes) > 70 {
+				label = string(runes[:70])
+			}
+
+			t.Errorf("the guide has a table a reader reaches with nothing saying what it lists: %s", label)
+
+			continue
+		}
+
+		name := strings.Join(strings.Fields(stripTags(caption[1])), " ")
+
+		seen[name]++
+
+		if head := regexp.MustCompile(`(?is)<thead\b[^>]*>(.*?)</thead>`).FindStringSubmatch(table); head == nil {
+			t.Errorf("the table %q has no header row, so nothing names its columns", name)
+		} else {
+			for _, cell := range regexp.MustCompile(`(?is)<(th|td)\b([^>]*)>`).FindAllStringSubmatch(head[1], -1) {
+				if cell[1] != "th" {
+					t.Errorf("the table %q builds its header row from a %q cell, which names no column", name, cell[1])
+
+					continue
+				}
+
+				if !strings.Contains(cell[2], `scope="col"`) {
+					t.Errorf("the table %q has a column header with no scope=%q, so a reader cannot pair a cell with its column", name, "col")
+				}
+			}
+		}
+
+		for _, body := range regexp.MustCompile(`(?is)<tbody\b[^>]*>(.*?)</tbody>`).FindAllStringSubmatch(table, -1) {
+			for _, row := range regexp.MustCompile(`(?is)<tr\b[^>]*>(.*?)</tr>`).FindAllStringSubmatch(body[1], -1) {
+				cells := regexp.MustCompile(`(?is)<(th|td)\b([^>]*)>`).FindAllStringSubmatch(row[1], -1)
+
+				if len(cells) == 0 {
+					continue
+				}
+
+				if cells[0][1] != "th" || !strings.Contains(cells[0][2], `scope="row"`) {
+					t.Errorf("the table %q starts a row with a %q cell, so the row has nothing naming it", name, cells[0][1])
+				}
+
+				for _, cell := range cells[1:] {
+					if cell[1] == "th" && !strings.Contains(cell[2], "scope=") {
+						t.Errorf("the table %q has a header cell inside its body with no scope", name)
+					}
+				}
+			}
+		}
+
+		opened := len(regexp.MustCompile(`(?i)<th\b`).FindAllString(table, -1))
+
+		if closed := strings.Count(table, "</th>"); opened != closed {
+			t.Errorf("the table %q opens %d header cells and closes %d, so its markup is not the markup a reader's browser is given", name, opened, closed)
+		}
+	}
+
+	for name, count := range seen {
+		if count > 1 {
+			t.Errorf("%d tables in the guide carry the caption %q, and a reader is told nothing about which one they are in", count, name)
+		}
+	}
+}
+
+// The project holds one position about the licence of what it ships, and it is stated where an operator reads it. The
+// listening guide documents the screen a listener uses: it has no standing to restate those terms, and a reader who
+// carries an extracted copy of it away from the rest of the archive would be holding terms the guide has no business
+// asserting. So the guide names where the position is written and states none of its own. The refusal is on the words
+// a reader reads, not on the bytes of the file: an embedded picture's base64 can hold any three letters the guide
+// never meant, and the stylesheet is not prose.
+func TestTheUserGuideStatesNoLicencePositionOfItsOwn(t *testing.T) {
+	body := userGuidePath(t)
+
+	visible := regexp.MustCompile(`(?is)<style\b.*?</style>`).ReplaceAllString(body, " ")
+	visible = strings.ToLower(stripTags(visible))
+
+	for _, term := range []string{
+		"general public license",
+		"gnu",
+		"gpl",
+		"free software",
+		"free software foundation",
+		"copyright",
+		"warranty",
+		"proprietary",
+	} {
+		if strings.Contains(visible, term) {
+			t.Errorf("the guide states %q to a reader, and the guide holds no licence position of its own to state", term)
+		}
+	}
+
+	spoken := guideSpoken(userGuideChapter(t, body, "ch-12-reference"))
+
+	for _, want := range []string{"licence", "no licence position of its own", "operator's guide"} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the reference chapter never says %q, which is how a reader is told where that position is written", want)
+		}
+	}
+}
+
+// The last chapter is where a reader who already knows what they are looking for goes. It is tables and a definition
+// list rather than prose, it carries no figures, and it points back at the chapters that operate each thing it
+// names: the point of a reference is that it can be scanned, and everything in it was earned earlier in the guide.
+// The names are the words the shipped application puts on its own controls, flags, criteria, and settings, and the
+// sentences it says out loud for a screen reader.
+func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideChapter(t, body, "ch-12-reference")
+
+	spoken := guideSpoken(chapter)
+
+	for _, want := range []string{
+		"LIVE FEED", "HOLD SYS", "HOLD TG", "REPLAY LAST", "SKIP NEXT", "AVOID", "SEARCH CALL", "PAUSE", "SELECT TG",
+		"OFF", "ON", "Reset", "Play", "Stop", "Download mode", "First page", "Previous page", "Next page", "Last page",
+		"PATCH", "DELAYED", "NO LINK", "Server status:", "L:", "Q:",
+		"Sort order", "Ascending", "Descending", "Date", "System", "Talkgroup", "Group", "Tag",
+		"Audio Conversion", "Auto Populate", "Branding Label", "Disable Duplicate Call Detection", "Email Support",
+		"Keypad Beep Style", "Max Clients", "Prune Days", "Show Listeners Count", "Sort Talkgroups",
+		"Queue:", "Playing", "Paused", "Stopped", "Page", "Searching calls",
+	} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the reference chapter never prints %q, which is a name the shipped application puts in front of the reader", want)
+		}
+	}
+
+	for _, caption := range []string{
+		"The nine controls on the control bar, what a press on each one does, and where this guide operates it.",
+		"The controls the two panels add, what each one does, and where this guide operates it.",
+		"The flags the display carries beside a call, what has to be true for each to appear, and where this guide operates it.",
+		"The lights on the screen, what each one says, and where this guide operates it.",
+		"The search panel's criteria, what each one holds, and where this guide operates it.",
+		"The settings the operator chooses, and what each one does to the screen a listener is looking at.",
+		"The sentences the page says out loud for a screen reader, what each one is for, and where this guide operates it.",
+	} {
+		if !strings.Contains(chapter, "<caption>"+caption+"</caption>") {
+			t.Errorf("the reference chapter has no table captioned %q, which is one of the lists a reader comes back to scan", caption)
+		}
+	}
+
+	defs := regexp.MustCompile(`(?is)<dt\b[^>]*>(.*?)</dt>\s*<dd\b[^>]*>(.*?)</dd>`).FindAllStringSubmatch(chapter, -1)
+
+	if len(defs) < 8 {
+		t.Errorf("the reference chapter defines %d of the application's words, and the words a reader meets across the guide need at least 8", len(defs))
+	}
+
+	for _, def := range defs {
+		word := strings.Join(strings.Fields(stripTags(def[1])), " ")
+
+		if !strings.Contains(def[1], "<dfn") {
+			t.Errorf("the reference chapter defines %q without marking the word being defined, so a reader has nothing to hold it by", word)
+		}
+
+		if len(strings.Fields(stripTags(def[2]))) < 5 {
+			t.Errorf("the definition of %q is shorter than a sentence", word)
+		}
+	}
+
+	hrefs := map[string]bool{}
+
+	for _, m := range regexp.MustCompile(`(?is)href="([^"]*)"`).FindAllStringSubmatch(chapter, -1) {
+		if isUserGuideChapter(strings.TrimPrefix(m[1], "#")) {
+			hrefs[m[1]] = true
+		}
+	}
+
+	if len(hrefs) < 5 {
+		t.Errorf("the reference chapter points back at %d chapters of this guide, and everything it lists was operated in at least 5 of them", len(hrefs))
+	}
+
+	// The paused reading of the server light is a place this guide already superseded once: the shipped state
+	// alternates, and the ring is what a reduced-motion operating system asks for. The reference chapter restates the
+	// state briefly, so the refusal belongs here too rather than only in the chapter that operates the light.
+	for _, superseded := range []string{
+		"a lit face inside a ring",
+		"the ring blinks",
+		"always blinking",
+	} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the reference chapter states %q about the server light, which is the reading this guide superseded: the shipped state alternates, and the ring is what reduced motion asks for", superseded)
+		}
+	}
+
+	if !strings.Contains(spoken, "less motion") {
+		t.Errorf("the reference chapter states the paused reading of the server light without saying that the ring is what an operating system asking for less motion gets")
+	}
+
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 0 {
+		t.Errorf("the reference chapter carries a figure, and the inventory gives it none: a reader scanning a reference is reading names and columns, not a picture")
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {

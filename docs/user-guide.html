@@ -528,7 +528,7 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The listening application was rewritten.</td>
+        <th scope="row">The listening application was rewritten.</th>
         <td>
           It is written without a framework now, and the screens, the controls, and the words on them are the ones
           you knew. Nothing you did in the old page has to be learned again.
@@ -536,7 +536,7 @@ footer.site .signoff {
         <td><a href="#ch-02-the-main-screen">The main screen</a></td>
       </tr>
       <tr>
-        <td>The listening application and the administration interface became two separate applications.</td>
+        <th scope="row">The listening application and the administration interface became two separate applications.</th>
         <td>
           Each has its own address, its own manifest, and its own offline worker. A listener's browser is never
           asked to hold the operator's screens, and the two applications are updated independently.
@@ -544,7 +544,7 @@ footer.site .signoff {
         <td><a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a></td>
       </tr>
       <tr>
-        <td>The look, geometry, and motion of the listening screens were rebuilt.</td>
+        <th scope="row">The look, geometry, and motion of the listening screens were rebuilt.</th>
         <td>
           Measured against the earlier application rather than approximated: the same sizes, the same positions,
           the same distances a press moves things.
@@ -552,7 +552,7 @@ footer.site .signoff {
         <td><a href="#ch-02-the-main-screen">The main screen</a></td>
       </tr>
       <tr>
-        <td>The main screen was brought back to the version 6.6.3 look and behaviour.</td>
+        <th scope="row">The main screen was brought back to the version 6.6.3 look and behaviour.</th>
         <td>
           The plain server light, the two-column display rows, the bevelled controls, the history mechanics, the
           avoid cycle, the holds, and the walk through replayed calls are the ones version 6.6.3 had, with a short
@@ -565,7 +565,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>Alert tones.</td>
+        <th scope="row">Alert tones.</th>
         <td>
           Before a live call's recording begins, you hear the sound an operator assigned to it, resolved group
           first, then tag, then system, then talkgroup, out of nine built-in sequences. A call you replay, a call
@@ -574,7 +574,7 @@ footer.site .signoff {
         <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
       </tr>
       <tr>
-        <td>A talkgroup can belong to more than one group, and every one of them counts.</td>
+        <th scope="row">A talkgroup can belong to more than one group, and every one of them counts.</th>
         <td>
           A group's colour and a group's tone now apply to a talkgroup that belongs to it as well as to one whose
           first group happens to be it, which is where they previously could not apply.
@@ -585,7 +585,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>Colours and tones can be assigned to groups and tags, not only to systems and talkgroups.</td>
+        <th scope="row">Colours and tones can be assigned to groups and tags, not only to systems and talkgroups.</th>
         <td>
           The colour the server light takes for a call, and the tone in front of it, can now follow a group or a
           tag you share across systems rather than being repeated for every talkgroup.
@@ -593,7 +593,7 @@ footer.site .signoff {
         <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
       </tr>
       <tr>
-        <td>A press in the select panel is a plain switch off or on.</td>
+        <th scope="row">A press in the select panel is a plain switch off or on.</th>
         <td>
           It clears a timed avoid that was armed elsewhere, and the timed windows belong to the control bar's
           <code>AVOID</code> alone. Each press plays its confirmation tone in the direction of the state it is
@@ -602,7 +602,7 @@ footer.site .signoff {
         <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
       </tr>
       <tr>
-        <td>The timed-avoid flag draws its hourglass as a monochrome symbol.</td>
+        <th scope="row">The timed-avoid flag draws its hourglass as a monochrome symbol.</th>
         <td>
           It is drawn in the display's own colour rather than as an emoji, and the minutes beside it are unchanged.
           The symbol depends on a font that carries it, so on a machine whose font does not, the shape you see is
@@ -614,7 +614,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The queue count falls on every skip.</td>
+        <th scope="row">The queue count falls on every skip.</th>
         <td>
           It no longer climbs as you skip, and it counts what is live at the moment it is painted, including calls
           that arrived while an alert tone was still open.
@@ -622,7 +622,7 @@ footer.site .signoff {
         <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
       </tr>
       <tr>
-        <td>Searched playback walks toward the newest call in either sort order.</td>
+        <th scope="row">Searched playback walks toward the newest call in either sort order.</th>
         <td>
           The queue count in the search panel names the calls that will play, including the one playing now, and it
           honours the filters you have set.
@@ -630,7 +630,7 @@ footer.site .signoff {
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
-        <td>Pause, skip, and stop do what their names say.</td>
+        <th scope="row">Pause, skip, and stop do what their names say.</th>
         <td>
           A recording in flight is silenced rather than left running, a skip or a stop actually stops it, and the
           elapsed time follows the audio rather than the wall clock.
@@ -641,7 +641,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The search panel's System and Talkgroup filters actually filter.</td>
+        <th scope="row">The search panel's System and Talkgroup filters actually filter.</th>
         <td>
           The panel sends the references the server reads, the form is held while a search is in flight, paging
           during a search asks for nothing, the Date field is bounded to the window the server answered, and a
@@ -650,7 +650,7 @@ footer.site .signoff {
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
-        <td>Every result row carries its duration.</td>
+        <th scope="row">Every result row carries its duration.</th>
         <td>
           The length comes from the recorder's own declaration, the converter's report, or a probe of the file, in
           that order of trust.
@@ -658,7 +658,7 @@ footer.site .signoff {
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
-        <td>No page scrollbars while a drawer slides, and the search progress bar completes on an empty answer.</td>
+        <th scope="row">No page scrollbars while a drawer slides, and the search progress bar completes on an empty answer.</th>
         <td>
           Opening the select or search panel no longer shakes the page, and a search that finds nothing still
           finishes its bar instead of leaving it hanging.
@@ -666,7 +666,7 @@ footer.site .signoff {
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
-        <td>Delayed audio.</td>
+        <th scope="row">Delayed audio.</th>
         <td>
           A system or a talkgroup can hold a call for whole minutes. The hold is measured from when the call
           happened, a held call cannot be searched until its hold has run out, and when it arrives it is flagged
@@ -679,7 +679,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>Systems and talkgroups have types.</td>
+        <th scope="row">Systems and talkgroups have types.</th>
         <td>
           A type is a rule about how that talkgroup's audio arrives, and it is one of the reasons two talkgroups
           you are both listening to behave differently.
@@ -690,7 +690,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The tags toggle is gone from the select panel.</td>
+        <th scope="row">The tags toggle is gone from the select panel.</th>
         <td>
           Groups are the categories you switch between, and a talkgroup can sit in more than one of them.
         </td>
@@ -700,7 +700,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The listening screens were brought up against the accessibility standard.</td>
+        <th scope="row">The listening screens were brought up against the accessibility standard.</th>
         <td>
           A skip link first in the keyboard route, landmarks and headings, a drawn focus indicator, status spoken
           rather than only shown, motion you can turn off, raised contrast, support for a machine whose colours you
@@ -711,7 +711,7 @@ footer.site .signoff {
         <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
       </tr>
       <tr>
-        <td>Access codes were made explicit.</td>
+        <th scope="row">Access codes were made explicit.</th>
         <td>
           The unlock screen and the code it stores, a code that has expired, a code that is wrong, too many
           connections at once, a code's own connection limit, and an attempt budget counted both per session and
@@ -720,7 +720,7 @@ footer.site .signoff {
         <td><a href="#ch-07-access-codes">Access codes and the unlock screen</a></td>
       </tr>
       <tr>
-        <td><code>/reset</code> and <code>?id=</code>.</td>
+        <th scope="row"><code>/reset</code> and <code>?id=</code>.</th>
         <td>
           One address clears everything the application kept in your browser; the other gives one listener several
           independent selections on one server.
@@ -731,7 +731,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The application installs, works offline, and asks before reloading.</td>
+        <th scope="row">The application installs, works offline, and asks before reloading.</th>
         <td>
           It can be added to a home screen, its shell is kept available with no server, and when a new version is
           published it asks you before it reloads the page out from under you.
@@ -739,7 +739,7 @@ footer.site .signoff {
         <td><a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a></td>
       </tr>
       <tr>
-        <td>The branding line, the help affordance, and the promotion of the native applications.</td>
+        <th scope="row">The branding line, the help affordance, and the promotion of the native applications.</th>
         <td>
           The line an operator sets appears at the top of the screen, the help affordance names the operator's own
           support address, and a phone is offered the native applications.
@@ -750,7 +750,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>Retention.</td>
+        <th scope="row">Retention.</th>
         <td>
           A deployment removes calls older than the operator's retention setting, on an hourly pass, and only
           retained calls can ever appear in a search.
@@ -761,7 +761,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>Converted audio.</td>
+        <th scope="row">Converted audio.</th>
         <td>
           A deployment that converts audio hands you the converted recording, and the level the operator chose
           changes what you hear: the converter now writes AAC at 32 kilobits per second in an <code>m4a</code>
@@ -828,7 +828,7 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The branding line, and the server light</td>
+        <th scope="row">The branding line, and the server light</th>
         <td>
           A line of text the operator sets for the deployment, and one light that says whether the application is
           receiving anything.
@@ -839,7 +839,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The display area</td>
+        <th scope="row">The display area</th>
         <td>
           The time on your machine, whether the page is joined to the server, the queue count, the rows that
           describe the call you are hearing or the last call that played, the flags beside them, and the list of
@@ -851,7 +851,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The control area</td>
+        <th scope="row">The control area</th>
         <td>Nine controls, arranged in three rows of three, that start and stop what you hear and open the panels.</td>
         <td>
           <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
@@ -969,15 +969,15 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>Top</td>
+        <th scope="row">Top</th>
         <td><code>LIVE FEED</code>, <code>HOLD SYS</code>, <code>HOLD TG</code></td>
       </tr>
       <tr>
-        <td>Middle</td>
+        <th scope="row">Middle</th>
         <td><code>REPLAY LAST</code>, <code>SKIP NEXT</code>, <code>AVOID</code></td>
       </tr>
       <tr>
-        <td>Bottom</td>
+        <th scope="row">Bottom</th>
         <td><code>SEARCH CALL</code>, <code>PAUSE</code>, <code>SELECT TG</code></td>
       </tr>
     </tbody>
@@ -1028,7 +1028,7 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>Red</td>
+        <th scope="row">Red</th>
         <td>
           The feed is off. The server is still recording, and your selection is still saved, but nothing is being
           offered to you, and the calls that were waiting to be played are dropped when you switch the feed off.
@@ -1036,7 +1036,7 @@ footer.site .signoff {
         <td>This chapter</td>
       </tr>
       <tr>
-        <td>Green</td>
+        <th scope="row">Green</th>
         <td>
           Live. Calls play as they arrive, and your selection is sent to the server so it knows which calls to send
           you.
@@ -1044,7 +1044,7 @@ footer.site .signoff {
         <td>This chapter</td>
       </tr>
       <tr>
-        <td>Yellow</td>
+        <th scope="row">Yellow</th>
         <td>
           A search is holding the feed: the calls you searched are being played one after another, and the live
           stream is not what is being played.
@@ -1197,23 +1197,23 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>First</td>
+        <th scope="row">First</th>
         <td>Held off indefinitely: no time limit, held for as long as you leave it.</td>
       </tr>
       <tr>
-        <td>Second</td>
+        <th scope="row">Second</th>
         <td>Held off for 30 minutes.</td>
       </tr>
       <tr>
-        <td>Third</td>
+        <th scope="row">Third</th>
         <td>Held off for 60 minutes.</td>
       </tr>
       <tr>
-        <td>Fourth</td>
+        <th scope="row">Fourth</th>
         <td>Held off for 120 minutes.</td>
       </tr>
       <tr>
-        <td>Fifth</td>
+        <th scope="row">Fifth</th>
         <td>You are hearing it again.</td>
       </tr>
     </tbody>
@@ -1367,24 +1367,24 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>A group button</td>
+        <th scope="row">A group button</th>
         <td>Green when every talkgroup in that group is chosen, red when none of them are, yellow when only some
           are.</td>
         <td>A group whose talkgroups are all chosen switches them all off. A group with none chosen, or with only
           some chosen, switches them all on.</td>
       </tr>
       <tr>
-        <td>A talkgroup button</td>
+        <th scope="row">A talkgroup button</th>
         <td>Green while you are hearing that talkgroup, red while it is held off.</td>
         <td>A plain flip: hearing becomes not hearing, not hearing becomes hearing.</td>
       </tr>
       <tr>
-        <td>The <code>OFF</code> and <code>ON</code> at the end of a system's box</td>
+        <th scope="row">The <code>OFF</code> and <code>ON</code> at the end of a system's box</th>
         <td>The pair has no light of its own. It is a command, not a state.</td>
         <td>Sets every talkgroup of that system to the state the button names.</td>
       </tr>
       <tr>
-        <td>The <code>OFF</code> and <code>ON</code> at the end of the group row</td>
+        <th scope="row">The <code>OFF</code> and <code>ON</code> at the end of the group row</th>
         <td>The pair has no light of its own. It is a command, not a state.</td>
         <td>Sets every talkgroup of every system. Although it sits under the group row, it is not a control
           belonging to that row.</td>
@@ -1545,34 +1545,34 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The actions column, which has no heading</td>
+        <th scope="row">The actions column, which has no heading</th>
         <td>The row's action: <code>Play</code>, or <code>Stop</code> while that row's recording is the one being
           heard, or <code>Download</code> when the download switch is on, or <code>Loading</code> while a recording is
           on its way to your browser.</td>
       </tr>
       <tr>
-        <td><code>Date</code></td>
+        <th scope="row"><code>Date</code></th>
         <td>The day the call was recorded, written as month and day.</td>
       </tr>
       <tr>
-        <td><code>Time</code></td>
+        <th scope="row"><code>Time</code></th>
         <td>The time it was recorded, in the form for time that chapter 6 gives.</td>
       </tr>
       <tr>
-        <td><code>Dur</code></td>
+        <th scope="row"><code>Dur</code></th>
         <td>How long the recording is, as minutes and seconds. A call whose length was never measured leaves this
           cell empty.</td>
       </tr>
       <tr>
-        <td><code>System</code></td>
+        <th scope="row"><code>System</code></th>
         <td>The name the configuration gives that system.</td>
       </tr>
       <tr>
-        <td><code>Talkgroup</code></td>
+        <th scope="row"><code>Talkgroup</code></th>
         <td>The name the configuration gives that talkgroup.</td>
       </tr>
       <tr>
-        <td><code>Name</code></td>
+        <th scope="row"><code>Name</code></th>
         <td>The name written on the talkgroup itself. It is not necessarily the same words as the
           <code>Talkgroup</code> column, and it says nothing about the call.</td>
       </tr>
@@ -1633,33 +1633,33 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td><code>Sort order</code></td>
+        <th scope="row"><code>Sort order</code></th>
         <td><code>Ascending</code> or <code>Descending</code>. <code>Descending</code> is the choice the panel opens
           with.</td>
         <td>Which end of the history the first page comes from, and which way the date criterion's window runs.</td>
       </tr>
       <tr>
-        <td><code>Date</code></td>
+        <th scope="row"><code>Date</code></th>
         <td>A field holding a date and a time.</td>
         <td>A day's worth of calls, measured from the instant typed rather than from midnight, as below.</td>
       </tr>
       <tr>
-        <td><code>System</code></td>
+        <th scope="row"><code>System</code></th>
         <td>The systems the configuration names, with <code>All Systems</code> first.</td>
         <td>Only calls recorded on that system.</td>
       </tr>
       <tr>
-        <td><code>Talkgroup</code></td>
+        <th scope="row"><code>Talkgroup</code></th>
         <td>The talkgroups of the chosen system, with <code>All Talkgroups</code> first.</td>
         <td>Only calls on that talkgroup.</td>
       </tr>
       <tr>
-        <td><code>Group</code></td>
+        <th scope="row"><code>Group</code></th>
         <td>The groups the configuration defines, with <code>All Groups</code> first.</td>
         <td>Only calls on the talkgroups that group covers.</td>
       </tr>
       <tr>
-        <td><code>Tag</code></td>
+        <th scope="row"><code>Tag</code></th>
         <td>The tags the configuration defines, with <code>All Tags</code> first.</td>
         <td>Only calls on talkgroups carrying that tag.</td>
       </tr>
@@ -1854,7 +1854,7 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>Time, link, queue</td>
+        <th scope="row">Time, link, queue</th>
         <td>The time kept from the machine the page runs on, then <code>NO LINK</code>, then the queue reading of
           zero.</td>
         <td>The same time, then <code>NO LINK</code> while the page is not talking to the server, or the listener
@@ -1862,41 +1862,41 @@ footer.site .signoff {
           then <code>Q:</code> and the number of calls waiting.</td>
       </tr>
       <tr>
-        <td>The small row under it</td>
+        <th scope="row">The small row under it</th>
         <td>Nothing. The application builds this row and writes nothing into it.</td>
         <td>Nothing.</td>
       </tr>
       <tr>
-        <td>System, type, tag</td>
+        <th scope="row">System, type, tag</th>
         <td><code>System</code>, an empty space, <code>Tag</code>.</td>
         <td>The system's name, the type word the configuration carries for the talkgroup or the system written in
           capitals, and the tag the talkgroup carries.</td>
       </tr>
       <tr>
-        <td>Talkgroup, date and progress</td>
+        <th scope="row">Talkgroup, date and progress</th>
         <td><code>Talkgroup</code> at the left, and <code>00:00</code> at the right.</td>
         <td>The talkgroup's label, or its number when the configuration gives no label; and at the right the time the
           call has reached, with a date in front of it only when the call is at least a day old.</td>
       </tr>
       <tr>
-        <td>The large name row</td>
+        <th scope="row">The large name row</th>
         <td><code>Rdio Scanner v</code> followed by the version the page was built from.</td>
         <td>The name written on the talkgroup, or the call's frequency when the talkgroup carries no name.</td>
       </tr>
       <tr>
-        <td>Frequency, talkgroup number</td>
+        <th scope="row">Frequency, talkgroup number</th>
         <td><code>F:</code> followed by the zero reading grouped, and <code>TGID: 0</code>.</td>
         <td><code>F:</code> and the frequency the call is on, grouped in threes and followed by <code>Hz</code>; and
           <code>TGID:</code> with the talkgroup's number.</td>
       </tr>
       <tr>
-        <td>Counters, unit</td>
+        <th scope="row">Counters, unit</th>
         <td><code>E: 0 S: 0</code> at the left, <code>UID: 0</code> at the right.</td>
         <td><code>E:</code> and <code>S:</code> with the two counts that ride with the recording; and
           <code>UID:</code> with the unit the call came from, or a blank space where the application cannot name one.</td>
       </tr>
       <tr>
-        <td>The flag row</td>
+        <th scope="row">The flag row</th>
         <td>Nothing lit. The words <code>AVOID</code>, <code>PATCH</code>, and <code>DELAYED</code> are on the screen
           from the start and are drawn as unlit.</td>
         <td>Any of those three, and the timed-avoid mark with the minutes it is held for.</td>
@@ -1977,22 +1977,22 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td><code>AVOID</code></td>
+        <th scope="row"><code>AVOID</code></th>
         <td>The call's talkgroup is not chosen in your selection. A system your selection says nothing about at all is
           never treated as avoided.</td>
       </tr>
       <tr>
-        <td><code>PATCH</code></td>
+        <th scope="row"><code>PATCH</code></th>
         <td>Only for a call that is avoided, and only when that call was patched onto a talkgroup you <em>are</em>
           choosing. It is the screen's way of saying the call reached you sideways.</td>
       </tr>
       <tr>
-        <td><code>DELAYED</code></td>
+        <th scope="row"><code>DELAYED</code></th>
         <td>The call arrived carrying the delay flag, which is how a deployment that holds audio back marks the calls
           it releases later.</td>
       </tr>
       <tr>
-        <td>The timed-avoid mark, <code>⧖</code></td>
+        <th scope="row">The timed-avoid mark, <code>⧖</code></th>
         <td>The call's talkgroup is being held off for a window of minutes. The mark is followed by the number of
           minutes and an <code>M</code>, and it belongs to the selection's timed avoid rather than to the call.</td>
       </tr>
@@ -2125,20 +2125,20 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td><code>Invalid unlock code</code></td>
+        <th scope="row"><code>Invalid unlock code</code></th>
         <td>The code is not one the server has. The same sentence also appears when the code is right and the tries
           have run out: running out is answered exactly as a wrong guess is.</td>
         <td>Check the code against what you were given. If you have tried several times, stop trying — the sentence
           will not change, and nothing you type can tell you which of the two it is.</td>
       </tr>
       <tr>
-        <td><code>This unlock code has expired</code></td>
+        <th scope="row"><code>This unlock code has expired</code></th>
         <td>The code is known and its date has passed. A code the operator gave no date never expires.</td>
         <td>Ask the operator to extend it or replace it. Presenting it again cannot help, because the date is the
           problem rather than the code.</td>
       </tr>
       <tr>
-        <td><code>Too many connections</code></td>
+        <th scope="row"><code>Too many connections</code></th>
         <td>This code is already open on as many listeners as it is allowed to be. The limit belongs to the code, and
           the operator sets it.</td>
         <td>Somebody else is holding the places your code has. If a shared code is always full, ask for a code of your
@@ -2306,17 +2306,17 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The search panel's six filters</td>
+        <th scope="row">The search panel's six filters</th>
         <td>narrower than 460 pixels, 460 to 979, 980 and wider</td>
         <td>A row each, then two to a row, then three to a row — which is two rows for the six.</td>
       </tr>
       <tr>
-        <td>The select panel's buttons</td>
+        <th scope="row">The select panel's buttons</th>
         <td>up to 719 pixels, 720 to 1199, 1200 and wider</td>
         <td>Four to a row, then five, then ten.</td>
       </tr>
       <tr>
-        <td>A panel's bar</td>
+        <th scope="row">A panel's bar</th>
         <td>narrower than 600 pixels</td>
         <td>Takes the shorter height the platform uses on a phone, and the scrolling area under it gains the
           difference.</td>
@@ -2458,34 +2458,34 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The page itself</td>
+        <th scope="row">The page itself</th>
         <td>It opens, dark, looking as it always looks.</td>
         <td>The browser has kept the page and the files it draws with.</td>
       </tr>
       <tr>
-        <td>The display's rows</td>
+        <th scope="row">The display's rows</th>
         <td>The readings the screen is built with, and <code>NO LINK</code> in the place the link reading belongs.</td>
         <td>Nothing has arrived from the server to write over them.</td>
       </tr>
       <tr>
-        <td>The version line</td>
+        <th scope="row">The version line</th>
         <td>A version number, in the large row, where the display's own name goes.</td>
         <td>It is carried by the files the browser kept, which is why it is the version the browser has rather than
           the one the server runs.</td>
       </tr>
       <tr>
-        <td>The history table</td>
+        <th scope="row">The history table</th>
         <td>Its ruled rows, empty.</td>
         <td>The table is always the same number of rows, and nothing has arrived to put in them.</td>
       </tr>
       <tr>
-        <td>The two panels</td>
+        <th scope="row">The two panels</th>
         <td>Neither opens.</td>
         <td>The controls that open them do nothing while there is no configuration, and the configuration comes from
           the server.</td>
       </tr>
       <tr>
-        <td>Live calls, a search, a recording</td>
+        <th scope="row">Live calls, a search, a recording</th>
         <td>None of any of them.</td>
         <td>Live calls and searches run over the connection, and recordings are fetched over it. The page keeps no
           recording of its own.</td>
@@ -2518,37 +2518,37 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The access code the server last accepted</td>
+        <th scope="row">The access code the server last accepted</th>
         <td>Yes</td>
         <td>In an encoded form rather than a protected one, shared by every profile on that browser, and presented
           again by itself on every reconnect. <a href="#ch-07-access-codes">Access codes</a> goes through what that
           costs.</td>
       </tr>
       <tr>
-        <td>The saved selection</td>
+        <th scope="row">The saved selection</th>
         <td>Yes</td>
         <td>One copy per profile, which is what <code>?id=</code> gives you a separate one of.</td>
       </tr>
       <tr>
-        <td>The selection as an older version saved it</td>
+        <th scope="row">The selection as an older version saved it</th>
         <td>Yes, briefly</td>
         <td>The copy written before profiles existed is read whenever a profile has never written its own, so a
           selection made by an older version survives the update — until that profile changes something, after which
           the older copy is left behind.</td>
       </tr>
       <tr>
-        <td>The version of the page the browser has</td>
+        <th scope="row">The version of the page the browser has</th>
         <td>Yes</td>
         <td>The page's own files, including the version line it paints. It lasts until a newer version is taken and
           accepted.</td>
       </tr>
       <tr>
-        <td>What the search was filtered to, and what it found</td>
+        <th scope="row">What the search was filtered to, and what it found</th>
         <td>No</td>
         <td>A search starts from the beginning each time the panel is opened.</td>
       </tr>
       <tr>
-        <td>Which panel was open, whether the feed was paused, whether the display was lit</td>
+        <th scope="row">Which panel was open, whether the feed was paused, whether the display was lit</th>
         <td>No</td>
         <td>Reload, and the feed is off, the panels are shut, and the display starts dimmed again.</td>
       </tr>
@@ -2653,48 +2653,48 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>Which deployment, from the name across the top of the screen — or the address you were given if that line
-          is empty</td>
+        <th scope="row">Which deployment, from the name across the top of the screen — or the address you were given if that line
+          is empty</th>
         <td>An operator may run more than one server, and two people may share a name you both read as obvious.</td>
       </tr>
       <tr>
-        <td>The version line, read exactly as it reads, and said to be the page's version</td>
+        <th scope="row">The version line, read exactly as it reads, and said to be the page's version</th>
         <td>It names the build your browser is running, which is the first thing anybody can rule out. Saying it is
           the page's version stops the two versions being mistaken for each other.</td>
       </tr>
       <tr>
-        <td>What you were doing: listening live, playing one recorded call, or walking a searched playback — and
-          whether you had paused it</td>
+        <th scope="row">What you were doing: listening live, playing one recorded call, or walking a searched playback — and
+          whether you had paused it</th>
         <td>Those are different routes through the application, with different settings behind them, and what is
           broken is usually one of them rather than the whole screen.</td>
       </tr>
       <tr>
-        <td>Which talkgroup, in both readings the display carries: the <code>Talkgroup</code> row's label and the
-          number on the <code>TGID:</code> row</td>
+        <th scope="row">Which talkgroup, in both readings the display carries: the <code>Talkgroup</code> row's label and the
+          number on the <code>TGID:</code> row</th>
         <td>Labels are chosen and numbers are not, and a label that matches a different system is a thing worth
           hearing about.</td>
       </tr>
       <tr>
-        <td>What the display was showing at the time — the flags, especially <code>AVOID</code>, <code>PATCH</code>,
-          and <code>DELAYED</code>, and the two counts on the unit row</td>
+        <th scope="row">What the display was showing at the time — the flags, especially <code>AVOID</code>, <code>PATCH</code>,
+          and <code>DELAYED</code>, and the two counts on the unit row</th>
         <td>A flag on the screen is the application's own reading of what it is doing with that call, which is a
           shorter way to the cause than a description of what you heard.</td>
       </tr>
       <tr>
-        <td>When it happened, from the display's clock, and whether the reading you were watching was a time of day
-          or elapsed time</td>
+        <th scope="row">When it happened, from the display's clock, and whether the reading you were watching was a time of day
+          or elapsed time</th>
         <td>Recordings are found by time. The progress reading the display shows is a time of day, which is what the
           operator needs to look the call up again.</td>
       </tr>
       <tr>
-        <td>Whether anybody else was listening, from the count of listeners the display carries, and whether they saw
-          the same thing</td>
+        <th scope="row">Whether anybody else was listening, from the count of listeners the display carries, and whether they saw
+          the same thing</th>
         <td>A problem that two listeners saw is about the deployment. A problem only you saw is about your browser,
           your device, or your selection.</td>
       </tr>
       <tr>
-        <td>Which browser and which device, and whether the page was opened from an address or from a home-screen
-          shortcut</td>
+        <th scope="row">Which browser and which device, and whether the page was opened from an address or from a home-screen
+          shortcut</th>
         <td>The page's files, its remembered selection, and its stored access code all live per browser. A shortcut
           opens the default profile, which is not necessarily the profile you were using.</td>
       </tr>
@@ -2834,53 +2834,53 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The server light beside the deployment's name</td>
+        <th scope="row">The server light beside the deployment's name</th>
         <td>Its name says the state outright: <code>Server status:</code> followed by which state it is in.</td>
         <td>Which state looks like which colour — its shape is the same in all three, and the paused state is told by
           a blink.</td>
       </tr>
       <tr>
-        <td>The full-screen control</td>
+        <th scope="row">The full-screen control</th>
         <td>Its name names the move it will make — <code>Fullscreen</code> or <code>Exit fullscreen</code> — and it
           carries <code>aria-pressed</code>, so the state is in the control's name. It exists at all because the
           double-click that also enters full screen has no keyboard equivalent.</td>
         <td>Nothing.</td>
       </tr>
       <tr>
-        <td>The select panel's buttons</td>
+        <th scope="row">The select panel's buttons</th>
         <td>Each carries <code>aria-pressed</code>, and a group button's name carries its state as a word:
           <code>on</code>, <code>off</code>, or <code>partial</code>.</td>
         <td>The corner light carries the same fact faster, and a reader who cannot see it is given the words instead.</td>
       </tr>
       <tr>
-        <td>The four controls on the control bar that have a state — <code>LIVE FEED</code>, <code>HOLD SYS</code>,
-          <code>HOLD TG</code>, <code>PAUSE</code></td>
+        <th scope="row">The four controls on the control bar that have a state — <code>LIVE FEED</code>, <code>HOLD SYS</code>,
+          <code>HOLD TG</code>, <code>PAUSE</code></th>
         <td>The feed's state and the pause are said out loud when they change, and the display says the feed's state in
           its own readings. The two hold controls are not said anywhere.</td>
         <td>The light in each control's corner is the only sign of the state, it has the same shape in every state, and
           for the two hold controls nothing else reports them.</td>
       </tr>
       <tr>
-        <td>The flags beside the display's readings — <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and
-          the timed window's hourglass <code>⧖</code></td>
+        <th scope="row">The flags beside the display's readings — <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and
+          the timed window's hourglass <code>⧖</code></th>
         <td>A flag that is on is a chip with words on it, and the words are the mark.</td>
         <td>A flag that is off is not drawn at all, so the display offers no mark for the state of not being flagged,
           and the hourglass is a shape with no word beside it beyond the minutes.</td>
       </tr>
       <tr>
-        <td>The search panel while a code has not been accepted, and while an answer is on its way</td>
+        <th scope="row">The search panel while a code has not been accepted, and while an answer is on its way</th>
         <td>The controls are marked as doing nothing rather than taken away, and the results area is marked as busy, so
           a reader is told the state of the panel instead of finding that a control has moved.</td>
         <td>Nothing. This is one of the things the application does the right way.</td>
       </tr>
       <tr>
-        <td>The buttons the select panel groups by system, and the row it groups by deployment group</td>
+        <th scope="row">The buttons the select panel groups by system, and the row it groups by deployment group</th>
         <td>Each system's box carries that system's name.</td>
         <td>The row of group buttons is grouped by a box the page gives no name at all, so a screen reader is handed a
           group with nothing to say about what its buttons have in common.</td>
       </tr>
       <tr>
-        <td>The last column of the search results, which holds the play, stop, and download controls</td>
+        <th scope="row">The last column of the search results, which holds the play, stop, and download controls</th>
         <td>Each control names itself: <code>Play</code>, <code>Stop</code>, <code>Download</code>, and
           <code>Loading</code> while an answer is being fetched.</td>
         <td>The column has no heading, so a reader who reads the column across is not told what kind of thing the
@@ -2920,62 +2920,62 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The display's readings on the face it wears while a call plays</td>
+        <th scope="row">The display's readings on the face it wears while a call plays</th>
         <td>4.5 to 1</td>
         <td>10.98 to 1</td>
       </tr>
       <tr>
-        <td>The display's readings on the resting face</td>
+        <th scope="row">The display's readings on the resting face</th>
         <td>4.5 to 1</td>
         <td>8.07 to 1</td>
       </tr>
       <tr>
-        <td>A lit flag's words on the flag's own chip, during a call</td>
+        <th scope="row">A lit flag's words on the flag's own chip, during a call</th>
         <td>4.5 to 1</td>
         <td>7.58 to 1</td>
       </tr>
       <tr>
-        <td>A lit flag's words on the flag's own chip, on the resting display</td>
+        <th scope="row">A lit flag's words on the flag's own chip, on the resting display</th>
         <td>4.5 to 1</td>
         <td>6.08 to 1</td>
       </tr>
       <tr>
-        <td>A control's label on its face</td>
+        <th scope="row">A control's label on its face</th>
         <td>4.5 to 1</td>
         <td>13.77 to 1</td>
       </tr>
       <tr>
-        <td>The deployment's name across the top of the screen</td>
+        <th scope="row">The deployment's name across the top of the screen</th>
         <td>4.5 to 1</td>
         <td>5.64 to 1</td>
       </tr>
       <tr>
-        <td>A panel's readings, and its play and download glyphs, on the panel's white content surface</td>
+        <th scope="row">A panel's readings, and its play and download glyphs, on the panel's white content surface</th>
         <td>4.5 to 1 and 3 to 1</td>
         <td>16.10 to 1</td>
       </tr>
       <tr>
-        <td>A paginator control's glyph on its surface</td>
+        <th scope="row">A paginator control's glyph on its surface</th>
         <td>3 to 1</td>
         <td>4.61 to 1</td>
       </tr>
       <tr>
-        <td>The state light on a control's face, lit green, lit yellow, lit red</td>
+        <th scope="row">The state light on a control's face, lit green, lit yellow, lit red</th>
         <td>3 to 1</td>
         <td>8.25 to 1, 11.16 to 1, 3.58 to 1</td>
       </tr>
       <tr>
-        <td>The server light on the page, lit green, cyan, yellow, white, orange, red, blue, magenta</td>
+        <th scope="row">The server light on the page, lit green, cyan, yellow, white, orange, red, blue, magenta</th>
         <td>3 to 1</td>
         <td>9.99, 10.84, 13.51, 16.67, 7.38, 4.33, 4.19, 4.13 to 1</td>
       </tr>
       <tr>
-        <td><strong>The server light on the page, at rest</strong></td>
+        <th scope="row"><strong>The server light on the page, at rest</strong></th>
         <td>3 to 1</td>
         <td><strong>2.07 to 1</strong></td>
       </tr>
       <tr>
-        <td>The keyboard's ring, on the control it rings and on the page</td>
+        <th scope="row">The keyboard's ring, on the control it rings and on the page</th>
         <td>3 to 1</td>
         <td>4.95 to 1 and 6.00 to 1</td>
       </tr>
@@ -3076,57 +3076,57 @@ footer.site .signoff {
     </thead>
     <tbody>
       <tr>
-        <td>The four state-bearing controls carry their state in colour alone, in a light whose shape never changes.</td>
+        <th scope="row">The four state-bearing controls carry their state in colour alone, in a light whose shape never changes.</th>
         <td>The feed's state and the pause are announced in words when they change, and the display's own rows report
           the feed. The two hold controls have no such route.</td>
       </tr>
       <tr>
-        <td>The server light at rest is 2.07 to 1 against the page, under the floor for a thing that carries meaning by
-          how it looks, and the paused state is told by a blink through that same low-contrast colour.</td>
+        <th scope="row">The server light at rest is 2.07 to 1 against the page, under the floor for a thing that carries meaning by
+          how it looks, and the paused state is told by a blink through that same low-contrast colour.</th>
         <td>The light's name says the state outright, and a reader who asks the device for reduced motion gets a
           standing mark in place of the blink.</td>
       </tr>
       <tr>
-        <td>Under a forced colours reading the corner lights on the controls are taken entirely.</td>
+        <th scope="row">Under a forced colours reading the corner lights on the controls are taken entirely.</th>
         <td>Everything else on the page keeps a boundary in the system's ink, the server light keeps its name, and the
           select panel's buttons keep the state they carry in words.</td>
       </tr>
       <tr>
-        <td>A flag that is off leaves no mark, so the display cannot show the difference between a call with no flags
-          and a display that has nothing to say about flags.</td>
+        <th scope="row">A flag that is off leaves no mark, so the display cannot show the difference between a call with no flags
+          and a display that has nothing to say about flags.</th>
         <td>A flag that is on is stated in words on its own chip, and the readings a flag would modify are stated
           whether or not the flag is on.</td>
       </tr>
       <tr>
-        <td>The row of group buttons in the select panel is grouped by a box with no name.</td>
+        <th scope="row">The row of group buttons in the select panel is grouped by a box with no name.</th>
         <td>The system boxes beside it carry their system's name, and each button in the nameless row carries its label
           and its state.</td>
       </tr>
       <tr>
-        <td>The last column of the search results has no heading.</td>
+        <th scope="row">The last column of the search results has no heading.</th>
         <td>Every control in it names itself, so the column is understood from its controls even without its heading.</td>
       </tr>
       <tr>
-        <td>The two countdowns write a bare number into the same announced block as their sentence, rewriting it once a
-          second, and neither notice carries a dismiss control.</td>
+        <th scope="row">The two countdowns write a bare number into the same announced block as their sentence, rewriting it once a
+          second, and neither notice carries a dismiss control.</th>
         <td>Both notices close by themselves after their count, and the control that showed each one stays on the page
           to be pressed again.</td>
       </tr>
       <tr>
-        <td>The store badge in the notice about the native applications is a link with nothing to say about itself: the
+        <th scope="row">The store badge in the notice about the native applications is a link with nothing to say about itself: the
           Android badge carries neither a title nor text, and the Apple badge is named after the file its artwork came
-          from. It is the only thing in that notice a keyboard can act on.</td>
+          from. It is the only thing in that notice a keyboard can act on.</th>
         <td>The notice closes by itself in ten seconds, and this guide names both stores in words, so a reader who
           wants the native application is not forced through an unnamed link to find it.</td>
       </tr>
       <tr>
-        <td>Motion is answered only by the reader's device. The page offers no control for it.</td>
+        <th scope="row">Motion is answered only by the reader's device. The page offers no control for it.</th>
         <td>The page does answer that setting, and answers it by replacing motion with a standing mark rather than by
           switching the marked state off.</td>
       </tr>
       <tr>
-        <td>At 320 CSS pixels the deployment's name is cut with an ellipsis and the version line is cut with no mark to
-          say it happened.</td>
+        <th scope="row">At 320 CSS pixels the deployment's name is cut with an ellipsis and the version line is cut with no mark to
+          say it happened.</th>
         <td>The narrow width costs nothing else, and the help chapter says what to report when those two readings will
           not fit.</td>
       </tr>
@@ -3354,13 +3354,595 @@ footer.site .signoff {
     deployment's configuration, the sites it listens to, the retention it keeps calls for, the limits on a code, and the
     delay on a talkgroup are all set by the operator. What you can bring is concrete — the version the page prints in
     its own line at the bottom of the display, the talkgroup and system, the time on the call you were looking at, what
-    the controls' own states were, and what the line above the display was reading. <a href="#ch-09-help-and-support">The
+    the controls' own states were, and what the link reading was saying. <a href="#ch-09-help-and-support">The
     chapter on help and support</a> says where to take it and what the application can tell you about itself.
   </p>
 </section>
 
 <section>
   <h2 id="ch-12-reference">12 · Reference</h2>
+
+  <p>
+    Everything the guide has been working through, gathered where a reader can scan it instead of reading it. Nothing
+    here is new. Each row names a thing an earlier chapter operates, and the last column says which chapter — except
+    in the table of the operator's settings, where the thing being named belongs to somebody else's screen and this
+    guide's only business is what it does to yours. The rows are deliberately shorter than the chapters they point at:
+    a reference is read by scanning, and a reader who wants the reasoning behind a row goes to the chapter the row
+    names.
+  </p>
+
+  <h3>The nine controls</h3>
+
+  <table>
+    <caption>The nine controls on the control bar, what a press on each one does, and where this guide operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The control</th>
+        <th scope="col">What a press does</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row"><code>LIVE FEED</code></th>
+        <td>
+          Turns the stream of calls the server is hearing right now on or off. Its own light carries three states, and
+          after a playback you opened out of a search it takes a second press before live calls come back.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>HOLD SYS</code></th>
+        <td>
+          Narrows what you are hearing to the system the call in front of you came from, switching off every system
+          your selection was also accepting. A second press puts the selection back as it was, provided nothing in the
+          selection panel has been pressed since.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>HOLD TG</code></th>
+        <td>
+          Narrows what you are hearing to the talkgroup of the call in front of you, and it is let go the same way.
+          Pressing it while a system hold is standing, or pressing <code>HOLD SYS</code> while this hold is standing,
+          releases the hold that was already there.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>REPLAY LAST</code></th>
+        <td>
+          Plays the call the display is showing. When that call carries no audio of its own, it plays the one before
+          it.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>SKIP NEXT</code></th>
+        <td>
+          Ends the recording in front of you and takes the next call the queue holds. During a playback out of a
+          search it moves along that answer instead.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>AVOID</code></th>
+        <td>
+          Steps the talkgroup of the call in front of you along the avoid cycle: held off for as long as you leave it,
+          then 30 minutes, then 60, then 120, then back to hearing it. It has no light of its own, and the display
+          carries the timed part of the cycle in its flag row.
+        </td>
+        <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>SEARCH CALL</code></th>
+        <td>
+          Opens the search panel and runs a search with the criteria the panel is already holding. It fills nothing in
+          from the call on the display.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>PAUSE</code></th>
+        <td>
+          Holds the recording in front of you where it is, in the middle of the call, and freezes the clock that has
+          been running on it. Nothing new begins while the hold stands, and letting go continues in the same call at
+          the same place.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>SELECT TG</code></th>
+        <td>
+          Opens the panel that says which systems and talkgroups you are willing to hear. A press in that panel that
+          changes the selection lets go of a hold.
+        </td>
+        <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The panels' own controls</h3>
+
+  <table>
+    <caption>The controls the two panels add, what each one does, and where this guide operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The control</th>
+        <th scope="col">What it does</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row"><code>OFF</code> and <code>ON</code> beside a system's talkgroups</th>
+        <td>
+          Set every talkgroup of that system to the state the button names. The pair appears only when that system has
+          more than one talkgroup, and neither button carries a light: it is a command, not a state.
+        </td>
+        <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>OFF</code> and <code>ON</code> at the end of the group row</th>
+        <td>
+          Set every talkgroup of every system. It sits under the group row but belongs to the panel rather than to that
+          row.
+        </td>
+        <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Play</code>, <code>Stop</code>, <code>Download</code>, <code>Loading</code></th>
+        <td>
+          One control at the head of each result row, named for what it will do. <code>Play</code> starts that
+          recording, <code>Stop</code> silences the one already playing, <code>Download</code> — the name the control
+          takes when the switch beside the paginator is on — saves the recording out instead, and
+          <code>Loading</code> is what the control says for the row whose recording is on its way.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Download mode</code></th>
+        <td>
+          The switch beside the paginator. It changes what a row's own control does, not what the answer contains.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Reset</code></th>
+        <td>
+          Clears the criteria you have set and searches again from the first page. While an answer is on its way the
+          panel marks this control as doing nothing, and a press then does not interrupt the search that is running.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>First page</code>, <code>Previous page</code>, <code>Next page</code>, <code>Last page</code></th>
+        <td>
+          The paginator's four controls, each named for what it moves to. The line between them says which part of the
+          answer you are looking at, and a reading of 0 of 0 says the criteria found nothing.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Close search panel</code> and <code>Close select panel</code></th>
+        <td>
+          Each panel's own closing control, named by saying what it closes. Shutting the search panel leaves a playback
+          that panel started playing.
+        </td>
+        <td>
+          <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>, and
+          <a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Help</code></th>
+        <td>
+          The affordance that names the address the operator configured. A deployment whose operator configured none
+          gets no <code>Help</code> control at all.
+        </td>
+        <td><a href="#ch-09-help-and-support">Help and support</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The flags beside a call</h3>
+
+  <table>
+    <caption>The flags the display carries beside a call, what has to be true for each to appear, and where this guide operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The flag</th>
+        <th scope="col">What has to be true</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row"><code>AVOID</code></th>
+        <td>The call's talkgroup is not one you are choosing. A system your selection says nothing about at all is
+          never treated as avoided.</td>
+        <td><a href="#ch-06-what-the-display-says">What the display says</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>PATCH</code></th>
+        <td>The call was avoided and reached you sideways, patched onto a talkgroup you are choosing. It appears only
+          beside an avoided call.</td>
+        <td><a href="#ch-06-what-the-display-says">What the display says</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>DELAYED</code></th>
+        <td>The deployment holds this call's audio back, and released it once its hold had run out.</td>
+        <td><a href="#ch-06-what-the-display-says">What the display says</a></td>
+      </tr>
+      <tr>
+        <th scope="row">The timed-avoid mark, <code>⧖</code></th>
+        <td>The call's talkgroup is being held off for a window of minutes. The mark is followed by the number of
+          minutes and an <code>M</code>, and it belongs to the selection rather than to the call.</td>
+        <td><a href="#ch-06-what-the-display-says">What the display says</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The lights on the screen</h3>
+
+  <table>
+    <caption>The lights on the screen, what each one says, and where this guide operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The light</th>
+        <th scope="col">What it says</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">The server light, beside the line at the top of the screen</th>
+        <td>
+          Dark while nothing is playing, lit in the colour the call's talkgroup resolves to, and while audio is held:
+          alternating between that colour and the grey it wears at rest, or — when the operating system asks for less
+          motion — a ring standing around the lit face. It carries the same reading in its own name: a screen reader is
+          told <code>Server status:</code> followed by the state it is in.
+        </td>
+        <td>
+          <a href="#ch-02-the-main-screen">The main screen</a>, and
+          <a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>LIVE FEED</code>'s own corner light</th>
+        <td>
+          Its colour carries three states, and the third one — the colour of a partial state — means a playback is
+          running that you opened out of a search.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row">The corner light on the three controls that answer on or off</th>
+        <td>
+          Lit when the control's own state is standing, dark when it is not. Four of the nine controls carry a state
+          at all: this one is <code>HOLD SYS</code>, <code>HOLD TG</code>, and <code>PAUSE</code>, and the live feed
+          control named above is the fourth. The other five carry nothing on their own faces.
+        </td>
+        <td><a href="#ch-02-the-main-screen">The main screen</a></td>
+      </tr>
+      <tr>
+        <th scope="row">The whole control bar while a code is being asked for</th>
+        <td>
+          While the server is asking for a code, has expired one, or is being asked for one that already carries too
+          many connections, every control on the bar is marked as answering nothing. The states on their lights stay
+          where they were.
+        </td>
+        <td><a href="#ch-07-access-codes">Access codes and the unlock screen</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The search panel's criteria</h3>
+
+  <table>
+    <caption>The search panel's criteria, what each one holds, and where this guide operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The criterion</th>
+        <th scope="col">What it holds</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row"><code>Sort order</code></th>
+        <td>
+          <code>Ascending</code> or <code>Descending</code>. It decides which end of the answer the first page shows,
+          and the order the rows arrive in.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Date</code></th>
+        <td>A date and a time. The answer is a day's worth of calls measured from the instant typed, not from
+          midnight.</td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>System</code></th>
+        <td>The systems the configuration names, with <code>All Systems</code> standing when you have chosen
+          none.</td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Talkgroup</code></th>
+        <td>The talkgroups the other criteria leave standing, with <code>All Talkgroups</code> first.</td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Group</code></th>
+        <td>The groups the configuration defines, with <code>All Groups</code> first. A group is the operator's own
+          grouping of talkgroups.</td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Tag</code></th>
+        <td>The tags the configuration defines, with <code>All Tags</code> first.</td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The settings a listener feels</h3>
+
+  <p>
+    These are named as the operator's settings name them, because an operator can hand a listener one of these words
+    and a listener needs to know what it did to their screen. Changing any of them, and finding out what the current
+    value is, belongs to the operator. What this guide adds is only the effect.
+  </p>
+
+  <table>
+    <caption>The settings the operator chooses, and what each one does to the screen a listener is looking at.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The setting</th>
+        <th scope="col">What it does to a listener's screen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row"><code>Audio Conversion</code></th>
+        <td>
+          Whether the recordings the page plays and hands you for saving are converted copies, and which conversion.
+          Two of its choices also level the copy's loudness, and that levelling only happens when the conversion
+          program this server probed at startup answers that it can do it. A conversion that fails leaves the original
+          recording stored, so the call is still there and still findable. When the call's talkgroup carries a tag, the
+          converted recording carries the talkgroup, the system, and the tag as the recording's own labels.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Auto Populate</code></th>
+        <td>
+          When it is on, a call heard on a channel the configuration does not already name adds that channel to the
+          configuration: the talkgroup the call claims is invented, with the groups and the tag it claims, and the units
+          it claims are added to its system. A system's own setting does the same for that system's calls whether or
+          not this server-wide option is on. A channel nobody was told about can therefore appear in the selection, and
+          in a search. Where neither setting applies, the operator has to name the channel before it can appear.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Branding Label</code></th>
+        <td>The words on the line at the top of the screen. When it holds nothing, that line is empty.</td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Disable Duplicate Call Detection</code></th>
+        <td>
+          Switched off as shipped, which is why detection runs. Switched on, it stops the server telling you twice about
+          the same call: a call heard on the same system, talkgroup, and site within 500 milliseconds on either side of
+          another is kept as one recording.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Email Support</code></th>
+        <td>
+          The address the <code>Help</code> affordance names. A deployment whose operator has not configured one gets
+          no <code>Help</code> control at all, and then nothing on the screen says where to take a problem.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Keypad Beep Style</code></th>
+        <td>
+          Which set of tones the control bar answers a press with. A deployment configured without a set answers a
+          press with silence, which is not the same as the press having done nothing.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Max Clients</code></th>
+        <td>
+          How many listeners the server answers at once. Past that the server closes the connection and says nothing, so
+          the screen reads <code>NO LINK</code> the way it reads any other lost connection. The cap is not the same
+          thing as the limit that belongs to a single access code, and only that second one is named on the screen.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Prune Days</code></th>
+        <td>
+          How long the server keeps calls. A pass on an hourly schedule removes what has outlived that, and a call the
+          pass has taken is not findable by any route the application offers. The value 0 switches the pass off.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Show Listeners Count</code></th>
+        <td>
+          Puts <code>L:</code> and the number of other listeners the server can see into the row across the top of the
+          display, beside the time and the queue reading. When it is off that place is empty, and an empty place is not
+          the same as nobody else listening.
+        </td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Sort Talkgroups</code></th>
+        <td>
+          Puts each system's talkgroups in the order of their names. When it is off they arrive in the order the
+          operator put them in, which is the order they appear on the screen.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    An access code has two settings of its own, an expiry and a limit on how many connections it carries at once. Both
+    belong to the code rather than to the server, and chapter 7 gives what a listener feels when either one is reached:
+    the field reading <code>This unlock code has expired</code>, and the field reading
+    <code>Too many connections</code>.
+  </p>
+
+  <h3>The sentences the page says out loud</h3>
+
+  <p>
+    The page writes one sentence at a time into a region a screen reader announces, so two changes happening together
+    arrive as the later one. None of these sentences is the server light's name: that is written into the light itself,
+    and it is a name rather than something the page says.
+  </p>
+
+  <table>
+    <caption>The sentences the page says out loud for a screen reader, what each one is for, and where this guide operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The sentence</th>
+        <th scope="col">What it is for</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row"><code>Queue:</code> followed by a number</th>
+        <td>Says how many calls the server has waiting for the page, which is the reading the screen also prints.</td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Playing</code> or <code>Paused</code> followed by a name</th>
+        <td>
+          Says whether audio is moving or held, and names the talkgroup the call in front of you belongs to. It is how
+          a hold on the audio is announced; the light beside the line at the top of the screen carries the same reading
+          in its own name.
+        </td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Stopped</code> followed by a name</th>
+        <td>Says the audio ended, and names what the display was showing when it did.</td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Page</code> followed by a number</th>
+        <td>Says which page of an answer the table is showing, each time the paginator moves.</td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+      <tr>
+        <th scope="row"><code>Searching calls</code></th>
+        <td>Says an answer is on its way, so a table that has not changed yet is not a table that has answered.</td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+      <tr>
+        <th scope="row">A number followed by the word calls</th>
+        <td>
+          Says how many calls the answer found, which is the sentence that tells you a search finished. The paginator's
+          own reading of the same answer is what you look at, and an empty answer reads 0 of 0.
+        </td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The application's own words</h3>
+
+  <p>
+    These are the words the guide uses throughout, collected here in the order a reader is most likely to meet them.
+    Where a word is the application's own rather than the guide's, the entry says so.
+  </p>
+
+  <dl>
+    <dt><dfn>attempt</dfn></dt>
+    <dd>One try at an access code. The server counts them against the session and against the address the code arrived
+      from, over a window, and clearing the page does not clear the counters.</dd>
+
+    <dt><dfn>avoid</dfn></dt>
+    <dd>What <code>AVOID</code> does: the talkgroup of the call in front of you is held off, and pressing through the
+      cycle steps the hold to 30 minutes, 60, 120, and then to no hold at all.</dd>
+
+    <dt><dfn>call</dfn></dt>
+    <dd>One transmission the server recorded: when it happened, how long it lasted, the talkgroup it was heard on, and
+      the audio itself.</dd>
+
+    <dt><dfn>delay</dfn></dt>
+    <dd>A deployment holding a call's audio back for whole minutes from the moment the call happened. A held call
+      arrives carrying the flag <code>DELAYED</code>, and until it arrives no search can find it.</dd>
+
+    <dt><dfn>group</dfn></dt>
+    <dd>The operator's own grouping of talkgroups — the application's word for it, and a search can ask with it. It is
+      not the same thing as a tag.</dd>
+
+    <dt><dfn>hold</dfn></dt>
+    <dd>What <code>HOLD SYS</code> and <code>HOLD TG</code> take: the selection narrowed to the system, or the
+      talkgroup, of the call in front of you. A second press puts the selection back exactly as it was, unless
+      something in the selection panel has been pressed since.</dd>
+
+    <dt><dfn>live feed</dfn></dt>
+    <dd>The stream of calls the server is hearing right now, which the page plays as they arrive. It is what
+      <code>LIVE FEED</code> turns on and off, and it is what a playback out of a search is not.</dd>
+
+    <dt><dfn>link reading</dfn></dt>
+    <dd>The guide's name for the place in the row above the display that says whether the page is joined to the server.
+      It reads <code>NO LINK</code> while it is not.</dd>
+
+    <dt><dfn>patch</dfn></dt>
+    <dd>A call that was moved onto a talkgroup other than the one it was heard on. The screen marks it
+      <code>PATCH</code> when it reaches you that way and you are choosing the talkgroup it landed on.</dd>
+
+    <dt><dfn>playback</dfn></dt>
+    <dd>A recording the page plays out of the archive rather than out of the live feed. While one is running the
+      <code>LIVE FEED</code> control carries its third state, and one press of it ends the playback and leaves the
+      feed off.</dd>
+
+    <dt><dfn>queue</dfn></dt>
+    <dd>The calls the server has for the page to play, printed on the screen as <code>Q:</code> and a number. Changing
+      your selection takes calls out of it.</dd>
+
+    <dt><dfn>retention</dfn></dt>
+    <dd>How long the server keeps the calls it has recorded. A pass on an hourly schedule removes what has outlived
+      it, and nothing a listener does brings a removed call back.</dd>
+
+    <dt><dfn>selection</dfn></dt>
+    <dd>What the panel opened by <code>SELECT TG</code> says you are willing to hear: the systems and talkgroups the
+      page will play for you. It is not a volume, and it is not a filter on what the server recorded.</dd>
+
+    <dt><dfn>site</dfn></dt>
+    <dd>A physical location of a system that has more than one, the application's own word for it. Two calls heard on
+      different sites of the same system are not the same call heard twice.</dd>
+
+    <dt><dfn>system</dfn></dt>
+    <dd>The radio system a talkgroup belongs to. The display names it in the row it shares with the type and the tag,
+      and a talkgroup's colour can come from it.</dd>
+
+    <dt><dfn>tag</dfn></dt>
+    <dd>A label the operator puts on a talkgroup. The display carries it in the row beside the system and the type, and
+      a search can ask with it.</dd>
+
+    <dt><dfn>talkgroup</dfn></dt>
+    <dd>The channel a call is heard on, and the thing a listener is choosing when they choose what to hear. The display
+      names it, and the call's colour comes from what it resolves to.</dd>
+
+    <dt><dfn>unit</dfn></dt>
+    <dd>A radio unit of a system — a moving identity a call can be attributed to, rather than a channel. One label can
+      cover a range of them. The display carries it in the row under the frequency.</dd>
+
+    <dt><dfn>unlock code</dfn></dt>
+    <dd>The field the page shows when a server asks for a code, and the code itself. The guide calls the code an access
+      code, because that is the operator's word for what they hand you.</dd>
+  </dl>
+
+  <h3>Where the licence position is written</h3>
+
+  <p>
+    This guide states no licence position of its own. It documents the screen a listener uses, and the terms the project
+    ships under belong where the whole project is described: the reference appendices of the operator's guide carry
+    them, beside the licence. A reader who wants to know what they may do with the software, or who is asking on behalf
+    of a deployment they run, asks the operator, who holds the copy and the terms that come with it.
+  </p>
 </section>
 
 </main>
@@ -3369,11 +3951,6 @@ footer.site .signoff {
 
 <footer class="site" role="contentinfo">
   <div class="wrap">
-    <p>
-      Rdio Scanner is free software under the GNU General Public License, version 3. Every interface the
-      server answers — the HTTP REST API and the real-time listener connection alike — is available for all
-      uses under those terms.
-    </p>
     <p>
       This document is written for the person who listens, and for the operator who hands it to them. It
       carries its own stylesheet and its own pictures, and it links to nothing outside itself. Everything it
