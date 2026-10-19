@@ -246,6 +246,23 @@ class ShimNode {
     this.parent = null;
   }
 
+  // isConnected is the fact a page asks when it wants to know whether an element is still on the page:
+  // a browser reports a node as connected while the parents holding it reach the document, and reports
+  // every node of a removed subtree as not connected with it. A node that was never placed on the page
+  // is not connected either.
+  //
+  // The shim tracks parents but has never answered this, and it does not run a disconnected callback
+  // when a node leaves: a component that answers its own disconnect — the selection tree reporting a
+  // dismissal, the logs component refusing a response that arrived after it went away — is only seen
+  // doing that in a browser.
+  get isConnected() {
+    let node = this;
+
+    while (node.parent) node = node.parent;
+
+    return node === globalThis.document?.body;
+  }
+
   // classList is the class view the drag handlers use to mark the row being moved.
   // It reads and writes the same className the components set.
   get classList() {

@@ -196,8 +196,13 @@ class RdioDialog extends HTMLElement {
       button.className = 'rdio-button-mini';
       button.textContent = action.label;
       button.addEventListener('click', () => {
-        this.close();
+        // The action is the answer, so it runs while the dialog and the content it carries are still on
+        // the page. Closing first reports a dismissal instead: content that answers its own removal — the
+        // selection tree hands back "nothing was picked" when it leaves the page — would answer before
+        // the action has handed anything, and the answer would be thrown away. An action that closes the
+        // dialog itself is closed twice, which answers the same way: the element is already off the page.
         action.onClick?.();
+        this.close();
       });
       bar.append(button);
     }
