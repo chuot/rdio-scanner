@@ -7,17 +7,24 @@
 // tag.id. Indeterminate states are display-only, never stored as values;
 // parent checks are derived from their children (legacy {emitEvent:false}
 // writes).
+//
+// A row also carries the label its configuration row carries, for the tree to
+// name it with. A label is display state like the indeterminate states: every
+// cascade, every hydration, and the emitted selection key on the identifiers
+// alone, and a label never reaches the stored value.
 
 export function createSelectionModel(config) {
-  const groups = (config.groups ?? []).map((group) => ({ id: group.id, checked: false }));
+  const groups = (config.groups ?? []).map((group) => ({ id: group.id, label: group.label, checked: false }));
 
-  const tags = (config.tags ?? []).map((tag) => ({ id: tag.id, checked: false }));
+  const tags = (config.tags ?? []).map((tag) => ({ id: tag.id, label: tag.label, checked: false }));
 
   const systems = (config.systems ?? []).map((system) => ({
     id: system.systemRef,
+    label: system.label,
     all: false,
     talkgroups: (system.talkgroups ?? []).map((talkgroup) => ({
       id: talkgroup.talkgroupRef,
+      label: talkgroup.label,
       checked: false,
       groupIds: Array.isArray(talkgroup.groupIds)
         ? talkgroup.groupIds

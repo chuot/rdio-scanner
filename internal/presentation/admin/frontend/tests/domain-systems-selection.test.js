@@ -55,6 +55,39 @@ test('model is built from business refs, not database ids', () => {
   assert.equal(model.all, false);
 });
 
+// The tree names its rows, and it can only name them with what the model carries. The configuration
+// hands the model a label on every row of every level; a model that keeps identifiers alone leaves the
+// tree nothing to say but the number.
+test('the model rows carry the labels the configuration carries', () => {
+  const model = createSelectionModel(fixture());
+
+  assert.deepEqual(model.groups.map((group) => group.label), ['Dispatch', 'Fire']);
+  assert.deepEqual(model.tags.map((tag) => tag.label), ['Law', 'EMS']);
+  assert.deepEqual(model.systems.map((system) => system.label), ['TESTSYS', 'OTHER']);
+  assert.deepEqual(model.systems[0].talkgroups.map((talkgroup) => talkgroup.label), ['TG1', 'TG2']);
+  assert.deepEqual(model.systems[1].talkgroups.map((talkgroup) => talkgroup.label), ['TG3', 'TG4']);
+});
+
+// A row the add control of a section has just created carries an empty label and no identifier of its
+// own. The model carries the row as it was handed it: it invents neither a name nor a number, because
+// the words that stand in for a row the operator has not filled in belong to the section that made it.
+test('a row the add control created is carried with its empty label and no identifier', () => {
+  const model = createSelectionModel({
+    groups: [{ alert: '', label: '', led: '', order: 0 }],
+    tags: [{ alert: '', label: '', led: '', order: 0 }],
+    systems: [{ systemRef: null, label: '', talkgroups: [{ talkgroupRef: null, label: '', groupIds: [], tagId: 0 }] }],
+  });
+
+  assert.equal(model.groups[0].id, undefined, 'the model invented an identifier for a group that has none');
+  assert.equal(model.groups[0].label, '');
+  assert.equal(model.tags[0].id, undefined, 'the model invented an identifier for a tag that has none');
+  assert.equal(model.tags[0].label, '');
+  assert.equal(model.systems[0].id, null);
+  assert.equal(model.systems[0].label, '');
+  assert.equal(model.systems[0].talkgroups[0].id, null);
+  assert.equal(model.systems[0].talkgroups[0].label, '');
+});
+
 test('checking Everything cascades to every group, tag, system and talkgroup', () => {
   const model = createSelectionModel(fixture());
 

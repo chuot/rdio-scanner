@@ -1,7 +1,9 @@
 // rdio-systems-selection: tri-state selection dialog
 // (legacy config/systems-selection). The tree Everything → Groups / Tags /
 // Systems → Talkgroups is rendered from the pure domain model; every check
-// cascades through it and the tree re-renders. Result: '*' or
+// cascades through it and the tree re-renders. A row names itself by the label
+// its configuration carries, with the system or talkgroup reference number
+// after it (rowLabel). Result: '*' or
 // [{ id: systemRef, talkgroups: '*' | [talkgroupRef...] }], or null on cancel.
 
 import { openDialog } from '../../../../common/frontend/presentation/ui/primitives.js';
@@ -15,6 +17,23 @@ import {
   setTag,
   setTalkgroup,
 } from '../../domain/systems-selection.js';
+
+// The words a row of the tree answers with. The label the configuration carries names the row, and the
+// reference number the operator works with — the one a row's Id field states, an exported configuration
+// carries, and a listener's `?id=` address names — follows it in parentheses. A group and a tag carry a
+// stored id and no reference number of their own, so their rows are named by the label alone. A row with
+// a reference and no label is named by that number, which the operator can still act on; a row with
+// neither is named by the words the section's own add control uses, so a row the operator has not filled
+// in yet reads the way the section reads it instead of as `undefined` or `null`.
+function rowLabel({ label, ref, unnamed }) {
+  const name = typeof label === 'string' ? label.trim() : '';
+
+  const number = typeof ref === 'number' && Number.isFinite(ref) && ref >= 1 ? ref : null;
+
+  if (name) return number === null ? name : `${name} (${number})`;
+
+  return number === null ? unnamed : String(number);
+}
 
 class RdioSystemsSelection extends HTMLElement {
   setup(config, value) {
@@ -59,7 +78,7 @@ class RdioSystemsSelection extends HTMLElement {
     );
 
     root.append(this.listBlock('Groups', model.groups.map((group, index) => ({
-      label: group.label ?? String(group.id),
+      label: rowLabel({ label: group.label, unnamed: 'New Group' }),
       node: `group:${group.id}`,
       checked: group.checked,
       indeterminate: model.indeterminate.groups[index],
@@ -70,7 +89,7 @@ class RdioSystemsSelection extends HTMLElement {
     }))));
 
     root.append(this.listBlock('Tags', model.tags.map((tag, index) => ({
-      label: tag.label ?? String(tag.id),
+      label: rowLabel({ label: tag.label, unnamed: 'New Tag' }),
       node: `tag:${tag.id}`,
       checked: tag.checked,
       indeterminate: model.indeterminate.tags[index],
@@ -90,7 +109,7 @@ class RdioSystemsSelection extends HTMLElement {
     model.systems.forEach((system, systemIndex) => {
       systemsBlock.append(
         this.checkbox({
-          label: system.label ?? String(system.id),
+          label: rowLabel({ label: system.label, ref: system.id, unnamed: 'New system' }),
           className: 'system',
           node: `system:${system.id}`,
           checked: system.all,
@@ -108,7 +127,7 @@ class RdioSystemsSelection extends HTMLElement {
       system.talkgroups.forEach((talkgroup, talkgroupIndex) => {
         talkgroups.append(
           this.checkbox({
-            label: `${talkgroup.id} ${talkgroup.label ?? ''}`.trim(),
+            label: rowLabel({ label: talkgroup.label, ref: talkgroup.id, unnamed: 'New talkgroup' }),
             node: `talkgroup:${talkgroup.id}`,
             checked: talkgroup.checked,
             onChange: (checked) => {
