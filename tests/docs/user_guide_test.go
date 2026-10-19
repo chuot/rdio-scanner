@@ -585,6 +585,56 @@ func TestTheUserGuideHandlesAccessCodesAsTheServerAnswersThem(t *testing.T) {
 	}
 }
 
+// The eighth chapter is about the listening screen on a phone. Two things it is required to get right are the words
+// the shipped update prompt and promo notice actually carry, and the rule that the native applications are named
+// without the guide reaching for them: the store names appear, no link leaves the guide for a store, and the chapter's
+// pictures are the three the figure inventory gives it, because a fourth could only be a native application's screen.
+func TestTheUserGuideDescribesThePhoneAsTheBrowserShowsIt(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-08-on-your-phone-or-tablet")
+
+	spoken := guideSpoken(chapter)
+
+	for _, name := range []string{
+		"Rdio Scanner", "New version available", "No", "Yes", "NO LINK", "Android", "Apple", "standalone",
+	} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on phones and tablets never names %q, which is a word the shipped page, its manifest, or its notices put up", name)
+		}
+	}
+
+	for _, fact := range []string{"ten seconds", "five minutes", "Google Play", "App Store", "countdown", "320"} {
+		if !strings.Contains(spoken, fact) {
+			t.Errorf("the chapter on phones and tablets never gives %q, which is a shipped interval, store name, or width the chapter has to state", fact)
+		}
+	}
+
+	if outward := regexp.MustCompile(`(?is)<a\b[^>]*\bhref="http`).FindAllString(chapter, -1); len(outward) > 0 {
+		t.Errorf("the chapter on phones and tablets carries %d links out of the guide, and it names the two stores precisely so that it does not", len(outward))
+	}
+
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 3 {
+		t.Errorf("the chapter on phones and tablets carries %d figures, and the only three it may carry are the listening screen at a phone's width, the notice it shows about the native applications, and the new-version prompt", len(figures))
+	}
+
+	for _, id := range []string{"main-narrow", "promo-snackbar", "update-dialog"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">.*?</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 1 {
+			t.Errorf("the chapter on phones and tablets does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[0])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[0], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {

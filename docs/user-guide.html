@@ -2267,6 +2267,294 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-08-on-your-phone-or-tablet">8 · On a phone or a tablet</h2>
+
+  <p class="lead">
+    There is one listening screen. It is not a different application on a phone, and nothing in this chapter is a
+    feature that only exists there. What changes on a small screen is how the layout gives way, what the device does
+    with the page, two notices that only appear on a phone or a tablet, and what the browser keeps so that the page
+    can open at all when the server cannot be reached.
+  </p>
+
+  <h3>How the layout gives way</h3>
+
+  <p>
+    The page asks to be as wide as the device it opened on, and its layout is fluid: nothing about it becomes a second
+    design at a phone's width. Each row of the display is a line with its readings pushed out to its two ends, so a
+    narrow screen narrows the space between those ends rather than moving readings onto new lines, and a reading too
+    long for its cell is cut by the cell rather than wrapped. The nine control buttons stay three rows of three at
+    every width. They only get narrower, and their labels are what give way, so a two-word label takes two lines.
+  </p>
+
+  <p>
+    The two panels are where the layout genuinely changes shape, because their contents are laid out by count and that
+    count depends on the width available.
+  </p>
+
+  <table>
+    <caption>Where the layout changes shape, and what it does at each point.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Part of the layout</th>
+        <th scope="col">At which widths</th>
+        <th scope="col">What it does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The search panel's six filters</td>
+        <td>narrower than 460 pixels, 460 to 979, 980 and wider</td>
+        <td>A row each, then two to a row, then three to a row — which is two rows for the six.</td>
+      </tr>
+      <tr>
+        <td>The select panel's buttons</td>
+        <td>up to 719 pixels, 720 to 1199, 1200 and wider</td>
+        <td>Four to a row, then five, then ten.</td>
+      </tr>
+      <tr>
+        <td>A panel's bar</td>
+        <td>narrower than 600 pixels</td>
+        <td>Takes the shorter height the platform uses on a phone, and the scrolling area under it gains the
+          difference.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="main-narrow">
+    <img alt="The listening screen at 390 pixels wide: the display rows stacked with the version line cut a little where the panel ends, the nine control buttons in three rows of three, and the history table under them.">
+    <figcaption>The same screen at a phone's width: the rows reflow, the controls stay a grid of nine, and the version line is the one line that width trims.</figcaption>
+  </figure>
+
+  <p>
+    What the narrowest widths cost is worth naming, because it is the one place the layout loses a reading instead of
+    rearranging it. At 320 pixels the branding line across the top is cut where a word will not fit, and the version
+    line in the large row is cut outright rather than shortened. <a href="#ch-09-help-and-support">Help and
+    support</a> explains what those two lines are for; said here, the point is that a phone at that width is not where
+    to read a version number off the screen.
+  </p>
+
+  <h3>Putting it on a home screen</h3>
+
+  <p>
+    The application declares itself as something a device can install. Its manifest gives it the name <code>Rdio
+    Scanner</code>, declares it a <code>standalone</code> application — the device is asked to open it as its own
+    application rather than as one more page in a browser tab — asks to be kept upright, gives its background colour
+    and its theme colour the same dark grey the page's own chrome is built with, and carries its icon at sizes from 72
+    to 512 pixels so that the device has one to draw whatever shape it needs. The page also carries the icon and the
+    status-bar setting an Apple device uses when a web page is added to a home screen.
+  </p>
+
+  <p>
+    How the adding happens is the browser's business rather than the application's: the wording, the moment, and
+    whether it is offered at all belong to the browser, and the listening screen carries no install control of its
+    own. What does belong to the application is worth knowing before you do it.
+  </p>
+
+  <aside class="caution">
+    <span class="label">A shortcut opens the plain address</span>
+    <p>
+      The manifest tells the device to open the application at its own plain address. If you gave a page a profile of
+      its own with <code>?id=</code>, its shortcut does not carry that profile: the installed icon opens the default
+      profile, which is the one the browser remembers for the plain address. The stored access code behaves the same
+      way and worse, because it belongs to the browser rather than to any profile, as <a
+      href="#ch-07-access-codes">the chapter on access codes</a> explains.
+    </p>
+  </aside>
+
+  <h3>The notice about the native applications</h3>
+
+  <p>
+    Ten seconds after the page opens, on a phone or a tablet, the application shows a notice of its own about the
+    native applications. It appears when what the browser reports about the device says <code>Android</code>,
+    <code>iPad</code>, or <code>iPhone</code> — which is why it never appears in a browser on a desktop computer, and
+    why nothing you do on the page can make it appear there either.
+  </p>
+
+  <p>
+    The sentence it shows is built with the platform's own word in the middle: <q>Do you know that Rdio Scanner works
+    natively on Android devices?</q>, or the same sentence with <code>Apple</code> in that place. Beside it sits a
+    badge that points at the store page for that platform's native application — Google Play on Android, the App Store
+    on the Apple one — and a countdown that runs down from ten, and the end of that countdown is what closes the
+    notice. The notice records nothing about having been shown, offers no way to decline it for good, and comes back
+    ten seconds after every time the page is opened.
+  </p>
+
+  <figure data-shot="promo-snackbar">
+    <img alt="A snackbar at the bottom of the listening screen reading Do you know that Rdio Scanner works natively on Android devices? beside a Google Play badge and a countdown.">
+    <figcaption>The application's own notice on a phone or tablet: it names the native application for that platform and points at its store page, and dismisses itself after a count.</figcaption>
+  </figure>
+
+  <p>
+    That is as far as this guide goes with the native applications. They exist, for Android and for Apple devices;
+    their screens are not documented here, and this guide links to neither store. What the notice does is point at the
+    store's own page for the application belonging to that platform, which is where the comparison between the
+    webapp and the native application has to be made.
+  </p>
+
+  <aside class="caution">
+    <span class="label">What that notice is like with a screen reader</span>
+    <p>
+      It arrives by itself, ten seconds in, while you are doing something else, in a region the page reports as a
+      status. The countdown is written into the same block of text as the sentence, so a reading of the notice gives a
+      bare digit run onto the end of the sentence rather than a sentence and then a number, and that digit rewrites
+      itself once a second. There is no dismiss control anywhere in the notice: the countdown is what closes it, and
+      the only thing in it the keyboard can act on is the badge — which is a picture, and the link it sits inside is
+      given no name for a screen reader to read. On the Apple form the picture does have a name, but it is the name of
+      the file the badge was drawn from rather than something a person would say. <a
+      href="#ch-10-keyboard-and-screen-readers">The chapter on keyboard and screen readers</a> counts this among the
+      application's accessibility findings, beside the ones it earns credit for.
+    </p>
+  </aside>
+
+  <h3>When a new version is waiting</h3>
+
+  <p>
+    The page keeps its own files in the browser, and looks for a newer version of them every five minutes. When a
+    newer one has been published the browser takes it in the background and holds it waiting: nothing on the screen
+    changes while you are listening, because a replacement does not take over a page that is in use. Telling the open
+    pages is something the browser does only when it is replacing a version that is in charge, which is why opening a
+    server for the first time never brings this prompt.
+  </p>
+
+  <p>
+    When a newer version is waiting, the page opens a dialog titled <code>New version available</code>, reading
+    <q>A new version of the scanner webapp is available. Would you like to reload the page?</q>, with <code>No</code>
+    and <code>Yes</code> beside it. It appears once each time the page is opened.
+  </p>
+
+  <p>
+    <code>Yes</code> puts the new version in charge and reloads the page, which ends whatever the old one was doing.
+    <code>No</code> leaves the version you are on running; the newer one goes on waiting, and takes over when the page
+    is opened again with no copy of the running version still open. The consequence is worth holding on to: the version
+    you are listening on is the version your browser has, which is not necessarily the version the server is running,
+    and that dialog is how you are told the two have diverged.
+  </p>
+
+  <figure data-shot="update-dialog">
+    <img alt="A dialog over the listening screen titled New version available, reading A new version of the scanner webapp is available. Would you like to reload the page?, with No and Yes buttons at its lower right.">
+    <figcaption>The prompt the application shows when it has fetched a new version: <code>No</code> leaves the version on screen until the next reload, <code>Yes</code> reloads and starts the new one.</figcaption>
+  </figure>
+
+  <h3>With the server gone</h3>
+
+  <p>
+    Because the page keeps its own files, it opens even when the server cannot be reached. That is worth knowing in
+    both directions: the page coming up is not evidence that the server is working, and the parts of the screen that
+    fill themselves in are not evidence that there is anything to see.
+  </p>
+
+  <table>
+    <caption>What the listening screen shows when the server cannot be reached.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Part of the screen</th>
+        <th scope="col">What you get</th>
+        <th scope="col">Why</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The page itself</td>
+        <td>It opens, dark, looking as it always looks.</td>
+        <td>The browser has kept the page and the files it draws with.</td>
+      </tr>
+      <tr>
+        <td>The display's rows</td>
+        <td>The readings the screen is built with, and <code>NO LINK</code> in the place the link reading belongs.</td>
+        <td>Nothing has arrived from the server to write over them.</td>
+      </tr>
+      <tr>
+        <td>The version line</td>
+        <td>A version number, in the large row, where the display's own name goes.</td>
+        <td>It is carried by the files the browser kept, which is why it is the version the browser has rather than
+          the one the server runs.</td>
+      </tr>
+      <tr>
+        <td>The history table</td>
+        <td>Its ruled rows, empty.</td>
+        <td>The table is always the same number of rows, and nothing has arrived to put in them.</td>
+      </tr>
+      <tr>
+        <td>The two panels</td>
+        <td>Neither opens.</td>
+        <td>The controls that open them do nothing while there is no configuration, and the configuration comes from
+          the server.</td>
+      </tr>
+      <tr>
+        <td>Live calls, a search, a recording</td>
+        <td>None of any of them.</td>
+        <td>Live calls and searches run over the connection, and recordings are fetched over it. The page keeps no
+          recording of its own.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    The version line is the one reading on an offline page that a listener might act on, and it is the one to be
+    careful with: quoted while the server is unreachable, it tells somebody what your browser has, not what the
+    deployment is running. <a href="#ch-11-when-something-does-not-work">The chapter on when something does not
+    work</a> takes the whole question of a server that will not answer.
+  </p>
+
+  <h3>What the page keeps in the browser</h3>
+
+  <p>
+    Everything the page remembers lives in the browser's own stored data for that site. The list is short, and what
+    is not on it matters as much as what is.
+  </p>
+
+  <table>
+    <caption>What the listening screen keeps in the browser, and what it does not.</caption>
+    <thead>
+      <tr>
+        <th scope="col">What</th>
+        <th scope="col">Kept?</th>
+        <th scope="col">What that means for you</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The access code the server last accepted</td>
+        <td>Yes</td>
+        <td>In an encoded form rather than a protected one, shared by every profile on that browser, and presented
+          again by itself on every reconnect. <a href="#ch-07-access-codes">Access codes</a> goes through what that
+          costs.</td>
+      </tr>
+      <tr>
+        <td>The saved selection</td>
+        <td>Yes</td>
+        <td>One copy per profile, which is what <code>?id=</code> gives you a separate one of.</td>
+      </tr>
+      <tr>
+        <td>The selection as an older version saved it</td>
+        <td>Yes, briefly</td>
+        <td>The copy written before profiles existed is read whenever a profile has never written its own, so a
+          selection made by an older version survives the update — until that profile changes something, after which
+          the older copy is left behind.</td>
+      </tr>
+      <tr>
+        <td>The version of the page the browser has</td>
+        <td>Yes</td>
+        <td>The page's own files, including the version line it paints. It lasts until a newer version is taken and
+          accepted.</td>
+      </tr>
+      <tr>
+        <td>What the search was filtered to, and what it found</td>
+        <td>No</td>
+        <td>A search starts from the beginning each time the panel is opened.</td>
+      </tr>
+      <tr>
+        <td>Which panel was open, whether the feed was paused, whether the display was lit</td>
+        <td>No</td>
+        <td>Reload, and the feed is off, the panels are shut, and the display starts dimmed again.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    All of it is cleared by <code>/reset</code>, which clears what the browser has stored for that site rather than
+    only these entries, and changes nothing on the server. What it is for, and what it cannot fix, is in <a
+    href="#ch-07-access-codes">the chapter on access codes</a>.
+  </p>
 </section>
 
 <section>
