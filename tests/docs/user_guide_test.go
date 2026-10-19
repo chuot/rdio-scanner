@@ -246,6 +246,75 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 	}
 }
 
+// The third chapter operates the listening controls. What it says about them has to match what the browser
+// components and the domain code actually do: the words the page puts up when you try to leave while something is
+// playing, the order the four levels are consulted in for a tone and for a colour, the built-in colour names, the
+// timed windows an avoid walks through, the delay the display waits by before it dims, and the two figures that
+// belong to the chapter.
+func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideChapter(t, body, "ch-03-listening-to-live-calls")
+
+	// The sentence the application hands to the browser, verbatim. It is shown by the browser's own leave
+	// prompt, and a guide that tidies it up would disagree with what the reader is shown.
+	if !strings.Contains(chapter, "Live Feed is ON, do you really want to leave?") {
+		t.Errorf("the chapter on live calls does not give the words the application supplies to the browser when you try to leave")
+	}
+
+	tones := chapter[len("Alert tones")+strings.Index(chapter, "Alert tones"):]
+
+	for _, name := range []string{"group", "tag", "system", "talkgroup"} {
+		at := strings.Index(tones, name)
+
+		if at < 0 {
+			t.Fatalf("the part of the chapter about alert tones never names %q, which is one of the four levels the application consults", name)
+		}
+
+		tones = tones[at+len(name):]
+	}
+
+	for _, color := range []string{"blue", "cyan", "green", "magenta", "orange", "red", "white", "yellow"} {
+		if !strings.Contains(chapter, color) {
+			t.Errorf("the chapter on live calls never names the colour %q, which is one of the colours the application can paint a call in", color)
+		}
+	}
+
+	for _, step := range []string{"30 minutes", "60 minutes", "120 minutes", "indefinitely"} {
+		if !strings.Contains(chapter, step) {
+			t.Errorf("the chapter on live calls does not give the avoid cycle as the application runs it, which holds %s among its steps", step)
+		}
+	}
+
+	if !strings.Contains(chapter, "five seconds") {
+		t.Errorf("the chapter on live calls never says how long the display waits before it dims, which is a delay the application fixes at five seconds")
+	}
+
+	for _, name := range []string{"LIVE FEED", "REPLAY LAST", "SKIP NEXT", "AVOID", "PAUSE", "Q:", "L:"} {
+		if !strings.Contains(chapter, name) {
+			t.Errorf("the chapter on live calls never names %q, which is a control or a reading the screen carries", name)
+		}
+	}
+
+	for _, id := range []string{"main-live", "main-paused"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">(.*?)</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 2 {
+			t.Errorf("the chapter on live calls does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[1])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[1], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {
