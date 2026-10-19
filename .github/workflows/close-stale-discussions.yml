@@ -1,0 +1,303 @@
+# Closes discussions that have had no activity for six months.
+#
+# How it runs: the Discussions API is read a page at a time, from the oldest activity to the newest, so the walk
+# ends as soon as it reaches discussions that are still live — everything behind them has an update at least as
+# recent. A discussion counts as live when either its own last update or its newest reply is younger than 180
+# days, which is what keeps an old thread with a recent reply open. Discussions the repository already has closed
+# are read and skipped, because that API answers open and closed discussions together and offers no state filter.
+# Each idle discussion gets the closing note first and is then closed, so whoever started it can see why. A
+# discussion that fails is reported with its number, title, and address and the walk goes on with the rest; the
+# counts are written to the run summary.
+#
+# Pull requests are not part of the Discussions API, and nothing in this workflow reads or writes one: the script
+# below answers the Discussions GraphQL API only.
+#
+# A scheduled run only starts from the repository's default branch. workflow_dispatch makes the same run available
+# by hand from any branch, and its dry-run box reports what would be closed without commenting on or closing
+# anything. The token the runner hands this job is what the script authenticates with, so no secret is passed.
+
+name: Close stale discussions
+
+on:
+  schedule:
+    # Daily at 07:40 UTC, held apart from the issues workflow so the two do not read the API in the same minute.
+    - cron: '40 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report what would be closed, comment on and close nothing.
+        type: boolean
+        default: false
+
+# Discussions are read and written, nothing else. Naming a permission here leaves every permission not named at
+# none, so this pair is the whole of what the job can do.
+permissions:
+  contents: read
+  discussions: write
+
+jobs:
+  close-stale-discussions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close discussions idle for six months
+        # Pinned to the commit the v9.0.0 tag names rather than to the tag itself, so a change in that action's
+        # repository cannot quietly change what runs here. Upgrading means changing this line on purpose.
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // The rule, the wording a person reads, and the reason the close names all live here, so the file
+            // that runs them is the file that states them.
+            const STALE_DAYS = 180;
+            const CLOSING_NOTE = 'This discussion has been automatically closed after 6 months of inactivity. Feel free to start a new discussion if further conversation is needed.';
+            const CLOSE_REASON = 'OUTDATED';
+
+            const PAGE_SIZE = 50; // discussions read per page
+            const MAX_PAGES = 20; // one walk stops and says so rather than chasing a connection indefinitely
+            const CALL_ATTEMPTS = 3; // a call the API asked to wait out is retried at most this often
+
+            const DAY_MS = 24 * 60 * 60 * 1000;
+            const idleSince = Date.now() - STALE_DAYS * DAY_MS; // activity at or before this instant is idle
+
+            const { owner, repo } = context.repo;
+            const dryRun = String(context.payload?.inputs?.dry_run ?? 'false') === 'true';
+
+            // Read oldest activity first, so the walk can stop instead of paging to the end of the connection.
+            // Open and closed discussions come back together and the connection offers no state filter, which is
+            // why the closed ones are skipped below rather than asked for here.
+            const idleDiscussionsQuery = `
+              query($owner: String!, $name: String!, $first: Int!, $after: String) {
+                repository(owner: $owner, name: $name) {
+                  discussions(first: $first, after: $after, orderBy: { field: UPDATED_AT, direction: ASC }) {
+                    nodes {
+                      id
+                      number
+                      title
+                      url
+                      closed
+                      updatedAt
+                      comments(last: 1) {
+                        nodes { createdAt }
+                      }
+                    }
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                  }
+                }
+              }
+            `;
+
+            const closingNoteMutation = `
+              mutation($input: AddDiscussionCommentInput!) {
+                addDiscussionComment(input: $input) {
+                  comment { id }
+                }
+              }
+            `;
+
+            const closeMutation = `
+              mutation($input: CloseDiscussionInput!) {
+                closeDiscussion(input: $input) {
+                  discussion { id closed }
+                }
+              }
+            `;
+
+            function momentOf(stamp) {
+              const moment = Date.parse(stamp);
+              return Number.isNaN(moment) ? null : moment;
+            }
+
+            // A discussion's most recent activity is its own last update or its newest reply, whichever is more
+            // recent. The connection has no ordering on replies, so its last page entry is taken as the newest,
+            // and the comparison with the discussion's own update is the belt: if it ever answered something
+            // else, a live discussion stays open rather than being closed on a guess.
+            function lastActivityAt(discussion) {
+              const moments = [momentOf(discussion.updatedAt)];
+              for (const reply of discussion.comments?.nodes ?? []) {
+                moments.push(momentOf(reply?.createdAt));
+              }
+              const known = moments.filter((moment) => moment !== null);
+              return known.length > 0 ? Math.max(...known) : null;
+            }
+
+            function idleDaysFor(discussion) {
+              const moment = lastActivityAt(discussion);
+              return moment === null ? null : Math.floor((Date.now() - moment) / DAY_MS);
+            }
+
+            function isIdle(discussion) {
+              const moment = lastActivityAt(discussion);
+              return moment !== null && moment <= idleSince;
+            }
+
+            // A wait is only ever the one the API asked for. A limit that names no wait is a failure the run
+            // reports, not one it guesses its way around.
+            function waitSecondsAskedFor(error) {
+              const headers = error?.response?.headers ?? error?.headers ?? {};
+              const asked = Number(headers['retry-after']);
+              return Number.isFinite(asked) ? Math.max(0, Math.min(asked, 120)) : null;
+            }
+
+            async function ask(document, variables) {
+              for (let attempt = 1; ; attempt++) {
+                try {
+                  return await github.graphql(document, variables);
+                } catch (error) {
+                  const wait = waitSecondsAskedFor(error);
+                  if (wait === null || attempt >= CALL_ATTEMPTS) {
+                    throw error;
+                  }
+                  core.warning(`the API asked for a retry of attempt ${attempt} after ${wait}s: ${error.message}`);
+                  await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+                }
+              }
+            }
+
+            core.info(
+              `${owner}/${repo}: looking for discussions with no activity in the last ${STALE_DAYS} days` +
+                `${dryRun ? ' (dry run: nothing is commented on and nothing is closed)' : ''}`
+            );
+
+            const idleDiscussions = [];
+            const discussionsRead = [];
+            let after = null;
+            let pages = 0;
+            let reachedLiveDiscussions = false;
+
+            // Everything is read before anything is changed, so closing a discussion cannot move a cursor the
+            // walk is still relying on.
+            while (true) {
+              const answer = await ask(idleDiscussionsQuery, { owner, name: repo, first: PAGE_SIZE, after });
+              const connection = answer?.repository?.discussions;
+              if (!connection || !Array.isArray(connection.nodes) || !connection.pageInfo) {
+                throw new Error(
+                  `the discussions query returned an unusable answer for ${owner}/${repo}: no discussions connection to read`
+                );
+              }
+
+              pages += 1;
+
+              for (const discussion of connection.nodes) {
+                discussionsRead.push(discussion);
+
+                // The first discussion that is still live ends the walk: behind it every discussion has an
+                // update at least as recent, so nothing idle lies further on.
+                const updated = momentOf(discussion.updatedAt);
+                if (updated !== null && updated > idleSince) {
+                  reachedLiveDiscussions = true;
+                  break;
+                }
+
+                if (discussion.closed === true) {
+                  core.debug(`#${discussion.number} ${discussion.title}: already closed, so left alone`);
+                  continue;
+                }
+
+                if (!isIdle(discussion)) {
+                  core.debug(
+                    `#${discussion.number} ${discussion.title}: kept open, its newest reply is more recent than its own update`
+                  );
+                  continue;
+                }
+
+                idleDiscussions.push(discussion);
+              }
+
+              if (reachedLiveDiscussions) {
+                core.info(`stopped reading at page ${pages}: the discussions after it are still live`);
+                break;
+              }
+              if (!connection.pageInfo.hasNextPage) {
+                break;
+              }
+              if (!connection.pageInfo.endCursor) {
+                core.warning(
+                  `${owner}/${repo}: the API promised another page without a cursor, so the walk stops here rather than guessing at one`
+                );
+                break;
+              }
+              if (pages >= MAX_PAGES) {
+                core.warning(
+                  `${owner}/${repo}: stopped after ${pages} pages, which is the most one walk reads. More discussions may be idle than this walk reached.`
+                );
+                break;
+              }
+
+              after = connection.pageInfo.endCursor;
+            }
+
+            let closedCount = 0;
+            let notedCount = 0;
+            let failedCount = 0;
+
+            for (const discussion of idleDiscussions) {
+              const label = `#${discussion.number} ${discussion.title} (${discussion.url})`;
+              const idleDays = idleDaysFor(discussion);
+
+              if (dryRun) {
+                core.info(`dry run: would close ${label} after ${idleDays} days without activity`);
+                continue;
+              }
+
+              // One discussion's failure is kept inside this boundary: the walk goes on with the rest.
+              try {
+                // The note goes on first, and the close follows it.
+                try {
+                  const noted = await ask(closingNoteMutation, {
+                    input: { discussionId: discussion.id, body: CLOSING_NOTE },
+                  });
+                  if (noted?.addDiscussionComment?.comment?.id) {
+                    notedCount += 1;
+                  } else {
+                    core.warning(`the closing note posted to ${label} was not confirmed by the API`);
+                  }
+                } catch (error) {
+                  // The close goes ahead regardless: a six-months-idle discussion left open is the bigger loss,
+                  // and the note that was refused is on the record either way.
+                  core.warning(`could not leave the closing note on ${label}: ${error.message}`);
+                }
+
+                const closed = await ask(closeMutation, {
+                  input: { discussionId: discussion.id, reason: CLOSE_REASON },
+                });
+                if (closed?.closeDiscussion?.discussion?.closed !== true) {
+                  throw new Error('the API did not confirm the discussion was closed');
+                }
+
+                closedCount += 1;
+                core.info(`closed ${label} after ${idleDays} days without activity`);
+              } catch (error) {
+                failedCount += 1;
+                core.error(`could not close ${label}: ${error.message}`);
+              }
+            }
+
+            core.info(
+              `${discussionsRead.length} discussion(s) read over ${pages} page(s); ` +
+                `${idleDiscussions.length} idle for ${STALE_DAYS} days or more; ` +
+                `${dryRun ? `${idleDiscussions.length} would close` : `${closedCount} closed`}; ` +
+                `${notedCount} closing note(s) posted; ${failedCount} failed`
+            );
+
+            if (failedCount > 0) {
+              core.warning(
+                `${failedCount} discussion(s) could not be closed. The walk went on with the rest; the run is green because a partial close is not a stopped close.`
+              );
+            }
+
+            core.summary.addMarkdownBlock(
+              [
+                `### Discussions idle for ${STALE_DAYS} days or more`,
+                '',
+                `- Discussions read: ${discussionsRead.length} over ${pages} page(s)`,
+                `- ${dryRun ? 'Would close' : 'Closed'}: ${dryRun ? idleDiscussions.length : closedCount}`,
+                `- Closing notes posted: ${notedCount}`,
+                `- Failed: ${failedCount}`,
+                '',
+                dryRun
+                  ? 'This was a dry run: nothing was commented on and nothing was closed.'
+                  : 'Every discussion named in this run carries the note explaining why it was closed.',
+              ].join('\n')
+            );
