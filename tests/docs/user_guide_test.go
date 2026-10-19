@@ -211,6 +211,8 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 
 	chapter := userGuideChapter(t, body, "ch-02-the-main-screen")
 
+	spoken := guideSpoken(chapter)
+
 	for _, want := range []string{
 		"Server status:",
 		"on paused",
@@ -222,7 +224,7 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 		"AVOID",
 		"PAUSE",
 	} {
-		if !strings.Contains(chapter, want) {
+		if !strings.Contains(spoken, want) {
 			t.Errorf("the chapter on the main screen never names %q, which is what the screen itself shows", want)
 		}
 	}
@@ -258,40 +260,50 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 
 	// The sentence the application hands to the browser, verbatim. It is shown by the browser's own leave
 	// prompt, and a guide that tidies it up would disagree with what the reader is shown.
-	if !strings.Contains(chapter, "Live Feed is ON, do you really want to leave?") {
+	spoken := guideSpoken(chapter)
+
+	// The sentence the application hands to the browser, verbatim. It is shown by the browser's own leave
+	// prompt, and a guide that tidies it up would disagree with what the reader is shown.
+	if !strings.Contains(spoken, "Live Feed is ON, do you really want to leave?") {
 		t.Errorf("the chapter on live calls does not give the words the application supplies to the browser when you try to leave")
 	}
 
-	tones := chapter[len("Alert tones")+strings.Index(chapter, "Alert tones"):]
+	at := strings.Index(spoken, "Alert tones")
+
+	if at < 0 {
+		t.Fatalf("the chapter on live calls has no part about alert tones, which is where the application's order of consultation belongs")
+	}
+
+	tones := spoken[at+len("Alert tones"):]
 
 	for _, name := range []string{"group", "tag", "system", "talkgroup"} {
-		at := strings.Index(tones, name)
+		level := strings.Index(tones, name)
 
-		if at < 0 {
+		if level < 0 {
 			t.Fatalf("the part of the chapter about alert tones never names %q, which is one of the four levels the application consults", name)
 		}
 
-		tones = tones[at+len(name):]
+		tones = tones[level+len(name):]
 	}
 
 	for _, color := range []string{"blue", "cyan", "green", "magenta", "orange", "red", "white", "yellow"} {
-		if !strings.Contains(chapter, color) {
-			t.Errorf("the chapter on live calls never names the colour %q, which is one of the colours the application can paint a call in", color)
+		if !strings.Contains(spoken, color) {
+			t.Errorf("the chapter on live calls never names the colour %q, which is one of the colours the application can paint the server light in", color)
 		}
 	}
 
 	for _, step := range []string{"30 minutes", "60 minutes", "120 minutes", "indefinitely"} {
-		if !strings.Contains(chapter, step) {
+		if !strings.Contains(spoken, step) {
 			t.Errorf("the chapter on live calls does not give the avoid cycle as the application runs it, which holds %s among its steps", step)
 		}
 	}
 
-	if !strings.Contains(chapter, "five seconds") {
+	if !strings.Contains(spoken, "five seconds") {
 		t.Errorf("the chapter on live calls never says how long the display waits before it dims, which is a delay the application fixes at five seconds")
 	}
 
 	for _, name := range []string{"LIVE FEED", "REPLAY LAST", "SKIP NEXT", "AVOID", "PAUSE", "Q:", "L:"} {
-		if !strings.Contains(chapter, name) {
+		if !strings.Contains(spoken, name) {
 			t.Errorf("the chapter on live calls never names %q, which is a control or a reading the screen carries", name)
 		}
 	}
@@ -313,6 +325,83 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 			t.Errorf("the figure %q carries no caption", id)
 		}
 	}
+}
+
+// The fourth chapter operates the select panel. Its checks carry the two halves of one shipped fact: the small
+// pair at the end of every row is named OFF and ON on the page this guide documents, and ALL ON and ALL OFF on the
+// page it replaced, so the chapter is held both to the names in use and away from the names that are not. The rest
+// are the conditions the panel itself applies — when its first row appears, when a row's pair appears, the sentence
+// it answers with when the server has nothing configured — the colour the mixed state takes, the words the row is
+// built from, and the three figures that belong to the chapter.
+func TestTheUserGuideOperatesTheSelectPanelAsTheApplicationBuildsIt(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-04-choosing-what-to-hear")
+
+	spoken := guideSpoken(chapter)
+
+	// The pair is checked in the form this guide uses for a word the screen prints, which is the markup claim
+	// being made rather than a claim about the words alone.
+	for _, name := range []string{"OFF", "ON"} {
+		if !strings.Contains(chapter, "<code>"+name+"</code>") {
+			t.Errorf("the chapter on choosing what to hear does not give the small button %q in the form this guide uses for a word the screen prints", name)
+		}
+	}
+
+	for _, superseded := range []string{"ALL OFF", "ALL ON"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on choosing what to hear names that pair %q, which is the name the superseded page printed and this one does not", superseded)
+		}
+	}
+
+	// The sentence the panel answers with when no system has any talkgroups, verbatim from the component.
+	if !strings.Contains(spoken, "No talkgroup configured!") {
+		t.Errorf("the chapter on choosing what to hear does not give the words the panel says when the server has nothing configured")
+	}
+
+	for _, phrase := range []string{"two or more groups", "more than one talkgroup", "yellow", "timed"} {
+		if !strings.Contains(spoken, phrase) {
+			t.Errorf("the chapter on choosing what to hear never gives %q, which is a reading or a condition the panel applies", phrase)
+		}
+	}
+
+	// The panel's first row is built from the deployment's groups. It was described as a row of tags while this
+	// guide was being planned, and the panel's own component says otherwise.
+	for _, mistaken := range []string{"tag row", "tag buttons", "tags row"} {
+		if strings.Contains(spoken, mistaken) {
+			t.Errorf("the chapter on choosing what to hear calls the panel's first row %q, and the panel builds that row from the deployment's groups", mistaken)
+		}
+	}
+
+	for _, name := range []string{"SELECT TG", "AVOID"} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on choosing what to hear never names %q, which is a control the chapter operates", name)
+		}
+	}
+
+	for _, id := range []string{"select-panel", "select-panel-timed", "select-panel-empty"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">(.*?)</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 2 {
+			t.Errorf("the chapter on choosing what to hear does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[1])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[1], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
+// guideSpoken reads a chapter the way it comes out of the page: the markup taken away and the runs of whitespace
+// joined, so a sentence the document's source wraps across three lines is still the sentence a reader reads. A
+// check about what the guide says works against this reading; a check about how the guide is built — a code span, a
+// figure slot — works against the markup itself.
+func guideSpoken(chapter string) string {
+	return regexp.MustCompile(`\s+`).ReplaceAllString(stripTags(chapter), " ")
 }
 
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
