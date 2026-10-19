@@ -319,12 +319,18 @@ class RdioFormField extends HTMLElement {
 
     this.isReached = () => reached;
 
-    const field = control();
+    // A label attached to no control names nothing, and the select a pick list builds is not
+    // under the field when this first runs: the attachment therefore runs every time a control
+    // appears under the field, the one laid down at connect time and the one a pick list builds
+    // and announces after.
+    const nameControl = () => {
+      const field = control();
 
-    if (label && field && !field.id) {
-      field.id = `fld-${Math.random().toString(36).slice(2, 8)}`;
-      label.htmlFor = field.id;
-    }
+      if (label && field && !field.id) {
+        field.id = `fld-${Math.random().toString(36).slice(2, 8)}`;
+        label.htmlFor = field.id;
+      }
+    };
 
     // Typing and picking bubble out of the control to the field that owns it: the value changing is
     // the reaching. Walking across a field changes nothing, and reveals nothing — Material's matcher
@@ -335,11 +341,15 @@ class RdioFormField extends HTMLElement {
     }
 
     // A pick list builds the select it answers with after this field is connected, so the field
-    // paints once at connect, for the control that is already under it, and again when the control
-    // a pick list builds appears: that select is the element the label is attached to and the
-    // screen reader announces, and it is the one carrying the field's declarations.
-    this.addEventListener('rdio-control', () => paint());
+    // names and paints once at connect, for the control that is already under it, and again when
+    // the control a pick list builds appears: that select is the element the label is attached to
+    // and the screen reader announces, and it is the one carrying the field's declarations.
+    this.addEventListener('rdio-control', () => {
+      nameControl();
+      paint();
+    });
 
+    nameControl();
     paint();
   }
 }
@@ -366,6 +376,20 @@ class RdioSelect extends HTMLElement {
       // listening for the change the operator made, and a non-bubbling event stops at this element.
       this.dispatchEvent(new CustomEvent('change', { detail: select.value, bubbles: true }));
     });
+
+    // The name the page puts on the host belongs to the control the operator reaches and a
+    // screen reader announces: the name rides on the select, and the host gives it up so the
+    // tree carries one name, not two. A name left on this host announces nothing — the owning
+    // field's lookup, a label's attachment, and the accessibility tree all reach past the host
+    // to the control inside it.
+    for (const attr of ['aria-label', 'aria-labelledby']) {
+      const value = this.getAttribute(attr);
+
+      if (value) {
+        select.setAttribute(attr, value);
+        this.removeAttribute(attr);
+      }
+    }
 
     this.append(select);
     this.select = select;

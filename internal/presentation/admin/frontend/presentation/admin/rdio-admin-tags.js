@@ -197,7 +197,7 @@ class RdioAdminTags extends HTMLElement {
     const alertSelect = document.createElement('rdio-select');
     alertSelect.setAttribute('options', JSON.stringify([['', 'No Alert'], ...Object.keys(alerts).map((name) => [name, titleCase(name)])]));
     alertSelect.setAttribute('value', row.alert ?? '');
-    alertSelect.setAttribute('aria-label', 'Alert');
+    alertSelect.setAttribute('aria-label', 'Audio alert');
     alertSelect.addEventListener('change', (ev) => {
       // ignore the bubbled native change (null/undefined detail); only the
       // primitive's CustomEvent carries the string value.
@@ -217,7 +217,7 @@ class RdioAdminTags extends HTMLElement {
     const ledSelect = document.createElement('rdio-select');
     ledSelect.setAttribute('options', JSON.stringify([['', 'Default'], ...LEDS.map((led) => [led, titleCase(led)])]));
     ledSelect.setAttribute('value', row.led ?? '');
-    ledSelect.setAttribute('aria-label', 'Color');
+    ledSelect.setAttribute('aria-label', 'Led Color');
     ledSelect.addEventListener('change', (ev) => {
       if (typeof ev.detail === 'string') this.updateRow(index, { led: ev.detail });
     });
