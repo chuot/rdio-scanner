@@ -101,6 +101,151 @@ func userGuideChapter(t *testing.T, body, id string) string {
 	return body[start:end]
 }
 
+// scannerPrintedText is the corpus of words the listening application can put on its own screen: every source
+// under the presentation of the server, Go and browser alike. The only rewriting is the one a reader needs:
+// a line break inside a label the components write — LIVE and FEED, SEARCH and CALL — becomes a space, and runs
+// of whitespace become one space, so a label spread over two lines is still the one label a reader sees. The
+// markup itself is left where it is. Taking tags out instead would let any comparison written with a less-than
+// sign start a match that runs to the next greater-than sign somewhere else in the file, and that would swallow
+// words the application plainly prints.
+func scannerPrintedText(t *testing.T) string {
+	t.Helper()
+
+	var text strings.Builder
+
+	err := filepath.Walk(filepath.Join("..", "..", "internal"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			if info.Name() == "bundle" {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		if strings.HasSuffix(path, "_test.go") || strings.HasSuffix(path, "_test.js") {
+			return nil
+		}
+
+		switch filepath.Ext(path) {
+		case ".go", ".js", ".html", ".css", ".webmanifest":
+		default:
+			return nil
+		}
+
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		text.WriteString(strings.ReplaceAll(string(body), "<br>", " "))
+
+		text.WriteString("\n")
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("the sources the guide is checked against cannot be read: %v", err)
+	}
+
+	text.WriteString("\n")
+
+	return regexp.MustCompile(`\s+`).ReplaceAllString(text.String(), " ")
+}
+
+// isAddressShape reports whether something the guide sets in code is an address the reader types or the server
+// serves — a path, a query — rather than a word the application prints. Those are held by the chapters that
+// describe them and not checked against the words on the screen, because no screen prints a path.
+func isAddressShape(name string) bool {
+	if strings.HasPrefix(name, "/") || strings.HasPrefix(name, "?") {
+		return true
+	}
+
+	return strings.Contains(name, "://")
+}
+
+// The guide is read against the screen a listener is looking at. Every name it sets as the application's own word
+// has to be a word the application writes. A caption is left out of this: a caption is an account of a picture,
+// and a picture carries whatever the sample deployment was showing when it was photographed — a version, a count,
+// the name of a talkgroup that only the sample deployment has.
+func TestTheNamesTheGuidePrintsAreTheNamesTheApplicationPrints(t *testing.T) {
+	body := userGuidePath(t)
+
+	corpus := scannerPrintedText(t)
+
+	body = regexp.MustCompile(`(?is)<figcaption>.*?</figcaption>`).ReplaceAllString(body, " ")
+
+	names := map[string]bool{}
+
+	for _, m := range regexp.MustCompile(`(?is)<code\b[^>]*>(.*?)</code>`).FindAllStringSubmatch(body, -1) {
+		name := strings.TrimSpace(regexp.MustCompile(`(?is)<[^>]*>`).ReplaceAllString(m[1], " "))
+
+		name = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(name, " "))
+
+		if name == "" || isAddressShape(name) {
+			continue
+		}
+
+		names[name] = true
+
+		if !strings.Contains(corpus, name) {
+			t.Errorf("the guide writes %q as a word the application itself uses, and the application never writes it", name)
+		}
+	}
+
+	if len(names) < 8 {
+		t.Errorf("the guide names %d of the application's own words as printed words, want the controls, flags, and display rows it describes named the way the screen shows them", len(names))
+	}
+}
+
+// The second chapter describes the screen the way the application assembles it: the branding line the operator
+// sets, the server light and the three states it takes, the display area with what each row holds before a first
+// call has arrived, the control area, and the version line. The names are the ones the components write, and the
+// two figures belong to this chapter.
+func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideChapter(t, body, "ch-02-the-main-screen")
+
+	for _, want := range []string{
+		"Server status:",
+		"on paused",
+		"System",
+		"Tag",
+		"Talkgroup",
+		"TGID: 0",
+		"UID: 0",
+		"AVOID",
+		"PAUSE",
+	} {
+		if !strings.Contains(chapter, want) {
+			t.Errorf("the chapter on the main screen never names %q, which is what the screen itself shows", want)
+		}
+	}
+
+	for _, id := range []string{"main-idle", "light-states"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">(.*?)</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 2 {
+			t.Errorf("the chapter on the main screen does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[1])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[1], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {

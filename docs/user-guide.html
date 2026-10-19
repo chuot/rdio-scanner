@@ -670,7 +670,7 @@ footer.site .signoff {
         <td>
           A system or a talkgroup can hold a call for whole minutes. The hold is measured from when the call
           happened, a held call cannot be searched until its hold has run out, and when it arrives it is flagged
-          <code>Delayed</code>.
+          <code>DELAYED</code>.
         </td>
         <td>
           <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
@@ -690,7 +690,7 @@ footer.site .signoff {
         </td>
       </tr>
       <tr>
-        <td>The <code>Tags</code> toggle is gone from the select panel.</td>
+        <td>The tags toggle is gone from the select panel.</td>
         <td>
           Groups are the categories you switch between, and a talkgroup can sit in more than one of them.
         </td>
@@ -803,6 +803,189 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-02-the-main-screen">2 · The main screen</h2>
+
+  <p class="lead">
+    Everything you do with the listening application happens on one screen. It is built in three areas, and they
+    sit in the same order on every device: the branding line with the server light beside it, the display area,
+    and the control area. Learn where things are on this page and every later chapter is short.
+  </p>
+
+  <figure data-shot="main-idle">
+    <img alt="The listening screen with no call playing: placeholder rows for system, tag, talkgroup, frequency, and unit, the version line in place of a call name, and a dark server light.">
+    <figcaption>The listening screen at rest. Every row carries its placeholder, the name row carries the application's version, and the server light beside the branding line is dark.</figcaption>
+  </figure>
+
+  <h3>The three areas</h3>
+
+  <table>
+    <caption>The three areas of the listening screen, what each one holds, and the chapter of this guide that operates it.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Area</th>
+        <th scope="col">What it holds</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The branding line, and the server light</td>
+        <td>
+          A line of text the operator sets for the deployment, and one light that says whether the application is
+          receiving anything.
+        </td>
+        <td>
+          This chapter,
+          <a href="#ch-09-help-and-support">Help and support</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The display area</td>
+        <td>
+          The time on your machine, whether the page is joined to the server, the queue count, the rows that
+          describe the call you are hearing or the last call that played, the flags beside them, and the list of
+          recent calls underneath.
+        </td>
+        <td>
+          <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
+          <a href="#ch-06-what-the-display-says">What the display says</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The control area</td>
+        <td>Nine controls, arranged in three rows of three, that start and stop what you hear and open the panels.</td>
+        <td>
+          <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
+          <a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a>,
+          <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
+          <a href="#ch-12-reference">Reference</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>The branding line, and the server light</h3>
+
+  <p>
+    The branding line is the operator's own words for the deployment: the name of the department, the name of the
+    scanner network, or nothing at all. When the operator sets nothing the line is empty, and the server light
+    sits at the left end of where the line would have been. The line tells you which deployment you are looking
+    at, which is the first thing to check when two deployments look the same.
+  </p>
+
+  <p>
+    The light is the quickest indication on the screen. It has three states, and they differ by colour, glow, and
+    motion rather than by shape: the same square is dark, lit, or lit inside a ring.
+  </p>
+
+  <ul>
+    <li>
+      <strong>Dark</strong> while nothing is playing and nothing has just played. The application is not receiving
+      a call.
+    </li>
+    <li>
+      <strong>Lit</strong> while a call is playing, in the colour that call's talkgroup resolves to — which comes
+      from a group, a tag, the system, or the talkgroup itself, in that order of being looked at first.
+    </li>
+    <li>
+      <strong>Paused</strong> while audio is held: the lit square inside a ring. Normally the ring blinks. When
+      your operating system asks for less motion, the ring stands still instead, and carries the same meaning.
+    </li>
+  </ul>
+
+  <p>
+    The page also says each state out loud for a screen reader, as <code>Server status:</code> followed by the
+    state — <code>off</code>, <code>on</code>, or <code>on paused</code> — so the state is not only a colour you
+    have to look at.
+  </p>
+
+  <figure data-shot="light-states">
+    <img alt="Three close crops of the server light side by side: a dark grey rectangle, a bright green rectangle with a glow around it, and a green rectangle inside a dark ring and a lighter ring.">
+    <figcaption>The server light in its three states: dark while nothing is playing, lit in the colour the call's talkgroup resolves to, and carrying a ring while audio is paused. The paused piece is photographed where the operating system asks for less motion, which is the reading the shipped stylesheet answers with a standing ring in place of the blink.</figcaption>
+  </figure>
+
+  <aside class="note">
+    <span class="label">If you cannot rely on colour</span>
+    <p>
+      The paused state is carried by the ring as well as by the colour, and the lit state is carried by a glow as
+      well as by the hue. The colours themselves are not reliable enough on their own, and neither is the glow:
+      the chapter on keyboards and screen readers gives the measured figures and says what the screen still leaves
+      to colour alone.
+    </p>
+  </aside>
+
+  <h3>The display area</h3>
+
+  <p>
+    At the top of the display, three readings sit in one line: the time on your machine, the state of the page's
+    connection to the server, and the queue count. The connection reads <code>NO LINK</code> until the page has
+    joined the server, and once joined it reads <code>L:</code> followed by the number of other listeners when the
+    operator has chosen to show that number, and nothing at all when the operator has not. What to do when it stays
+    at <code>NO LINK</code> is in the chapter about when something does not work.
+  </p>
+
+  <p>
+    Below that line sit the rows that describe a call: the system, the talkgroup's type, the tag, the talkgroup,
+    the date and the running clock of the call, the call's name in the largest type on the page, the frequency,
+    the talkgroup identifier, the statistics line, and the unit that spoke. Before a first call has arrived, each
+    row holds the placeholder it was built with — <code>System</code>, <code>Tag</code>, <code>Talkgroup</code>,
+    <code>TGID: 0</code>, <code>E: 0 S: 0</code>, <code>UID: 0</code>, a frequency written as a run of zero
+    digits, and <code>00:00</code> in the place where a call's running clock will appear. The row that carries the
+    clock shows the time on your machine the whole time, placeholder or not.
+  </p>
+
+  <p>
+    The name row is what tells you the version you are listening with. Before the first call arrives it reads
+    <code>Rdio Scanner</code> followed by the version and the build the operator's server is running. Once a call
+    has played, that row carries call names from then on, and the last call's rows stay on the screen after the
+    call ends; the version is not shown again until the page is reloaded. This guide asks you to read that line to
+    the operator when something is missing, and the chapter about help and support says how.
+  </p>
+
+  <p>
+    Underneath the call rows sits the list of recent calls, with its own column headings — <code>Time</code>,
+    <code>System</code>, <code>Talkgroup</code>, <code>Name</code> — and the flags that appear beside them when a
+    call carries something extra: <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and the hourglass
+    with the minutes left on an avoid you armed. Every row, and what each one holds, is given one at a time in the
+    chapter about what the display says.
+  </p>
+
+  <h3>The control area</h3>
+
+  <p>
+    Nine controls, in three rows of three. Where a control sits is how you find it again on a phone in one hand,
+    and the names below are the names printed on the buttons, each written on two lines except the last three.
+  </p>
+
+  <table>
+    <caption>The controls as they sit on the screen, top row first, left to right within each row.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Row</th>
+        <th scope="col">Controls, left to right</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Top</td>
+        <td><code>LIVE FEED</code>, <code>HOLD SYS</code>, <code>HOLD TG</code></td>
+      </tr>
+      <tr>
+        <td>Middle</td>
+        <td><code>REPLAY LAST</code>, <code>SKIP NEXT</code>, <code>AVOID</code></td>
+      </tr>
+      <tr>
+        <td>Bottom</td>
+        <td><code>SEARCH CALL</code>, <code>PAUSE</code>, <code>SELECT TG</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    The controls that start and stop what you hear are operated in the chapter about listening to live calls, the
+    two that decide what you are offered are operated in the chapter about choosing what to hear, and the search
+    control is operated in the chapter about searching recorded calls. The reference carries all nine in one
+    table.
+  </p>
 </section>
 
 <section>
