@@ -404,6 +404,92 @@ func guideSpoken(chapter string) string {
 	return regexp.MustCompile(`\s+`).ReplaceAllString(stripTags(chapter), " ")
 }
 
+// The fifth chapter operates the search panel and the playback a searched call starts. Two things are checked
+// here. The first is the words the panel puts on its own controls, which the guide has to carry because a reader
+// reads this chapter while looking at that form. The second is the absence of four promises the superseded page
+// made and the shipped panel does not keep: a paginator said to be disabled in playback mode, a stop said to cancel
+// playback, a searched row said to be unavailable while the feed is paused, and a paginator said to follow the
+// playback walk across pages. Each forbidden phrase is taken from the superseded page's own wording, so a claim
+// that returns is a failing check rather than a finding someone has to notice in review.
+func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-05-searching-archived-calls")
+
+	spoken := guideSpoken(chapter)
+
+	for _, name := range []string{
+		"Sort order", "Date", "Time", "Dur", "System", "Talkgroup", "Group", "Tag",
+		"All Systems", "All Talkgroups", "All Groups", "All Tags",
+		"Download mode", "Reset", "Searching calls",
+		"Play", "Stop", "Download", "Loading",
+		"First page", "Previous page", "Next page", "Last page",
+		"paginator", "6.6.3",
+	} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on searching recorded calls never names %q, which is a word the search panel or its paginator puts on the screen", name)
+		}
+	}
+
+	// The shipped reading, stated as the decision about shipped behaviour says the chapter must state it: the
+	// paginator is not taken away from the reader during a search or during a playback.
+	if !strings.Contains(spoken, "stays available") {
+		t.Errorf("the chapter on searching recorded calls does not say what the paginator does during a search, which is that it stays available")
+	}
+
+	// The panel bounds the date field only when the answer holds calls. The chapter's first draft claimed the
+	// opposite - that an empty answer bounds the field to a date the archive has nothing in - so the check holds
+	// both halves here: the shipped fact, and the refusal of the bound the shipped code refuses to set.
+	if !strings.Contains(spoken, "unbounded") {
+		t.Errorf("the chapter on searching recorded calls does not say what happens to the date field's bounds when the answer is empty, which is that the field is left unbounded")
+	}
+
+	if strings.Contains(spoken, "1970") {
+		t.Errorf("the chapter on searching recorded calls bounds the date field to a date in 1970, which is a bound the panel refuses to set when an answer holds no calls")
+	}
+
+	// The actions column has no heading, which the chapter has to say because it is the one column a reader
+	// cannot read a name for.
+	if !strings.Contains(spoken, "no heading") {
+		t.Errorf("the chapter on searching recorded calls does not say that the column of row actions carries no heading, which is what the panel's own table header holds")
+	}
+
+	for _, promised := range []string{
+		"is disabled while in playback",
+		"paginator is disabled",
+		"paginator is locked",
+		"paginator follows",
+		"follows the walk",
+		"cancel the playback",
+		"Stop ends the playback",
+		"ends playback mode",
+		"cannot be played while",
+		"will not play while",
+		"unavailable while",
+		"is not offered while",
+	} {
+		if strings.Contains(spoken, promised) {
+			t.Errorf("the chapter on searching recorded calls says %q, which is a promise the superseded page made and the shipped panel does not keep", promised)
+		}
+	}
+
+	for _, id := range []string{"search-list", "search-filters", "search-download", "search-playback", "search-empty"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">(.*?)</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 2 {
+			t.Errorf("the chapter on searching recorded calls does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[1])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[1], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {
