@@ -1809,7 +1809,7 @@ footer.site .signoff {
     span it names, on a pass that runs every hour, and a call that pass has taken is not findable by any route the
     application offers. A deployment that holds a call's audio back — a delay set on a system or a talkgroup, counted
     from the moment the call happened — keeps that call out of a search until its hold has run out, and when it does
-    arrive it arrives flagged <code>Delayed</code>, which is the flag the display's flag row carries; chapter 6 gives
+    arrive it arrives flagged <code>DELAYED</code>, which is the flag the display's flag row carries; chapter 6 gives
     that row.
   </p>
 
@@ -3157,6 +3157,206 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-11-when-something-does-not-work">11 · When something does not work</h2>
+
+  <p>
+    This chapter is arranged the way a listener arrives at it: with the symptom, not with the part of the application
+    that causes it. Each entry says what the screen is doing, what you can do about it with the controls the screen
+    already gives you, and where the answer is not yours to reach. Nothing in this chapter is a procedure for the
+    machine behind the deployment. Those procedures are written in the operator's guide, and the line between the two
+    documents is the line this guide has been drawing since its first chapter.
+  </p>
+
+  <p>
+    Two readings do most of the work here, and both are already on the screen. One is the server light, which carries
+    its state in its own name: a screen reader is told <code>Server status:</code> followed by the state it is in. The
+    other is the link reading, the part of the display that says whether the page is joined to the server, and it reads
+    <code>NO LINK</code> while it is not. A good deal of what looks like silence is that one reading, and it is worth
+    learning what it does and does not mean.
+  </p>
+
+  <h3>A talkgroup is silent while the others play</h3>
+
+  <p>
+    Three things make one talkgroup quiet while the rest carry on, and all three are states the listener set at some
+    point. The talkgroup is not chosen, which <code>SELECT TG</code> shows you directly — <a
+    href="#ch-04-choosing-what-to-hear">the chapter on choosing what to hear</a> gives what a button reads when it is
+    chosen, when it is held off, and when it is neither. The talkgroup is being held off, which is what <code>AVOID</code>
+    arms: while a window of minutes is standing, that button's corner mark blinks and the minutes beside the mark are
+    how much of the window is left. The whole system, or the talkgroup alone, is being held, which is <code>HOLD SYS</code>
+    or <code>HOLD TG</code> switched on.
+  </p>
+
+  <p>
+    Start in the select panel, because it is the one place these states are written in words as well as in colour. The
+    four controls with a state carry their state in colour alone, with no words on the control and no sentence written
+    out loud for it; <a href="#ch-10-keyboard-and-screen-readers">the chapter on keyboards and screen readers</a> sets
+    out what each of them offers a reader who cannot rely on the colour. Pressing <code>AVOID</code> again steps the hold
+    forward, and the cycle the <a href="#ch-03-listening-to-live-calls">chapter on live calls</a> gives comes back
+    around to no hold at all, which is how an armed window is let go.
+  </p>
+
+  <p>
+    When a talkgroup is chosen, not held, and not held off, and it is still silent, the deployment is not hearing it.
+    Ask the operator, who is the one who sets which talkgroups a site listens to.
+  </p>
+
+  <h3>Nothing is arriving at all</h3>
+
+  <p>
+    Work outward from the screen's own readings: when nothing is arriving, they say whether the page is asking for
+    nothing or receiving nothing. If the link reading says <code>NO LINK</code>, the page has no connection to the
+    server, and no call can reach it while that is true; the <a
+    href="#ch-07-access-codes">chapter on access codes</a> gives what the page does with the code it stored in the
+    browser between visits, and the field under the display takes another attempt at it. If that reading says something
+    else, the four controls with a state are the next thing to read: <code>LIVE FEED</code> switched off asks the
+    application for nothing at all, <code>HOLD SYS</code> and <code>HOLD TG</code> switched on hold what would
+    otherwise reach you, and <code>PAUSE</code> holds the audio while the page goes on showing what it last showed.
+  </p>
+
+  <p>
+    The server light tells you which of these the page thinks it is in, and it carries that in its own name as well as
+    in its colour: a screen reader is told <code>Server status:</code> followed by which state it is in. A dark light
+    and that name reading off together mean the page is holding nothing in front of you, which is not the same as the
+    deployment having nothing to send. Ask the operator whether the server is receiving calls; that is a fact about the
+    sites, and it is not something a listener's screen can show.
+  </p>
+
+  <h3>A search answers nothing</h3>
+
+  <p>
+    The search panel reads the calls the server has stored, and not the calls it is hearing right now. So a search that
+    answers nothing has two possible causes, and the panel tells you which of them it is by the reading it gives: an
+    empty answer reads 0 of 0 in its range, and that reading is about the filters you have asked with, not
+    about the server being out of calls. The control named <code>Reset</code> clears the filters — while an answer is on
+    its way the panel marks that control as doing nothing, because there is no answer to change yet — and <a
+    href="#ch-05-searching-archived-calls">the chapter on searching</a> gives each filter, what it holds, and how the
+    dates bound the answer. The control <code>SEARCH CALL</code> opens the panel and runs the search with the filters
+    it is already holding, which is the quickest way to tell an empty filter apart from a deployment that has nothing
+    to give.
+  </p>
+
+  <h3>Audio will not pause, or will not start</h3>
+
+  <p>
+    <code>PAUSE</code> holds the recording that is in front of you where it is: it suspends the audio in the middle of
+    the call and freezes the clock that has been running on it, and letting go of the hold continues where it stopped,
+    in the same call at the same place. What it does not do is start anything. While the hold is standing, the
+    application begins no new audio at all — not a call that arrives, and not a call you asked to hear again from
+    <code>REPLAY LAST</code> or from a search result. If a replay seems to do nothing, look at the paused state first.
+    The control's own corner light carries it however audio was left, and the server light's name carries it when a
+    recording was in flight when you pressed: <a href="#ch-03-listening-to-live-calls">the chapter on live calls</a>
+    gives which is which, and what pressing the control again puts back.
+  </p>
+
+  <h3>Audio will not stop</h3>
+
+  <p>
+    A hold is not a stop, and a listener who expects <code>PAUSE</code> to end the call is left with a screen that looks
+    stuck while it is doing exactly what it was asked to do. To move on, press <code>SKIP NEXT</code>: it ends what is
+    playing and takes the next thing the queue holds. To end the queue as well, press <code>LIVE FEED</code> while it is
+    switched on — the queue is emptied, the audio stops, and the light on that control reads the colour of off.
+    <code>REPLAY LAST</code> then plays the last call the display showed again, which is the way back to something you
+    have already heard once.
+  </p>
+
+  <h3>The live feed does not come back from one press</h3>
+
+  <p>
+    After a playback you opened from the search panel, the page is working in its playback mode, and that is a third
+    state the control has: its light reads the colour of a partial state rather than on or off. Pressing <code>LIVE
+    FEED</code> once from there ends the replay and leaves the live feed switched off, which is not what a listener
+    usually meant. It takes twice: the first press ends the replay, the second asks for the live feed again. The chapter
+    on searching recorded calls explains how a playback leaves the page, and this is the one symptom whose remedy is
+    simply a second press.
+  </p>
+
+  <h3>A call arrives flagged delayed</h3>
+
+  <p>
+    <code>DELAYED</code> in the flag row is not a fault and there is nothing for a listener to correct. It says the
+    deployment holds this call's audio back before anyone is told about it, counted in whole minutes. A talkgroup with a
+    delay of its own decides first, and the system it belongs to is consulted only when the talkgroup names nothing.
+    The minutes are the operator's to set or remove; ask the operator, and name the talkgroup. <a
+    href="#ch-06-what-the-display-says">The chapter on what the display says</a> gives the flag row reading in full.
+  </p>
+
+  <h3>A call you heard is not in the results</h3>
+
+  <p>
+    Two shipped rules account for a call that was heard and cannot be found again, and neither is a fault. The first is
+    retention: the server prunes the calls and log entries that have outlived the retention its configuration sets, on
+    an hourly schedule, and it reads the retention in force at the moment it runs. The setting the operator changes is
+    named <code>Prune Days</code>, and it is the operator's to set; a call older than that is not in the results and no
+    listener action brings it back. <a href="#ch-05-searching-archived-calls">The chapter on searching recorded
+    calls</a> gives what that pass removes from a search, and <a href="#ch-12-reference">the reference chapter</a>
+    lists the setting beside the others the operator sets. The second
+    is duplicate detection: a call heard on the same system, the same
+    talkgroup, and the same site within 500 milliseconds on either side of another is stored once, which is why the
+    second copy of a call that arrived twice is not in the results either. The detection window is a shipped constant,
+    and switching it off is the operator's setting, not a choice on the listening screen.
+  </p>
+
+  <h3>The unlock code is refused</h3>
+
+  <p>
+    The field under the display is named <code>Unlock code</code>, and when the server answers your attempt by asking
+    for the code again the field says <code>Invalid unlock code</code>. That one sentence covers three situations and
+    the screen does not say which one it is: the code was typed wrong, the attempts counted against your session and
+    your address have run out, or a code that was valid arrived on the last attempt the server allows and was locked
+    for that. <a href="#ch-07-access-codes">The chapter on access codes</a> gives how many attempts the server counts,
+    over what window, and why clearing the page does not clear those counters. The field takes another attempt, so try
+    the code once more exactly as the operator gave it; if it is refused again, ask the operator, who holds the code
+    and knows what it was set to.
+  </p>
+
+  <h3>The code has expired, or too many connections</h3>
+
+  <p>
+    Two answers do say what they are. The field reads <code>This unlock code has expired</code> when the code's own
+    end date has passed, and there is nothing a listener can do about that: the length a code lives for is the
+    operator's to set, and a new code is what resolves it. The field reads <code>Too many connections</code> when the
+    limit that belongs to the code itself has been reached, which is a different limit from the number of listeners the
+    server allows at all. That larger cap is named <code>Max Clients</code> in the operator's settings, and reaching it
+    does not print anything on your screen — the page keeps <code>NO LINK</code>, which is why a full deployment and a
+    lost connection look the same from the listener's side. <a href="#ch-07-access-codes">The chapter on access codes</a>
+    works through both, including what happens to a code the moment a connection is lost.
+  </p>
+
+  <h3>A selection seems lost</h3>
+
+  <p>
+    What you have chosen lives in the browser, not on the server. It is stored per profile, and a profile is decided by
+    the <code>?id=</code> marker on the address you opened, so a page opened without the marker, or with a different
+    one, reads a different selection and looks as though yours was lost. It also survives an update until that profile
+    changes something, after which the older shape of it is replaced. <a
+    href="#ch-04-choosing-what-to-hear">The chapter on choosing what to hear</a> gives what is stored and where.
+    <code>SELECT TG</code> shows what the page is holding now, and choosing again writes it. The reset control
+    <code>/reset</code> clears everything the page stored in the browser — your code as well as your selection — so use
+    it when you want a clean start and not when you are trying to find your choices.
+  </p>
+
+  <h3>An old version is still on the screen</h3>
+
+  <p>
+    The page keeps its own files in the browser and looks for a newer set of them every five minutes. When a newer set
+    is waiting, the page opens a dialog titled <code>New version available</code> and asks whether it may reload the
+    page; the answer that says yes takes the new files and reopens the page, and the other answer leaves what you have
+    running in place. The dialog appears only when an installation is waiting to replace the one in control, which is
+    why a first visit to a page never gets it. What an update costs a listener — a code you have to enter again, a
+    selection that keeps its older shape — is set out in <a href="#ch-08-on-your-phone-or-tablet">the chapter on phones
+    and tablets</a>, along with what the page keeps and what it does not.
+  </p>
+
+  <h3>What to bring when the answer is not yours</h3>
+
+  <p>
+    Several of the entries above end the same way, and that is not the guide running out of things to say: the
+    deployment's configuration, the sites it listens to, the retention it keeps calls for, the limits on a code, and the
+    delay on a talkgroup are all set by the operator. What you can bring is concrete — the version the page prints in
+    its own line at the bottom of the display, the talkgroup and system, the time on the call you were looking at, what
+    the controls' own states were, and what the line above the display was reading. <a href="#ch-09-help-and-support">The
+    chapter on help and support</a> says where to take it and what the application can tell you about itself.
+  </p>
 </section>
 
 <section>

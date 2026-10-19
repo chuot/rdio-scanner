@@ -453,6 +453,17 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		}
 	}
 
+	// The delay named here is the deployment holding a call back, and the flag it arrives with is printed by the
+	// display in capitals, the way the other two flags in that row are. A reader is told the flag in words and then
+	// looks for it on the screen, and chapter 6 gives the row: the chapter spells it the way the page prints it.
+	if !strings.Contains(spoken, "DELAYED") {
+		t.Errorf("the chapter on searching recorded calls never names the delay flag as %q, which is how the page prints it", "DELAYED")
+	}
+
+	if strings.Contains(chapter, "<code>Delayed</code>") {
+		t.Errorf("the chapter on searching recorded calls prints the delay flag as %q, which is not the spelling the page prints", "Delayed")
+	}
+
 	// The shipped reading, stated as the decision about shipped behaviour says the chapter must state it: the
 	// paginator is not taken away from the reader during a search or during a playback.
 	if !strings.Contains(spoken, "stays available") {
@@ -766,6 +777,124 @@ func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 		if !strings.Contains(slot, "<figcaption>") {
 			t.Errorf("the figure %q carries no caption", id)
 		}
+	}
+}
+
+// The eleventh chapter answers the reader who arrives with something broken. It is written symptom first, because
+// that is how a listener arrives: they know the screen went quiet, not which of the application's parts is quiet.
+// Every remedy it offers is a thing the shipped application already does — a control, a panel, the page's own reading
+// of a state — and the chapter's own limits are named: a lockout and a retention window are the operator's, and the
+// screen does not distinguish them. The names are what the unlock field and the controls print, the figures are the
+// shipped windows the application counts in, and no administration procedure belongs here.
+func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideChapter(t, body, "ch-11-when-something-does-not-work")
+
+	spoken := guideSpoken(chapter)
+
+	for _, want := range []string{
+		"LIVE FEED",
+		"HOLD SYS",
+		"HOLD TG",
+		"PAUSE",
+		"SKIP NEXT",
+		"REPLAY LAST",
+		"AVOID",
+		"SEARCH CALL",
+		"SELECT TG",
+		"DELAYED",
+		"NO LINK",
+		"Server status:",
+		"Unlock code",
+		"Invalid unlock code",
+		"This unlock code has expired",
+		"Too many connections",
+		"Max Clients",
+		"Prune Days",
+		"New version available",
+	} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter about when something does not work never prints %q, which is a name the shipped application puts in front of the reader", want)
+		}
+	}
+
+	for _, want := range []string{
+		"silent",
+		"nothing is arriving",
+		"answers nothing",
+		"will not pause",
+		"will not stop",
+		"one press",
+		"twice",
+		"flagged delayed",
+		"not in the results",
+		"has expired",
+		"lost",
+		"old version",
+		"0 of 0",
+		"continues where it stopped",
+		"queue",
+		"500 milliseconds",
+		"hourly",
+		"retention",
+		"ask the operator",
+	} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter about when something does not work never gives %q, which is a symptom a reader searches for, a remedy the shipped application offers, or a window the application counts in", want)
+		}
+	}
+
+	// A remedy has to be a thing the shipped application does. Anything that reads as a server procedure, or as
+	// advice about the machine behind the deployment, belongs in the operator's guide and not here.
+	for _, forbidden := range []string{
+		"restart",
+		"reboot",
+		"flush",
+		"delete the database",
+		"clear the calls",
+		"dashboard",
+		"console",
+		"code is locked",
+	} {
+		if strings.Contains(spoken, forbidden) {
+			t.Errorf("the chapter about when something does not work offers %q, which is not a thing the shipped application does for a listener", forbidden)
+		}
+	}
+
+	// The search panel opens searching with whatever its filters are already holding, and it does not fill them in
+	// from the call standing on the display. A draft of this chapter said it did, and a reader who believed that
+	// would look for a prefilled row that the shipped panel never writes.
+	for _, superseded := range []string{"already filled in"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter about when something does not work carries %q, which describes a thing the shipped search panel does not do", superseded)
+		}
+	}
+
+	// The chapter leans on the chapters that already describe each part, rather than describing them a second
+	// time. The hrefs are read the way the guide's own self-containment check reads them, because a link whose
+	// opening tag wraps across a line is still one link.
+	hrefs := map[string]bool{}
+
+	for _, m := range regexp.MustCompile(`(?is)href="([^"]*)"`).FindAllStringSubmatch(chapter, -1) {
+		hrefs[m[1]] = true
+	}
+
+	for _, want := range []string{
+		"#ch-04-choosing-what-to-hear",
+		"#ch-05-searching-archived-calls",
+		"#ch-07-access-codes",
+		"#ch-08-on-your-phone-or-tablet",
+	} {
+		if !hrefs[want] {
+			t.Errorf("the chapter about when something does not work never points at %s, which is where the detail it leans on is already written", want)
+		}
+	}
+
+	// No figures: the figure inventory gives this chapter none, and a reader who cannot get anything working is
+	// reading words, not a picture of the application doing it.
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 0 {
+		t.Errorf("the chapter about when something does not work carries a figure, and the inventory gives it none")
 	}
 }
 
