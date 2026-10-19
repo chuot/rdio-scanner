@@ -490,6 +490,55 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 	}
 }
 
+// The sixth chapter reads the display area. Two things are checked. The first is the words the display itself
+// writes — the row labels and the flags are printed by the application and a reader matches this chapter against
+// them while looking at the screen. The second is the handful of readings a reader cannot get from a glance: that
+// the history is five rows, that the timed-avoid mark is a character whose glyph is not guaranteed, that the big row
+// falls back to a frequency when the talkgroup carries no name, and that full screen has a route that is not a
+// double-click.
+func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-06-what-the-display-says")
+
+	spoken := guideSpoken(chapter)
+
+	for _, name := range []string{
+		"System", "Tag", "Talkgroup", "NO LINK", "L:", "Q:", "F:", "TGID:", "E:", "S:", "UID:",
+		"AVOID", "PATCH", "DELAYED", "Rdio Scanner v", "Fullscreen", "Exit fullscreen",
+	} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on the display never names %q, which is a word the display area writes", name)
+		}
+	}
+
+	for _, fact := range []string{"five", "hourglass", "font", "double-click", "no name", "elapsed"} {
+		if !strings.Contains(spoken, fact) {
+			t.Errorf("the chapter on the display never gives %q, which is a reading or a condition the display itself applies", fact)
+		}
+	}
+
+	if !strings.Contains(spoken, "screen reader") {
+		t.Errorf("the chapter on the display never mentions a screen reader, which is the reader the truncated rows are written for")
+	}
+
+	for _, id := range []string{"main-flags", "main-history", "main-fullscreen"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">(.*?)</figure>`).FindStringSubmatch(chapter)
+		if len(slot) < 2 {
+			t.Errorf("the chapter on the display does not carry the figure %q", id)
+
+			continue
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[1])
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot[1], "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {

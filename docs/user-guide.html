@@ -1827,6 +1827,253 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-06-what-the-display-says">6 · What the display says</h2>
+
+  <p class="lead">
+    The display area is a fixed grid of rows. Its cells are laid out for the longest reading they might have to hold,
+    which is why a short call leaves gaps on the screen and a long label gets cut rather than wrapped.
+  </p>
+
+  <p>
+    The area starts dimmed and stays dimmed until a call arrives or you press something. The chapter on listening to
+    live calls gives the delay that dims it again; what matters here is that a display you have not touched yet is
+    showing the readings it was built with, not readings about anything the server knows.
+  </p>
+
+  <h3>Every row, at rest and with a call on screen</h3>
+
+  <table>
+    <caption>The display's rows, what each holds before any call, and what it holds once a call is on the screen.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The row</th>
+        <th scope="col">Before a call</th>
+        <th scope="col">With a call on screen</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Time, link, queue</td>
+        <td>The time kept from the machine the page runs on, then <code>NO LINK</code>, then the queue reading of
+          zero.</td>
+        <td>The same time, then <code>NO LINK</code> while the page is not talking to the server, or the listener
+          count as <code>L:</code> and a number when the deployment shows it, or nothing at all when it does not;
+          then <code>Q:</code> and the number of calls waiting.</td>
+      </tr>
+      <tr>
+        <td>The small row under it</td>
+        <td>Nothing. The application builds this row and writes nothing into it.</td>
+        <td>Nothing.</td>
+      </tr>
+      <tr>
+        <td>System, type, tag</td>
+        <td><code>System</code>, an empty space, <code>Tag</code>.</td>
+        <td>The system's name, the type word the configuration carries for the talkgroup or the system written in
+          capitals, and the tag the talkgroup carries.</td>
+      </tr>
+      <tr>
+        <td>Talkgroup, date and progress</td>
+        <td><code>Talkgroup</code> at the left, and <code>00:00</code> at the right.</td>
+        <td>The talkgroup's label, or its number when the configuration gives no label; and at the right the time the
+          call has reached, with a date in front of it only when the call is at least a day old.</td>
+      </tr>
+      <tr>
+        <td>The large name row</td>
+        <td><code>Rdio Scanner v</code> followed by the version the page was built from.</td>
+        <td>The name written on the talkgroup, or the call's frequency when the talkgroup carries no name.</td>
+      </tr>
+      <tr>
+        <td>Frequency, talkgroup number</td>
+        <td><code>F:</code> followed by the zero reading grouped, and <code>TGID: 0</code>.</td>
+        <td><code>F:</code> and the frequency the call is on, grouped in threes and followed by <code>Hz</code>; and
+          <code>TGID:</code> with the talkgroup's number.</td>
+      </tr>
+      <tr>
+        <td>Counters, unit</td>
+        <td><code>E: 0 S: 0</code> at the left, <code>UID: 0</code> at the right.</td>
+        <td><code>E:</code> and <code>S:</code> with the two counts that ride with the recording; and
+          <code>UID:</code> with the unit the call came from, or a blank space where the application cannot name one.</td>
+      </tr>
+      <tr>
+        <td>The flag row</td>
+        <td>Nothing lit. The words <code>AVOID</code>, <code>PATCH</code>, and <code>DELAYED</code> are on the screen
+          from the start and are drawn as unlit.</td>
+        <td>Any of those three, and the timed-avoid mark with the minutes it is held for.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    Those placeholder readings are what the screen was built with, and they are the only place the version line
+    appears: once a call has reached the display the rows keep the last call's readings, and the version line does
+    not come back. The display does not clear when a call ends, and neither do the flags on it — they keep being
+    re-evaluated against the last call the display showed, which is why a flag can still be lit when nothing is
+    playing.
+  </p>
+
+  <h3>The name row, and what stands in for it</h3>
+
+  <p>
+    The large row is the talkgroup's name. A deployment that names its talkgroups put those names here, and a
+    deployment that does not gets the call's frequency in that space instead, written the grouped way the frequency
+    row writes it. That is the reading a listener of an unnamed deployment sees at the largest size on the screen, and
+    it is why the same number can appear twice on one screen at two different sizes.
+  </p>
+
+  <p>
+    A deployment whose systems or talkgroups carry the older type the application reads as provoice gets the
+    talkgroup's number rewritten into a different form on both the talkgroup row and the <code>TGID:</code> row, which
+    is why a talkgroup number can look nothing like the number in the configuration.
+  </p>
+
+  <h3>Time, progress, and elapsed</h3>
+
+  <p>
+    The time at the top left is the page's own clock, kept from the machine it runs on, and it moves at the turn of
+    each minute. The reading at the right of the talkgroup row is not a duration: it is a time of day, the moment the
+    call started moved forward by how far the recording has got, so a call that began at 14:03 and has run forty
+    seconds reads as 14:07. Before any call it reads <code>00:00</code>.
+  </p>
+
+  <p>
+    How far a recording has got is measured from the audio rather than from the wall clock. It starts again with each
+    recording, and while the feed is paused it freezes with the sound instead of running on: the elapsed reading and
+    therefore the progress reading stand still for as long as the pause holds, and continue from where they stood.
+  </p>
+
+  <p>
+    The date in front of that reading appears only when the call is at least a day old, and it is written as month and
+    day. A live call never carries it, and a call you found in yesterday's history does.
+  </p>
+
+  <h3>The frequency, the counts, and the unit</h3>
+
+  <p>
+    The <code>F:</code> row follows the call. A recording whose frequency changed partway through carries that
+    history, and the display moves through it as the call progresses, so the frequency you read is the one the call
+    was on at the point the display has reached. The two counts beside it work the same way: <code>E:</code> and
+    <code>S:</code> are the error count and the spike count the call reports for that same part of the recording, and
+    where a call reports none the reading is zero. Nothing on the screen explains what the application counted; the
+    numbers are what the recorder said.
+  </p>
+
+  <p>
+    <code>UID:</code> is the unit the call came from. Where the deployment defines names for its units the row carries
+    that name, and the number the recorder reported is resolved against the ranges the deployment sets for it. Where
+    no name can be found the row is left blank rather than falling back to the bare number, so a blank unit row means
+    the deployment has not named that unit, not that the call had none.
+  </p>
+
+  <h3>The flag row</h3>
+
+  <table>
+    <caption>The display's flags, and what has to be true for each of them to be lit.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The flag</th>
+        <th scope="col">When it is lit</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>AVOID</code></td>
+        <td>The call's talkgroup is not chosen in your selection. A system your selection says nothing about at all is
+          never treated as avoided.</td>
+      </tr>
+      <tr>
+        <td><code>PATCH</code></td>
+        <td>Only for a call that is avoided, and only when that call was patched onto a talkgroup you <em>are</em>
+          choosing. It is the screen's way of saying the call reached you sideways.</td>
+      </tr>
+      <tr>
+        <td><code>DELAYED</code></td>
+        <td>The call arrived carrying the delay flag, which is how a deployment that holds audio back marks the calls
+          it releases later.</td>
+      </tr>
+      <tr>
+        <td>The timed-avoid mark, <code>⧖</code></td>
+        <td>The call's talkgroup is being held off for a window of minutes. The mark is followed by the number of
+          minutes and an <code>M</code>, and it belongs to the selection's timed avoid rather than to the call.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <figure data-shot="main-flags">
+    <img alt="Close crop of the display's flag row showing an hourglass symbol followed by 30M, then the dark badges AVOID, PATCH, and DELAYED.">
+    <figcaption>The flag row with three flags lit — <code>AVOID</code>, <code>PATCH</code>, and <code>DELAYED</code> — and the timed-avoid hourglass beside the minutes it is held for.</figcaption>
+  </figure>
+
+  <p>
+    The hourglass is worth knowing about on its own. Every other mark on this screen is drawn from an icon set the
+    application ships with itself and never asks the internet for; the timed-avoid mark is a single character,
+    <code>⧖</code>, written into the text of the row. Whether it reaches your eye at all depends on the font your
+    browser has for that character, so on a machine without the glyph it can appear as a box or as nothing, with the
+    minutes still beside it. Where the symbol is missing, the minutes are still the reading to trust, and the chapter
+    on keyboards and screen readers gives what the selection panel says about the same state in words.
+  </p>
+
+  <h3>The history table</h3>
+
+  <p>
+    Under the display sits a table of five rows, always five. Calls that have not happened yet leave their rows
+    blank, so a listener who has heard two calls sees two rows and three empty ones. Its columns are the time, the
+    system, the talkgroup, and the name, and the name column falls back the same way the large row does — except that
+    it writes the frequency as a bare number rather than in the grouped form the display uses. The row holding the
+    call the display is on is marked, which is what tells you that what you are hearing is a replay rather than a new
+    call.
+  </p>
+
+  <p>
+    The table holds calls the listener has already heard, not the one being heard. A call joins it when it has ended,
+    and the control bar's replay control walks this list: successive presses within a second of one another move
+    backwards through it, which is the route the chapter on live calls describes.
+  </p>
+
+  <figure data-shot="main-history">
+    <img alt="The listening screen's history table holding five rows of recently heard calls, each row showing a time, a system name, a talkgroup label and name, and the call name.">
+    <figcaption>The history table under the display, with the calls the listener has just heard in it: time, system, talkgroup, and name.</figcaption>
+  </figure>
+
+  <h3>Long labels, and the whole of them</h3>
+
+  <p>
+    The grid does not widen for a long name, and a label longer than its cell is cut. What is written on the screen
+    may therefore be the beginning of a talkgroup's name rather than all of it, at any zoom. The application gives the
+    whole of the text to a screen reader for each row it clips, including the history rows, so the reader who cannot
+    see the cut is not missing the part that did not fit. That is one of the things the application does
+    deliberately for assistive technology, and the chapter on keyboards and screen readers counts it as one.
+  </p>
+
+  <h3>Full screen</h3>
+
+  <p>
+    Double-clicking anywhere on the display area puts the page into full screen and takes it out again. Because a
+    double-click is not something every reader can perform, the same move has a control: it sits at the lower right of
+    the screen beside the help control, and it names the move it will make rather than the state it sits in —
+    <code>Fullscreen</code> while the page is in the window, <code>Exit fullscreen</code> once it is not — and it reads
+    as pressed while the screen is filled. Pressing it and double-clicking the display do the same thing, and the
+    control's name and pressed state follow whichever one you used.
+  </p>
+
+  <figure data-shot="main-fullscreen">
+    <img alt="The lower right corner of the listening screen with the full-screen control showing a pressed background and outline, and the help control beside it.">
+    <figcaption>The full-screen control pressed: it reads as pressed while the screen fills the window, and the help control sits beside it.</figcaption>
+  </figure>
+
+  <h3>What the display says out loud</h3>
+
+  <p>
+    Everything on this screen is also said. The display writes the state it shows into the region a screen reader
+    listens to: a call starting is announced as <q>Playing</q> followed by the talkgroup's label, a pause as
+    <q>Paused</q> and the same label, a call ending as <q>Stopped</q> and the label it had, and a change in the waiting
+    list as <q>Queue: 3</q>. When the queue changes at the same moment a call starts, the queue is said first and the
+    call last, so the last thing a listener hears is the talkgroup they are now hearing. The first painting of the
+    page is not announced at all: the page does not introduce itself as a change.
+  </p>
+
+  <p>
+    The shape of each of those sentences, and what a screen reader makes of them, belongs to the chapter on keyboards
+    and screen readers.
+  </p>
 </section>
 
 <section>
