@@ -1,0 +1,68 @@
+# Closes issues that have had no activity for six months.
+#
+# How it runs: the action walks the repository's open issues once a day. An issue idle for 180 days is given the
+# Stale label and the note below, and because its close delay is 0 the same run closes it straight away, so a
+# stale issue never survives to the next day. Activity resets the clock: an issue someone replies to, relabels,
+# or reopens is no longer idle, and a Stale label it had is taken back off.
+#
+# Pull requests are switched off by the two negative day settings, which tell the action never to mark a pull
+# request stale and never to close one. Nothing in this workflow reads, labels, comments on, or closes a pull
+# request, and the pull-request permission is not granted at all.
+#
+# A scheduled run only starts from the repository's default branch, which is also what the action itself says its
+# configuration has to sit on. workflow_dispatch makes the same run available by hand, and its dry-run box uses
+# the action's own debug mode: it prints what would be marked and closed and makes no call that alters anything.
+
+name: Close stale issues
+
+on:
+  schedule:
+    # Daily at 07:15 UTC.
+    - cron: '15 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report what would be marked stale and closed, change nothing.
+        type: boolean
+        default: false
+
+# The action lists open issues, then labels, comments on, and closes them. Naming a permission here leaves every
+# permission not named at none, so this pair is the whole of what the job can do: no pull-request permission, and
+# no branch deletion, which is the only thing that would need write access to the repository's contents.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  close-stale-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark and close stale issues
+        # Pinned to the commit the v11.0.0 tag names rather than to the tag itself, so a change in that action's
+        # repository cannot quietly change what runs here. Upgrading means changing this line on purpose.
+        uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          # Six months without activity makes an issue stale, and it closes in the same run: a stale label is not
+          # given out on one day and acted on a week later.
+          days-before-issue-stale: 180
+          days-before-issue-close: 0
+
+          # No pull request is ever marked stale and none is ever closed. Both switched off on purpose.
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+
+          stale-issue-label: Stale
+          stale-issue-message: This issue has been marked as stale after 6 months of inactivity.
+          close-issue-message: This issue has been automatically closed after 6 months of inactivity. If this is still relevant, please open a new issue.
+
+          # Stated rather than left to the action's default, so the reason a closed issue shows stays this
+          # repository's decision instead of becoming whatever a later revision defaults to.
+          close-issue-reason: not_planned
+
+          # The first run over a backlog of long-idle issues is the busiest one there will be. The action keeps
+          # its position between runs, so anything left over carries into the next day rather than being dropped.
+          operations-per-run: 100
+
+          # The dispatch dry run, wired to the action's own debug mode. A scheduled run has no dispatch inputs, so
+          # this resolves to nothing there, and nothing is the action's own off.
+          debug-only: ${{ inputs.dry_run }}
