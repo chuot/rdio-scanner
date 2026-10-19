@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 // Package backend is the Model Context Protocol surface: the endpoint an AI assistant administers the
 // deployment through.
@@ -38,6 +33,6 @@
 // and answers the read-only capabilities anonymously — which is what the listener socket does today.
 //
 // Nothing here touches a websocket surface. The listener socket and the administrator configuration
-// socket are reserved for Saubeo Solutions, and this surface is built on the HTTP REST surface and the
-// use cases behind it, which the access policy leaves unrestricted.
+// socket are under the same GNU General Public License as this surface, and this surface is built on the
+// HTTP REST surface and the use cases behind it.
 package backend

@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 // Package delayer holds back the calls that the talkgroup or system they were heard on say should
 // be held back, and hands them to the server's delivery path once the hold has run out.

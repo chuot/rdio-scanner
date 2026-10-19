@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 package backend
 
@@ -30,10 +25,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The call history endpoints are the GPL HTTP surface for the recorded calls. Today the history is
-// reachable only on the listener socket, which the access policy reserves; these endpoints are the
-// answer an HTTP client — and the Model Context Protocol surface built on it — can use, and they
-// answer with the same page and the same call the listener gets.
+// The call history endpoints are the HTTP surface for the recorded calls, under the same licence as the
+// rest of the server. The history is reachable on the listener socket too; these endpoints are the answer
+// an HTTP client — and the Model Context Protocol surface built on it — can use, and they answer with the
+// same page and the same call the listener gets.
 
 func TestSearchEndpointAnswersAPageOfCallHistory(t *testing.T) {
 	fixture := newCallsFixture(t)

@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 // Package fakes holds in-memory implementations of every application port, used by the
 // use case tests. They are not mocks: they behave like the real adapters on the rules

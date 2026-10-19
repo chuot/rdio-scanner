@@ -12,19 +12,13 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 // Package backend is the call history HTTP surface: the entry points a client uses to search the
 // recorded calls, read one recorded call, and fetch one recording.
 //
-// The history exists today on the listener socket, which the access policy reserves for Saubeo
-// Solutions. The HTTP REST surface is the part of the server the policy leaves unrestricted, so the
-// history reaches an HTTP client — and the Model Context Protocol surface built on it — by being
-// added here, on the unrestricted side.
+// The history exists today on the listener socket. That socket and this HTTP surface are both part of
+// the server and carry the same licence, so the history reaches an HTTP client — and the Model Context
+// Protocol surface built on it — by being added here.
 //
 // The endpoints answer with the page and the call the listener already gets, from the use cases the
 // listener already uses. Nothing is decided here: the paging bounds, the day window, the group and

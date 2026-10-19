@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 // Package backend is the scanner webapp's own surface: the WebSocket connection the web
 // app and the native Rdio Scanner applications hold open, the JSON-array frame they exchange,

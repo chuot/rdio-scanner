@@ -75,13 +75,12 @@ You can enjoy your [Rdio Scanner](https://github.com/chuot/rdio-scanner) on the 
 
 By submitting a contribution to this repository, you agree to the terms of the [Individual Contributor Assignment Agreement](./ICAA.md).
 
-## WebSocket API - Commercial Use
+## License
 
-This project is licensed under the GNU GPL. The **HTTP REST API** is fully available for all uses.
-
-However, the **WebSocket API** is a proprietary service provided exclusively by Saubeo Solutions for its native applications and the integrated scanner webapp. This restriction supports the commercial model that funds this project's development.
-
-Self-hosted deployments can use the HTTP REST API without limitation. Access to the WebSocket API in self-hosted instances requires a license agreement. For details, see [API_ACCESS_POLICY.md](API_ACCESS_POLICY.md).
+Rdio Scanner is free software, distributed under the GNU General Public License, version 3. That covers the
+whole server: the HTTP REST API and the real-time listener connection alike are available for every use,
+self-hosted deployments and third-party clients included. A deployment's own access codes decide which
+listeners see which systems and talkgroups; they are a setting an operator chooses, not a licence.
 
 ---
 

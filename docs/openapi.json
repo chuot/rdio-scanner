@@ -3,7 +3,7 @@
   "info": {
     "title": "Rdio Scanner API",
     "version": "8.0.0",
-    "description": "The complete entry-point surface of the Rdio Scanner server: the administrator REST surface (authentication, whole-config access, per-section config endpoints, alerts, logs, password change, access user management), the two call ingestion endpoints, the call history endpoints (search, one call, one recording), the two static applications, and the two WebSocket surfaces. Admin REST auth: raw JWT in the Authorization header, no Bearer prefix; HTTP 401 on invalid/expired token. The ingestion endpoints authenticate with the key form field. The WebSocket surfaces are documented as components.x-websockets (OpenAPI 3.1 has no native WebSocket construct): the listener protocol on any path, chosen by the Upgrade header, and the administrator configuration socket on /api/admin/config. The listener protocol is reserved for Saubeo Solutions native applications per API_ACCESS_POLICY.md."
+    "description": "The complete entry-point surface of the Rdio Scanner server: the administrator REST surface (authentication, whole-config access, per-section config endpoints, alerts, logs, password change, access user management), the two call ingestion endpoints, the call history endpoints (search, one call, one recording), the two static applications, and the two WebSocket surfaces. Admin REST auth: raw JWT in the Authorization header, no Bearer prefix; HTTP 401 on invalid/expired token. The ingestion endpoints authenticate with the key form field. The WebSocket surfaces are documented as components.x-websockets (OpenAPI 3.1 has no native WebSocket construct): the listener protocol on any path, chosen by the Upgrade header, and the administrator configuration socket on /api/admin/config."
   },
   "servers": [
     {
@@ -2749,7 +2749,7 @@
       "listener": {
         "path": "*",
         "summary": "Listener protocol: the connection the scanner webapp and the native applications hold",
-        "description": "Any path under / and /admin/ carrying the Upgrade: websocket header is taken over as a listener connection before anything is looked up. Frames are JSON arrays: [command, ...args]. A server with access codes asks for one (PIN) before answering anything else; a server with no access codes is open. Reserved for Saubeo Solutions and its native applications per API_ACCESS_POLICY.md.",
+        "description": "Any path under / and /admin/ carrying the Upgrade: websocket header is taken over as a listener connection before anything is looked up. Frames are JSON arrays: [command, ...args]. A server with access codes asks for one (PIN) before answering anything else; a server with no access codes is open. The protocol is part of the server and carries no licensing restriction of its own.",
         "framing": "JSON array frames: [command, ...args]",
         "auth": "The PIN command carries the access code when the server is restricted; no credential before it.",
         "commands": {

@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 package docs
 
@@ -1321,6 +1316,109 @@ func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
 	} {
 		if !strings.Contains(notes, strings.ToLower(want)) {
 			t.Errorf("COMPILING.md never says %q", want)
+		}
+	}
+}
+
+// guideFooter returns the closing statement the reader meets at the end of the document, which is where the
+// guide says in one sentence what the project is under.
+func guideFooter(t *testing.T, body string) string {
+	t.Helper()
+
+	footer := regexp.MustCompile(`(?is)<footer\b[^>]*>(.*?)</footer>`).FindStringSubmatch(body)
+	if len(footer) < 2 {
+		t.Fatalf("the guide has no closing statement to carry its licence position")
+	}
+
+	return footer[1]
+}
+
+// The project holds one licence position, and the guide is where an operator reads it: the introduction names
+// the chapter that states it, the chapter that says what a listener reaches says what those parts of the
+// server are free for, the REST chapter says what the real-time connection is under, the reference appendix
+// states the position in full, and the closing statement states it in a sentence.
+//
+// The position is that every interface the server answers is under the GNU General Public License, version
+// 3, and that what limits a listener is the deployment's own access code rather than a licence. The negative
+// half is what keeps it a position and not a preference: a guide that calls one interface proprietary, or
+// asks a self-hosted operator for an agreement with anyone, states a second position, and an operator who
+// reads it will not build something the licence allows.
+func TestTheGuideStatesOneLicencePositionForEveryInterface(t *testing.T) {
+	body := guidePath(t)
+
+	places := []struct {
+		chapter string
+		need    []string
+	}{
+		{
+			chapter: "ch-01-overview",
+			need: []string{
+				"the licence, and what it means for both interfaces the server answers, is in chapter 27",
+			},
+		},
+		{
+			chapter: "ch-02-how-audio-flows",
+			need: []string{
+				"both are free to use for any purpose, under the same terms as the rest of the server",
+			},
+		},
+		{
+			chapter: "ch-16-rest-api",
+			need: []string{
+				"the server asks a restricted server's listeners for an access code",
+				"the connection carries no licence restriction of its own",
+				"as every other interface the server answers",
+				"what gates it is the deployment's own access code",
+			},
+		},
+		{
+			chapter: "ch-27-reference",
+			need: []string{
+				"gnu general public license, version 3",
+				"both of the interfaces it answers",
+				"is under the same terms",
+				"what limits a listener is the deployment's own choice, not the licence",
+				"nothing here needs an agreement with anyone",
+			},
+		},
+	}
+
+	for _, p := range places {
+		text := strings.ToLower(words(chapterOf(t, body, p.chapter)))
+
+		for _, want := range p.need {
+			if !strings.Contains(text, strings.ToLower(want)) {
+				t.Errorf("the guide's chapter %q never says %q", p.chapter, want)
+			}
+		}
+	}
+
+	footer := strings.ToLower(words(guideFooter(t, body)))
+
+	for _, want := range []string{
+		"free software under the gnu general public license, version 3",
+		"every interface the server answers",
+		"available for all uses under those terms",
+	} {
+		if !strings.Contains(footer, strings.ToLower(want)) {
+			t.Errorf("the guide's closing statement never says %q", want)
+		}
+	}
+
+	// The second position is what these refusals are for: wordings that used to sit in the guide and would
+	// put a licence in front of an interface the project no longer holds apart. The retired document's own
+	// name is refused across the whole repository by the licence guard, so what this test refuses is the
+	// wording a reader actually reads.
+	all := strings.ToLower(words(body))
+
+	for _, withdrawn := range []string{
+		"proprietary",
+		"reserved for",
+		"licence agreement",
+		"saubeo solutions and its native applications",
+	} {
+		if strings.Contains(all, withdrawn) {
+			t.Errorf("the guide still states a withdrawn position (%q)", withdrawn)
 		}
 	}
 }

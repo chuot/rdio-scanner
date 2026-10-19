@@ -333,11 +333,10 @@ test('the two static applications and the admin redirect are documented', () => 
   assert.ok(redirect, 'GET /admin must document the 307 redirect to /admin/');
 });
 
-// The call history over HTTP. The recorded calls live today on the listener socket, which
-// the access policy reserves; these three endpoints are the same history on the side of the server the
-// policy leaves unrestricted. They are listener-facing, so they answer to a listener access code, and
-// an administrator session opens the whole history through the credential the admin page already
-// presents.
+// The call history over HTTP. The recorded calls live today on the listener socket, and these three
+// endpoints are the same history on the HTTP side of the server, under the same licence. They are
+// listener-facing, so they answer to a listener access code, and an administrator session opens the whole
+// history through the credential the admin page already presents.
 const CALL_PATHS = {
   '/api/calls/search': ['post'],
   '/api/calls/{callId}': ['get'],

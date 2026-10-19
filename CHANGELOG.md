@@ -6,6 +6,8 @@
 
 _Entry in progress: Version 8.0 is still being assembled, and this section names what has landed._
 
+- The server no longer holds its real-time interface apart from the rest of it. The whole server is GNU GPL version 3 — the HTTP REST API and the real-time listener connection alike — and a self-hosted deployment answers both for its own clients without an agreement with anyone. The separate policy document earlier versions pointed at is gone; the licence is stated in the administrator guide, chapter 27.
+
 - The server log now names the part of the server that wrote every entry, and the log view filters on it: directory watchers, downstreams, logins, live feed, retention, and the rest of them.
 - Log messages no longer begin with the name of the internal function that wrote them. They say what happened, and where something failed they say the failure's own reason after it. Entries written by the previous server were kept, and filed under the part of the server their old prefix names.
 - The administration log view gained a subsystem filter, a text search over the message, a count of how many entries each part of the server wrote — clickable, so the count is how you narrow the view — and an auto-refresh toggle.

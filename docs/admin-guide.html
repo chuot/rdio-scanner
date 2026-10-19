@@ -562,9 +562,9 @@ footer.site .signoff {
     and consulted afterwards. It is complete on its own terms: the operating detail for Linux, Windows,
     macOS, and FreeBSD is in <a href="#ch-21-running-as-a-service">chapter 21</a>; the container image, its
     volume, and its user are in <a href="#ch-04-installation">chapter 4</a>; the log's subsystems and what
-    each one reports are in <a href="#ch-14-logs">chapter 14</a>; the licence and the API access position
-    are in <a href="#ch-27-reference">chapter 27</a>. Nothing in this guide asks you to open another file:
-    every cross-reference is a chapter of this guide.
+    each one reports are in <a href="#ch-14-logs">chapter 14</a>; the licence, and what it means for both
+    interfaces the server answers, is in <a href="#ch-27-reference">chapter 27</a>. Nothing in this guide
+    asks you to open another file: every cross-reference is a chapter of this guide.
   </p>
 
   <aside class="note">
@@ -630,9 +630,8 @@ footer.site .signoff {
   <ul>
     <li>
       <strong>Listeners</strong> read the call history and the recordings over the HTTP REST API, and follow
-      live calls over the server's real-time channel. The REST API is free to use for any purpose; the
-      real-time channel is proprietary, reserved for Saubeo Solutions and its native applications, as
-      <a href="#ch-27-reference">chapter 27</a> states.
+      live calls over the server's real-time channel. Both are free to use for any purpose, under the same
+      terms as the rest of the server, as <a href="#ch-27-reference">chapter 27</a> states.
     </li>
     <li>
       <strong>Downstreams</strong> forward calls to another Rdio Scanner deployment, presenting an API key
@@ -2707,8 +2706,10 @@ rm -f ${basename}.*</code></pre>
       <strong>The listener connection</strong> is taken over the address the scanner webapp is served from:
       the same path answers a browser and a listener, and the upgrade header decides which. The server asks
       a restricted server's listeners for an access code, sends the configuration their scope grants, and
-      streams the calls. This connection is reserved for Saubeo Solutions and its native applications; the
-      position is stated in <a href="#ch-27-reference">chapter 27</a>.
+      streams the calls. The connection carries no licence restriction of its own: it is under the same GNU
+      General Public License as every other interface the server answers, as
+      <a href="#ch-27-reference">chapter 27</a> states, and what gates it is the deployment's own access
+      code.
     </li>
     <li>
       <strong>The administration connection</strong> at <code>/api/admin/config</code> is how an open
@@ -4321,31 +4322,25 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   </p>
 
   <p>
-    The <strong>HTTP REST API</strong> is not restricted. It is available under the GPL terms for every
-    use, self-hosted deployments and third-party applications included: the endpoints in
-    <a href="#ch-16-rest-api">chapter 16</a> are yours to drive.
+    That position covers the whole server, and both of the interfaces it answers. The <strong>HTTP REST
+    API</strong> — the endpoints in <a href="#ch-16-rest-api">chapter 16</a> — is available under the GPL
+    terms for every use, self-hosted deployments and third-party applications included. The
+    <strong>real-time connection</strong> a listener holds open, the one taken over the address the scanner
+    webapp is served from, is under the same terms: it is part of the server, not a service standing beside
+    it.
   </p>
 
   <p>
-    The <strong>WebSocket API</strong> — the connection a listener holds open, the one taken over the
-    address the scanner webapp is served from — is a proprietary real-time channel provided by Saubeo
-    Solutions, and it is the exception to the GPL position. It is available through Saubeo Solutions'
-    hosted service for its native applications and the integrated scanner webapp. A self-hosted deployment
-    answers the HTTP REST API without restriction; a self-hosted deployment whose own clients use the
-    WebSocket API needs a prior written licence agreement with Saubeo Solutions. Authorized clients use
-    the credentials Saubeo Solutions provides and do not share them.
+    What limits a listener is the deployment's own choice, not the licence. A server configured with access
+    codes asks a listener for one, and a server configured without them answers openly. The access code
+    decides which systems and talkgroups a listener is given; the licence decides what anyone may do with
+    the software.
   </p>
 
   <p>
-    The restrictions that go with that position: the WebSocket API is not used without authorization, not
-    used in a commercial application or service without a licence agreement, not reverse-engineered,
-    replicated, or redistributed, and not unlocked by modifying the code that restricts it. Access can be
-    revoked, an agreement terminated, and unauthorized use pursued. The reason the project states is that
-    the channel funds the development.
-  </p>
-
-  <p>
-    To ask about licensing, write to <strong>rdio-scanner@saubeo.solutions</strong>.
+    Nothing here needs an agreement with anyone. A self-hosted deployment answers the HTTP REST API and the
+    real-time connection alike, for its own webapp, its own native applications, and its own third-party
+    clients.
   </p>
 
   <h3>The ffmpeg licence</h3>
@@ -4399,9 +4394,9 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 <footer class="site" role="contentinfo">
   <div class="wrap">
     <p>
-      Rdio Scanner is free software under the GNU General Public License, version 3. The HTTP REST API
-      is available for all uses; the WebSocket API is proprietary to Saubeo Solutions and self-hosted
-      use of it requires a licence agreement.
+      Rdio Scanner is free software under the GNU General Public License, version 3. Every interface the
+      server answers — the HTTP REST API and the real-time listener connection alike — is available for all
+      uses under those terms.
     </p>
     <p>
       This document is written for the server and its administration interface. It carries its own

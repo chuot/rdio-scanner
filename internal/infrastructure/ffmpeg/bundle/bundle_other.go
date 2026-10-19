@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 //go:build !(linux && amd64) && !(linux && arm64) && !(linux && arm) && !(linux && 386) && !(windows && amd64) && !(darwin && amd64) && !(darwin && arm64) && !(freebsd && amd64)
 

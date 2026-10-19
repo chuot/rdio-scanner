@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 package app
 
@@ -561,10 +556,11 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	adminAPI.Register(mux)
 	uploads.Register(mux)
 
-	// The call history surface is registered unconditionally. It is the GPL HTTP half of the
-	// recorded-call capability — the side the access policy leaves unrestricted — and it is what
-	// the Model Context Protocol surface is built on. A deployment that never enabled the MCP
-	// surface still answers its call history over REST, the way it answers every other REST route.
+	// The call history surface is registered unconditionally. It is the HTTP half of the
+	// recorded-call capability — open to any client under the same GNU General Public License the rest
+	// of the server is under — and it is what the Model Context Protocol surface is built on. A
+	// deployment that never enabled the MCP surface still answers its call history over REST, the way it
+	// answers every other REST route.
 	callsAPI := callsbackend.NewCalls(callsbackend.CallsDeps{
 		Call:    application.NewGetCallQueryHandler(calls),
 		Clock:   s.clock,

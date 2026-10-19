@@ -12,11 +12,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
-//
-// WebSocket API Access Policy:
-// This WebSocket API is reserved exclusively for Saubeo Solutions and its native applications.
-// Unauthorized access is strictly prohibited.
-// See API_ACCESS_POLICY.md for full terms.
 
 package acceptance
 
@@ -32,10 +27,9 @@ import (
 )
 
 // The call history over HTTP is the journey a listener has today on the listener socket, taken off
-// the socket: search the history, read one call, fetch one recording. The socket is reserved for
-// Saubeo Solutions; the HTTP REST surface is the part of the server the access policy leaves
-// unrestricted, so this is the surface a third-party client — and the Model Context Protocol surface
-// built on it — reaches the history through.
+// the socket: search the history, read one call, fetch one recording. The socket and this surface reach
+// the same history and are under the same licence, so this is the surface a third-party client — and the
+// Model Context Protocol surface built on it — reaches the history through.
 //
 // These journeys run against a server with a real database, a real upload that put the call in it,
 // and the real access list, because the thing being proved is the seam: the paging the history
