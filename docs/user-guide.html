@@ -448,6 +448,357 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-01-overview">1 · The scanner webapp, and this guide</h2>
+
+  <p class="lead">
+    Rdio Scanner is a server that collects the recordings a software-defined radio recorder writes, works out
+    which system, site, talkgroup, and unit each recording came from, keeps them, and hands them to the people
+    who listen. This guide is about the part you listen with: the page the server serves at its own root
+    address, where calls arrive as they happen, where you choose what you want to hear, and where you search the
+    calls the server has already kept.
+  </p>
+
+  <p>
+    It is one page, it needs nothing installed, and it is kept in your browser — so it opens even when the server
+    cannot be reached. What it can show you with no server is a chapter of its own, and so is what happens on a
+    phone or a tablet.
+  </p>
+
+  <aside class="note">
+    <span class="label">How the name is said</span>
+    <p class="pron">
+      <strong>Rdio Scanner</strong>
+      <span class="ipa">/ˈreɪ.di.oʊ ˈskæn.ər/</span>
+      <span class="syllables">RAY-dee-oh SCAN-er</span>
+    </p>
+    <p>
+      The name is written <em>Rdio</em> and spoken <em>Raydio</em>. The written name is the one on the screen and
+      in this guide; the spoken name is the one to use when you have to ask an operator about a call, because
+      saying it out loud is enough for them to know which product you mean.
+    </p>
+  </aside>
+
+  <h3>Who this guide is for</h3>
+
+  <p>
+    It is written for the person who listens, and for the operator who hands it to them. Everything in it is
+    written from the listening side of the deployment: what a control does when you press it, what the screen says
+    when something has gone wrong, and what you can and cannot settle yourself. Nothing in it asks you to
+    configure a server, and nothing in it assumes you can. Where a thing can only be settled by the operator who
+    runs the server, the guide says so and says what to tell them.
+  </p>
+
+  <h3>What this guide does not cover</h3>
+
+  <p>
+    The server itself is not covered here: installing it, meeting its requirements, configuring what it records
+    and how long it keeps it, driving its administration interface, and driving its APIs. The administration
+    interface lives at a separate address of the same server — the operator's own screens, which the server names
+    <code>/admin</code> when it starts — and the administrator guide, published beside this one, covers all of it.
+    Where a listener needs the operator's guide, this guide names it in words rather than as a file, because the
+    copy you are reading may be all you have.
+  </p>
+
+  <p>
+    The native applications for Android and Apple are named here and not described. The listening application
+    offers them on a small screen, which is described in the chapter about phones and tablets; the applications
+    in the stores have their own screens, their own settings, and their own maintainers, and this guide documents
+    none of them and links to no store.
+  </p>
+
+  <h3>What's new since version 6.6.3</h3>
+
+  <p>
+    If you listened to version 6.6.3, the screens are the screens you knew: the same main screen, the same
+    controls, the same search. What changed is what happens behind them, and some of it changes what you hear and
+    when you hear it. Version 7 was assembled and never published, so everything it brought arrives together with
+    version 8. Each row below names the change, what it does to the way you listen, and the chapter of this guide
+    that operates it.
+  </p>
+
+  <table>
+    <caption>
+      Everything that changed between version 6.6.3 and version 8, and the chapter of this guide that operates it.
+    </caption>
+    <thead>
+      <tr>
+        <th scope="col">What changed</th>
+        <th scope="col">What it means for the way you listen</th>
+        <th scope="col">Where this guide operates it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The listening application was rewritten.</td>
+        <td>
+          It is written without a framework now, and the screens, the controls, and the words on them are the ones
+          you knew. Nothing you did in the old page has to be learned again.
+        </td>
+        <td><a href="#ch-02-the-main-screen">The main screen</a></td>
+      </tr>
+      <tr>
+        <td>The listening application and the administration interface became two separate applications.</td>
+        <td>
+          Each has its own address, its own manifest, and its own offline worker. A listener's browser is never
+          asked to hold the operator's screens, and the two applications are updated independently.
+        </td>
+        <td><a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a></td>
+      </tr>
+      <tr>
+        <td>The look, geometry, and motion of the listening screens were rebuilt.</td>
+        <td>
+          Measured against the earlier application rather than approximated: the same sizes, the same positions,
+          the same distances a press moves things.
+        </td>
+        <td><a href="#ch-02-the-main-screen">The main screen</a></td>
+      </tr>
+      <tr>
+        <td>The main screen was brought back to the version 6.6.3 look and behaviour.</td>
+        <td>
+          The plain server light, the two-column display rows, the bevelled controls, the history mechanics, the
+          avoid cycle, the holds, and the walk through replayed calls are the ones version 6.6.3 had, with a short
+          list of what deliberately stays different.
+        </td>
+        <td>
+          <a href="#ch-02-the-main-screen">The main screen</a>,
+          <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
+          <a href="#ch-06-what-the-display-says">What the display says</a>
+        </td>
+      </tr>
+      <tr>
+        <td>Alert tones.</td>
+        <td>
+          Before a live call's recording begins, you hear the sound an operator assigned to it, resolved group
+          first, then tag, then system, then talkgroup, out of nine built-in sequences. A call you replay, a call
+          you reach through a search, and anything in playback mode all begin with no tone in front of them.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <td>A talkgroup can belong to more than one group, and every one of them counts.</td>
+        <td>
+          A group's colour and a group's tone now apply to a talkgroup that belongs to it as well as to one whose
+          first group happens to be it, which is where they previously could not apply.
+        </td>
+        <td>
+          <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
+          <a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a>
+        </td>
+      </tr>
+      <tr>
+        <td>Colours and tones can be assigned to groups and tags, not only to systems and talkgroups.</td>
+        <td>
+          The colour a call is painted in, and the tone in front of it, can now follow a group or a tag you share
+          across systems rather than being repeated for every talkgroup.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <td>A press in the select panel is a plain switch off or on.</td>
+        <td>
+          It clears a timed avoid that was armed elsewhere, and the timed windows belong to the control bar's
+          <code>AVOID</code> alone. Each press plays its confirmation tone in the direction of the state it is
+          leaving, and each button states its status to a screen reader.
+        </td>
+        <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
+      </tr>
+      <tr>
+        <td>The timed-avoid flag draws its hourglass as a monochrome symbol.</td>
+        <td>
+          It is drawn in the display's own colour rather than as an emoji, and the minutes beside it are unchanged.
+          The symbol depends on a font that carries it, so on a machine whose font does not, the shape you see is
+          different.
+        </td>
+        <td>
+          <a href="#ch-06-what-the-display-says">What the display says</a>,
+          <a href="#ch-11-when-something-does-not-work">When something does not work</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The queue count falls on every skip.</td>
+        <td>
+          It no longer climbs as you skip, and it counts what is live at the moment it is painted, including calls
+          that arrived while an alert tone was still open.
+        </td>
+        <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
+      </tr>
+      <tr>
+        <td>Searched playback walks toward the newest call in either sort order.</td>
+        <td>
+          The queue count in the search panel names the calls that will play, including the one playing now, and it
+          honours the filters you have set.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <td>Pause, skip, and stop do what their names say.</td>
+        <td>
+          A recording in flight is silenced rather than left running, a skip or a stop actually stops it, and the
+          elapsed time follows the audio rather than the wall clock.
+        </td>
+        <td>
+          <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
+          <a href="#ch-06-what-the-display-says">What the display says</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The search panel's System and Talkgroup filters actually filter.</td>
+        <td>
+          The panel sends the references the server reads, the form is held while a search is in flight, paging
+          during a search asks for nothing, the Date field is bounded to the window the server answered, and a
+          criterion the server does not recognise leaves the list unfiltered instead of emptying it.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <td>Every result row carries its duration.</td>
+        <td>
+          The length comes from the recorder's own declaration, the converter's report, or a probe of the file, in
+          that order of trust.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <td>No page scrollbars while a drawer slides, and the search progress bar completes on an empty answer.</td>
+        <td>
+          Opening the select or search panel no longer shakes the page, and a search that finds nothing still
+          finishes its bar instead of leaving it hanging.
+        </td>
+        <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
+      </tr>
+      <tr>
+        <td>Delayed audio.</td>
+        <td>
+          A system or a talkgroup can hold a call for whole minutes. The hold is measured from when the call
+          happened, a held call cannot be searched until its hold has run out, and when it arrives it is flagged
+          <code>Delayed</code>.
+        </td>
+        <td>
+          <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
+          <a href="#ch-06-what-the-display-says">What the display says</a>,
+          <a href="#ch-11-when-something-does-not-work">When something does not work</a>
+        </td>
+      </tr>
+      <tr>
+        <td>Systems and talkgroups have types.</td>
+        <td>
+          A type is a rule about how that talkgroup's audio arrives, and it is one of the reasons two talkgroups
+          you are both listening to behave differently.
+        </td>
+        <td>
+          <a href="#ch-06-what-the-display-says">What the display says</a>,
+          <a href="#ch-12-reference">Reference</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The <code>Tags</code> toggle is gone from the select panel.</td>
+        <td>
+          Groups are the categories you switch between, and a talkgroup can sit in more than one of them.
+        </td>
+        <td>
+          <a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a>,
+          <a href="#ch-12-reference">Reference</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The listening screens were brought up against the accessibility standard.</td>
+        <td>
+          A skip link first in the keyboard route, landmarks and headings, a drawn focus indicator, status spoken
+          rather than only shown, motion you can turn off, raised contrast, support for a machine whose colours you
+          chose, targets at least 24 pixels across, reflow at 320 CSS pixels, labelled fields, and a keyboard route
+          into full screen. The chapter on keyboards and screen readers also names what still falls short and what
+          carries a state besides colour.
+        </td>
+        <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
+      </tr>
+      <tr>
+        <td>Access codes were made explicit.</td>
+        <td>
+          The unlock screen and the code it stores, a code that has expired, a code that is wrong, too many
+          connections at once, a code's own connection limit, and an attempt budget counted both per session and
+          per address.
+        </td>
+        <td><a href="#ch-07-access-codes">Access codes and the unlock screen</a></td>
+      </tr>
+      <tr>
+        <td><code>/reset</code> and <code>?id=</code>.</td>
+        <td>
+          One address clears everything the application kept in your browser; the other gives one listener several
+          independent selections on one server.
+        </td>
+        <td>
+          <a href="#ch-07-access-codes">Access codes and the unlock screen</a>,
+          <a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a>
+        </td>
+      </tr>
+      <tr>
+        <td>The application installs, works offline, and asks before reloading.</td>
+        <td>
+          It can be added to a home screen, its shell is kept available with no server, and when a new version is
+          published it asks you before it reloads the page out from under you.
+        </td>
+        <td><a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a></td>
+      </tr>
+      <tr>
+        <td>The branding line, the help affordance, and the promotion of the native applications.</td>
+        <td>
+          The line an operator sets appears at the top of the screen, the help affordance names the operator's own
+          support address, and a phone is offered the native applications.
+        </td>
+        <td>
+          <a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a>,
+          <a href="#ch-09-help-and-support">Help and support</a>
+        </td>
+      </tr>
+      <tr>
+        <td>Retention.</td>
+        <td>
+          A deployment removes calls older than the operator's retention setting, on an hourly pass, and only
+          retained calls can ever appear in a search.
+        </td>
+        <td>
+          <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
+          <a href="#ch-11-when-something-does-not-work">When something does not work</a>
+        </td>
+      </tr>
+      <tr>
+        <td>Converted audio.</td>
+        <td>
+          A deployment that converts audio hands you the converted recording, and the level the operator chose
+          changes what you hear: the converter now writes AAC at 32 kilobits per second in an <code>m4a</code>
+          container.
+        </td>
+        <td>
+          <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
+          <a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a>,
+          <a href="#ch-12-reference">Reference</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>What the update costs you</h3>
+
+  <p>
+    The update is the operator's, not yours, and there is nothing for you to install. What it costs a listener is
+    small and worth knowing in advance, because it is the kind of thing that looks like a broken deployment on the
+    day it happens:
+  </p>
+
+  <ul>
+    <li>
+      The operator's database is upgraded in place. It is the same database, with its recorded calls, at the same
+      address; it is not copied somewhere new.
+    </li>
+    <li>Every administration session that was open when the update ran ends. That is the operator's screens, not
+      your listening.</li>
+    <li>A stored access code may have to be presented again. If the screen opens straight to the unlock screen
+      after an update, that is why, and the code is the one the operator gave you.</li>
+    <li>
+      A saved selection may need clearing. The selection the application kept in your browser can survive the
+      update in a shape the new application does not recognise, and <code>/reset</code>, which the chapter on
+      phones and tablets describes, puts it back to a starting point.
+    </li>
+  </ul>
 </section>
 
 <section>

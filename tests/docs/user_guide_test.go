@@ -101,6 +101,18 @@ func userGuideChapter(t *testing.T, body, id string) string {
 	return body[start:end]
 }
 
+// isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
+// cross-reference has to land on.
+func isUserGuideChapter(id string) bool {
+	for _, want := range userGuideChapters {
+		if want == id {
+			return true
+		}
+	}
+
+	return false
+}
+
 // The guide renders everything it shows from bytes inside itself: its stylesheet, and every picture once the
 // pictures are in. A listener with no network gets the whole document, not a document with holes in it.
 func TestTheUserGuideCarriesEverythingItRendersInsideItself(t *testing.T) {
@@ -350,6 +362,80 @@ func TestTheUserGuideCarriesTheReadingsAPrintedAndARecolouredPageNeeds(t *testin
 
 	if at := strings.Index(style[1], "forced-color-adjust"); at >= 0 {
 		t.Errorf("the guide's stylesheet pins a colour of its own to something at offset %d, which is what a reader's chosen colours are for", at)
+	}
+}
+
+// A listener who used version 6.6.3 is the reader this guide is written for first: the screens are the ones they
+// knew, and everything that changed arrived in the update they have just been given. A change the reader cannot
+// act on is not news, so each change names the chapter that operates it, and the update's own cost is said
+// rather than left to be discovered on the day the operator upgrades the server.
+func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
+	body := userGuidePath(t)
+	chapter := userGuideChapter(t, body, "ch-01-overview")
+
+	start := strings.Index(chapter, "What's new since version 6.6.3")
+	if start < 0 {
+		start = strings.Index(chapter, "What&#39;s new since version 6.6.3")
+	}
+
+	if start < 0 {
+		t.Fatalf("the opening chapter does not carry the changes since version 6.6.3")
+	}
+
+	section := chapter[start:]
+
+	links := regexp.MustCompile(`(?i)href="([^"]+)"`).FindAllStringSubmatch(section, -1)
+
+	if len(links) < 25 {
+		t.Errorf("the changes since version 6.6.3 name %d chapters, want a chapter to act on for each of the twenty-five changes the update brought", len(links))
+	}
+
+	for _, m := range links {
+		href := m[1]
+
+		if !strings.HasPrefix(href, "#") {
+			t.Errorf("the changes since version 6.6.3 point at %q, outside the document", href)
+
+			continue
+		}
+
+		if !strings.Contains(body, `id="`+strings.TrimPrefix(href, "#")+`"`) {
+			t.Errorf("the changes since version 6.6.3 point at %q, which the document does not carry", href)
+
+			continue
+		}
+
+		if !isUserGuideChapter(strings.TrimPrefix(href, "#")) {
+			t.Errorf("the changes since version 6.6.3 point at %q, which is not one of this guide's chapters", href)
+		}
+	}
+
+	for _, cost := range []string{"upgraded in place", "access code", "/reset", "selection"} {
+		if !strings.Contains(section, cost) {
+			t.Errorf("the changes since version 6.6.3 do not name the cost of the update to a listener: %q is missing", cost)
+		}
+	}
+}
+
+// The opening chapter says what the listener will not find here — the server and its administration, and the
+// native applications the operator may also have offered — because a guide that reaches for both answers neither
+// well. It also says how the product's name is read, which is the first thing a listener who has to ask an
+// operator about it needs.
+func TestTheUserGuideSaysWhatItLeavesOutAndHowTheNameIsRead(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-01-overview")
+
+	for _, want := range []string{"native applications", "administration", "does not cover"} {
+		if !strings.Contains(chapter, want) {
+			t.Errorf("the opening chapter never names %q, so the reader is left to find out what this guide leaves out", want)
+		}
+	}
+
+	if !strings.Contains(chapter, `<span class="syllables">`) {
+		t.Errorf("the opening chapter never says how the name is read, which is what a listener needs in order to ask about it")
+	}
+
+	if !strings.Contains(chapter, "Raydio") {
+		t.Errorf("the opening chapter never gives the name as it is spoken, so the written name and the spoken name are left to be guessed apart")
 	}
 }
 
