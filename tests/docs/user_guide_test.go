@@ -246,6 +246,16 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 			t.Errorf("the figure %q carries no caption", id)
 		}
 	}
+
+	// The paused light's normal reading is an alternation of the light's own face, not a ring around it: the shipped
+	// stylesheet switches the lit face to the grey the light wears at rest, and the standing ring is what the reading
+	// that asks for less motion answers with. A draft of this chapter described the ring as the normal reading, and a
+	// reader who believed it would look for a mark that is not on the page.
+	for _, superseded := range []string{"the ring blinks", "always blinking"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on the main screen carries %q, which describes a mark the shipped page does not draw in that state", superseded)
+		}
+	}
 }
 
 // The third chapter operates the listening controls. What it says about them has to match what the browser
@@ -323,6 +333,20 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 
 		if !strings.Contains(slot[1], "<figcaption>") {
 			t.Errorf("the figure %q carries no caption", id)
+		}
+	}
+
+	// Only two lights on the shipped page animate: the server light while audio is held, and a talkgroup's button in
+	// the select panel while that talkgroup sits inside a timed window. The four lights on the control bar are drawn
+	// once and only their colour changes. A draft of this chapter told the reader the live feed light is always
+	// blinking, and a listener who believed it would be hunting for a signal the screen never draws.
+	if !strings.Contains(spoken, "shape") {
+		t.Errorf("the chapter on live calls never says that the state light's shape does not change, which is the fact a reader needs in order to know the colour is the whole of the signal")
+	}
+
+	for _, superseded := range []string{"blinking", "blinks"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on live calls carries %q, which describes motion the shipped control bar does not draw", superseded)
 		}
 	}
 }
@@ -684,6 +708,64 @@ func TestTheUserGuideSaysWhoToAskAndWhatToSay(t *testing.T) {
 
 	if !strings.Contains(slot[0], "<figcaption>") {
 		t.Errorf("the figure %q carries no caption", "help-snackbar")
+	}
+}
+
+// The tenth chapter is the one a keyboard user and a screen-reader user are meant to trust: it names what the
+// application does for them, what it leaves to colour, and the colour figures that were measured. Its own promises
+// are what this check holds it to — the sentences the shipped page speaks, the names the shipped page gives its own
+// controls, the measured figures, and exactly the three figures the figure inventory gives this chapter.
+func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-10-keyboard-and-screen-readers")
+
+	spoken := guideSpoken(chapter)
+
+	for _, name := range []string{
+		"Rdio Scanner", "Skip to contents", "Server status:", "Close search panel", "Close select panel",
+		"Fullscreen", "Exit fullscreen", "AVOID", "PATCH", "DELAYED",
+	} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on keyboards and screen readers never names %q, which is a name the shipped page gives itself", name)
+		}
+	}
+
+	for _, fact := range []string{
+		"Queue:", "Playing", "Paused", "Stopped", "Searching calls", "Page",
+		"reduced motion", "forced colours", "4.5 to 1", "3 to 1", "2.07", "48", "zoom", "320", "landmark",
+	} {
+		if !strings.Contains(spoken, fact) {
+			t.Errorf("the chapter on keyboards and screen readers never gives %q, which is a sentence the shipped page speaks or a figure or rule the chapter was written to report", fact)
+		}
+	}
+
+	// The two figures this feature first measured wrongly, and the claim one of them was written to support. The
+	// corrected figures are on the record; a chapter that repeated the superseded ones would be publishing a fault
+	// the shipped page does not have.
+	for _, superseded := range []string{"2.61", "1.00", "invisible by design", "always blinking"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on keyboards and screen readers carries %q, which is a superseded figure or the claim it was written to support", superseded)
+		}
+	}
+
+	// Three figures, which is all the figure inventory gives this chapter.
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 3 {
+		t.Errorf("the chapter on keyboards and screen readers carries %d figures, and the inventory gives it exactly three", len(figures))
+	}
+
+	for _, id := range []string{"main-320-reflow", "keyboard-focus", "forced-colours"} {
+		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">.*?</figure>`).FindString(chapter)
+		if slot == "" {
+			t.Fatalf("the chapter on keyboards and screen readers does not carry the figure %q", id)
+		}
+
+		alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot)
+		if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with nothing to say about it", id)
+		}
+
+		if !strings.Contains(slot, "<figcaption>") {
+			t.Errorf("the figure %q carries no caption", id)
+		}
 	}
 }
 

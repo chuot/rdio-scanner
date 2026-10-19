@@ -887,8 +887,10 @@ footer.site .signoff {
       from a group, a tag, the system, or the talkgroup itself, in that order of being looked at first.
     </li>
     <li>
-      <strong>Paused</strong> while audio is held: the lit square inside a ring. Normally the ring blinks. When
-      your operating system asks for less motion, the ring stands still instead, and carries the same meaning.
+      <strong>Paused</strong> while audio is held: the light alternates between the colour it is lit with and the dark
+      grey it wears at rest, on a cycle that switches rather than fades. When your operating system asks for less
+      motion, the alternation stops and a ring drawn standing around the lit face takes over the meaning — the ring
+      the figure below was photographed in.
     </li>
   </ul>
 
@@ -1009,7 +1011,7 @@ footer.site .signoff {
   <p>
     <code>LIVE FEED</code> decides whether the application is offering you anything at all. Like the other
     controls that carry a state, it has a small light in the upper right corner of its face. That light is present
-    in every state and is always blinking, so the state is told by its colour alone: red for off, green for live,
+    in every state and its shape never changes, so the state is told by its colour alone: red for off, green for live,
     yellow for a search holding the feed. Nothing else on the control says which state it is in, and the chapter on
     keyboards and screen readers gives the measured figures for those colours and says what a reader who cannot
     tell them apart has to work from.
@@ -2005,10 +2007,13 @@ footer.site .signoff {
   <p>
     The hourglass is worth knowing about on its own. Every other mark on this screen is drawn from an icon set the
     application ships with itself and never asks the internet for; the timed-avoid mark is a single character,
-    <code>⧖</code>, written into the text of the row. Whether it reaches your eye at all depends on the font your
-    browser has for that character, so on a machine without the glyph it can appear as a box or as nothing, with the
-    minutes still beside it. Where the symbol is missing, the minutes are still the reading to trust, and the chapter
-    on keyboards and screen readers gives what the selection panel says about the same state in words.
+    <code>⧖</code>, written into the text of the row. That character is in none of the faces the application ships, so
+    the page carries a rule offering a font family for that one character and nothing else — its letters and its
+    digits keep the face every other line on the screen uses — drawn from four faces already on the machine, which is
+    what keeps the mark from arriving as an empty box on a plain Linux install. Where none of those four is installed
+    the mark can still appear as a box, or as nothing, with the minutes still beside it, and the minutes are then the
+    reading to trust. The chapter on keyboards and screen readers counts that rule as one of the things the
+    application does well, and gives what the selection panel says about the same state in words.
   </p>
 
   <h3>The history table</h3>
@@ -2722,6 +2727,432 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-10-keyboard-and-screen-readers">10 · Keyboard and screen readers</h2>
+
+  <p class="lead">
+    The listening screen grew out of a version that carried none of this, and what it now carries for a keyboard and a
+    screen reader is worth knowing in both directions. There is more on the page than what you can see. And some of
+    what you can see is the only place a piece of information lives. This chapter gives both, and the colour figures
+    behind them: the guide measured the listening screens against WCAG 2.2 at its AA conformance level, and the
+    figures here come from the colours the shipped page declares rather than from judging a picture of it.
+  </p>
+
+  <h3>Getting onto the page, and what is on it</h3>
+
+  <p>
+    The first thing the page offers is a link named <code>Skip to contents</code>, ahead of everything else, and it
+    moves the keyboard to the part of the page that holds the screen. That part carries the name <code>Rdio
+    Scanner</code>, given to it by a heading the page keeps hidden from the eye and hands to a screen reader — which is
+    what lets a reader move by landmark and land on the listening screen by name instead of by counting positions.
+    Each panel is a landmark of its own, and the landmark carries no name of its own: what says which panel a panel
+    is, is a heading the page keeps hidden from the eye — <code>Search</code> and <code>Select</code> — and the close
+    control, <code>Close search panel</code> and <code>Close select panel</code>, which names the panel by saying what
+    pressing it does. A reader who moves from heading to heading finds both panels by name; a reader who moves from
+    landmark to landmark is handed two regions with nothing on them saying which is which.
+  </p>
+
+  <h3>Where the keyboard goes when a panel opens, and where it comes back</h3>
+
+  <p>
+    A drawer that slides out under a press and leaves the keyboard sitting on the control that opened it puts the panel
+    behind the reader in the tab order, so the page marks a landing place inside each panel. Opening one moves the
+    keyboard to that marked control. A panel that marks nothing takes the first control its own content offers, and a
+    panel with nothing to work in takes the control that closes it. Closing a panel puts the keyboard back on the
+    control that opened it, because focus left standing on a control that has just left the page lands the reader at
+    the top of the document.
+  </p>
+
+  <p>
+    The marked landing place matters because a panel rebuilds its own content while the page answers. The search panel
+    repaints every row of its table on each answer, so a keyboard standing on a row is standing on a control the answer
+    takes away, and the browser puts the reader at the top of the page. The control a panel marks as its landing place
+    is one its own answers leave standing.
+  </p>
+
+  <p>
+    Every control the keyboard can reach draws a ring around itself when the keyboard arrives, including the panel
+    close controls, the help control, the full-screen control, and the small controls in the search panel. The ring is
+    drawn outside the control rather than over it, which is what keeps a control's own face readable.
+  </p>
+
+  <figure data-shot="keyboard-focus">
+    <img alt="The control row of the listening screen with a green outline drawn around the SELECT TG button and no pointer involved; the four controls that have an on-or-off state — LIVE FEED, HOLD SYS, HOLD TG, and PAUSE — each carry a small red light in their corner, and the five controls with no state carry none.">
+    <figcaption>A control reached by key presses only, with its focus indicator drawn around it.</figcaption>
+  </figure>
+
+  <h3>What the page says out loud</h3>
+
+  <p>
+    The page carries one live region, and it is kept empty until something happens: a region that holds permanent text
+    tells a screen reader the page is answering every time it paints. A sentence is written into it only when the thing
+    that sentence names changes, and the first painting of a page is silent. It holds one sentence at a time, and a new
+    writing replaces it, so two things changing in the same beat are given as the later one. These are the sentences,
+    in the application's own words:
+  </p>
+
+  <ul>
+    <li>
+      <q>Queue:</q> and a number, when the queue of calls waiting to be heard changes.
+    </li>
+    <li>
+      <q>Playing</q> or <q>Paused</q> and the talkgroup's label, when the audio in front of you starts or stops for a
+      reason you caused.
+    </li>
+    <li>
+      <q>Stopped</q> and the name the display was showing, when a call ends.
+    </li>
+    <li>
+      <q>Searching calls</q>, when a search begins, and then the number of calls the answer found.
+    </li>
+    <li>
+      <q>Page</q> and a number, when the results are turned to another page.
+    </li>
+  </ul>
+
+  <p>
+    The notices the page shows along its bottom — the two described in <a href="#ch-08-on-your-phone-or-tablet">the
+    chapter on phones and tablets</a> and <a href="#ch-09-help-and-support">the chapter on help and support</a> — are a
+    separate announcement surface, and neither carries a dismiss control. Each one's countdown is a bare number written
+    into the same block of text as its sentence and rewritten once a second, which is why the countdown reads as part of
+    the sentence rather than as a number after it.
+  </p>
+
+  <h3>State that is said in words, and state that is only a colour</h3>
+
+  <p>
+    This is where the application is uneven, and the difference is worth having straight. The table below says, for each
+    thing the screen reports about itself, what a reader is given besides its colour.
+  </p>
+
+  <table>
+    <caption>What each state on the listening screen carries besides colour.</caption>
+    <thead>
+      <tr>
+        <th scope="col">The thing on the screen</th>
+        <th scope="col">What it carries besides colour</th>
+        <th scope="col">What is left to colour</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The server light beside the deployment's name</td>
+        <td>Its name says the state outright: <code>Server status:</code> followed by which state it is in.</td>
+        <td>Which state looks like which colour — its shape is the same in all three, and the paused state is told by
+          a blink.</td>
+      </tr>
+      <tr>
+        <td>The full-screen control</td>
+        <td>Its name names the move it will make — <code>Fullscreen</code> or <code>Exit fullscreen</code> — and it
+          carries <code>aria-pressed</code>, so the state is in the control's name. It exists at all because the
+          double-click that also enters full screen has no keyboard equivalent.</td>
+        <td>Nothing.</td>
+      </tr>
+      <tr>
+        <td>The select panel's buttons</td>
+        <td>Each carries <code>aria-pressed</code>, and a group button's name carries its state as a word:
+          <code>on</code>, <code>off</code>, or <code>partial</code>.</td>
+        <td>The corner light carries the same fact faster, and a reader who cannot see it is given the words instead.</td>
+      </tr>
+      <tr>
+        <td>The four controls on the control bar that have a state — <code>LIVE FEED</code>, <code>HOLD SYS</code>,
+          <code>HOLD TG</code>, <code>PAUSE</code></td>
+        <td>The feed's state and the pause are said out loud when they change, and the display says the feed's state in
+          its own readings. The two hold controls are not said anywhere.</td>
+        <td>The light in each control's corner is the only sign of the state, it has the same shape in every state, and
+          for the two hold controls nothing else reports them.</td>
+      </tr>
+      <tr>
+        <td>The flags beside the display's readings — <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and
+          the timed window's hourglass <code>⧖</code></td>
+        <td>A flag that is on is a chip with words on it, and the words are the mark.</td>
+        <td>A flag that is off is not drawn at all, so the display offers no mark for the state of not being flagged,
+          and the hourglass is a shape with no word beside it beyond the minutes.</td>
+      </tr>
+      <tr>
+        <td>The search panel while a code has not been accepted, and while an answer is on its way</td>
+        <td>The controls are marked as doing nothing rather than taken away, and the results area is marked as busy, so
+          a reader is told the state of the panel instead of finding that a control has moved.</td>
+        <td>Nothing. This is one of the things the application does the right way.</td>
+      </tr>
+      <tr>
+        <td>The buttons the select panel groups by system, and the row it groups by deployment group</td>
+        <td>Each system's box carries that system's name.</td>
+        <td>The row of group buttons is grouped by a box the page gives no name at all, so a screen reader is handed a
+          group with nothing to say about what its buttons have in common.</td>
+      </tr>
+      <tr>
+        <td>The last column of the search results, which holds the play, stop, and download controls</td>
+        <td>Each control names itself: <code>Play</code>, <code>Stop</code>, <code>Download</code>, and
+          <code>Loading</code> while an answer is being fetched.</td>
+        <td>The column has no heading, so a reader who reads the column across is not told what kind of thing the
+          column is.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    One credit belongs here even though the reader meets it earlier. The mark the page draws for a talkgroup kept out
+    of the feed for a window of minutes is a single character that appears in none of the faces the application ships,
+    and the page carries a rule offering a font family for that one character and for nothing else — the flag's
+    minutes and the words beside it keep the face every other line uses — drawn from four faces already on the
+    machine. Left to a browser's own guess the glyph arrives as an empty box on a plain Linux install, which is where
+    the reading a listener most needs would become a hole in the display.
+    <a href="#ch-06-what-the-display-says">The chapter on what the display says</a> gives what it costs when none of
+    those four faces is installed.
+  </p>
+
+  <h3>The colours, measured</h3>
+
+  <p>
+    The standard sets two floors. Words a person reads are measured against 4.5 to 1, unless they are large enough for
+    the lower 3 to 1. A thing that carries meaning by how it looks — a light, an outline, an icon you press — is
+    measured against 3 to 1. These are the colours the listening page paints, measured from the colours it declares,
+    with the transparency the page paints through composited onto the surface beneath it.
+  </p>
+
+  <table>
+    <caption>The measured colour pairs, against the floor each one answers.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Colour pair</th>
+        <th scope="col">Floor</th>
+        <th scope="col">Measured</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The display's readings on the face it wears while a call plays</td>
+        <td>4.5 to 1</td>
+        <td>10.98 to 1</td>
+      </tr>
+      <tr>
+        <td>The display's readings on the resting face</td>
+        <td>4.5 to 1</td>
+        <td>8.07 to 1</td>
+      </tr>
+      <tr>
+        <td>A lit flag's words on the flag's own chip, during a call</td>
+        <td>4.5 to 1</td>
+        <td>7.58 to 1</td>
+      </tr>
+      <tr>
+        <td>A lit flag's words on the flag's own chip, on the resting display</td>
+        <td>4.5 to 1</td>
+        <td>6.08 to 1</td>
+      </tr>
+      <tr>
+        <td>A control's label on its face</td>
+        <td>4.5 to 1</td>
+        <td>13.77 to 1</td>
+      </tr>
+      <tr>
+        <td>The deployment's name across the top of the screen</td>
+        <td>4.5 to 1</td>
+        <td>5.64 to 1</td>
+      </tr>
+      <tr>
+        <td>A panel's readings, and its play and download glyphs, on the panel's white content surface</td>
+        <td>4.5 to 1 and 3 to 1</td>
+        <td>16.10 to 1</td>
+      </tr>
+      <tr>
+        <td>A paginator control's glyph on its surface</td>
+        <td>3 to 1</td>
+        <td>4.61 to 1</td>
+      </tr>
+      <tr>
+        <td>The state light on a control's face, lit green, lit yellow, lit red</td>
+        <td>3 to 1</td>
+        <td>8.25 to 1, 11.16 to 1, 3.58 to 1</td>
+      </tr>
+      <tr>
+        <td>The server light on the page, lit green, cyan, yellow, white, orange, red, blue, magenta</td>
+        <td>3 to 1</td>
+        <td>9.99, 10.84, 13.51, 16.67, 7.38, 4.33, 4.19, 4.13 to 1</td>
+      </tr>
+      <tr>
+        <td><strong>The server light on the page, at rest</strong></td>
+        <td>3 to 1</td>
+        <td><strong>2.07 to 1</strong></td>
+      </tr>
+      <tr>
+        <td>The keyboard's ring, on the control it rings and on the page</td>
+        <td>3 to 1</td>
+        <td>4.95 to 1 and 6.00 to 1</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    One pair does not clear its floor: the server light in its resting state, at 2.07 to 1 against the page. It is also
+    the colour that light falls to for half of every blink of the paused state, which is the state the blink exists to
+    tell. The application's answer is the one in the table above — the light's name carries the state in words — and
+    under a device's reduced motion request the paused light gains a standing mark instead of a blink, drawn as a dark
+    band against the lit face and a light band against the page it sits on, so the paused state stops depending on
+    motion and stops depending on a single colour. The tightest of the lit marks is the red state light on a control's
+    face at 3.58 to 1, which clears the floor it answers: the fault with those four controls is not their contrast but
+    that their state is carried by colour alone.
+  </p>
+
+  <p>
+    Two of these pairs are only what they are because of how they were measured. A flag's words are painted on the
+    flag's own dark chip, not on the display's face, and measuring them against the display's face instead would have
+    reported a flag as unreadable when it is one of the clearest things on the screen. An unlit flag is not painted
+    anywhere at all, which is a different fault from an unreadable one, and is named in the table above rather than
+    given a number.
+  </p>
+
+  <h3>The recoloured reading</h3>
+
+  <p>
+    Some readers set their device to draw everything in the system's own colours instead of the page's. Under that
+    reading the page wears the system's canvas and ink, and the parts of it that carry information keep a boundary
+    drawn in that ink: the display area, every control, the server light as a filled square whose name still says which
+    state it is in, and the keyboard's ring in the system's own highlight colour. What does not survive is the small
+    state lights in the corners of the controls, which are taken by the mode outright. That is the clearest case in
+    this chapter of the difference the table above names: where the state was also given in words it survives, and where
+    it was only ever a colour it does not.
+  </p>
+
+  <figure data-shot="forced-colours">
+    <img alt="The listening screen in forced colours: dark text on a white canvas, the display area and each of the nine control buttons outlined in dark ink, the server light a dark filled square, no corner lights on the controls, and a dark ring drawn around the SELECT TG button where the keyboard stopped.">
+    <figcaption>The screen under a forced-colours reading: the page wears the system's canvas and ink, the display area and every control carry a boundary drawn in that ink, the server light is an ink-filled square whose name says which state it is in, the small state lights on the controls are taken by the mode, and the keyboard's ring stands on the control it reached, drawn in the system's own highlight.</figcaption>
+  </figure>
+
+  <h3>Motion, and who can turn it off</h3>
+
+  <p>
+    The page has motion. The server light blinks while audio is held. A talkgroup's button in the select panel blinks
+    in its corner while that talkgroup is held off for a set window of minutes. The search panel shows a progress bar
+    moving while an answer is on its way, and a spinning reload icon in a row while that row's recording is being
+    fetched. The drawers slide open and shut. There is no control anywhere on the screen that turns any of it off. What
+    answers is the reader's own device: the page carries a rule for the operating system's setting for reduced motion,
+    and under it every one of those animations stops, the drawers and the sliding bars arrive already at the state they
+    were heading to, and the paused light gains the standing mark described above instead of a blink. A reader who needs
+    that has to ask the device for it, and cannot ask the page.
+  </p>
+
+  <h3>Sizes, narrow widths, and zoom</h3>
+
+  <p>
+    The smallest pressable things on the screen are the round controls in the search panel — the play, stop, and
+    download controls in its rows, and the four controls that turn its results to another page — and they are 48 CSS
+    pixels across. The nine controls under the display are 40 pixels tall. The standard's floor for a target is 24 by
+    24, and nothing a listener presses is under it. A control the page has itself switched off is a different matter:
+    when there is no further page to turn to, the paginator's four controls are dimmed to 38 percent of the colour its
+    own words are painted in, and the standard asks nothing of a control that is inactive.
+  </p>
+
+  <p>
+    The page sets the width it uses to the device it opened on, and sets no ceiling on the device's own zoom, which is
+    what a reader who needs larger text depends on. At 320 CSS pixels — the narrowest width the application claims, and
+    the one it refuses to go below — everything a listener needs is still on the page, the controls are still three
+    rows of three, and nothing runs off the side. Two readings are trimmed by the boxes they sit in. The display's rows
+    are cut rather than wrapped, and here that is what costs: the deployment's name ends in an ellipsis, which at least
+    says that something was cut, and the version line in the large row is cut off partway with no mark at all. Both
+    readings matter when a listener reports a problem, and <a href="#ch-09-help-and-support">the chapter on help and
+    support</a> says what to say when they will not fit.
+  </p>
+
+  <figure data-shot="main-320-reflow">
+    <img alt="The listening screen at 320 pixels wide with the display rows, the nine control buttons in three rows of three, and the history table stacked inside the window with no horizontal scrollbar; the branding line above the display reads CAPITOL RIDGE DISPAT with an ellipsis, and the version line is cut off partway through its last letter.">
+    <figcaption>The screen at 320 CSS pixels, the narrowest width the application claims: everything the listener needs is still on the page and nothing scrolls sideways. Two lines are trimmed by the boxes they sit in — the branding line ends in an ellipsis, the version line is cut with no mark to say so.</figcaption>
+  </figure>
+
+  <h3>What still falls short</h3>
+
+  <p>
+    Everything below is a fault the measured reading and the shipped page both support. Each one is named with what the
+    application offers a reader who cannot use the thing that is missing, because a fault with an answer in it is a
+    different thing from a fault with none.
+  </p>
+
+  <table>
+    <caption>The listening screen's accessibility faults, and what the application offers beside each.</caption>
+    <thead>
+      <tr>
+        <th scope="col">What falls short</th>
+        <th scope="col">What the application offers beside it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The four state-bearing controls carry their state in colour alone, in a light whose shape never changes.</td>
+        <td>The feed's state and the pause are announced in words when they change, and the display's own rows report
+          the feed. The two hold controls have no such route.</td>
+      </tr>
+      <tr>
+        <td>The server light at rest is 2.07 to 1 against the page, under the floor for a thing that carries meaning by
+          how it looks, and the paused state is told by a blink through that same low-contrast colour.</td>
+        <td>The light's name says the state outright, and a reader who asks the device for reduced motion gets a
+          standing mark in place of the blink.</td>
+      </tr>
+      <tr>
+        <td>Under a forced colours reading the corner lights on the controls are taken entirely.</td>
+        <td>Everything else on the page keeps a boundary in the system's ink, the server light keeps its name, and the
+          select panel's buttons keep the state they carry in words.</td>
+      </tr>
+      <tr>
+        <td>A flag that is off leaves no mark, so the display cannot show the difference between a call with no flags
+          and a display that has nothing to say about flags.</td>
+        <td>A flag that is on is stated in words on its own chip, and the readings a flag would modify are stated
+          whether or not the flag is on.</td>
+      </tr>
+      <tr>
+        <td>The row of group buttons in the select panel is grouped by a box with no name.</td>
+        <td>The system boxes beside it carry their system's name, and each button in the nameless row carries its label
+          and its state.</td>
+      </tr>
+      <tr>
+        <td>The last column of the search results has no heading.</td>
+        <td>Every control in it names itself, so the column is understood from its controls even without its heading.</td>
+      </tr>
+      <tr>
+        <td>The two countdowns write a bare number into the same announced block as their sentence, rewriting it once a
+          second, and neither notice carries a dismiss control.</td>
+        <td>Both notices close by themselves after their count, and the control that showed each one stays on the page
+          to be pressed again.</td>
+      </tr>
+      <tr>
+        <td>The store badge in the notice about the native applications is a link with nothing to say about itself: the
+          Android badge carries neither a title nor text, and the Apple badge is named after the file its artwork came
+          from. It is the only thing in that notice a keyboard can act on.</td>
+        <td>The notice closes by itself in ten seconds, and this guide names both stores in words, so a reader who
+          wants the native application is not forced through an unnamed link to find it.</td>
+      </tr>
+      <tr>
+        <td>Motion is answered only by the reader's device. The page offers no control for it.</td>
+        <td>The page does answer that setting, and answers it by replacing motion with a standing mark rather than by
+          switching the marked state off.</td>
+      </tr>
+      <tr>
+        <td>At 320 CSS pixels the deployment's name is cut with an ellipsis and the version line is cut with no mark to
+          say it happened.</td>
+        <td>The narrow width costs nothing else, and the help chapter says what to report when those two readings will
+          not fit.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    What the application does well is worth saying once plainly, because most of it was a deliberate departure from the
+    version the screen grew out of: the skip link and the named landmark, the landing place inside a panel and the
+    return to the control that opened it, the focus ring on every control the keyboard reaches, the announcements that
+    speak only when something named has changed, the state carried in words where a screen reader needs it, the marked
+    controls and marked results instead of removed ones, the quieted motion that keeps the state motion was carrying,
+    and the one-character font rule that keeps the hourglass a mark. None of that is a courtesy: it is the part of the
+    screen that works when a pointer is not being used, and it is why the faults above can be named against an answer
+    instead of against nothing.
+  </p>
+
+  <h3>This guide, and the same rules</h3>
+
+  <p>
+    The guide carries the two device rules in its own stylesheet: under a request for reduced motion its motion stops,
+    and under a forced colours reading it draws itself in the system's colours rather than its own. Its colours are
+    measured against the same floors as the page's, its figures are given a name and a sentence, no meaning in it is
+    carried by colour alone, and it links to nothing outside itself. Where it describes a fault above it does not soften
+    it, and where it names a figure it names the figure that was measured.
+  </p>
 </section>
 
 <section>
