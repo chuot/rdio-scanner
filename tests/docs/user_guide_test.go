@@ -635,6 +635,58 @@ func TestTheUserGuideDescribesThePhoneAsTheBrowserShowsIt(t *testing.T) {
 	}
 }
 
+// The ninth chapter is about whom a listener can ask and what is worth saying when they ask. The words the shipped
+// help notice and the shipped version line are built from are checked against the sources, and so are the two things
+// the chapter exists to tell a reader: that the help affordance only exists when the operator configured an address,
+// and that the version on the screen belongs to the page rather than to the server.
+func TestTheUserGuideSaysWhoToAskAndWhatToSay(t *testing.T) {
+	chapter := userGuideChapter(t, userGuidePath(t), "ch-09-help-and-support")
+
+	spoken := guideSpoken(chapter)
+
+	for _, name := range []string{"Rdio Scanner v", "Server status", "dev"} {
+		if !strings.Contains(spoken, name) {
+			t.Errorf("the chapter on help and support never names %q, which is a word the shipped screen puts up or a version the shipped build stamps in", name)
+		}
+	}
+
+	// The chapter's own heading carries the word Help, so the check for the control runs on what follows the heading.
+	body := guideSpoken(regexp.MustCompile(`(?is)<h2\b.*?</h2>`).ReplaceAllString(chapter, ""))
+
+	if !strings.Contains(body, "Help") {
+		t.Errorf("the chapter on help and support never names the Help control, which is the only control the screen offers for finding a support address")
+	}
+
+	for _, fact := range []string{
+		"For further assistance please contact", "Rdio Scanner discussions", "ten seconds", "8.0.0", "mail", "commit",
+		"no Help control", "reaches it",
+	} {
+		if !strings.Contains(spoken, fact) {
+			t.Errorf("the chapter on help and support never gives %q, which is a sentence the shipped notice says or a fact about what the screen can tell the operator", fact)
+		}
+	}
+
+	// The chapter owns exactly one figure, and anything more in it would be a picture the figure inventory does not
+	// give this chapter.
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 1 {
+		t.Errorf("the chapter on help and support carries %d figures, and the only one it may carry is the notice the help control shows", len(figures))
+	}
+
+	slot := regexp.MustCompile(`(?is)<figure data-shot="help-snackbar">.*?</figure>`).FindStringSubmatch(chapter)
+	if len(slot) < 1 {
+		t.Fatalf("the chapter on help and support does not carry the figure %q", "help-snackbar")
+	}
+
+	alt := regexp.MustCompile(`(?is)<img\b[^>]*\balt="([^"]*)"`).FindStringSubmatch(slot[0])
+	if len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+		t.Errorf("the figure %q carries an image with nothing to say about it", "help-snackbar")
+	}
+
+	if !strings.Contains(slot[0], "<figcaption>") {
+		t.Errorf("the figure %q carries no caption", "help-snackbar")
+	}
+}
+
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
 // cross-reference has to land on.
 func isUserGuideChapter(id string) bool {

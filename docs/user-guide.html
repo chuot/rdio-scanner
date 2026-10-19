@@ -2559,6 +2559,165 @@ footer.site .signoff {
 
 <section>
   <h2 id="ch-09-help-and-support">9 · Help and support</h2>
+
+  <p class="lead">
+    A listener cannot configure anything about support. The name on the screen, the address the screen will offer, and
+    the version the screen reports are all decided by the deployment and by the build the page came from. What a
+    listener can do is read what the screen already says, know when the screen has nothing to offer, and say the right
+    things when asking somebody for help.
+  </p>
+
+  <h3>Which deployment this is</h3>
+
+  <p>
+    The line across the top of the screen is the name the operator gave the deployment. It is not a name the listener
+    chooses, changes, or can add, and a deployment whose operator gave no name shows nothing there at all: an empty
+    space with the light beside it. That is not the server failing, it is the deployment not having a name to show.
+    Beside the name sits the light that says whether the page is joined to the server, and that light carries its
+    state in its name as well as in its colour — a reader who cannot see the colour is told <code>Server status</code>
+    and the state, and not only the state's colour.
+  </p>
+
+  <p>
+    When a deployment runs more than one server, or when the same person listens to deployments run by different
+    people, the name on the screen is the only thing that tells the two apart. It is the first thing worth quoting
+    when something is wrong, and if the line is empty, quote the address you were given instead.
+  </p>
+
+  <h3>The help control, and when the screen has none</h3>
+
+  <p>
+    A deployment whose operator configured a contact address gets one more control in the corner of the screen, named
+    <code>Help</code>. Press it and a notice appears along the bottom of the screen: the sentence <q>For further
+    assistance please contact</q>, then the deployment's own address, written so that you can act on it — pressing it
+    starts a mail message addressed to that address, in a new window rather than by taking you away from the screen
+    you were watching. The notice counts down from ten, one a second, and the end of the countdown closes it: the
+    address is on the screen for about ten seconds, and if you needed longer than that to copy it down, the notice has
+    gone and the control has to be pressed again.
+  </p>
+
+  <figure data-shot="help-snackbar">
+    <img alt="A snackbar at the bottom of the listening screen reading For further assistance please contact dispatch@capitolridge.example beside a countdown.">
+    <figcaption>What the help control says: the support address the operator configured, in the application's own words.</figcaption>
+  </figure>
+
+  <p>
+    A deployment whose operator did not configure an address gets no <code>Help</code> control at all. Nothing on the
+    screen says so, and nothing on the screen offers a way to find out who runs it: the control that would have shown
+    the notice is the thing that is missing. The application does have a sentence ready for that case — it would point
+    at the project's own discussions, named <strong>Rdio Scanner discussions</strong> — but the control that shows the
+    notice is hidden in exactly the situation where that sentence is the one the application would need to say, so
+    there is no press that reaches it. If your screen has no help control, the operator who gave you the address is
+    the way to get help, and the discussions are where the application itself would have sent you.
+  </p>
+
+  <h3>The version line is the page's version</h3>
+
+  <p>
+    The large row of the display carries the display's own name until a call arrives on it, and that name is
+    <code>Rdio Scanner v</code> followed by a version. That version was stamped into the page when the page was built,
+    and it belongs to the page and to your browser. A release build stamps the release and a mark naming the commit
+    the build was made from, so a released line reads something like 8.0.0 with a commit mark after it. A build made
+    without the release tool stamps the version the repository declares, or <code>dev</code> — and a version line that
+    says <code>dev</code> is a page somebody built from a source tree, which no release ever had.
+  </p>
+
+  <p>
+    The server does report which server it is, and the page uses that report for two things only: the name across the
+    top of the screen and the contact address. The version the server reports is not shown anywhere on the listening
+    screen. So when you and the operator are quoting versions at each other, quote both and say which is which — the
+    version line on your screen is the build your browser has, and the version the operator quotes from the server is
+    a different thing, as <a href="#ch-08-on-your-phone-or-tablet">the chapter on phones and tablets</a> explains for
+    the case where your browser has an older build than the deployment.
+  </p>
+
+  <h3>What to say when you report a problem</h3>
+
+  <p>
+    Everything in this list is something the screen already shows you, and everything on it is something the operator
+    can use to find the same event on their side.
+  </p>
+
+  <table>
+    <caption>What to tell the operator about a problem on the listening screen.</caption>
+    <thead>
+      <tr>
+        <th scope="col">What to say</th>
+        <th scope="col">What it does for the person you are asking</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Which deployment, from the name across the top of the screen — or the address you were given if that line
+          is empty</td>
+        <td>An operator may run more than one server, and two people may share a name you both read as obvious.</td>
+      </tr>
+      <tr>
+        <td>The version line, read exactly as it reads, and said to be the page's version</td>
+        <td>It names the build your browser is running, which is the first thing anybody can rule out. Saying it is
+          the page's version stops the two versions being mistaken for each other.</td>
+      </tr>
+      <tr>
+        <td>What you were doing: listening live, playing one recorded call, or walking a searched playback — and
+          whether you had paused it</td>
+        <td>Those are different routes through the application, with different settings behind them, and what is
+          broken is usually one of them rather than the whole screen.</td>
+      </tr>
+      <tr>
+        <td>Which talkgroup, in both readings the display carries: the <code>Talkgroup</code> row's label and the
+          number on the <code>TGID:</code> row</td>
+        <td>Labels are chosen and numbers are not, and a label that matches a different system is a thing worth
+          hearing about.</td>
+      </tr>
+      <tr>
+        <td>What the display was showing at the time — the flags, especially <code>AVOID</code>, <code>PATCH</code>,
+          and <code>DELAYED</code>, and the two counts on the unit row</td>
+        <td>A flag on the screen is the application's own reading of what it is doing with that call, which is a
+          shorter way to the cause than a description of what you heard.</td>
+      </tr>
+      <tr>
+        <td>When it happened, from the display's clock, and whether the reading you were watching was a time of day
+          or elapsed time</td>
+        <td>Recordings are found by time. The progress reading the display shows is a time of day, which is what the
+          operator needs to look the call up again.</td>
+      </tr>
+      <tr>
+        <td>Whether anybody else was listening, from the count of listeners the display carries, and whether they saw
+          the same thing</td>
+        <td>A problem that two listeners saw is about the deployment. A problem only you saw is about your browser,
+          your device, or your selection.</td>
+      </tr>
+      <tr>
+        <td>Which browser and which device, and whether the page was opened from an address or from a home-screen
+          shortcut</td>
+        <td>The page's files, its remembered selection, and its stored access code all live per browser. A shortcut
+          opens the default profile, which is not necessarily the profile you were using.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    If the problem is that the screen is not showing what you expect rather than that it is showing something wrong,
+    read <a href="#ch-11-when-something-does-not-work">the chapter on when something does not work</a> first. It starts
+    from what you can see and works back to what it means, and most of what a listener reports as a fault is one of
+    its cases rather than a fault at all.
+  </p>
+
+  <h3>Where this guide stops</h3>
+
+  <p>
+    This guide ends at the listening screen. Installing the server, configuring it, deciding which systems a code may
+    see, setting how long recordings are kept, reading the server's log, and the application's interfaces for other
+    programs are the operator's side of the deployment, and there is a guide for them that came beside this one in the
+    same archive. It is written for the person who runs the server rather than for the person watching it, and this
+    guide names it rather than repeating any of it: where a listener's question can only be answered by changing
+    something on the server, the answer is in that guide and not here, and the change belongs to the operator.
+  </p>
+
+  <p>
+    What belongs to a listener is in these twelve chapters, and <a href="#ch-01-overview">the opening chapter</a> says
+    what this guide leaves out of them.
+  </p>
 </section>
 
 <section>
