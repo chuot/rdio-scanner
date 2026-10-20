@@ -2419,6 +2419,64 @@ func TestTheUserGuideSkipsToTheMainText(t *testing.T) {
 	}
 }
 
+// A figure in this guide is only a figure once it carries its own bytes: the pictures travel inside the file, so a
+// slot that names no picture shows the reader an empty frame. Every figure names its picture, says what it shows to
+// a reader who cannot see it, and captions it for a reader who can, and the document embeds enough of them that it
+// is showing the screen rather than describing it.
+func TestEveryFigureInTheGuideCarriesItsPictureCaptionAndDescription(t *testing.T) {
+	body := userGuidePath(t)
+
+	figures := regexp.MustCompile(`(?is)<figure data-shot="([^"]+)">([\s\S]*?)</figure>`).FindAllStringSubmatch(body, -1)
+
+	if len(figures) != 24 {
+		t.Errorf("the guide carries %d figures, and the twelve chapters account for 24 of them between themselves, so a figure sits outside the chapter written to hold it or one is missing", len(figures))
+	}
+
+	embedded := 0
+
+	for _, figure := range figures {
+		id := figure[1]
+
+		img := regexp.MustCompile(`(?is)<img\b[^>]*>`).FindString(figure[2])
+
+		if img == "" {
+			t.Errorf("the figure %q carries no image element, so the reader is shown nothing", id)
+
+			continue
+		}
+
+		if alt := regexp.MustCompile(`(?i)alt="([^"]*)"`).FindStringSubmatch(img); len(alt) < 2 || strings.TrimSpace(alt[1]) == "" {
+			t.Errorf("the figure %q carries an image with no account of what it shows, so a reader who cannot see it is left with the frame alone", id)
+		}
+
+		src := regexp.MustCompile(`(?i)src="([^"]*)"`).FindStringSubmatch(img)
+
+		if len(src) < 2 {
+			t.Errorf("the figure %q carries no picture inside the guide: its image names no src, so the frame the reader is shown is empty", id)
+
+			continue
+		}
+
+		if !strings.HasPrefix(src[1], "data:image/png;base64,") {
+			t.Errorf("the figure %q carries a picture that is not a PNG inlined as a data URI, so the guide reaches outside itself for it: %q", id, src[1])
+
+			continue
+		}
+
+		embedded++
+
+		caption := regexp.MustCompile(`(?is)<figcaption\b[^>]*>(.*?)</figcaption>`).FindStringSubmatch(figure[2])
+
+		if len(caption) < 2 || strings.TrimSpace(stripTags(caption[1])) == "" {
+			t.Errorf("the figure %q carries no caption, so a reader who can see the picture is not told what it is a picture of", id)
+		}
+	}
+
+	if embedded < 20 {
+		t.Errorf("the guide embeds %d pictures inside itself, and a guide that shows the listening screen at all needs at least 20", embedded)
+	}
+}
+
 // The header names the mark beside the application's name and says what it is: an image a reader who cannot see
 // it still gets an account of.
 func TestTheUserGuideShowsTheMarkInTheHeader(t *testing.T) {
@@ -2441,6 +2499,10 @@ func TestTheUserGuideShowsTheMarkInTheHeader(t *testing.T) {
 
 	if !regexp.MustCompile(`(?i)\bdata-logo\b`).MatchString(mark) {
 		t.Errorf("the header's mark is not the slot the picture step fills: %s", mark)
+	}
+
+	if src := regexp.MustCompile(`(?i)src="([^"]*)"`).FindStringSubmatch(mark); len(src) < 2 || !strings.HasPrefix(src[1], "data:image/png;base64,") {
+		t.Errorf("the header's mark is not the project's own drawing inlined as a data URI, so a listener with no network gets an empty frame beside the application's name: %s", mark)
 	}
 }
 
