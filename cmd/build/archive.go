@@ -133,15 +133,23 @@ func readArchiveSource(repo string, path string, name string, mode os.FileMode) 
 	return archiveFile{name: name, mode: mode, modified: info.ModTime(), body: body}, nil
 }
 
-// guideSource is the document a release archive carries: the administrator guide, at the path the guide
-// itself states. It is the whole of the documentation a deployment ships with — the platform pages, the
-// container guide, the log guide, the questions, and the licence and access position are chapters of it —
-// and it carries its own pictures, its stylesheet, and the project's mark, so the archive needs no
-// picture folder and the reader needs no network.
+// guideSource is the document a release archive carries for whoever installs and runs the server: the
+// administrator guide, at the path the guide itself states. It is the whole of the documentation an
+// operator needs — the platform pages, the container guide, the log guide, the questions, and the
+// licence and access position are chapters of it — and it carries its own pictures, its stylesheet, and
+// the project's mark, so the archive needs no picture folder and the reader needs no network.
 const guideSource = "docs/admin-guide.html"
 
-// archiveFiles reads what a target's archive carries: the program the run wrote to `output`, the guide
-// that operates it, and the licence of the ffmpeg the build embeds.
+// listenerGuideSource is the document a release archive carries for whoever hears calls on the web
+// application the server serves: the guide written for that listener, again at the path the guide
+// itself states, and again with its pictures, its stylesheet, and the project's mark inside it. A release
+// that shipped the administrator guide alone left the person who actually uses the program with the
+// document that operates somebody else's work.
+const listenerGuideSource = "docs/user-guide.html"
+
+// archiveFiles reads what a target's archive carries: the program the run wrote to `output`, the two
+// guides that operate it — the administrator guide for whoever runs the server, the listening guide for
+// whoever hears calls on the web application — and the licence of the ffmpeg the build embeds.
 //
 // The program is read from the path the run wrote it to, and not from a path the archive chose for
 // itself: a release that reads a path it picked ships whatever was standing there, which is a binary the
@@ -159,9 +167,9 @@ const guideSource = "docs/admin-guide.html"
 // hand-named target outside the matrix, which is what a developer builds to try something this project
 // does not release.
 //
-// The archive's layout is the repository's own layout, so the path the guide states for itself resolves
+// The archive's layout is the repository's own layout, so the path each guide states for itself resolves
 // inside the archive. The tool renders nothing, converts nothing, inlines nothing, and rewrites nothing:
-// the guide the archive carries is the guide the repository has, byte for byte.
+// each guide the archive carries is the guide the repository has, byte for byte.
 func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 	name := "rdio-scanner" + programSuffix(tr.targetWord())
 
@@ -177,7 +185,12 @@ func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, 
 		return nil, fmt.Errorf("the release has no %s for %s: %w", guideSource, tr.targetWord(), err)
 	}
 
-	files := []archiveFile{program, guide}
+	listenerGuide, err := readArchiveSource(repo, listenerGuideSource, listenerGuideSource, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("the release has no %s for %s: %w", listenerGuideSource, tr.targetWord(), err)
+	}
+
+	files := []archiveFile{program, guide, listenerGuide}
 
 	if _, ok := bundle.ReadManifest().Targets[tr.targetWord()]; ok {
 		licence, err := readArchiveSource(repo, filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), "LICENCE.md"), "FFMPEG.txt", 0o644)

@@ -459,6 +459,7 @@ func TestADistRunArchivesTheBinaryItCompiled(t *testing.T) {
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary from an earlier build")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	tl, _, _ := fakeRun(released, "")
@@ -825,8 +826,8 @@ func TestAReleaseRunFinishesTheFfmpegPhaseBeforeTheServerCompilesStart(t *testin
 func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T) {
 	repo := t.TempDir()
 
-	// The tree a release run writes its archives from: each target's binary, the guide, and the licence
-	// of the ffmpeg each ready target carries. The times are fixed, because an archive carries the time
+	// The tree a release run writes its archives from: each target's binary, the two guides, and the
+	// licence of the ffmpeg each ready target carries. The times are fixed, because an archive carries the time
 	// of the file it carries, and both runs are reading the same tree.
 	for _, tr := range releaseTargets {
 		target := tr.targetWord()
@@ -840,6 +841,7 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 	}
 
 	writeRepoFile(t, repo, guideSource, "the guide")
+	writeRepoFile(t, repo, listenerGuideSource, "the guide for the listener")
 
 	fixEveryFileTime(t, repo, time.Date(2026, 1, 2, 3, 4, 6, 0, time.Local))
 

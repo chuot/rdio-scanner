@@ -29,12 +29,14 @@ import (
 )
 
 // One archive per release target. What it carries is the release-archive contract this command carries:
-// the program, the administrator guide that operates it, and the licence of the ffmpeg the build embeds.
+// the program, the two guides that operate it, and the licence of the ffmpeg the build embeds: the
+// administrator guide for whoever installs and runs the server, and the guide for whoever hears calls
+// on the web application.
 //
-// The guide carries its own pictures, its own stylesheet, and its own mark, so the archive carries no
-// pictures and needs no network for the reader to read it. It carries no markdown: the guide absorbed
-// the pages the archive used to carry, and a markdown file beside the guide is a document the guide
-// already says.
+// Each guide carries its own pictures, its own stylesheet, and its own mark, so the archive carries no
+// pictures and needs no network for the reader to read it. It carries no markdown: a guide absorbed
+// the pages the archive used to carry, and a markdown file beside a guide is a document the reader is
+// told to open and does not have.
 
 // The archive's name is the name the guide's installation chapter tells the reader to download, so a
 // release that writes a file the guide does not name is a release a reader cannot follow.
@@ -49,10 +51,10 @@ func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing
 }
 
 // A release archive that stamps every entry with the moment the archive was written says nothing about
-// when the files inside it were written: the binary the run compiled, the guide the repository has, and
-// the licence the ffmpeg phase wrote are three files with three histories, and a reader who extracts
-// them and finds three identical timestamps has learned nothing from the timestamps. The archive is
-// required to state when the files it carries were written.
+// when the files inside it were written: the binary the run compiled, the two guides the repository
+// has, and the licence the ffmpeg phase wrote are four files with four histories, and a reader who
+// extracts them and finds four identical timestamps has learned nothing from the timestamps. The
+// archive is required to state when the files it carries were written.
 func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	repo := t.TempDir()
 
@@ -63,9 +65,10 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run compiled")
 	writeRepoFile(t, repo, guideSource, "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	// Three files, three histories. The times are distinct, in the range a zip archive records, and on
+	// Four files, four histories. The times are distinct, in the range a zip archive records, and on
 	// even seconds, which is the resolution the archive's own timestamp field carries.
 	want := []struct {
 		name     string
@@ -74,6 +77,7 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	}{
 		{"rdio-scanner", program, time.Date(2026, 3, 4, 5, 6, 8, 0, time.Local)},
 		{guideSource, guideSource, time.Date(2025, 1, 2, 3, 4, 6, 0, time.Local)},
+		{"docs/user-guide.html", "docs/user-guide.html", time.Date(2025, 2, 3, 4, 5, 7, 0, time.Local)},
 		{"FFMPEG.txt", licence, time.Date(2024, 11, 22, 9, 10, 12, 0, time.Local)},
 	}
 
@@ -140,16 +144,19 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	}
 }
 
-// The archive is the program and the one document that operates it, at the names the repository writes
-// them at: a reader who extracts the archive finds the guide at the path the guide itself states, and
-// finds the ffmpeg licence under the name a reader looks for.
-func TestTheArchiveCarriesTheProgramTheGuideAndTheLicenceOfTheFfmpegItCarries(t *testing.T) {
+// The archive is the program and the two documents that operate it, at the names the repository
+// writes them at: a reader who extracts the archive finds each guide at the path the guide itself
+// states — the administrator guide for whoever installs and runs the server, the listening guide for
+// whoever hears calls on the web application — and finds the ffmpeg licence under the name a reader
+// looks for.
+func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	repo := t.TempDir()
 
 	target := releaseTargets[4].targetWord()
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
@@ -159,7 +166,8 @@ func TestTheArchiveCarriesTheProgramTheGuideAndTheLicenceOfTheFfmpegItCarries(t 
 
 	want := []string{
 		"rdio-scanner",
-		"docs/admin-guide.html",
+		guideSource,
+		"docs/user-guide.html",
 		"FFMPEG.txt",
 	}
 
@@ -173,8 +181,18 @@ func TestTheArchiveCarriesTheProgramTheGuideAndTheLicenceOfTheFfmpegItCarries(t 
 		}
 	}
 
-	if string(files[2].body) != "the licence" {
-		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase wrote", files[2].body)
+	// The licence is read by its name, not by its position: the archive's layout is the repository's
+	// own, and a document added to it moves what sits after the documents.
+	licence := ""
+
+	for _, f := range files {
+		if f.name == "FFMPEG.txt" {
+			licence = string(f.body)
+		}
+	}
+
+	if licence != "the licence" {
+		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase wrote", licence)
 	}
 }
 
@@ -189,6 +207,7 @@ func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 	writeRepoFile(t, repo, "docs/platforms/linux.md", "the platform page")
@@ -219,6 +238,7 @@ func TestTheArchiveCarriesTheBinaryTheRunWroteAndNotTheFileStandingAtThePathItRe
 	// The file standing at the path the archive used to read from, before the run wrote anywhere.
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run never compiled")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	// The binary the run wrote, at the path the run wrote to.
@@ -240,18 +260,20 @@ func TestTheArchiveCarriesTheBinaryTheRunWroteAndNotTheFileStandingAtThePathItRe
 	}
 }
 
-// The guide is read where nothing else is: an extracted archive on a machine with no network. The copy
-// in the archive is the file the repository has, pictures and all, so the reader who opens it offline
-// gets every picture it shows.
-func TestTheGuideInTheArchiveCarriesEveryPictureInsideItself(t *testing.T) {
+// The guides are read where nothing else is: an extracted archive on a machine with no network. The
+// copy in the archive is the file the repository has, pictures and all, so the reader who opens either
+// guide offline gets every picture it shows.
+func TestTheGuidesInTheArchiveCarryEveryPictureInsideThemselves(t *testing.T) {
 	repo := t.TempDir()
 
 	target := releaseTargets[4].targetWord()
 
 	guide := `<figure data-shot="section-systems"><img src="data:image/png;base64,aW1hZ2U=" alt="The Systems section."><figcaption>The Systems section.</figcaption></figure>`
+	listenerGuide := `<figure data-shot="main-live"><img src="data:image/png;base64,bGl2ZQ==" alt="The listening screen with a call playing."><figcaption>The listening screen with a call playing.</figcaption></figure>`
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", guide)
+	writeRepoFile(t, repo, "docs/user-guide.html", listenerGuide)
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
@@ -259,25 +281,33 @@ func TestTheGuideInTheArchiveCarriesEveryPictureInsideItself(t *testing.T) {
 		t.Fatalf("archiveFiles: %v", err)
 	}
 
+	carried := 0
+
 	for _, f := range files {
-		if f.name != "docs/admin-guide.html" {
+		if f.name != guideSource && f.name != "docs/user-guide.html" {
 			continue
 		}
 
+		carried++
+
 		if !strings.Contains(string(f.body), `src="data:image/png;base64,`) {
-			t.Errorf("the guide in the archive carries no picture inside itself: %q", f.body)
+			t.Errorf("%s in the archive carries no picture inside itself: %q", f.name, f.body)
 		}
 
 		if strings.Contains(string(f.body), "?raw=true") {
-			t.Errorf("the guide in the archive asks for %q, which no folder on disk is named", "?raw=true")
+			t.Errorf("%s in the archive asks for %q, which no folder on disk is named", f.name, "?raw=true")
 		}
+	}
+
+	if carried != 2 {
+		t.Errorf("the archive carries %d of the two guides, so a reader with no network is handed a document with an empty frame where a picture was to be shown", carried)
 	}
 }
 
-// The guide is the repository's own document, written by hand. The release carries it as it is written:
-// a tool that rewrote the guide on the way into the archive would be a tool that published a document
-// nobody read.
-func TestTheGuideInTheArchiveIsTheGuideTheRepositoryHas(t *testing.T) {
+// The guides are the repository's own documents, written by hand. The release carries each as it is
+// written, with the pictures it was committed with: a tool that rewrote a guide on the way into the
+// archive would be a tool that published a document nobody read.
+func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 	real, err := repositoryRoot()
 	if err != nil {
 		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
@@ -287,13 +317,24 @@ func TestTheGuideInTheArchiveIsTheGuideTheRepositoryHas(t *testing.T) {
 
 	target := releaseTargets[4].targetWord()
 
-	body, err := os.ReadFile(filepath.Join(real, "docs", "admin-guide.html"))
-	if err != nil {
-		t.Fatalf("the release has no guide to carry: %v", err)
+	// Both guides are read from the repository the release is being built from, so what the archive
+	// holds is compared with the bytes the published repository actually carries.
+	committed := map[string]string{}
+
+	for _, name := range []string{"admin-guide.html", "user-guide.html"} {
+		body, err := os.ReadFile(filepath.Join(real, "docs", name))
+		if err != nil {
+			t.Fatalf("the release has no docs/%s to carry: %v", name, err)
+		}
+
+		committed["docs/"+name] = string(body)
 	}
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeRepoFile(t, repo, "docs/admin-guide.html", string(body))
+
+	for _, name := range []string{guideSource, "docs/user-guide.html"} {
+		writeRepoFile(t, repo, name, committed[name])
+	}
 	writeArchiveLicence(t, repo, target, "the ffmpeg licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
@@ -301,41 +342,57 @@ func TestTheGuideInTheArchiveIsTheGuideTheRepositoryHas(t *testing.T) {
 		t.Fatalf("archiveFiles: %v", err)
 	}
 
-	carried := false
+	carried := 0
 
 	for _, f := range files {
-		if f.name != "docs/admin-guide.html" {
+		want, ok := committed[f.name]
+		if !ok {
 			continue
 		}
 
-		carried = true
+		carried++
 
-		if string(f.body) != string(body) {
-			t.Errorf("the guide in the archive is not the guide the repository has: %d bytes carried of %d written", len(f.body), len(body))
+		if string(f.body) != want {
+			t.Errorf("%s in the archive is not the guide the repository has: %d bytes carried of %d written", f.name, len(f.body), len(want))
 		}
 	}
 
-	if !carried {
-		t.Errorf("the archive does not carry the guide")
+	if carried != len(committed) {
+		t.Errorf("the archive carries %d of the %d guides the repository has, so a release ships a document it did not read from the tree it is releasing", carried, len(committed))
 	}
 }
 
-// A release without the guide is a release whose reader has the program and nothing that operates it.
+// A release without either guide is a release whose reader has the program and nothing that operates
+// it. Each guide is named in the failure, because whoever builds a release from a tree that is short
+// one document has to be told which one the release refuses to ship without.
 func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
-	repo := t.TempDir()
+	guides := []string{guideSource, "docs/user-guide.html"}
 
-	target := releaseTargets[4].targetWord()
+	for _, missing := range guides {
+		repo := t.TempDir()
 
-	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
-	writeArchiveLicence(t, repo, target, "the licence")
+		target := releaseTargets[4].targetWord()
 
-	_, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
-	if err == nil {
-		t.Fatal("the release accepted an archive with no guide")
-	}
+		writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 
-	if !strings.Contains(err.Error(), "docs/admin-guide.html") {
-		t.Errorf("the failure %q does not name the guide the release cannot carry", err.Error())
+		for _, name := range guides {
+			if name == missing {
+				continue
+			}
+
+			writeRepoFile(t, repo, name, "the guide the tree does hold")
+		}
+
+		writeArchiveLicence(t, repo, target, "the licence")
+
+		_, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
+		if err == nil {
+			t.Fatalf("the release accepted an archive with no %s", missing)
+		}
+
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("the failure %q does not name the guide %s the release cannot carry", err.Error(), missing)
+		}
 	}
 }
 
@@ -352,6 +409,7 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 
 		writeArchiveSource(t, repo, target, "rdio-scanner"+programSuffix(target), "the binary")
 		writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+		writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 		writeArchiveLicence(t, repo, target, "the licence of the ffmpeg "+target+" carries")
 
 		files, err := archiveFiles(repo, tr, defaultOutputPath(tr.targetWord()))
@@ -361,8 +419,8 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 
 		names := fileNames(files)
 
-		if len(names) != 3 {
-			t.Fatalf("%s: the archive carries %d files, want the program, the guide and the licence: %v", target, len(names), names)
+		if len(names) != 4 {
+			t.Fatalf("%s: the archive carries %d files, want the program, the two guides and the licence: %v", target, len(names), names)
 		}
 
 		found := false
@@ -404,6 +462,7 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 
 	writeArchiveSource(t, repo, "macos-arm64", "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
 	writeArchiveLicence(t, repo, "macos-arm64", licence)
 
@@ -414,8 +473,8 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 
 	names := fileNames(files)
 
-	if strings.Join(names, " ") != strings.Join([]string{"rdio-scanner", "docs/admin-guide.html", "FFMPEG.txt"}, " ") {
-		t.Fatalf("the archive carries %v, want the program, the guide and the licence", names)
+	if strings.Join(names, " ") != strings.Join([]string{"rdio-scanner", guideSource, "docs/user-guide.html", "FFMPEG.txt"}, " ") {
+		t.Fatalf("the archive carries %v, want the program, the two guides and the licence", names)
 	}
 
 	for _, f := range files {
@@ -424,7 +483,13 @@ func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
 		}
 	}
 
-	carried := string(files[2].body)
+	carried := ""
+
+	for _, f := range files {
+		if f.name == "FFMPEG.txt" {
+			carried = string(f.body)
+		}
+	}
 
 	if carried != licence {
 		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase writes for supplied binaries", carried)
@@ -458,6 +523,7 @@ func TestAMissingFfmpegLicenceStopsTheRelease(t *testing.T) {
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 
 	_, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
 	if err == nil {
@@ -476,6 +542,7 @@ func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) 
 
 	writeArchiveSource(t, repo, "windows-amd64", "rdio-scanner.exe", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, "windows-amd64", "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[7], defaultOutputPath("windows-amd64"))
@@ -497,6 +564,7 @@ func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
@@ -543,6 +611,7 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
@@ -592,7 +661,8 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 
 	want := []string{
 		"rdio-scanner",
-		"docs/admin-guide.html",
+		guideSource,
+		"docs/user-guide.html",
 		"FFMPEG.txt",
 	}
 
