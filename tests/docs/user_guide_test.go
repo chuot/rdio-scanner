@@ -242,6 +242,31 @@ func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
 	if !strings.Contains(body, "corner light") {
 		t.Errorf("the guide no longer names the corner lights on the controls, which are lights on the screen and not the header light")
 	}
+
+	// The reference chapter's own row for this light has to carry the name, because a reader looks a word up in
+	// that table after having already seen it on the screen. The row is found by the name the page gives the
+	// element, which is printed in the row and nowhere else on the page.
+	lights := regexp.MustCompile(`(?is)<caption>\s*The lights on the screen[^<]*</caption>[\s\S]*?<tbody>(.*?)</tbody>`).FindStringSubmatch(userGuideChapter(t, body, "ch-12-reference"))
+
+	if lights == nil {
+		t.Fatalf("the reference chapter carries no table of the lights on the screen, so its row for the header light cannot be read")
+	}
+
+	header := ""
+
+	for _, row := range regexp.MustCompile(`(?is)<tr>\s*<th scope="row">(.*?)</th>.*?</tr>`).FindAllStringSubmatch(lights[1], -1) {
+		if strings.Contains(row[0], "<code>Server status:</code>") {
+			header = strings.Join(strings.Fields(stripTags(row[1])), " ")
+
+			break
+		}
+	}
+
+	if header == "" {
+		t.Errorf("the reference chapter's table of the lights on the screen carries no row quoting %q, which is how a reader finds the header light there", "Server status:")
+	} else if !strings.Contains(header, "LED") {
+		t.Errorf("the reference chapter names the row for the header light %q, and the name the shipped application uses for that element is the LED", header)
+	}
 }
 
 // The second chapter describes the screen the way the application assembles it: the branding line the operator
