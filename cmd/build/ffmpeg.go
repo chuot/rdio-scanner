@@ -392,7 +392,7 @@ func ffmpegTarget(o options) string {
 // have a record for is a promise, and a build that cannot keep it says so instead of quietly producing a
 // server that will do without.
 //
-// The machine is the platform the build is running on, and it is part of the decision because three of
+// The machine is the platform the build is running on, and it is part of the decision because two of
 // the targets are compiled on the platform their ffmpeg binaries run on: on that platform the build has
 // the source, the digest, the recipe, the flags, and the run, and compiling them there is what the
 // operator asked for. On every other platform they are something the build is handed.
@@ -558,8 +558,8 @@ const suppliedProduction = "supplied"
 // them, on the machine standing here, through the same gate a compile runs its own binaries through.
 //
 // A target with nothing dropped for it, on a machine that is not its platform, is not a failure. The
-// three targets are built on machines the release machine does not control, and a release run that stopped
-// for the one it does not have would ship nothing at all, including the five archives it could have
+// two supplied targets are built on machines the release machine does not control, and a release run that
+// stopped for the one it does not have would ship nothing at all, including the six archives it could have
 // shipped. It is reported, and skipped.
 func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	// The cache key is the manifest's record and the target, so a warm cache is the entry this machine's
@@ -974,11 +974,11 @@ func fetchSource(src ffmpegSource) error {
 
 // runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
 //
-// It reports the targets it has nothing to produce for: the three whose ffmpeg binaries are compiled on their own
-// platform, on a machine this build is not standing on, with nothing dropped for it. Such a target is
-// skipped, and the caller decides what a skipped target means for the run — the release run ships the
-// archives it can ship, and a run that compiles one binary compiles none. On the machine that is the
-// target, the same phase compiles them, and that is not a skip.
+// It reports the targets it has nothing to produce for: the two whose ffmpeg binaries are compiled on
+// their own platform, on a machine this build is not standing on, with nothing dropped for it. Such a
+// target is skipped, and the caller decides what a skipped target means for the run — the release run
+// ships the archives it can ship, and a run that compiles one binary compiles none. On the machine that is
+// the target, the same phase compiles them, and that is not a skip.
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 

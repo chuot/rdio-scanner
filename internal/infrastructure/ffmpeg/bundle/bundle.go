@@ -61,9 +61,9 @@ type Source struct {
 
 // Target is how one architecture's ffmpeg comes to be.
 //
-// A record with no `produced` names a toolchain: the container that holds it, the packages to install in
-// it, and the configure arguments that make the compile cross to it. This build compiles that target's
-// ffmpeg and runs the binaries it produced.
+// A record with no `produced` names a toolchain: the container that holds it, the Containerfile that builds
+// it, the packages to install in it, and the configure arguments that make the compile cross to it. This
+// build compiles that target's ffmpeg and runs the binaries it produced.
 //
 // A record with `produced` saying `supplied` names no container, no packages, no cross arguments, and no
 // check environment: the machine that produces the releases has none of those for it, and asking for one
@@ -74,14 +74,36 @@ type Source struct {
 // A target with no record in the manifest is an uncovered target: the build compiles no ffmpeg for it,
 // adopts nothing for it, and the server that runs on it uses the host's.
 type Target struct {
-	Container string   `json:"container"`
-	Packages  []string `json:"packages"`
-	Cross     []string `json:"cross"`
-	CFlags    []string `json:"cflags"`
-	LDFlags   []string `json:"ldflags"`
+	// Container is the image the toolchain is built in. Containerfile names the Containerfile at the root of
+	// this repository that builds it, which is empty for Containerfile.ffmpeg: the toolchain of a target
+	// compiled with the compiler its container's own distribution ships needs nothing beside that.
+	// ContainerDigest is the image the record names as the build that compiled these binaries pulled it,
+	// which is what makes the compile reproducible; empty is the tag the record names, and a tag moves.
+	Container       string   `json:"container"`
+	Containerfile   string   `json:"containerfile"`
+	ContainerDigest string   `json:"container_digest"`
+	Packages        []string `json:"packages"`
+	Cross           []string `json:"cross"`
 
-	// Make is the make program a compile of this target runs. Empty is `make`. FreeBSD's base make is not
-	// GNU make and ffmpeg's build asks for GNU make, so the FreeBSD record names `gmake`.
+	// CC is the answer configure passes on to the `--cc=` it was given, which is where a compile that
+	// crosses to another operating system names the invocation that produces binaries for it: the compiler,
+	// the target triple, and the sysroot it reads the other system's headers and libraries from. Empty is
+	// configure's own choice, which is the right answer when the container's compiler already targets the
+	// container's own operating system.
+	CC string `json:"cc"`
+
+	CFlags  []string `json:"cflags"`
+	LDFlags []string `json:"ldflags"`
+
+	// SysrootImage names an image whose contents become the sysroot the compile reads: the headers and
+	// libraries of the operating system the compile crosses to, published by that operating system's own
+	// project. The build never runs such an image — every program in it is written for a kernel this host
+	// does not have — and copies it out of the image whole. SysrootDigest pins it.
+	SysrootImage  string  `json:"sysroot_image"`
+	SysrootDigest string  `json:"sysroot_digest"`
+	Sysroot       Sysroot `json:"sysroot"`
+
+	// Make is the make program a compile of this target runs. Empty is `make`.
 	Make string `json:"make"`
 
 	// Conformance is how the compiled program is run to be checked, which is not always the container
@@ -96,13 +118,50 @@ type Target struct {
 	Produced string `json:"produced"`
 }
 
+// Sysroot is a sysroot somebody outside both repositories prepared, which is what an operating system's
+// software development kit is: its publisher ships no container of it and licenses it in a way that keeps it
+// out of this repository's build, so nothing this repository builds can carry it. The build finds the tree
+// named by SDK under the directory its version names in the cache the operator keeps, or under the directory
+// the operator points at, mounts it read-only at Mount, and refuses when it is not there.
+type Sysroot struct {
+	SDK       string `json:"sdk"`
+	SHA256    string `json:"sha256"`
+	Generator string `json:"generator"`
+	Mount     string `json:"mount"`
+}
+
 // Conformance is the environment the build runs the compiled ffmpeg in to prove it can do the job: the
-// container that holds it, which is empty when the build container is the one, the packages that
-// container needs on top, and the program that starts a binary the container cannot run by itself.
+// container that holds it, which is empty when the build container is the one, the packages that container
+// needs on top, and the program that starts a binary the container cannot run by itself.
+//
+// A record names one way of proving the program it compiled. `run` runs it under an interpreter or an
+// emulation layer, `freebsd_vm` runs it inside an operating system the build boots from a published image,
+// and `reads` says nothing on the build host can run it at all, which leaves the build reading the shape of
+// the binaries instead. Which one a record names is what the licence text has to say about the binaries it
+// describes.
 type Conformance struct {
 	Container string   `json:"container"`
+	Digest    string   `json:"conformance_digest"`
 	Packages  []string `json:"packages"`
 	Run       []string `json:"run"`
+
+	// FreeBSDVM is the published FreeBSD image the build boots to run a program no container on the build
+	// host and no interpreter on it can run. It is pinned by the digest of the compressed file the URL
+	// serves, and Bytes is the size the image unpacks to.
+	FreeBSDVM FreeBSDVM `json:"freebsd_vm"`
+
+	// Reads names what the build reads out of the binaries when it cannot run them anywhere: a target that
+	// is proven by shape is proven differently from one that was run, and says so.
+	Reads []string `json:"reads"`
+}
+
+// FreeBSDVM is one published release of an operating system, named by the image its project publishes for
+// booting, and pinned by the digest of the file that image is served as.
+type FreeBSDVM struct {
+	Release string `json:"release"`
+	URL     string `json:"url"`
+	SHA256  string `json:"sha256"`
+	Bytes   int64  `json:"bytes"`
 }
 
 //go:embed manifest.json

@@ -782,10 +782,10 @@ func aDropOfSuppliedBinariesWith(t *testing.T, repo string, target string, ffmpe
 }
 
 // Binaries that were not dropped are the ordinary state of a release run on a machine that does not have
-// the Mac or the FreeBSD box in front of it. It is not a failure, and the build says where to build them
-// and where to drop them.
+// the Mac in front of it. It is not a failure, and the build says where to build them and where to drop
+// them.
 func TestASuppliedTargetWhoseBinariesWereNotDroppedProducesNothing(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 		if err != nil {
 			t.Errorf("%s: binaries that were simply not dropped failed the run: %v", target, err)
@@ -1104,13 +1104,12 @@ func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *tes
 }
 
 // The machine supplied ffmpeg binaries are compiled on is the machine that runs them, and the build can be
-// standing on
-// it: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are on, and the
-// repository in front of them names the source, its digest, the recipe, the flags that floor sets, the make
-// program that build needs, and the check that proves the result. The compile is what that run asked for,
-// and it is what only that machine can do.
+// standing on it: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are on, and
+// the repository in front of them names the source, its digest, the recipe, the flags that floor sets, the
+// make program that build needs, and the check that proves the result. The compile is what that run asked
+// for, and it is what only that machine can do.
 func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		manifest := bundle.ReadManifest()
 
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, aNativeTree(target), aMachineForTarget(target))
@@ -1128,12 +1127,9 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 			t.Errorf("%s: the plan skips the target whose binaries it can compile, and the operator on that host is told to build binaries they are standing on", target)
 		}
 
-		want := []string{"unpack", "configure", "make", "strip"}
-		if strings.HasPrefix(target, "macos-") {
-			// Stripping rewrites the binary, so the signature goes on after it: a signature over the
-			// bytes strip removed is a signature macOS refuses to run.
-			want = append(want, "sign")
-		}
+		// Stripping rewrites the binary, so the signature goes on after it: a signature over the bytes
+		// strip removed is a signature macOS refuses to run.
+		want := []string{"unpack", "configure", "make", "strip", "sign"}
 
 		if got := stepLabels(plan.Steps); !sameWords(got, want) {
 			t.Errorf("%s: the compile runs %v, want %v", target, got, want)
@@ -1251,7 +1247,7 @@ func TestTheAudioOnlySwitchesReachConfigureOnBothRoutes(t *testing.T) {
 // unpacked, and the repository is where the tar command is run from, not where the source is configured
 // or built.
 func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		manifest := bundle.ReadManifest()
 
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), manifest, aNativeTree(target), aMachineForTarget(target))
@@ -1288,9 +1284,7 @@ func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 
 // The two macOS architectures ship one toolchain: the Command Line Tools' clang produces x86_64 on an
 // Apple Silicon Mac and arm64 on an Intel Mac, the macOS SDK carries the libraries of both, and codesign
-// signs a program of either architecture on either machine. A FreeBSD ffmpeg binary is statically linked
-// against FreeBSD's own libc, which is the whole point of compiling it there, so a host of another
-// operating system has nothing to link it against and compiles nothing.
+// signs a program of either architecture on either machine.
 func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 	for _, tc := range []struct {
 		target  string
@@ -1307,26 +1301,6 @@ func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 
 		if !plan.Native {
 			t.Errorf("%s on a %s host: the build compiled nothing, and one macOS toolchain produces both architectures", tc.target, tc.machine.goarch)
-		}
-	}
-
-	for _, machine := range []host{
-		{goos: "darwin", goarch: "arm64"},
-		{goos: "linux", goarch: "amd64"},
-		{goos: "windows", goarch: "amd64"},
-	} {
-		plan, err := planFFmpeg(options{target: "freebsd-amd64"}, t.TempDir(), bundle.ReadManifest(), aNativeTree("freebsd-amd64"), machine)
-		if err != nil {
-			t.Errorf("freebsd-amd64 on a %s host: %v", machine.goarch, err)
-			continue
-		}
-
-		if plan.Native {
-			t.Errorf("freebsd-amd64 on a %s host: the build compiled a FreeBSD ffmpeg on a machine that is not FreeBSD, and it is linked against FreeBSD's own libc", machine.goarch)
-		}
-
-		if !plan.Skipped {
-			t.Errorf("freebsd-amd64 on a %s host: the run promises an ffmpeg for a target it has no binaries for", machine.goarch)
 		}
 	}
 }
@@ -1479,7 +1453,7 @@ func argAfter(args []string, flag string) string {
 // binaries were not supplied, the host that compiles them, the command that compiles them there, and the
 // directory to drop them in.
 func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(target), theReleaseHost)
 		if err != nil {
 			t.Errorf("%s: a machine that is not the target's host failed the run: %v", target, err)
@@ -1568,20 +1542,6 @@ func TestTheNativeCompileRefusesAHostWithNoToolchain(t *testing.T) {
 		if !strings.Contains(err.Error(), missing) {
 			t.Errorf("the refusal %q does not name the %s that is missing", err.Error(), missing)
 		}
-	}
-
-	// FreeBSD's record names gmake, and that is the program its host has to have: a host with make and no
-	// gmake cannot build ffmpeg, because BSD make will not build it.
-	state := aNativeTree("freebsd-amd64")
-	delete(state.nativeTools, "gmake")
-
-	_, err := planFFmpeg(options{target: "freebsd-amd64"}, t.TempDir(), bundle.ReadManifest(), state, aMachineForTarget("freebsd-amd64"))
-	if err == nil {
-		t.Fatal("the build planned a FreeBSD compile on a host with no gmake")
-	}
-
-	if !strings.Contains(err.Error(), "gmake") {
-		t.Errorf("the refusal %q does not name the gmake that is missing", err.Error())
 	}
 }
 

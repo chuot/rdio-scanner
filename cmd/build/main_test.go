@@ -642,7 +642,7 @@ func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing
 }
 
 // An incomplete matrix is not a release, and the run that wrote it says so with its exit status, so a
-// script can tell "the five archives are the whole release this machine can make" from "the release is
+// script can tell "the six archives are the whole release this machine can make" from "the release is
 // missing archives".
 func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
@@ -650,10 +650,10 @@ func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T
 	skipsSuppliedTargets(tl, ran)
 
 	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
-		t.Fatalf("exit code = %d, want 3: three of the eight targets the run was asked for wrote no archive", code)
+		t.Fatalf("exit code = %d, want 3: two of the eight targets the run was asked for wrote no archive", code)
 	}
 
-	for _, want := range []string{"5 archives written", "3 targets wrote none", "freebsd-amd64", "macos-amd64", "macos-arm64"} {
+	for _, want := range []string{"6 archives written", "2 targets wrote none", "macos-amd64", "macos-arm64"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the run's log %q does not say %q", out.String(), want)
 		}
@@ -892,11 +892,10 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 }
 
 // theSuppliedTargets are the targets whose ffmpeg binaries are compiled on the platform they run on:
-// on a Linux host they write none, and the five the host compiles are the ready targets.
+// on a Linux host they write none, and the six the host compiles are the ready targets.
 var theSuppliedTargets = map[string]bool{
-	"macos-amd64":   true,
-	"macos-arm64":   true,
-	"freebsd-amd64": true,
+	"macos-amd64": true,
+	"macos-arm64": true,
 }
 
 // skipTheSuppliedTargets is the ffmpeg phase of a machine that is not the platform the supplied
@@ -1122,21 +1121,21 @@ func skipsSuppliedTargets(tl *tool, ran *[]step) {
 	}
 }
 
-// Binaries that were not dropped are not a failure. The three supplied targets are built on three machines
-// the release machine does not control, and a run that stopped for the one it does not have would ship
-// nothing at all — not the five archives it could have shipped, and not the two it was told to build. The
-// run says which target it skipped and what would have made it buildable, ships the rest, and ends with
-// the summary that says the release is incomplete: five of the eight archives it was asked for.
+// Binaries that were not dropped are not a failure. The two supplied targets are built on machines the
+// release machine does not control, and a run that stopped at a target whose binaries it was not given would
+// ship nothing at all — not the six archives it could have shipped, and not the archives it was told to
+// build. The run says which target it skipped and what would have made it buildable, ships the rest, and
+// ends with the summary that says the release is incomplete: six of the eight archives it was asked for.
 func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
 	skipsSuppliedTargets(tl, ran)
 
 	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
-		t.Fatalf("exit code = %d, want 3: a release run missing three supplied targets' binaries ships the five it can and says the release is incomplete", code)
+		t.Fatalf("exit code = %d, want 3: a release run missing two supplied targets' binaries ships the six it can and says the release is incomplete", code)
 	}
 
-	for _, target := range []string{"freebsd-amd64", "macos-amd64", "macos-arm64"} {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		for _, want := range []string{
 			"the ffmpeg for " + target + " was not supplied",
 			"internal/infrastructure/ffmpeg/bundle/" + target,
@@ -1155,15 +1154,15 @@ func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
 			archives++
 		}
 
-		for _, target := range []string{"freebsd-amd64", "macos-amd64", "macos-arm64"} {
+		for _, target := range []string{"macos-amd64", "macos-arm64"} {
 			if strings.Contains(s.result, target) {
 				t.Errorf("%s ran for %s, a target the release run skipped", s.label, s.result)
 			}
 		}
 	}
 
-	if archives != 5 {
-		t.Errorf("the run wrote %d archives, want the five of the targets this build compiles an ffmpeg for", archives)
+	if archives != 6 {
+		t.Errorf("the run wrote %d archives, want the six of the targets this build compiles an ffmpeg for", archives)
 	}
 }
 
@@ -1548,13 +1547,15 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 
 // The binaries a host compiles are run by that host, adopted into the cache entry the manifest's record
 // names, and published. The run is not a skip: the operator asked for the ffmpeg of the machine they are
-// on, and the server and the archive that carry it are what that run was for.
+// on, and the server and the archive that carry it are what that run was for. The targets a host compiles
+// are the two macOS ones, and this harness is theirs: what a container compiles is proven by the run the
+// container does, which the check tests cover.
 //
 // The manifest is the file the release reads, and the run leaves it byte for byte as it found it: nothing
 // the build learns about binaries it ran is written into a tracked file, because running them is the whole
 // of what the build needs to know about them.
 func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
-	for _, target := range []string{"macos-arm64", "freebsd-amd64"} {
+	for _, target := range []string{"macos-arm64"} {
 		tl, out, seen, repo := aNativeRun(t, target, "")
 
 		original := theManifestFile(t, repo)
@@ -1570,13 +1571,9 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 			continue
 		}
 
-		want := []string{"source", "unpack", "configure", "make", "strip"}
-
-		if strings.HasPrefix(target, "macos-") {
-			want = append(want, "sign")
-		}
-
-		want = append(want, "prove")
+		// The sign is the host's own: the macOS compile signs what it compiled with the host's codesign, and
+		// the program the host signed is the program that host's loader accepts.
+		want := []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}
 
 		if !sameWords(seen.ran, want) {
 			t.Errorf("%s: the run did %v, want %v", target, seen.ran, want)

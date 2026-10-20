@@ -149,8 +149,8 @@ func serviceChapterHeadings(guide string) []string {
 }
 
 // Which targets carry an ffmpeg is answered by the manifest, not by a second list. Every release target
-// has a record: five records name the toolchain this build compiles the ffmpeg binaries in, and three
-// name the binaries the maintainer compiles on the platform the target runs on.
+// has a record: six records name the toolchain this build compiles the ffmpeg binaries in, and two name
+// the binaries compiled on the platform the target runs on.
 func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -174,13 +174,13 @@ func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 		}
 	}
 
-	wantCompiled := []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"}
+	wantCompiled := []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"}
 
 	if strings.Join(compiled, " ") != strings.Join(wantCompiled, " ") {
 		t.Errorf("the targets this build compiles an ffmpeg for are %v, want %v", compiled, wantCompiled)
 	}
 
-	wantSupplied := []string{"freebsd-amd64", "macos-amd64", "macos-arm64"}
+	wantSupplied := []string{"macos-amd64", "macos-arm64"}
 
 	if strings.Join(supplied, " ") != strings.Join(wantSupplied, " ") {
 		t.Errorf("the targets whose ffmpeg is compiled on their own platform are %v, want %v", supplied, wantSupplied)

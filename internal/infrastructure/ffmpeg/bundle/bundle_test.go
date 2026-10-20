@@ -112,7 +112,7 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 		t.Errorf("the pinned source digest is %q, want a sha256", manifest.Source.SHA256)
 	}
 
-	want := []string{"linux-amd64", "linux-arm64", "linux-arm", "linux-386", "windows-amd64"}
+	want := []string{"linux-amd64", "linux-arm64", "linux-arm", "linux-386", "windows-amd64", "freebsd-amd64"}
 
 	for _, target := range want {
 		record, ok := manifest.Targets[target]
@@ -135,7 +135,7 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 	}
 }
 
-// The three targets this build compiles no ffmpeg for are the ones the maintainer compiles on the platform
+// The two targets this build compiles no ffmpeg for are the ones the maintainer compiles on the platform
 // each one runs on. The manifest records the compile that runs there — its flags and its make program — and
 // records no toolchain and no check environment for them, because the machine that produces the releases
 // has neither.
@@ -146,7 +146,7 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 func TestTheManifestRecordsTheSuppliedTargetsAsCompiledOnTheirOwnPlatform(t *testing.T) {
 	manifest := ReadManifest()
 
-	for _, target := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		record, ok := manifest.Targets[target]
 		if !ok {
 			t.Errorf("the manifest has no record for %s, so its release archive carries no ffmpeg of its own", target)
@@ -163,6 +163,119 @@ func TestTheManifestRecordsTheSuppliedTargetsAsCompiledOnTheirOwnPlatform(t *tes
 
 		if record.Conformance.Container != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
 			t.Errorf("%s is supplied and still records a check environment: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
+		}
+	}
+}
+
+// The FreeBSD toolchain container is a Debian container with a FreeBSD sysroot copied out of an image of
+// FreeBSD's own, and the build never runs that first image: a FreeBSD binary does not execute on this host,
+// so the sysroot arrives as data. The record names the image the sysroot comes from and the compiler command
+// that names the target, and the build reads both out of the record, so a record naming them has to read as
+// naming them.
+func TestARecordNamingASysrootImageParses(t *testing.T) {
+	manifest := ReadManifest()
+
+	record, ok := manifest.Targets["freebsd-amd64"]
+	if !ok {
+		t.Fatal("the manifest has no record for freebsd-amd64, which this build compiles in a container")
+	}
+
+	if record.Containerfile != "Containerfile.ffmpeg.freebsd" {
+		t.Errorf("freebsd-amd64 builds its toolchain from %q, want Containerfile.ffmpeg.freebsd", record.Containerfile)
+	}
+
+	if record.SysrootImage != "docker.io/freebsd/freebsd-toolchain:15.1" {
+		t.Errorf("freebsd-amd64 takes its sysroot from the image %q, want docker.io/freebsd/freebsd-toolchain:15.1", record.SysrootImage)
+	}
+
+	if record.CC != "clang --target=x86_64-unknown-freebsd --sysroot=/sysroot" {
+		t.Errorf("freebsd-amd64 compiles with %q, which is the answer configure passes to the --cc= it was given", record.CC)
+	}
+
+	// The sysroot is inside the image the compile runs in, so the build mounts nothing and the operator
+	// prepares nothing. A record naming a sysroot the operator prepared names one held outside the
+	// repositories, which is what a macOS SDK is.
+	if record.Sysroot != (Sysroot{}) {
+		t.Errorf("freebsd-amd64 names a sysroot somebody prepared: %+v", record.Sysroot)
+	}
+
+	if got := strings.Join(record.Cross, " "); got != "--enable-cross-compile --target-os=freebsd --arch=x86_64" {
+		t.Errorf("freebsd-amd64 configures with %q", got)
+	}
+
+	if got := strings.Join(record.CFlags, " "); got != "--sysroot=/sysroot" {
+		t.Errorf("freebsd-amd64 compiles with the cflags %q", got)
+	}
+
+	// Debian's own ld stamps the binary it links as a GNU program, and a FreeBSD kernel is not going to
+	// load that; naming lld is what makes the produced ELF say FreeBSD.
+	if got := strings.Join(record.LDFlags, " "); got != "-static -fuse-ld=lld --sysroot=/sysroot" {
+		t.Errorf("freebsd-amd64 links with the ldflags %q", got)
+	}
+
+	if record.Produced != "" {
+		t.Errorf("freebsd-amd64 says it is produced by %q, and this build compiles it in a container", record.Produced)
+	}
+}
+
+// A FreeBSD binary runs on FreeBSD and on nothing else: the container that compiled it runs Debian, and no
+// interpreter on this host executes a FreeBSD program. The record names the operating system the build boots
+// to run the program, and names the published image it boots at a pinned digest — a proof that runs on a
+// system the build assembled itself would prove nothing about the system the binary has to run on.
+func TestARecordNamingABootProofReportsWhatItBoots(t *testing.T) {
+	manifest := ReadManifest()
+
+	record, ok := manifest.Targets["freebsd-amd64"]
+	if !ok {
+		t.Fatal("the manifest has no record for freebsd-amd64, which this build proves by booting FreeBSD")
+	}
+
+	proof := record.Conformance.FreeBSDVM
+
+	if proof.Release != "15.1-RELEASE" {
+		t.Errorf("the FreeBSD proof boots %q, want 15.1-RELEASE", proof.Release)
+	}
+
+	image := "https://download.freebsd.org/ftp/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
+
+	if proof.URL != image {
+		t.Errorf("the FreeBSD proof boots %q, want the published image %s", proof.URL, image)
+	}
+
+	if proof.SHA256 != "e4ca4db889f8559c9b9dfcacc70405c038476f4b6d41649b152d3809a2ed9e1f" {
+		t.Errorf("the FreeBSD proof pins the image digest %q", proof.SHA256)
+	}
+
+	if proof.Bytes != 2671443968 {
+		t.Errorf("the FreeBSD proof expects an image of %d bytes, want 2671443968: that is what the pinned file unpacks to", proof.Bytes)
+	}
+
+	if record.Conformance.Container != "" || len(record.Conformance.Run) > 0 || len(record.Conformance.Reads) > 0 {
+		t.Errorf("freebsd-amd64 names a booted FreeBSD and something else to check with: container %q, run %v, reads %v",
+			record.Conformance.Container, record.Conformance.Run, record.Conformance.Reads)
+	}
+
+	// A record names one way of proving what it compiled: run it in the container that compiled it, run it
+	// under an interpreter, run it inside an operating system the build boots, or read its shape because
+	// nothing on the build host can run it. Naming more than one would let a build pick whichever is
+	// cheapest and report the other as the proof.
+	for target, rec := range manifest.Targets {
+		names := 0
+
+		if rec.Conformance.Container != "" || len(rec.Conformance.Run) > 0 {
+			names++
+		}
+
+		if rec.Conformance.FreeBSDVM.Release != "" {
+			names++
+		}
+
+		if len(rec.Conformance.Reads) > 0 {
+			names++
+		}
+
+		if names > 1 {
+			t.Errorf("%s names %d ways of proving the program it compiled, and a build that has to choose one will choose the cheapest", target, names)
 		}
 	}
 }
@@ -212,9 +325,9 @@ func TestTheManifestCarriesNoDigestOfAnyProgram(t *testing.T) {
 }
 
 // The ffmpeg binaries of a supplied target are compiled on the platform the target runs on, and the
-// manifest is where that compile is written down: the flags that set the floor the binary declares and link it the way the target needs, and
-// the make program the build runs. ffmpeg's own documentation refuses BSD make, so the FreeBSD record names
-// gmake; the macOS records name none, because the Command Line Tools carry make.
+// manifest is where that compile is written down: the flags that set the floor the binary declares and link
+// it the way the target needs, and the make program the build runs. The macOS records name no make program,
+// because the Command Line Tools carry one.
 func TestTheSuppliedRecordsNameTheCompileTheirHostRuns(t *testing.T) {
 	manifest := ReadManifest()
 
@@ -225,9 +338,8 @@ func TestTheSuppliedRecordsNameTheCompileTheirHostRuns(t *testing.T) {
 	}
 
 	want := map[string]native{
-		"freebsd-amd64": {ldflags: []string{"-static"}, make: "gmake"},
-		"macos-amd64":   {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
-		"macos-arm64":   {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
+		"macos-amd64": {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
+		"macos-arm64": {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
 	}
 
 	for target, w := range want {

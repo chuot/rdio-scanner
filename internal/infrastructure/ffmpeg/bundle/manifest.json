@@ -172,11 +172,41 @@
       ]
     },
     "freebsd-amd64": {
-      "produced": "supplied",
-      "ldflags": [
-        "-static"
+      "container": "docker.io/debian:stable",
+      "containerfile": "Containerfile.ffmpeg.freebsd",
+      "packages": [
+        "build-essential",
+        "clang",
+        "lld",
+        "curl",
+        "ca-certificates",
+        "tar",
+        "xz-utils",
+        "python3"
       ],
-      "make": "gmake"
+      "cross": [
+        "--enable-cross-compile",
+        "--target-os=freebsd",
+        "--arch=x86_64"
+      ],
+      "cc": "clang --target=x86_64-unknown-freebsd --sysroot=/sysroot",
+      "cflags": [
+        "--sysroot=/sysroot"
+      ],
+      "ldflags": [
+        "-static",
+        "-fuse-ld=lld",
+        "--sysroot=/sysroot"
+      ],
+      "sysroot_image": "docker.io/freebsd/freebsd-toolchain:15.1",
+      "conformance": {
+        "freebsd_vm": {
+          "release": "15.1-RELEASE",
+          "url": "https://download.freebsd.org/ftp/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz",
+          "sha256": "e4ca4db889f8559c9b9dfcacc70405c038476f4b6d41649b152d3809a2ed9e1f",
+          "bytes": 2671443968
+        }
+      }
     }
   }
 }
