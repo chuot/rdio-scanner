@@ -84,15 +84,15 @@ func (h host) isTheHostOf(target string) bool {
 	return found && h.goos == tr.goos && h.goarch == tr.goarch
 }
 
-// canCompile says whether this machine can produce one target's ffmpeg binaries: the operating system is the
-// target's, and the architecture is the target's, or the other architecture macOS ships.
+// canCompile says whether this machine can produce one target's ffmpeg binaries with its own toolchain: the
+// operating system is the target's, and the architecture is the target's, or the other architecture macOS
+// ships.
 //
 // Apple ships one toolchain that produces both macOS architectures: the Command Line Tools' clang takes
 // -arch x86_64 on an Apple Silicon Mac and -arch arm64 on an Intel Mac, the macOS SDK carries the
-// libraries of both, and codesign signs a program of either architecture on either machine. A FreeBSD
-// ffmpeg binary is statically linked against FreeBSD's own libc, which is the whole point of compiling it
-// there, and a host of
-// another operating system does not have it.
+// libraries of both, and codesign signs a program of either architecture on either machine. Every other
+// target this project ships an ffmpeg for is compiled in a container, wherever the build runs, so this is a
+// question only the two macOS targets can answer yes to.
 func (h host) canCompile(target string) bool {
 	tr, found := targetFor(target)
 	if !found || h.goos != tr.goos {
@@ -747,8 +747,9 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 	return plan, nil
 }
 
-// makeProgram is the make program a compile of this target runs. A record naming none runs make; the
-// FreeBSD record names gmake, because ffmpeg's build asks for GNU make and FreeBSD's base make is not it.
+// makeProgram is the make program a compile of this target runs. A record naming none runs make: the
+// containers this project compiles an ffmpeg in install the GNU make ffmpeg's build asks for, and a compile
+// on a macOS host runs that host's own make.
 func makeProgram(record bundle.Target) string {
 	if record.Make == "" {
 		return "make"
@@ -774,29 +775,17 @@ func nativeProgramsAre(record bundle.Target, target string) []string {
 //
 // A machine missing one of them cannot start the compile, and finding that out from configure's output,
 // after the source was fetched and unpacked, is a minute of work spent to learn what could have been said
-// at once. The refusal names the program and where it comes from on that platform.
+// at once. The refusal names the program and where it comes from: a compile on the target's own platform is
+// a macOS compile, and the tools it runs are the ones Apple's Command Line Tools install.
 func checkNativeToolchain(record bundle.Target, target string, state ffmpegState) error {
 	for _, name := range nativeProgramsAre(record, target) {
 		if state.nativeTools[name] == "" {
-			return fmt.Errorf("compiling the ffmpeg for %s needs %s, which this machine does not have: %s",
-				target, name, whereTheToolComesFrom(name, target))
+			return fmt.Errorf("compiling the ffmpeg for %s needs %s, which this machine does not have: the Xcode Command Line Tools carry it",
+				target, name)
 		}
 	}
 
 	return nil
-}
-
-// whereTheToolComesFrom is what installs one build tool on the platform the target runs on.
-func whereTheToolComesFrom(name string, target string) string {
-	if strings.HasPrefix(target, "freebsd-") {
-		if name == "gmake" {
-			return "pkg install gmake installs it, and ffmpeg's build asks for GNU make where FreeBSD's base make is not it"
-		}
-
-		return "it is in the FreeBSD base system"
-	}
-
-	return "the Xcode Command Line Tools carry it"
 }
 
 // suppliedDropFor is where binaries built by hand sit before this build adopts them, and where the

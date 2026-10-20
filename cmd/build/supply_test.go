@@ -459,104 +459,6 @@ func TestTheBuildRefusesAFileThatIsNotAProgramForItsTarget(t *testing.T) {
 	}
 }
 
-// The ELF numbers the FreeBSD rule is written in. FreeBSD links statically with its own libc, and these
-// are the numbers its linker writes.
-const (
-	theELFMagic      = "\x7fELF"
-	theELF64Class    = 2
-	theELF32Class    = 1
-	theFreeBSDOSABI  = 9
-	theLinuxOSABI    = 3
-	theNoneOSABI     = 0
-	theX8664Machine  = 0x3e
-	theI386Machine   = 0x03
-	theExecType      = 2
-	theLoadSegment   = 1
-	theInterpSegment = 3
-)
-
-// aFreeBSDProgram is an ELF header and the program headers a test cares about. Raw, when set, is written
-// alone: a drop that is not an ELF at all.
-type aFreeBSDProgram struct {
-	Class    byte
-	OSABI    byte
-	Machine  uint16
-	Type     uint16
-	Segments []uint32
-	Mode     os.FileMode
-	Raw      []byte
-}
-
-func writeELF(t *testing.T, name string, fixture aFreeBSDProgram) string {
-	t.Helper()
-
-	mode := fixture.Mode
-	if mode == 0 {
-		mode = 0755
-	}
-
-	path := filepath.Join(t.TempDir(), name)
-
-	if fixture.Raw != nil {
-		if err := os.WriteFile(path, fixture.Raw, mode); err != nil {
-			t.Fatalf("writing the fixture: %v", err)
-		}
-
-		return path
-	}
-
-	if err := os.WriteFile(path, elfBytes(fixture), mode); err != nil {
-		t.Fatalf("writing the fixture: %v", err)
-	}
-
-	return path
-}
-
-// elfBytes is the header and the program headers a fixture describes, laid out the way an ELF linker
-// lays them out. The identification area after the magic is the class, the byte order, the version, the
-// brand, the ABI version, and padding: the class is the fifth byte of the header and the brand the
-// eighth. The program header offset, the size of one entry, and the count of them are the words at
-// offsets 32, 54 and 56 of a 64-bit header.
-func elfBytes(fixture aFreeBSDProgram) []byte {
-	header := make([]byte, 64)
-	copy(header[0:], theELFMagic)
-	header[4] = fixture.Class
-	header[5] = 1 // EI_DATA: little-endian, which is both architectures this project ships for FreeBSD
-	header[6] = 1 // EI_VERSION
-	header[7] = fixture.OSABI
-	binary.LittleEndian.PutUint16(header[16:], fixture.Type)
-	binary.LittleEndian.PutUint16(header[18:], fixture.Machine)
-	binary.LittleEndian.PutUint64(header[32:], 64) // e_phoff: the program headers follow the header
-	binary.LittleEndian.PutUint16(header[52:], 64) // e_ehsize
-	binary.LittleEndian.PutUint16(header[54:], 56) // e_phentsize
-	binary.LittleEndian.PutUint16(header[56:], uint16(len(fixture.Segments)))
-
-	body := append([]byte{}, header...)
-
-	for _, segment := range fixture.Segments {
-		entry := make([]byte, 56)
-		binary.LittleEndian.PutUint32(entry[0:], segment)
-
-		body = append(body, entry...)
-	}
-
-	return body
-}
-
-// aStaticFreeBSDProgram is the fixture every FreeBSD rule is measured against: a 64-bit x86-64
-// executable branded FreeBSD, with no program interpreter, which is what needs nothing installed on the
-// host it runs on.
-func aStaticFreeBSDProgram() aFreeBSDProgram {
-
-	return aFreeBSDProgram{
-		Class:    theELF64Class,
-		OSABI:    theFreeBSDOSABI,
-		Machine:  theX8664Machine,
-		Type:     theExecType,
-		Segments: []uint32{theLoadSegment},
-	}
-}
-
 // aSuppliedProgramBytes is the program a maintainer drops for one target: the shape the build adopts.
 func aSuppliedProgramBytes(target string) []byte {
 	switch target {
@@ -564,8 +466,6 @@ func aSuppliedProgramBytes(target string) []byte {
 		return machOBytes(aSystemProgram(theX8664CPU))
 	case "macos-arm64":
 		return machOBytes(aSystemProgram(theArm64CPU))
-	case "freebsd-amd64":
-		return elfBytes(aStaticFreeBSDProgram())
 	}
 
 	panic("no supplied program fixture for " + target)
@@ -779,125 +679,6 @@ func TestTheRunRefusesBinariesThatDoNotConvert(t *testing.T) {
 	}
 }
 
-func aHostForTarget(target string) string {
-	goos := "linux"
-
-	switch {
-	case strings.HasPrefix(target, "macos-"):
-		goos = "darwin"
-	case strings.HasPrefix(target, "freebsd-"):
-		goos = "freebsd"
-	case strings.HasPrefix(target, "windows-"):
-		goos = "windows"
-	}
-
-	goarch := strings.SplitN(target, "-", 2)[1]
-
-	return goos + "-" + goarch
-}
-
-// FreeBSD is the release target this project ships whose ffmpeg binaries are built on FreeBSD itself, and
-// the bundle's
-// rule for it is the rule the Linux targets have: the program the server writes out and runs needs
-// nothing installed on the host.
-func TestASuppliedFreeBSDProgramIsAStaticBinaryForItsTarget(t *testing.T) {
-	path := writeELF(t, "ffmpeg", aStaticFreeBSDProgram())
-
-	if err := checkSuppliedProgram(path, "freebsd-amd64"); err != nil {
-		t.Errorf("a static x86-64 FreeBSD program was refused: %v", err)
-	}
-}
-
-// The bundle carries the operating system's own brand in the header, and the build reads it: a program
-// linked against glibc is a program that runs on Linux and not on FreeBSD, and a program branded nothing
-// is a program nobody can say anything about.
-func TestTheBuildRefusesASuppliedProgramThatIsNotFreeBSDs(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		osabi byte
-		rule  string
-	}{
-		{"a Linux program", theLinuxOSABI, "FreeBSD"},
-		{"a program branded nothing", theNoneOSABI, "FreeBSD"},
-	} {
-		fixture := aStaticFreeBSDProgram()
-		fixture.OSABI = tc.osabi
-
-		path := writeELF(t, "ffmpeg", fixture)
-
-		err := checkSuppliedProgram(path, "freebsd-amd64")
-		if err == nil {
-			t.Errorf("%s was adopted for freebsd-amd64", tc.name)
-			continue
-		}
-
-		if !strings.Contains(err.Error(), tc.rule) {
-			t.Errorf("the failure %q does not name the %s rule", err.Error(), tc.rule)
-		}
-	}
-}
-
-// The recipe the manifest records links FreeBSD statically, and that is what the compile produces. A
-// program the maintainer built by hand with a program interpreter is his choice, the same as a macOS
-// program linking a Homebrew library: the build adopts it, and the licence text names the host that
-// compiled it.
-func TestTheBuildAdoptsADynamicFreeBSDProgram(t *testing.T) {
-	fixture := aStaticFreeBSDProgram()
-	fixture.Segments = []uint32{theInterpSegment, theLoadSegment}
-
-	path := writeELF(t, "ffprobe", fixture)
-
-	if err := checkSuppliedProgram(path, "freebsd-amd64"); err != nil {
-		t.Errorf("a program with a program interpreter was refused for freebsd-amd64: %v", err)
-	}
-}
-
-// One archive per architecture, and the FreeBSD archive this project ships is the x86-64 one.
-func TestTheBuildRefusesAFreeBSDProgramOfTheOtherWidthAndArchitecture(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		patch func(*aFreeBSDProgram)
-		rule  string
-	}{
-		{
-			name: "an i386 program",
-			patch: func(f *aFreeBSDProgram) {
-				f.Machine = theI386Machine
-			},
-			rule: "architecture",
-		},
-		{
-			name: "a 32-bit program",
-			patch: func(f *aFreeBSDProgram) {
-				f.Class = theELF32Class
-			},
-			rule: "64-bit",
-		},
-		{
-			name: "not an ELF at all",
-			patch: func(f *aFreeBSDProgram) {
-				f.Raw = []byte{0xcf, 0xfa, 0xed, 0xfe} // the Mach-O 64-bit magic, which is not an ELF
-			},
-			rule: "ELF",
-		},
-	} {
-		fixture := aStaticFreeBSDProgram()
-		tc.patch(&fixture)
-
-		path := writeELF(t, "ffmpeg", fixture)
-
-		err := checkSuppliedProgram(path, "freebsd-amd64")
-		if err == nil {
-			t.Errorf("%s was adopted for freebsd-amd64", tc.name)
-			continue
-		}
-
-		if !strings.Contains(err.Error(), tc.rule) {
-			t.Errorf("%s: the failure %q does not name the %s rule", tc.name, err.Error(), tc.rule)
-		}
-	}
-}
-
 // theManifestFile is the manifest this repository tracks, copied into a tree the build may write a pin
 // into. The test works on the file as it is written, because the rule is which bytes of it move.
 func theManifestFile(t *testing.T, repo string) []byte {
@@ -922,14 +703,12 @@ func theManifestFile(t *testing.T, repo string) []byte {
 }
 
 // The header a program carries is the promise its reader keeps. A Mach-O header names its load commands
-// twice — the count of them at offset 16, and the size they occupy at offset 20, two different numbers.
-// An ELF program's class is the sixth byte of its identification area and its brand the ninth, with a
-// padding byte between the magic and the class. A universal binary's magic is big-endian on disk,
-// whatever machine produced it. A fixture that writes the bytes its own reader happens to look at,
-// instead of the bytes a linker writes, proves the reader agrees with itself and proves nothing about a
-// program: that is how a program compiled on a Mac came to be refused as a header whose load commands do
-// not fit inside what it describes, and how a FreeBSD program compiled on FreeBSD came to be refused as
-// a 32-bit one. This test reads the fixtures' own bytes back at the published offsets.
+// twice — the count of them at offset 16, and the size they occupy at offset 20, two different numbers. A
+// universal binary's magic is big-endian on disk, whatever machine produced it. A fixture that writes the
+// bytes its own reader happens to look at, instead of the bytes a linker writes, proves the reader agrees
+// with itself and proves nothing about a program: that is how a program compiled on a Mac came to be refused
+// as a header whose load commands do not fit inside what it describes. This test reads the fixtures' own
+// bytes back at the published offsets.
 func TestTheFixtureProgramsAreLaidOutTheWayLinkersLayThemOut(t *testing.T) {
 	t.Run("the Mach-O header names its load commands twice", func(t *testing.T) {
 		fixture := aSystemProgram(theArm64CPU)
@@ -978,30 +757,6 @@ func TestTheFixtureProgramsAreLaidOutTheWayLinkersLayThemOut(t *testing.T) {
 
 		if got := binary.BigEndian.Uint32(bytes[0:]); got != theFatMagic {
 			t.Errorf("the fixture writes the universal magic as the bytes %x, want ca fe ba be", bytes[0:4])
-		}
-	})
-
-	t.Run("the ELF identification area carries the class and the brand", func(t *testing.T) {
-		bytes := elfBytes(aStaticFreeBSDProgram())
-
-		if bytes[4] != theELF64Class {
-			t.Errorf("the class is the byte %d at offset 4, want %d: the fifth byte of the header is the class", bytes[4], theELF64Class)
-		}
-
-		if bytes[5] != 1 {
-			t.Errorf("the byte order is %d at offset 5, want 1: the sixth byte says how the words are ordered", bytes[5])
-		}
-
-		if bytes[6] != 1 {
-			t.Errorf("the version is the byte %d at offset 6, want 1: the seventh byte is the version", bytes[6])
-		}
-
-		if bytes[7] != theFreeBSDOSABI {
-			t.Errorf("the brand is the byte %d at offset 7, want %d: the eighth byte of the header is the brand", bytes[7], theFreeBSDOSABI)
-		}
-
-		if bytes[9] != 0 {
-			t.Errorf("the padding at offset 9 holds %d: a program puts nothing in the bytes after its ABI version", bytes[9])
 		}
 	})
 }

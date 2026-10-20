@@ -28,25 +28,25 @@ import (
 	"strings"
 )
 
-// The rules the ffmpeg binaries compiled on their own platform are adopted under.
+// The rules the macOS ffmpeg binaries are admitted under — the ones this build compiled with a Mac's own
+// toolchain, and the ones a maintainer built by hand and dropped.
 //
-// The machine that produces the releases runs Linux, and it cannot execute a macOS program or a FreeBSD
-// one. So the build reads what it can read — the headers the target's own linker wrote — and requires the
-// binaries to be the programs that target runs, in the form the bundle's rule asks for:
+// The machine that produces the releases runs Linux, and it cannot execute a macOS program. So the build
+// reads what it can read — the headers the target's own linker wrote — and requires the binaries to be the
+// programs that target runs, in the form the bundle's rule asks for:
 //
 //	macos-amd64, macos-arm64  a thin 64-bit Mach-O holding that architecture's machine code, because an
 //	                          Apple Silicon Mac runs arm64 and x86-64 alike and running the binaries
 //	                          cannot say which one the compiler produced
 //
-//	freebsd-amd64             a 64-bit x86-64 ELF branded FreeBSD, because a FreeBSD program is FreeBSD's
-//	                          own libc, and a binary branded for another system is not a FreeBSD program
+// Every other target this project ships an ffmpeg for is compiled in a container, which produces the
+// program that target runs; nothing is admitted into such a target from outside the compile that made it.
 //
 // The one thing this build reads out of a program it did not compile is which machine code the file
-// holds. The failures the audit layers used to name — a Homebrew bottle, an unsigned Apple Silicon
-// binary, a dynamically linked FreeBSD binary — are the business of the machine that built the program,
-// and the licence text the archive carries names that machine. The architecture is not: an Apple Silicon
-// Mac runs arm64 and x86-64 alike, so running the program it compiled for the other architecture cannot
-// tell it what the compiler produced.
+// holds. The failures the audit layers used to name — a Homebrew bottle, an unsigned Apple Silicon binary —
+// are the business of the machine that built the program, and the licence text the archive carries names
+// that machine. The architecture is not: an Apple Silicon Mac runs arm64 and x86-64 alike, so running the
+// program it compiled for the other architecture cannot tell it what the compiler produced.
 const (
 	machOMagic   = 0xfeedfacf // MH_MAGIC_64: a thin 64-bit image, little-endian
 	machO32Magic = 0xfeedface // MH_MAGIC: 32-bit, which no release of this project ships
@@ -56,13 +56,6 @@ const (
 	cpuArm64 = 0x0100000c // CPU_TYPE_ARM64
 
 	machOHeaderSize = 32
-
-	elfMagic        = "\x7fELF"
-	elf64Class      = 2  // EI_CLASS: 64-bit
-	elfFreeBSDOSABI = 9  // EI_OSABI: ELFOSABI_FREEBSD
-	elfX8664Machine = 62 // e_machine: EM_X86_64
-
-	elfHeaderSize = 64
 )
 
 // checkSuppliedProgram reports whether the program at path is the program the given target runs.
@@ -91,8 +84,6 @@ func checkSuppliedProgram(path string, target string) error {
 		return checkMachO(path, name, cpuX8664, target)
 	case "macos-arm64":
 		return checkMachO(path, name, cpuArm64, target)
-	case "freebsd-amd64":
-		return checkFreeBSDProgram(path, name, target)
 	}
 
 	return fmt.Errorf("%s is not a target this project supplies an ffmpeg for", target)
@@ -139,42 +130,6 @@ func checkMachO(path string, name string, cpuType uint32, target string) error {
 	return nil
 }
 
-// checkFreeBSDProgram reports whether the program at path is a 64-bit x86-64 ELF branded FreeBSD, which is
-// the machine code freebsd-amd64 runs. Whether it links FreeBSD's loader and libraries is the business of
-// the FreeBSD box that built it, and the licence text names that box.
-func checkFreeBSDProgram(path string, name string, target string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("the supplied %s for %s cannot be read: %w", name, target, err)
-	}
-	defer f.Close()
-
-	header := make([]byte, elfHeaderSize)
-	if _, err := io.ReadFull(f, header); err != nil {
-		return fmt.Errorf("the supplied %s for %s is not an ELF program: it is shorter than the header an ELF program starts with", name, target)
-	}
-
-	if string(header[0:4]) != elfMagic {
-		return fmt.Errorf("the supplied %s for %s is not an ELF program: %s carries the ffmpeg binaries its own architecture runs", name, target, target)
-	}
-
-	// The identification area is the magic, the class, the byte order, the version, the brand, the ABI
-	// version, and then padding: the class is the fifth byte of the header and the brand the eighth.
-	if header[4] != elf64Class {
-		return fmt.Errorf("the supplied %s for %s is a 32-bit program: the FreeBSD release this project ships is 64-bit", name, target)
-	}
-
-	if osabi := header[7]; osabi != elfFreeBSDOSABI {
-		return fmt.Errorf("the supplied %s is branded %s, and %s runs the ffmpeg binaries built on FreeBSD: build them on FreeBSD, with FreeBSD's own libc", name, nameOfOSABI(osabi), target)
-	}
-
-	if machine := binary.LittleEndian.Uint16(header[18:]); machine != elfX8664Machine {
-		return fmt.Errorf("the supplied %s is compiled for the %s architecture, and %s runs x86-64", name, nameOfMachine(machine), target)
-	}
-
-	return nil
-}
-
 func nameOfCPU(cpuType uint32) string {
 	switch cpuType {
 	case cpuX8664:
@@ -184,36 +139,6 @@ func nameOfCPU(cpuType uint32) string {
 	}
 
 	return fmt.Sprintf("0x%x", cpuType)
-}
-
-func nameOfOSABI(osabi byte) string {
-	switch osabi {
-	case 0:
-		return "nothing at all"
-	case 3:
-		return "Linux"
-	case 9:
-		return "FreeBSD"
-	case 10:
-		return "OpenBSD"
-	case 6:
-		return "Solaris"
-	}
-
-	return fmt.Sprintf("brand %d", osabi)
-}
-
-func nameOfMachine(machine uint16) string {
-	switch machine {
-	case 3:
-		return "i386"
-	case 62:
-		return "x86-64"
-	case 180:
-		return "aarch64"
-	}
-
-	return fmt.Sprintf("0x%x", machine)
 }
 
 // theRunOfTheBinaries is what the build saw when it ran the ffmpeg binaries: the machine that ran them,
