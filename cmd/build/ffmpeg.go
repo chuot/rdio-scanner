@@ -205,6 +205,11 @@ type ffmpegPlan struct {
 	// build container does not have.
 	Image  string
 	Runner string
+
+	// Reads are the things this target's record says to read out of the pair it compiled, and is empty for
+	// every target whose proof is a run. A plan that names reads builds no runner container, and the run
+	// spends the step the others spend running on reading instead.
+	Reads []string
 }
 
 // ffmpegPathsFor is where one target's pieces are kept. The cache key is in the path, so a recipe that
@@ -423,6 +428,15 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		return ffmpegPlan{Target: target, Says: "no ffmpeg is compiled for " + target}, nil
 	}
 
+	// A record names one proof for the pair its target compiles: the container that runs it through the
+	// converter's own argument list, or the things to read out of the files it produced. Naming both would
+	// leave this build to choose which proof the release ships, and the cheaper one is the choice a build
+	// under pressure makes.
+	if len(record.Conformance.Reads) > 0 && (len(record.Conformance.Run) > 0 || record.Conformance.Container != "") {
+		return ffmpegPlan{}, fmt.Errorf("the %s record names two proofs at once: its conformance run %q, its conformance container %q, and its conformance reads %q. A record names one proof, and this build will not guess which one %s means",
+			target, strings.Join(record.Conformance.Run, " "), record.Conformance.Container, strings.Join(record.Conformance.Reads, " "), target)
+	}
+
 	paths := ffmpegPathsFor(repo, manifest, target)
 
 	if record.Produced == suppliedProduction {
@@ -467,6 +481,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		Paths:  paths,
 		Image:  image,
 		Runner: runner,
+		Reads:  record.Conformance.Reads,
 	}
 
 	packages := record.Packages
@@ -528,7 +543,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 
 	plan.Steps = append(plan.Steps, step{
 		label:  "make",
-		result: "ffmpeg and ffprobe for " + target,
+		result: whatTheCompileProduced(record, target),
 		dir:    repo,
 		name:   program.name,
 		args: append(program.run(),
@@ -897,6 +912,17 @@ func theContainerfileFor(record bundle.Target) string {
 	return sharedContainerfile
 }
 
+// whatTheCompileProduced is what the compile step tells the operator it made. A record that proves its pair
+// by reading it has a pair nothing on this machine ran, and the step that compiled it says so; a record that
+// proves its pair by running it spends that claim on the run that follows.
+func whatTheCompileProduced(record bundle.Target, target string) string {
+	if len(record.Conformance.Reads) > 0 {
+		return "ffmpeg and ffprobe for " + target + ", compiled and not run"
+	}
+
+	return "ffmpeg and ffprobe for " + target
+}
+
 // configureStep is the trimmed build asked of the source: the recipe, then what makes the compile cross
 // to this target, then the flags that link it statically for the target's word size.
 //
@@ -1102,16 +1128,27 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 			fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
 		}
 
-		report, err := t.runFFMPEGCheck(theContainerProgram{name: state.program}, plan, manifest, record, target)
-		if err != nil {
-			return false, err
-		}
+		if len(plan.Reads) > 0 {
+			// The record names what proves the pair because nothing on this machine can start it. The build
+			// reads those things out of the files the container left behind, and the pair is not run here or
+			// anywhere: nothing is compressed, cached, or published until the pair says every one of them.
+			if err := readTheCompiledPair(plan.Paths, manifest, record, target); err != nil {
+				return false, err
+			}
 
-		fmt.Fprintf(stdout, "%-7s %d conversions, %d codecs, %s s to %s s\n", "check", report.Conversions,
-			len(report.Codecs.Audio),
-			strconv.FormatFloat(report.Shortest, 'f', 6, 64),
-			strconv.FormatFloat(report.Longest, 'f', 6, 64),
-		)
+			fmt.Fprintf(stdout, "%-7s %s\n", "read", strings.Join(plan.Reads, " "))
+		} else {
+			report, err := t.runFFMPEGCheck(theContainerProgram{name: state.program}, plan, manifest, record, target)
+			if err != nil {
+				return false, err
+			}
+
+			fmt.Fprintf(stdout, "%-7s %d conversions, %d codecs, %s s to %s s\n", "check", report.Conversions,
+				len(report.Codecs.Audio),
+				strconv.FormatFloat(report.Shortest, 'f', 6, 64),
+				strconv.FormatFloat(report.Longest, 'f', 6, 64),
+			)
+		}
 
 		if err := gzipCompiled(plan.Paths, manifest, target); err != nil {
 			return false, err

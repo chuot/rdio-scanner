@@ -184,11 +184,12 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // lives; what belongs to a target alone is its container, the file that image is built from, what gets
 // installed in it, the image a sysroot is copied out of when the target's operating system is not the one the
 // build container runs, the compiler invocation a cross compile names, what makes the compile cross, the flags
-// it links with, and the container its programs are checked in.
+// it links with, the container its programs are checked in when a run is what proves them, and the things the
+// build reads out of the pair when no run can.
 //
 // None of these targets is compiled on the platform its binaries run on, and none is skipped: a compiled record
 // that answered either way would build a server around a target the build quietly gave up on.
-func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
+func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
 	cases := []struct {
@@ -203,6 +204,7 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 		ldflags     string
 		checked     string   // checks in this container: empty is the container that compiled them
 		checkedWith []string // what that container installs
+		reads       []string // what the plan reads out of the pair instead of running it: empty is a run
 	}{
 		{
 			target:      "freebsd-amd64",
@@ -214,6 +216,7 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 			cross:       []string{"--enable-cross-compile", "--target-os=freebsd", "--arch=x86_64"},
 			cflags:      "--sysroot=/sysroot",
 			ldflags:     "-static -fuse-ld=lld --sysroot=/sysroot",
+			reads:       []string{"elf64", "exec", "x86_64", "osabi_freebsd", "static", "comment"},
 		},
 		{
 			target:    "linux-386",
@@ -326,6 +329,31 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 			}
 		}
 
+		// What proves the compiled pair is what the record names, and the plan carries that answer: a target
+		// that is read is never also run, and its compile step says which of the two the release ships.
+		if named := manifest.Targets[c.target].Conformance.Reads; !sameArgs(named, c.reads) {
+			t.Errorf("%s's record names %v as what to read out of its compiled pair, want %v", c.target, named, c.reads)
+		}
+
+		if !sameArgs(plan.Reads, c.reads) {
+			t.Errorf("%s plans to read %v out of the pair it compiles, want %v", c.target, plan.Reads, c.reads)
+		}
+
+		make, ok := stepNamed(plan, "make")
+		if !ok {
+			t.Errorf("%s has no step that compiles the pair", c.target)
+			continue
+		}
+
+		notRun := strings.Contains(make.result, "compiled and not run")
+		if len(c.reads) > 0 && !notRun {
+			t.Errorf("%s compiles a pair nothing on this machine can start, and its compile step says %q", c.target, make.result)
+		}
+
+		if len(c.reads) == 0 && notRun {
+			t.Errorf("%s says %q, and what follows in that run does start that pair", c.target, make.result)
+		}
+
 		configure, ok := stepNamed(plan, "configure")
 		if !ok {
 			t.Errorf("%s has no step that configures the source", c.target)
@@ -372,6 +400,9 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 // system the target runs on. A Mac running the release compiles the FreeBSD ffmpeg exactly as this host does,
 // and a plan that answered otherwise would either ask that Mac for a FreeBSD toolchain it does not have, or
 // skip a target its own record says it compiles.
+//
+// What the plan does with the pair once it is compiled is the same on all three hosts as well: it reads it,
+// because none of them can start a FreeBSD program.
 func TestTheFfmpegForFreeBSDIsCompiledInAContainerWhateverHostRunsTheBuild(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -409,6 +440,49 @@ func TestTheFfmpegForFreeBSDIsCompiledInAContainerWhateverHostRunsTheBuild(t *te
 			t.Errorf("freebsd-amd64 on a %s %s host copies its sysroot out of %q, want docker.io/freebsd/freebsd-toolchain:15.1",
 				machine.goos, machine.goarch, sysroot)
 		}
+
+		// Nothing on any of these hosts starts a FreeBSD program, so the plan spends no step preparing a
+		// container to run the pair in, and the step that compiles it says the pair was compiled and not run.
+		if _, has := stepNamed(plan, "runner"); has {
+			t.Errorf("freebsd-amd64 on a %s %s host prepares a container to run the compiled pair in, and no host runs a FreeBSD program",
+				machine.goos, machine.goarch)
+		}
+
+		if want := []string{"elf64", "exec", "x86_64", "osabi_freebsd", "static", "comment"}; !sameArgs(plan.Reads, want) {
+			t.Errorf("freebsd-amd64 on a %s %s host reads %v out of the pair, want %v",
+				machine.goos, machine.goarch, plan.Reads, want)
+		}
+
+		make, ok := stepNamed(plan, "make")
+		if !ok {
+			t.Errorf("freebsd-amd64 on a %s %s host has no step that compiles the pair", machine.goos, machine.goarch)
+			continue
+		}
+
+		if !strings.Contains(make.result, "compiled and not run") {
+			t.Errorf("freebsd-amd64 on a %s %s host compiles the pair in its compile step as %q, and nothing in that run starts it",
+				machine.goos, machine.goarch, make.result)
+		}
+	}
+}
+
+// A record names one proof. A record naming two is refused rather than planned: the cheaper proof is the one a
+// build under pressure ends up making, and the release would carry a pair wearing a claim nobody chose.
+func TestARecordNamingBothARunAndAReadIsRefused(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["freebsd-amd64"]
+	record.Conformance.Run = []string{"/work/ffmpeg-9.0.2/ffmpeg", "-version"}
+
+	manifest.Targets["freebsd-amd64"] = record
+
+	_, err := planFFmpeg(options{target: "freebsd-amd64"}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
+	if err == nil {
+		t.Fatal("the build planned a target whose record names both a run and a read")
+	}
+
+	if !strings.Contains(err.Error(), "will not guess") {
+		t.Errorf("the refusal %q does not say it refuses to guess which proof the record means", err.Error())
 	}
 }
 

@@ -63,7 +63,9 @@ type Source struct {
 //
 // A record with no `produced` names a toolchain: the container that holds it, the Containerfile that builds
 // it, the packages to install in it, and the configure arguments that make the compile cross to it. This
-// build compiles that target's ffmpeg and runs the binaries it produced.
+// build compiles that target's ffmpeg and proves the pair it produced the way its `conformance` says to: by
+// running it, or, when no host this build runs on can start it, by reading out of the files what the record
+// names.
 //
 // A record with `produced` saying `supplied` names no container, no packages, no cross arguments, and no
 // check environment: the machine that produces the releases has none of those for it, and asking for one
