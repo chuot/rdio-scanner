@@ -174,6 +174,158 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 	}
 }
 
+// What each container target is compiled with, and where its compiled programs are run to be checked, is
+// recorded one target at a time. The plan is where the build commits to that answer, so the values below are
+// written out instead of read back off the manifest: the container work this release is doing reaches those
+// records, and a record that moves by mistake has to trip a test rather than quietly recompile five targets
+// under a toolchain nobody chose.
+//
+// The configure recipe is not repeated here. It is the one list these targets share, and it is gated where it
+// lives; what belongs to a target alone is its container, what gets installed in it, what makes the compile
+// cross, the flags it links with, and the container its programs are checked in.
+func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	cases := []struct {
+		target      string
+		container   string
+		installs    []string
+		cross       []string
+		cflags      string
+		ldflags     string
+		checked     string   // checks in this container: empty is the container that compiled them
+		checkedWith []string // what that container installs
+	}{
+		{
+			target:    "linux-386",
+			container: "docker.io/debian:stable",
+			installs:  []string{"build-essential", "gcc-multilib", "libc6-dev-i386", "qemu-user-static"},
+			cflags:    "-m32",
+			ldflags:   "-static -m32",
+		},
+		{
+			target:    "linux-amd64",
+			container: "docker.io/debian:stable",
+			installs:  []string{"build-essential"},
+			ldflags:   "-static",
+		},
+		{
+			target:    "linux-arm",
+			container: "docker.io/debian:stable",
+			installs:  []string{"build-essential", "gcc-arm-linux-gnueabihf", "libc6-dev-armhf-cross", "qemu-user-static"},
+			cross:     []string{"--enable-cross-compile", "--target-os=linux", "--arch=arm", "--cross-prefix=arm-linux-gnueabihf-"},
+			ldflags:   "-static",
+		},
+		{
+			target:    "linux-arm64",
+			container: "docker.io/debian:stable",
+			installs:  []string{"build-essential", "gcc-aarch64-linux-gnu", "libc6-dev-arm64-cross", "qemu-user-static"},
+			cross:     []string{"--enable-cross-compile", "--target-os=linux", "--arch=aarch64", "--cross-prefix=aarch64-linux-gnu-"},
+			ldflags:   "-static",
+		},
+		{
+			target:      "windows-amd64",
+			container:   "docker.io/alpine:latest",
+			installs:    []string{"build-base", "mingw-w64-gcc"},
+			cross:       []string{"--enable-cross-compile", "--target-os=win64", "--arch=x86_64", "--cross-prefix=x86_64-w64-mingw32-"},
+			ldflags:     "-static -static-libgcc",
+			checked:     "docker.io/debian:stable",
+			checkedWith: []string{"wine"},
+		},
+	}
+
+	for _, c := range cases {
+		plan, err := planFFmpeg(options{target: c.target}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
+		if err != nil {
+			t.Errorf("the build refused %s: %v", c.target, err)
+			continue
+		}
+
+		image, ok := stepNamed(plan, "image")
+		if !ok {
+			t.Errorf("%s has no step that prepares the container it compiles in", c.target)
+			continue
+		}
+
+		built := containerBuildArgs(image.args)
+		if built["base"] != c.container {
+			t.Errorf("%s compiles in %q, want %s", c.target, built["base"], c.container)
+		}
+		if built["packages"] != strings.Join(c.installs, " ") {
+			t.Errorf("%s installs %q, want %s", c.target, built["packages"], strings.Join(c.installs, " "))
+		}
+
+		runner, hasRunner := stepNamed(plan, "runner")
+		if c.checked == "" {
+			if hasRunner {
+				t.Errorf("%s prepares a second container, %s, which its record never asked for: %v",
+					c.target, containerBuildArgs(runner.args)["base"], runner.args)
+			}
+			if plan.Runner != plan.Image {
+				t.Errorf("%s checks the programs it compiled in %s, want the build container %s",
+					c.target, plan.Runner, plan.Image)
+			}
+		} else if !hasRunner {
+			t.Errorf("%s has no step that prepares %s, the container its programs are checked in", c.target, c.checked)
+		} else {
+			checked := containerBuildArgs(runner.args)
+			if checked["base"] != c.checked {
+				t.Errorf("%s checks its programs in %q, want %s", c.target, checked["base"], c.checked)
+			}
+			if checked["packages"] != strings.Join(c.checkedWith, " ") {
+				t.Errorf("%s checks its programs in a container installing %q, want %s",
+					c.target, checked["packages"], strings.Join(c.checkedWith, " "))
+			}
+			if plan.Runner == plan.Image {
+				t.Errorf("%s would check its programs in the container that compiled them", c.target)
+			}
+		}
+
+		configure, ok := stepNamed(plan, "configure")
+		if !ok {
+			t.Errorf("%s has no step that configures the source", c.target)
+			continue
+		}
+
+		// A target's own flags come after the recipe: what makes the compile cross, then the flags it links
+		// with. Cross flags where none were chosen, or a link flag that is not the one recorded, is a
+		// different compile than the one this release answers for.
+		want := []string{}
+		want = append(want, c.cross...)
+		if c.cflags != "" {
+			want = append(want, "--extra-cflags="+c.cflags)
+		}
+		if c.ldflags != "" {
+			want = append(want, "--extra-ldflags="+c.ldflags)
+		}
+
+		got := configure.args
+		if len(got) > len(want) {
+			got = got[len(got)-len(want):]
+		}
+		if !sameArgs(got, want) {
+			t.Errorf("%s ends configure with %v, want %v", c.target, got, want)
+		}
+	}
+}
+
+// containerBuildArgs is the --build-arg of a step that prepares a container, keyed by what it sets.
+func containerBuildArgs(args []string) map[string]string {
+	out := map[string]string{}
+
+	for i, arg := range args {
+		if arg != "--build-arg" || i+1 >= len(args) {
+			continue
+		}
+
+		if key, value, ok := strings.Cut(args[i+1], "="); ok {
+			out[key] = value
+		}
+	}
+
+	return out
+}
+
 // A Windows build has no ffmpeg make target: the rule is %$(PROGSSUF)$(EXESUF), and make ffmpeg
 // fails with "No rule to make target". Plain make builds both programs.
 func TestTheFfmpegBuildRunsPlainMakeForAWindowsTarget(t *testing.T) {
