@@ -591,7 +591,7 @@ func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) 
 // git is a prerequisite of this build, and it writes to both streams: its version to standard output,
 // and its complaint about a tree that is not a repository to standard error.
 func TestAStepsOwnOutputReachesTheOperator(t *testing.T) {
-	dir := t.TempDir()
+	dir := scratchWithoutARepository(t)
 
 	out, errout, restore := theOperatorsStreams(t)
 

@@ -296,10 +296,37 @@ func TestReadSourceReportsAVersionTheRepositoryNeverDeclaredAsAssumed(t *testing
 	}
 }
 
+// A scratch directory with no repository above it. Both tests below are about git refusing a tree it cannot answer
+// for, and git answers by walking upward: when the scratch a test makes sits inside a repository — which is where this
+// repository's own tooling puts its scratch — git finds that enclosing tree and answers for it, and the premise the
+// test states would depend on wherever the operator happened to point TMPDIR. GIT_CEILING_DIRECTORIES names the
+// boundary git agrees not to cross, and the tree git is asked about has to sit strictly inside that boundary, because
+// git treats a ceiling it is pointed at as the tree it was asked about and walks past it. The paths are resolved
+// because git compares resolved paths, and scratch made under a symlinked temporary directory would otherwise be
+// searched beyond the boundary.
+func scratchWithoutARepository(t *testing.T) string {
+	t.Helper()
+
+	below, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("the scratch directory cannot be resolved: %v", err)
+	}
+
+	dir := filepath.Join(below, "tree")
+
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("making the scratch directory: %v", err)
+	}
+
+	t.Setenv("GIT_CEILING_DIRECTORIES", below)
+
+	return dir
+}
+
 // A directory that is not a repository cannot answer what it is built from, and saying so is better
 // than building something whose version is a guess.
 func TestReadSourceRefusesADirectoryThatIsNotARepository(t *testing.T) {
-	dir := t.TempDir()
+	dir := scratchWithoutARepository(t)
 	writeScratchVersionFile(t, dir, "8.0.0\n")
 
 	if _, err := readSource(dir); err == nil {
@@ -328,7 +355,7 @@ func TestReadSourceRefusesAVersionFileItCannotReadBeforeAskingGit(t *testing.T) 
 // says what to do — a tree that is not a repository, a commit no tag names — and an error that says
 // only "exit status 128" sends the operator to run git themselves to learn what the tool already knew.
 func TestATreeGitCannotAnswerForNamesGitTheDirectoryAndTheCommand(t *testing.T) {
-	dir := t.TempDir()
+	dir := scratchWithoutARepository(t)
 
 	_, err := git(dir, "rev-parse", "--show-toplevel")
 	if err == nil {
