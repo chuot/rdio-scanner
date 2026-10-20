@@ -269,6 +269,46 @@ func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
 	}
 }
 
+// The rule about names is not only about the light beside the branding line. The screen's other two parts are
+// named by the shipped code as well: the component that paints the rows describes itself as the LCD display rows,
+// the history table, and the unlock overlay, and the nine controls are one component the guide calls the control
+// bar. Carrying those nouns into the section titles is only half the work, because a reader meets the sentences
+// that introduce the sections and the alternative text that describes a picture. A lead that says the screen is
+// built in "three areas" introduces a section titled *The screen in three parts* and a caption that says "three
+// parts"; a sentence that says "the area starts dimmed" sits in a chapter named for the display, in a document
+// whose third chapter already says the display starts dimmed; an alternative text that says "the control row"
+// describes a region the guide names the control bar everywhere else. Each of those leaves a reader holding two
+// names for one thing.
+func TestTheGuideNamesTheScreensPartsAsTheComponentsPaintThem(t *testing.T) {
+	body := userGuidePath(t)
+
+	// A picture carried inside the guide is a long run of base64, and base64 spells the same letters by chance.
+	// The claim here is about the words the guide says, so the bytes of its own pictures come out first.
+	prose := regexp.MustCompile(`src="data:[^"]*"`).ReplaceAllString(body, `src=""`)
+
+	for _, paraphrase := range []string{"three areas", "the area starts", "the display area", "the control area", "control row of the listening screen"} {
+		if hits := regexp.MustCompile(`(?i)`+paraphrase).FindAllString(prose, -1); len(hits) > 0 {
+			t.Errorf("the guide names a region of the screen %q %d times, where the shipped components and the guide's own section titles name it the display, the control bar, or one of the three parts of the screen", paraphrase, len(hits))
+		}
+	}
+
+	main := guideSpoken(userGuideChapter(t, body, "ch-02-the-main-screen"))
+
+	if !strings.Contains(main, "built in three parts") {
+		t.Errorf("the chapter on the main screen never says the screen is built in three parts, which is the reading its own section title and its own table caption carry")
+	}
+
+	if !strings.Contains(main, "the display, and the control bar") {
+		t.Errorf("the chapter on the main screen never names the display and the control bar as the two parts the branding line sits beside, which is the order the shipped page lays them out in")
+	}
+
+	display := guideSpoken(userGuideChapter(t, body, "ch-06-what-the-display-says"))
+
+	if matched, _ := regexp.MatchString(`(?i)\bthe display starts dimmed\b`, display); !matched {
+		t.Errorf("the chapter on the display never says the display starts dimmed, which is what the shipped dimmer does and what the chapter on listening to live calls already says")
+	}
+}
+
 // The second chapter describes the screen the way the application assembles it: the branding line the operator
 // sets, the LED and the three states it takes, the display with what each row holds before a first call has
 // arrived, the control bar, and the version line. The names are the ones the components write, and the
@@ -582,6 +622,21 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 
 	if strings.Contains(spoken, "1970") {
 		t.Errorf("the chapter on searching recorded calls bounds the date field to a date in 1970, which is a bound the panel refuses to set when an answer holds no calls")
+	}
+
+	// The busy marking belongs to one element: the shipped panel writes it onto the bar it keeps in the layout while
+	// a search runs. The chapter's first draft wrote the marking as something the panel claims for itself, which is a
+	// state the shipped panel sets neither on the panel nor on the calls it found, and a reader who believed it would
+	// look for a busy reading over the table that is not there. What the panel does for that reader is leave every
+	// control in place and marked as doing nothing, and say out loud what it is doing.
+	if strings.Contains(spoken, "panel marks itself busy") {
+		t.Errorf("the chapter on searching recorded calls says the panel marks itself busy, which is a marking the shipped panel writes onto the progress bar it keeps in the layout, not onto the panel or onto the calls it found")
+	}
+
+	for _, carrier := range []string{"progress bar", "is marked as busy"} {
+		if !strings.Contains(spoken, carrier) {
+			t.Errorf("the chapter on searching recorded calls never names %q, which is the element the shipped panel marks busy while an answer is on its way", carrier)
+		}
 	}
 
 	// The actions column has no heading, which the chapter has to say because it is the one column a reader
@@ -918,6 +973,39 @@ func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 
 	if !strings.Contains(spoken, "first column of the search results") {
 		t.Errorf("the chapter on keyboards and screen readers never says the search results' action column is the first one, which is where the shipped table puts it")
+	}
+
+	// The state the search panel is in while an answer is on its way is painted on one element. The shipped panel
+	// writes the busy marking onto the bar it keeps in the layout while the search runs, leaves its criteria and its
+	// reset in place marked as doing nothing, and writes a sentence into the page's one live region. The row's first
+	// draft put the marking on the results the panel is waiting for, which is a state the shipped panel never sets on
+	// them, and it named the search panel for the state of a code that has not been accepted, which is a state the
+	// shipped page reports by marking the nine controls that open the panels. The row is read on its own so that a
+	// claim returning in another row is not mistaken for this one.
+	state := ""
+
+	for _, row := range regexp.MustCompile(`(?is)<tr>\s*<th scope="row">(.*?)</th>(.*?)</tr>`).FindAllStringSubmatch(chapter, -1) {
+		if strings.Contains(row[1], "answer is on its way") {
+			state = row[2]
+
+			break
+		}
+	}
+
+	if state == "" {
+		t.Fatalf("the chapter on keyboards and screen readers carries no row for the search panel while an answer is on its way, so what it says about the marking cannot be read")
+	}
+
+	readRow := guideSpoken(state)
+
+	if strings.Contains(readRow, "results area is marked as busy") || strings.Contains(readRow, "results are marked as busy") {
+		t.Errorf("the chapter's row for the search panel says the calls it is waiting for carry the busy marking, which is a marking the shipped panel writes onto the progress bar it keeps in the layout")
+	}
+
+	for _, want := range []string{"progress bar", "marked as busy", "Searching calls", "doing nothing rather than taken away"} {
+		if !strings.Contains(readRow, want) {
+			t.Errorf("the chapter's row for the search panel never names %q, which is what the shipped panel does for a reader while an answer is on its way", want)
+		}
 	}
 
 	// Three figures, which is all the figure inventory gives this chapter.
