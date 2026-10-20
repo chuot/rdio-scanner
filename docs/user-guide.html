@@ -34,7 +34,6 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -336,20 +335,28 @@ footer.site .signoff {
   header.site h1 { font-size: 1.6rem; }
   table { display: block; overflow-x: auto; }
   p code, li code { white-space: normal; overflow-wrap: anywhere; }
+  /* A name in a column has to break where the column ends. Left unbreakable it pushes the table wider than
+     the page, and the words past the edge of a sideways scroll are out of reach for anyone who moves through
+     the document with a keyboard. */
+  th code, td code { white-space: normal; overflow-wrap: anywhere; }
+  th, td { padding: 0.35rem 0.45rem; overflow-wrap: anywhere; }
 }
 
 /* ---------------------------------------------------------------- motion */
-/* The guide moves in two places only: an anchor jump glides to the chapter, and a contents link takes up
-   its highlight. Both are turned off for a reader who has asked the platform for less motion. */
+/* A contents link takes up its highlight over 120 milliseconds, and that is the only moving thing the guide puts
+   on its own screen. An anchor jump goes where it is asked at once: this document is long enough that a glide
+   would keep a reader waiting seconds for a chapter they have already named. The highlight is turned off for a
+   reader who has asked the platform for less motion. */
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
   nav.toc a { transition: none; }
 }
 
 /* ---------------------------------------------------------------- recoloured reading */
 /* Windows High Contrast hands the guide back the colours the reader chose, and nothing here argues with
    them: every border, every band of background, and every highlight is put back in the reader's own
-   system colours, and no rule pins a colour of ours to anything. */
+   system colours, and no rule pins a colour of ours to anything. The contents aid keeps its underline and an
+   edge drawn in the reader's ink there, because a list of chapters has to read as a list of things to follow
+   once the colours that set it apart are gone. */
 @media (forced-colors: active) {
   header.site, footer.site, figure, details, pre, aside.note, aside.caution, aside.danger {
     background: Canvas;
@@ -369,7 +376,7 @@ footer.site .signoff {
   h2 { border-bottom-color: CanvasText; }
   aside.note, aside.caution, aside.danger { border-left-color: CanvasText; }
   a { color: LinkText; }
-  nav.toc a { background: Canvas; color: CanvasText; }
+  nav.toc a { background: Canvas; color: CanvasText; border-left-color: CanvasText; text-decoration: underline; }
   nav.toc a:hover, nav.toc a:focus { background: Canvas; color: CanvasText; border-left-color: Highlight; }
   .skip { background: Canvas; color: CanvasText; }
   .skip:focus { outline: 2px solid CanvasText; }

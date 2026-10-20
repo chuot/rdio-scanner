@@ -2758,3 +2758,164 @@ func TestTheUserGuideStatesTheVersionItDocuments(t *testing.T) {
 		t.Errorf("the guide does not say, at the head of the page, that it reaches out to nothing")
 	}
 }
+
+// The guide is one long read, and a reader who follows a route out of the contents aid has already said where
+// they are going. Gliding there through seventy thousand pixels of chapters they are not reading keeps them
+// waiting for a place they named, and a reader who moves by key is reading a page that is moving under them.
+// So the guide arrives when it is asked to, and the only motion it starts on its own is the highlight a
+// contents link takes up â the reading the reader's own request for less motion turns off.
+func TestTheGuidesAnchorRoutesArriveWhereTheyAreAsked(t *testing.T) {
+	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
+	if len(style) < 2 {
+		t.Fatalf("the guide carries no inlined stylesheet")
+	}
+
+	if at := strings.Index(style[1], "scroll-behavior: smooth"); at >= 0 {
+		t.Errorf("the guide's stylesheet glides to an anchor at offset %d, so a route the reader has already named arrives seconds late", at)
+	}
+
+	if !strings.Contains(style[1], "@media (prefers-reduced-motion: reduce)") {
+		t.Errorf("the guide starts motion of its own and carries no rule for a reader who has asked the platform for less")
+	}
+}
+
+// At phone width a guide has to fit its tables onto the page it was given. A name that cannot break holds the
+// column it sits in open, the table paints past the edge of the page, and the words past that edge are out of
+// reach for a reader who moves through the document with a keyboard: a sideways scroll has nothing in it to put
+// focus into. So the narrow reading of the guide lets what sits in a column break, the names set in their own
+// face included.
+func TestTheGuidesTablesFitTheNarrowPageTheyAreReadOn(t *testing.T) {
+	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
+	if len(style) < 2 {
+		t.Fatalf("the guide carries no inlined stylesheet")
+	}
+
+	breaks := regexp.MustCompile(`@media \(max-width: ([0-9.]+)rem\)`).FindAllStringSubmatch(style[1], -1)
+
+	if len(breaks) == 0 {
+		t.Fatalf("the guide carries no width at which it rearranges itself for a narrow page")
+	}
+
+	narrowest, offset := "", -1
+
+	for _, at := range regexp.MustCompile(`@media \(max-width: ([0-9.]+)rem\)`).FindAllStringSubmatchIndex(style[1], -1) {
+		width := style[1][at[2]:at[3]]
+
+		if narrowest == "" || parseRem(width) < parseRem(narrowest) {
+			narrowest, offset = width, at[0]
+		}
+	}
+
+	if offset < 0 {
+		t.Fatalf("the guide names no narrow page to rearrange itself for")
+	}
+
+	next := strings.Index(style[1][offset+1:], "@media")
+
+	block := style[1][offset:]
+
+	if next >= 0 {
+		block = style[1][offset : offset+1+next]
+	}
+
+	rules := regexp.MustCompile(`(?s)([^{}]+)\{([^{}]*)\}`).FindAllStringSubmatch(block, -1)
+
+	cells := false
+	names := false
+
+	for _, rule := range rules {
+		selector := strings.Join(strings.Fields(strings.TrimSpace(rule[1])), " ")
+		body := rule[2]
+
+		if !strings.Contains(body, "overflow-wrap") && !strings.Contains(body, "white-space: normal") {
+			continue
+		}
+
+		for _, part := range strings.Split(selector, ",") {
+			words := strings.Fields(part)
+
+			for _, word := range words {
+				if word == "td" || word == "th" {
+					cells = true
+				}
+
+				if word == "code" && (strings.Contains(part, "td") || strings.Contains(part, "th")) {
+					names = true
+				}
+			}
+		}
+	}
+
+	if !cells {
+		t.Errorf("at the %s rem page the guide has no rule that lets what sits in a table column break, so a wide table can paint past the page it was read on", narrowest)
+	}
+
+	if !names {
+		t.Errorf("at the %s rem page the guide keeps a name set in its own face unbreakable inside a column, which is what holds a table open past the page", narrowest)
+	}
+}
+
+// parseRem reads a width the guide says it rearranges itself at, so the narrowest of them can be compared.
+func parseRem(reading string) float64 {
+	width, err := strconv.ParseFloat(reading, 64)
+	if err != nil {
+		return -1
+	}
+
+	return width
+}
+
+// Where the reader has the machine draw everything in their own colours, the guide flattens its own surfaces to
+// that palette, and a list of chapters has to survive the flattening as a list of things to follow. An entry
+// keeps the line under it or an edge drawn in the reader's own ink; a colour alone would leave the contents aid
+// reading as a list of ordinary words with something hidden in it.
+func TestTheContentsAidStaysReadableUnderARecolouredReading(t *testing.T) {
+	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
+	if len(style) < 2 {
+		t.Fatalf("the guide carries no inlined stylesheet")
+	}
+
+	start := strings.Index(style[1], "@media (forced-colors: active)")
+
+	if start < 0 {
+		t.Fatalf("the guide carries no reading for a machine drawing everything in the reader's own colours")
+	}
+
+	next := strings.Index(style[1][start+1:], "@media")
+
+	block := style[1][start:]
+
+	if next >= 0 {
+		block = style[1][start : start+1+next]
+	}
+
+	cue := ""
+
+	for _, rule := range regexp.MustCompile(`(?s)([^{}]+)\{([^{}]*)\}`).FindAllStringSubmatch(block, -1) {
+		selector := strings.Join(strings.Fields(strings.TrimSpace(rule[1])), " ")
+
+		if !strings.Contains(selector, "nav.toc a") {
+			continue
+		}
+
+		if strings.Contains(rule[2], "text-decoration: underline") {
+			cue = "the line under it"
+
+			break
+		}
+
+		if regexp.MustCompile(`border-[a-z-]*color:\s*CanvasText`).MatchString(rule[2]) {
+			cue = "an edge drawn in the reader's own ink"
+
+			break
+		}
+	}
+
+	if cue == "" {
+		t.Errorf("under a palette the reader chose the guide leaves a contents-aid entry with nothing but a colour to tell it from the words around it, so the list of chapters reads as a list of words")
+
+		return
+	}
+
+	t.Logf("under a recoloured reading a contents-aid entry is carried by %s", cue)
+}
