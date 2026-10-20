@@ -318,6 +318,16 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 		}
 	}
 
+	// A tone plays before the recording it belongs to, and the recording is not yet under way during it. The shipped
+	// play path defers the recording behind the tone and cancels it when the call is silenced, skipped, or taken out of
+	// the selection in the meantime. A draft of this chapter left that window out, and a listener who skipped a call
+	// during its tone would have expected the recording to arrive anyway and looked for audio that never starts.
+	for _, want := range []string{"never starts its recording", "the tone is the only part of that call you hear"} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter on live calls never gives %q, which is what the shipped application does to a call whose tone is interrupted", want)
+		}
+	}
+
 	if !strings.Contains(spoken, "five seconds") {
 		t.Errorf("the chapter on live calls never says how long the display waits before it dims, which is a delay the application fixes at five seconds")
 	}
@@ -546,6 +556,20 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 	for _, superseded := range []string{"or Stop while that row's recording is the one being heard, or Download"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on searching recorded calls lists the row's action in the order %q, which is not the order the shipped chain decides in", superseded)
+		}
+	}
+
+	// The chapter on searching is where this guide promises to operate converted audio, so it has to say what
+	// conversion does to a recording a listener plays or saves. The shipped play path and the shipped download path
+	// read the same bytes the server sends, converted first when the operator has conversion switched on. A draft of
+	// this chapter spoke of the arriving recording without naming conversion at all, and the chapter its own
+	// converted-audio row pointed at then carried nothing about it.
+	for _, want := range []string{
+		"the converted copy when the operator has audio conversion switched on",
+		"the audio you hear and the file you keep are the same copy",
+	} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter on searching recorded calls never gives %q, which is what its own converted-audio row promises this chapter carries", want)
 		}
 	}
 
@@ -961,6 +985,16 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 		}
 	}
 
+	// The timed-avoid mark is a character the page asks a font for, so a machine with none of the fonts it asks for can
+	// show it as a box or as nothing. A reader who sees that looks here first, and the answer has to be that the
+	// reading is unaffected rather than a second account of the mark, which the chapter on the display gives and this
+	// chapter links to.
+	for _, want := range []string{"arrives as a box", "the minutes are still beside it"} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter about when something does not work never gives %q, which is what a reader who sees the timed-avoid mark as a box needs to be told", want)
+		}
+	}
+
 	// The chapter leans on the chapters that already describe each part, rather than describing them a second
 	// time. The hrefs are read the way the guide's own self-containment check reads them, because a link whose
 	// opening tag wraps across a line is still one link.
@@ -1166,6 +1200,14 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 		if len(strings.Fields(stripTags(def[2]))) < 5 {
 			t.Errorf("the definition of %q is shorter than a sentence", word)
 		}
+	}
+
+	// The type is one of the words a reader sees written on the display, and this is the chapter the guide sends a
+	// reader to for the words the application uses. A draft of the glossary defined nineteen words and left this
+	// one out, while the opening chapter's account of the change pointed a reader here and the chapter on the
+	// display kept its reading to itself.
+	if !strings.Contains(chapter, "<dfn>type</dfn>") {
+		t.Errorf("the reference chapter does not define the word type, which the display writes and the opening chapter sends a reader here to find")
 	}
 
 	hrefs := map[string]bool{}
@@ -2554,6 +2596,23 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 		}
 	}
 
+	// The row that promises the branding line, the help affordance, and the promotion of the native applications
+	// names the chapters that operate each of the three. The branding line is operated in the chapter on the main
+	// screen, which is where the guide first says what that line is. A draft of the row named only the chapter on
+	// phones and tablets and the chapter on help, and a reader who followed the row never reached the account of
+	// the line itself.
+	branding := regexp.MustCompile(`(?is)<tr>\s*<th scope="row">The branding line, the help affordance, and the promotion of the native applications\.</th>(.*?)</tr>`).FindStringSubmatch(section)
+
+	if branding == nil {
+		t.Fatalf("the changes since version 6.6.3 carry no row for the branding line, the help affordance, and the promotion, so this check proves nothing about where the guide operates them")
+	}
+
+	for _, want := range []string{"#ch-02-the-main-screen", "#ch-08-on-your-phone-or-tablet", "#ch-09-help-and-support"} {
+		if !strings.Contains(branding[1], want) {
+			t.Errorf("the row for the branding line, the help affordance, and the promotion no longer points at %q, which is a chapter that operates one of them", want)
+		}
+	}
+
 	// The stored access code is read from the same place the older application wrote it, and the page presents it by
 	// itself on every reconnect, so typing it out again is not among the costs of the update. A draft of this chapter
 	// promised a code the reader would have to enter again, and a listener who believed it went looking for a cost the
@@ -2567,6 +2626,29 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 	for _, superseded := range []string{"may have to be presented again", "a code you have to enter again"} {
 		if strings.Contains(prose, superseded) {
 			t.Errorf("the changes since version 6.6.3 promise %q, which is not a cost the shipped update has", superseded)
+		}
+	}
+
+	// The row that promises converted audio names the chapters that operate it. The chapter on phones and tablets is
+	// not one of them: what that chapter is written to carry is the narrow layout, adding the application to a home
+	// screen, what works with no server, the new-version prompt, the store promotion, and what the browser remembers,
+	// and none of it is a converted recording. The row names the chapter on searching, which now says a played
+	// recording and a saved one are the same converted copy, and the reference chapter, which carries the setting.
+	row := regexp.MustCompile(`(?is)<tr>\s*<th scope="row">Converted audio\.</th>(.*?)</tr>`).FindStringSubmatch(section)
+
+	if row == nil {
+		t.Fatalf("the changes since version 6.6.3 carry no row for converted audio, so this check proves nothing about where the guide operates it")
+	}
+
+	for _, want := range []string{"#ch-05-searching-archived-calls", "#ch-12-reference"} {
+		if !strings.Contains(row[1], want) {
+			t.Errorf("the converted-audio row no longer points at %q, which is a chapter that operates converted audio", want)
+		}
+	}
+
+	for _, superseded := range []string{"#ch-08-on-your-phone-or-tablet"} {
+		if strings.Contains(row[1], superseded) {
+			t.Errorf("the converted-audio row points at %q, a chapter this guide writes to carry the narrow layout, installing, working offline, the update prompt, and what the browser remembers, and nothing about a converted recording", superseded)
 		}
 	}
 }

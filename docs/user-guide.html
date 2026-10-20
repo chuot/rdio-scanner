@@ -745,6 +745,7 @@ footer.site .signoff {
           support address, and a phone is offered the native applications.
         </td>
         <td>
+          <a href="#ch-02-the-main-screen">The main screen</a>,
           <a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a>,
           <a href="#ch-09-help-and-support">Help and support</a>
         </td>
@@ -769,7 +770,6 @@ footer.site .signoff {
         </td>
         <td>
           <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
-          <a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a>,
           <a href="#ch-12-reference">Reference</a>
         </td>
       </tr>
@@ -1112,6 +1112,12 @@ footer.site .signoff {
     through a search, and every call in a searched queue all begin with their recording and nothing in front of
     them. A deployment that assigns tones to groups answers every call on those groups with the same tone, which
     is usually what an operator intends and often what makes a listener notice a group at all.
+  </p>
+
+  <p>
+    A tone opens a window, and what happens inside it matters. While the tone is playing the recording has not
+    started, and a call that is skipped, stopped, or taken out of your selection before its tone ends never starts
+    its recording at all: the tone is the only part of that call you hear.
   </p>
 
   <h3>The colour of the server light</h3>
@@ -1740,6 +1746,13 @@ footer.site .signoff {
     <code>Download</code> and the recording arrives as a file in your browser instead of playing. Switching it does
     not search again: the rows you already hold are redrawn, so the page keeps its calls and only changes what
     pressing one of them does.
+  </p>
+
+  <p>
+    What the page plays and what <code>Download mode</code> saves is the deployment's own recording, and it is the
+    converted copy when the operator has audio conversion switched on: the audio you hear and the file you keep are
+    the same copy. <a href="#ch-12-reference">The reference chapter</a> names that setting and what it does to what
+    you hear.
   </p>
 
   <p>
@@ -3277,6 +3290,17 @@ footer.site .signoff {
     simply a second press.
   </p>
 
+  <h3>The timed avoid mark arrives as a box</h3>
+
+  <p>
+    The hourglass that stands beside the minutes of an avoid window is a character the page asks a font for, not a
+    drawing, and on a machine with none of the fonts it asks for it can arrive as a box or as nothing at all. The
+    reading it carries does not change: the minutes are still beside it, and the flag row still says the talkgroup is
+    avoided. There is nothing for a listener to install or change. <a
+    href="#ch-06-what-the-display-says">The chapter on what the display says</a> names the mark and the fonts it asks
+    for.
+  </p>
+
   <h3>A call arrives flagged delayed</h3>
 
   <p>
@@ -3937,6 +3961,12 @@ footer.site .signoff {
     <dt><dfn>talkgroup</dfn></dt>
     <dd>The channel a call is heard on, and the thing a listener is choosing when they choose what to hear. The display
       names it, and the call's colour comes from what it resolves to.</dd>
+
+    <dt><dfn>type</dfn></dt>
+    <dd>The word a deployment's configuration carries for a system or a talkgroup to say what kind of thing it is. The
+      display writes it in capitals in the row it shares with the system and the tag, and a system or talkgroup typed
+      provoice has its number rewritten into another form on the screen, so the number a listener reads need not match
+      the number in the configuration.</dd>
 
     <dt><dfn>unit</dfn></dt>
     <dd>A radio unit of a system — a moving identity a call can be attributed to, rather than a channel. One label can
