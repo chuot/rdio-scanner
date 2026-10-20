@@ -177,25 +177,44 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // What each container target is compiled with, and where its compiled programs are run to be checked, is
 // recorded one target at a time. The plan is where the build commits to that answer, so the values below are
 // written out instead of read back off the manifest: the container work this release is doing reaches those
-// records, and a record that moves by mistake has to trip a test rather than quietly recompile five targets
+// records, and a record that moves by mistake has to trip a test rather than quietly recompile six targets
 // under a toolchain nobody chose.
 //
 // The configure recipe is not repeated here. It is the one list these targets share, and it is gated where it
-// lives; what belongs to a target alone is its container, what gets installed in it, what makes the compile
-// cross, the flags it links with, and the container its programs are checked in.
+// lives; what belongs to a target alone is its container, the file that image is built from, what gets
+// installed in it, the image a sysroot is copied out of when the target's operating system is not the one the
+// build container runs, the compiler invocation a cross compile names, what makes the compile cross, the flags
+// it links with, and the container its programs are checked in.
+//
+// None of these targets is compiled on the platform its binaries run on, and none is skipped: a compiled record
+// that answered either way would build a server around a target the build quietly gave up on.
 func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
 	cases := []struct {
 		target      string
 		container   string
+		from        string // the Containerfile the toolchain image is built from: empty is the shared one
 		installs    []string
+		sysrootFrom string // the image a sysroot is copied out of: empty names none
+		compiler    string // what configure is told to compile with: empty names no compiler at all
 		cross       []string
 		cflags      string
 		ldflags     string
 		checked     string   // checks in this container: empty is the container that compiled them
 		checkedWith []string // what that container installs
 	}{
+		{
+			target:      "freebsd-amd64",
+			container:   "docker.io/debian:stable",
+			from:        "Containerfile.ffmpeg.freebsd",
+			installs:    []string{"build-essential", "clang", "lld", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
+			sysrootFrom: "docker.io/freebsd/freebsd-toolchain:15.1",
+			compiler:    "clang --target=x86_64-unknown-freebsd --sysroot=/sysroot",
+			cross:       []string{"--enable-cross-compile", "--target-os=freebsd", "--arch=x86_64"},
+			cflags:      "--sysroot=/sysroot",
+			ldflags:     "-static -fuse-ld=lld --sysroot=/sysroot",
+		},
 		{
 			target:    "linux-386",
 			container: "docker.io/debian:stable",
@@ -247,12 +266,38 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 			continue
 		}
 
+		if plan.Native {
+			t.Errorf("%s says it is compiled on the machine running this build, and %s is compiled in a container",
+				c.target, c.target)
+		}
+		if plan.Skipped {
+			t.Errorf("%s is skipped by a build whose record says it compiles it in a container", c.target)
+		}
+
+		wantFile := c.from
+		if wantFile == "" {
+			wantFile = "Containerfile.ffmpeg"
+		}
+		if file := theFlagValue(image.args, "-f"); file != wantFile {
+			t.Errorf("%s builds its toolchain image from %q, want %s", c.target, file, wantFile)
+		}
+
 		built := containerBuildArgs(image.args)
 		if built["base"] != c.container {
 			t.Errorf("%s compiles in %q, want %s", c.target, built["base"], c.container)
 		}
 		if built["packages"] != strings.Join(c.installs, " ") {
 			t.Errorf("%s installs %q, want %s", c.target, built["packages"], strings.Join(c.installs, " "))
+		}
+
+		if c.sysrootFrom == "" {
+			if named, has := built["sysroot_image"]; has {
+				t.Errorf("%s copies a sysroot out of %q, which its record does not name: %v",
+					c.target, named, image.args)
+			}
+		} else if built["sysroot_image"] != c.sysrootFrom {
+			t.Errorf("%s copies its sysroot out of %q, want %s: the compile is not the one its record prepares",
+				c.target, built["sysroot_image"], c.sysrootFrom)
 		}
 
 		runner, hasRunner := stepNamed(plan, "runner")
@@ -292,6 +337,9 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 		// different compile than the one this release answers for.
 		want := []string{}
 		want = append(want, c.cross...)
+		if c.compiler != "" {
+			want = append(want, "--cc="+c.compiler)
+		}
 		if c.cflags != "" {
 			want = append(want, "--extra-cflags="+c.cflags)
 		}
@@ -305,6 +353,61 @@ func TestEveryContainerTargetBuildsAndChecksInWhatItsRecordNames(t *testing.T) {
 		}
 		if !sameArgs(got, want) {
 			t.Errorf("%s ends configure with %v, want %v", c.target, got, want)
+		}
+
+		// A target whose record names no compiler gets ffmpeg's own default, and a --cc= it was not told to
+		// have is a compiler nobody chose.
+		if c.compiler == "" {
+			for _, arg := range configure.args {
+				if strings.HasPrefix(arg, "--cc=") {
+					t.Errorf("%s configures with %q, which its record does not name", c.target, arg)
+				}
+			}
+		}
+	}
+}
+
+// The FreeBSD compile does not care which machine it is running on, because the machine is no longer part of
+// the answer: the container carries the compiler and the headers, libraries and startup files of the operating
+// system the target runs on. A Mac running the release compiles the FreeBSD ffmpeg exactly as this host does,
+// and a plan that answered otherwise would either ask that Mac for a FreeBSD toolchain it does not have, or
+// skip a target its own record says it compiles.
+func TestTheFfmpegForFreeBSDIsCompiledInAContainerWhateverHostRunsTheBuild(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, machine := range []host{theReleaseHost, {goos: "darwin", goarch: "arm64"}, {goos: "darwin", goarch: "amd64"}} {
+		plan, err := planFFmpeg(options{target: "freebsd-amd64"}, "/repo", manifest, anUncompiledTree(), machine)
+		if err != nil {
+			t.Errorf("the build refused freebsd-amd64 on a %s %s host: %v", machine.goos, machine.goarch, err)
+			continue
+		}
+
+		if plan.Native {
+			t.Errorf("freebsd-amd64 on a %s %s host says it is compiled with that host's own toolchain, and the FreeBSD sysroot is in the container, not on the host",
+				machine.goos, machine.goarch)
+		}
+
+		if plan.Skipped {
+			t.Errorf("freebsd-amd64 on a %s %s host is skipped, and the release run ships no FreeBSD binary at all",
+				machine.goos, machine.goarch)
+		}
+
+		image, ok := stepNamed(plan, "image")
+		if !ok {
+			t.Errorf("freebsd-amd64 on a %s %s host has no step that prepares the container it compiles in",
+				machine.goos, machine.goarch)
+			continue
+		}
+
+		if file := theFlagValue(image.args, "-f"); file != "Containerfile.ffmpeg.freebsd" {
+			t.Errorf("freebsd-amd64 on a %s %s host builds its toolchain image from %q, want Containerfile.ffmpeg.freebsd: the shared file carries no FreeBSD sysroot",
+				machine.goos, machine.goarch, file)
+		}
+
+		sysroot := containerBuildArgs(image.args)["sysroot_image"]
+		if sysroot != "docker.io/freebsd/freebsd-toolchain:15.1" {
+			t.Errorf("freebsd-amd64 on a %s %s host copies its sysroot out of %q, want docker.io/freebsd/freebsd-toolchain:15.1",
+				machine.goos, machine.goarch, sysroot)
 		}
 	}
 }
@@ -446,11 +549,11 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 // Mac and an Intel Mac keying the Intel target alike is not a collision, because each machine's cache
 // holds only what that machine compiled.
 //
-// The five compiled targets' keys are pinned by value here. A warm cache is the only reason a release run
+// The six compiled targets' keys are pinned by value here. A warm cache is the only reason a release run
 // takes minutes rather than hours, and a manifest that gains a field must not throw it away: a compiled
 // record has no supplied fields at all, and its key is the compile's inputs and nothing else. The values
 // below are the compile as it reads today, so a recipe that gains a switch moves them — which is the key
-// doing its job, and the release run that follows recompiles those five targets once.
+// doing its job, and the release run that follows recompiles those six targets once.
 func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -500,6 +603,54 @@ func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T
 		t.Error("a target this build compiles an ffmpeg for keeps the cache entry of the binaries it no longer ships")
 	}
 
+	// A FreeBSD record's own three fields are compile inputs: the file its toolchain image is built from, the
+	// image its sysroot is copied out of, and the compiler invocation that reaches configure. Changing any of
+	// them is asking for a different compile, and reusing the warm entry the old one produced would ship a
+	// binary built against a sysroot or a toolchain nobody named.
+	freebsd := cacheKey(manifest, "freebsd-amd64")
+
+	otherFile := bundle.ReadManifest()
+	targets = map[string]bundle.Target{}
+	for name, rec := range otherFile.Targets {
+		targets[name] = rec
+	}
+	record = targets["freebsd-amd64"]
+	record.Containerfile = "Containerfile.ffmpeg"
+	targets["freebsd-amd64"] = record
+	otherFile.Targets = targets
+
+	if cacheKey(otherFile, "freebsd-amd64") == freebsd {
+		t.Error("a FreeBSD compile asked of the shared Containerfile reuses the cache of the one asked of the file that carries a FreeBSD sysroot")
+	}
+
+	otherSysroot := bundle.ReadManifest()
+	targets = map[string]bundle.Target{}
+	for name, rec := range otherSysroot.Targets {
+		targets[name] = rec
+	}
+	record = targets["freebsd-amd64"]
+	record.SysrootImage = "docker.io/freebsd/freebsd-toolchain:15.0"
+	targets["freebsd-amd64"] = record
+	otherSysroot.Targets = targets
+
+	if cacheKey(otherSysroot, "freebsd-amd64") == freebsd {
+		t.Error("a FreeBSD record naming another sysroot image reuses the cache of the binaries the old sysroot built")
+	}
+
+	otherCompiler := bundle.ReadManifest()
+	targets = map[string]bundle.Target{}
+	for name, rec := range otherCompiler.Targets {
+		targets[name] = rec
+	}
+	record = targets["freebsd-amd64"]
+	record.CC = "clang"
+	targets["freebsd-amd64"] = record
+	otherCompiler.Targets = targets
+
+	if cacheKey(otherCompiler, "freebsd-amd64") == freebsd {
+		t.Error("a FreeBSD compile whose compiler names no target triple reuses the cache of the one that named one")
+	}
+
 	// The two macOS targets are compiled by the same host with the same recipe and differ only by the
 	// architecture the compile is told to produce, so their keys have to differ.
 	if cacheKey(manifest, "macos-amd64") == cacheKey(manifest, "macos-arm64") {
@@ -507,6 +658,7 @@ func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T
 	}
 
 	want := map[string]string{
+		"freebsd-amd64": "3ea7f232258ba5ddd4f97f04b28452facda0c76e732dbc7e8950653f5c1cf8c3",
 		"linux-386":     "e6b0dcd5763abfee3ed4dcbd8888dbc3ec5d9eeeffb38378d2a7b5fa6996ab4f",
 		"linux-amd64":   "20793f67a5ed90ec23ac53388b8d15e9491294553ed753f7250feaf682ae1373",
 		"linux-arm":     "95e8a1ad5f04e1fef752f679a1f99fdd4585f85ccd9f2f96137fc34f5815ffa4",
@@ -514,7 +666,7 @@ func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T
 		"windows-amd64": "dfe8ad310c25f9487fc8206e3d79bc62ec5b46badd22583bd367eb11577a52a5",
 	}
 
-	for _, target := range []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"} {
+	for _, target := range []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"} {
 		if got := cacheKey(manifest, target); got != want[target] {
 			t.Errorf("%s's cache key is %s, want %s: something the compiled compile reads has moved, and the warm entries move with it — when the move is the recipe, record the key it computes now", target, got, want[target])
 		}

@@ -329,7 +329,10 @@ func pruneFFMpegCache(repo string) ([]string, error) {
 }
 
 // cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the source this
-// project pinned, the target, the configure recipe, and that target's toolchain and check environment.
+// project pinned, the target, the configure recipe, and that target's toolchain and check environment — the
+// image it compiles in, what gets installed in it, the file that image is built from, the image a sysroot is
+// copied out of when the target's operating system is not the container's own, the compiler the record
+// names, what makes the compile cross, the flags it links with, and where its programs are checked.
 //
 // The source digest is in here and not only in the run that proves the binaries after compiling, because a
 // cache hit skips that run: without it, a manifest whose pinned source was changed would quietly reuse
@@ -356,6 +359,22 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		record.Conformance.Container,
 		strings.Join(record.Conformance.Packages, " "),
 		strings.Join(record.Conformance.Run, " "),
+	}
+
+	// The three inputs a compile that reads another operating system's tree adds to that list. A record
+	// naming none of them keys exactly as it keyed before, so the targets compiled with the build container's
+	// own headers and libraries keep the warm entries they already have, and the one that does name them moves
+	// whenever the toolchain, the sysroot, or the compiler moves.
+	if record.Containerfile != "" {
+		parts = append(parts, record.Containerfile)
+	}
+
+	if record.SysrootImage != "" {
+		parts = append(parts, record.SysrootImage)
+	}
+
+	if record.CC != "" {
+		parts = append(parts, record.CC)
 	}
 
 	// The fields a target compiled on its own platform has are the way it is produced, the make program
@@ -460,16 +479,19 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		result: image,
 		dir:    repo,
 		name:   program.name,
-		args:   buildImageArgs(image, record.Container, packages),
+		args:   buildImageArgs(image, theContainerfileFor(record), record.Container, record.SysrootImage, packages),
 	})
 
 	if runner != image {
+		// A check container has no record of its own: it is the shared toolchain file with the packages the
+		// record's conformance names, and it has no sysroot to copy because it runs the program rather than
+		// compiling it.
 		plan.Steps = append(plan.Steps, step{
 			label:  "runner",
 			result: runner,
 			dir:    repo,
 			name:   program.name,
-			args:   buildImageArgs(runner, record.Conformance.Container, record.Conformance.Packages),
+			args:   buildImageArgs(runner, sharedContainerfile, record.Conformance.Container, "", record.Conformance.Packages),
 		})
 	}
 
@@ -847,17 +869,43 @@ func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target st
 
 // buildImageArgs prepares the container one target is compiled or checked in. The build context is an
 // empty directory on purpose: the image is a toolchain, and nothing of this repository belongs in it.
-func buildImageArgs(image string, base string, packages []string) []string {
+//
+// Which file the image is built from and which image a sysroot is copied out of both come from the target's
+// record. A compile that reads another operating system's headers, libraries and startup files gets them
+// from an image the build copies out of and never runs; a target that needs none is built from the shared
+// file and names no sysroot at all.
+func buildImageArgs(image string, file string, base string, sysrootImage string, packages []string) []string {
 	args := []string{
 		"build",
 		"-t", image,
-		"-f", "Containerfile.ffmpeg",
+		"-f", file,
 		"--build-arg", "base=" + base,
-		"--build-arg", "packages=" + strings.Join(packages, " "),
-		filepath.Join(".build", "ffmpeg", "context"),
 	}
 
+	if sysrootImage != "" {
+		args = append(args, "--build-arg", "sysroot_image="+sysrootImage)
+	}
+
+	args = append(args,
+		"--build-arg", "packages="+strings.Join(packages, " "),
+		filepath.Join(".build", "ffmpeg", "context"),
+	)
+
 	return args
+}
+
+// sharedContainerfile is the file every target that compiles without another operating system's sysroot is
+// built from, and the answer for a record that names no file of its own.
+const sharedContainerfile = "Containerfile.ffmpeg"
+
+// theContainerfileFor is the file one target's toolchain image is built from, which its record names because
+// the file is what makes the compile that target's record describes possible.
+func theContainerfileFor(record bundle.Target) string {
+	if record.Containerfile != "" {
+		return record.Containerfile
+	}
+
+	return sharedContainerfile
 }
 
 // configureStep is the trimmed build asked of the source: the recipe, then what makes the compile cross
@@ -875,6 +923,14 @@ func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle
 
 	args = append(args, manifest.Recipe...)
 	args = append(args, record.Cross...)
+
+	// A compile reading another operating system's headers, libraries and startup files names the compiler
+	// that can do it, target triple and sysroot included. The invocation stays one configure argument: the
+	// container is asked for the program directly, with no shell between them to split it into words, and
+	// configure is the one that hands the whole thing to the compile.
+	if record.CC != "" {
+		args = append(args, "--cc="+record.CC)
+	}
 
 	if len(record.CFlags) > 0 {
 		args = append(args, "--extra-cflags="+strings.Join(record.CFlags, " "))
