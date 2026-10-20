@@ -791,8 +791,11 @@ footer.site .signoff {
     </li>
     <li>Every administration session that was open when the update ran ends. That is the operator's screens, not
       your listening.</li>
-    <li>A stored access code may have to be presented again. If the screen opens straight to the unlock screen
-      after an update, that is why, and the code is the one the operator gave you.</li>
+    <li>
+      A stored access code is usually presented again by itself, because the newer application reads the copy the
+      older one left in your browser. When the screen opens straight to the unlock screen after an update, that copy
+      is not answering, and the code to type is the one the operator gave you.
+    </li>
     <li>
       A saved selection may need clearing. The selection the application kept in your browser can survive the
       update in a shape the new application does not recognise, and <code>/reset</code>, which the chapter on
@@ -947,7 +950,8 @@ footer.site .signoff {
     Underneath the call rows sits the list of recent calls, with its own column headings — <code>Time</code>,
     <code>System</code>, <code>Talkgroup</code>, <code>Name</code> — and the flags that appear beside them when a
     call carries something extra: <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and the hourglass
-    with the minutes left on an avoid you armed. Every row, and what each one holds, is given one at a time in the
+    marking an avoid you armed, with the minutes that window is held for. Every row, and what each one holds, is
+    given one at a time in the
     chapter about what the display says.
   </p>
 
@@ -1220,10 +1224,10 @@ footer.site .signoff {
   </table>
 
   <p>
-    A timed window opens itself again when it runs out; you do not have to remember to press anything, and the
-    talkgroup is hearing again on its own. While a window is standing, the display shows the hourglass mark with
-    the minutes left beside it, and the select panel marks that talkgroup with the same timed reading — which is
-    how you find out that a talkgroup is being held off when it is not the call in front of you. The chapter about
+    A timed window closes itself when it runs out; you do not have to remember to press anything, and the talkgroup
+    is hearing again on its own. While a window is standing, the display shows the hourglass mark with the minutes
+    that window is held for beside it, and the select panel marks that talkgroup with the same timed reading — which
+    is how you find out that a talkgroup is being held off when it is not the call in front of you. The chapter about
     choosing what to hear gives that mark, and it also gives the one thing that clears a window armed here: a
     plain press on that talkgroup in the select panel.
   </p>
@@ -1546,9 +1550,10 @@ footer.site .signoff {
     <tbody>
       <tr>
         <th scope="row">The actions column, which has no heading</th>
-        <td>The row's action: <code>Play</code>, or <code>Stop</code> while that row's recording is the one being
-          heard, or <code>Download</code> when the download switch is on, or <code>Loading</code> while a recording is
-          on its way to your browser.</td>
+        <td>The row's action, in the order the page decides which one to draw: <code>Download</code> when the
+          download switch is on, otherwise <code>Loading</code> while that row's recording is on its way to your
+          browser, otherwise <code>Stop</code> while that row's recording is the one being heard, otherwise
+          <code>Play</code>.</td>
       </tr>
       <tr>
         <th scope="row"><code>Date</code></th>
@@ -2020,11 +2025,11 @@ footer.site .signoff {
 
   <p>
     Under the display sits a table of five rows, always five. Calls that have not happened yet leave their rows
-    blank, so a listener who has heard two calls sees two rows and three empty ones. Its columns are the time, the
-    system, the talkgroup, and the name, and the name column falls back the same way the large row does — except that
-    it writes the frequency as a bare number rather than in the grouped form the display uses. The row holding the
-    call the display is on is marked, which is what tells you that what you are hearing is a replay rather than a new
-    call.
+    blank, so a listener who has heard two calls sees two rows and three empty ones. Its columns are headed
+    <code>Time</code>, <code>System</code>, <code>Talkgroup</code>, and <code>Name</code>, and the
+    <code>Name</code> column falls back the same way the large row does — except that it writes the frequency as a
+    bare number rather than in the grouped form the display uses. The row holding the call the display is on is
+    marked, which is what tells you that what you are hearing is a replay rather than a new call.
   </p>
 
   <p>
@@ -2687,8 +2692,8 @@ footer.site .signoff {
           operator needs to look the call up again.</td>
       </tr>
       <tr>
-        <th scope="row">Whether anybody else was listening, from the count of listeners the display carries, and whether they saw
-          the same thing</th>
+        <th scope="row">Whether anybody else was listening, from the count of listeners the display carries when the
+          deployment shows it, and whether they saw the same thing</th>
         <td>A problem that two listeners saw is about the deployment. A problem only you saw is about your browser,
           your device, or your selection.</td>
       </tr>
@@ -2880,9 +2885,9 @@ footer.site .signoff {
           group with nothing to say about what its buttons have in common.</td>
       </tr>
       <tr>
-        <th scope="row">The last column of the search results, which holds the play, stop, and download controls</th>
+        <th scope="row">The first column of the search results, which holds the play, stop, and download controls</th>
         <td>Each control names itself: <code>Play</code>, <code>Stop</code>, <code>Download</code>, and
-          <code>Loading</code> while an answer is being fetched.</td>
+          <code>Loading</code> while that row's recording is on its way.</td>
         <td>The column has no heading, so a reader who reads the column across is not told what kind of thing the
           column is.</td>
       </tr>
@@ -3103,7 +3108,7 @@ footer.site .signoff {
           and its state.</td>
       </tr>
       <tr>
-        <th scope="row">The last column of the search results has no heading.</th>
+        <th scope="row">The first column of the search results has no heading.</th>
         <td>Every control in it names itself, so the column is understood from its controls even without its heading.</td>
       </tr>
       <tr>
@@ -3181,9 +3186,9 @@ footer.site .signoff {
     point. The talkgroup is not chosen, which <code>SELECT TG</code> shows you directly — <a
     href="#ch-04-choosing-what-to-hear">the chapter on choosing what to hear</a> gives what a button reads when it is
     chosen, when it is held off, and when it is neither. The talkgroup is being held off, which is what <code>AVOID</code>
-    arms: while a window of minutes is standing, that button's corner mark blinks and the minutes beside the mark are
-    how much of the window is left. The whole system, or the talkgroup alone, is being held, which is <code>HOLD SYS</code>
-    or <code>HOLD TG</code> switched on.
+    arms: while a window of minutes is standing, the flag row carries the hourglass with the minutes that window is
+    held for, and that talkgroup's own button in the select panel carries the timed mark. The whole system, or the
+    talkgroup alone, is being held, which is <code>HOLD SYS</code> or <code>HOLD TG</code> switched on.
   </p>
 
   <p>
@@ -3253,8 +3258,10 @@ footer.site .signoff {
   <p>
     A hold is not a stop, and a listener who expects <code>PAUSE</code> to end the call is left with a screen that looks
     stuck while it is doing exactly what it was asked to do. To move on, press <code>SKIP NEXT</code>: it ends what is
-    playing and takes the next thing the queue holds. To end the queue as well, press <code>LIVE FEED</code> while it is
-    switched on — the queue is emptied, the audio stops, and the light on that control reads the colour of off.
+    playing, and while a hold is standing that is all it does — the next thing the queue holds starts only when you
+    let go of the hold. Letting go of a hold you have not skipped from continues the same recording where it stopped.
+    To end the queue as well, press <code>LIVE FEED</code> while it is switched on — the queue is emptied, the audio
+    stops, and the light on that control reads the colour of off.
     <code>REPLAY LAST</code> then plays the last call the display showed again, which is the way back to something you
     have already heard once.
   </p>
@@ -3342,9 +3349,10 @@ footer.site .signoff {
     is waiting, the page opens a dialog titled <code>New version available</code> and asks whether it may reload the
     page; the answer that says yes takes the new files and reopens the page, and the other answer leaves what you have
     running in place. The dialog appears only when an installation is waiting to replace the one in control, which is
-    why a first visit to a page never gets it. What an update costs a listener — a code you have to enter again, a
-    selection that keeps its older shape — is set out in <a href="#ch-08-on-your-phone-or-tablet">the chapter on phones
-    and tablets</a>, along with what the page keeps and what it does not.
+    why a first visit to a page never gets it. What the page keeps in your browser, and what a newer set of files does
+    with what an older application left there, is set out in <a href="#ch-08-on-your-phone-or-tablet">the chapter on
+    phones and tablets</a>, and what the version update itself costs a listener is in <a
+    href="#ch-01-overview">the opening chapter</a>.
   </p>
 
   <h3>What to bring when the answer is not yours</h3>
@@ -3534,14 +3542,6 @@ footer.site .signoff {
           <a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a>
         </td>
       </tr>
-      <tr>
-        <th scope="row"><code>Help</code></th>
-        <td>
-          The affordance that names the address the operator configured. A deployment whose operator configured none
-          gets no <code>Help</code> control at all.
-        </td>
-        <td><a href="#ch-09-help-and-support">Help and support</a></td>
-      </tr>
     </tbody>
   </table>
 
@@ -3693,7 +3693,8 @@ footer.site .signoff {
   <p>
     These are named as the operator's settings name them, because an operator can hand a listener one of these words
     and a listener needs to know what it did to their screen. Changing any of them, and finding out what the current
-    value is, belongs to the operator. What this guide adds is only the effect.
+    value is in the deployment in front of you, belongs to the operator. What this guide adds is the effect, and the
+    value the server starts with before anyone changes it, which is what the last column of the table gives.
   </p>
 
   <table>
@@ -3702,6 +3703,7 @@ footer.site .signoff {
       <tr>
         <th scope="col">The setting</th>
         <th scope="col">What it does to a listener's screen</th>
+        <th scope="col">As shipped</th>
       </tr>
     </thead>
     <tbody>
@@ -3714,6 +3716,7 @@ footer.site .signoff {
           recording stored, so the call is still there and still findable. When the call's talkgroup carries a tag, the
           converted recording carries the talkgroup, the system, and the tag as the recording's own labels.
         </td>
+        <td>Converted copies, not levelled</td>
       </tr>
       <tr>
         <th scope="row"><code>Auto Populate</code></th>
@@ -3724,10 +3727,12 @@ footer.site .signoff {
           not this server-wide option is on. A channel nobody was told about can therefore appear in the selection, and
           in a search. Where neither setting applies, the operator has to name the channel before it can appear.
         </td>
+        <td>On</td>
       </tr>
       <tr>
         <th scope="row"><code>Branding Label</code></th>
         <td>The words on the line at the top of the screen. When it holds nothing, that line is empty.</td>
+        <td>Nothing set</td>
       </tr>
       <tr>
         <th scope="row"><code>Disable Duplicate Call Detection</code></th>
@@ -3736,6 +3741,7 @@ footer.site .signoff {
           the same call: a call heard on the same system, talkgroup, and site within 500 milliseconds on either side of
           another is kept as one recording.
         </td>
+        <td>Off</td>
       </tr>
       <tr>
         <th scope="row"><code>Email Support</code></th>
@@ -3743,6 +3749,7 @@ footer.site .signoff {
           The address the <code>Help</code> affordance names. A deployment whose operator has not configured one gets
           no <code>Help</code> control at all, and then nothing on the screen says where to take a problem.
         </td>
+        <td>Nothing set</td>
       </tr>
       <tr>
         <th scope="row"><code>Keypad Beep Style</code></th>
@@ -3750,6 +3757,7 @@ footer.site .signoff {
           Which set of tones the control bar answers a press with. A deployment configured without a set answers a
           press with silence, which is not the same as the press having done nothing.
         </td>
+        <td>Uniden</td>
       </tr>
       <tr>
         <th scope="row"><code>Max Clients</code></th>
@@ -3758,6 +3766,7 @@ footer.site .signoff {
           the screen reads <code>NO LINK</code> the way it reads any other lost connection. The cap is not the same
           thing as the limit that belongs to a single access code, and only that second one is named on the screen.
         </td>
+        <td>200 listeners</td>
       </tr>
       <tr>
         <th scope="row"><code>Prune Days</code></th>
@@ -3765,6 +3774,7 @@ footer.site .signoff {
           How long the server keeps calls. A pass on an hourly schedule removes what has outlived that, and a call the
           pass has taken is not findable by any route the application offers. The value 0 switches the pass off.
         </td>
+        <td>7 days</td>
       </tr>
       <tr>
         <th scope="row"><code>Show Listeners Count</code></th>
@@ -3773,12 +3783,14 @@ footer.site .signoff {
           display, beside the time and the queue reading. When it is off that place is empty, and an empty place is not
           the same as nobody else listening.
         </td>
+        <td>Off</td>
       </tr>
       <tr>
         <th scope="row"><code>Sort Talkgroups</code></th>
         <td>
           Puts each system's talkgroups in the order of their names. When it is off they arrive in the order the
           operator put them in, which is the order they appear on the screen.</td>
+        <td>Off</td>
       </tr>
     </tbody>
   </table>

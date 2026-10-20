@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -256,6 +257,15 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 			t.Errorf("the chapter on the main screen carries %q, which describes a mark the shipped page does not draw in that state", superseded)
 		}
 	}
+
+	// The minutes beside the hourglass in the flag row are the length of the window an avoid opened, and nothing on
+	// the page counts them down. A draft of this chapter told the reader to read the remaining minutes off the mark,
+	// and a listener who believed it would watch a number that never moves.
+	for _, superseded := range []string{"minutes left", "minutes remaining", "minutes are left"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on the main screen carries %q, which describes a countdown the shipped display does not keep", superseded)
+		}
+	}
 }
 
 // The third chapter operates the listening controls. What it says about them has to match what the browser
@@ -347,6 +357,23 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 	for _, superseded := range []string{"blinking", "blinks"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on live calls carries %q, which describes motion the shipped control bar does not draw", superseded)
+		}
+	}
+
+	// A timed window is what the application closes, not what it renews: when a window runs out the talkgroup is put
+	// back to hearing and its window is cleared, so a press after that starts the cycle again from its beginning. A
+	// draft of this chapter said the window opens itself again, and a listener who believed it would expect a
+	// talkgroup to go on being held off past a window the application had already ended. The minutes written beside
+	// the mark are the length of that window, which the application never counts down.
+	for _, superseded := range []string{"opens itself again", "minutes left"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on live calls carries %q, which describes an avoid window the shipped application does not keep", superseded)
+		}
+	}
+
+	for _, want := range []string{"closes itself", "the minutes that window is held for"} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter on live calls never gives %q, which is what the shipped application does with a timed avoid window", want)
 		}
 	}
 }
@@ -503,6 +530,22 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 	} {
 		if strings.Contains(spoken, promised) {
 			t.Errorf("the chapter on searching recorded calls says %q, which is a promise the superseded page made and the shipped panel does not keep", promised)
+		}
+	}
+
+	// The panel draws one action per row, and decides which one through a chain that the download switch heads: with
+	// the switch on, the row whose recording is being heard reads Download rather than Stop. A draft of this chapter
+	// listed the four shapes in an order the shipped chain does not follow, and a listener downloading a searched
+	// call would have looked for a stop control the panel never draws.
+	for _, link := range []string{"otherwise Loading", "otherwise Stop", "otherwise Play"} {
+		if !strings.Contains(spoken, link) {
+			t.Errorf("the chapter on searching recorded calls does not give the row's action as the chain that draws it, which decides %s", link)
+		}
+	}
+
+	for _, superseded := range []string{"or Stop while that row's recording is the one being heard, or Download"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on searching recorded calls lists the row's action in the order %q, which is not the order the shipped chain decides in", superseded)
 		}
 	}
 
@@ -701,6 +744,13 @@ func TestTheUserGuideSaysWhoToAskAndWhatToSay(t *testing.T) {
 		}
 	}
 
+	// The count of other listeners is a reading the display writes only when the operator has it turned on, and the
+	// server ships with it turned off. The chapter's first draft asked a reader to note the count as something the
+	// display carries, which is a promise the shipped display does not keep for every deployment.
+	if !strings.Contains(spoken, "when the deployment shows it") {
+		t.Errorf("the chapter on help and support asks whether anybody else was listening without saying that the count is only there when the deployment shows it")
+	}
+
 	// The chapter owns exactly one figure, and anything more in it would be a picture the figure inventory does not
 	// give this chapter.
 	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 1 {
@@ -756,6 +806,19 @@ func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on keyboards and screen readers carries %q, which is a superseded figure or the claim it was written to support", superseded)
 		}
+	}
+
+	// The column that holds the row actions is the first column of the shipped table, and it is the one its header
+	// row leaves without a heading. A draft of this chapter placed it at the other end, and a reader looking for it at
+	// the right edge of the table would have found the column carrying talkgroup names instead.
+	for _, superseded := range []string{"last column of the search results"} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter on keyboards and screen readers carries %q, which places the search table's action column where the shipped table does not put it", superseded)
+		}
+	}
+
+	if !strings.Contains(spoken, "first column of the search results") {
+		t.Errorf("the chapter on keyboards and screen readers never says the search results' action column is the first one, which is where the shipped table puts it")
 	}
 
 	// Three figures, which is all the figure inventory gives this chapter.
@@ -871,6 +934,33 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 		}
 	}
 
+	// Three readings the sweep against the shipped application found this chapter holding wrongly. The minutes the
+	// hourglass carries are the length of an avoid window, and they ride the display's flag row rather than the
+	// control bar's AVOID button, which has no light of its own and blinks in no state. A press of SKIP NEXT while a
+	// hold is standing ends the recording but starts nothing, because the application begins no audio while a hold is
+	// standing. And a version update costs a listener no code to type again, because the page reads the code an older
+	// application left in the same browser and presents it by itself. Each superseded reading is refused by name.
+	for _, superseded := range []string{
+		"that button's corner mark blinks",
+		"how much of the window is left",
+		"takes the next thing the queue holds",
+		"a code you have to enter again",
+	} {
+		if strings.Contains(spoken, superseded) {
+			t.Errorf("the chapter about when something does not work carries %q, which describes behaviour the shipped application does not have", superseded)
+		}
+	}
+
+	for _, want := range []string{
+		"the minutes that window is held for",
+		"only when you let go of the hold",
+		"the flag row carries the hourglass",
+	} {
+		if !strings.Contains(spoken, want) {
+			t.Errorf("the chapter about when something does not work never gives %q, which is what the shipped application does instead", want)
+		}
+	}
+
 	// The chapter leans on the chapters that already describe each part, rather than describing them a second
 	// time. The hrefs are read the way the guide's own self-containment check reads them, because a link whose
 	// opening tag wraps across a line is still one link.
@@ -881,6 +971,7 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 	}
 
 	for _, want := range []string{
+		"#ch-01-overview",
 		"#ch-04-choosing-what-to-hear",
 		"#ch-05-searching-archived-calls",
 		"#ch-07-access-codes",
@@ -1109,6 +1200,1043 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 0 {
 		t.Errorf("the reference chapter carries a figure, and the inventory gives it none: a reader scanning a reference is reading names and columns, not a picture")
 	}
+}
+
+// The guide's tables gather the names the listening page puts on its own screen. This check reads the components
+// those names come from and compares them with the tables a reader scans, the way the operator guide's tables are
+// compared with the server's own flag set. Both directions are held because both go wrong: a name the guide
+// carries that the page never renders is a name a listener looks for and does not find, and a name the page
+// renders that the guide leaves out is a name the reader has to guess at. Where a table's own caption promises the
+// order the screen puts its rows in, the order is compared too. Every failure names the name that differs, because
+// a count of disagreeing rows tells a reader nothing they can act on.
+//
+// Each inventory is read from a closed structure in the shipped sources: the control bar's own template, the search
+// panel's form and the heading row of its result table, the display's flag row and the words it writes into its own
+// rows, the fixed names the page's components put on their controls, the sentences the components say out loud, and
+// the words the display heads the columns of the table under it. The four paginator names come from the shared
+// component the search panel builds its paginator from, because the search panel asks that component for the
+// four-control shape and those four names are what the paginator the reader sees carries.
+func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) {
+	body := userGuidePath(t)
+
+	// The controls, in the rows the screen puts them in, left to right within each row. The chapter about the main
+	// screen promises that arrangement in its own caption, so its rows are compared one for one; the reference
+	// chapter gathers the same names for a reader who only needs one of them.
+	bar := controlBarRows(t)
+
+	barNames := []string{}
+	for _, row := range bar {
+		barNames = append(barNames, row...)
+	}
+
+	arranged := guideTableRows(tableWithCaption(t, body, "The controls as they sit on the screen, top row first, left to right within each row."))
+
+	for index, screen := range bar {
+		if index >= len(arranged) {
+			t.Errorf("the control bar puts %s in a row the guide's arrangement has no row for: the guide names %d rows and the screen %d",
+				strings.Join(screen, ", "), len(arranged), len(bar))
+
+			continue
+		}
+
+		got := strings.Join(codeSpansIn(strings.Join(arranged[index], " ")), ", ")
+
+		if got != strings.Join(screen, ", ") {
+			t.Errorf("the guide's control arrangement says the row it names %q holds %s; the control bar puts %s in that row",
+				words(arranged[index][0]), saidList(codeSpansIn(strings.Join(arranged[index], " "))), strings.Join(screen, ", "))
+		}
+	}
+
+	compareNames(t, "reference chapter's control table", "the control bar", barNames,
+		codeSpansIn(rowHeaders(tableWithCaption(t, body, "The nine controls on the control bar, what a press on each one does, and where this guide operates it."))))
+
+	// The criteria the search panel's form offers, and the order the form puts them in. The chapter operating the
+	// search panel promises the order in its caption; the reference chapter only gathers the names.
+	criteria := searchFormNames(t)
+
+	criteriaChapter := tableWithCaption(t, body, "The search panel's criteria, in the order the form puts them.")
+
+	compareNames(t, "search chapter's criteria table", "the search panel's form", criteria,
+		rowNames(guideTableRows(criteriaChapter), printedName))
+	compareOrder(t, "search chapter's criteria table", "the search panel's form", criteria,
+		rowNames(guideTableRows(criteriaChapter), printedName))
+
+	criteriaReference := tableWithCaption(t, body, "The search panel's criteria, what each one holds, and where this guide operates it.")
+
+	compareNames(t, "reference chapter's criteria table", "the search panel's form", criteria,
+		rowNames(guideTableRows(criteriaReference), printedName))
+
+	// The entries a listener sees in each criterion before touching anything: the entry that searches every one of
+	// a thing, and the choice the one criterion that preselects opens with.
+	openings := searchFormOpenings(t)
+
+	compareWords(t, "search chapter's criteria table", "the search panel's form", openings, bodyWords(criteriaChapter))
+	compareWords(t, "reference chapter's criteria table", "the search panel's form", openings, bodyWords(criteriaReference))
+
+	// The headings of the result table, in the order the columns come. The shipped table leaves its first column
+	// without a heading, and the guide's row for that column says so in words, which is all there is to say about
+	// it: a guide that invented a heading for it is named as inventing one.
+	columns := searchColumnNames(t)
+
+	resultRows := tableWithCaption(t, body, "What the search panel's result rows hold, in the order the columns come.")
+
+	compareNames(t, "search chapter's result table", "the search panel's result table", columns,
+		rowNames(guideTableRows(resultRows), columnHeadedName))
+	compareOrder(t, "search chapter's result table", "the search panel's result table", columns,
+		rowNames(guideTableRows(resultRows), columnHeadedName))
+
+	// The flags the display carries beside a call. The chapter operating the display and the reference chapter both
+	// tabulate them, and neither promises an order.
+	flags := displayFlagNames(t)
+
+	compareNames(t, "display chapter's flag table", "the display", flags,
+		rowNames(guideTableRows(tableWithCaption(t, body, "The display's flags, and what has to be true for each of them to be lit.")), printedName))
+	compareNames(t, "reference chapter's flag table", "the display", flags,
+		rowNames(guideTableRows(tableWithCaption(t, body, "The flags the display carries beside a call, what has to be true for each to appear, and where this guide operates it.")), printedName))
+
+	// The controls the two panels add. The criteria the form offers and the headings of the result table are bound
+	// by the checks above, so they are not gathered here as well.
+	compareNames(t, "reference chapter's panel table", "the panel chrome", panelControlNames(t),
+		codeSpansIn(rowHeaders(tableWithCaption(t, body, "The controls the two panels add, what each one does, and where this guide operates it."))))
+
+	// The buttons the select panel itself prints words on. The buttons naming a group or a talkgroup take their
+	// words from the configuration rather than from the application, so no fixed word is theirs to compare, and the
+	// guide describes those two in words of its own.
+	compareNames(t, "select chapter's button table", "the select panel", selectPanelButtons(t),
+		codeSpansIn(rowHeaders(tableWithCaption(t, body, "What the select panel's buttons show, and what a press on each one does."))))
+
+	// What the unlock field says when the server refuses the code a listener offers.
+	compareNames(t, "access code chapter's table", "the display's unlock field", unlockReadings(t),
+		rowNames(guideTableRows(tableWithCaption(t, body, "What the unlock field says, what the server actually answered, and what is worth doing about it.")), printedName))
+
+	// The sentences the page says out loud for a screen reader. The reference chapter gathers them as sentences,
+	// and one of them is built entirely out of a reading, so the words each sentence holds fixed are looked for in
+	// the table's own words rather than demanded as row headers. What the table names as a printed sentence is held
+	// to the sentences the components actually announce.
+	announcements := announcedSentences(t)
+	announcementTable := tableWithCaption(t, body, "The sentences the page says out loud for a screen reader, what each one is for, and where this guide operates it.")
+
+	compareWords(t, "reference chapter's announcement table", "the page's own live region", announcements,
+		bodyWords(announcementTable))
+
+	for _, name := range codeSpansIn(rowHeaders(announcementTable)) {
+		if !holds(announcements, name) {
+			t.Errorf("the guide's announcement table names %q as a sentence the page says out loud, which no component of the listening page announces", name)
+		}
+	}
+
+	// The words the display writes into its own rows before any call has arrived. Its rows table is a description
+	// rather than a list of names, so the readings are looked for in the table's words, and a guide that leaves one
+	// out leaves the reader guessing what a row says while it is waiting.
+	compareWords(t, "display chapter's rows table", "the display", displayReadings(t),
+		bodyWords(tableWithCaption(t, body, "The display's rows, what each holds before any call, and what it holds once a call is on the screen.")))
+
+	// The headings of the table that sits under the display, read where the guide operates that table.
+	history := guideSection(t, userGuideChapter(t, body, "ch-06-what-the-display-says"), "The history table")
+
+	for _, name := range historyHeadings(t) {
+		if !holds(codeSpansIn(history), name) {
+			t.Errorf("the display heads a column of the table under it %q, which the guide's section about that table never names as a printed name", name)
+		}
+	}
+}
+
+// The reference chapter's settings table gathers the settings a listener never chooses but feels on the screen, and
+// says what each one is as shipped. These are the server's own settings, so the table is measured against the
+// administration interface's own list of them and against the values the server starts with, the way the operator
+// guide's flag tables are measured against the server's flags. A setting the guide names that the server does not
+// define, a defined setting the guide leaves out, and a shipped position the guide states wrongly are each named by
+// the setting they concern. A default that moves and a guide still reading the old one is a sentence that has
+// quietly become untrue, which is what this check is for.
+func TestTheSettingsTheGuideTabulatesAreTheSettingsTheServerDefines(t *testing.T) {
+	body := userGuidePath(t)
+
+	table := tableWithCaption(t, body, "The settings the operator chooses, and what each one does to the screen a listener is looking at.")
+
+	column := shippedPositionColumn(t, table)
+
+	stated := map[string]string{}
+	titled := map[string]bool{}
+
+	for _, row := range guideTableRows(table) {
+		titles := codeSpansIn(row[0])
+
+		if len(titles) == 0 {
+			t.Errorf("the guide's settings table has a row naming no setting: %s", words(row[0]))
+
+			continue
+		}
+
+		titled[titles[0]] = true
+
+		if column < 0 {
+			continue
+		}
+
+		if column >= len(row) {
+			t.Errorf("the guide's settings table names %q in a row with no cell saying what the setting is as shipped", titles[0])
+
+			continue
+		}
+
+		stated[titles[0]] = words(row[column])
+	}
+
+	settings := settingDefaults(t)
+
+	defined := map[string]bool{}
+
+	for _, setting := range settings {
+		defined[setting.title] = true
+
+		if !titled[setting.title] {
+			t.Errorf("the server defines the %q setting the administration interface offers, which the guide's settings table never names", setting.title)
+
+			continue
+		}
+
+		// A table with no column for what a setting is as shipped is already reported as itself, which is the fault
+		// a reader needs naming.
+		if column < 0 {
+			continue
+		}
+
+		if !statesShippedPosition(t, setting, stated[setting.title]) {
+			t.Errorf("the guide's settings table says the %q setting is %s; the server starts with %s",
+				setting.title, said(stated[setting.title]), readsAsShipped(setting))
+		}
+	}
+
+	for title := range titled {
+		if !defined[title] {
+			t.Errorf("the guide's settings table names %q, which is no setting the administration interface offers or the server defines", title)
+		}
+	}
+}
+
+// listenerComponentSource reads one of the components the listening page is built from. The names held against
+// these sources are the ones the components write into the screen themselves.
+func listenerComponentSource(t *testing.T, name string) string {
+	t.Helper()
+
+	return repoFile(t, "internal", "presentation", "scanner", "frontend", "presentation", "listener", name)
+}
+
+// sharedComponentSource reads the component both webapps build their controls from.
+func sharedComponentSource(t *testing.T) string {
+	t.Helper()
+
+	return repoFile(t, "internal", "presentation", "common", "frontend", "presentation", "ui", "primitives.js")
+}
+
+// printedLabel turns a label a component writes into the words a reader sees. The control bar splits a label over
+// two lines, and a listener reads it as the one label it names.
+func printedLabel(label string) string {
+	return strings.Join(strings.Fields(regexp.MustCompile(`(?is)<[^>]*>`).ReplaceAllString(label, " ")), " ")
+}
+
+// codeSpansIn reads the names a piece of the guide sets out as words the application prints.
+func codeSpansIn(fragment string) []string {
+	names := []string{}
+
+	for _, span := range regexp.MustCompile(`(?is)<code>(.*?)</code>`).FindAllStringSubmatch(fragment, -1) {
+		names = append(names, strings.Join(strings.Fields(span[1]), " "))
+	}
+
+	return names
+}
+
+// holds reports whether a list of names carries one.
+func holds(names []string, name string) bool {
+	for _, have := range names {
+		if have == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+// said reads a name, or the words saying nothing was there, so a failure never shows an empty quote where a reader
+// needs to know the guide printed nothing.
+func said(name string) string {
+	if name == "" {
+		return "nothing"
+	}
+
+	return strconv.Quote(name)
+}
+
+// saidList reads the names a guide table carries, or the words saying it carries none.
+func saidList(names []string) string {
+	if len(names) == 0 {
+		return "no printed names at all"
+	}
+
+	return strings.Join(names, ", ")
+}
+
+// guideTableRows reads a guide table's body rows: each row's cells in the order they come, the row header first.
+// The header row is left out because it names the columns rather than a row.
+func guideTableRows(table string) [][]string {
+	rows := [][]string{}
+
+	for _, row := range regexp.MustCompile(`(?is)<tr\b[^>]*>.*?</tr>`).FindAllString(table, -1) {
+		if strings.Contains(row, `scope="col"`) {
+			continue
+		}
+
+		cells := []string{}
+
+		for _, cell := range regexp.MustCompile(`(?is)<t[hd]\b[^>]*>(.*?)</t[hd]>`).FindAllStringSubmatch(row, -1) {
+			cells = append(cells, cell[1])
+		}
+
+		if len(cells) > 0 {
+			rows = append(rows, cells)
+		}
+	}
+
+	return rows
+}
+
+// rowHeaders joins the cells that name each row of a guide table, which are the cells carrying the names the table
+// promises.
+func rowHeaders(table string) string {
+	headers := []string{}
+
+	for _, row := range guideTableRows(table) {
+		headers = append(headers, row[0])
+	}
+
+	return strings.Join(headers, " ")
+}
+
+// bodyWords leaves the words a table's body rows carry. Its caption and its column headers name the table and its
+// columns, and are not what a row promises.
+func bodyWords(table string) string {
+	parts := []string{}
+
+	for _, row := range guideTableRows(table) {
+		parts = append(parts, words(strings.Join(row, " ")))
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// rowNames reads the name each of a table's body rows puts in front of the reader. nameOf says how a row names the
+// thing it is about.
+func rowNames(rows [][]string, nameOf func([]string) string) []string {
+	names := []string{}
+
+	for _, row := range rows {
+		names = append(names, nameOf(row))
+	}
+
+	return names
+}
+
+// printedName reads the one printed name a row header carries, for the tables whose rows are one name each. A row
+// naming nothing returns nothing, and the comparison says so by name.
+func printedName(row []string) string {
+	names := codeSpansIn(row[0])
+
+	if len(names) == 0 {
+		return ""
+	}
+
+	return names[0]
+}
+
+// columnHeadedName reads the name a row carries for a column of a table. The one column a shipped table leaves
+// without a heading is named by the guide in words, because that is all there is to say about it.
+func columnHeadedName(row []string) string {
+	if strings.Contains(strings.ToLower(words(row[0])), "no heading") {
+		return ""
+	}
+
+	return printedName(row)
+}
+
+// uniqueNames drops the repeats a table leaves behind when one printed name answers two rows, which is what the
+// select panel's pair does in a chapter about that panel and in a table gathering the panels' controls.
+func uniqueNames(names []string) []string {
+	unique := []string{}
+	seen := map[string]bool{}
+
+	for _, name := range names {
+		if name == "" || seen[name] {
+			continue
+		}
+
+		seen[name] = true
+		unique = append(unique, name)
+	}
+
+	return unique
+}
+
+// compareNames holds one guide table to the printed names the listening application puts on its screen. It reports
+// the differing name in either direction.
+func compareNames(t *testing.T, table, screen string, want, got []string) {
+	offered := map[string]bool{}
+	for _, name := range want {
+		offered[name] = true
+	}
+
+	for _, name := range uniqueNames(got) {
+		if !offered[name] {
+			t.Errorf("the guide's %s names %q, which %s never puts on its screen", table, name, screen)
+		}
+	}
+
+	carried := map[string]bool{}
+	for _, name := range got {
+		carried[name] = true
+	}
+
+	for _, name := range want {
+		if !carried[name] {
+			t.Errorf("%s puts %q on its screen, which the guide's %s never names", screen, name, table)
+		}
+	}
+}
+
+// compareOrder holds one guide table to the order the screen puts its names in, for the tables whose own caption
+// promises that order. It names where the two part rather than counting how far apart they are.
+func compareOrder(t *testing.T, table, screen string, want, got []string) {
+	if len(want) != len(got) {
+		return
+	}
+
+	for index, name := range want {
+		if got[index] != name {
+			t.Errorf("the guide's %s puts %s in the place %s puts it: %q", table, said(got[index]), screen, name)
+		}
+	}
+}
+
+// compareWords holds a guide table to the words an application writes into what it shows, for the readings the
+// guide describes in sentences rather than naming row by row.
+func compareWords(t *testing.T, table, screen string, want []string, text string) {
+	for _, word := range want {
+		if !strings.Contains(text, word) {
+			t.Errorf("the guide's %s never carries %q, which %s writes into what it shows", table, word, screen)
+		}
+	}
+}
+
+// controlBarRows reads the control bar's buttons from the component that renders them, grouped into the rows the
+// screen puts them in and left to right within each row, which is the order a reader sees them in.
+func controlBarRows(t *testing.T) [][]string {
+	template := regexp.MustCompile("(?s)this.innerHTML = `(.*?)`;").FindStringSubmatch(listenerComponentSource(t, "rdio-controls.js"))
+
+	if template == nil {
+		t.Fatalf("the control bar component does not read as the markup it renders")
+	}
+
+	rows := [][]string{}
+
+	for _, chunk := range strings.Split(template[1], `<div class="row">`)[1:] {
+		names := []string{}
+
+		for _, button := range regexp.MustCompile(`data-action="[a-zA-Z]+">(.*?)</button>`).FindAllStringSubmatch(chunk, -1) {
+			names = append(names, printedLabel(button[1]))
+		}
+
+		if len(names) > 0 {
+			rows = append(rows, names)
+		}
+	}
+
+	if len(rows) == 0 {
+		t.Fatalf("the control bar component renders no rows of controls")
+	}
+
+	return rows
+}
+
+// searchFormNames reads the criteria the search panel's form offers, in the order the form puts them.
+func searchFormNames(t *testing.T) []string {
+	names := []string{}
+
+	for _, label := range regexp.MustCompile(`(?is)<label>([^<]*)</label>`).FindAllStringSubmatch(listenerComponentSource(t, "rdio-search-panel.js"), -1) {
+		names = append(names, printedLabel(label[1]))
+	}
+
+	if len(names) == 0 {
+		t.Fatalf("the search panel component writes no criteria into its form")
+	}
+
+	return names
+}
+
+// searchFormOpenings reads the entries a listener sees in the criteria before touching anything: the entry that
+// searches every one of a thing, and the choice the one criterion that preselects opens with.
+func searchFormOpenings(t *testing.T) []string {
+	source := listenerComponentSource(t, "rdio-search-panel.js")
+
+	names := []string{}
+
+	for _, entry := range regexp.MustCompile(`(?is)<option value="">([^<]+)</option>`).FindAllStringSubmatch(source, -1) {
+		// An entry the panel fills in from the configuration carries no fixed word of its own, and the guide names
+		// none for it either.
+		if strings.Contains(entry[1], "${") {
+			continue
+		}
+
+		names = append(names, printedLabel(entry[1]))
+	}
+
+	for _, entry := range regexp.MustCompile(`(?is)<option value="[^"]+" selected>([^<]+)</option>`).FindAllStringSubmatch(source, -1) {
+		if strings.Contains(entry[1], "${") {
+			continue
+		}
+
+		names = append(names, printedLabel(entry[1]))
+	}
+
+	if len(names) == 0 {
+		t.Fatalf("the search panel's criteria carry no openings")
+	}
+
+	return uniqueNames(names)
+}
+
+// searchColumnNames reads the headings of the search panel's result table in the order the columns come, keeping the
+// first column the shipped table leaves without a heading so that the guide's row for it is compared in its place
+// rather than dropped from the table.
+func searchColumnNames(t *testing.T) []string {
+	thead := regexp.MustCompile(`(?is)<thead>(.*?)</thead>`).FindStringSubmatch(listenerComponentSource(t, "rdio-search-panel.js"))
+
+	if thead == nil {
+		t.Fatalf("the search panel renders no result table")
+	}
+
+	names := []string{}
+
+	for _, cell := range regexp.MustCompile(`(?is)<th\b[^>]*>(.*?)</th>`).FindAllStringSubmatch(thead[1], -1) {
+		names = append(names, printedLabel(cell[1]))
+	}
+
+	return names
+}
+
+// displayFlagNames reads the flags the display carries beside a call: the three it prints into its markup, and the
+// mark it writes for the timed part of the avoid cycle, which has no place in the markup because it is written only
+// while that part is running.
+func displayFlagNames(t *testing.T) []string {
+	source := listenerComponentSource(t, "rdio-display.js")
+
+	names := []string{}
+
+	for _, flag := range regexp.MustCompile(`(?is)<span class="flag flag-[a-z]+">(.*?)</span>`).FindAllStringSubmatch(source, -1) {
+		if name := printedLabel(flag[1]); name != "" {
+			names = append(names, name)
+		}
+	}
+
+	// The mark exists nowhere in the markup, because the component writes it only while the timed part of the
+	// cycle is running: it is the fixed head of the reading the component writes.
+	const write = "tempAvoid.textContent = minutes ? `"
+
+	at := strings.Index(source, write)
+
+	if at < 0 {
+		t.Fatalf("the display writes no mark for the timed part of the avoid cycle")
+	}
+
+	head := source[at+len(write):]
+
+	if stop := strings.IndexAny(head, "$`"); stop >= 0 {
+		head = head[:stop]
+	}
+
+	names = append(names, strings.TrimSpace(head))
+
+	return names
+}
+
+// panelControlNames reads the controls the two panels add, from the components that render them and from the page
+// shell that renders the bars the panels open on: the select panel's pair, the search panel's switch, its reset, and
+// the one control its result rows carry in the shapes it takes, the names the paginator the search panel asks the
+// shared component for, and the two controls that shut the panels.
+func panelControlNames(t *testing.T) []string {
+	names := []string{}
+
+	for _, control := range regexp.MustCompile(`>(OFF|ON)<`).FindAllStringSubmatch(listenerComponentSource(t, "rdio-select-panel.js"), -1) {
+		names = append(names, control[1])
+	}
+
+	search := listenerComponentSource(t, "rdio-search-panel.js")
+
+	for _, control := range regexp.MustCompile(`aria-label="([^"$]+)"`).FindAllStringSubmatch(search, -1) {
+		names = append(names, control[1])
+	}
+
+	for _, control := range regexp.MustCompile(`>(Reset)<`).FindAllStringSubmatch(search, -1) {
+		names = append(names, control[1])
+	}
+
+	paginator := regexp.MustCompile("(?s)const paginatorControls = \\(material\\) =>(.*?\\];)").FindStringSubmatch(sharedComponentSource(t))
+
+	if paginator == nil {
+		t.Fatalf("the shared component writes no paginator for the search panel to ask for")
+	}
+
+	for _, control := range regexp.MustCompile(`\[('[a-z]+', )?'[^']*', '([A-Z][^']*)'\]`).FindAllStringSubmatch(paginator[1], -1) {
+		names = append(names, control[2])
+	}
+
+	for _, control := range regexp.MustCompile(`panel-close[^>]*aria-label="([^"$]+)"`).FindAllStringSubmatch(listenerComponentSource(t, "rdio-app.js"), -1) {
+		names = append(names, control[1])
+	}
+
+	names = uniqueNames(names)
+
+	if len(names) == 0 {
+		t.Fatalf("the two panels render no control the check can name")
+	}
+
+	return names
+}
+
+// selectPanelButtons reads the buttons the select panel prints words on itself.
+func selectPanelButtons(t *testing.T) []string {
+	names := uniqueNames([]string{})
+
+	for _, control := range regexp.MustCompile(`>(OFF|ON)<`).FindAllStringSubmatch(listenerComponentSource(t, "rdio-select-panel.js"), -1) {
+		names = append(names, control[1])
+	}
+
+	if len(names) == 0 {
+		t.Fatalf("the select panel renders no button it names in words")
+	}
+
+	return names
+}
+
+// unlockReadings reads what the display writes into the unlock field when the server refuses the code a listener
+// offers.
+func unlockReadings(t *testing.T) []string {
+	names := []string{}
+
+	for _, message := range regexp.MustCompile(`setError\('([^']+)'\)`).FindAllStringSubmatch(listenerComponentSource(t, "rdio-display.js"), -1) {
+		names = append(names, message[1])
+	}
+
+	if len(names) == 0 {
+		t.Fatalf("the display never refuses an unlock code in words")
+	}
+
+	return names
+}
+
+// announcedSentences reads the words the page says out loud for a screen reader: every sentence the components of
+// the listening page announce, and the words each sentence holds fixed while the rest of it is filled in from the
+// reading the screen is showing.
+func announcedSentences(t *testing.T) []string {
+	sentences := []string{}
+
+	for _, component := range []string{"rdio-display.js", "rdio-search-panel.js"} {
+		for _, call := range regexp.MustCompile(`announce\((.*?)\);`).FindAllStringSubmatch(listenerComponentSource(t, component), -1) {
+			sentences = append(sentences, fixedWords(call[1])...)
+		}
+	}
+
+	sentences = uniqueNames(sentences)
+
+	if len(sentences) == 0 {
+		t.Fatalf("no component of the listening page announces anything")
+	}
+
+	return sentences
+}
+
+// fixedWords returns the words an announced sentence holds fixed. What is filled in is a reading the guide operates
+// where it operates the display and the search results, and a sentence built entirely out of readings holds no
+// fixed word to compare.
+func fixedWords(expression string) []string {
+	expression = strings.TrimSpace(expression)
+
+	// A sentence the components write as one string carries its own words whole. Go's unquoting reads a
+	// single-quoted literal as one rune, which is not what the components write, so the quotes are taken off here.
+	if len(expression) >= 2 &&
+		((strings.HasPrefix(expression, "'") && strings.HasSuffix(expression, "'")) ||
+			(strings.HasPrefix(expression, `"`) && strings.HasSuffix(expression, `"`))) {
+		return []string{strings.TrimSpace(expression[1 : len(expression)-1])}
+	}
+
+	found := []string{}
+
+	for _, part := range regexp.MustCompile(`\$\{[^}]*\}`).Split(strings.Trim(expression, "`"), -1) {
+		if word := strings.TrimSpace(part); word != "" {
+			found = append(found, word)
+		}
+	}
+
+	for _, part := range regexp.MustCompile(`'([^']*)'`).FindAllStringSubmatch(expression, -1) {
+		if word := strings.TrimSpace(part[1]); word != "" {
+			found = append(found, word)
+		}
+	}
+
+	return found
+}
+
+// displayReadings reads the words the display writes into its own rows as plain words: what a row holds before any
+// call has arrived. A reading built out of a number or a name is filled in from a call, and describing it is the
+// display chapter's work rather than naming it.
+func displayReadings(t *testing.T) []string {
+	found := []string{}
+
+	for _, write := range regexp.MustCompile(`\.textContent = '([^']*)'`).FindAllStringSubmatch(listenerComponentSource(t, "rdio-display.js"), -1) {
+		if word := strings.TrimSpace(write[1]); word != "" {
+			found = append(found, word)
+		}
+	}
+
+	found = uniqueNames(found)
+
+	if len(found) == 0 {
+		t.Fatalf("the display writes nothing into its rows as a plain word")
+	}
+
+	return found
+}
+
+// historyHeadings reads the headings of the table the display renders under its rows.
+func historyHeadings(t *testing.T) []string {
+	thead := regexp.MustCompile(`(?is)<table class="history">(.*?)</thead>`).FindStringSubmatch(listenerComponentSource(t, "rdio-display.js"))
+
+	if thead == nil {
+		t.Fatalf("the display renders no table of recently heard calls")
+	}
+
+	names := []string{}
+
+	for _, cell := range regexp.MustCompile(`(?is)<th\b[^>]*>(.*?)</th>`).FindAllStringSubmatch(thead[1], -1) {
+		if name := printedLabel(cell[1]); name != "" {
+			names = append(names, name)
+		}
+	}
+
+	return names
+}
+
+// guideSection reads the part of a chapter under one of its own headings, up to the next heading or the end of the
+// chapter. A check binding a promise to the part of the guide that operates something reads that part, so a name
+// earned somewhere else in the chapter does not answer for it here.
+func guideSection(t *testing.T, chapter, heading string) string {
+	headings := regexp.MustCompile(`(?is)<h3\b[^>]*>(.*?)</h3>`)
+
+	bounds := headings.FindAllStringSubmatchIndex(chapter, -1)
+
+	end := len(chapter)
+
+	if closer := strings.Index(chapter, "</section>"); closer >= 0 {
+		end = closer
+	}
+
+	for index, bound := range bounds {
+		if words(chapter[bound[2]:bound[3]]) != heading {
+			continue
+		}
+
+		if index+1 < len(bounds) && bounds[index+1][0] < end {
+			end = bounds[index+1][0]
+		}
+
+		return chapter[bound[1]:end]
+	}
+
+	t.Fatalf("the guide has no section headed %q, so this check proves nothing", heading)
+
+	return ""
+}
+
+// settingDefault is one setting the administration interface offers, the option the server stores it in, and the
+// value the server starts with.
+type settingDefault struct {
+	title string
+	field string
+	value string
+	label string
+}
+
+// settingDefaults reads the settings the administration interface lists, pairs each with the option the domain
+// declares for it, and resolves the value the server starts with. The settings a listener never chooses are the
+// server's own, so what the guide says about them is measured against these values.
+func settingDefaults(t *testing.T) []settingDefault {
+	source := repoFile(t, "internal", "presentation", "admin", "frontend", "presentation", "admin", "rdio-admin-options.js")
+
+	controls := regexp.MustCompile("(?s)const CONTROLS = \\[(.*?)\n\\];").FindStringSubmatch(source)
+
+	if controls == nil {
+		t.Fatalf("the administration interface's settings do not read as a list")
+	}
+
+	keys := []string{}
+	for _, key := range regexp.MustCompile(`key: '([a-zA-Z]+)'`).FindAllStringSubmatch(controls[1], -1) {
+		keys = append(keys, key[1])
+	}
+
+	titles := []string{}
+	for _, title := range regexp.MustCompile(`title: '([^']+)'`).FindAllStringSubmatch(controls[1], -1) {
+		titles = append(titles, title[1])
+	}
+
+	if len(keys) != len(titles) {
+		t.Fatalf("the administration interface lists %d settings keys and %d settings titles, so the settings do not read as pairs", len(keys), len(titles))
+	}
+
+	fields := optionsFields(t)
+	consts := optionConstants(t)
+	started := startedOptions(t)
+
+	settings := []settingDefault{}
+
+	for index, key := range keys {
+		field := strings.ToUpper(key[:1]) + key[1:]
+
+		kind, declared := fields[field]
+
+		if !declared {
+			t.Fatalf("the administration interface offers %q, which no option named %q holds", key, field)
+		}
+
+		expression, stated := started[field]
+
+		if !stated {
+			expression = zeroOf(kind)
+		}
+
+		value, ok := resolveDefault(expression, consts, 0)
+
+		if !ok {
+			t.Fatalf("the server's own starting value for %q reads as %q, which resolves to nothing the guide can be compared with", field, expression)
+		}
+
+		settings = append(settings, settingDefault{
+			title: titles[index],
+			field: field,
+			value: value,
+			label: optionLabel(source, key, value),
+		})
+	}
+
+	if len(settings) == 0 {
+		t.Fatalf("the administration interface offers no settings")
+	}
+
+	return settings
+}
+
+// optionsFields reads the options the domain declares, with the kind each one holds, so a setting the server
+// starts with nothing in is read as that kind's nothing rather than as missing.
+func optionsFields(t *testing.T) map[string]string {
+	declared := regexp.MustCompile("(?s)type Options struct \\{(.*?)\n\\}").FindStringSubmatch(repoFile(t, "internal", "domain", "options.go"))
+
+	if declared == nil {
+		t.Fatalf("the domain declares no options")
+	}
+
+	fields := map[string]string{}
+
+	for _, field := range regexp.MustCompile(`(?m)^\s*([A-Z][A-Za-z]*)\s+(bool|string|uint|int)\s*$`).FindAllStringSubmatch(declared[1], -1) {
+		fields[field[1]] = field[2]
+	}
+
+	return fields
+}
+
+// optionConstants reads the constants the domain writes its option values with, so a default named by a constant is
+// read as the value the server starts with.
+func optionConstants(t *testing.T) map[string]string {
+	source := repoFile(t, "internal", "domain", "options.go")
+
+	consts := map[string]string{}
+
+	for _, block := range regexp.MustCompile(`(?s)const \((.*?)\n\)`).FindAllStringSubmatch(source, -1) {
+		for _, line := range strings.Split(block[1], "\n") {
+			name := regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*(?:uint|string|bool|int)?\s*=\s*(.+)$`).FindStringSubmatch(strings.TrimSpace(line))
+
+			if len(name) == 3 {
+				consts[name[1]] = strings.TrimSpace(name[2])
+			}
+		}
+	}
+
+	for _, single := range regexp.MustCompile(`(?m)^const ([A-Za-z_][A-Za-z0-9_]*)\s*(?:uint|string|bool|int)?\s*=\s*(.+)$`).FindAllStringSubmatch(source, -1) {
+		consts[single[1]] = strings.TrimSpace(single[2])
+	}
+
+	return consts
+}
+
+// startedOptions reads the values the server gives its options before an operator changes any of them. An option
+// left out of that list is started with nothing in it.
+func startedOptions(t *testing.T) map[string]string {
+	source := repoFile(t, "internal", "domain", "options.go")
+
+	body := regexp.MustCompile("(?s)func DefaultOptions\\(\\) Options \\{\n\treturn Options\\{(.*?)\n\\}").FindStringSubmatch(source)
+
+	if body == nil {
+		t.Fatalf("the domain writes no starting values for its options")
+	}
+
+	started := map[string]string{}
+
+	for _, field := range regexp.MustCompile(`([A-Z][A-Za-z]*):\s+(.*),`).FindAllStringSubmatch(body[1], -1) {
+		started[field[1]] = strings.TrimSpace(field[2])
+	}
+
+	return started
+}
+
+// zeroOf names the nothing a kind of option starts with when the server names no value for it.
+func zeroOf(kind string) string {
+	switch kind {
+	case "bool":
+		return "false"
+	case "uint", "int":
+		return "0"
+	default:
+		return `""`
+	}
+}
+
+// optionLabel reads the words the administration interface prints for one value of one setting. A listener chooses
+// between those words, so the guide names them rather than the value the server stores.
+func optionLabel(source, key, value string) string {
+	control := regexp.MustCompile("(?s)key: '" + regexp.QuoteMeta(key) + "'.*?options: \\[(.*?)\n\\s*\\]").FindStringSubmatch(source)
+
+	if control == nil {
+		return ""
+	}
+
+	label := regexp.MustCompile(`\[` + regexp.QuoteMeta("'"+value+"'") + `, '([^']+)'\]`).FindStringSubmatch(control[1])
+
+	if label == nil {
+		return ""
+	}
+
+	return label[1]
+}
+
+// shippedPositionColumn finds the column of the guide's settings table saying what each setting is as shipped. The
+// guide's tables name every column in their header row, the column of row headers included, so a header cell and the
+// cells beneath it hold the same index. A table without that column says nothing a default can be compared with.
+func shippedPositionColumn(t *testing.T, table string) int {
+	head := regexp.MustCompile(`(?is)<thead\b[^>]*>(.*?)</thead>`).FindStringSubmatch(table)
+
+	if head == nil {
+		t.Fatalf("the guide's settings table has no header row")
+	}
+
+	for index, cell := range regexp.MustCompile(`(?is)<th\b[^>]*>(.*?)</th>`).FindAllStringSubmatch(head[1], -1) {
+		if words(cell[1]) == "As shipped" {
+			return index
+		}
+	}
+
+	t.Errorf("the guide's settings table carries no column saying what each setting is as shipped, so no value the server starts with can be compared with it")
+
+	return -1
+}
+
+// conversionReadings are the words the guide's settings table uses for the recordings a listener hears, for each
+// mode the server starts conversion in. The guide writes the listener's words rather than the names the
+// administration interface prints, because a listener is choosing what they will hear and not configuring a server.
+var conversionReadings = map[string]string{
+	"0": "left as they arrived",
+	"1": "converted copies, not levelled",
+	"2": "converted copies, levelled",
+	"3": "converted copies, levelled",
+}
+
+// statesShippedPosition reports whether the guide's table says what a setting is as shipped in the words the value
+// the server starts with calls for. Each rule is the shape the guide's cell answers to: a switch answers on or off,
+// the retention is a number of days or the pass switched off, the client cap is the number the server names, the
+// conversion setting is what it does to the recordings, a setting started with nothing in it is named as nothing
+// set, and a setting whose values are printed as choices is named by the choice the interface prints. An option the
+// guide's table reaches for with no rule here is a decision somebody has to make on purpose.
+func statesShippedPosition(t *testing.T, setting settingDefault, cell string) bool {
+	t.Helper()
+
+	cell = words(cell)
+
+	switch setting.field {
+	case "AutoPopulate", "DisableDuplicateDetection", "ShowListenersCount", "SortTalkgroups":
+		if setting.value == "true" {
+			return strings.HasPrefix(cell, "On")
+		}
+
+		return strings.HasPrefix(cell, "Off")
+
+	case "PruneDays":
+		if setting.value == "0" {
+			return strings.HasPrefix(cell, "Off")
+		}
+
+		return strings.Contains(cell, setting.value+" days")
+
+	case "MaxClients":
+		return strings.Contains(cell, setting.value)
+
+	case "AudioConversion":
+		reading, known := conversionReadings[setting.value]
+
+		return known && strings.Contains(strings.ToLower(cell), strings.ToLower(reading))
+
+	case "Branding", "Email":
+		return setting.value == "" && strings.Contains(strings.ToLower(cell), "nothing set")
+
+	case "KeypadBeeps":
+		return setting.label != "" && strings.Contains(cell, setting.label)
+	}
+
+	t.Fatalf("the guide's settings table names %q, and this check has no rule for what the server starting with %q looks like in the guide's words", setting.title, setting.value)
+
+	return false
+}
+
+// readsAsShipped says what the server starts with in the words the guide's cell has to match, so a failure tells a
+// reader which side moved.
+func readsAsShipped(setting settingDefault) string {
+	switch setting.field {
+	case "AutoPopulate", "DisableDuplicateDetection", "ShowListenersCount", "SortTalkgroups":
+		if setting.value == "true" {
+			return "the setting on"
+		}
+
+		return "the setting off"
+
+	case "PruneDays":
+		if setting.value == "0" {
+			return "the pruning pass switched off"
+		}
+
+		return setting.value + " days"
+
+	case "MaxClients":
+		return setting.value
+
+	case "AudioConversion":
+		return conversionReadings[setting.value]
+
+	case "Branding", "Email":
+		return "nothing set"
+
+	case "KeypadBeeps":
+		if setting.label == "" {
+			return "the value " + setting.value + ", which the administration interface prints no words for"
+		}
+
+		return "the set it names " + setting.label
+	}
+
+	return setting.value
 }
 
 // isUserGuideChapter reports whether an anchor names one of the guide's own chapters, which is what a chapter
@@ -1423,6 +2551,22 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 	for _, cost := range []string{"upgraded in place", "access code", "/reset", "selection"} {
 		if !strings.Contains(section, cost) {
 			t.Errorf("the changes since version 6.6.3 do not name the cost of the update to a listener: %q is missing", cost)
+		}
+	}
+
+	// The stored access code is read from the same place the older application wrote it, and the page presents it by
+	// itself on every reconnect, so typing it out again is not among the costs of the update. A draft of this chapter
+	// promised a code the reader would have to enter again, and a listener who believed it went looking for a cost the
+	// update does not have.
+	prose := strings.Join(strings.Fields(section), " ")
+
+	if !strings.Contains(prose, "presented again by itself") {
+		t.Errorf("the changes since version 6.6.3 do not say the stored access code is presented again by itself, which is what the shipped page does with the code an older application left in the same browser")
+	}
+
+	for _, superseded := range []string{"may have to be presented again", "a code you have to enter again"} {
+		if strings.Contains(prose, superseded) {
+			t.Errorf("the changes since version 6.6.3 promise %q, which is not a cost the shipped update has", superseded)
 		}
 	}
 }
