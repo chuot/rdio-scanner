@@ -2396,14 +2396,17 @@ func TestTheContentsAidNamesEveryUserGuideChapter(t *testing.T) {
 	}
 }
 
-// The skip link is the first thing in the keyboard route, and it lands on the document's own main text rather
-// than on the contents aid the keyboard has already passed.
-func TestTheUserGuideSkipsToTheMainText(t *testing.T) {
+// The skip link is the first thing the keyboard meets, and it goes where its own name says: the contents aid.
+// An earlier version aimed it at #main on the reasoning that a keyboard reader had already passed the contents
+// list. That is backwards — the link is the first stop of the whole route, so the contents aid is exactly what
+// lies ahead of it — and a reader told "Skip to contents" who lands inside a chapter has been given a promise the
+// document does not keep.
+func TestTheUserGuideSkipsToItsContentsAid(t *testing.T) {
 	body := userGuidePath(t)
 
-	skip := regexp.MustCompile(`(?is)<a class="skip"[^>]*href="#main"[^>]*>(.*?)</a>`).FindStringSubmatch(body)
+	skip := regexp.MustCompile(`(?is)<a class="skip"[^>]*href="#contents"[^>]*>(.*?)</a>`).FindStringSubmatch(body)
 	if len(skip) < 2 {
-		t.Fatalf("the guide carries no skip link aimed at #main")
+		t.Fatalf("the guide carries no skip link aimed at #contents, which is what its own name promises")
 	}
 
 	if strings.TrimSpace(skip[1]) == "" {
@@ -2414,8 +2417,12 @@ func TestTheUserGuideSkipsToTheMainText(t *testing.T) {
 		t.Errorf("the skip link comes after the banner, so it is not the first thing the keyboard meets")
 	}
 
-	if !strings.Contains(body, `id="main"`) {
-		t.Errorf("the guide's skip link aims at #main, and the document carries no main text with that anchor")
+	if !regexp.MustCompile(`(?is)<nav class="toc"[^>]*id="contents"`).MatchString(body) {
+		t.Errorf("the guide's skip link aims at #contents, and the document carries no contents aid with that anchor")
+	}
+
+	if strings.Contains(body, `href="#main"`) {
+		t.Errorf("the guide aims a link at #main, which is the main text rather than the contents the link names")
 	}
 }
 
@@ -2818,14 +2825,35 @@ func TestTheGuidesTablesFitTheNarrowPageTheyAreReadOn(t *testing.T) {
 		block = style[1][offset : offset+1+next]
 	}
 
+	// A rule the guide explains in a comment is still that rule, so the explanation comes out before the rules
+	// are read.
+	block = regexp.MustCompile(`/\*[\s\S]*?\*/`).ReplaceAllString(block, " ")
+
 	rules := regexp.MustCompile(`(?s)([^{}]+)\{([^{}]*)\}`).FindAllStringSubmatch(block, -1)
 
 	cells := false
 	names := false
+	laidOut := false
+	displayChanged := ""
 
 	for _, rule := range rules {
 		selector := strings.Join(strings.Fields(strings.TrimSpace(rule[1])), " ")
 		body := rule[2]
+
+		// A table at phone width is laid out from the page it was given. Left to the browser's own layout the
+		// column with the shortest content shrinks to whatever its longest word needs, and every column beside
+		// it is squeezed until the words in it break in the middle. And a table given a display that is not a
+		// table stops being a table for whatever is reading it, which is a poor price to pay for a sideways
+		// scroll that nothing on the page needed.
+		if isTableSelector(selector) {
+			if strings.Contains(body, "table-layout: fixed") {
+				laidOut = true
+			}
+
+			if shown := regexp.MustCompile(`display:\s*(block|flex|grid|inline-block|inline-flex)`).FindString(body); shown != "" {
+				displayChanged = selector + " { " + strings.TrimSpace(shown) + " }"
+			}
+		}
 
 		if !strings.Contains(body, "overflow-wrap") && !strings.Contains(body, "white-space: normal") {
 			continue
@@ -2853,6 +2881,28 @@ func TestTheGuidesTablesFitTheNarrowPageTheyAreReadOn(t *testing.T) {
 	if !names {
 		t.Errorf("at the %s rem page the guide keeps a name set in its own face unbreakable inside a column, which is what holds a table open past the page", narrowest)
 	}
+
+	if !laidOut {
+		t.Errorf("at the %s rem page the guide lets the browser size its columns from the words inside them, which shrinks the shortest column to one word and breaks the words in its neighbours in the middle", narrowest)
+	}
+
+	if displayChanged != "" {
+		t.Errorf("at the %s rem page the guide sets %s, which stops a table being a table for whatever is reading it", narrowest, displayChanged)
+	}
+}
+
+// isTableSelector reports that a rule at the narrow breakpoint is about a table itself, rather than about
+// something sitting inside one.
+func isTableSelector(selector string) bool {
+	for _, part := range strings.Split(selector, ",") {
+		words := strings.Fields(part)
+
+		if len(words) == 1 && words[0] == "table" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // parseRem reads a width the guide says it rearranges itself at, so the narrowest of them can be compared.

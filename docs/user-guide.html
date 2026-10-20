@@ -333,7 +333,13 @@ footer.site .signoff {
   body { font-size: 15px; }
   nav.toc ol { columns: 1; }
   header.site h1 { font-size: 1.6rem; }
-  table { display: block; overflow-x: auto; }
+  /* A table at phone width is laid out from the page it was given, not from the words inside it.
+     Left to the browser's own layout the column with the shortest content shrinks to whatever its
+     longest word needs and the columns beside it are squeezed until their words break in the
+     middle; the change table read as "listeni ng applic ation" at 320 CSS pixels that way. Fixed
+     layout divides the page between the columns instead, and the table stays a table for whatever
+     is reading it. */
+  table { table-layout: fixed; }
   p code, li code { white-space: normal; overflow-wrap: anywhere; }
   /* A name in a column has to break where the column ends. Left unbreakable it pushes the table wider than
      the page, and the words past the edge of a sideways scroll are out of reach for anyone who moves through
@@ -402,7 +408,7 @@ footer.site .signoff {
 </style>
 </head>
 <body>
-<a class="skip" href="#main">Skip to contents</a>
+<a class="skip" href="#contents">Skip to contents</a>
 
 <header class="site" role="banner">
   <div class="wrap">
@@ -423,7 +429,7 @@ footer.site .signoff {
 
 <div class="layout">
 
-<nav class="toc" aria-label="Contents">
+<nav class="toc" aria-label="Contents" id="contents">
   <h2>Contents</h2>
 
   <p class="part">Part I — Listening</p>
