@@ -196,10 +196,10 @@ func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t
 	}
 }
 
-// A release archive carries no markdown file. The change log and the scanner webapp guide are the
-// project's own documents and stay in the repository; the guide the archive carries absorbed what an
-// administrator needs from the rest of them, so a markdown file in the archive is a document the
-// reader is told to open and does not have.
+// A release archive carries no markdown file. The markdown this repository tracks — its change log, its
+// front page, its compiling notes, and its security notes among them — are the project's own documents and
+// stay in the repository; each guide the archive carries says what its reader needs in its own words, so a
+// markdown file in the archive is a document the reader is told to open and does not have.
 func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	repo := t.TempDir()
 
@@ -209,9 +209,9 @@ func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeRepoFile(t, repo, "CHANGELOG.md", "the change log")
-	writeRepoFile(t, repo, "docs/faq.md", "the FAQ")
-	writeRepoFile(t, repo, "docs/platforms/linux.md", "the platform page")
-	writeRepoFile(t, repo, "docs/webapp.md", "the scanner webapp guide")
+	writeRepoFile(t, repo, "README.md", "the repository's front page")
+	writeRepoFile(t, repo, "COMPILING.md", "the compiling notes")
+	writeRepoFile(t, repo, "SECURITY.md", "the security notes")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
