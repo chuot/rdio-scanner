@@ -2969,3 +2969,77 @@ func TestTheContentsAidStaysReadableUnderARecolouredReading(t *testing.T) {
 
 	t.Logf("under a recoloured reading a contents-aid entry is carried by %s", cue)
 }
+
+// A call-out's weight is the thing that tells a reader how much care to take: a note adds something to what the
+// reader already knows, a caution says a belief the reader arrived with is wrong or a thing they are doing has a
+// cost. The guide carries that weight in the aside's class, which paints it as a coloured edge and a coloured
+// ground, and under the recoloured reading the guide declares support for every one of those surfaces becomes the
+// reader's own ink — a caution then reads exactly as a note reads, in print as well as on a screen that has been
+// flattened. So the words carry it: each call-out's label names its kind before it names what it is about.
+func TestTheGuidesCalloutsSayWhatKindTheyAre(t *testing.T) {
+	body := userGuidePath(t)
+
+	callouts := regexp.MustCompile(`(?is)<aside class="(note|caution|danger)">\s*<span class="label">([^<]*)</span>`).FindAllStringSubmatch(body, -1)
+
+	if len(callouts) != 9 {
+		t.Errorf("the guide carries %d call-outs, and the twelve chapters account for 9 of them between themselves, so a call-out sits outside the chapter written to hold it or one is missing", len(callouts))
+	}
+
+	for _, callout := range callouts {
+		weight, label := callout[1], strings.Join(strings.Fields(callout[2]), " ")
+		words := strings.Fields(label)
+		kind := ""
+
+		if len(words) > 0 {
+			kind = strings.ToLower(strings.Trim(words[0], ":—-"))
+		}
+
+		if kind != weight {
+			t.Errorf("the guide's call-out classed %q carries the label %q, which says what it is about but not what kind of call-out it is; the edge and the ground that carry the kind are flattened to the reader's own ink under the recoloured reading the guide declares support for, and are grey-on-grey on paper", weight, label)
+
+			continue
+		}
+
+		if len(words) < 2 {
+			t.Errorf("the guide's call-out labelled %q names its kind and nothing else, so a reader is told a caution is there without being told what it cautions about", label)
+		}
+	}
+}
+
+// The guide opens a chapter with a lead: the sentence or two that say what the chapter is for before the reader is
+// inside it. Every chapter of the administrator guide opens this way, and every chapter of this guide except two;
+// the two that opened in ordinary body text sat beside ten that had been given the larger, softer opening, which
+// reads as an opening that was left unfinished rather than a chapter that does not need one.
+func TestEveryChapterInTheGuideOpensWithItsLead(t *testing.T) {
+	body := userGuidePath(t)
+
+	heads := regexp.MustCompile(`(?is)<h2 id="(ch-[a-z0-9-]+)">[\s\S]*?</h2>`).FindAllStringSubmatchIndex(body, -1)
+
+	if len(heads) != 12 {
+		t.Fatalf("the guide carries %d chapters, want the 12 its contents aid lists", len(heads))
+	}
+
+	for at, head := range heads {
+		id := body[head[2]:head[3]]
+		start := head[1]
+		end := len(body)
+
+		if at+1 < len(heads) {
+			end = heads[at+1][0]
+		} else if main := strings.Index(body[start:], "</main>"); main >= 0 {
+			end = start + main
+		}
+
+		lead := regexp.MustCompile(`(?is)^\s*<p class="lead">([\s\S]*?)</p>`).FindStringSubmatch(body[start:end])
+
+		if len(lead) < 2 {
+			t.Errorf("the chapter %q opens in ordinary body text, where every other chapter of this guide and every chapter of the administrator guide opens with a lead", id)
+
+			continue
+		}
+
+		if words := len(strings.Fields(stripTags(lead[1]))); words < 12 {
+			t.Errorf("the chapter %q opens with a lead of %d words, which says less than the heading above it already said", id, words)
+		}
+	}
+}
