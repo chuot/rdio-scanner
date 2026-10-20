@@ -203,9 +203,50 @@ func TestTheNamesTheGuidePrintsAreTheNamesTheApplicationPrints(t *testing.T) {
 	}
 }
 
+// The light beside the branding line is the LED. That is the noun for it in everything that ships it: the
+// component file describes itself as the branding line and the server LED and gives the element the class led,
+// the client domain that resolves its colour is named for LED colour, and the operator's screens print a caption
+// about the default LED colour being green. This guide's own rule is that the names it states are the names the
+// shipped application writes, and "the server light" is a paraphrase no shipped string carries anywhere. The name
+// the page gives that element to a screen reader is a different string, printed as Server status: followed by the
+// state, and it is quoted exactly as printed. The word light stays for the page's other lights, because they are
+// not this one.
+func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
+	body := userGuidePath(t)
+
+	hits := regexp.MustCompile(`(?i)server light`).FindAllString(body, -1)
+
+	if len(hits) > 0 {
+		t.Errorf("the guide calls the light beside the branding line %q %d times, and no shipped string uses that name: the component, the client domain that paints it, and the operator's own screens all call it the LED", "server light", len(hits))
+	}
+
+	for _, chapter := range []string{"ch-02-the-main-screen", "ch-03-listening-to-live-calls", "ch-10-keyboard-and-screen-readers", "ch-12-reference"} {
+		// A picture carried inside the guide is a long run of base64, and base64 spells the same letters by
+		// chance. The claim being made here is about the words the guide says, so the bytes of its own pictures
+		// are taken out before the chapter is read.
+		prose := regexp.MustCompile(`src="data:[^"]*"`).ReplaceAllString(userGuideChapter(t, body, chapter), `src=""`)
+
+		if !strings.Contains(prose, "LED") {
+			t.Errorf("the chapter %q operates the light beside the branding line and never names it the LED", chapter)
+		}
+	}
+
+	// The guide's new noun is not the accessible name, and the two are not interchangeable: the name the page
+	// gives the element is what a reader who cannot see the colour is told, and the guide quotes it as printed.
+	if !strings.Contains(body, "<code>Server status:</code>") {
+		t.Errorf("the guide no longer quotes %q followed by the state, which is the name the shipped page gives the light to a screen reader", "Server status:")
+	}
+
+	// Renaming the header light is not renaming every light on the page. The corner lights are the controls' own
+	// marks, and a guide that calls them LEDs describes controls that do not have one.
+	if !strings.Contains(body, "corner light") {
+		t.Errorf("the guide no longer names the corner lights on the controls, which are lights on the screen and not the header light")
+	}
+}
+
 // The second chapter describes the screen the way the application assembles it: the branding line the operator
-// sets, the server light and the three states it takes, the display area with what each row holds before a first
-// call has arrived, the control area, and the version line. The names are the ones the components write, and the
+// sets, the LED and the three states it takes, the display with what each row holds before a first call has
+// arrived, the control bar, and the version line. The names are the ones the components write, and the
 // two figures belong to this chapter.
 func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 	body := userGuidePath(t)
@@ -308,7 +349,7 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 
 	for _, color := range []string{"blue", "cyan", "green", "magenta", "orange", "red", "white", "yellow"} {
 		if !strings.Contains(spoken, color) {
-			t.Errorf("the chapter on live calls never names the colour %q, which is one of the colours the application can paint the server light in", color)
+			t.Errorf("the chapter on live calls never names the colour %q, which is one of the colours the application can paint the LED in", color)
 		}
 	}
 
@@ -356,7 +397,7 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 		}
 	}
 
-	// Only two lights on the shipped page animate: the server light while audio is held, and a talkgroup's button in
+	// Only two lights on the shipped page animate: the LED while audio is held, and a talkgroup's button in
 	// the select panel while that talkgroup sits inside a timed window. The four lights on the control bar are drawn
 	// once and only their colour changes. A draft of this chapter told the reader the live feed light is always
 	// blinking, and a listener who believed it would be hunting for a signal the screen never draws.
@@ -592,7 +633,7 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 	}
 }
 
-// The sixth chapter reads the display area. Two things are checked. The first is the words the display itself
+// The sixth chapter reads the display. Two things are checked. The first is the words the display itself
 // writes — the row labels and the flags are printed by the application and a reader matches this chapter against
 // them while looking at the screen. The second is the handful of readings a reader cannot get from a glance: that
 // the history is five rows, that the timed-avoid mark is a character whose glyph is not guaranteed, that the big row
@@ -608,7 +649,7 @@ func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
 		"AVOID", "PATCH", "DELAYED", "Rdio Scanner v", "Fullscreen", "Exit fullscreen",
 	} {
 		if !strings.Contains(spoken, name) {
-			t.Errorf("the chapter on the display never names %q, which is a word the display area writes", name)
+			t.Errorf("the chapter on the display never names %q, which is a word the display writes", name)
 		}
 	}
 
@@ -622,7 +663,7 @@ func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
 		t.Errorf("the chapter on the display never mentions a screen reader, which is the reader the truncated rows are written for")
 	}
 
-	for _, id := range []string{"main-flags", "main-history", "main-fullscreen"} {
+	for _, id := range []string{"main-flags", "main-history"} {
 		slot := regexp.MustCompile(`(?is)<figure data-shot="` + id + `">(.*?)</figure>`).FindStringSubmatch(chapter)
 		if len(slot) < 2 {
 			t.Errorf("the chapter on the display does not carry the figure %q", id)
@@ -638,6 +679,15 @@ func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
 		if !strings.Contains(slot[1], "<figcaption>") {
 			t.Errorf("the figure %q carries no caption", id)
 		}
+	}
+
+	// The chapter carried a third figure, a crop of the full-screen control beside the help control. The owner's
+	// review of the finished guide called it out as showing nothing, and the review is right: the picture is a small
+	// button in a corner, and full screen is a route through the display, which the two readings above carry. The
+	// chapter's account of full screen is the double-click route, the control's own route, and the two names the
+	// control prints, and a figure that shows neither the display nor the change to it is furniture.
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 2 {
+		t.Errorf("the chapter on the display carries %d figures, want the two it operates: the flag row and the history table", len(figures))
 	}
 }
 
@@ -1222,7 +1272,7 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 		t.Errorf("the reference chapter points back at %d chapters of this guide, and everything it lists was operated in at least 5 of them", len(hrefs))
 	}
 
-	// The paused reading of the server light is a place this guide already superseded once: the shipped state
+	// The paused reading of the LED is a place this guide already superseded once: the shipped state
 	// alternates, and the ring is what a reduced-motion operating system asks for. The reference chapter restates the
 	// state briefly, so the refusal belongs here too rather than only in the chapter that operates the light.
 	for _, superseded := range []string{
@@ -1231,12 +1281,12 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 		"always blinking",
 	} {
 		if strings.Contains(spoken, superseded) {
-			t.Errorf("the reference chapter states %q about the server light, which is the reading this guide superseded: the shipped state alternates, and the ring is what reduced motion asks for", superseded)
+			t.Errorf("the reference chapter states %q about the LED, which is the reading this guide superseded: the shipped state alternates, and the ring is what reduced motion asks for", superseded)
 		}
 	}
 
 	if !strings.Contains(spoken, "less motion") {
-		t.Errorf("the reference chapter states the paused reading of the server light without saying that the ring is what an operating system asking for less motion gets")
+		t.Errorf("the reference chapter states the paused reading of the LED without saying that the ring is what an operating system asking for less motion gets")
 	}
 
 	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 0 {
@@ -2435,8 +2485,8 @@ func TestEveryFigureInTheGuideCarriesItsPictureCaptionAndDescription(t *testing.
 
 	figures := regexp.MustCompile(`(?is)<figure data-shot="([^"]+)">([\s\S]*?)</figure>`).FindAllStringSubmatch(body, -1)
 
-	if len(figures) != 24 {
-		t.Errorf("the guide carries %d figures, and the twelve chapters account for 24 of them between themselves, so a figure sits outside the chapter written to hold it or one is missing", len(figures))
+	if len(figures) != 23 {
+		t.Errorf("the guide carries %d figures, and the twelve chapters account for 23 of them between themselves, so a figure sits outside the chapter written to hold it or one is missing", len(figures))
 	}
 
 	embedded := 0
@@ -2633,11 +2683,23 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 
 	section := chapter[start:]
 
-	links := regexp.MustCompile(`(?i)href="([^"]+)"`).FindAllStringSubmatch(section, -1)
+	// The table is the listener's list: the changes a listener sees or hears on the listening screen, and the
+	// owner's review of the finished guide is what narrowed it to 22 rows by taking out the three that name work
+	// behind the screen. The count is read off the rows rather than off the anchors, because an anchor count passes
+	// whether a row is missing or a row has been added, and the rows are what the guide promises a reader.
+	rows := regexp.MustCompile(`(?is)<tr>\s*<th scope="row">(.*?)</th>.*?</tr>`).FindAllStringSubmatch(section, -1)
 
-	if len(links) < 25 {
-		t.Errorf("the changes since version 6.6.3 name %d chapters, want a chapter to act on for each of the twenty-five changes the update brought", len(links))
+	if len(rows) != 22 {
+		t.Errorf("the changes since version 6.6.3 carry %d rows, want the 22 changes a listener sees or hears on the listening screen", len(rows))
 	}
+
+	for _, row := range rows {
+		if !strings.Contains(row[0], `href="#ch-`) {
+			t.Errorf("the changes since version 6.6.3 carry a row nothing can be acted on from, because it names no chapter of this guide: %s", strings.TrimSpace(stripTags(row[1])))
+		}
+	}
+
+	links := regexp.MustCompile(`(?i)href="([^"]+)"`).FindAllStringSubmatch(section, -1)
 
 	for _, m := range links {
 		href := m[1]
@@ -2698,6 +2760,19 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 		}
 	}
 
+	// Three of the changes this update brought are work a listener cannot see or hear from the listening screen:
+	// how the listening application was written, that the listening and administration applications were split
+	// apart, and the type each system and talkgroup carries in its configuration. A listener meets the first as
+	// the same screens they already knew, the second only as an address that is not theirs, and the third only as
+	// colour and tone, which have rows of their own. They are recorded in the specifications and not in this
+	// guide, and a later edit that slides one back into the table fails here instead of widening a listener's list
+	// back into a change log.
+	for _, behind := range []string{"was rewritten", "without a framework", "became two separate applications", "have types."} {
+		if strings.Contains(prose, behind) {
+			t.Errorf("the changes since version 6.6.3 carry %q, which is a change behind the screen and not something a listener sees or hears while listening", behind)
+		}
+	}
+
 	// The row that promises converted audio names the chapters that operate it. The chapter on phones and tablets is
 	// not one of them: what that chapter is written to carry is the narrow layout, adding the application to a home
 	// screen, what works with no server, the new-version prompt, the store promotion, and what the browser remembers,
@@ -2744,6 +2819,46 @@ func TestTheUserGuideSaysWhatItLeavesOutAndHowTheNameIsRead(t *testing.T) {
 	}
 }
 
+// Two sub-sections came out of the guide on the owner's review of the finished document: the one whose whole
+// subject was the guide's own limits, and the one that described a select panel on a deployment with nothing
+// configured. The headings went and what they said did not. What is proved here is both halves of that: the guide
+// no longer carries the two headings, because a section that survived its own removal is a section the review did
+// not carry out; and the facts a reader can act on are still stated in the chapters that now hold them, because a
+// guide that loses a heading and a fact in the same edit has lost something it was written to say.
+func TestTheRemovedSubSectionsLeftTheirFactsBehind(t *testing.T) {
+	body := userGuidePath(t)
+
+	for _, gone := range []string{"What this guide does not cover", "The panel with nothing configured"} {
+		if regexp.MustCompile(`(?is)<h[34][^>]*>\s*` + regexp.QuoteMeta(gone) + `\s*</h[34]>`).MatchString(body) {
+			t.Errorf("the guide still carries the sub-section %q, which the owner's review of the finished guide took out", gone)
+		}
+	}
+
+	opening := userGuideChapter(t, body, "ch-01-overview")
+
+	if !strings.Contains(opening, "Who this guide is for") {
+		t.Errorf("the opening chapter no longer carries the section the exclusions were folded into, so the reader has nowhere left to meet them")
+	}
+
+	if !strings.Contains(guideSpoken(opening), "does not cover") {
+		t.Errorf("the opening chapter no longer says in its own sentence what it does not cover, which is the sentence the removed heading used to carry")
+	}
+
+	panel := userGuideChapter(t, body, "ch-04-choosing-what-to-hear")
+
+	if !strings.Contains(panel, "How the panel is arranged") {
+		t.Errorf("the chapter on choosing what to hear no longer carries the section the empty state was folded into")
+	}
+
+	if !strings.Contains(guideSpoken(panel), "No talkgroup configured!") {
+		t.Errorf("the chapter on choosing what to hear no longer answers a deployment whose systems carry no talkgroups")
+	}
+
+	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(panel, -1); len(figures) != 3 {
+		t.Errorf("the chapter on choosing what to hear carries %d figures after the empty state moved, want the three it is written to carry", len(figures))
+	}
+}
+
 // The guide states which version it describes, in its own words, at the top of the page, and that version is
 // the one in the repository the guide is published beside. Everything it says about the application is a claim
 // about that version behaving as that version behaves.
@@ -2763,6 +2878,27 @@ func TestTheUserGuideStatesTheVersionItDocuments(t *testing.T) {
 
 	if !strings.Contains(body, "The guide links to nothing outside itself") {
 		t.Errorf("the guide does not say, at the head of the page, that it reaches out to nothing")
+	}
+
+	// The line carries the version the page was built with, and there are two readings of it. A build made at a
+	// commit a tag names stamps the version and nothing after it; a build made from a commit no tag names stamps
+	// the version with a mark naming that commit, which begins with +g. A guide that describes only one of them
+	// leaves a listener quoting a mark at an operator who has never seen one on a screen, which is what the guide
+	// itself did in its first draft: it said a release build stamps the release and a mark, and the build tool
+	// leaves the mark out whenever a tag has already named the release. The chapter is read as running text, so the
+	// phrases are proved whatever line the document happens to break them on.
+	spoken := guideSpoken(userGuideChapter(t, body, "ch-09-help-and-support"))
+
+	if !strings.Contains(spoken, "no tag names") {
+		t.Errorf("the chapter on help and support never says that a build made from a commit no tag names is the reading that carries a mark, so the reader cannot tell which version line they are looking at")
+	}
+
+	if !strings.Contains(spoken, "nothing after it") {
+		t.Errorf("the chapter on help and support never says that a build made at the release stamps the version with nothing after it, which is the reading a listener at a release sees")
+	}
+
+	if !strings.Contains(spoken, "+g") {
+		t.Errorf("the chapter on help and support never names the shape the mark takes, so a reader who sees one has nothing to match it against")
 	}
 }
 
