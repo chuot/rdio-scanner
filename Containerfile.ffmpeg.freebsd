@@ -1,0 +1,44 @@
+# The container the freebsd-amd64 target's ffmpeg is compiled in, and the only place its FreeBSD sysroot
+# enters a build. Like Containerfile.ffmpeg, this image is a build-time artifact built from an empty
+# directory: it is a toolchain, and nothing of this repository belongs inside it.
+#
+# Two stages, because the machine that compiles and the operating system being compiled for are not the
+# same one. Stage 1 is the FreeBSD project's own published toolchain image, read and never run. Stage 2 is
+# the Debian image the Linux targets compile in, and it is where the compiler and the linker actually work.
+#
+# Both starting images are named by arguments rather than written into the file, because both are recorded
+# in the target's entry in the bundle manifest and the build passes what that record pins. The values here
+# are what a person building this file by hand gets. An argument a FROM line reads has to be declared
+# before the first FROM, which is why these two sit ahead of both stages.
+
+ARG sysroot_image=docker.io/freebsd/freebsd-toolchain:15.1
+ARG base=docker.io/debian:stable
+
+# A FreeBSD binary segfaults the moment this Linux host executes it (running this stage on a Linux host
+# exits 139), so nothing is RUN here: the stage exists to be copied out of, and the one instruction it
+# carries executes nothing, which is what keeps it alive long enough for the COPY below to reach it.
+FROM --platform=freebsd/amd64 ${sysroot_image} AS freebsd-sysroot
+ENV SYSROOT_SOURCE=freebsd-project-oci-image
+
+# The compiler has to run on Linux, so it is clang told to target FreeBSD rather than a FreeBSD compiler.
+# The link goes through lld because Debian's own ld.bfd stamps what it links with the GNU operating-system
+# ABI, and a program carrying that stamp is not the FreeBSD program this target's proof reads back.
+FROM ${base}
+
+LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
+
+# The compiler, the linker, and the programs the configure and the stripped pair need on the way. Which
+# cross switches the compile uses and which sysroot it compiles against belong to the target's record in
+# the bundle manifest: this file makes them possible, the record says what is asked for.
+ARG packages="build-essential clang lld curl ca-certificates tar xz-utils python3"
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${packages} && \
+    rm -rf /var/lib/apt/lists/*
+
+# The whole tree rather than a selection of it. The sysroot is the FreeBSD image's own arrangement of
+# includes, libraries and startup files, and picking pieces out of it is how a compile ends up half
+# FreeBSD and half Debian without anyone deciding that.
+COPY --from=freebsd-sysroot / /sysroot
+
+WORKDIR /work
