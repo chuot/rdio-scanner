@@ -134,34 +134,20 @@ type Sysroot struct {
 // container that holds it, which is empty when the build container is the one, the packages that container
 // needs on top, and the program that starts a binary the container cannot run by itself.
 //
-// A record names one way of proving the program it compiled. `run` runs it under an interpreter or an
-// emulation layer, `freebsd_vm` runs it inside an operating system the build boots from a published image,
-// and `reads` says nothing on the build host can run it at all, which leaves the build reading the shape of
-// the binaries instead. Which one a record names is what the licence text has to say about the binaries it
-// describes.
+// A record names one way of proving the program it compiled, and at most one: `run` runs it under an
+// interpreter or an emulation layer, and `reads` says nothing on the build host can run it at all, which
+// leaves the build reading out of the binaries what they say about how they were compiled. Which one a record
+// names is what the licence text has to say about the binaries it describes.
 type Conformance struct {
 	Container string   `json:"container"`
 	Digest    string   `json:"conformance_digest"`
 	Packages  []string `json:"packages"`
 	Run       []string `json:"run"`
 
-	// FreeBSDVM is the published FreeBSD image the build boots to run a program no container on the build
-	// host and no interpreter on it can run. It is pinned by the digest of the compressed file the URL
-	// serves, and Bytes is the size the image unpacks to.
-	FreeBSDVM FreeBSDVM `json:"freebsd_vm"`
-
 	// Reads names what the build reads out of the binaries when it cannot run them anywhere: a target that
-	// is proven by shape is proven differently from one that was run, and says so.
+	// is proven by shape is proven differently from one that was run, and says so. The names are the ones
+	// the check that reads them knows, in the order it checks them.
 	Reads []string `json:"reads"`
-}
-
-// FreeBSDVM is one published release of an operating system, named by the image its project publishes for
-// booting, and pinned by the digest of the file that image is served as.
-type FreeBSDVM struct {
-	Release string `json:"release"`
-	URL     string `json:"url"`
-	SHA256  string `json:"sha256"`
-	Bytes   int64  `json:"bytes"`
 }
 
 //go:embed manifest.json

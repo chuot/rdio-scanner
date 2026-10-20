@@ -26,9 +26,9 @@ import (
 // These are unit tests of the rule that decides whether a target carries a bundle. They are given a
 // directory they can see completely, so they say nothing about which target this machine happens to be.
 
-// A directory holding both programs is a bundle, whatever the way those programs came to be: the ffmpeg
-// binaries this build compiles, and the binaries the maintainer drops for a macOS or FreeBSD target, end
-// up in the same shape, and the server materializes both the same way.
+// A directory holding both programs is a bundle, whatever the way those programs came to be: the pair a build
+// run compiles and drops, and the pair somebody drops in themselves, end up in the same shape, and the server
+// materializes both the same way.
 func TestARecordedTargetCarriesABundle(t *testing.T) {
 	for _, dir := range []string{"linux-arm64", "macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		files := fstest.MapFS{
@@ -48,11 +48,10 @@ func TestARecordedTargetCarriesABundle(t *testing.T) {
 	}
 }
 
-// The three targets whose ffmpeg binaries are compiled on the platform each one runs on are the ordinary
-// state of a
-// fresh clone: their directories hold only the placeholder that makes the embed compile, so a binary built
-// from that clone carries nothing and converts with the ffmpeg its host installs.
-func TestASuppliedTargetWhoseBinariesWereNeverDroppedCarriesNoBundle(t *testing.T) {
+// A target directory holding only the placeholder that makes the embed compile carries no bundle: a server
+// built from such a tree converts with the ffmpeg its host installs, and carries binaries of its own only
+// after a build run has dropped a pair into the target's directory.
+func TestATargetWhoseBinariesWereNeverDroppedCarriesNoBundle(t *testing.T) {
 	for _, dir := range []string{"macos-amd64", "macos-arm64", "freebsd-amd64"} {
 		files := fstest.MapFS{dir + "/.gitkeep": {Data: []byte{}}}
 
@@ -218,55 +217,51 @@ func TestARecordNamingASysrootImageParses(t *testing.T) {
 	}
 }
 
-// A FreeBSD binary runs on FreeBSD and on nothing else: the container that compiled it runs Debian, and no
-// interpreter on this host executes a FreeBSD program. The record names the operating system the build boots
-// to run the program, and names the published image it boots at a pinned digest — a proof that runs on a
-// system the build assembled itself would prove nothing about the system the binary has to run on.
-func TestARecordNamingABootProofReportsWhatItBoots(t *testing.T) {
+// Nothing on this build host runs a FreeBSD program: the container that compiled the pair runs Debian, Debian
+// ships no FreeBSD emulator, and qemu builds the FreeBSD emulator it has only on a host that already is a BSD.
+// The record therefore names what the build reads out of the two files the compile produced, in the order it
+// reads them, and names no machine the program has to be run on before it is accepted.
+func TestARecordThatCannotRunItsProgramNamesWhatItReads(t *testing.T) {
 	manifest := ReadManifest()
 
 	record, ok := manifest.Targets["freebsd-amd64"]
 	if !ok {
-		t.Fatal("the manifest has no record for freebsd-amd64, which this build proves by booting FreeBSD")
+		t.Fatal("the manifest has no record for freebsd-amd64, which this build proves by reading what it compiled")
 	}
 
-	proof := record.Conformance.FreeBSDVM
+	want := strings.Join([]string{"elf64", "exec", "x86_64", "osabi_freebsd", "static", "comment"}, " ")
 
-	if proof.Release != "15.1-RELEASE" {
-		t.Errorf("the FreeBSD proof boots %q, want 15.1-RELEASE", proof.Release)
+	if got := strings.Join(record.Conformance.Reads, " "); got != want {
+		t.Errorf("freebsd-amd64 is proven by reading %q, want %q", got, want)
 	}
 
-	image := "https://download.freebsd.org/ftp/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
-
-	if proof.URL != image {
-		t.Errorf("the FreeBSD proof boots %q, want the published image %s", proof.URL, image)
+	if record.Conformance.Container != "" || record.Conformance.Digest != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
+		t.Errorf("freebsd-amd64 names both a way to run its program and a way to read it: container %q, digest %q, packages %v, run %v",
+			record.Conformance.Container, record.Conformance.Digest, record.Conformance.Packages, record.Conformance.Run)
 	}
 
-	if proof.SHA256 != "e4ca4db889f8559c9b9dfcacc70405c038476f4b6d41649b152d3809a2ed9e1f" {
-		t.Errorf("the FreeBSD proof pins the image digest %q", proof.SHA256)
+	// No record names an operating system the build boots, because the build boots nothing to prove a program:
+	// neither the field that named one, nor the image it pinned, nor the site it would have been fetched from
+	// is in the file the operator reads.
+	body, err := os.ReadFile("manifest.json")
+	if err != nil {
+		t.Fatalf("the manifest this package embeds is not there to read: %v", err)
 	}
 
-	if proof.Bytes != 2671443968 {
-		t.Errorf("the FreeBSD proof expects an image of %d bytes, want 2671443968: that is what the pinned file unpacks to", proof.Bytes)
+	for _, gone := range []string{"freebsd_vm", "qcow2", "download.freebsd.org"} {
+		if strings.Contains(string(body), gone) {
+			t.Errorf("the manifest names %q, and nothing in this build boots a system image to prove anything", gone)
+		}
 	}
 
-	if record.Conformance.Container != "" || len(record.Conformance.Run) > 0 || len(record.Conformance.Reads) > 0 {
-		t.Errorf("freebsd-amd64 names a booted FreeBSD and something else to check with: container %q, run %v, reads %v",
-			record.Conformance.Container, record.Conformance.Run, record.Conformance.Reads)
-	}
-
-	// A record names one way of proving what it compiled: run it in the container that compiled it, run it
-	// under an interpreter, run it inside an operating system the build boots, or read its shape because
-	// nothing on the build host can run it. Naming more than one would let a build pick whichever is
-	// cheapest and report the other as the proof.
+	// A record names one way of proving the program it compiled: run it in the container that compiled it, run
+	// it under an interpreter or an emulation layer, or read what the binary itself says because nothing on the
+	// build host can run it. Naming more than one would let a build pick whichever is cheapest and report the
+	// other as the proof.
 	for target, rec := range manifest.Targets {
 		names := 0
 
 		if rec.Conformance.Container != "" || len(rec.Conformance.Run) > 0 {
-			names++
-		}
-
-		if rec.Conformance.FreeBSDVM.Release != "" {
 			names++
 		}
 

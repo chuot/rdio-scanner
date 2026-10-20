@@ -22,10 +22,10 @@ import (
 	"io/fs"
 )
 
-// The bundle for freebsd-amd64. This build compiles the ffmpeg binaries for that target on the machine that is the
-// target, and adopts them from there: they are compiled where they run, dropped in this directory, and
-// gzipped here. On a fresh clone, and on a release run on a machine that is not that platform with nothing
-// dropped for it, the directory holds only its placeholder, which
+// The bundle for freebsd-amd64. The build compiles these binaries for that target in a container on the release
+// host, against the FreeBSD project's own toolchain image as its sysroot, and drops them here, gzipped: nothing on
+// that host runs them, so what they are held to is read out of the files the compile produced. On a fresh clone, and
+// on a release run with nothing dropped for this target, the directory holds only its placeholder, which
 // //go:embed all: matches, so a plain go build compiles and the lookup reports no bundle.
 //
 //go:embed all:freebsd-amd64
