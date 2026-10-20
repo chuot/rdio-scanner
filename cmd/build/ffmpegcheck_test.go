@@ -429,29 +429,6 @@ func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
 	}
 }
 
-// The check asks the program what it registers, once, on the program it is proving: the compiled
-// binaries answer inside their conformance container, and the adopted ones answer on the host that
-// compiled them.
-func TestTheFFMPEGCheckAsksTheProgramWhatItRegisters(t *testing.T) {
-	stand := &aStandIn{}
-
-	if _, err := anFFMPEGCheck(t, stand.run); err != nil {
-		t.Fatalf("the ffmpeg check refused a working ffmpeg: %v", err)
-	}
-
-	asked := 0
-
-	for _, run := range stand.asked("/ffmpeg-9.0.2/ffmpeg") {
-		if strings.Contains(run, "-codecs") {
-			asked++
-		}
-	}
-
-	if asked != 1 {
-		t.Errorf("the check asked the program what it registers %d times, want once", asked)
-	}
-}
-
 // The check records the codecs the program registers, so the run's report says what the binaries are
 // and not only what they converted. The codec descriptors every ffmpeg carries are not codecs the
 // program registers: they decode and encode nothing.

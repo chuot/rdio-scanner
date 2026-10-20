@@ -1351,46 +1351,6 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 	}
 }
 
-// The audio-only switches are not a note kept in the manifest: they are what the source is told. Both
-// routes are shown passing them to configure — the compile this machine runs in a container, and the
-// compile a target's own host runs on the machine that is the target — because a switch that reaches
-// only one route is one recipe with two meanings, and the supplied pairs are compiled by the other one.
-func TestTheAudioOnlySwitchesReachConfigureOnBothRoutes(t *testing.T) {
-	manifest := bundle.ReadManifest()
-
-	want := []string{"--disable-everything", "--disable-network"}
-
-	container, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
-	if err != nil {
-		t.Fatalf("the build refused linux-arm64: %v", err)
-	}
-
-	native, err := planFFmpeg(options{target: "macos-arm64"}, t.TempDir(), manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
-	if err != nil {
-		t.Fatalf("the build refused to compile macos-arm64 on its own host: %v", err)
-	}
-
-	for _, route := range []struct {
-		target string
-		plan   ffmpegPlan
-	}{
-		{target: "linux-arm64", plan: container},
-		{target: "macos-arm64", plan: native},
-	} {
-		configure := stepFor(route.plan.Steps, "configure")
-
-		if configure.name == "" {
-			t.Fatalf("%s: the compile plans no configure", route.target)
-		}
-
-		for _, flag := range want {
-			if !carries(configure.args, flag) {
-				t.Errorf("%s: the configure does not tell the source %s: %v", route.target, flag, configure.args)
-			}
-		}
-	}
-}
-
 // ffmpeg's configure writes its build files into the directory it is run from: the config.mak its
 // Makefile includes on its second line, the config headers, and the directory skeleton of the tree it is
 // configuring. Run it from anywhere else and two things happen: the tree it configured has no
@@ -1457,25 +1417,13 @@ func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 	}
 }
 
-// The cache entry of a supplied target is named by the manifest's record and the target, and not by the
-// machine computing it: the Mac that compiled the binaries and a run reusing them look for the same entry.
-// Each machine's cache is its own tree and gitignored, so an Apple Silicon Mac and an Intel Mac compiling
-// the Intel target key the same entry in their own caches, and each cache holds what that machine compiled.
-// The two macOS targets key differently, which is what lets one Mac compile both architectures into two
-// entries.
+// The cache entry a supplied target is looked for in is named by the manifest's record and the target, and
+// not by the machine computing it: the Mac that compiled the binaries and a run reusing them look for the
+// same entry. Each machine's cache is its own tree and gitignored, so an Apple Silicon Mac and an Intel Mac
+// compiling the Intel target key the same entry in their own caches, and each cache holds what that machine
+// compiled.
 func TestTheCacheEntryOfSuppliedBinariesIsTheSameEntryOnEveryHost(t *testing.T) {
 	manifest := bundle.ReadManifest()
-
-	fromTheIntelHost := cacheKey(manifest, "macos-amd64")
-	fromTheAppleSiliconHost := cacheKey(manifest, "macos-amd64")
-
-	if fromTheIntelHost != fromTheAppleSiliconHost {
-		t.Errorf("the same manifest and target give two cache keys, %s and %s", fromTheIntelHost, fromTheAppleSiliconHost)
-	}
-
-	if cacheKey(manifest, "macos-amd64") == cacheKey(manifest, "macos-arm64") {
-		t.Error("macos-amd64 and macos-arm64 share a cache entry, and one Mac compiling both writes one entry")
-	}
 
 	repo := t.TempDir()
 

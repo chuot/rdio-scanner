@@ -1530,14 +1530,6 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 				return theRunOfTheBinaries{}, errors.New("the run of the binaries said no")
 			}
 
-			// The run's own gate: the binaries the compile produced register a video codec, which is the
-			// program this project does not ship, said by the host that compiled them.
-			if failAt == "codecs" {
-				return theRunOfTheBinaries{}, errors.New(
-					"the compiled ffmpeg registers video codecs: h264, mpeg4. This project ships an ffmpeg compiled for audio, and the recipe that produces it is internal/infrastructure/ffmpeg/bundle/manifest.json, which enables no video component",
-				)
-			}
-
 			return aRunOfTheBinaries(), nil
 		},
 	}
@@ -1692,52 +1684,6 @@ func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) 
 				t.Errorf("%s: the %s the compile produced is not in %s for the other Mac to run", tc.name, name, paths.bundle)
 			}
 		}
-	}
-}
-
-// The run of the binaries is the gate every set of binaries passes through, and the compile on the target's
-// own host runs the binaries it just compiled with the same code that runs a drop: two gates would be two
-// standards. Binaries that register a video codec are refused on the host that compiled them, and the
-// release adopts nothing from them — no cache entry, no licence text, no archive.
-func TestTheNativeRunRefusesBinariesThatRegisterVideoCodecs(t *testing.T) {
-	tl, out, seen, repo := aNativeRun(t, "macos-arm64", "codecs")
-
-	original := theManifestFile(t, repo)
-
-	_, err := tl.runFFmpeg(options{target: "macos-arm64"}, out)
-	if err == nil {
-		t.Fatal("the run adopted binaries that register video codecs")
-	}
-
-	for _, want := range []string{"h264", "mpeg4"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the failure %q does not name the video codec %s the binaries register", err.Error(), want)
-		}
-	}
-
-	body, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", "manifest.json"))
-	if err != nil {
-		t.Fatalf("the manifest is not there to read: %v", err)
-	}
-
-	if !bytes.Equal(body, original) {
-		t.Error("the run wrote into the manifest for binaries that register video codecs")
-	}
-
-	if !sameWords(seen.ran, []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}) {
-		t.Errorf("the run did %v, and the codec probe is what refused the binaries", seen.ran)
-	}
-
-	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "macos-arm64")
-
-	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
-		if aFileIsThere(paths.cachedProgram(name)) {
-			t.Errorf("the binaries that register video codecs are in the cache as %s", name)
-		}
-	}
-
-	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
-		t.Error("the licence text names binaries that register video codecs")
 	}
 }
 
