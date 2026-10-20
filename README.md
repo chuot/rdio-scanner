@@ -42,7 +42,7 @@ ALWAYS DOWNLOAD THE LATEST VERSION OF [RDIO SCANNER](https://github.com/chuot/rd
 3. Run the [Rdio Scanner](https://github.com/chuot/rdio-scanner) executable.
 4. Access the administrative dashboard to finalize the configuration.
 
-More detailed instructions are in the documentation: the [administrator guide](https://github.com/chuot/rdio-scanner/blob/main/docs/admin-guide.html), one self-contained HTML file that covers installation, configuration, operation, and troubleshooting on every system, and the [scanner webapp guide](https://github.com/chuot/rdio-scanner/blob/main/docs/webapp.md) for the listening screen. The precompiled archives carry the administrator guide, pictures inside the file it is, so the same instructions are in the folder you extracted.
+More detailed instructions are in the documentation: the [administrator guide](https://github.com/chuot/rdio-scanner/blob/main/docs/admin-guide.html), one self-contained HTML file that covers installation, configuration, operation, and troubleshooting on every system, and the [scanner webapp guide](https://github.com/chuot/rdio-scanner/blob/main/docs/user-guide.html), a file of the same kind for whoever hears calls on the listening screen. The precompiled archives carry both guides, each with its pictures inside the file it is, so the same instructions are in the folder you extracted.
 
 ## Docker
 

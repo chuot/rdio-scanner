@@ -855,8 +855,9 @@ func TestTheEndpointsTheGuideTabulatesAreTheEndpointsTheContractPublishes(t *tes
 
 // The guide is read where nothing else is: an extracted archive, a mail attachment, a machine with no
 // network. A link that leaves the document is a page that renders empty there, and a document the guide
-// names that the reader does not have is the instruction the reader cannot follow. The scanner webapp's
-// guide is the one document the guide names, and it names it as the out-of-scope pointer.
+// names that the reader does not have is the instruction the reader cannot follow. The guide written for
+// the listener who hears calls is the one document this guide names, and it names it as the out-of-scope
+// pointer: the file the reader finds beside this one in the repository and in the release archive.
 func TestNothingInTheGuidePointsOutsideItself(t *testing.T) {
 	body := guidePath(t)
 
@@ -892,7 +893,7 @@ func TestNothingInTheGuidePointsOutsideItself(t *testing.T) {
 
 	for _, name := range regexp.MustCompile(`[A-Za-z0-9_\-./]+\.(?:md|html)\b`).FindAllString(prose, -1) {
 		switch name {
-		case "webapp.md", "docs/webapp.md", "admin-guide.html", "docs/admin-guide.html":
+		case "user-guide.html", "docs/user-guide.html", "admin-guide.html", "docs/admin-guide.html":
 			continue
 		}
 
