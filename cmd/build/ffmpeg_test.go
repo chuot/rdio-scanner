@@ -355,11 +355,11 @@ func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T
 	}
 
 	want := map[string]string{
-		"linux-386":     "0fe270712477f3b22658387941f2c232a793e664bbe5a55970996d701be746b9",
-		"linux-amd64":   "fba72d5bd353a0ec01117d488c7475e065c72f7fd4f0d552aa04600d595fbf72",
-		"linux-arm":     "11319ad2a5697ebfab755f69fe8fe3d8939b6e95e444b727d5275430e0010367",
-		"linux-arm64":   "56eb350e321fcb3a9ce58c41158da28b1b0729f4d945a9f5b61de69b59278aaa",
-		"windows-amd64": "d526f96b16f0fb55e4baaf8038ead09d8de9dac0f69640329a43bd1464558f20",
+		"linux-386":     "e6b0dcd5763abfee3ed4dcbd8888dbc3ec5d9eeeffb38378d2a7b5fa6996ab4f",
+		"linux-amd64":   "20793f67a5ed90ec23ac53388b8d15e9491294553ed753f7250feaf682ae1373",
+		"linux-arm":     "95e8a1ad5f04e1fef752f679a1f99fdd4585f85ccd9f2f96137fc34f5815ffa4",
+		"linux-arm64":   "13243228d40b52d03600f55b1f073c0ce87690e9831f541189d10cdb4420fd98",
+		"windows-amd64": "dfe8ad310c25f9487fc8206e3d79bc62ec5b46badd22583bd367eb11577a52a5",
 	}
 
 	for _, target := range []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"} {

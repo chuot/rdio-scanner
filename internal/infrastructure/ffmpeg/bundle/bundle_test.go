@@ -251,9 +251,11 @@ func TestTheSuppliedRecordsNameTheCompileTheirHostRuns(t *testing.T) {
 	}
 }
 
-// The three configure omissions this project found by running the trimmed build are the ones a hand
-// edited recipe is most likely to put back wrong, because each one fails at conversion time rather
-// than at configure time.
+// What the converter asks of ffmpeg is what the recipe has to keep enabling: leaving one of these out
+// is the kind of edit configure accepts and the conversion then fails. The two buffer filters are not on
+// this list and the recipe does not name them, because ffmpeg compiles abuffer and abuffersink with no
+// configure guard of its own and every build carries them — which is why the pinned release answers
+// --enable-filter=abuffer and --enable-filter=abuffersink with "did not match anything".
 func TestTheRecipeCarriesWhatTheConverterAsksOfFfmpeg(t *testing.T) {
 	recipe := ReadManifest().Recipe
 
@@ -261,8 +263,6 @@ func TestTheRecipeCarriesWhatTheConverterAsksOfFfmpeg(t *testing.T) {
 		"--enable-ffmpeg",
 		"--enable-ffprobe",
 		"--enable-protocol=fd",
-		"--enable-filter=abuffer",
-		"--enable-filter=abuffersink",
 		"--enable-filter=aformat",
 		"--enable-filter=aresample",
 		"--enable-filter=apad",
@@ -273,6 +273,24 @@ func TestTheRecipeCarriesWhatTheConverterAsksOfFfmpeg(t *testing.T) {
 	for _, flag := range want {
 		if !hasFlag(recipe, flag) {
 			t.Errorf("the recipe does not enable %s, and the conversion fails without it", flag)
+		}
+	}
+}
+
+// The pinned release reports these three switches as matching no component at all: configure prints
+// "Option --enable-... did not match anything" for each one, and the trimmed build converts audio with the
+// same codec list and the same recording whether they are carried or not. A switch that selects nothing is
+// indistinguishable, to the next reader, from a switch a conversion depends on, so it is not carried.
+func TestTheRecipeCarriesNoSwitchThatSelectsNothing(t *testing.T) {
+	recipe := ReadManifest().Recipe
+
+	for _, selectsNothing := range []string{
+		"--enable-muxer=json",
+		"--enable-filter=abuffer",
+		"--enable-filter=abuffersink",
+	} {
+		if hasFlag(recipe, selectsNothing) {
+			t.Errorf("the recipe carries %s, which the pinned release reports as matching nothing", selectsNothing)
 		}
 	}
 }
@@ -333,8 +351,10 @@ func TestTheRecipeEnablesNoVideoComponent(t *testing.T) {
 }
 
 // theAudioComponents are the components the recipe is allowed to enable: the audio demuxers, decoders,
-// encoder, muxers and filters the converter's argument list runs, the pipe, fd and file protocols the
-// server hands the recording in and out on, and the json muxer the length probe reads.
+// encoder, muxers and filters the converter's argument list runs, and the pipe, fd and file protocols
+// the server hands the recording in and out on. ffprobe answers with its own json writer and not with a
+// muxer the recipe enables, and ffmpeg compiles its buffer filters without a switch, so neither belongs
+// on this list.
 var theAudioComponents = map[string]bool{
 	"protocol=pipe": true,
 	"protocol=fd":   true,
@@ -344,23 +364,20 @@ var theAudioComponents = map[string]bool{
 	"demuxer=mp3": true,
 	"demuxer=mov": true,
 
-	"decoder=pcm_s16le":  true,
-	"decoder=pcm_s16be":  true,
-	"decoder=pcm_s24le":  true,
-	"decoder=pcm_f32le":  true,
-	"decoder=pcm_mulaw":  true,
-	"decoder=pcm_alaw":   true,
-	"decoder=mp3float":   true,
-	"decoder=mp3":        true,
-	"encoder=aac":        true,
-	"muxer=ipod":         true,
-	"muxer=json":         true,
-	"filter=abuffer":     true,
-	"filter=abuffersink": true,
-	"filter=aformat":     true,
-	"filter=aresample":   true,
-	"filter=apad":        true,
-	"filter=loudnorm":    true,
+	"decoder=pcm_s16le": true,
+	"decoder=pcm_s16be": true,
+	"decoder=pcm_s24le": true,
+	"decoder=pcm_f32le": true,
+	"decoder=pcm_mulaw": true,
+	"decoder=pcm_alaw":  true,
+	"decoder=mp3float":  true,
+	"decoder=mp3":       true,
+	"encoder=aac":       true,
+	"muxer=ipod":        true,
+	"filter=aformat":    true,
+	"filter=aresample":  true,
+	"filter=apad":       true,
+	"filter=loudnorm":   true,
 }
 
 // theComponentKinds are the component names configure is given with `--enable-<kind>=<name>`. A flag
