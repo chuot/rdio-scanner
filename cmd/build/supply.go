@@ -539,12 +539,14 @@ type theRunOfTheBinaries struct {
 // somebody dropped.
 //
 // The operating system's own refusal is carried inside it. This build does not ask the host what it has
-// installed and does not guess at what it can execute: an Intel Mac holding the arm64 binaries, and a
-// Linux host holding the macOS binaries, are answered by the programs not starting.
+// installed and does not guess at what it can execute: an Intel Mac holding the arm64 pair, and an Apple
+// Silicon Mac holding the Intel pair with no translator installed to start it, are answered by the programs
+// not starting. The gate is asked of a pair the host was about to adopt, and that is a macOS pair on a macOS
+// host: the container route never starts a pair this host cannot start, it reads what it produced instead.
 func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
 	return fmt.Errorf("the %s ffmpeg binaries do not run on this machine (%s): %w\n"+
-		"the ffmpeg binaries are compiled where they run: run go run ./cmd/build ffmpeg %s on a %s host, and the binaries in %s are the ones this host cannot run",
-		target, releaseTargetWordFor(machine.goos, machine.goarch), err, target, target, paths.bundle)
+		"the pair in %s is adopted by being run, and this host cannot run it: run go run ./cmd/build ffmpeg %s on a %s host",
+		target, releaseTargetWordFor(machine.goos, machine.goarch), err, paths.bundle, target, target)
 }
 
 // proveSuppliedBinaries runs the ffmpeg binaries sitting in one target's bundle directory, on the machine
@@ -625,7 +627,7 @@ func theProgramVersion(run command, program []string) (string, error) {
 // onThisMachine runs one program here, hands it a recording on its input, and hands back what it wrote.
 //
 // It is the shape the check runs compiled binaries through a container in, used for the binaries this
-// machine can run: the run that adopts binaries runs them on their own platform, so nothing stands
+// machine can run: the pair a host adopts is a pair built for the machine standing there, so nothing stands
 // between the check and the programs.
 //
 // A program that ran and answered badly answers with its own words, which is what the check reads. A

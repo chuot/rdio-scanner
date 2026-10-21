@@ -550,8 +550,8 @@ const buildJobsEnv = "RDIO_BUILD_JOBS"
 // targets it is ready to build, and the bound the operator named, whichever is the fewest. The compiles
 // are independent — each target's binary is a different file, built from the same sources, sharing only
 // Go's own build cache — so the bound is about the machine's memory and the log's readability, not
-// about correctness: a release run on a small machine compiling five toolchains at once is a run that
-// trades the release for a machine that stops responding.
+// about correctness: a release run on a small machine giving every core a server compile at once is a run
+// that trades the release for a machine that stops responding.
 //
 // A value that is not a count of work is refused, because a run that quietly ignored the bound the
 // operator named would be a run doing more than the operator said. A variable set to nothing says
@@ -583,7 +583,7 @@ func distWorkers(ready int, lookup func(string) (string, bool)) (int, error) {
 }
 
 // archivesWord and targetsWord say a count and its noun the way the release log reads: one archive,
-// five archives, one target, three targets.
+// two archives, one target, two targets.
 func archivesWord(n int) string {
 	if n == 1 {
 		return "1 archive"

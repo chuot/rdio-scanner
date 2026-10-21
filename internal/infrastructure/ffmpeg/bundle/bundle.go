@@ -15,12 +15,13 @@
 
 // Package bundle is the ffmpeg this server carries inside its own binary.
 //
-// A server built for a target whose ffmpeg this build compiles carries the ffmpeg binaries compiled for
-// that target, so a deployment needs nothing installed on the host it runs on. A server built for a
-// target whose ffmpeg binaries are compiled where the target runs carries the binaries that compile
-// produced — the ones this build compiled on the machine that is the target, or the ones dropped for it
-// — for the same effect. A server built for a target whose binaries never arrived, and for every plain
-// `go build` a developer runs, carries none, and the server falls back to the ffmpeg its host provides.
+// A server built for a release target carries the ffmpeg binaries compiled for that target inside its own
+// binary, so a deployment needs nothing installed on the host it runs on. The pair reaches the target's
+// directory the same way whatever compiled it: this build compiles every target's pair in a container on the
+// machine the build runs on, a Mac compiling a macOS pair does it with its own compiler, linker and signer,
+// and a pair a maintainer built by hand is dropped there by the maintainer. A server built for a target whose
+// binaries never arrived, and for every plain `go build` a developer runs, carries none, and the server falls
+// back to the ffmpeg its host provides.
 //
 // Which target a binary carries is decided by its build tags, in the bundle_<target>.go files: each
 // one embeds exactly one target's directory, so a linux-arm64 binary carries the linux-arm64 ffmpeg
@@ -136,7 +137,7 @@ type Target struct {
 	// operating system.
 	Conformance Conformance `json:"conformance"`
 
-	// Host is the compile this target's own platform runs when the build happens to be standing on it: the
+	// Host is the compile a Mac runs for a macOS target when the build happens to be standing on a Mac: the
 	// flags that floor the binary declares and link it the way that platform needs, and the make program
 	// that build runs. Only the two macOS records name one, because a Mac is the only host in the release
 	// matrix whose own toolchain can produce a target's ffmpeg, and the flags of a macOS target's two
@@ -146,9 +147,9 @@ type Target struct {
 	Host Host `json:"host"`
 }
 
-// Host is the compile a target's own platform runs, named beside the container compile the same record
-// names. A record whose target has no such host names none, and every program a compile of that target runs
-// is in the container the record names.
+// Host is the compile a Mac's own toolchain runs, named beside the container compile the same record names.
+// A record for a target no Mac compiles names none, and every program a compile of that target runs is in the
+// container the record names.
 type Host struct {
 	CFlags  []string `json:"cflags"`
 	LDFlags []string `json:"ldflags"`

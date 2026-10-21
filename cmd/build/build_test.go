@@ -325,7 +325,7 @@ func carriesAPath(paths []string, want string) bool {
 
 // The server compiles of a release run are independent, and the bound on them is about the machine's
 // memory and the log's readability, not about correctness. The operator can bound it lower: a release
-// run on a small machine compiling five toolchains at once is a run that trades the release for a
+// run on a small machine giving every core a server compile at once is a run that trades the release for a
 // machine that stops responding. A value that is not a count of work is refused, because a run that
 // quietly ignored it would be a run doing more than the operator said.
 func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {

@@ -35,6 +35,11 @@ import (
 // notice, so the old position cannot come back as a stray comment or a copy-pasted header. They name the
 // file that still states it, because "the repository states a withdrawn position in 31 places" is not a
 // failure a reader can act on.
+//
+// The list is not only the licence one. The phrasings the deleted FreeBSD compile route left behind are
+// refused in the same walk, because a stale route in a comment or a security note is how a maintainer goes
+// back to compiling a target on a machine that has no toolchain for it, and the route is a build decision
+// a reader cannot tell apart from a stale sentence.
 
 // licenceNotice is the last line of the header every source file carries. Nothing belongs after it.
 const licenceNotice = "// along with this program.  If not, see <http://www.gnu.org/licenses/>"
@@ -56,6 +61,13 @@ var retiredWordings = []struct {
 	{"licence agreement with saubeo solutions", "asks a self-hosted operator for an agreement"},
 	{"license agreement with saubeo solutions", "asks a self-hosted operator for an agreement"},
 	{"proprietary real-time", "calls an interface of the server proprietary"},
+	{"five of the eight release targets", "splits the release matrix into a compiled group and a group compiled at home"},
+	{"the drop route is the three targets", "names a drop route wider than the two macOS targets on a macOS host"},
+	{"the five this build compiles", "counts the targets this build compiles an ffmpeg for as five"},
+	{"the three whose ffmpeg binaries", "counts three targets whose ffmpeg arrives from somewhere else"},
+	{"compiled where they run", "says a pair of ffmpeg binaries is compiled on the machine it runs on"},
+	{"compiled where the target runs", "says a pair of ffmpeg binaries is compiled on the machine it runs on"},
+	{"target's own platform", "names the host compile by the route name that once covered FreeBSD too"},
 }
 
 // guardSelf is the one file that is allowed to name the wordings it refuses: a refusal has to say what it

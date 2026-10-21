@@ -849,7 +849,7 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	}
 
 	record = manifest.Targets["macos-arm64"]
-	record.Host.Make = "gmake"
+	record.Host.Make = "another-make"
 
 	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
 		t.Error("a macOS host compile running another make program reuses the cache of the binaries the old one built")

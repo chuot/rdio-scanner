@@ -22,11 +22,13 @@ import (
 	"io/fs"
 )
 
-// The bundle for macos-arm64. This build compiles the ffmpeg binaries for that target on the machine that is the
-// target, and adopts them from there: they are compiled where they run, dropped in this directory, and
-// gzipped here. On a fresh clone, and on a release run on a machine that is not that platform with nothing
-// dropped for it, the directory holds only its placeholder, which
-// //go:embed all: matches, so a plain go build compiles and the lookup reports no bundle.
+// The bundle for macos-arm64. The build compiles these binaries in a container on the machine the build runs
+// on, against the Apple SDK tree its maintainer prepares, and publishes them here, gzipped: nothing on that host
+// starts them, so what they are held to is read out of the files the compile produced. A Mac compiling this
+// target instead uses its own compiler, linker and signer, and a pair its maintainer built by hand is dropped
+// here and adopted on a macOS host, after being run there; either way the pair lands gzipped in this directory.
+// On a fresh clone, and on any build that has not compiled or adopted this target's pair, the directory holds only
+// its placeholder, which //go:embed all: matches, so a plain go build compiles and the lookup reports no bundle.
 //
 //go:embed all:macos-arm64
 var darwinArm64 embed.FS

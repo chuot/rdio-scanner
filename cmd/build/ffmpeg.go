@@ -53,9 +53,9 @@ type ffmpegState struct {
 	bundleIsCached bool
 
 	// nativeTools is the host's own build tools, resolved: the program name mapped to where it was found,
-	// and no entry for a program that is not there. Only a compile that runs on the target's own platform
-	// uses it, and it is read before the plan is made so that a host missing a compiler is told which one
-	// before a minute of work finds it out.
+	// and no entry for a program that is not there. Only a Mac compiling a macOS pair uses it, and it is read
+	// before the plan is made so that a host missing a compiler is told which one before a minute of work
+	// finds it out.
 	nativeTools map[string]string
 
 	// sysrootTree is the directory of the SDK tree a record pins, when this machine has that tree prepared, and
@@ -832,7 +832,7 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 	return plan, nil
 }
 
-// makeProgram is the make program the compile a target's own host runs. A record naming none runs make, which
+// makeProgram is the make program the compile a Mac runs for a macOS target. A record naming none runs make, which
 // is what the Command Line Tools carry; a container's compile is not asked, because the image installs the GNU
 // make ffmpeg's build asks for.
 func makeProgram(record bundle.Target) string {
@@ -843,9 +843,9 @@ func makeProgram(record bundle.Target) string {
 	return record.Host.Make
 }
 
-// nativeProgramsAre the programs a compile on the target's own platform runs: the archive reader, a C
-// compiler, the stripper, and the make program the record names, plus the signer on a macOS target, where
-// the binaries have to carry a signature to run.
+// nativeProgramsAre the programs a Mac compiling a macOS pair runs with its own toolchain: the archive reader,
+// a C compiler, the stripper, and the make program the record names, plus codesign, because a macOS program has
+// to carry a signature to start.
 func nativeProgramsAre(record bundle.Target, target string) []string {
 	programs := []string{"tar", "cc", "strip", makeProgram(record)}
 
@@ -860,8 +860,8 @@ func nativeProgramsAre(record bundle.Target, target string) []string {
 //
 // A machine missing one of them cannot start the compile, and finding that out from configure's output,
 // after the source was fetched and unpacked, is a minute of work spent to learn what could have been said
-// at once. The refusal names the program and where it comes from: a compile on the target's own platform is
-// a macOS compile, and the tools it runs are the ones Apple's Command Line Tools install.
+// at once. The refusal names the program and where it comes from: the only host compile this build has is the
+// one a Mac runs for a macOS pair, and the tools it runs are the ones Apple's Command Line Tools install.
 func checkNativeToolchain(record bundle.Target, target string, state ffmpegState) error {
 	for _, name := range nativeProgramsAre(record, target) {
 		if state.nativeTools[name] == "" {
@@ -1289,9 +1289,9 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	bundleIsCached := covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz"))
 
-	// The tools of a compile that runs on the target's own platform are resolved the way the container
-	// program is, and for the same reason: the plan is made from what this machine has, and a host
-	// missing one of them is told which one before the source is fetched.
+	// The tools of the compile a Mac runs for a macOS pair are resolved the way the container program is, and
+	// for the same reason: the plan is made from what this machine has, and a host missing one of them is told
+	// which one before the source is fetched.
 	nativeTools := map[string]string{}
 
 	if covered && machine.canCompile(target) {
@@ -1986,15 +1986,16 @@ func theRecipeCarries(recipe []string, flag string) bool {
 	return false
 }
 
-// suppliedFFMpegLicence is what a release archive carries about the ffmpeg binaries compiled on the host
-// the target runs on.
+// suppliedFFMpegLicence is what a release archive carries about a pair this build did not compile in a
+// container: the pair a Mac compiled with its own toolchain, or the pair its maintainer built by hand and
+// dropped.
 //
-// A compiled target's binaries are reproducible from this repository, so its notice points at the manifest
-// and the command. These are not reproducible on the machine that produces the releases: they are compiled
-// where the target runs, by a build standing on that machine, and the build ran them there. The notice
-// names that machine, the source and recipe they were built from, the command that built them, and the
-// codecs the run recorded. It says plainly that a deployment inherits the libraries of the machine that
-// compiled them, because that is the one thing about these binaries the build does not check.
+// The pair a container compile produced is reproducible from this repository, so its notice points at the
+// manifest and the command. This pair is not: it was built on a macOS host that could build it and start it,
+// and this build started it there before adopting it. The notice names that machine, the source and recipe
+// they were built from, the command that built them, and the codecs the run recorded. It says plainly that a
+// deployment inherits the libraries of the machine that compiled them, because that is the one thing about
+// these binaries the build does not check.
 func suppliedFFMpegLicence(manifest bundle.Manifest, target string, run theRunOfTheBinaries) string {
 	var text strings.Builder
 

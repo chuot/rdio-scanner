@@ -156,12 +156,13 @@ const listenerGuideSource = "docs/user-guide.html"
 // release did not build.
 //
 // Every target the release matrix ships carries an ffmpeg inside its binary, so every one of these
-// archives carries a licence: the five this build compiles carry the notice naming the recipe, the source
-// digest and the command that produced the binaries, and the three whose ffmpeg binaries were compiled on
-// the platform the target runs on carry the notice naming the host that compiled them, the command that
-// built them there, and the codecs the run that adopted them recorded. The licence is the
-// text the ffmpeg phase wrote from the manifest, and the archive carries it under the name a reader looks
-// for, not the name the bundle directory uses.
+// archives carries a licence. Which of the two notices it carries is decided by where the pair came from: a
+// pair this build compiled in a container carries the notice naming the recipe, the source digest, and the
+// toolchain and image the record pins, and for the three pairs a compile host cannot start it names what the
+// build read out of the produced files in place of running them; a pair a Mac compiled with its own toolchain,
+// or a maintainer built and dropped, carries the notice naming the host that compiled them, the command that
+// built them there, and the codecs the run that adopted them recorded. The licence is the text the ffmpeg phase
+// wrote, and the archive carries it under the name a reader looks for, not the name the bundle directory uses.
 //
 // A target the manifest has no record for carries no licence, because it carries no ffmpeg: that is a
 // hand-named target outside the matrix, which is what a developer builds to try something this project

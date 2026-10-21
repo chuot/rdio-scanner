@@ -46,12 +46,16 @@ It does **not** cover:
 
 ## The ffmpeg binaries the build adopts
 
-Every server binary carries its own `ffmpeg` and `ffprobe` inside it. Five of the eight release targets
-get binaries this build compiles in a container, from the source release the manifest pins, checked
-against the digest the manifest records. The other three — `macos-amd64`, `macos-arm64`,
-`freebsd-amd64` — are compiled on the platform each one runs on, and the same route also adopts binaries
-an operator built by hand: drop `ffmpeg` and `ffprobe` in that target's bundle directory and the build on
-that host takes them.
+Every server binary carries its own `ffmpeg` and `ffprobe` inside it. The pair of every release target is
+compiled by this build, in a container, on the machine the build runs on, from the source release the manifest
+pins and against the digest the manifest records: the `freebsd-amd64` pair against the FreeBSD project's own
+toolchain image used as a sysroot, and the two macOS pairs against an Apple SDK tree its maintainer prepares.
+That host starts none of those three pairs, so what they are held to is read out of the files the compile
+produced. The one compile a host does with its own toolchain is a Mac compiling a macOS pair, and that Mac
+starts the pair it produced.
+
+A hand-built drop is a route for the two macOS targets, and only on a macOS host: `ffmpeg` and `ffprobe`
+dropped in that target's bundle directory are run there, and what converts is adopted.
 
 The adoption is a gate, and the gate is a run: the build executes the binaries through the converter's
 own argument list, on the machine standing there, with the recordings the server stores, and asks them
@@ -72,14 +76,17 @@ it can refuse a binary that fails the gate, and it cannot vouch for one that pas
 
 Two things follow from that, and both are in the release:
 
-- The archive carries `FFMPEG.txt`, and for these three targets the notice names the host that compiled
-  the binaries, the command that built them there, and the codecs the run recorded. The person who
-  downloads the archive can see that the binaries in it were adopted from a machine and not compiled from
-  the pinned source. The notice is the record; the trust is the reader's to place.
-- A program dropped into one of the five directories whose binaries this build compiles in a container is
-  embedded in the server binary and used by nothing. It is not a route, and it is not refused: it is a
-  payload in an archive. The drop route is the three targets compiled on their own platform, and a drop
-  anywhere else is a mistake that ships.
+- The archive carries `FFMPEG.txt`, and which of the two notices it is depends on where the pair came from. A
+  pair this build compiled in a container carries the notice naming the pinned source and digest, the recipe,
+  and the toolchain and image the record pins; for the three pairs a compile host cannot start, that notice
+  also names what the build read out of the produced files in place of running them. A pair a Mac compiled with
+  its own toolchain, or a maintainer built and dropped, carries the notice naming the host that compiled them,
+  the command that built them there, and the codecs the run recorded. The person who downloads the archive can
+  see which of the two the binaries in it are. The notice is the record; the trust is the reader's to place.
+- A program dropped into a target's bundle directory is consulted only on a macOS host, for one of the two
+  macOS targets. Anywhere else `//go:embed all:` takes it into the server binary and nothing loads it: not a
+  route, not refused, a payload in an archive. The drop route is the two macOS targets on a macOS host, and a
+  drop the build never consults is a mistake that ships.
 
 A server built with plain `go build`, without this build, carries no ffmpeg at all and converts with the
 ffmpeg its host installs. That is a third source of the same program, chosen by whoever installed the

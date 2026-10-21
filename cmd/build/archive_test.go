@@ -396,11 +396,10 @@ func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
 	}
 }
 
-// Every release target carries an ffmpeg inside its binary, so every release archive carries the licence
-// of the one it carries: the five this build compiles, and the three whose ffmpeg binaries the maintainer
-// compiled
-// on the platform the target runs on. An archive that quietly left the licence out shipped the terms of a
-// component it embedded with none of the terms.
+// Every release target carries an ffmpeg inside its binary, so every release archive carries the licence of
+// the one it carries, whatever route produced that pair: a pair this build compiled in a container, a pair a
+// Mac compiled with its own toolchain, or a pair its maintainer built and dropped. An archive that quietly left
+// the licence out shipped the terms of a component it embedded with none of the terms.
 func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	for _, tr := range releaseTargets {
 		target := tr.targetWord()

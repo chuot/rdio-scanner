@@ -1052,15 +1052,16 @@ func aSuppliedProgramBytes(target string) []byte {
 	panic("no supplied program fixture for " + target)
 }
 
-// The gate is the binaries' own execution. A host that cannot execute the binaries it compiled — an Intel
-// Mac holding the arm64 binaries, this Linux host holding the macOS binaries — adopts nothing, and it is not
-// refused by a guess about what the host has installed: the binaries are run, the operating system answers,
-// and the build's answer names the host that compiles them, the command that compiles them there, and the
-// directory the ones this run compiled are sitting in. Nothing is recorded: binaries a host cannot run are
-// binaries the release ships nothing about.
+// The gate is the binaries' own execution. A host that cannot execute the pair in front of it — an Intel Mac
+// holding the arm64 pair, or this Linux host driven through the gate by the test itself — adopts nothing, and it
+// is not refused by a guess about what the host has installed: the binaries are run, the operating system
+// answers, and the build's answer names the host that can run them, the command that compiles them there, and
+// the directory the pair is sitting in. Nothing is recorded: binaries a host cannot run are binaries the release
+// ships nothing about.
 //
 // The binaries here are the fixture shape the shape rules adopt, so the shape rules let them through to the
-// run, and the run is where this host answers.
+// run, and the run is where this host answers. No production route brings a macOS pair to a Linux host to be
+// started: the plan adopts a dropped pair only on a host that runs macOS, and this test drives the gate itself.
 func TestAHostThatCannotRunTheBinariesIsToldWhichHostCompilesThem(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		repo := t.TempDir()
