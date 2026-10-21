@@ -685,6 +685,50 @@ func TestADistRunAskedForOneTargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
 	}
 }
 
+// The tests above stand in for a phase that produced nothing for a target. This is the phase producing it for
+// real: the Linux host that produces the releases, asked for a macOS archive, with no prepared SDK tree in the
+// cache directory its record's SDK version names. The ffmpeg phase names the tree it looked for, reports the
+// target as one it wrote no archive for, and the run ships nothing it did not produce and says by its exit
+// status that the release it was asked for is not the release it wrote.
+func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["macos-amd64"]
+
+	home := t.TempDir()
+
+	t.Setenv("HOME", home)
+	t.Setenv(darwinSysrootVariable, "")
+
+	lookedIn := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK,
+		"MacOSX"+record.Sysroot.SDK+".sdk")
+
+	tl, out, ran := fakeRun(released, "")
+
+	tl.repo = t.TempDir()
+	tl.machine = func() host { return theReleaseHost }
+
+	tl.ffmpeg = tl.runFFmpeg
+
+	if code := tl.run([]string{"dist", "macos-amd64"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: the one archive this run was asked for is compiled against a tree this machine has not prepared", code)
+	}
+
+	for _, want := range []string{"0 archives written, 1 target wrote none: macos-amd64", lookedIn, record.Sysroot.SDK, darwinSysrootVariable} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the run's log %q does not say %q", out.String(), want)
+		}
+	}
+
+	// A target whose compile cannot start has no container built for it, no compile, and no archive: the run
+	// writes no server either, because a server compiled now would embed no ffmpeg.
+	for _, s := range *ran {
+		if s.label == subArchive || s.label == subServer || s.label == "image" || s.label == "configure" {
+			t.Errorf("%s ran for %s, a target whose compile this machine cannot start", s.label, s.result)
+		}
+	}
+}
+
 // The release folder is where the archives sit side by side until they are uploaded by hand. The
 // archives of the version a run released, sitting next to the archives of the versions it did not
 // release, is how the wrong file gets uploaded.
@@ -893,9 +937,9 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 
 // wroteNoFfmpegFor is the ffmpeg phase of a stand-in build that wrote no ffmpeg for the targets it is given,
 // which is the state a release run has to answer for: it ships the archives it can and says the release is not
-// the one it was asked for. Nothing in this build answers that way about a target today — every target the
-// manifest records is compiled by every host this build runs on — so the stand-in is the only way that answer
-// can be exercised at all.
+// the one it was asked for. The stand-in names whichever targets a test wants reported that way, so that the
+// summary line and the exit status are exercised for a matrix half of which cannot be filled; the phase that
+// reports it for real is exercised beside these.
 //
 // The targets it produces for are recorded, when the caller is counting the steps that ran.
 func wroteNoFfmpegFor(ran *[]step, targets ...string) func(options, io.Writer) (bool, error) {

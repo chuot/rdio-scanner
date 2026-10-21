@@ -1726,6 +1726,10 @@ func TestACompileAcrossTheTwoArchitecturesNamesTheTargetArchitecture(t *testing.
 // refusal names the target, the SDK version the record pins, the directory the build looked in, and the variable
 // that names another directory: an operator who keeps the tree somewhere else has to be able to tell from one line
 // whether they have not prepared it, or have prepared it where the build does not look.
+//
+// A release run answers the same absent tree with the same sentence and a different ending. It was asked for the
+// archives of several targets, and one target whose compile cannot start is one archive it does not write: it says
+// so about that target and carries on to the archives it can write.
 func TestTheBuildRefusesAMacOSTargetWhosePreparedSysrootIsAbsent(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1740,8 +1744,9 @@ func TestTheBuildRefusesAMacOSTargetWhosePreparedSysrootIsAbsent(t *testing.T) {
 			t.Fatalf("%s: the build found a prepared sysroot in a home directory that holds none: %s", target, tree)
 		}
 
-		plan, err := planFFmpeg(options{target: target}, "/repo", manifest,
-			ffmpegState{program: podmanProgram, sysrootLookedIn: lookedIn}, theReleaseHost)
+		state := ffmpegState{program: podmanProgram, sysrootLookedIn: lookedIn}
+
+		plan, err := planFFmpeg(options{target: target}, "/repo", manifest, state, theReleaseHost)
 		if err == nil {
 			t.Errorf("%s: the build planned a compile with no sysroot for it to read: %d steps", target, len(plan.Steps))
 			continue
@@ -1754,6 +1759,27 @@ func TestTheBuildRefusesAMacOSTargetWhosePreparedSysrootIsAbsent(t *testing.T) {
 		for _, want := range []string{target, record.Sysroot.SDK, lookedIn, "RDIO_FFMPEG_DARWIN_SDK"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("%s: the refusal %q does not name %q", target, err.Error(), want)
+			}
+		}
+
+		plan, err = planFFmpeg(options{sub: subDist, target: target}, "/repo", manifest, state, theReleaseHost)
+		if err != nil {
+			t.Errorf("%s: a release run was refused outright, and the release it was asked for has other archives in it: %v", target, err)
+			continue
+		}
+
+		if !plan.WritesNone {
+			t.Errorf("%s: the release run reports this target as writing an archive it cannot compile", target)
+			continue
+		}
+
+		if len(plan.Steps) > 0 {
+			t.Errorf("%s: the release run still has %d steps for a compile it cannot start", target, len(plan.Steps))
+		}
+
+		for _, want := range []string{target, record.Sysroot.SDK, lookedIn, "RDIO_FFMPEG_DARWIN_SDK"} {
+			if !strings.Contains(plan.Says, want) {
+				t.Errorf("%s: what the release run says about this target, %q, does not name %q", target, plan.Says, want)
 			}
 		}
 	}

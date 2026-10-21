@@ -181,6 +181,14 @@ type ffmpegPlan struct {
 	// compile runs its own binaries through.
 	Adopts bool
 
+	// WritesNone says this plan produces no ffmpeg binaries for its target at all: the machine running the
+	// build cannot start the compile the record describes, because an input the record pins is not there to
+	// read. Says carries the sentence that names what is missing and where to prepare it. A release run asked
+	// for several archives reports such a target as one it wrote no archive for and ships the rest; a run
+	// asked for that one target's ffmpeg is refused instead, because the thing it was asked for is the thing
+	// it cannot produce.
+	WritesNone bool
+
 	Source ffmpegSource
 	Paths  ffmpegPaths
 
@@ -486,7 +494,18 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	// what it reported was clang's complaint about being unable to create an executable file — a compiler's own
 	// words for a missing tree, with nothing in them naming the tree the operator was meant to prepare.
 	if record.Sysroot != (bundle.Sysroot{}) && state.sysrootTree == "" {
-		return ffmpegPlan{}, theRefusalOfAnUnpreparedSysroot(target, record, state.sysrootLookedIn)
+		refusal := theRefusalOfAnUnpreparedSysroot(target, record, state.sysrootLookedIn)
+
+		// A release run was asked for the archives of several targets, and this is one of them it cannot write.
+		// It says so about this target, in the same sentence the run asked for one target's ffmpeg is refused
+		// with, and carries on to the archives whose compile it can start: a release run that stopped at the
+		// first target missing a prepared tree would ship nothing at all, on the host that produces every
+		// archive this project publishes.
+		if o.sub == subDist {
+			return ffmpegPlan{Target: target, Says: refusal.Error(), WritesNone: true}, nil
+		}
+
+		return ffmpegPlan{}, refusal
 	}
 
 	// Every step of this plan speaks to the program the run resolved, and enters a container the way
@@ -1143,9 +1162,10 @@ func fetchSource(src ffmpegSource) error {
 // runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
 //
 // It reports whether it produced nothing for the target, which is the answer the release run asks: a target
-// that wrote no ffmpeg writes no archive, and the caller decides what that means for the run. No plan says it
-// today — every target the manifest covers is compiled by every host this build runs on — so the answer is
-// always no, and the mechanism stays until the run's answer for a target it cannot compile is settled.
+// that wrote no ffmpeg writes no archive, and the caller decides what that means for the run. The plans that say
+// it are the ones this machine cannot start — a record whose compile reads a tree the operator has not prepared,
+// on a run that was asked for more than that one target — and such a plan names the missing tree in the line it
+// prints before it reports writing none.
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
@@ -1215,6 +1235,14 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	if plan.Says != "" {
 		fmt.Fprintf(stdout, "%-7s %s\n", subFFmpeg, plan.Says)
+	}
+
+	if plan.WritesNone {
+		// The compile this target's record describes cannot start here, so nothing is fetched, built, read,
+		// gzipped, cached, licensed, or adopted for it, and no server embeds an ffmpeg it does not have. The
+		// sentence naming the input that is missing is on the log above; what a run does with a target that
+		// wrote none is the run's own answer.
+		return true, nil
 	}
 
 	if plan.Native {

@@ -76,9 +76,8 @@ type tool struct {
 	//
 	// It reports the target it wrote no ffmpeg for, because a target with no ffmpeg to embed writes no
 	// archive, and a release run asked for the whole matrix ships the archives whose ffmpeg it did produce
-	// rather than stopping at the first target it could not fill. Every target the manifest records is
-	// compiled by every host this build runs on, so no plan reports it today, and the answer is the phase's
-	// own way of saying the same thing a compile this host cannot start would have to say.
+	// rather than stopping at the first target it could not fill. A target whose compile reads a sysroot the
+	// operator has not prepared is such a target on a release run, and the release run's summary names it.
 	ffmpeg func(options, io.Writer) (bool, error)
 
 	// prove is the gate the ffmpeg binaries pass before anything adopts them: the version line the
