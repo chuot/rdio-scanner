@@ -1710,6 +1710,9 @@ func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, l
 //
 // It is written from the manifest rather than kept as a document somebody has to remember to update,
 // because a licence notice that names the wrong release is worse than none.
+//
+// A target whose record names reads instead of a run also carries what the build did in place of running its
+// pair, because the archive is the only place that target's reader learns the pair was never started.
 func ffmpegLicence(manifest bundle.Manifest, target string) string {
 	var text strings.Builder
 
@@ -1718,6 +1721,17 @@ func ffmpegLicence(manifest bundle.Manifest, target string) string {
 		"This build of rdio-scanner carries ffmpeg %s and ffprobe %s inside its own binary, compiled\nfrom source for %s. It converts audio with nothing installed on the host.\n\n",
 		manifest.FFmpeg, manifest.FFmpeg, target,
 	))
+
+	// A target whose record names reads instead of a run is a target this build never started, and the archive
+	// is the only place a reader of a release learns that. The claim is made of the proof the record names, so
+	// it appears for exactly the targets the build proves by reading and never for one it proved by running its
+	// own binaries in a container.
+	if record, pinned := manifest.Targets[target]; pinned && len(record.Conformance.Reads) > 0 {
+		text.WriteString(fmt.Sprintf(
+			"These two programs were compiled and not run. The machine that compiled them runs no %s program, and\nno machine this build reached runs one either: nothing was started, and the build published only what it could\nread out of the two programs — their own headers, and the records those headers point at. What a program's headers\nshow is how it was linked and what it was linked for, not what it does, and this build does not pretend\notherwise.\n\n",
+			target,
+		))
+	}
 
 	text.WriteString("ffmpeg is free software, copyright the FFmpeg developers. This binary is used under the GNU\nLesser General Public License version 2.1 or later, and was configured without --enable-gpl\nand without --enable-nonfree, so it carries no GPL or otherwise restricted component. The\nlicence text is at https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html\n\n")
 

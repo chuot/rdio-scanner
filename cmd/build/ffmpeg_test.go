@@ -1010,6 +1010,31 @@ func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) 
 	if !strings.Contains(licence, "without --enable-gpl") {
 		t.Error("the licence text does not say what was left out")
 	}
+
+	// The targets this build proves by reading and not by running are the ones whose archive is the only place
+	// a reader learns it: the step result says the pair was compiled and not run, and the text inside the
+	// archive has to say the same about the pair it carries. The claim is made of the proof the record names,
+	// so a target whose proof was a run of its own binaries in a container never carries it.
+	for _, one := range releaseTargets {
+		target := one.targetWord()
+		record, pinned := manifest.Targets[target]
+
+		if !pinned {
+			continue
+		}
+
+		text := ffmpegLicence(manifest, target)
+		provenByReading := len(record.Conformance.Reads) > 0
+		saysItWasNotRun := strings.Contains(text, "compiled and not run")
+
+		if provenByReading && !saysItWasNotRun {
+			t.Errorf("%s is proven by reading, and its licence text does not say its pair was compiled and not run:\n%s", target, text)
+		}
+
+		if saysItWasNotRun && !provenByReading {
+			t.Errorf("%s is proven by running its own binaries in a container, and its licence text says its pair was compiled and not run:\n%s", target, text)
+		}
+	}
 }
 
 // The licence text says the program is compiled for audio, and the switches that make that true are the
