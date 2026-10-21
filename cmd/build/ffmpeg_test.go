@@ -296,7 +296,7 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 	}
 
 	for _, c := range cases {
-		plan, err := planFFmpeg(options{target: c.target}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
+		plan, err := planFFmpeg(options{target: c.target}, "/repo", manifest, aTreeReadyFor(t, manifest, c.target), theReleaseHost)
 		if err != nil {
 			t.Errorf("the build refused %s: %v", c.target, err)
 			continue
@@ -479,7 +479,7 @@ func TestEveryContainerTargetIsCompiledInAContainerWhateverHostRunsTheBuild(t *t
 		}
 
 		for _, machine := range c.machines {
-			plan, err := planFFmpeg(options{target: c.target}, "/repo", manifest, anUncompiledTree(), machine)
+			plan, err := planFFmpeg(options{target: c.target}, "/repo", manifest, aTreeReadyFor(t, manifest, c.target), machine)
 			if err != nil {
 				t.Errorf("the build refused %s on a %s %s host: %v", c.target, machine.goos, machine.goarch, err)
 				continue
@@ -1139,7 +1139,7 @@ func TestADroppedPairIsAdoptedOnlyForAMacOSTargetOnAMacHost(t *testing.T) {
 
 	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
-	onTheBuildHost, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
+	onTheBuildHost, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aTreeReadyFor(t, manifest, "macos-arm64"), theReleaseHost)
 	if err != nil {
 		t.Fatalf("the build refused the macOS target its record says it compiles: %v", err)
 	}
@@ -1674,6 +1674,286 @@ func TestACompileAcrossTheTwoArchitecturesNamesTheTargetArchitecture(t *testing.
 	if carries(own.args, "-arch ") {
 		t.Errorf("a compile on the target's own host names -arch, asking the compiler for the architecture it is standing on: %v", own.args)
 	}
+}
+
+// A record that pins an SDK names a tree this machine has to have before its compile can read headers, libraries
+// and startup files out of it, and the run is refused before a container is built or a source is fetched. The
+// refusal names the target, the SDK version the record pins, the directory the build looked in, and the variable
+// that names another directory: an operator who keeps the tree somewhere else has to be able to tell from one line
+// whether they have not prepared it, or have prepared it where the build does not look.
+func TestTheBuildRefusesAMacOSTargetWhosePreparedSysrootIsAbsent(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		record := manifest.Targets[target]
+
+		home := t.TempDir()
+
+		tree, lookedIn := thePreparedSysrootFor(record, noEnvironment, home)
+
+		if tree != "" {
+			t.Fatalf("%s: the build found a prepared sysroot in a home directory that holds none: %s", target, tree)
+		}
+
+		plan, err := planFFmpeg(options{target: target}, "/repo", manifest,
+			ffmpegState{program: podmanProgram, sysrootLookedIn: lookedIn}, theReleaseHost)
+		if err == nil {
+			t.Errorf("%s: the build planned a compile with no sysroot for it to read: %d steps", target, len(plan.Steps))
+			continue
+		}
+
+		if len(plan.Steps) > 0 {
+			t.Errorf("%s: the refused plan still carries %d steps", target, len(plan.Steps))
+		}
+
+		for _, want := range []string{target, record.Sysroot.SDK, lookedIn, "RDIO_FFMPEG_DARWIN_SDK"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: the refusal %q does not name %q", target, err.Error(), want)
+			}
+		}
+	}
+}
+
+// A directory standing where the build looks is not a sysroot. The tree a compile reads is the one that carries the
+// library a Darwin link reads, and a directory that is empty, half prepared, or one level too high is refused with
+// the same sentence as an absent one, because what the operator has to do is the same either way.
+func TestTheBuildRefusesADirectoryThatCarriesNoSysroot(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["macos-amd64"]
+
+	home := t.TempDir()
+
+	keptAt := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK, "MacOSX"+record.Sysroot.SDK+".sdk")
+
+	if err := os.MkdirAll(keptAt, 0755); err != nil {
+		t.Fatalf("the test cannot write the directory it was given: %v", err)
+	}
+
+	tree, lookedIn := thePreparedSysrootFor(record, noEnvironment, home)
+
+	if tree != "" {
+		t.Errorf("the build took an empty directory for the macOS %s SDK its record pins: %s", record.Sysroot.SDK, tree)
+	}
+
+	if lookedIn != keptAt {
+		t.Errorf("the build looked in %s, and the harness that prepares the tree writes it at %s", lookedIn, keptAt)
+	}
+
+	plan, err := planFFmpeg(options{target: "macos-amd64"}, "/repo", manifest,
+		ffmpegState{program: podmanProgram, sysrootLookedIn: lookedIn}, theReleaseHost)
+	if err == nil {
+		t.Fatalf("the build planned a compile against a directory that carries no libraries: %d steps", len(plan.Steps))
+	}
+
+	if !strings.Contains(err.Error(), lookedIn) {
+		t.Errorf("the refusal %q does not name the directory it found nothing prepared in", err.Error())
+	}
+}
+
+// The tree a record pins is looked for where the record says this machine keeps it: the directory under the
+// operator's home that the harness which prepares it writes it into, or the directory the operator named with
+// RDIO_FFMPEG_DARWIN_SDK. The variable names the tree itself, because the tree is what the container mounts, and
+// what the build reports as prepared is what carries the library a Darwin link reads.
+func TestTheBuildLooksForItsSysrootWhereItsRecordSaysTheMachineKeepsIt(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["macos-amd64"]
+
+	home := t.TempDir()
+
+	inTheCacheOfItsOwn := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK, "MacOSX"+record.Sysroot.SDK+".sdk")
+
+	if err := writeASysrootTree(inTheCacheOfItsOwn); err != nil {
+		t.Fatalf("the test cannot write the sysroot it was given: %v", err)
+	}
+
+	tree, lookedIn := thePreparedSysrootFor(record, noEnvironment, home)
+
+	if lookedIn != inTheCacheOfItsOwn || tree != inTheCacheOfItsOwn {
+		t.Errorf("the build resolved %s and %s for a tree written at %s", tree, lookedIn, inTheCacheOfItsOwn)
+	}
+
+	elsewhere := t.TempDir()
+
+	if err := writeASysrootTree(elsewhere); err != nil {
+		t.Fatalf("the test cannot write the sysroot the operator named: %v", err)
+	}
+
+	tree, lookedIn = thePreparedSysrootFor(record, anEnvironment(map[string]string{
+		"RDIO_FFMPEG_DARWIN_SDK": elsewhere,
+	}), home)
+
+	if lookedIn != elsewhere || tree != elsewhere {
+		t.Errorf("the operator named %s and the build resolved %s and %s", elsewhere, tree, lookedIn)
+	}
+}
+
+// The prepared sysroot reaches the compile as a mount and not as a layer: the image the compile runs in is built
+// with nothing of Apple's in it, and the tree is put where the record says the compiler looks for it, read-only,
+// for the steps that run the compiler and the linker. The steps that only carry files around are not given it.
+func TestTheMacOSCompileMountsItsPreparedSysrootReadOnly(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		record := manifest.Targets[target]
+
+		state, tree := aTreeWithTheSysrootPreparedFor(t, record)
+
+		plan, err := planFFmpeg(options{target: target}, "/repo", manifest, state, theReleaseHost)
+		if err != nil {
+			t.Errorf("%s: the build refused a compile whose sysroot is prepared: %v", target, err)
+			continue
+		}
+
+		want := tree + ":" + record.Sysroot.Mount + ":ro"
+
+		for _, label := range []string{"configure", "make"} {
+			s, ok := stepNamed(plan, label)
+			if !ok {
+				t.Errorf("%s: the build has no %s step", target, label)
+				continue
+			}
+
+			if !carries(s.args, want) {
+				t.Errorf("%s: the %s step does not mount the prepared sysroot read-only as %s: %v", target, label, want, s.args)
+			}
+		}
+
+		image, ok := stepNamed(plan, "image")
+		if !ok {
+			t.Errorf("%s: the build has no step that prepares the container it compiles in", target)
+			continue
+		}
+
+		if carries(image.args, tree) {
+			t.Errorf("%s: the image step carries the sysroot tree %s, and the image is built with nothing of Apple's in it: %v", target, tree, image.args)
+		}
+
+		if _, pinned := containerBuildArgs(image.args)["sysroot_image"]; pinned {
+			t.Errorf("%s: the image step copies a sysroot out of an image into the image, and this sysroot arrives at run time: %v", target, image.args)
+		}
+
+		for _, label := range []string{"clean", "unpack", "chmod"} {
+			s, ok := stepNamed(plan, label)
+			if !ok {
+				continue
+			}
+
+			if carries(s.args, tree) {
+				t.Errorf("%s: the %s step mounts the sysroot, and it reads no headers, libraries or startup files: %v", target, label, s.args)
+			}
+		}
+	}
+}
+
+// The mount names the path the record says the compile reads, which is the same path the record spells into its own
+// compiler and linker flags: a build that hardcoded one of the two would mount a tree where nothing looks for it.
+func TestTheSysrootIsMountedWhereItsRecordSaysTheCompileReadsIt(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["macos-arm64"]
+	record.Sysroot.Mount = "/SDKroot"
+
+	manifest = aManifestWithOtherTarget("macos-arm64", record)
+
+	state, tree := aTreeWithTheSysrootPreparedFor(t, record)
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, "/repo", manifest, state, theReleaseHost)
+	if err != nil {
+		t.Fatalf("the build refused a compile whose sysroot is prepared: %v", err)
+	}
+
+	for _, label := range []string{"configure", "make"} {
+		s, ok := stepNamed(plan, label)
+		if !ok {
+			t.Errorf("the build has no %s step", label)
+			continue
+		}
+
+		if !carries(s.args, tree+":/SDKroot:ro") {
+			t.Errorf("the %s step mounts the sysroot somewhere other than where its record says the compile reads it: %v", label, s.args)
+		}
+	}
+}
+
+// A Mac compiling its own ffmpeg needs no prepared tree, because the SDK that compile reads is the one its own
+// toolchain carries: the host route is planned on a machine the build asked nothing of, and it refuses nothing and
+// mounts nothing.
+func TestTheMacOSCompileOnItsOwnHostNeedsNoPreparedSysroot(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, tc := range []struct {
+		target  string
+		machine host
+	}{
+		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "arm64"}},
+		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "amd64"}},
+	} {
+		plan, err := planFFmpeg(options{target: tc.target}, t.TempDir(), manifest, aNativeTree(tc.target), tc.machine)
+		if err != nil {
+			t.Errorf("%s on a %s Mac: the build refused a compile that needs no prepared sysroot: %v", tc.target, tc.machine.goarch, err)
+			continue
+		}
+
+		for _, s := range plan.Steps {
+			if carries(s.args, ":/sysroot") || carries(s.args, "--sysroot") {
+				t.Errorf("%s on a %s Mac: the %s step names a sysroot that host does not prepare: %v", tc.target, tc.machine.goarch, s.label, s.args)
+			}
+		}
+	}
+}
+
+// aTreeReadyFor is the state of a machine a plan is asked on: the container program it has, and, when the target's
+// record pins an SDK tree its compile reads, that tree prepared in the machine's own cache directory. A record that
+// names no tree gets the plain state, because nothing is asked of the machine for it.
+func aTreeReadyFor(t *testing.T, manifest bundle.Manifest, target string) ffmpegState {
+	t.Helper()
+
+	record, covered := manifest.Targets[target]
+	if !covered || record.Sysroot == (bundle.Sysroot{}) {
+		return anUncompiledTree()
+	}
+
+	state, _ := aTreeWithTheSysrootPreparedFor(t, record)
+
+	return state
+}
+
+// aTreeWithTheSysrootPreparedFor is the state of a machine that has the SDK tree a record pins: the tree is written
+// in a home directory of the test's own, in the layout the harness that prepares it writes it into, and the state
+// carries what the build resolved from that home. The tree's directory comes back too, because a test that asks
+// what a container was mounted has to name it.
+func aTreeWithTheSysrootPreparedFor(t *testing.T, record bundle.Target) (ffmpegState, string) {
+	t.Helper()
+
+	home := t.TempDir()
+
+	tree := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK, "MacOSX"+record.Sysroot.SDK+".sdk")
+
+	if err := writeASysrootTree(tree); err != nil {
+		t.Fatalf("the test cannot write the sysroot it was given: %v", err)
+	}
+
+	state := anUncompiledTree()
+
+	state.sysrootTree, state.sysrootLookedIn = thePreparedSysrootFor(record, noEnvironment, home)
+
+	if state.sysrootTree != tree {
+		t.Fatalf("the build resolved %s beside the tree it was shown at %s", state.sysrootTree, tree)
+	}
+
+	return state, tree
+}
+
+// writeASysrootTree writes the one file a macOS link reads, which is what a directory has to carry before this
+// build takes it for the SDK its record pins.
+func writeASysrootTree(dir string) error {
+	if err := os.MkdirAll(filepath.Join(dir, "usr", "lib"), 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(dir, "usr", "lib", "libSystem.tbd"), []byte("text-based stub library\n"), 0644)
 }
 
 // theFlagNamed is the value of one flag-bearing argument, which is how a test reads what a step was told

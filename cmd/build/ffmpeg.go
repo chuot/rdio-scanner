@@ -57,6 +57,14 @@ type ffmpegState struct {
 	// uses it, and it is read before the plan is made so that a host missing a compiler is told which one
 	// before a minute of work finds it out.
 	nativeTools map[string]string
+
+	// sysrootTree is the directory of the SDK tree a record pins, when this machine has that tree prepared, and
+	// empty when it does not. sysrootLookedIn is where the run looked for it either way: the directory the
+	// operator named with RDIO_FFMPEG_DARWIN_SDK, or the cache directory the record's SDK version names. Only a
+	// compile that reads another operating system's headers, libraries and startup files out of a tree the operator
+	// prepared is asked, and the plan that needs a tree this machine does not have is refused.
+	sysrootTree     string
+	sysrootLookedIn string
 }
 
 // host is the platform the machine running the build is on, named the way the release names a platform: the
@@ -453,6 +461,14 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 			target, podmanProgram, dockerProgram)
 	}
 
+	// A record that pins an SDK names a tree this machine has to have prepared, and the plan is where that is
+	// found out. A run that carried on reached configure with nothing mounted at the path its own flags name, and
+	// what it reported was clang's complaint about being unable to create an executable file — a compiler's own
+	// words for a missing tree, with nothing in them naming the tree the operator was meant to prepare.
+	if record.Sysroot != (bundle.Sysroot{}) && state.sysrootTree == "" {
+		return ffmpegPlan{}, theRefusalOfAnUnpreparedSysroot(target, record, state.sysrootLookedIn)
+	}
+
 	// Every step of this plan speaks to the program the run resolved, and enters a container the way
 	// that program understands.
 	program := theContainerProgram{name: state.program}
@@ -531,19 +547,27 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		),
 	})
 
-	plan.Steps = append(plan.Steps, configureStep(repo, paths, image, manifest, record, program))
+	plan.Steps = append(plan.Steps, configureStep(repo, paths, image, manifest, record, program, state.sysrootTree))
+
+	// The compile itself reads the same tree configure read: the headers it includes, the libraries it links
+	// against and the startup files the link names all come out of it, and the mount stays read-only because the
+	// tree is the operator's, prepared once and read by every compile.
+	makeArgs := append(program.run(), "-v", paths.scratch+":/work")
+
+	makeArgs = append(makeArgs, sysrootMount(record, state.sysrootTree)...)
+
+	makeArgs = append(makeArgs,
+		"-w", "/work/"+sourceDir(manifest),
+		image,
+		"make", "-j", strconv.Itoa(runtime.NumCPU()),
+	)
 
 	plan.Steps = append(plan.Steps, step{
 		label:  "make",
 		result: whatTheCompileProduced(record, target),
 		dir:    repo,
 		name:   program.name,
-		args: append(program.run(),
-			"-v", paths.scratch+":/work",
-			"-w", "/work/"+sourceDir(manifest),
-			image,
-			"make", "-j", strconv.Itoa(runtime.NumCPU()),
-		),
+		args:   makeArgs,
 	})
 
 	// The tree the container compiled in belongs to whatever uid the container was given, which is not
@@ -885,6 +909,61 @@ func theContainerfileFor(record bundle.Target) string {
 	return sharedContainerfile
 }
 
+// darwinSysrootVariable names the directory an operator keeps a prepared sysroot in when they keep it somewhere
+// other than the directory this build looks in. It names the SDK tree itself, because the tree is what the
+// container mounts.
+const darwinSysrootVariable = "RDIO_FFMPEG_DARWIN_SDK"
+
+// thePreparedSysrootFor answers where the sysroot tree a record pins is on the machine running the build. The
+// record names an SDK version, and the tree of that version sits in the operator's cache directory — outside both
+// repositories, because the tree carries Apple's headers and libraries and belongs in neither — unless the operator
+// named another directory. The tree is reported only when its directory carries the library a macOS link reads: an
+// empty directory, a half-prepared one, and a directory of the wrong level are one answer to the build and one
+// sentence to the operator. Where the build looked is reported either way, because a refusal has to name it.
+func thePreparedSysrootFor(record bundle.Target, look func(string) (string, bool), homeDir string) (tree string, lookedIn string) {
+	lookedIn, named := look(darwinSysrootVariable)
+
+	if !named || lookedIn == "" {
+		lookedIn = filepath.Join(homeDir, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk",
+			record.Sysroot.SDK, "MacOSX"+record.Sysroot.SDK+".sdk")
+	}
+
+	if !aFileIsThere(filepath.Join(lookedIn, "usr", "lib", "libSystem.tbd")) {
+		return "", lookedIn
+	}
+
+	return lookedIn, lookedIn
+}
+
+// theRefusalOfAnUnpreparedSysroot is what the build says instead of compiling a pair against a tree it does not
+// have. It names the target, the SDK version the record pins, the directory the build looked in, and the way to
+// name another one: a build that only said "no sysroot" would send the operator looking for a fact it already knew.
+// The run that plans a compile asks this machine where its tree is kept before it plans, so the directory is known
+// whenever a compile is refused; a plan composed without asking says which directory that left out rather than
+// naming nothing.
+func theRefusalOfAnUnpreparedSysroot(target string, record bundle.Target, lookedIn string) error {
+	where := "the cache directory of the machine running the build"
+
+	if lookedIn != "" {
+		where = lookedIn
+	}
+
+	return fmt.Errorf("the ffmpeg for %s is compiled against the macOS %s SDK its record pins, and this machine has no prepared sysroot at %s: prepare that tree, or name the directory you keep it in with %s",
+		target, record.Sysroot.SDK, where, darwinSysrootVariable)
+}
+
+// sysrootMount is how a prepared sysroot reaches the container that compiles against it: the tree the operator
+// prepared, mounted where the record says the compiler looks for it, read-only. The compile reads headers,
+// libraries and startup files out of that tree and writes nothing to it, and a mount keeps the tree one copy on the
+// machine instead of a layer of every toolchain image the build makes.
+func sysrootMount(record bundle.Target, tree string) []string {
+	if tree == "" || record.Sysroot == (bundle.Sysroot{}) {
+		return nil
+	}
+
+	return []string{"-v", tree + ":" + record.Sysroot.Mount + ":ro"}
+}
+
 // whatTheCompileProduced is what the compile step tells the operator it made. A record that proves its pair
 // by reading it has a pair nothing on this machine ran, and the step that compiled it says so; a record that
 // proves its pair by running it spends that claim on the run that follows.
@@ -901,9 +980,16 @@ func whatTheCompileProduced(record bundle.Target, target string) string {
 //
 // --enable-cross-compile and ffmpeg's own win32 and win64 operating-system names are what the manifest
 // records, because both mistakes surface as a Makefile error rather than as a cross-compile error.
-func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle.Manifest, record bundle.Target, program theContainerProgram) step {
-	args := append(program.run(),
-		"-v", paths.scratch+":/work",
+//
+// The tree a record pins is mounted for this step, because configure is where a compiler is asked to make a test
+// program, and a compiler with no sysroot mounted answers with its own complaint instead of naming the tree the
+// operator was meant to prepare.
+func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle.Manifest, record bundle.Target, program theContainerProgram, sysroot string) step {
+	args := append(program.run(), "-v", paths.scratch+":/work")
+
+	args = append(args, sysrootMount(record, sysroot)...)
+
+	args = append(args,
 		"-w", "/work/"+sourceDir(manifest),
 		image,
 		"./configure",
@@ -1040,6 +1126,8 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	record, covered := manifest.Targets[target]
 
+	bundleIsCached := covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz"))
+
 	// The tools of a compile that runs on the target's own platform are resolved the way the container
 	// program is, and for the same reason: the plan is made from what this machine has, and a host
 	// missing one of them is told which one before the source is fetched.
@@ -1055,11 +1143,31 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		}
 	}
 
+	// A compile that reads another operating system's headers, libraries and startup files reads them out of a tree
+	// the operator prepared, and whether this machine has that tree is asked here for the same reason the container
+	// program and the host's own tools are asked here: the plan is made from what this machine has, and a machine
+	// that has not prepared the tree is told which SDK is missing before it builds a container. A Mac compiling its
+	// own ffmpeg reads the SDK its own toolchain carries, and is asked for nothing. Nothing is asked of a machine
+	// whose cache already holds the pair, because that compile does not happen again.
+	sysrootTree, sysrootLookedIn := "", ""
+
+	if covered && !bundleIsCached && record.Sysroot != (bundle.Sysroot{}) && !machine.canCompile(target) {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return false, fmt.Errorf("the ffmpeg for %s is compiled against the macOS %s SDK its record pins, and this machine has no home directory a prepared copy of it is kept in: name the directory you keep it in with %s",
+				target, record.Sysroot.SDK, darwinSysrootVariable)
+		}
+
+		sysrootTree, sysrootLookedIn = thePreparedSysrootFor(record, os.LookupEnv, homeDir)
+	}
+
 	state := ffmpegState{
-		program:        program,
-		sourceIsCached: aFileIsThere(paths.source),
-		bundleIsCached: covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz")),
-		nativeTools:    nativeTools,
+		program:         program,
+		sourceIsCached:  aFileIsThere(paths.source),
+		bundleIsCached:  bundleIsCached,
+		nativeTools:     nativeTools,
+		sysrootTree:     sysrootTree,
+		sysrootLookedIn: sysrootLookedIn,
 	}
 
 	plan, err := planFFmpeg(o, t.repo, manifest, state, machine)
