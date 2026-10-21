@@ -65,6 +65,11 @@ type ffmpegState struct {
 	// prepared is asked, and the plan that needs a tree this machine does not have is refused.
 	sysrootTree     string
 	sysrootLookedIn string
+
+	// sysrootDigest is the digest the preparation of that tree recorded beside it, and it is empty when nothing is
+	// recorded. It is read only for a tree that was found, and a tree whose recorded digest is not the digest the
+	// record pins is a tree this build does not compile against.
+	sysrootDigest string
 }
 
 // host is the platform the machine running the build is on, named the way the release names a platform: the
@@ -494,18 +499,17 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	// what it reported was clang's complaint about being unable to create an executable file — a compiler's own
 	// words for a missing tree, with nothing in them naming the tree the operator was meant to prepare.
 	if record.Sysroot != (bundle.Sysroot{}) && state.sysrootTree == "" {
-		refusal := theRefusalOfAnUnpreparedSysroot(target, record, state.sysrootLookedIn)
+		return theRefusalAnswered(o, target, theRefusalOfAnUnpreparedSysroot(target, record, state.sysrootLookedIn))
+	}
 
-		// A release run was asked for the archives of several targets, and this is one of them it cannot write.
-		// It says so about this target, in the same sentence the run asked for one target's ffmpeg is refused
-		// with, and carries on to the archives whose compile it can start: a release run that stopped at the
-		// first target missing a prepared tree would ship nothing at all, on the host that produces every
-		// archive this project publishes.
-		if o.sub == subDist {
-			return ffmpegPlan{Target: target, Says: refusal.Error(), WritesNone: true}, nil
-		}
-
-		return ffmpegPlan{}, refusal
+	// A tree standing where the pinned tree is kept is the pinned tree only when the digest its preparation
+	// recorded beside it is the digest the record names. Nothing in the tree says which tree it is, and the pair
+	// compiled from it would be cached, licensed and released under the pinned digest whether or not the tree
+	// deserved that name: a directory swapped in under the pinned version's name, and a tree assembled by hand
+	// without the record its preparation writes, are both a release whose provenance is a story. The refusal is the
+	// same answer a release run gives to a tree that is not there at all.
+	if record.Sysroot != (bundle.Sysroot{}) && state.sysrootTree != "" && state.sysrootDigest != record.Sysroot.SHA256 {
+		return theRefusalAnswered(o, target, theRefusalOfASysrootThatIsNotThePinnedTree(target, record, state.sysrootTree, state.sysrootDigest))
 	}
 
 	// Every step of this plan speaks to the program the run resolved, and enters a container the way
@@ -974,6 +978,29 @@ func thePreparedSysrootFor(record bundle.Target, look func(string) (string, bool
 	return lookedIn, lookedIn
 }
 
+// theSysrootDigestFile is the name the preparation of a sysroot tree records its digest under, in the directory that
+// holds the tree. It is the same file the preparation re-reads the tree against, and the only thing beside the tree
+// that says which tree it is supposed to be.
+const theSysrootDigestFile = "sha256"
+
+// theSysrootDigestRecordedBeside answers what the preparation of a sysroot tree recorded for it. The tree is a
+// directory somebody outside both repositories produced, and nothing inside it names the tree it is: the preparation
+// writes the tree and records its sha256 in a file named sha256 in the directory holding the tree, and re-reads the
+// tree against that record whenever it is run again. A tree with nothing recorded beside it has no measured digest,
+// and the answer is empty rather than invented, because a digest this build made up would be a pin of its own.
+func theSysrootDigestRecordedBeside(tree string) string {
+	if tree == "" {
+		return ""
+	}
+
+	body, err := os.ReadFile(filepath.Join(filepath.Dir(tree), theSysrootDigestFile))
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(body))
+}
+
 // theRefusalOfAnUnpreparedSysroot is what the build says instead of compiling a pair against a tree it does not
 // have. It names the target, the SDK version the record pins, the directory the build looked in, and the way to
 // name another one: a build that only said "no sysroot" would send the operator looking for a fact it already knew.
@@ -989,6 +1016,36 @@ func theRefusalOfAnUnpreparedSysroot(target string, record bundle.Target, looked
 
 	return fmt.Errorf("the ffmpeg for %s is compiled against the macOS %s SDK its record pins, and this machine has no prepared sysroot at %s: prepare that tree, or name the directory you keep it in with %s",
 		target, record.Sysroot.SDK, where, darwinSysrootVariable)
+}
+
+// theRefusalOfASysrootThatIsNotThePinnedTree is what the build says instead of compiling a pair against a tree that
+// is standing where the pinned tree is kept and is not that tree. A tree whose recorded digest is another tree's, and
+// a tree with nothing recorded beside it at all, are both a release whose binaries would be cached, licensed and
+// published under a digest nothing read. What the operator has to do is the same either way, so the two sentences
+// name the same four things: the target, the directory, the digest the record pins, and what the tree records instead
+// of it — including recording nothing.
+func theRefusalOfASysrootThatIsNotThePinnedTree(target string, record bundle.Target, tree, recorded string) error {
+	if recorded == "" {
+		return fmt.Errorf("the ffmpeg for %s is compiled against the macOS %s SDK its record pins, and the tree at %s has no digest recorded beside it, where its preparation records one in a file named %s, and the digest its record names for that tree is %s: re-prepare that tree, or name the directory you keep it in with %s",
+			target, record.Sysroot.SDK, tree, theSysrootDigestFile, record.Sysroot.SHA256, darwinSysrootVariable)
+	}
+
+	return fmt.Errorf("the ffmpeg for %s is compiled against the macOS %s SDK its record pins, and the digest the tree at %s records beside it is %s, not the %s its record names for that tree: re-prepare that tree, or name the directory you keep it in with %s",
+		target, record.Sysroot.SDK, tree, recorded, record.Sysroot.SHA256, darwinSysrootVariable)
+}
+
+// theRefusalAnswered hands one refusal of a compile to the run that has to answer it, in the shape that run can
+// answer. A release run was asked for the archives of several targets, and this is one of them it cannot write: it
+// says so about this target, in the sentence the refusal names, and carries on to the archives whose compile it can
+// start — a release run that stopped at the first target missing an input would ship nothing at all, on the host that
+// produces every archive this project publishes. A run asked for this one target's ffmpeg is refused outright,
+// because the one thing it was asked for is the thing it cannot produce, and exit 0 for it would say otherwise.
+func theRefusalAnswered(o options, target string, refusal error) (ffmpegPlan, error) {
+	if o.sub == subDist {
+		return ffmpegPlan{Target: target, Says: refusal.Error(), WritesNone: true}, nil
+	}
+
+	return ffmpegPlan{}, refusal
 }
 
 // sysrootMount is how a prepared sysroot reaches the container that compiles against it: the tree the operator
@@ -1226,6 +1283,12 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		nativeTools:     nativeTools,
 		sysrootTree:     sysrootTree,
 		sysrootLookedIn: sysrootLookedIn,
+
+		// A tree that was found is asked what its preparation recorded for it, in the same breath: the directory
+		// carrying the library a Darwin link reads is half of being the pinned tree, and the digest recorded beside
+		// it is the other half. Nothing is read out of the tree itself, and an empty answer is the honest one for a
+		// tree nobody measured.
+		sysrootDigest: theSysrootDigestRecordedBeside(sysrootTree),
 	}
 
 	plan, err := planFFmpeg(o, t.repo, manifest, state, machine)

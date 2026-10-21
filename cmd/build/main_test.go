@@ -729,6 +729,73 @@ func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t 
 	}
 }
 
+// The tree a machine has prepared is found, and asked what its preparation recorded for it, by the phase that gathers
+// what this machine has — before a plan is composed and before a container is built. A tree standing in the pinned
+// version's directory, carrying the library a Darwin link reads, and recording some other tree's digest beside it is
+// refused on the operator's own stream, and nothing is fetched or built for it: a run that compiled against it would
+// publish binaries under a digest it never read.
+func TestARunAskedForTheFfmpegOfATargetWhoseSysrootRecordsAnotherTreeIsRefused(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["macos-amd64"]
+
+	const theDigestOfSomeOtherTree = "0000000000000000000000000000000000000000000000000000000000000000"
+
+	home := t.TempDir()
+
+	t.Setenv("HOME", home)
+	t.Setenv(darwinSysrootVariable, "")
+
+	tree := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK,
+		"MacOSX"+record.Sysroot.SDK+".sdk")
+
+	if err := writeASysrootTree(tree); err != nil {
+		t.Fatalf("the test cannot write the sysroot it was shown: %v", err)
+	}
+
+	if err := writeTheSysrootDigestRecordedFor(record, tree); err != nil {
+		t.Fatalf("the test cannot write the digest the preparation records beside its tree: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(filepath.Dir(tree), "sha256"), []byte(theDigestOfSomeOtherTree+"\n"), 0644); err != nil {
+		t.Fatalf("the test cannot relabel the tree with another tree's digest: %v", err)
+	}
+
+	tl, out, ran := fakeRun(released, "")
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+	tl.repo = t.TempDir()
+	tl.machine = func() host { return theReleaseHost }
+
+	tl.ffmpeg = tl.runFFmpeg
+
+	if code := tl.run([]string{"ffmpeg", "macos-amd64"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: the one ffmpeg this run was asked for is compiled against a tree whose record does not match its own", code)
+	}
+
+	for _, want := range []string{"macos-amd64", record.Sysroot.SDK, tree, theDigestOfSomeOtherTree, record.Sysroot.SHA256, darwinSysrootVariable} {
+		if !strings.Contains(errout.String(), want) {
+			t.Errorf("the refusal on the operator's stream %q does not say %q", errout.String(), want)
+		}
+	}
+
+	if strings.Contains(errout.String(), "no prepared sysroot") {
+		t.Errorf("a tree that is there was refused as a tree that is not: %q", errout.String())
+	}
+
+	if strings.Contains(out.String(), record.Sysroot.SHA256) {
+		t.Errorf("the refusal of the tree reached %q, and a refusal belongs to the operator, not to the run's progress", out.String())
+	}
+
+	for _, s := range *ran {
+		if s.label == "image" || s.label == "unpack" || s.label == "configure" || s.label == "make" || s.label == subServer {
+			t.Errorf("%s ran for %s, a target refused before its compile could start", s.label, s.result)
+		}
+	}
+}
+
 // The release folder is where the archives sit side by side until they are uploaded by hand. The
 // archives of the version a run released, sitting next to the archives of the versions it did not
 // release, is how the wrong file gets uploaded.

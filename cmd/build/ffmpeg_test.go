@@ -1860,6 +1860,99 @@ func TestTheBuildLooksForItsSysrootWhereItsRecordSaysTheMachineKeepsIt(t *testin
 	}
 }
 
+// A directory standing where the build looks, carrying the library a Darwin link reads, is a sysroot the build can
+// name — but it is the sysroot its record pins only when the digest recorded beside it is the digest the record
+// names. The preparation that writes a tree also records its digest in a file named `sha256` in the directory that
+// holds the tree, and re-checks the tree against that record. A tree swapped in under the pinned version's name, and
+// a tree copied or assembled by hand with nothing recorded beside it, are two ways of standing in the right place
+// with the wrong tree, and the build compiles against neither: the pair it produces would be cached, licensed and
+// released under a digest it never read.
+func TestTheBuildRefusesASysrootWhoseRecordedDigestIsNotTheOneItsRecordPins(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	record := manifest.Targets["macos-amd64"]
+
+	home := t.TempDir()
+
+	tree := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK, "MacOSX"+record.Sysroot.SDK+".sdk")
+
+	if err := writeASysrootTree(tree); err != nil {
+		t.Fatalf("the test cannot write the sysroot it was given: %v", err)
+	}
+
+	const anotherTree = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	cases := []struct {
+		// recorded is the digest written beside the tree, and "" is nothing written there at all.
+		recorded string
+		want     []string
+	}{
+		{recorded: anotherTree, want: []string{"macos-amd64", record.Sysroot.SDK, tree, anotherTree, record.Sysroot.SHA256, darwinSysrootVariable}},
+		{recorded: "", want: []string{"macos-amd64", record.Sysroot.SDK, tree, record.Sysroot.SHA256, darwinSysrootVariable}},
+	}
+
+	for _, c := range cases {
+		label := filepath.Join(filepath.Dir(tree), "sha256")
+
+		if c.recorded == "" {
+			if err := os.Remove(label); err != nil && !os.IsNotExist(err) {
+				t.Fatalf("the test cannot remove the digest it wrote beside the tree: %v", err)
+			}
+		} else if err := os.WriteFile(label, []byte(c.recorded+"\n"), 0644); err != nil {
+			t.Fatalf("the test cannot write the digest beside the tree: %v", err)
+		}
+
+		if found := theSysrootDigestRecordedBeside(tree); found != c.recorded {
+			t.Fatalf("the digest recorded beside %s reads %q, and the preparation records it at %s", tree, found, label)
+		}
+
+		state := anUncompiledTree()
+
+		state.sysrootTree, state.sysrootLookedIn = thePreparedSysrootFor(record, noEnvironment, home)
+		state.sysrootDigest = theSysrootDigestRecordedBeside(tree)
+
+		if state.sysrootTree != tree {
+			t.Fatalf("the build found no prepared sysroot at %s", tree)
+		}
+
+		plan, err := planFFmpeg(options{target: "macos-amd64"}, "/repo", manifest, state, theReleaseHost)
+		if err == nil {
+			t.Errorf("a tree recording %q was planned a compile with %d steps, and the record pins %s",
+				c.recorded, len(plan.Steps), record.Sysroot.SHA256)
+			continue
+		}
+
+		for _, want := range c.want {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal of a tree recording %q does not name %q: %q", c.recorded, want, err.Error())
+			}
+		}
+
+		if strings.Contains(err.Error(), "no prepared sysroot") {
+			t.Errorf("a tree that is there is refused as a tree that is not: %q", err.Error())
+		}
+
+		// The same refusal answers a release run as the target it wrote no archive for, whichever of the two
+		// sysroot refusals it is.
+		plan, err = planFFmpeg(options{sub: subDist, target: "macos-amd64"}, "/repo", manifest, state, theReleaseHost)
+		if err != nil {
+			t.Errorf("a release run was refused outright over a tree recording %q, and the release it was asked for has other archives in it: %v", c.recorded, err)
+			continue
+		}
+
+		if !plan.WritesNone {
+			t.Errorf("a release run reports a target compiled against a tree recording %q as one it wrote an archive for", c.recorded)
+			continue
+		}
+
+		for _, want := range c.want {
+			if !strings.Contains(plan.Says, want) {
+				t.Errorf("what a release run says about a tree recording %q does not name %q: %q", c.recorded, want, plan.Says)
+			}
+		}
+	}
+}
+
 // The prepared sysroot reaches the compile as a mount and not as a layer: the image the compile runs in is built
 // with nothing of Apple's in it, and the tree is put where the record says the compiler looks for it, read-only,
 // for the steps that run the compiler and the linker. The steps that only carry files around are not given it.
@@ -2059,9 +2152,9 @@ func aTreeReadyFor(t *testing.T, manifest bundle.Manifest, target string) ffmpeg
 }
 
 // aTreeWithTheSysrootPreparedFor is the state of a machine that has the SDK tree a record pins: the tree is written
-// in a home directory of the test's own, in the layout the harness that prepares it writes it into, and the state
-// carries what the build resolved from that home. The tree's directory comes back too, because a test that asks
-// what a container was mounted has to name it.
+// in a home directory of the test's own, in the layout the harness that prepares it writes it into — the tree, and
+// the digest that preparation recorded beside it — and the state carries what the build resolved from that home. The
+// tree's directory comes back too, because a test that asks what a container was mounted has to name it.
 func aTreeWithTheSysrootPreparedFor(t *testing.T, record bundle.Target) (ffmpegState, string) {
 	t.Helper()
 
@@ -2073,25 +2166,42 @@ func aTreeWithTheSysrootPreparedFor(t *testing.T, record bundle.Target) (ffmpegS
 		t.Fatalf("the test cannot write the sysroot it was given: %v", err)
 	}
 
+	if err := writeTheSysrootDigestRecordedFor(record, tree); err != nil {
+		t.Fatalf("the test cannot write the digest the preparation records beside its tree: %v", err)
+	}
+
 	state := anUncompiledTree()
 
 	state.sysrootTree, state.sysrootLookedIn = thePreparedSysrootFor(record, noEnvironment, home)
+	state.sysrootDigest = theSysrootDigestRecordedBeside(tree)
 
 	if state.sysrootTree != tree {
 		t.Fatalf("the build resolved %s beside the tree it was shown at %s", state.sysrootTree, tree)
 	}
 
+	if state.sysrootDigest != record.Sysroot.SHA256 {
+		t.Fatalf("the digest recorded beside the tree it was shown reads %q, and the record pins %s", state.sysrootDigest, record.Sysroot.SHA256)
+	}
+
 	return state, tree
 }
 
-// writeASysrootTree writes the one file a macOS link reads, which is what a directory has to carry before this
-// build takes it for the SDK its record pins.
+// writeASysrootTree writes the one file a macOS link reads, which is what a directory has to carry before this build
+// takes it for the SDK its record pins.
 func writeASysrootTree(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, "usr", "lib"), 0755); err != nil {
 		return err
 	}
 
 	return os.WriteFile(filepath.Join(dir, "usr", "lib", "libSystem.tbd"), []byte("text-based stub library\n"), 0644)
+}
+
+// writeTheSysrootDigestRecordedFor writes, in the directory holding the tree, the record the preparation of a sysroot
+// tree leaves for it: the tree's sha256, in a file named after the digest it holds. A fixture standing for a prepared
+// tree writes what the preparation writes, because carrying the library a link reads makes a directory a sysroot and
+// the digest recorded beside it makes it the one a record pins.
+func writeTheSysrootDigestRecordedFor(record bundle.Target, tree string) error {
+	return os.WriteFile(filepath.Join(filepath.Dir(tree), theSysrootDigestFile), []byte(record.Sysroot.SHA256+"\n"), 0644)
 }
 
 // theFlagNamed is the value of one flag-bearing argument, which is how a test reads what a step was told
