@@ -644,35 +644,38 @@ func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing
 // An incomplete matrix is not a release, and the run that wrote it says so with its exit status, so a
 // script can tell "these are the whole release this machine can make" from "the release is missing archives".
 //
-// The two targets the stand-in writes no ffmpeg for stand in for a target the ffmpeg phase could not fill:
-// every target the manifest records is compiled by every host this build runs on, so which target a real run
-// reports this way is open — what the release run does for a target whose compile asks the operator for a
-// tree they have not prepared is being decided — and the mechanism, its summary line, and its exit status
-// stay until it is.
+// The two targets are the ones the stand-in writes no ffmpeg for, and they stand for any target whose ffmpeg
+// the phase could not produce: the summary line and the exit status are what this defends, whichever target a
+// real run ends up reporting that way.
 func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	tl.ffmpeg = wroteNoFfmpegFor(ran, "macos-amd64", "macos-arm64")
+	tl.ffmpeg = wroteNoFfmpegFor(ran, "linux-386", "windows-amd64")
 
 	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
 		t.Fatalf("exit code = %d, want 3: two of the eight targets the run was asked for wrote no archive", code)
 	}
 
-	for _, want := range []string{"6 archives written", "2 targets wrote none", "macos-amd64", "macos-arm64"} {
+	for _, want := range []string{"6 archives written", "2 targets wrote none: linux-386, windows-amd64"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the run's log %q does not say %q", out.String(), want)
 		}
 	}
 }
 
-// A release run asked for one target that wrote no ffmpeg wrote none of the one archive it was asked for.
+// A release run asked for one target that wrote no ffmpeg wrote none of the one archive it was asked for, and
+// says so instead of shipping a server that would embed nothing.
 func TestADistRunAskedForOneTargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	tl.ffmpeg = wroteNoFfmpegFor(ran, "macos-arm64")
+	tl.ffmpeg = wroteNoFfmpegFor(ran, "linux-386")
 
-	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 3 {
+	if code := tl.run([]string{"dist", "linux-386"}, out); code != 3 {
 		t.Fatalf("exit code = %d, want 3", code)
+	}
+
+	if !strings.Contains(out.String(), "0 archives written, 1 target wrote none: linux-386") {
+		t.Errorf("the run's log %q does not say which target wrote none", out.String())
 	}
 
 	for _, s := range *ran {
@@ -891,8 +894,8 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 // wroteNoFfmpegFor is the ffmpeg phase of a stand-in build that wrote no ffmpeg for the targets it is given,
 // which is the state a release run has to answer for: it ships the archives it can and says the release is not
 // the one it was asked for. Nothing in this build answers that way about a target today — every target the
-// manifest records is compiled by every host — so the stand-in is the only way the release run's answer can be
-// exercised at all, and which target it applies to is recorded as an open question.
+// manifest records is compiled by every host this build runs on — so the stand-in is the only way that answer
+// can be exercised at all.
 //
 // The targets it produces for are recorded, when the caller is counting the steps that ran.
 func wroteNoFfmpegFor(ran *[]step, targets ...string) func(options, io.Writer) (bool, error) {
