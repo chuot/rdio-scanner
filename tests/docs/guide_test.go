@@ -921,10 +921,10 @@ func TestTheGuideIsSmallEnoughToCarry(t *testing.T) {
 // The release matrix table is what an administrator reads to decide what a deployment runs, and the column
 // that says whether the archive carries its own ffmpeg is the reason a deployment installs nothing. Every
 // target this project releases carries one inside the program, and the guide has to say so for every row:
-// the ffmpeg binaries this project's build compiles for the Linux and Windows targets, and the binaries
-// compiled on the target's own platform and adopted by the release for the macOS and FreeBSD ones.
+// every target's ffmpeg is compiled by this project's build, in a container, including the FreeBSD and the
+// two macOS pairs, which are compiled for an operating system the machine that compiled them does not run.
 func TestTheReleaseMatrixSaysEveryArchiveCarriesItsOwnFfmpeg(t *testing.T) {
-	const caption = "The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program; the macOS and FreeBSD ffmpeg binaries are compiled on the platform each target runs on, and the build adopts them into the release."
+	const caption = "The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program, compiled by this project's build in a container on the machine that produces the releases."
 
 	body := guidePath(t)
 
@@ -1048,7 +1048,21 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	}
 }
 
-func TestTheGuideSaysTheFfmpegBinariesAreCompiledByTheBuildOnTheirOwnHost(t *testing.T) {
+// The guide is where a reader learns which machine compiles the ffmpeg their own archive carries, and what
+// the build did to believe it. The container is the route for every target this project releases: the Linux
+// and Windows pairs, the FreeBSD pair compiled against a FreeBSD sysroot, and the two macOS pairs compiled
+// against Apple's SDK are compiled in a container by the machine that produces the releases. A Mac is the
+// one host that compiles a target's pair with its own toolchain instead, and the three pairs compiled for an
+// operating system the build host does not run are proved by reading the programs rather than starting them.
+// The statements are pinned in the places the ritual is written — the chapter that says what an archive
+// carries, the chapter that lists the commands, the per-platform sections of the service chapter, and the
+// licence appendix — because a reader who finds the old ritual in one of them follows the old ritual.
+//
+// The hand route stays: binaries built by hand are dropped where the build looks for them, and the build
+// runs them and adopts what converts. What the guide has to stop doing is listing the compile's own steps
+// as the operator's ritual, because the build runs them, and a guide that tells an operator to run them
+// invites binaries the release adopts on nothing.
+func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunning(t *testing.T) {
 	body := guidePath(t)
 
 	places := []struct {
@@ -1058,8 +1072,8 @@ func TestTheGuideSaysTheFfmpegBinariesAreCompiledByTheBuildOnTheirOwnHost(t *tes
 		{
 			chapter: "ch-03-requirements",
 			need: []string{
-				"compiled by this build on a machine that runs the target's operating system",
-				"this build compiles them on a machine that runs the target's operating system",
+				"Every one of the eight archives carries the ffmpeg binaries this project's build compiled, in a container",
+				"the build host runs no FreeBSD program and no macOS program",
 			},
 		},
 		{
@@ -1073,13 +1087,13 @@ func TestTheGuideSaysTheFfmpegBinariesAreCompiledByTheBuildOnTheirOwnHost(t *tes
 		{
 			chapter: "ch-21-running-as-a-service",
 			need: []string{
-				"this build compiles them on the machine that is the target",
+				"the release build compiles the ffmpeg of every release target in a container",
 			},
 		},
 		{
 			chapter: "ch-27-reference",
 			need: []string{
-				"names the host that compiled them",
+				"names the container image and digest that compiled them",
 			},
 		},
 	}
@@ -1121,11 +1135,10 @@ func TestTheGuideSaysTheFfmpegBinariesAreCompiledByTheBuildOnTheirOwnHost(t *tes
 }
 
 // The two macOS architectures compile each other's ffmpeg binaries, and the guide is where an operator
-// learns which Mac to stand on. The statements here are the ones that answer the question the release host
-// cannot: there is no machine that is both macOS architectures, so the release of the Intel archive comes
-// from an Apple Silicon Mac, and the release of the Apple Silicon archive can come from an Intel Mac.
-// Rosetta 2 is what lets the Apple Silicon Mac run the Intel binaries it compiled, and the run an Intel Mac
-// performs on the arm64 binaries is the run that proves the program the Apple Silicon machine ships.
+// learns which Mac to stand on when a Mac compiles the macOS pair with its own toolchain. The machine that
+// produces the releases does not stand on either architecture: it compiles both macOS pairs in a container.
+// Rosetta 2 is what lets an Apple Silicon Mac run the Intel binaries it compiled there, and the run an Intel
+// Mac performs on the arm64 binaries is the run that proves the pair that Mac carries.
 func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	body := guidePath(t)
 
@@ -1139,7 +1152,6 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 				"the two macOS architectures compile each other's ffmpeg binaries",
 				"one Apple Silicon Mac compiles both macOS archives",
 				"Rosetta 2",
-				"FreeBSD is compiled on FreeBSD",
 			},
 		},
 		{
@@ -1237,6 +1249,13 @@ func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
 		".build/ffmpeg/checks",
 		"the host that recorded the proof",
 		"the proof its ffmpeg check left",
+		"gmake",
+		"freebsd is compiled on freebsd",
+		"compiled only on freebsd",
+		"ships the five archives",
+		"the five linux and windows",
+		"the macos and freebsd targets",
+		"on the platform each target runs on",
 	} {
 		if strings.Contains(body, gone) {
 			t.Errorf("the guide says %q, which is the ritual of a build that audited the binaries it adopted", gone)
@@ -1255,8 +1274,10 @@ func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
 }
 
 // COMPILING.md is the developer's note beside the repository, and it states the same ritual the guide
-// states: one command on a Mac, one on a FreeBSD box, one Apple Silicon Mac for both macOS archives, the
-// compile running the binaries it compiled, no check command, and no digests for anybody to copy.
+// states: one command that compiles the ffmpeg of the target you name, in a container, on any machine that
+// has a container program; one command on a Mac compiling the macOS pair with the Mac's own toolchain; the
+// compile running the binaries its container can start and reading the ones it cannot; no check command; and
+// no digests for anybody to copy.
 func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 	body := strings.ToLower(words(repoFile(t, "COMPILING.md")))
 
@@ -1268,6 +1289,8 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 		"the two macos architectures compile each other's ffmpeg binaries",
 		"rosetta 2",
 		"drop `ffmpeg` and `ffprobe`",
+		"the ffmpeg of every release target is compiled in a container",
+		"compiled and not run",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("COMPILING.md never says %q", want)
@@ -1281,6 +1304,11 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 		".build/ffmpeg/checks",
 		"no code signature",
 		"program interpreter",
+		"gmake",
+		"freebsd box",
+		"the other three",
+		"compiled on the platform each one runs on",
+		"the three targets compiled on their own platform",
 	} {
 		if strings.Contains(body, gone) {
 			t.Errorf("COMPILING.md says %q, which describes the audit this build no longer performs", gone)
@@ -1288,11 +1316,12 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 	}
 }
 
-// The hand-built drop is adopted by the three targets whose ffmpeg binaries are compiled where they run.
-// The five this build compiles in a container take the binaries the container produced: a program an
-// operator drops in one of those directories is embedded by the server binary, is used by nothing, and
-// no message says it is there. The guide is where the operator reads the drop route, so the guide names
-// the targets the route belongs to and says what a drop in the other directories costs.
+// The hand-built drop is adopted by the two macOS targets, and only on a host that runs macOS: every
+// target's compile is a container compile now, and the host route that survives is the Mac's. The other six
+// take the binaries the container produced: a program an operator drops in one of those directories is
+// embedded by the server binary, is used by nothing, and no message says it is there. The guide is where the
+// operator reads the drop route, so the guide names the targets the route belongs to and says what a drop in
+// the other directories costs.
 func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
 	body := guidePath(t)
 
@@ -1300,7 +1329,7 @@ func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
 
 	for _, want := range []string{
 		"drop ffmpeg and ffprobe in the target's bundle directory",
-		"the macOS and FreeBSD targets",
+		"the two macOS targets",
 		"embedded in the binary and used by nothing",
 	} {
 		if !strings.Contains(chapter, strings.ToLower(want)) {
@@ -1312,7 +1341,7 @@ func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
 
 	for _, want := range []string{
 		"drop `ffmpeg` and `ffprobe`",
-		"the three targets compiled on their own platform",
+		"the two macOS targets on a host that runs macOS",
 		"embedded in the binary and used by nothing",
 	} {
 		if !strings.Contains(notes, strings.ToLower(want)) {
