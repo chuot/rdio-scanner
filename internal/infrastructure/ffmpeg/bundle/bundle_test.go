@@ -173,6 +173,14 @@ func TestNoRecordNamesAProductionKindOrATopLevelMakeProgram(t *testing.T) {
 // Neither list says anything about the binaries themselves. The container compile is proven by reading what it
 // produced, because nothing on the build host can run a Mach-O, and a manifest carrying a digest of a program
 // the build never ran would be a promise the release has no way to keep.
+//
+// The record names one more thing about the container compile: the archiver it writes its libraries with, and the
+// tool that writes the index of those archives. The archiver the container's own distribution ships is built for
+// the machine it runs on, and a Darwin link refuses an archive carrying nothing it can look a library up in.
+//
+// And it says something about the programs that compile produces: they are not stripped. The Darwin link signs
+// the binary it writes, and a strip step rewrites that file afterwards in a container that has nothing which can
+// sign it again.
 func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 	manifest := ReadManifest()
 
@@ -182,6 +190,8 @@ func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 		cflags    string
 		ldflags   string
 		hostFlags string
+		archiver  string
+		indexer   string
 		reads     string
 	}
 
@@ -192,6 +202,8 @@ func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
 			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
 			hostFlags: "-mmacosx-version-min=11.0",
+			archiver:  "llvm-ar",
+			indexer:   "llvm-ranlib",
 			reads:     "mh_execute lc_main lc_load_dylinker lc_load_libsystem",
 		},
 		"macos-arm64": {
@@ -200,6 +212,8 @@ func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
 			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
 			hostFlags: "-mmacosx-version-min=11.0",
+			archiver:  "llvm-ar",
+			indexer:   "llvm-ranlib",
 			reads:     "mh_execute lc_main lc_load_dylinker lc_load_libsystem lc_code_signature",
 		},
 	}
@@ -215,7 +229,7 @@ func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 			t.Errorf("%s compiles in %q, want docker.io/debian:stable", target, record.Container)
 		}
 
-		if got := strings.Join(record.Packages, " "); got != "build-essential clang lld curl ca-certificates tar xz-utils python3" {
+		if got := strings.Join(record.Packages, " "); got != "build-essential clang lld llvm curl ca-certificates tar xz-utils python3" {
 			t.Errorf("%s installs %q", target, got)
 		}
 
@@ -250,6 +264,27 @@ func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 			t.Errorf("%s names %s as its host make program, and the Command Line Tools carry make", target, record.Host.Make)
 		}
 
+		// A Darwin link looks a library up in its archive's symbol table before it reads any member of that
+		// archive, and the archiver Debian ships in this container cannot write one: it is built for the machine
+		// it runs on and answers "file format not recognized" for a Mach-O object, so its ranlib reports success
+		// having written nothing. The record names the archiver and the indexer the compile writes its libraries
+		// with, which is what the platform whose binary it produces archives with.
+		if record.AR != c.archiver {
+			t.Errorf("%s archives its libraries with %q, want %s: the link refuses an archive that carries no symbol table", target, record.AR, c.archiver)
+		}
+
+		if record.Ranlib != c.indexer {
+			t.Errorf("%s indexes its archives with %q, want %s: the archiver is asked to write an index it cannot read out of the objects", target, record.Ranlib, c.indexer)
+		}
+
+		// The linker signs the binary while it writes it, and nothing in this build can write a signature over
+		// bytes a strip step changed afterwards: the pair ships exactly what the link produced. Naming that in the
+		// record is what keeps configure's own default strip out of the compile, instead of leaving the produced
+		// programs to whatever the container happens to answer for strip.
+		if !record.NoStripping {
+			t.Errorf("%s leaves its programs to configure's default strip, and the signature its link wrote over them cannot be written again over stripped bytes", target)
+		}
+
 		if record.Sysroot.SDK != "15.5" {
 			t.Errorf("%s compiles against SDK %q, want the pinned 15.5", target, record.Sysroot.SDK)
 		}
@@ -274,6 +309,42 @@ func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 		// it has to be run on.
 		if record.Conformance.Container != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
 			t.Errorf("%s names a way of running the binaries it compiles: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
+		}
+	}
+}
+
+// Two things belong to the Darwin records alone. The archiver and the indexer are what their link demands: the
+// failure that measures this names one compile, the macOS run that reported all seven of the archives it wrote as
+// `archive has no index`. The choice not to strip is what their signature needs, and a Mac's own compile is not
+// covered by it: a host strips its own binaries and signs them again with its own codesign. A target whose compile
+// writes archives its own container's archiver understands, and whose binaries carry no signature to keep, is not
+// asked to name either — and a record naming either for such a target would move the cache entry its binaries are
+// named by for nothing.
+func TestOnlyTheDarwinRecordsNameTheirToolchain(t *testing.T) {
+	manifest := ReadManifest()
+
+	for target, record := range manifest.Targets {
+		darwin := strings.HasPrefix(target, "macos-")
+		names := record.AR != "" || record.Ranlib != ""
+
+		if darwin && !names {
+			t.Errorf("%s names no archiver and no indexer, and the link of the pair it compiles refuses an archive that carries no symbol table", target)
+		}
+
+		if darwin && !record.NoStripping {
+			t.Errorf("%s leaves its programs to configure's default strip, and the signature its link wrote over them cannot be written again by anything this build runs", target)
+		}
+
+		if darwin {
+			continue
+		}
+
+		if names {
+			t.Errorf("%s names ar=%q and ranlib=%q, and nothing measured says the compile that target describes needs a tool beside the one its container already carries", target, record.AR, record.Ranlib)
+		}
+
+		if record.NoStripping {
+			t.Errorf("%s says its programs are not stripped, and nothing measured says stripping breaks the pair that target produces", target)
 		}
 	}
 }

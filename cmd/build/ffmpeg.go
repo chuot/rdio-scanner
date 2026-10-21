@@ -371,6 +371,26 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		parts = append(parts, record.CC)
 	}
 
+	// The archiver and the indexer are part of the name for the same reason the compiler is: a pair whose
+	// libraries were archived and indexed by another tool is another pair of binaries. A record naming
+	// neither keys exactly as it keyed before, so the compiles that use the archiver their own container
+	// ships keep the warm entries they already have.
+	if record.AR != "" {
+		parts = append(parts, record.AR)
+	}
+
+	if record.Ranlib != "" {
+		parts = append(parts, record.Ranlib)
+	}
+
+	// A pair that never went through a strip step is another pair of binaries than one that did, so the switch
+	// that kept the strip out is part of the name those binaries are cached under. A record that names no such
+	// switch keys exactly as it keyed before, which is what keeps every cached entry of the other six targets
+	// warm.
+	if record.NoStripping {
+		parts = append(parts, "--disable-stripping")
+	}
+
 	// A sysroot somebody prepared outside both repositories is a tree the compile read: the SDK version, the
 	// digest of the tree, and the tool that prepared it are part of the name of the binaries built from it.
 	// The mount path is not, because the record names it in its cc, cflags, and ldflags, and a record whose
@@ -1012,6 +1032,24 @@ func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle
 
 	if len(record.LDFlags) > 0 {
 		args = append(args, "--extra-ldflags="+strings.Join(record.LDFlags, " "))
+	}
+
+	// The archiver a record names reaches the compile through configure's own options, which is where a
+	// toolchain the record names belongs: configure writes both into the Makefile it produces, that Makefile
+	// archives every library with the named tool and asks the named indexer for the archive's symbol table.
+	if record.AR != "" {
+		args = append(args, "--ar="+record.AR)
+	}
+
+	if record.Ranlib != "" {
+		args = append(args, "--ranlib="+record.Ranlib)
+	}
+
+	// And the switch that keeps the programs their link wrote: configure answers --disable-stripping by leaving
+	// its own strip step to a program that prints what it skipped, so the shipped program is the one the link
+	// wrote, signature and all.
+	if record.NoStripping {
+		args = append(args, "--disable-stripping")
 	}
 
 	return step{

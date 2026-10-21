@@ -99,6 +99,30 @@ type Target struct {
 	CFlags  []string `json:"cflags"`
 	LDFlags []string `json:"ldflags"`
 
+	// AR and Ranlib name the tools the container compile writes its libraries with and writes the symbol
+	// table of those archives with. Empty is configure's own choice, which is the right answer for every
+	// compile whose objects the archiver of its own container can read. The archiver Debian ships is built
+	// for the machine it runs on: asked about a Mach-O object it answers that the file format is not
+	// recognized, so it writes an archive carrying no symbol table, and its ranlib reports success having
+	// written nothing. A Darwin link refuses an archive it cannot look a library up in before it reads a
+	// single member of it. The two macOS records name the LLVM archiver, which is what the platform whose
+	// binaries they produce archives with. Only the container compile is told: a host compiling its own
+	// ffmpeg has its own toolchain, and these are not programs its own PATH carries.
+	AR     string `json:"ar"`
+	Ranlib string `json:"ranlib"`
+
+	// NoStripping says the programs that compile ship exactly as its link wrote them, and it reaches the compile
+	// as configure's own --disable-stripping. It belongs to the two macOS records and to no other target: the
+	// arm64 half of that pair carries a code signature the Darwin link wrote while writing the binary — that
+	// signature is what the read rule of that target names — and a container that rewrites a signed program
+	// afterwards has nothing which can write the signature again, because signing a Mach-O is a program of the
+	// platform whose binary it is and no part of this build carries one. The two records describe one compile
+	// shape and the release ships their programs as a pair, so neither is stripped: the alternative would leave
+	// the arm64 pair exactly as its link wrote it and rewrite the other half, for what was measured at just over
+	// half a megabyte off each program before gzip. Every other target keeps configure's own strip step, which is
+	// what the binaries in their cached entries were written with.
+	NoStripping bool `json:"no_stripping"`
+
 	// SysrootImage names an image whose contents become the sysroot the compile reads: the headers and
 	// libraries of the operating system the compile crosses to, published by that operating system's own
 	// project. The build never runs such an image — every program in it is written for a kernel this host

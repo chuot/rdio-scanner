@@ -159,6 +159,7 @@
         "build-essential",
         "clang",
         "lld",
+        "llvm",
         "curl",
         "ca-certificates",
         "tar",
@@ -180,6 +181,9 @@
         "-fuse-ld=lld",
         "--sysroot=/sysroot"
       ],
+      "ar": "llvm-ar",
+      "ranlib": "llvm-ranlib",
+      "no_stripping": true,
       "host": {
         "cflags": [
           "-mmacosx-version-min=11.0"
@@ -209,6 +213,7 @@
         "build-essential",
         "clang",
         "lld",
+        "llvm",
         "curl",
         "ca-certificates",
         "tar",
@@ -230,6 +235,9 @@
         "-fuse-ld=lld",
         "--sysroot=/sysroot"
       ],
+      "ar": "llvm-ar",
+      "ranlib": "llvm-ranlib",
+      "no_stripping": true,
       "host": {
         "cflags": [
           "-mmacosx-version-min=11.0"

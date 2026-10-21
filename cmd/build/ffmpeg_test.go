@@ -221,6 +221,9 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 		cross       []string
 		cflags      string
 		ldflags     string
+		archiver    string   // what configure writes its libraries with: empty is configure's own choice
+		indexer     string   // what writes the symbol table of those archives: empty is configure's own
+		unstripped  bool     // the programs keep what the link wrote: false is configure's own strip step
 		checked     string   // checks in this container: empty is the container that compiled them
 		checkedWith []string // what that container installs
 		reads       []string // what the plan reads out of the pair instead of running it: empty is a run
@@ -274,24 +277,30 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 			checkedWith: []string{"wine"},
 		},
 		{
-			target:    "macos-amd64",
-			container: "docker.io/debian:stable",
-			installs:  []string{"build-essential", "clang", "lld", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
-			compiler:  "clang --target=x86_64-apple-darwin20 --sysroot=/sysroot",
-			cross:     []string{"--enable-cross-compile", "--target-os=darwin", "--arch=x86_64"},
-			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
-			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
-			reads:     []string{"mh_execute", "lc_main", "lc_load_dylinker", "lc_load_libsystem"},
+			target:     "macos-amd64",
+			container:  "docker.io/debian:stable",
+			installs:   []string{"build-essential", "clang", "lld", "llvm", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
+			compiler:   "clang --target=x86_64-apple-darwin20 --sysroot=/sysroot",
+			cross:      []string{"--enable-cross-compile", "--target-os=darwin", "--arch=x86_64"},
+			cflags:     "-mmacosx-version-min=11.0 --sysroot=/sysroot",
+			ldflags:    "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
+			archiver:   "llvm-ar",
+			indexer:    "llvm-ranlib",
+			unstripped: true,
+			reads:      []string{"mh_execute", "lc_main", "lc_load_dylinker", "lc_load_libsystem"},
 		},
 		{
-			target:    "macos-arm64",
-			container: "docker.io/debian:stable",
-			installs:  []string{"build-essential", "clang", "lld", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
-			compiler:  "clang --target=arm64-apple-darwin20 --sysroot=/sysroot",
-			cross:     []string{"--enable-cross-compile", "--target-os=darwin", "--arch=aarch64"},
-			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
-			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
-			reads:     []string{"mh_execute", "lc_main", "lc_load_dylinker", "lc_load_libsystem", "lc_code_signature"},
+			target:     "macos-arm64",
+			container:  "docker.io/debian:stable",
+			installs:   []string{"build-essential", "clang", "lld", "llvm", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
+			compiler:   "clang --target=arm64-apple-darwin20 --sysroot=/sysroot",
+			cross:      []string{"--enable-cross-compile", "--target-os=darwin", "--arch=aarch64"},
+			cflags:     "-mmacosx-version-min=11.0 --sysroot=/sysroot",
+			ldflags:    "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
+			archiver:   "llvm-ar",
+			indexer:    "llvm-ranlib",
+			unstripped: true,
+			reads:      []string{"mh_execute", "lc_main", "lc_load_dylinker", "lc_load_libsystem", "lc_code_signature"},
 		},
 	}
 
@@ -413,6 +422,15 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 		}
 		if c.ldflags != "" {
 			want = append(want, "--extra-ldflags="+c.ldflags)
+		}
+		if c.archiver != "" {
+			want = append(want, "--ar="+c.archiver)
+		}
+		if c.indexer != "" {
+			want = append(want, "--ranlib="+c.indexer)
+		}
+		if c.unstripped {
+			want = append(want, "--disable-stripping")
 		}
 
 		got := configure.args
@@ -810,6 +828,31 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 		t.Error("a macOS container compile whose link flags changed reuses the cache of the binaries the old flags linked")
 	}
 
+	// The archiver and the indexer are compile inputs the way the compiler is: a pair whose libraries were
+	// archived by another tool is another pair of binaries, whatever the target's name says.
+	record = manifest.Targets["macos-arm64"]
+	record.AR = "ar"
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS compile asked of another archiver reuses the cache of the pair its record's archiver wrote")
+	}
+
+	record = manifest.Targets["macos-arm64"]
+	record.Ranlib = "ranlib"
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS compile asked of another indexer reuses the cache of the pair whose archives its record's indexer indexed")
+	}
+
+	// Keeping the programs exactly as its link wrote them is an input the way the tools are: a pair that went
+	// through a strip step is another pair of binaries than a pair that did not, whatever the target's name says.
+	record = manifest.Targets["macos-arm64"]
+	record.NoStripping = false
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS compile told to strip its programs reuses the cache of the pair its record says ships as its link wrote them")
+	}
+
 	// The mount path is not its own input: the record already spells it into the compiler invocation and the
 	// flags, and those are in the key.
 	record = manifest.Targets["macos-arm64"]
@@ -829,15 +872,17 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	// than hours, and a manifest that gains fields must not throw away the entries a compile that did not
 	// change produced: the six values below are the keys those targets had before this feature's records grew,
 	// and they are the values that must not move. The two macOS values are the keys of the compiles those
-	// records now name.
+	// records now name, and they move whenever the toolchain their records name moves — which is what happened
+	// when the two Darwin records gained the archiver and the indexer their link needs an index out of, and again
+	// when they gained the switch that keeps their programs exactly as that link wrote them.
 	want := map[string]string{
 		"freebsd-amd64": "3ea7f232258ba5ddd4f97f04b28452facda0c76e732dbc7e8950653f5c1cf8c3",
 		"linux-386":     "e6b0dcd5763abfee3ed4dcbd8888dbc3ec5d9eeeffb38378d2a7b5fa6996ab4f",
 		"linux-amd64":   "20793f67a5ed90ec23ac53388b8d15e9491294553ed753f7250feaf682ae1373",
 		"linux-arm":     "95e8a1ad5f04e1fef752f679a1f99fdd4585f85ccd9f2f96137fc34f5815ffa4",
 		"linux-arm64":   "13243228d40b52d03600f55b1f073c0ce87690e9831f541189d10cdb4420fd98",
-		"macos-amd64":   "a13e9a4f1ea266dafb16df9a2edf41895a802a90c0c408fc3149f28f0fe03c5b",
-		"macos-arm64":   "95e6460bd2066e739e664885da99fd3f80f83866564c7eb46b52bb716804a02f",
+		"macos-amd64":   "e1fbed5b5cfb8efe28d08393b51a8d4875a080ff745f8fdb2092637aca4e8294",
+		"macos-arm64":   "ee739e4fecb49ec7fd55e8de24b937c4290e0f41abc593f812b517b0af881eb7",
 		"windows-amd64": "dfe8ad310c25f9487fc8206e3d79bc62ec5b46badd22583bd367eb11577a52a5",
 	}
 
@@ -1899,6 +1944,73 @@ func TestTheMacOSCompileOnItsOwnHostNeedsNoPreparedSysroot(t *testing.T) {
 		for _, s := range plan.Steps {
 			if carries(s.args, ":/sysroot") || carries(s.args, "--sysroot") {
 				t.Errorf("%s on a %s Mac: the %s step names a sysroot that host does not prepare: %v", tc.target, tc.machine.goarch, s.label, s.args)
+			}
+		}
+	}
+}
+
+// What a record names about its container compile reaches that compile through configure's own options, which is
+// where a toolchain a record names belongs: configure writes both tools into the Makefile it produces, that Makefile
+// archives every library with the named tool, and the named indexer writes the archive's symbol table after it. The
+// choice not to strip travels the same way, because it is a switch configure answers for. A record naming none of
+// them is left to configure's own defaults, which is the right answer for a compile whose objects its container's
+// own archiver can read and whose binaries carry no signature to keep — and naming one for such a compile would move
+// the cache entry its binaries are named by with nothing measured behind it. A Mac compiling its own ffmpeg is told
+// nothing at all: the archiver of its own toolchain is the one it has, the container's names are programs its PATH
+// does not carry, and its own build signs what its own strip step leaves behind.
+func TestTheCompileIsToldTheToolchainItsRecordNames(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		record := manifest.Targets[target]
+
+		plan, err := planFFmpeg(options{target: target}, "/repo", manifest, aTreeReadyFor(t, manifest, target), theReleaseHost)
+		if err != nil {
+			t.Errorf("%s: the build refused a compile whose sysroot is prepared: %v", target, err)
+			continue
+		}
+
+		configure := stepFor(plan.Steps, "configure")
+
+		for _, asked := range []struct{ arg, why string }{
+			{arg: "--ar=" + record.AR, why: "the archives written with the archiver the container ships are refused by the link that reads them"},
+			{arg: "--ranlib=" + record.Ranlib, why: "the archives it writes carry no symbol table for that link to look a library up in"},
+			{arg: "--disable-stripping", why: "the container rewrites a program its own link signed, and nothing it has can write that signature again"},
+		} {
+			if !hasArg(configure.args, asked.arg) {
+				t.Errorf("%s: configure was not told %s, and %s: %v", target, asked.arg, asked.why, configure.args)
+			}
+		}
+	}
+
+	for _, target := range []string{"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64", "freebsd-amd64"} {
+		plan, err := planFFmpeg(options{target: target}, "/repo", manifest, aTreeReadyFor(t, manifest, target), theReleaseHost)
+		if err != nil {
+			t.Errorf("%s: the build refused a target whose record names no prepared sysroot: %v", target, err)
+			continue
+		}
+
+		if configure := stepFor(plan.Steps, "configure"); carries(configure.args, "--ar=") || carries(configure.args, "--ranlib=") || carries(configure.args, "--disable-stripping") {
+			t.Errorf("%s: configure was told which archiver writes its libraries, or told to keep its programs as its link wrote them, and nothing measured about that compile names a tool it cannot read out of its own container or a signature it has to keep: %v", target, configure.args)
+		}
+	}
+
+	for _, tc := range []struct {
+		target  string
+		machine host
+	}{
+		{target: "macos-amd64", machine: host{goos: "darwin", goarch: "arm64"}},
+		{target: "macos-arm64", machine: host{goos: "darwin", goarch: "amd64"}},
+	} {
+		plan, err := planFFmpeg(options{target: tc.target}, t.TempDir(), manifest, aNativeTree(tc.target), tc.machine)
+		if err != nil {
+			t.Errorf("%s on a %s Mac: the build refused a compile that asks nothing of the machine: %v", tc.target, tc.machine.goarch, err)
+			continue
+		}
+
+		for _, s := range plan.Steps {
+			if carries(s.args, "--ar=") || carries(s.args, "--ranlib=") || carries(s.args, "--disable-stripping") {
+				t.Errorf("%s on a %s Mac: the %s step names a choice made for a container that compile does not run in: %v", tc.target, tc.machine.goarch, s.label, s.args)
 			}
 		}
 	}
