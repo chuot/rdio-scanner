@@ -116,7 +116,17 @@ func (handler *UpdateSystemSubSectionHandler) Handle(ctx context.Context, cmd Up
 	}
 
 	if err := handler.saver.publish(ctx); err != nil {
-		return UpdateConfigurationResult{Outcome: ConfigurationSaveFailed}, err
+		// The level reached the system repository, and reading back the configuration that resulted is what
+		// failed. The server is running with the edited level of that system, so the level is named as
+		// stored and the outcome says the save as a whole did not complete: reporting the pair as a level
+		// that was not stored would describe a store the save did write to, and the operator reading it
+		// would edit a level that is already saved. The reason is filed where the refusal above files its
+		// reason.
+		result.Outcome = ConfigurationSaveFailed
+
+		handler.saver.reportFailure(ctx, err)
+
+		return result, err
 	}
 
 	handler.announce(ctx, cmd)

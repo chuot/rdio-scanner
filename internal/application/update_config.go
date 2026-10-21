@@ -138,9 +138,13 @@ const (
 	// always been answered.
 	ConfigurationSaved UpdateConfigurationOutcome = "saved"
 
-	// ConfigurationSaveFailed means the save stopped before it finished. Only a per-section
-	// save does this: an administrator saving one section is told it did not work, rather than
-	// being shown a configuration that quietly never changed.
+	// ConfigurationSaveFailed means the save stopped before it finished, and which half stopped it
+	// is read from the lists it carries with it: a section the store refused appears in Failed, a
+	// section the store holds while the announcement of the result failed appears in Saved. The two
+	// are answered the same status by the REST layer and are not the same state, and only the
+	// server's log tells them apart. Only a per-section save reports a refusal this way — a
+	// whole-configuration save answers its section failures in the log and goes on with the rest —
+	// so for a whole-configuration save this outcome means the announcement failed.
 	ConfigurationSaveFailed UpdateConfigurationOutcome = "failed"
 )
 
@@ -367,7 +371,17 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 	handler.saver.dirwatchers.Start(ctx, handler.watchesToStart(ctx, cmd.Changes, saved))
 
 	if err := handler.saver.publish(ctx); err != nil {
-		return UpdateConfigurationResult{Outcome: ConfigurationSaveFailed}, err
+		// Every section this save named is in the store, and reading back the configuration that resulted
+		// is what failed. The server is running with what was submitted; it could not tell anyone. The
+		// result carries both halves — which sections reached the store, and that the save as a whole did
+		// not complete — because the two answers send an administrator to different actions, and a result
+		// that named nothing would describe a store the save never wrote to. The reason is filed where
+		// every other refusal of this save files its reason.
+		result.Outcome = ConfigurationSaveFailed
+
+		handler.saver.reportFailure(ctx, err)
+
+		return result, err
 	}
 
 	handler.saver.announce(ctx, "")
@@ -451,7 +465,17 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 	}
 
 	if err := handler.saver.publish(ctx); err != nil {
-		return UpdateConfigurationResult{Outcome: ConfigurationSaveFailed}, err
+		// The section the page submitted is in the store, and reading back the configuration that resulted
+		// is what failed. The status the page gets is the same 417 a section the store refused gets, so the
+		// distinction has to live in the answer the use case returns and in the line the server files: the
+		// section named as stored is one the server is now running with, and a result that named nothing
+		// would tell the operator to edit it again. The reason is filed where the refusal above files its
+		// reason.
+		result.Outcome = ConfigurationSaveFailed
+
+		handler.saver.reportFailure(ctx, err)
+
+		return result, err
 	}
 
 	handler.saver.announce(ctx, cmd.Section)

@@ -241,6 +241,53 @@ func TestUpdateSystemSubSectionReportsAPersistenceFailure(t *testing.T) {
 	}
 }
 
+// TestUpdateSystemSubSectionReportsTheLevelItStoredWhenTheAnnouncementFailed is the same distinction on
+// the save the administration page makes when it saves one level of one system — its sites, its
+// talkgroups, or its units — which shares the configuration saver with the two section saves and fails
+// the same way.
+//
+// The level reached the system repository, so the server is running with the edited level. The
+// announcement that would have told every listener and every open administration connection did not
+// work. Reporting the save as though the level had never been stored describes a state the store is not
+// in, and the operator reading it re-edits a level that is already saved.
+//
+// `tags` is the repository that refuses here: the announcement reads the whole configuration, and this
+// save writes none of it, so the only failure in the run is the announcement's.
+func TestUpdateSystemSubSectionReportsTheLevelItStoredWhenTheAnnouncementFailed(t *testing.T) {
+	fixture := newSubSectionFixture()
+
+	fixture.tags.Err = errors.New("no such table: tags")
+
+	result, err := fixture.saveSubSection(1, SitesSubSection, domain.Sites{{SiteRef: 101, Label: "Metro East"}}, nil, nil)
+	if err == nil {
+		t.Fatal("Handle = nil for a configuration the server could not announce, want the failure to reach the caller")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: the announcement did not work", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != ConfigSection(SitesSubSection) {
+		t.Errorf("saved = %v, want the sites level named as stored: the system repository holds what was submitted, and the failure is the announcement's", result.Saved)
+	}
+
+	if len(result.Failed) != 0 {
+		t.Errorf("failed = %v, want no level named as not stored", result.Failed)
+	}
+
+	if fixture.systems.SubSectionLevel != string(SitesSubSection) || fixture.systems.SubSectionSystemID != 1 {
+		t.Errorf("the system repository saved level %q of system %d, want the sites of system 1 left stored", fixture.systems.SubSectionLevel, fixture.systems.SubSectionSystemID)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration could not be saved") {
+		t.Errorf("logs = %v, want the reason the announcement gave filed where every other refusal's reason is filed", fixture.subSectionLogMessages())
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 0 {
+		t.Error("a configuration the server could not read back must not be broadcast as though it had")
+	}
+}
+
 // The system the save was aimed at is deleted under the save: the level is stored, and the
 // announcement runs after it, with the system no longer in the store. The line says the level
 // changed and names no identifier, because the number it would name belongs to a row that is gone.

@@ -295,6 +295,54 @@ func TestUpdateConfigurationKeepsGoingWhenASectionCannotBeStored(t *testing.T) {
 	}
 }
 
+// TestUpdateConfigurationReportsTheSectionsItStoredWhenTheAnnouncementFailed separates a section the
+// store refused from a section the store holds while the announcement failed, on the save that answers
+// with both. They are not the same failure, and the administrator's next action is not the same action:
+// a section that never reached the store is named in `Failed`, and a section that did is one the server
+// is now running with. Reporting the second as the first tells the administrator that their
+// configuration did not change when it did, and re-submitting it is not the same as reading what the
+// server holds.
+//
+// The announcement reads the configuration the save resulted in, so the arrangement here is a repository
+// that cannot answer its read — `tags`, which this save never writes to, so the store write is not the
+// thing under test.
+func TestUpdateConfigurationReportsTheSectionsItStoredWhenTheAnnouncementFailed(t *testing.T) {
+	fixture := newConfigFixture()
+
+	fixture.tags.Err = errors.New("no such table: tags")
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	result, err := fixture.save(ConfigurationChanges{Groups: &groups})
+	if err == nil {
+		t.Fatal("Handle = nil for a configuration the server could not announce, want the failure to reach the caller")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: the announcement did not work", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != GroupsSection {
+		t.Errorf("saved = %v, want the groups section named as stored: the store holds what was submitted, and the failure is the announcement's", result.Saved)
+	}
+
+	if len(result.Failed) != 0 {
+		t.Errorf("failed = %v, want no section named as not stored: every section this save named reached the store", result.Failed)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration could not be saved") {
+		t.Errorf("logs = %v, want the reason the announcement gave filed where every other refusal's reason is filed", fixture.logs.Stored)
+	}
+
+	if len(fixture.groups.Stored) != 1 || fixture.groups.Stored[0].Label != "EMS" {
+		t.Errorf("the store holds %v, want the submitted groups left in effect: the save worked", fixture.groups.Stored)
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 0 {
+		t.Error("a configuration the server could not read back must not be broadcast as though it had")
+	}
+}
+
 func TestUpdateConfigurationAnnouncesTheNewConfigurationToListenersAndAdministrators(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -536,6 +584,55 @@ func TestUpdateConfigurationSectionReportsAFailureAndChangesNothingElse(t *testi
 	// rejected save leaves the server watching rather than silently stopped.
 	if fixture.watchers.Stops != 1 || len(fixture.watchers.Starts) != 1 {
 		t.Errorf("watchers stopped %d started %d, want them restarted even though the save failed", fixture.watchers.Stops, len(fixture.watchers.Starts))
+	}
+}
+
+// TestUpdateConfigurationSectionReportsASectionItStoredWhenTheAnnouncementFailed is the same
+// distinction on the per-section save — the one the administration page answers with a status code, and
+// so the one where a section the store holds has to be distinguishable from a section it refused,
+// because the page reports both the same way and the server's log is what tells them apart.
+//
+// The watchers are restarted before the announcement is attempted, exactly as they are for a save the
+// store refused, so an announcement failure cannot leave the server stopped watching. That is pinned
+// here as well, because the branch that fails sits after the restart.
+func TestUpdateConfigurationSectionReportsASectionItStoredWhenTheAnnouncementFailed(t *testing.T) {
+	fixture := newConfigFixture()
+
+	fixture.tags.Err = errors.New("no such table: tags")
+
+	groups := domain.Groups{{ID: 3, Label: "EMS"}}
+
+	result, err := fixture.saveSection(GroupsSection, ConfigurationChanges{Groups: &groups})
+	if err == nil {
+		t.Fatal("Handle = nil for a configuration the server could not announce, want the failure to reach the caller")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: the announcement did not work", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Saved) != 1 || result.Saved[0] != GroupsSection {
+		t.Errorf("saved = %v, want the groups section named as stored: the store holds what the page submitted, and the failure is the announcement's", result.Saved)
+	}
+
+	if len(result.Failed) != 0 {
+		t.Errorf("failed = %v, want no section named as not stored", result.Failed)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceConfig, "the configuration could not be saved") {
+		t.Errorf("logs = %v, want the reason the announcement gave filed where every other refusal's reason is filed", fixture.logs.Stored)
+	}
+
+	if len(fixture.groups.Stored) != 1 || fixture.groups.Stored[0].Label != "EMS" {
+		t.Errorf("the store holds %v, want the submitted groups left in effect: the save worked", fixture.groups.Stored)
+	}
+
+	if fixture.watchers.Stops != 1 || len(fixture.watchers.Starts) != 1 {
+		t.Errorf("watchers stopped %d started %d, want them restarted before the announcement was attempted", fixture.watchers.Stops, len(fixture.watchers.Starts))
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 0 {
+		t.Error("a configuration the server could not read back must not be broadcast as though it had")
 	}
 }
 
