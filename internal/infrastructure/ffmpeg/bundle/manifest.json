@@ -154,22 +154,105 @@
       }
     },
     "macos-amd64": {
-      "produced": "supplied",
+      "container": "docker.io/debian:stable",
+      "packages": [
+        "build-essential",
+        "clang",
+        "lld",
+        "curl",
+        "ca-certificates",
+        "tar",
+        "xz-utils",
+        "python3"
+      ],
+      "cross": [
+        "--enable-cross-compile",
+        "--target-os=darwin",
+        "--arch=x86_64"
+      ],
+      "cc": "clang --target=x86_64-apple-darwin20 --sysroot=/sysroot",
       "cflags": [
-        "-mmacosx-version-min=11.0"
+        "-mmacosx-version-min=11.0",
+        "--sysroot=/sysroot"
       ],
       "ldflags": [
-        "-mmacosx-version-min=11.0"
-      ]
+        "-mmacosx-version-min=11.0",
+        "-fuse-ld=lld",
+        "--sysroot=/sysroot"
+      ],
+      "host": {
+        "cflags": [
+          "-mmacosx-version-min=11.0"
+        ],
+        "ldflags": [
+          "-mmacosx-version-min=11.0"
+        ]
+      },
+      "sysroot": {
+        "sdk": "15.5",
+        "sha256": "51a55f4aa4b036b44a5eebb00a36abd16c8d44b4625170f4774e5968fc387987",
+        "generator": "macos-cross 8dbfdc08e33c32aca17958461e878efdce337003",
+        "mount": "/sysroot"
+      },
+      "conformance": {
+        "reads": [
+          "mh_execute",
+          "lc_main",
+          "lc_load_dylinker",
+          "lc_load_libsystem"
+        ]
+      }
     },
     "macos-arm64": {
-      "produced": "supplied",
+      "container": "docker.io/debian:stable",
+      "packages": [
+        "build-essential",
+        "clang",
+        "lld",
+        "curl",
+        "ca-certificates",
+        "tar",
+        "xz-utils",
+        "python3"
+      ],
+      "cross": [
+        "--enable-cross-compile",
+        "--target-os=darwin",
+        "--arch=aarch64"
+      ],
+      "cc": "clang --target=arm64-apple-darwin20 --sysroot=/sysroot",
       "cflags": [
-        "-mmacosx-version-min=11.0"
+        "-mmacosx-version-min=11.0",
+        "--sysroot=/sysroot"
       ],
       "ldflags": [
-        "-mmacosx-version-min=11.0"
-      ]
+        "-mmacosx-version-min=11.0",
+        "-fuse-ld=lld",
+        "--sysroot=/sysroot"
+      ],
+      "host": {
+        "cflags": [
+          "-mmacosx-version-min=11.0"
+        ],
+        "ldflags": [
+          "-mmacosx-version-min=11.0"
+        ]
+      },
+      "sysroot": {
+        "sdk": "15.5",
+        "sha256": "51a55f4aa4b036b44a5eebb00a36abd16c8d44b4625170f4774e5968fc387987",
+        "generator": "macos-cross 8dbfdc08e33c32aca17958461e878efdce337003",
+        "mount": "/sysroot"
+      },
+      "conformance": {
+        "reads": [
+          "mh_execute",
+          "lc_main",
+          "lc_load_dylinker",
+          "lc_load_libsystem",
+          "lc_code_signature"
+        ]
+      }
     },
     "freebsd-amd64": {
       "container": "docker.io/debian:stable",

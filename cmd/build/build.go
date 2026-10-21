@@ -74,11 +74,11 @@ type tool struct {
 	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
 	// through the converter's own argument list, and puts it where the server embeds it.
 	//
-	// It reports the target it has nothing to produce for: the three targets whose ffmpeg binaries are
-	// compiled on their own platform are compiled there, by a build standing on that machine, and a release run
-	// asked for one of them on a machine that is not that platform, with nothing dropped for it, has no
-	// ffmpeg to embed. That is not a failure, and the run that was asked for the whole matrix ships the
-	// archives whose ffmpeg it can produce.
+	// It reports the target it wrote no ffmpeg for, because a target with no ffmpeg to embed writes no
+	// archive, and a release run asked for the whole matrix ships the archives whose ffmpeg it did produce
+	// rather than stopping at the first target it could not fill. Every target the manifest records is
+	// compiled by every host this build runs on, so no plan reports it today, and the answer is the phase's
+	// own way of saying the same thing a compile this host cannot start would have to say.
 	ffmpeg func(options, io.Writer) (bool, error)
 
 	// prove is the gate the ffmpeg binaries pass before anything adopts them: the version line the
@@ -94,14 +94,13 @@ type tool struct {
 
 	// theRun is one program run here, handed a recording on its input, answering with what it wrote. It
 	// is how the build runs the ffmpeg binaries it compiled: the container targets run them inside the
-	// container that can run them, and a supplied target's binaries run on the machine that compiled them.
+	// container that can run them, and the binaries a target's own host compiled run on that host.
 	theRun command
 
-	// machine is the platform the build is running on. A supplied target is decided by it — the ffmpeg
-	// binaries are compiled by the machine that is the platform they run on, and adopted by every other —
-	// so the plan
-	// the run composes is composed with it, and the run asks it of the machine rather than reading it in
-	// the middle of the plan.
+	// machine is the platform the build is running on, and it is what decides which route a target's ffmpeg
+	// takes: compiled with the host's own compiler, linker, and signer on the machine that is the platform
+	// the binaries run on, and compiled in a container on every other. The plan the run composes is composed
+	// with it, and the run asks it of the machine rather than reading it in the middle of the plan.
 	machine func() host
 
 	// now is the moment the run is making the container image. The image's build time is a fact the run
@@ -254,11 +253,9 @@ func (t tool) run(args []string, stdout io.Writer) int {
 			return fail(t.errout, fmt.Errorf("%s: %w", subFFmpeg, err))
 		}
 
-		// The ffmpeg binaries this target carries are compiled on their own platform and were not
-		// dropped for it, and the message the ffmpeg phase printed says where to build them and where to
-		// drop them. A server
-		// compiled now embeds no ffmpeg and converts with whatever the host happens to have, which is
-		// not what this target releases, so the run ends here, successfully, and compiles no binary.
+		// The ffmpeg phase says it wrote no ffmpeg for this target. A server compiled now would embed no
+		// ffmpeg and convert with whatever the host happens to have, which is not what this target releases,
+		// so the run ends here, and compiles no binary.
 		if skipped {
 			return 0
 		}
@@ -347,12 +344,10 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 // release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
 // to embed.
 //
-// A target whose ffmpeg binaries are compiled on its own platform is not compiled, and not dropped for
-// it, by the machine running a matrix run: they are produced on a machine the release machine does not
-// control,
-// and a run that stopped for it would ship nothing at all. It is skipped, the run ships the rest, and
-// the run's last line names the targets that wrote no archive and says, by its exit status, that the
-// release it was asked for is not the release it wrote.
+// A target the ffmpeg phase wrote no ffmpeg for is not a failure of the run that was asked for the whole
+// matrix: it writes no archive, the run ships the archives whose ffmpeg it did produce, and its last line names
+// the targets that wrote none and says, by its exit status, that the release it was asked for is not the release
+// it wrote. A run that stopped for the first target it could not fill would ship nothing at all.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
 	// The list is decided once, before any of it runs, so that a run asked for the machine it is
 	// standing on is refused before a single application is built, and not after the first archive.
@@ -394,9 +389,8 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			return fail(t.errout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
 		}
 
-		// The message the ffmpeg phase printed for this target says which host compiles the binaries,
-		// the command that compiles them there, and the directory to drop them in. The run carries on to
-		// the targets whose ffmpeg it can produce, and says at the end which targets wrote none.
+		// The ffmpeg phase says this target wrote no ffmpeg. The run carries on to the targets whose ffmpeg
+		// it can produce, and says at the end which targets wrote none.
 		if skipped {
 			none = append(none, o.target)
 
@@ -493,9 +487,9 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	}
 
 	// The release says what it wrote, and what it wrote none for, and its exit status says whether the
-	// release it was asked for is the release it wrote. A target whose binaries are compiled on its own
-	// platform is not a failure, and a run that ships the archives it can produce is doing its job; it is
-	// an incomplete release, which is a fact a script has to be able to tell from a step that broke.
+	// release it was asked for is the release it wrote. Writing the archives whose ffmpeg it produced is the
+	// run doing its job; it is an incomplete release, which is a fact a script has to be able to tell from a
+	// step that broke.
 	if len(none) == 0 {
 		fmt.Fprintf(stdout, "%-7s %s written\n", subDist, archivesWord(len(written)))
 

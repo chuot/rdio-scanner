@@ -178,9 +178,8 @@ func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host,
 // give the machine that compiled across the two macOS architectures, because an Apple Silicon Mac runs
 // arm64 and x86-64 alike.
 //
-// The compile of a supplied target runs the binaries it produced through this, and the run that adopts a
-// drop runs the dropped binaries through this: two gates would be two standards, and a release adopting on
-// the weaker one is not visible from outside the build.
+// The compile a macOS host runs and the run that adopts a drop both run the binaries through this: two gates
+// would be two standards, and a release adopting on the weaker one is not visible from outside the build.
 func (t tool) proveSuppliedBinaries(target string, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
 	drop := suppliedDropFor(paths, target)
 

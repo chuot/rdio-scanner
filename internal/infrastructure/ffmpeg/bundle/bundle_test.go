@@ -111,7 +111,7 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 		t.Errorf("the pinned source digest is %q, want a sha256", manifest.Source.SHA256)
 	}
 
-	want := []string{"linux-amd64", "linux-arm64", "linux-arm", "linux-386", "windows-amd64", "freebsd-amd64"}
+	want := []string{"linux-amd64", "linux-arm64", "linux-arm", "linux-386", "windows-amd64", "freebsd-amd64", "macos-amd64", "macos-arm64"}
 
 	for _, target := range want {
 		record, ok := manifest.Targets[target]
@@ -128,40 +128,152 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 			t.Errorf("%s has no toolchain packages", target)
 		}
 
-		if record.Produced != "" {
-			t.Errorf("%s is compiled by this build and says it is produced by %q", target, record.Produced)
+		// What proves the pair each record names is gated where the plan is built, in the table that writes out
+		// what every compiled target is compiled with: a record naming both a run and a read is refused there.
+	}
+}
+
+// `produced` is how a record used to say that this build compiles nothing for its target and takes the binaries
+// from wherever they come from. No target is produced that way any more, and the manifest is where that is
+// settled: the field is out of both the record and the struct that reads it, so a manifest that grew one again
+// would be a manifest carrying a field nothing in the build reads. The same holds of the top-level `make`
+// program: a container installs the make its compile step runs, and the one compile that asks a host for its
+// make program reads it out of the record's host block.
+func TestNoRecordNamesAProductionKindOrATopLevelMakeProgram(t *testing.T) {
+	body, err := os.ReadFile("manifest.json")
+	if err != nil {
+		t.Fatalf("the manifest this package embeds cannot be read: %v", err)
+	}
+
+	var raw struct {
+		Targets map[string]map[string]json.RawMessage `json:"targets"`
+	}
+
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("the manifest this package embeds does not read as JSON: %v", err)
+	}
+
+	for target, fields := range raw.Targets {
+		for _, field := range []string{"produced", "make"} {
+			if _, found := fields[field]; found {
+				t.Errorf("%s names %q at the top of its record, and nothing in the build reads it", target, field)
+			}
 		}
 	}
 }
 
-// The two targets this build compiles no ffmpeg for are the ones the maintainer compiles on the platform
-// each one runs on. The manifest records the compile that runs there — its flags and its make program — and
-// records no toolchain and no check environment for them, because the machine that produces the releases
-// has neither.
+// A macOS target is compiled two ways, and one record names both: the Linux build host compiles it in a
+// container against Apple's SDK mounted inside it, and a Mac compiles it with its own compiler, its own link,
+// and its own ad-hoc signature. The record's cflags and ldflags are the container's, and they name the mount;
+// the host block is the Mac's, and it names no mount, because /sysroot is a path that exists only inside the
+// container, and no linker switch, because a Mac links with its own ld. The two lists repeat the same
+// deployment floor on purpose, and pinning both by value is what catches one being moved and the other left
+// behind: two archives for one target promising two different minimum systems.
 //
-// It records nothing about the binaries themselves. The build runs the binaries it adopts, so the binaries
-// are their own record: a manifest carrying a digest of a program the build never ran would be a promise
-// the release has no way to keep.
-func TestTheManifestRecordsTheSuppliedTargetsAsCompiledOnTheirOwnPlatform(t *testing.T) {
+// Neither list says anything about the binaries themselves. The container compile is proven by reading what it
+// produced, because nothing on the build host can run a Mach-O, and a manifest carrying a digest of a program
+// the build never ran would be a promise the release has no way to keep.
+func TestTheManifestRecordsBothWaysAMacOSTargetIsCompiled(t *testing.T) {
 	manifest := ReadManifest()
 
-	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+	type macOSRecord struct {
+		cross     string
+		cc        string
+		cflags    string
+		ldflags   string
+		hostFlags string
+		reads     string
+	}
+
+	cases := map[string]macOSRecord{
+		"macos-amd64": {
+			cross:     "--enable-cross-compile --target-os=darwin --arch=x86_64",
+			cc:        "clang --target=x86_64-apple-darwin20 --sysroot=/sysroot",
+			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
+			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
+			hostFlags: "-mmacosx-version-min=11.0",
+			reads:     "mh_execute lc_main lc_load_dylinker lc_load_libsystem",
+		},
+		"macos-arm64": {
+			cross:     "--enable-cross-compile --target-os=darwin --arch=aarch64",
+			cc:        "clang --target=arm64-apple-darwin20 --sysroot=/sysroot",
+			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
+			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
+			hostFlags: "-mmacosx-version-min=11.0",
+			reads:     "mh_execute lc_main lc_load_dylinker lc_load_libsystem lc_code_signature",
+		},
+	}
+
+	for target, c := range cases {
 		record, ok := manifest.Targets[target]
 		if !ok {
 			t.Errorf("the manifest has no record for %s, so its release archive carries no ffmpeg of its own", target)
 			continue
 		}
 
-		if record.Produced != "supplied" {
-			t.Errorf("%s is produced by %q, want supplied", target, record.Produced)
+		if record.Container != "docker.io/debian:stable" {
+			t.Errorf("%s compiles in %q, want docker.io/debian:stable", target, record.Container)
 		}
 
-		if record.Container != "" || len(record.Packages) > 0 || len(record.Cross) > 0 {
-			t.Errorf("%s is supplied and still records a toolchain: container %q, packages %v, cross %v", target, record.Container, record.Packages, record.Cross)
+		if got := strings.Join(record.Packages, " "); got != "build-essential clang lld curl ca-certificates tar xz-utils python3" {
+			t.Errorf("%s installs %q", target, got)
 		}
 
+		if got := strings.Join(record.Cross, " "); got != c.cross {
+			t.Errorf("%s configures with %q, want %q", target, got, c.cross)
+		}
+
+		if record.CC != c.cc {
+			t.Errorf("%s compiles with %q, which is the answer configure passes to the --cc= it was given", target, record.CC)
+		}
+
+		if got := strings.Join(record.CFlags, " "); got != c.cflags {
+			t.Errorf("%s compiles in its container with the cflags %q, want %q", target, got, c.cflags)
+		}
+
+		// Debian's ld is not what writes a Mach-O: for arm64 it is ld64.lld that writes the code signature the
+		// read rule asks for, and the container's linker has to be named the way FreeBSD's is.
+		if got := strings.Join(record.LDFlags, " "); got != c.ldflags {
+			t.Errorf("%s links in its container with the ldflags %q, want %q", target, got, c.ldflags)
+		}
+
+		if got := strings.Join(record.Host.CFlags, " "); got != c.hostFlags {
+			t.Errorf("%s is compiled on its own host with the cflags %q, want %q", target, got, c.hostFlags)
+		}
+
+		if got := strings.Join(record.Host.LDFlags, " "); got != c.hostFlags {
+			t.Errorf("%s is linked on its own host with the ldflags %q, want %q", target, got, c.hostFlags)
+		}
+
+		// The Command Line Tools carry a make, so the host compile asks the host's PATH for it.
+		if record.Host.Make != "" {
+			t.Errorf("%s names %s as its host make program, and the Command Line Tools carry make", target, record.Host.Make)
+		}
+
+		if record.Sysroot.SDK != "15.5" {
+			t.Errorf("%s compiles against SDK %q, want the pinned 15.5", target, record.Sysroot.SDK)
+		}
+
+		if record.Sysroot.SHA256 != "51a55f4aa4b036b44a5eebb00a36abd16c8d44b4625170f4774e5968fc387987" {
+			t.Errorf("%s compiles against the tree whose digest is %s, want the digest the harness measured", target, record.Sysroot.SHA256)
+		}
+
+		if record.Sysroot.Generator != "macos-cross 8dbfdc08e33c32aca17958461e878efdce337003" {
+			t.Errorf("%s compiles against the tree prepared by %q, which is not the pinned macos-cross revision", target, record.Sysroot.Generator)
+		}
+
+		if record.Sysroot.Mount != "/sysroot" {
+			t.Errorf("%s mounts its sysroot at %q, want /sysroot", target, record.Sysroot.Mount)
+		}
+
+		if got := strings.Join(record.Conformance.Reads, " "); got != c.reads {
+			t.Errorf("%s is proven by reading %q, want %q", target, got, c.reads)
+		}
+
+		// Nothing here, or on the container's own distribution, runs a Mach-O, so no macOS record names a machine
+		// it has to be run on.
 		if record.Conformance.Container != "" || len(record.Conformance.Packages) > 0 || len(record.Conformance.Run) > 0 {
-			t.Errorf("%s is supplied and still records a check environment: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
+			t.Errorf("%s names a way of running the binaries it compiles: container %q, run %v", target, record.Conformance.Container, record.Conformance.Run)
 		}
 	}
 }
@@ -212,8 +324,9 @@ func TestARecordNamingASysrootImageParses(t *testing.T) {
 		t.Errorf("freebsd-amd64 links with the ldflags %q", got)
 	}
 
-	if record.Produced != "" {
-		t.Errorf("freebsd-amd64 says it is produced by %q, and this build compiles it in a container", record.Produced)
+	// A FreeBSD target's host is not a host this build ever stands on, so its record names no host compile.
+	if len(record.Host.CFlags) > 0 || len(record.Host.LDFlags) > 0 || record.Host.Make != "" {
+		t.Errorf("freebsd-amd64 names a host compile: cflags %v, ldflags %v, make %q", record.Host.CFlags, record.Host.LDFlags, record.Host.Make)
 	}
 }
 
@@ -315,45 +428,6 @@ func TestTheManifestCarriesNoDigestOfAnyProgram(t *testing.T) {
 
 		if _, found := fields["programs"]; found {
 			t.Errorf("%s carries a programs field: the build has no digest to write into it, and the operator has no digest to commit", target)
-		}
-	}
-}
-
-// The ffmpeg binaries of a supplied target are compiled on the platform the target runs on, and the
-// manifest is where that compile is written down: the flags that set the floor the binary declares and link
-// it the way the target needs, and the make program the build runs. The macOS records name no make program,
-// because the Command Line Tools carry one.
-func TestTheSuppliedRecordsNameTheCompileTheirHostRuns(t *testing.T) {
-	manifest := ReadManifest()
-
-	type native struct {
-		cflags  []string
-		ldflags []string
-		make    string
-	}
-
-	want := map[string]native{
-		"macos-amd64": {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
-		"macos-arm64": {cflags: []string{"-mmacosx-version-min=11.0"}, ldflags: []string{"-mmacosx-version-min=11.0"}},
-	}
-
-	for target, w := range want {
-		record, ok := manifest.Targets[target]
-		if !ok {
-			t.Errorf("the manifest has no record for %s", target)
-			continue
-		}
-
-		if got := strings.Join(record.CFlags, " "); got != strings.Join(w.cflags, " ") {
-			t.Errorf("%s compiles with the cflags %v, want %v", target, record.CFlags, w.cflags)
-		}
-
-		if got := strings.Join(record.LDFlags, " "); got != strings.Join(w.ldflags, " ") {
-			t.Errorf("%s links with the ldflags %v, want %v", target, record.LDFlags, w.ldflags)
-		}
-
-		if record.Make != w.make {
-			t.Errorf("%s runs %s as its make program, want %q", target, record.Make, w.make)
 		}
 	}
 }

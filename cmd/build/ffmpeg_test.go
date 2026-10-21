@@ -46,6 +46,24 @@ func anUncompiledTree() ffmpegState {
 	return ffmpegState{program: podmanProgram}
 }
 
+// aManifestWithOtherTarget is the manifest the repository carries with one target's record replaced, which is
+// how a test asks what would move if a record moved. The manifest struct copies by value and its targets map is
+// shared, so the replaced record goes into a map of its own.
+func aManifestWithOtherTarget(target string, record bundle.Target) bundle.Manifest {
+	manifest := bundle.ReadManifest()
+
+	targets := map[string]bundle.Target{}
+	for name, rec := range manifest.Targets {
+		targets[name] = rec
+	}
+
+	targets[target] = record
+
+	manifest.Targets = targets
+
+	return manifest
+}
+
 func stepNamed(plan ffmpegPlan, label string) (step, bool) {
 	for _, s := range plan.Steps {
 		if s.label == label {
@@ -177,7 +195,7 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // What each container target is compiled with, and where its compiled programs are run to be checked, is
 // recorded one target at a time. The plan is where the build commits to that answer, so the values below are
 // written out instead of read back off the manifest: the container work this release is doing reaches those
-// records, and a record that moves by mistake has to trip a test rather than quietly recompile six targets
+// records, and a record that moves by mistake has to trip a test rather than quietly recompile eight targets
 // under a toolchain nobody chose.
 //
 // The configure recipe is not repeated here. It is the one list these targets share, and it is gated where it
@@ -187,8 +205,9 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // it links with, the container its programs are checked in when a run is what proves them, and the things the
 // build reads out of the pair when no run can.
 //
-// None of these targets is compiled on the platform its binaries run on, and none is skipped: a compiled record
-// that answered either way would build a server around a target the build quietly gave up on.
+// None of these targets is compiled with the toolchain of the machine that runs this build, and none is left
+// uncompiled. The two macOS records are here because the machine that produces the releases compiles them in a
+// container like every other target; what a Mac does instead is gated where the host is the target.
 func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -254,6 +273,26 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 			checked:     "docker.io/debian:stable",
 			checkedWith: []string{"wine"},
 		},
+		{
+			target:    "macos-amd64",
+			container: "docker.io/debian:stable",
+			installs:  []string{"build-essential", "clang", "lld", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
+			compiler:  "clang --target=x86_64-apple-darwin20 --sysroot=/sysroot",
+			cross:     []string{"--enable-cross-compile", "--target-os=darwin", "--arch=x86_64"},
+			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
+			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
+			reads:     []string{"mh_execute", "lc_main", "lc_load_dylinker", "lc_load_libsystem"},
+		},
+		{
+			target:    "macos-arm64",
+			container: "docker.io/debian:stable",
+			installs:  []string{"build-essential", "clang", "lld", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
+			compiler:  "clang --target=arm64-apple-darwin20 --sysroot=/sysroot",
+			cross:     []string{"--enable-cross-compile", "--target-os=darwin", "--arch=aarch64"},
+			cflags:    "-mmacosx-version-min=11.0 --sysroot=/sysroot",
+			ldflags:   "-mmacosx-version-min=11.0 -fuse-ld=lld --sysroot=/sysroot",
+			reads:     []string{"mh_execute", "lc_main", "lc_load_dylinker", "lc_load_libsystem", "lc_code_signature"},
+		},
 	}
 
 	for _, c := range cases {
@@ -273,8 +312,9 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 			t.Errorf("%s says it is compiled on the machine running this build, and %s is compiled in a container",
 				c.target, c.target)
 		}
-		if plan.Skipped {
-			t.Errorf("%s is skipped by a build whose record says it compiles it in a container", c.target)
+		if plan.Host {
+			t.Errorf("%s takes the host route — its own compile, an adoption, or a cache entry this machine made — and its record names a container that compiles it",
+				c.target)
 		}
 
 		wantFile := c.from
@@ -395,73 +435,136 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 	}
 }
 
-// The FreeBSD compile does not care which machine it is running on, because the machine is no longer part of
-// the answer: the container carries the compiler and the headers, libraries and startup files of the operating
-// system the target runs on. A Mac running the release compiles the FreeBSD ffmpeg exactly as this host does,
-// and a plan that answered otherwise would either ask that Mac for a FreeBSD toolchain it does not have, or
-// skip a target its own record says it compiles.
+// The machine a build runs on is not part of what a container target is compiled with: the container carries the
+// compiler and the headers, libraries and startup files of the operating system the target runs on. A Mac
+// producing a release compiles the FreeBSD ffmpeg exactly as this host does, and compiles the macOS ffmpeg in a
+// container too — the sysroot that compile reads is mounted inside the container, and the host is asked for
+// nothing beside its own container engine. The hosts below are every host but the one a target's own toolchain
+// belongs to: the host that is asked for its own compiler is gated where the host is the target.
 //
-// What the plan does with the pair once it is compiled is the same on all three hosts as well: it reads it,
-// because none of them can start a FreeBSD program.
-func TestTheFfmpegForFreeBSDIsCompiledInAContainerWhateverHostRunsTheBuild(t *testing.T) {
+// The pair is proven the same way on every host the compile runs on, because the proof travels with the record
+// and not with the machine: what none of these hosts can start is read out of the binaries, and the step that
+// compiled them says so.
+func TestEveryContainerTargetIsCompiledInAContainerWhateverHostRunsTheBuild(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
-	for _, machine := range []host{theReleaseHost, {goos: "darwin", goarch: "arm64"}, {goos: "darwin", goarch: "amd64"}} {
-		plan, err := planFFmpeg(options{target: "freebsd-amd64"}, "/repo", manifest, anUncompiledTree(), machine)
-		if err != nil {
-			t.Errorf("the build refused freebsd-amd64 on a %s %s host: %v", machine.goos, machine.goarch, err)
-			continue
+	macHosts := []host{{goos: "darwin", goarch: "arm64"}, {goos: "darwin", goarch: "amd64"}}
+
+	cases := []struct {
+		target   string
+		machines []host
+	}{
+		// A FreeBSD toolchain belongs to no host this build ever stands on, and this is the target whose plan
+		// used to ask the host for one.
+		{target: "freebsd-amd64", machines: append(append([]host{theReleaseHost}, macHosts...), host{goos: "linux", goarch: "arm64"})},
+
+		// A Mac is the one host a macOS target's ffmpeg is compiled on with its own toolchain, and every other
+		// host — including a Mac of the other architecture — compiles it in a container. Those hosts are here.
+		{target: "macos-amd64", machines: []host{theReleaseHost, {goos: "linux", goarch: "arm64"}}},
+		{target: "macos-arm64", machines: []host{theReleaseHost}},
+
+		// A Mac producing a release does not compile a Linux or a Windows ffmpeg with the tools it happens to
+		// have, and this is the state the host route used to be keyed on a manifest field instead of on.
+		{target: "linux-amd64", machines: macHosts},
+		{target: "linux-arm64", machines: macHosts},
+		{target: "windows-amd64", machines: macHosts},
+	}
+
+	for _, c := range cases {
+		record := manifest.Targets[c.target]
+
+		wantFile := record.Containerfile
+		if wantFile == "" {
+			wantFile = "Containerfile.ffmpeg"
 		}
 
-		if plan.Native {
-			t.Errorf("freebsd-amd64 on a %s %s host says it is compiled with that host's own toolchain, and the FreeBSD sysroot is in the container, not on the host",
-				machine.goos, machine.goarch)
-		}
+		for _, machine := range c.machines {
+			plan, err := planFFmpeg(options{target: c.target}, "/repo", manifest, anUncompiledTree(), machine)
+			if err != nil {
+				t.Errorf("the build refused %s on a %s %s host: %v", c.target, machine.goos, machine.goarch, err)
+				continue
+			}
 
-		if plan.Skipped {
-			t.Errorf("freebsd-amd64 on a %s %s host is skipped, and the release run ships no FreeBSD binary at all",
-				machine.goos, machine.goarch)
-		}
+			if plan.Native {
+				t.Errorf("%s on a %s %s host says it is compiled with that host's own toolchain, and %s is compiled in a container",
+					c.target, machine.goos, machine.goarch, c.target)
+			}
 
-		image, ok := stepNamed(plan, "image")
-		if !ok {
-			t.Errorf("freebsd-amd64 on a %s %s host has no step that prepares the container it compiles in",
-				machine.goos, machine.goarch)
-			continue
-		}
+			if plan.Host {
+				t.Errorf("%s on a %s %s host takes the host route, and the host standing here is not the platform a %s ffmpeg is compiled on",
+					c.target, machine.goos, machine.goarch, c.target)
+			}
 
-		if file := theFlagValue(image.args, "-f"); file != "Containerfile.ffmpeg.freebsd" {
-			t.Errorf("freebsd-amd64 on a %s %s host builds its toolchain image from %q, want Containerfile.ffmpeg.freebsd: the shared file carries no FreeBSD sysroot",
-				machine.goos, machine.goarch, file)
-		}
+			image, ok := stepNamed(plan, "image")
+			if !ok {
+				t.Errorf("%s on a %s %s host has no step that prepares the container it compiles in",
+					c.target, machine.goos, machine.goarch)
+				continue
+			}
 
-		sysroot := containerBuildArgs(image.args)["sysroot_image"]
-		if sysroot != "docker.io/freebsd/freebsd-toolchain:15.1" {
-			t.Errorf("freebsd-amd64 on a %s %s host copies its sysroot out of %q, want docker.io/freebsd/freebsd-toolchain:15.1",
-				machine.goos, machine.goarch, sysroot)
-		}
+			built := containerBuildArgs(image.args)
 
-		// Nothing on any of these hosts starts a FreeBSD program, so the plan spends no step preparing a
-		// container to run the pair in, and the step that compiles it says the pair was compiled and not run.
-		if _, has := stepNamed(plan, "runner"); has {
-			t.Errorf("freebsd-amd64 on a %s %s host prepares a container to run the compiled pair in, and no host runs a FreeBSD program",
-				machine.goos, machine.goarch)
-		}
+			if file := theFlagValue(image.args, "-f"); file != wantFile {
+				t.Errorf("%s on a %s %s host builds its toolchain image from %q, want %s",
+					c.target, machine.goos, machine.goarch, file, wantFile)
+			}
 
-		if want := []string{"elf64", "exec", "x86_64", "osabi_freebsd", "static", "comment"}; !sameArgs(plan.Reads, want) {
-			t.Errorf("freebsd-amd64 on a %s %s host reads %v out of the pair, want %v",
-				machine.goos, machine.goarch, plan.Reads, want)
-		}
+			if built["base"] != record.Container {
+				t.Errorf("%s on a %s %s host compiles in %q, want the container its record names, %s",
+					c.target, machine.goos, machine.goarch, built["base"], record.Container)
+			}
 
-		make, ok := stepNamed(plan, "make")
-		if !ok {
-			t.Errorf("freebsd-amd64 on a %s %s host has no step that compiles the pair", machine.goos, machine.goarch)
-			continue
-		}
+			// The image installs what its record names. A target whose pair is started by an interpreter, and
+			// started in the container that compiled it because no other container is named, carries that
+			// interpreter in the same image: an arm64 pair checked on a build host that is not arm64 needs the
+			// translator in the place the pair is run.
+			wantInstalled := append([]string{}, record.Packages...)
 
-		if !strings.Contains(make.result, "compiled and not run") {
-			t.Errorf("freebsd-amd64 on a %s %s host compiles the pair in its compile step as %q, and nothing in that run starts it",
-				machine.goos, machine.goarch, make.result)
+			if record.Conformance.Container == "" {
+				wantInstalled = append(wantInstalled, record.Conformance.Packages...)
+			}
+
+			if built["packages"] != strings.Join(wantInstalled, " ") {
+				t.Errorf("%s on a %s %s host installs %q, want %s",
+					c.target, machine.goos, machine.goarch, built["packages"], strings.Join(wantInstalled, " "))
+			}
+
+			sysrootImage, hasSysroot := built["sysroot_image"]
+
+			if record.SysrootImage == "" && hasSysroot {
+				t.Errorf("%s on a %s %s host copies a sysroot out of %q, which its record does not name: %v",
+					c.target, machine.goos, machine.goarch, sysrootImage, image.args)
+			}
+
+			if record.SysrootImage != "" && sysrootImage != record.SysrootImage {
+				t.Errorf("%s on a %s %s host copies its sysroot out of %q, want %s",
+					c.target, machine.goos, machine.goarch, sysrootImage, record.SysrootImage)
+			}
+
+			// What proves the pair travels with the record and not with the machine: a pair no host in this list
+			// can start is read out of the binaries the compile produced.
+			if !sameArgs(plan.Reads, record.Conformance.Reads) {
+				t.Errorf("%s on a %s %s host proves the pair by reading %v, want %v",
+					c.target, machine.goos, machine.goarch, plan.Reads, record.Conformance.Reads)
+			}
+
+			make, ok := stepNamed(plan, "make")
+			if !ok {
+				t.Errorf("%s on a %s %s host has no step that compiles the pair", c.target, machine.goos, machine.goarch)
+				continue
+			}
+
+			notRun := strings.Contains(make.result, "compiled and not run")
+
+			if len(record.Conformance.Reads) > 0 && !notRun {
+				t.Errorf("%s on a %s %s host compiles a pair nothing on that host can start, and its compile step says %q",
+					c.target, machine.goos, machine.goarch, make.result)
+			}
+
+			if len(record.Conformance.Reads) == 0 && notRun {
+				t.Errorf("%s on a %s %s host says %q, and what follows in that run does start that pair",
+					c.target, machine.goos, machine.goarch, make.result)
+			}
 		}
 	}
 }
@@ -573,6 +676,16 @@ func TestTheBuildAcceptsTheSourceTarballItPinned(t *testing.T) {
 	}
 }
 
+// Everything the ffmpeg compile reads is part of the name of the cache entry its binaries land in, and the name
+// is computed from the manifest and the target rather than carried in either: a warm entry is the binaries that
+// exact compile produced, and a compile asked with anything else in it is a different set of binaries. The
+// inputs are the release and its source, the recipe, the target, and what that target's record names — its
+// container and the file that image is built from, what gets installed in it, the image a sysroot is copied out
+// of, the compiler invocation a cross compile names, the flags it compiles and links with, the sysroot an
+// operator prepared, and the flags and make program of the compile this machine's own toolchain runs.
+//
+// What proves a pair is not among them, because a cache hit re-runs no proof: a proof name in the key would
+// throw away warm entries for a change that changed nothing that was compiled.
 func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -609,140 +722,128 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	record := manifest.Targets["linux-arm64"]
 	record.Cross = []string{"--enable-cross-compile", "--arch=aarch64"}
 
-	withCross := manifest
-	withCross.Targets = map[string]bundle.Target{"linux-arm64": record}
-
-	if cacheKey(withCross, "linux-arm64") == same {
+	if cacheKey(aManifestWithOtherTarget("linux-arm64", record), "linux-arm64") == same {
 		t.Error("a changed toolchain reuses the previous toolchain's cache")
 	}
-}
 
-// A supplied target's cache entry is named by the manifest's record and the target, exactly as a compiled
-// target's is. The binaries themselves are not part of the name of the entry they land in: the cache is
-// this machine's own tree, gitignored, and what this machine compiled is what sits in it. An Apple Silicon
-// Mac and an Intel Mac keying the Intel target alike is not a collision, because each machine's cache
-// holds only what that machine compiled.
-//
-// The six compiled targets' keys are pinned by value here. A warm cache is the only reason a release run
-// takes minutes rather than hours, and a manifest that gains a field must not throw it away: a compiled
-// record has no supplied fields at all, and its key is the compile's inputs and nothing else. The values
-// below are the compile as it reads today, so a recipe that gains a switch moves them — which is the key
-// doing its job, and the release run that follows recompiles those six targets once.
-func TestTheFfmpegCacheKeyOfSuppliedBinariesIsTheRecipeAndTheTarget(t *testing.T) {
-	manifest := bundle.ReadManifest()
-
-	supplied := cacheKey(manifest, "macos-arm64")
-
-	// The record the manifest carries, copied and changed: the map is shared when the manifest struct is
-	// copied, so a test that wants a second record builds a second map.
-	withFlags := bundle.ReadManifest()
-	targets := map[string]bundle.Target{}
-	for name, record := range withFlags.Targets {
-		targets[name] = record
-	}
-	record := targets["macos-arm64"]
-	record.LDFlags = append(append([]string{}, record.LDFlags...), "-mmacosx-version-min=12.0")
-	targets["macos-arm64"] = record
-	withFlags.Targets = targets
-
-	if cacheKey(withFlags, "macos-arm64") == supplied {
-		t.Error("a supplied record whose flags changed reuses the cache of the binaries the old flags built")
-	}
-
-	withMake := bundle.ReadManifest()
-	targets = map[string]bundle.Target{}
-	for name, rec := range withMake.Targets {
-		targets[name] = rec
-	}
-	record = targets["macos-arm64"]
-	record.Make = "make"
-	targets["macos-arm64"] = record
-	withMake.Targets = targets
-
-	if cacheKey(withMake, "macos-arm64") == supplied {
-		t.Error("a supplied record naming a different make program reuses the cache of the binaries the old one built")
-	}
-
-	compiled := bundle.ReadManifest()
-	targets = map[string]bundle.Target{}
-	for name, rec := range compiled.Targets {
-		targets[name] = rec
-	}
-	record = targets["macos-arm64"]
-	record.Produced = ""
-	targets["macos-arm64"] = record
-	compiled.Targets = targets
-
-	if cacheKey(compiled, "macos-arm64") == supplied {
-		t.Error("a target this build compiles an ffmpeg for keeps the cache entry of the binaries it no longer ships")
-	}
-
-	// A FreeBSD record's own three fields are compile inputs: the file its toolchain image is built from, the
-	// image its sysroot is copied out of, and the compiler invocation that reaches configure. Changing any of
-	// them is asking for a different compile, and reusing the warm entry the old one produced would ship a
-	// binary built against a sysroot or a toolchain nobody named.
+	// A FreeBSD compile's own three fields: the file its toolchain image is built from, the image its sysroot is
+	// copied out of, and the compiler invocation that reaches configure. Reusing the warm entry the old one
+	// produced would ship a binary built against a sysroot or a toolchain nobody named.
 	freebsd := cacheKey(manifest, "freebsd-amd64")
 
-	otherFile := bundle.ReadManifest()
-	targets = map[string]bundle.Target{}
-	for name, rec := range otherFile.Targets {
-		targets[name] = rec
-	}
-	record = targets["freebsd-amd64"]
+	record = manifest.Targets["freebsd-amd64"]
 	record.Containerfile = "Containerfile.ffmpeg"
-	targets["freebsd-amd64"] = record
-	otherFile.Targets = targets
 
-	if cacheKey(otherFile, "freebsd-amd64") == freebsd {
+	if cacheKey(aManifestWithOtherTarget("freebsd-amd64", record), "freebsd-amd64") == freebsd {
 		t.Error("a FreeBSD compile asked of the shared Containerfile reuses the cache of the one asked of the file that carries a FreeBSD sysroot")
 	}
 
-	otherSysroot := bundle.ReadManifest()
-	targets = map[string]bundle.Target{}
-	for name, rec := range otherSysroot.Targets {
-		targets[name] = rec
-	}
-	record = targets["freebsd-amd64"]
+	record = manifest.Targets["freebsd-amd64"]
 	record.SysrootImage = "docker.io/freebsd/freebsd-toolchain:15.0"
-	targets["freebsd-amd64"] = record
-	otherSysroot.Targets = targets
 
-	if cacheKey(otherSysroot, "freebsd-amd64") == freebsd {
+	if cacheKey(aManifestWithOtherTarget("freebsd-amd64", record), "freebsd-amd64") == freebsd {
 		t.Error("a FreeBSD record naming another sysroot image reuses the cache of the binaries the old sysroot built")
 	}
 
-	otherCompiler := bundle.ReadManifest()
-	targets = map[string]bundle.Target{}
-	for name, rec := range otherCompiler.Targets {
-		targets[name] = rec
-	}
-	record = targets["freebsd-amd64"]
+	record = manifest.Targets["freebsd-amd64"]
 	record.CC = "clang"
-	targets["freebsd-amd64"] = record
-	otherCompiler.Targets = targets
 
-	if cacheKey(otherCompiler, "freebsd-amd64") == freebsd {
+	if cacheKey(aManifestWithOtherTarget("freebsd-amd64", record), "freebsd-amd64") == freebsd {
 		t.Error("a FreeBSD compile whose compiler names no target triple reuses the cache of the one that named one")
 	}
 
-	// The two macOS targets are compiled by the same host with the same recipe and differ only by the
-	// architecture the compile is told to produce, so their keys have to differ.
-	if cacheKey(manifest, "macos-amd64") == cacheKey(manifest, "macos-arm64") {
-		t.Error("macos-amd64 and macos-arm64 share a cache key, and one Mac compiling both writes one entry")
+	// What proves a pair is not a compile input: a cache hit re-runs no proof, and a proof name in the key
+	// would throw away the entry a compile that changed nothing produced.
+	record = manifest.Targets["linux-arm64"]
+	record.Conformance.Reads = []string{"elf64", "exec"}
+
+	if cacheKey(aManifestWithOtherTarget("linux-arm64", record), "linux-arm64") != same {
+		t.Error("naming what to read out of a pair moves the cache entry its unchanged compile produced")
 	}
 
+	// A macOS compile reads a sysroot somebody prepared outside both repositories, so that tree is one of the
+	// inputs its entry is named by: an SDK version moved, or a tree re-prepared from another source, is a
+	// different pair of binaries wearing the same target's name.
+	darwin := cacheKey(manifest, "macos-arm64")
+
+	record = manifest.Targets["macos-arm64"]
+	record.Sysroot.SDK = "15.4"
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS compile asked of another SDK reuses the cache of the binaries the pinned SDK built")
+	}
+
+	record = manifest.Targets["macos-arm64"]
+	record.Sysroot.SHA256 = strings.Repeat("0", 64)
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS compile asked of a re-prepared tree reuses the cache of the binaries the tree this record pins built")
+	}
+
+	record = manifest.Targets["macos-arm64"]
+	record.Sysroot.Generator = "macos-cross deadbeef"
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS compile asked of a tree another revision prepared reuses the cache of the binaries the pinned preparation built")
+	}
+
+	// The host block is the compile a Mac runs with its own toolchain, and it is part of the name too: the two
+	// compiles of one macOS target land in one entry, and each one's inputs move it.
+	record = manifest.Targets["macos-arm64"]
+	record.Host.LDFlags = append(append([]string{}, record.Host.LDFlags...), "-mmacosx-version-min=12.0")
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS host compile whose flags changed reuses the cache of the binaries the old flags built")
+	}
+
+	record = manifest.Targets["macos-arm64"]
+	record.Host.Make = "gmake"
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS host compile running another make program reuses the cache of the binaries the old one built")
+	}
+
+	record = manifest.Targets["macos-arm64"]
+	record.LDFlags = append(append([]string{}, record.LDFlags...), "-Wl,-z,now")
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") == darwin {
+		t.Error("a macOS container compile whose link flags changed reuses the cache of the binaries the old flags linked")
+	}
+
+	// The mount path is not its own input: the record already spells it into the compiler invocation and the
+	// flags, and those are in the key.
+	record = manifest.Targets["macos-arm64"]
+	record.Sysroot.Mount = "/opt/sysroot"
+
+	if cacheKey(aManifestWithOtherTarget("macos-arm64", record), "macos-arm64") != darwin {
+		t.Error("a record naming only another mount path for the same sysroot and the same flags moves the cache it warmed")
+	}
+
+	// The two macOS targets differ only by the architecture their records tell the compile to produce, so their
+	// keys have to differ.
+	if cacheKey(manifest, "macos-amd64") == cacheKey(manifest, "macos-arm64") {
+		t.Error("macos-amd64 and macos-arm64 share a cache key, and one machine compiling both writes one entry")
+	}
+
+	// The eight keys are pinned by value. A warm cache is the only reason a release run takes minutes rather
+	// than hours, and a manifest that gains fields must not throw away the entries a compile that did not
+	// change produced: the six values below are the keys those targets had before this feature's records grew,
+	// and they are the values that must not move. The two macOS values are the keys of the compiles those
+	// records now name.
 	want := map[string]string{
 		"freebsd-amd64": "3ea7f232258ba5ddd4f97f04b28452facda0c76e732dbc7e8950653f5c1cf8c3",
 		"linux-386":     "e6b0dcd5763abfee3ed4dcbd8888dbc3ec5d9eeeffb38378d2a7b5fa6996ab4f",
 		"linux-amd64":   "20793f67a5ed90ec23ac53388b8d15e9491294553ed753f7250feaf682ae1373",
 		"linux-arm":     "95e8a1ad5f04e1fef752f679a1f99fdd4585f85ccd9f2f96137fc34f5815ffa4",
 		"linux-arm64":   "13243228d40b52d03600f55b1f073c0ce87690e9831f541189d10cdb4420fd98",
+		"macos-amd64":   "a13e9a4f1ea266dafb16df9a2edf41895a802a90c0c408fc3149f28f0fe03c5b",
+		"macos-arm64":   "95e6460bd2066e739e664885da99fd3f80f83866564c7eb46b52bb716804a02f",
 		"windows-amd64": "dfe8ad310c25f9487fc8206e3d79bc62ec5b46badd22583bd367eb11577a52a5",
 	}
 
-	for _, target := range []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"} {
+	for _, target := range []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "macos-amd64", "macos-arm64", "windows-amd64"} {
 		if got := cacheKey(manifest, target); got != want[target] {
-			t.Errorf("%s's cache key is %s, want %s: something the compiled compile reads has moved, and the warm entries move with it — when the move is the recipe, record the key it computes now", target, got, want[target])
+			t.Errorf("%s's cache key is %s, want %s: something the compile reads has moved, and the warm entries move with it — when the move is the recipe or a record, record the key it computes now", target, got, want[target])
 		}
 	}
 }
@@ -967,13 +1068,13 @@ func carries(args []string, want string) bool {
 	return false
 }
 
-// The supplied targets are the ones this build compiles no ffmpeg for in a container: the ffmpeg binaries
-// are compiled on the platform the target runs on, dropped where the build finds it, and run by the run
-// that adopts them. These are the decisions the ffmpeg phase makes about binaries it must run to know
-// anything about them, and the plan takes them before anything is written.
-
 // aDropOfSuppliedBinaries drops the binaries a maintainer builds for one target and returns the manifest this
 // repository carries. Nothing is recorded about them: the run that adopts them is the run that proves them.
+//
+// A drop is the way binaries reach this build from the machine they run on: they are compiled there, dropped
+// where the build finds them, and run by the run that adopts them. These are the decisions the ffmpeg phase
+// makes about binaries it must run to know anything about them, and the plan takes them before anything is
+// written.
 func aDropOfSuppliedBinaries(t *testing.T, repo string, target string) bundle.Manifest {
 	t.Helper()
 
@@ -1007,35 +1108,6 @@ func aDropOfSuppliedBinariesWith(t *testing.T, repo string, target string, ffmpe
 	return bundle.ReadManifest()
 }
 
-// Binaries that were not dropped are the ordinary state of a release run on a machine that does not have
-// the Mac in front of it. It is not a failure, and the build says where to build them and where to drop
-// them.
-func TestASuppliedTargetWhoseBinariesWereNotDroppedProducesNothing(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64"} {
-		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
-		if err != nil {
-			t.Errorf("%s: binaries that were simply not dropped failed the run: %v", target, err)
-			continue
-		}
-
-		if len(plan.Steps) != 0 {
-			t.Errorf("%s: the build has %d steps for a target with nothing dropped", target, len(plan.Steps))
-		}
-
-		if !plan.Skipped {
-			t.Errorf("%s: the plan does not mark the target skipped, so the release run builds a server and an archive for nothing", target)
-		}
-
-		if !strings.Contains(plan.Says, "internal/infrastructure/ffmpeg/bundle/"+target) {
-			t.Errorf("%s: the message %q does not name the directory to drop the binaries in", target, plan.Says)
-		}
-
-		if !strings.Contains(plan.Says, "go run ./cmd/build ffmpeg "+target) {
-			t.Errorf("%s: the message %q does not name the command that compiles them where they run", target, plan.Says)
-		}
-	}
-}
-
 // The machine code the file holds is the one thing the build reads of binaries it did not compile, and it
 // reads it before anything else: an Apple Silicon Mac runs the arm64 binaries and the x86-64 ones alike,
 // so the only thing that says the Intel archive carries Intel code is the header. The refusal names the
@@ -1047,7 +1119,7 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 
 	manifest := aDropOfSuppliedBinariesWith(t, repo, "macos-arm64", intel, intel)
 
-	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
+	_, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
 	if err == nil {
 		t.Fatal("the build adopted x86-64 binaries for macos-arm64, which runs arm64")
 	}
@@ -1057,29 +1129,36 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 	}
 }
 
-// Binaries dropped for a target the build cannot run in a container are adopted: the plan says so, and the
-// run that adopts them runs them first. The plan carries the adoption, because the licence text the archive
-// carries is written from that run.
-func TestTheBuildAdoptsTheSuppliedBinariesDroppedForItsTarget(t *testing.T) {
+// A pair dropped into a target's bundle directory is adopted by the targets this build adopts on, and after
+// this feature that is the two macOS targets on a Mac. On the machine that produces the releases a macOS
+// target is a target it compiles in a container, and the pair sitting in that target's directory is not read:
+// it stays there, and every server binary built for that target embeds it beside the gzipped pair, which is
+// the cost COMPILING.md names.
+func TestADroppedPairIsAdoptedOnlyForAMacOSTargetOnAMacHost(t *testing.T) {
 	repo := t.TempDir()
 
 	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
 
-	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
+	onTheBuildHost, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, anUncompiledTree(), theReleaseHost)
 	if err != nil {
-		t.Fatalf("the build refused the binaries that were dropped: %v", err)
+		t.Fatalf("the build refused the macOS target its record says it compiles: %v", err)
 	}
 
-	if plan.Skipped {
-		t.Error("the build skipped binaries that were dropped for it")
+	if onTheBuildHost.Adopts {
+		t.Error("the machine that produces the releases adopted binaries it did not compile, when its own record names the container that compiles them")
 	}
 
-	if !plan.Adopts {
-		t.Error("the plan does not carry the adoption, so the run publishes a cache entry it never adopted into")
+	if _, ok := stepNamed(onTheBuildHost, "make"); !ok {
+		t.Errorf("the build compiled no pair for macos-arm64 on the machine that compiles it: %d steps", len(onTheBuildHost.Steps))
 	}
 
-	if !strings.Contains(plan.Says, "supplied") {
-		t.Errorf("the message %q does not say the ffmpeg is supplied", plan.Says)
+	onItsOwnHost, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
+	if err != nil {
+		t.Fatalf("the build refused the binaries dropped for it on the host that is the target: %v", err)
+	}
+
+	if !onItsOwnHost.Adopts {
+		t.Error("the host standing on the target adopted nothing, and the binaries are sitting in the directory it embeds")
 	}
 }
 
@@ -1097,7 +1176,10 @@ func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 		t.Fatalf("adopting the binaries: %v", err)
 	}
 
-	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, ffmpegState{bundleIsCached: true}, theReleaseHost)
+	state := aNativeTree("macos-arm64")
+	state.bundleIsCached = true
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, state, aMachineForTarget("macos-arm64"))
 	if err != nil {
 		t.Fatalf("the build refused cached supplied binaries: %v", err)
 	}
@@ -1106,8 +1188,8 @@ func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 		t.Errorf("cached supplied binaries are adopted again: %d steps", len(plan.Steps))
 	}
 
-	if plan.Skipped {
-		t.Error("cached supplied binaries are skipped, and the release run ships no archive for them")
+	if plan.Native {
+		t.Error("the build compiles binaries its own cache already holds")
 	}
 
 	if plan.Adopts {
@@ -1319,8 +1401,8 @@ func readGzip(path string) ([]byte, error) {
 // The target an operator who named none is building for is the release target this machine belongs to,
 // named the way the release names it. On a Mac that is macos-arm64, the target the manifest records, and
 // not the darwin-arm64 name go builds for: a phase that named the machine by go's word asked the manifest
-// about a target this project has no record for, and answered with the uncovered-target message on the
-// very machine the supplied ffmpeg binaries are built on.
+// about a target this project has no record for, and answered with the uncovered-target message on the very
+// machine a macOS ffmpeg is compiled on with its own toolchain.
 func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *testing.T) {
 	want := releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
 
@@ -1329,12 +1411,17 @@ func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *tes
 	}
 }
 
-// The machine supplied ffmpeg binaries are compiled on is the machine that runs them, and the build can be
-// standing on it: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are on, and
-// the repository in front of them names the source, its digest, the recipe, the flags that floor sets, the
-// make program that build needs, and the check that proves the result. The compile is what that run asked
-// for, and it is what only that machine can do.
-func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
+// The two macOS targets are the ones a build can be standing on the host of, and there the host's own
+// toolchain is the compile: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are
+// on, and the repository in front of them names the source, its digest, the recipe, the flags that floor sets,
+// the make program that build needs, and the codesign step that signs what it produced. The compile is what
+// that run asked for, and it is what only that machine can do.
+//
+// The flags it passes are the record's host flags and nothing beside them: --sysroot= names a directory that
+// exists only inside a container, and -fuse-ld= names a linker a Mac does not run — a Mac links with the one
+// Apple ships, and what makes its binaries runnable is the codesign step, which the container route has no
+// equivalent of.
+func TestTheMacOSTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		manifest := bundle.ReadManifest()
 
@@ -1349,8 +1436,8 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 			continue
 		}
 
-		if plan.Skipped {
-			t.Errorf("%s: the plan skips the target whose binaries it can compile, and the operator on that host is told to build binaries they are standing on", target)
+		if !plan.Host {
+			t.Errorf("%s: the plan does not say this machine runs the compile, and the run that carries a plan out is chosen by that", target)
 		}
 
 		// Stripping rewrites the binary, so the signature goes on after it: a signature over the bytes
@@ -1389,12 +1476,25 @@ func TestTheSuppliedTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 
 		record := manifest.Targets[target]
 
-		if len(record.CFlags) > 0 && !carries(configure.args, "--extra-cflags="+strings.Join(record.CFlags, " ")) {
-			t.Errorf("%s: the configure does not add the record's cflags %v to the source: %v", target, record.CFlags, configure.args)
+		if len(record.Host.CFlags) > 0 && !carries(configure.args, "--extra-cflags="+strings.Join(record.Host.CFlags, " ")) {
+			t.Errorf("%s: the configure does not add the record's host cflags %v to the source: %v", target, record.Host.CFlags, configure.args)
 		}
 
-		if len(record.LDFlags) > 0 && !carries(configure.args, "--extra-ldflags="+strings.Join(record.LDFlags, " ")) {
-			t.Errorf("%s: the configure does not add the record's ldflags %v to the source: %v", target, record.LDFlags, configure.args)
+		if len(record.Host.LDFlags) > 0 && !carries(configure.args, "--extra-ldflags="+strings.Join(record.Host.LDFlags, " ")) {
+			t.Errorf("%s: the configure does not add the record's host ldflags %v to the source: %v", target, record.Host.LDFlags, configure.args)
+		}
+
+		// What the container compile is told is not what this one is told. A Mac has no /sysroot, and its
+		// linker is the one Apple ships: passing either to a host compile is asking it for a path and a program
+		// that are not there.
+		for _, prefix := range []string{"--extra-cflags=", "--extra-ldflags="} {
+			if flags := theFlagNamed(configure.args, prefix); strings.Contains(flags, "sysroot") || strings.Contains(flags, "-fuse-ld") {
+				t.Errorf("%s: the host compile passes %q, and a Mac reads the SDK its Command Line Tools installed and links with its own ld", target, flags)
+			}
+		}
+
+		if carries(configure.args, "--cc=") {
+			t.Errorf("%s: the host compile is told which compiler to run, when the compiler its own machine has is the answer: %v", target, configure.args)
 		}
 
 		if carries(configure.args, "--enable-cross-compile") {
@@ -1491,12 +1591,12 @@ func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 	}
 }
 
-// The cache entry a supplied target is looked for in is named by the manifest's record and the target, and
-// not by the machine computing it: the Mac that compiled the binaries and a run reusing them look for the
+// The cache entry a macOS target's binaries are looked for in is named by the manifest's record and the
+// target, and not by the machine computing it: the Mac that compiled them and a Mac reusing them look for the
 // same entry. Each machine's cache is its own tree and gitignored, so an Apple Silicon Mac and an Intel Mac
 // compiling the Intel target key the same entry in their own caches, and each cache holds what that machine
 // compiled.
-func TestTheCacheEntryOfSuppliedBinariesIsTheSameEntryOnEveryHost(t *testing.T) {
+func TestTheCacheEntryOfAMacOSTargetIsTheSameEntryOnEveryMac(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
 	repo := t.TempDir()
@@ -1623,33 +1723,10 @@ func argAfter(args []string, flag string) string {
 	return ""
 }
 
-// The compile is what the target's own host does. A machine outside it compiles nothing, and says the
-// binaries were not supplied, the host that compiles them, the command that compiles them there, and the
-// directory to drop them in.
-func TestTheSuppliedTargetOnAnotherHostCompilesNothing(t *testing.T) {
-	for _, target := range []string{"macos-amd64", "macos-arm64"} {
-		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), aNativeTree(target), theReleaseHost)
-		if err != nil {
-			t.Errorf("%s: a machine that is not the target's host failed the run: %v", target, err)
-			continue
-		}
-
-		if plan.Native {
-			t.Errorf("%s: the build compiled %s binaries on a machine that cannot run them", target, target)
-		}
-
-		if !plan.Skipped {
-			t.Errorf("%s: the build does not skip a target whose binaries it cannot produce", target)
-		}
-
-		if len(plan.Steps) != 0 {
-			t.Errorf("%s: the build has %d steps for a target it is not standing on", target, len(plan.Steps))
-		}
-	}
-}
-
 // Binaries the maintainer dropped are adopted on their own host exactly as they are adopted anywhere
 // else: the compile is what the build does when there is nothing to adopt, not a replacement for the drop.
+// The plan carries the adoption, because the licence text the archive carries is written from the run that
+// adopted the binaries.
 func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testing.T) {
 	repo := t.TempDir()
 
@@ -1667,33 +1744,13 @@ func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testin
 	if !plan.Adopts {
 		t.Error("the plan adopts nothing: the host standing on the target is the host that can run them")
 	}
-}
 
-// Binaries the cache holds are reused on their own host, and nothing is compiled over them: the cache key
-// is the manifest's record and the target, so a warm entry is what this machine's own run published.
-func TestSuppliedBinariesInCacheAreReusedOnTheirOwnHost(t *testing.T) {
-	repo := t.TempDir()
-
-	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
-
-	state := aNativeTree("macos-arm64")
-	state.bundleIsCached = true
-
-	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, state, aMachineForTarget("macos-arm64"))
-	if err != nil {
-		t.Fatalf("the build refused cached binaries: %v", err)
+	if !plan.Host {
+		t.Error("the plan does not say the binaries come from this machine, and the run that carries a plan out is chosen by that")
 	}
 
-	if plan.Native {
-		t.Error("the build compiles binaries the cache already holds")
-	}
-
-	if plan.Adopts {
-		t.Error("the build adopts binaries the cache already holds, and looks for a drop it does not need")
-	}
-
-	if len(plan.Steps) != 0 {
-		t.Errorf("the build has %d steps for binaries it already has", len(plan.Steps))
+	if !strings.Contains(plan.Says, "supplied") {
+		t.Errorf("the message %q does not say the ffmpeg is supplied", plan.Says)
 	}
 }
 
@@ -1728,8 +1785,8 @@ func aMachineForTarget(target string) host {
 	return host{goos: tr.goos, goarch: tr.goarch}
 }
 
-// theReleaseHost is the machine that produces the releases: Linux, and no host supplied ffmpeg binaries
-// run on.
+// theReleaseHost is the machine that produces the releases: a Linux host, which is not a host either macOS
+// target is compiled on with its own toolchain.
 var theReleaseHost = host{goos: "linux", goarch: "amd64"}
 
 // aNativeTree is a tree with nothing compiled in it, and the host's own build tools in front of it.
@@ -1756,13 +1813,15 @@ func aToolchainFor(target string) map[string]string {
 	return tools
 }
 
+// aMakeProgramFor is the make program the host compile of a target runs, which is what a test that asks what a
+// host compile runs needs.
 func aMakeProgramFor(target string) string {
 	record, ok := bundle.ReadManifest().Targets[target]
-	if !ok || record.Make == "" {
+	if !ok || record.Host.Make == "" {
 		return "make"
 	}
 
-	return record.Make
+	return record.Host.Make
 }
 
 func stepFor(steps []step, label string) step {

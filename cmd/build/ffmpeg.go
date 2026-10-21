@@ -59,9 +59,9 @@ type ffmpegState struct {
 	nativeTools map[string]string
 }
 
-// host is the platform the machine running the build is on, named the way the release names a platform:
-// the ffmpeg binaries a supplied target carries run on one platform alone, and the question the build asks of it is
-// whether the machine standing in front of the build is that platform.
+// host is the platform the machine running the build is on, named the way the release names a platform: the
+// ffmpeg of a macOS target runs on one platform alone, and the question the build asks of this one is whether
+// it is that platform, because only there the host's own compiler, linker, and signer are the toolchain.
 type host struct {
 	goos   string
 	goarch string
@@ -72,50 +72,24 @@ func thisMachine() host {
 	return host{goos: runtime.GOOS, goarch: runtime.GOARCH}
 }
 
-// isTheHostOf says whether this machine is the platform one target's ffmpeg binaries run on.
+// canCompile says whether this machine can produce one target's ffmpeg binaries with its own toolchain, which
+// is one host and one pair of targets: a Mac compiling a macOS target.
 //
-// It is the rule that decides what a supplied target means for a run. The ffmpeg binaries are compiled
-// platform's own compiler, against the platform's own libraries, and a compile of it written on any other
-// machine is a binary that platform refuses to run: the build that is standing on the target's platform
-// compiles them, and every other machine adopts what was dropped or skips the target.
-func (h host) isTheHostOf(target string) bool {
-	tr, found := targetFor(target)
-
-	return found && h.goos == tr.goos && h.goarch == tr.goarch
-}
-
-// canCompile says whether this machine can produce one target's ffmpeg binaries with its own toolchain: the
-// operating system is the target's, and the architecture is the target's, or the other architecture macOS
-// ships.
-//
-// Apple ships one toolchain that produces both macOS architectures: the Command Line Tools' clang takes
-// -arch x86_64 on an Apple Silicon Mac and -arch arm64 on an Intel Mac, the macOS SDK carries the
-// libraries of both, and codesign signs a program of either architecture on either machine. Every other
-// target this project ships an ffmpeg for is compiled in a container, wherever the build runs, so this is a
-// question only the two macOS targets can answer yes to.
+// Apple ships one toolchain that produces both macOS architectures — the Command Line Tools' clang takes
+// -arch x86_64 on an Apple Silicon Mac and -arch arm64 on an Intel Mac, the macOS SDK carries the libraries of
+// both, and codesign signs a program of either architecture on either machine — so the host's own architecture
+// is not part of the answer. Every other target this project ships an ffmpeg for is compiled in a container
+// wherever the build runs, the Linux targets of a Linux host among them: what a container carries is the
+// compiler and the headers, libraries and startup files of the operating system the target runs on, and a
+// host's own toolchain carries only its own.
 func (h host) canCompile(target string) bool {
-	tr, found := targetFor(target)
-	if !found || h.goos != tr.goos {
+	if h.goos != "darwin" {
 		return false
 	}
 
-	if h.goarch == tr.goarch {
-		return true
-	}
+	tr, found := targetFor(target)
 
-	return h.goos == "darwin" && aMacOSReleaseTarget(h.goarch) && aMacOSReleaseTarget(tr.goarch)
-}
-
-// aMacOSReleaseTarget reports whether the release matrix ships a macOS platform for this architecture,
-// which is the list the two architectures a Mac can be are read from.
-func aMacOSReleaseTarget(goarch string) bool {
-	for _, tr := range releaseTargets {
-		if tr.goos == "darwin" && tr.goarch == goarch {
-			return true
-		}
-	}
-
-	return false
+	return found && tr.goos == "darwin"
 }
 
 // theFFmpegArchitectureOf is the architecture of a target, named the way ffmpeg names architectures:
@@ -183,13 +157,15 @@ type ffmpegPlan struct {
 	// was dropped for it.
 	Steps []step
 
-	// Skipped says this target has nothing to build and produces nothing: the ffmpeg binaries the manifest says are
-	// supplied were not dropped. A release run skips it and ships the rest.
-	Skipped bool
+	// Host says the binaries this plan produces come from the machine running the build: the pair it compiled
+	// with its own toolchain, the pair a maintainer dropped for it, or the cache entry its own run published.
+	// A plan that is not Host compiles the pair in a container, on whatever machine runs the build.
+	Host bool
 
-	// Native says this plan compiles the ffmpeg binaries on the machine running the build, because that
-	// machine is the platform they run on. It is the answer to the operator who asked for the ffmpeg of the
-	// machine they are standing on, and it is never a skip: the compile is what that run asked for.
+	// Native says this plan compiles the ffmpeg binaries with the toolchain of the machine running the build,
+	// because that machine is a host of the operating system they run on. It is the answer to the operator who
+	// asked for the ffmpeg of the machine they are standing on, and it is never a plan that produces nothing:
+	// the compile is what that run asked for.
 	Native bool
 
 	// Adopts says the plan is taking binaries a maintainer dropped in the target's bundle directory,
@@ -343,10 +319,15 @@ func pruneFFMpegCache(repo string) ([]string, error) {
 // cache hit skips that run: without it, a manifest whose pinned source was changed would quietly reuse
 // what the old source compiled.
 //
-// A target whose ffmpeg binaries are compiled on its own platform has no container to key on, so its key
-// adds the way it is produced, the make program that build names, and the flags the compile is told to
-// pass. A compiled record keys on the container's inputs alone, so a manifest gaining these fields does
-// not invalidate a warm cache.
+// A record that names a sysroot somebody prepared outside the repositories keys on that tree — the SDK
+// version, its digest, and the tool that prepared it — because those are the headers and libraries the compile
+// read. Its mount path is not in the key: the record spells that path into its cc, cflags, and ldflags, which
+// the key already carries, and a mount path disagreeing with them is one record contradicting itself rather
+// than a second input.
+//
+// A record that names a host compile keys on that compile's flags and make program as well: the two compiles
+// of a macOS target land in one entry, and the inputs of either one move it. A record naming neither keys
+// exactly as it keyed before, so a manifest gaining these fields does not invalidate a warm cache.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
@@ -382,12 +363,19 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		parts = append(parts, record.CC)
 	}
 
-	// The fields a target compiled on its own platform has are the way it is produced, the make program
-	// that build ran, and the flags its compile passes. The binaries themselves are not part of the name
-	// of the entry they land in: the cache is this machine's own tree, and what this machine compiled is
-	// what sits in it.
-	if record.Produced != "" {
-		parts = append(parts, record.Produced, record.Make)
+	// A sysroot somebody prepared outside both repositories is a tree the compile read: the SDK version, the
+	// digest of the tree, and the tool that prepared it are part of the name of the binaries built from it.
+	// The mount path is not, because the record names it in its cc, cflags, and ldflags, and a record whose
+	// mount disagreed with its own flags is a record the build cannot honour.
+	if record.Sysroot != (bundle.Sysroot{}) {
+		parts = append(parts, record.Sysroot.SDK, record.Sysroot.SHA256, record.Sysroot.Generator)
+	}
+
+	// What a host compile runs is part of the name of the entry its binaries land in, too. The binaries
+	// themselves are not: the cache is this machine's own tree, and what this machine compiled is what sits
+	// in it.
+	if len(record.Host.CFlags) > 0 || len(record.Host.LDFlags) > 0 || record.Host.Make != "" {
+		parts = append(parts, strings.Join(record.Host.CFlags, " "), strings.Join(record.Host.LDFlags, " "), record.Host.Make)
 	}
 
 	return sha256Of([]byte(strings.Join(parts, "\n")))
@@ -416,10 +404,11 @@ func ffmpegTarget(o options) string {
 // have a record for is a promise, and a build that cannot keep it says so instead of quietly producing a
 // server that will do without.
 //
-// The machine is the platform the build is running on, and it is part of the decision because two of
-// the targets are compiled on the platform their ffmpeg binaries run on: on that platform the build has
-// the source, the digest, the recipe, the flags, and the run, and compiling them there is what the
-// operator asked for. On every other platform they are something the build is handed.
+// The machine is part of the decision for one reason: a macOS target's ffmpeg is compiled with the toolchain
+// of a Mac when the build is standing on one, because that is the only host whose own compiler, linker, and
+// signer can produce it, and an operator who asked for the ffmpeg of the machine they are on gets the compile
+// and not the container. Every other target's compile carries another operating system's headers, libraries
+// and startup files, and travels with the container that carries them.
 func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState, machine host) (ffmpegPlan, error) {
 	target := ffmpegTarget(o)
 
@@ -439,8 +428,11 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 
 	paths := ffmpegPathsFor(repo, manifest, target)
 
-	if record.Produced == suppliedProduction {
-		return planSuppliedFFmpeg(repo, manifest, target, record, paths, state, machine)
+	// The one host that compiles a target's ffmpeg with its own toolchain takes the host route, and the record
+	// is not what decides: a macOS target is compiled in a container on the machine that produces the releases,
+	// and with a Mac's own compiler, linker, and signer on a Mac.
+	if machine.canCompile(target) {
+		return planHostFFmpeg(repo, manifest, target, record, paths, state, machine)
 	}
 
 	source := ffmpegSource{Path: paths.source, URL: manifest.Source.URL}
@@ -575,37 +567,25 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	return plan, nil
 }
 
-// suppliedProduction is the manifest's way of saying that this build compiles the ffmpeg binaries for a
-// target where
-// the target runs, and not in a container: the machine that is the target compiles it with its own
-// toolchain, and every other machine adopts the binaries that host produced — the ones this build
-// compiled there, or the ones the maintainer built by hand and dropped for it to adopt.
-const suppliedProduction = "supplied"
-
-// planSuppliedFFmpeg decides what the ffmpeg phase does with binaries this build compiles in a container
-// nowhere.
+// planHostFFmpeg decides what the ffmpeg phase does with the ffmpeg of a target whose host is the machine
+// standing under this build.
 //
-// They are compiled on the platform they run on, and two machines can produce them. The maintainer's own
-// build does, and drops them in the bundle directory for this build to adopt; the build standing on that
-// same platform does it itself, with the source, digest, recipe, flags, and recipe the manifest already
-// carries. Binaries the maintainer dropped win over the compile every time: the drop is what he built
-// and tested, and compiling over it would throw it away.
+// Two machines can produce those binaries. The maintainer's own build does, and drops them in the bundle
+// directory for this build to adopt; the build standing on that same platform does it itself, with the source,
+// digest, recipe, and flags the manifest already carries. Binaries the maintainer dropped win over the compile
+// every time: the drop is what he built and tested, and compiling over it would throw it away.
 //
-// The plan reads one thing from a drop: which machine code the files hold. The run that adopts them runs
-// them, on the machine standing here, through the same gate a compile runs its own binaries through.
-//
-// A target with nothing dropped for it, on a machine that is not its platform, is not a failure. The
-// two supplied targets are built on machines the release machine does not control, and a release run that
-// stopped for the one it does not have would ship nothing at all, including the six archives it could have
-// shipped. It is reported, and skipped.
-func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
+// The plan reads one thing from a drop: which machine code the files hold. The run that adopts them runs them,
+// on the machine standing here, through the same gate a compile runs its own binaries through.
+func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	// The cache key is the manifest's record and the target, so a warm cache is the entry this machine's
 	// own run published, and the drop is not needed again: it has already been consumed out of this
 	// directory.
 	if state.bundleIsCached {
 		return ffmpegPlan{
 			Target: target,
-			Says:   "reusing the ffmpeg supplied for " + target,
+			Says:   "reusing the ffmpeg built for " + target,
+			Host:   true,
 			Paths:  paths,
 		}, nil
 	}
@@ -613,21 +593,11 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 	drop := suppliedDropFor(paths, target)
 
 	if !aFileIsThere(drop["ffmpeg"]) && !aFileIsThere(drop["ffprobe"]) {
-		// Nothing was dropped, and this machine can produce the binaries: the compile is what only a host of
-		// the target's own operating system can do, and it is what the operator asked for when they asked
-		// for the ffmpeg of the machine they are on. A macOS host of the other architecture is such a
-		// host, because one macOS toolchain produces both architectures.
-		if machine.canCompile(target) {
-			return planNativeFFmpeg(repo, manifest, target, record, paths, state, machine)
-		}
-
-		return ffmpegPlan{
-			Target: target,
-			Says: "the ffmpeg for " + target + " was not supplied: build them on a " + target +
-				" host with go run ./cmd/build ffmpeg " + target + ", or drop ffmpeg and ffprobe in " + paths.bundle,
-			Skipped: true,
-			Paths:   paths,
-		}, nil
+		// Nothing was dropped, and this machine is a host of the operating system the binaries run on: the
+		// compile is what only such a host can do, and it is what the operator asked for when they asked for
+		// the ffmpeg of the machine they are on. A Mac of the other architecture is such a host, because one
+		// macOS toolchain produces both architectures.
+		return planNativeFFmpeg(repo, manifest, target, record, paths, state, machine)
 	}
 
 	// The binaries a maintainer dropped are run by the run that adopts them, on this machine, through the
@@ -649,18 +619,20 @@ func planSuppliedFFmpeg(repo string, manifest bundle.Manifest, target string, re
 		Target: target,
 		Says:   "adopting the ffmpeg supplied for " + target,
 		Adopts: true,
+		Host:   true,
 		Paths:  paths,
 	}, nil
 }
 
-// planNativeFFmpeg decides what the compile of the ffmpeg binaries looks like when the build is standing
-// on the platform they run on.
+// planNativeFFmpeg decides what the compile of the ffmpeg binaries looks like when the build is standing on a
+// host of the operating system they run on.
 //
-// It is the same trimmed build the container targets make, from the same source the manifest pins, with
-// the same recipe, and with the record's flags reaching configure the way they do there. What it does not
-// have is a container: the host's own compiler, linker, stripper, make program, and signer are the
-// toolchain, and the binaries come out of it as the platform's own programs — which is the whole reason
-// they are compiled there and not shipped from a cross-compiler.
+// It is the same trimmed build the container targets make, from the same source the manifest pins, with the
+// same recipe, and with the record's host flags reaching configure the way the record's own flags do there.
+// What it does not have is a container: the host's own compiler, linker, stripper, make program, and signer are
+// the toolchain, and the binaries come out of it as the platform's own programs — which is the whole reason a
+// macOS ffmpeg is compiled here when a Mac is standing under the build, and in a container against Apple's SDK
+// when anything else is.
 //
 // Stripping comes before signing, and the order is not a style: strip rewrites the binary, and a signature
 // computed over the bytes strip removed is a signature macOS refuses to run.
@@ -676,6 +648,7 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 	plan := ffmpegPlan{
 		Target: target,
 		Native: true,
+		Host:   true,
 		Source: source,
 		Paths:  paths,
 	}
@@ -695,12 +668,12 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 	// A compile across the two macOS architectures names the architecture it is building for in three
 	// places: ffmpeg's own architecture switch, the switch that keeps configure from running a test
 	// program of an architecture this host may not execute, and the compiler's own architecture flag in
-	// the compiler and linker flags. On the target's own host the compiler's default is the target's
-	// architecture, and none of the three is named.
+	// the compiler and linker flags. On a Mac compiling a macOS target with the architecture it stands on
+	// the compiler's default is that architecture, and none of the three is named.
 	compilerArch := theCompilerArchitectureTheHostMustProduce(target, machine)
 
-	cflags := append([]string{}, record.CFlags...)
-	ldflags := append([]string{}, record.LDFlags...)
+	cflags := append([]string{}, record.Host.CFlags...)
+	ldflags := append([]string{}, record.Host.LDFlags...)
 
 	if compilerArch != "" {
 		configure = append(configure, "--arch="+theFFmpegArchitectureOf(target), "--enable-cross-compile")
@@ -762,15 +735,15 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 	return plan, nil
 }
 
-// makeProgram is the make program a compile of this target runs. A record naming none runs make: the
-// containers this project compiles an ffmpeg in install the GNU make ffmpeg's build asks for, and a compile
-// on a macOS host runs that host's own make.
+// makeProgram is the make program the compile a target's own host runs. A record naming none runs make, which
+// is what the Command Line Tools carry; a container's compile is not asked, because the image installs the GNU
+// make ffmpeg's build asks for.
 func makeProgram(record bundle.Target) string {
-	if record.Make == "" {
+	if record.Host.Make == "" {
 		return "make"
 	}
 
-	return record.Make
+	return record.Host.Make
 }
 
 // nativeProgramsAre the programs a compile on the target's own platform runs: the archive reader, a C
@@ -1045,11 +1018,10 @@ func fetchSource(src ffmpegSource) error {
 
 // runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
 //
-// It reports the targets it has nothing to produce for: the two whose ffmpeg binaries are compiled on
-// their own platform, on a machine this build is not standing on, with nothing dropped for it. Such a
-// target is skipped, and the caller decides what a skipped target means for the run — the release run
-// ships the archives it can ship, and a run that compiles one binary compiles none. On the machine that is
-// the target, the same phase compiles them, and that is not a skip.
+// It reports whether it produced nothing for the target, which is the answer the release run asks: a target
+// that wrote no ffmpeg writes no archive, and the caller decides what that means for the run. No plan says it
+// today — every target the manifest covers is compiled by every host this build runs on — so the answer is
+// always no, and the mechanism stays until the run's answer for a target it cannot compile is settled.
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
@@ -1073,7 +1045,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	// missing one of them is told which one before the source is fetched.
 	nativeTools := map[string]string{}
 
-	if covered && record.Produced == suppliedProduction {
+	if covered && machine.canCompile(target) {
 		for _, name := range nativeProgramsAre(record, target) {
 			where, err := t.resolve(name)
 
@@ -1103,8 +1075,8 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		return t.runNativeFFmpeg(plan, manifest, target, stdout)
 	}
 
-	if record.Produced == suppliedProduction {
-		return t.runSuppliedFFmpeg(plan, manifest, target, stdout)
+	if plan.Host {
+		return t.runFFmpegOnHost(plan, manifest, target, stdout)
 	}
 
 	if len(plan.Steps) > 0 {
@@ -1168,22 +1140,13 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	return false, nil
 }
 
-// runSuppliedFFmpeg does the work of a target whose ffmpeg binaries are compiled on the platform they run
-// on: the binaries a maintainer dropped, the binaries this machine compiled, or the binaries already in
-// this machine's cache.
+// runFFmpegOnHost does the work of the ffmpeg that comes from the machine running the build: the pair a
+// maintainer dropped for it, or the pair this machine's own run put in its cache.
 //
 // The dropped binaries are run before they are adopted, on the machine standing here, through the same gate
 // the compile runs its own binaries through. What converts is gzipped into the cache entry, and the licence
 // text the archive carries is written from that run: it names the machine that ran them.
-//
-// A target with nothing dropped for it, on a machine that is not its platform, is reported as skipped, and
-// that is the whole of it: the message the plan printed says where to drop the binaries and where to build
-// them.
-func (t tool) runSuppliedFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
-	if plan.Skipped {
-		return true, nil
-	}
-
+func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Adopts {
 		run, err := t.prove(target, plan.Paths, stdout)
 		if err != nil {

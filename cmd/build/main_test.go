@@ -642,12 +642,17 @@ func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing
 }
 
 // An incomplete matrix is not a release, and the run that wrote it says so with its exit status, so a
-// script can tell "the six archives are the whole release this machine can make" from "the release is
-// missing archives".
+// script can tell "these are the whole release this machine can make" from "the release is missing archives".
+//
+// The two targets the stand-in writes no ffmpeg for stand in for a target the ffmpeg phase could not fill:
+// every target the manifest records is compiled by every host this build runs on, so which target a real run
+// reports this way is open — what the release run does for a target whose compile asks the operator for a
+// tree they have not prepared is being decided — and the mechanism, its summary line, and its exit status
+// stay until it is.
 func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	skipsSuppliedTargets(tl, ran)
+	tl.ffmpeg = wroteNoFfmpegFor(ran, "macos-amd64", "macos-arm64")
 
 	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
 		t.Fatalf("exit code = %d, want 3: two of the eight targets the run was asked for wrote no archive", code)
@@ -660,11 +665,11 @@ func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T
 	}
 }
 
-// A release run asked for one target it cannot build wrote none of the one archive it was asked for.
-func TestADistRunAskedForOneTargetItCannotBuildExitsNonZero(t *testing.T) {
+// A release run asked for one target that wrote no ffmpeg wrote none of the one archive it was asked for.
+func TestADistRunAskedForOneTargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
-	skipsSuppliedTargets(tl, ran)
+	tl.ffmpeg = wroteNoFfmpegFor(ran, "macos-arm64")
 
 	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 3 {
 		t.Fatalf("exit code = %d, want 3", code)
@@ -672,7 +677,7 @@ func TestADistRunAskedForOneTargetItCannotBuildExitsNonZero(t *testing.T) {
 
 	for _, s := range *ran {
 		if s.label == subArchive || s.label == subServer {
-			t.Errorf("%s ran for %s, a target whose binaries were never supplied", s.label, s.result)
+			t.Errorf("%s ran for %s, a target that wrote no ffmpeg to embed", s.label, s.result)
 		}
 	}
 }
@@ -756,14 +761,12 @@ func TestTheVersionInAnArchiveNameIsReadByTheTargetTheNameNames(t *testing.T) {
 // a line that says `server  dist/linux-arm64/rdio-scanner` in a log of five targets is reading a line
 // whose owner the line itself has to name.
 func TestAReleaseRunNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
-	tl, out, ran := fakeRun(released, "")
+	tl, out, _ := fakeRun(released, "")
 
-	tl.ffmpeg = skipTheSuppliedTargets(ran)
-
-	// The three targets whose ffmpeg binaries are compiled on their own platform wrote none, which is
-	// the release this machine can produce: the run says so and exits 3.
-	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, out); code != 3 {
-		t.Fatalf("exit code = %d, want 3", code)
+	// Every target the manifest records is compiled by this host, so the matrix run writes all eight archives
+	// and exits 0.
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
 	}
 
 	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
@@ -792,10 +795,8 @@ func TestAReleaseRunNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
 func TestAReleaseRunFinishesTheFfmpegPhaseBeforeTheServerCompilesStart(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
-	tl.ffmpeg = skipTheSuppliedTargets(ran)
-
-	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 3 {
-		t.Fatalf("exit code = %d, want 3", code)
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
 	}
 
 	lastFfmpeg, firstServer := -1, -1
@@ -832,10 +833,6 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 	for _, tr := range releaseTargets {
 		target := tr.targetWord()
 
-		if theSuppliedTargets[target] {
-			continue
-		}
-
 		writeRepoFile(t, repo, defaultOutputPath(target), "the binary of "+target)
 		writeArchiveLicence(t, repo, target, "the licence of "+target)
 	}
@@ -848,7 +845,7 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 	tl, _, _ := fakeRun(released, "")
 
 	tl.repo = repo
-	tl.ffmpeg = skipTheSuppliedTargets(nil)
+	tl.ffmpeg = func(options, io.Writer) (bool, error) { return false, nil }
 
 	// The binaries are the ones this tree's sources produce, so the run copies them into its archives
 	// and compiles nothing: the bytes the two runs compare are the bytes of one tree.
@@ -866,16 +863,16 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 
 	t.Setenv(buildJobsEnv, "1")
 
-	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 3 {
-		t.Fatalf("the serial release run: exit code = %d, want 3", code)
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 0 {
+		t.Fatalf("the serial release run: exit code = %d, want 0", code)
 	}
 
 	serial := theArchivesOfTheRelease(t, repo)
 
 	t.Setenv(buildJobsEnv, "4")
 
-	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 3 {
-		t.Fatalf("the parallel release run: exit code = %d, want 3", code)
+	if code := tl.run([]string{"dist", "--all", "--allow-dirty"}, io.Discard); code != 0 {
+		t.Fatalf("the parallel release run: exit code = %d, want 0", code)
 	}
 
 	parallel := theArchivesOfTheRelease(t, repo)
@@ -891,20 +888,21 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 	}
 }
 
-// theSuppliedTargets are the targets whose ffmpeg binaries are compiled on the platform they run on:
-// on a Linux host they write none, and the six the host compiles are the ready targets.
-var theSuppliedTargets = map[string]bool{
-	"macos-amd64": true,
-	"macos-arm64": true,
-}
-
-// skipTheSuppliedTargets is the ffmpeg phase of a machine that is not the platform the supplied
-// targets' binaries run on. The targets it produces for are recorded, when the caller is counting the
-// steps that ran.
-func skipTheSuppliedTargets(ran *[]step) func(options, io.Writer) (bool, error) {
+// wroteNoFfmpegFor is the ffmpeg phase of a stand-in build that wrote no ffmpeg for the targets it is given,
+// which is the state a release run has to answer for: it ships the archives it can and says the release is not
+// the one it was asked for. Nothing in this build answers that way about a target today — every target the
+// manifest records is compiled by every host — so the stand-in is the only way the release run's answer can be
+// exercised at all, and which target it applies to is recorded as an open question.
+//
+// The targets it produces for are recorded, when the caller is counting the steps that ran.
+func wroteNoFfmpegFor(ran *[]step, targets ...string) func(options, io.Writer) (bool, error) {
 	return func(o options, stdout io.Writer) (bool, error) {
-		if theSuppliedTargets[o.target] {
-			return true, nil
+		for _, target := range targets {
+			if o.target == target {
+				fmt.Fprintf(stdout, "%-7s the build wrote no ffmpeg for %s\n", subFFmpeg, o.target)
+
+				return true, nil
+			}
 		}
 
 		if ran != nil {
@@ -1027,8 +1025,7 @@ func TestATestRunEndsNonZeroWhenASuiteFails(t *testing.T) {
 // after it are not built, and no server is compiled for the targets before it either: the ffmpeg phase
 // finishes before any compile starts, so a run that stopped in that phase stopped with nothing compiled
 // at all. A half matrix is not a release, and a run that carried on would leave an archive directory
-// with a server in it and no ffmpeg to embed. This is the promise the compiled targets keep, and it is
-// not the way supplied binaries that were never dropped are treated.
+// with a server in it and no ffmpeg to embed.
 func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -1097,96 +1094,6 @@ func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("the release run ran\n  %v\nwant\n  %v", got, want)
-	}
-}
-
-// skipsSuppliedTargets makes the stand-in answer the way the ffmpeg phase answers for a target whose
-// binaries the maintainer never dropped: the message names the target, the host that compiles them, the
-// command that compiles them there, and the directory to drop them in, and the target is reported as
-// skipped.
-func skipsSuppliedTargets(tl *tool, ran *[]step) {
-	tl.ffmpeg = func(o options, stdout io.Writer) (bool, error) {
-		record, found := bundle.ReadManifest().Targets[o.target]
-
-		if found && record.Produced == suppliedProduction {
-			fmt.Fprintf(stdout, "%-7s the ffmpeg for %s was not supplied: build them on a %s host with go run ./cmd/build ffmpeg %s, or drop ffmpeg and ffprobe in internal/infrastructure/ffmpeg/bundle/%s\n",
-				subFFmpeg, o.target, o.target, o.target, o.target)
-
-			return true, nil
-		}
-
-		*ran = append(*ran, step{label: subFFmpeg, result: o.target})
-
-		return false, nil
-	}
-}
-
-// Binaries that were not dropped are not a failure. The two supplied targets are built on machines the
-// release machine does not control, and a run that stopped at a target whose binaries it was not given would
-// ship nothing at all — not the six archives it could have shipped, and not the archives it was told to
-// build. The run says which target it skipped and what would have made it buildable, ships the rest, and
-// ends with the summary that says the release is incomplete: six of the eight archives it was asked for.
-func TestADistRunSkipsASuppliedTargetWhoseBinariesWereNotDropped(t *testing.T) {
-	tl, out, ran := fakeRun(released, "")
-
-	skipsSuppliedTargets(tl, ran)
-
-	if code := tl.run([]string{"dist", "--all"}, out); code != 3 {
-		t.Fatalf("exit code = %d, want 3: a release run missing two supplied targets' binaries ships the six it can and says the release is incomplete", code)
-	}
-
-	for _, target := range []string{"macos-amd64", "macos-arm64"} {
-		for _, want := range []string{
-			"the ffmpeg for " + target + " was not supplied",
-			"internal/infrastructure/ffmpeg/bundle/" + target,
-			"go run ./cmd/build ffmpeg " + target,
-		} {
-			if !strings.Contains(out.String(), want) {
-				t.Errorf("the run's output does not say %q, which is what tells the operator how to make %s buildable", want, target)
-			}
-		}
-	}
-
-	archives := 0
-
-	for _, s := range *ran {
-		if s.label == subArchive {
-			archives++
-		}
-
-		for _, target := range []string{"macos-amd64", "macos-arm64"} {
-			if strings.Contains(s.result, target) {
-				t.Errorf("%s ran for %s, a target the release run skipped", s.label, s.result)
-			}
-		}
-	}
-
-	if archives != 6 {
-		t.Errorf("the run wrote %d archives, want the six of the targets this build compiles an ffmpeg for", archives)
-	}
-}
-
-// A release run asked for one supplied target with nothing dropped for it warns, skips, and writes no
-// archive: an archive whose server carries no ffmpeg is the thing the bundle exists to prevent, and the
-// operator is told what would have made it buildable. The run was asked for one archive and wrote none,
-// which is the incomplete release the exit status names.
-func TestADistRunForASuppliedTargetWithNothingDroppedProducesNoArchive(t *testing.T) {
-	tl, out, ran := fakeRun(released, "")
-
-	skipsSuppliedTargets(tl, ran)
-
-	if code := tl.run([]string{"dist", "macos-arm64"}, out); code != 3 {
-		t.Fatalf("exit code = %d, want 3: the one archive the run was asked for was not written", code)
-	}
-
-	for _, s := range *ran {
-		if s.label == subArchive || s.label == subServer {
-			t.Errorf("%s ran for %s, a target whose binaries were never supplied", s.label, s.result)
-		}
-	}
-
-	if !strings.Contains(out.String(), "macos-arm64") {
-		t.Errorf("the run's output %q does not name the target it skipped", out.String())
 	}
 }
 
@@ -1453,7 +1360,7 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 	theManifestFile(t, repo)
 
 	// The directory the binaries are dropped into is the directory the server embeds, and the repository
-	// carries it empty for each supplied target.
+	// carries it empty for every target in the release matrix.
 	if err := os.MkdirAll(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target), 0755); err != nil {
 		t.Fatalf("the tree has no bundle directory for %s: %v", target, err)
 	}
@@ -1468,8 +1375,8 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 		installed: func(string) bool { return true },
 		errout:    io.Discard,
 
-		// The harness is the build standing on the host the binaries are compiled on, which is the one
-		// fact that makes the plan compile them instead of skipping the target.
+		// The harness is the build standing on the host the binaries are compiled on, which is the one fact
+		// that makes the plan run the host's own toolchain instead of a container.
 		machine: func() host { return theHost },
 
 		source: func(src ffmpegSource, manifest bundle.Manifest) error {

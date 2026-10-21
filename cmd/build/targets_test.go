@@ -148,14 +148,13 @@ func serviceChapterHeadings(guide string) []string {
 	return headings
 }
 
-// Which targets carry an ffmpeg is answered by the manifest, not by a second list. Every release target
-// has a record: six records name the toolchain this build compiles the ffmpeg binaries in, and two name
-// the binaries compiled on the platform the target runs on.
+// Which targets carry an ffmpeg is answered by the manifest, not by a second list. Every release target has
+// a record, and every record names a container this build compiles the ffmpeg pair in: after this feature no
+// target's ffmpeg is something the build is handed instead of compiled.
 func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
 	compiled := []string{}
-	supplied := []string{}
 
 	for _, tr := range releaseTargets {
 		record, ok := manifest.Targets[tr.targetWord()]
@@ -164,26 +163,18 @@ func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 			continue
 		}
 
-		switch record.Produced {
-		case "":
-			compiled = append(compiled, tr.targetWord())
-		case "supplied":
-			supplied = append(supplied, tr.targetWord())
-		default:
-			t.Errorf("%s says it is produced by %q, which is not a way this project produces an ffmpeg", tr.targetWord(), record.Produced)
+		if record.Container == "" {
+			t.Errorf("%s has a manifest record that names no container to compile its ffmpeg in", tr.targetWord())
+			continue
 		}
+
+		compiled = append(compiled, tr.targetWord())
 	}
 
-	wantCompiled := []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "windows-amd64"}
+	wantCompiled := []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "macos-amd64", "macos-arm64", "windows-amd64"}
 
 	if strings.Join(compiled, " ") != strings.Join(wantCompiled, " ") {
 		t.Errorf("the targets this build compiles an ffmpeg for are %v, want %v", compiled, wantCompiled)
-	}
-
-	wantSupplied := []string{"macos-amd64", "macos-arm64"}
-
-	if strings.Join(supplied, " ") != strings.Join(wantSupplied, " ") {
-		t.Errorf("the targets whose ffmpeg is compiled on their own platform are %v, want %v", supplied, wantSupplied)
 	}
 }
 

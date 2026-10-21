@@ -441,12 +441,12 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	}
 }
 
-// A supplied target's archive says what the ffmpeg inside its binary is, in the text the ffmpeg phase
-// writes for binaries it adopted and did not compile in a container: the licence terms, the source release
-// the manifest pins, the configure recipe, the audio-only posture, the host that compiled them, the command
-// that built them, and the codecs the run recorded. The archive carries that text under the name a reader
-// looks for, and carries no markdown file beside it.
-func TestASuppliedTargetsArchiveCarriesWhatItsFfmpegIs(t *testing.T) {
+// The archive of a target whose ffmpeg binaries were adopted says what the ffmpeg inside its binary is, in
+// the text the ffmpeg phase writes for binaries it ran and did not compile in a container: the licence terms,
+// the source release the manifest pins, the configure recipe, the audio-only posture, the host that compiled
+// them, the command that built them, and the codecs the run recorded. The archive carries that text under the
+// name a reader looks for, and carries no markdown file beside it.
+func TestTheArchiveOfATargetWhoseFfmpegWasAdoptedCarriesWhatItsFfmpegIs(t *testing.T) {
 	repo := t.TempDir()
 
 	tr, found := targetFor("macos-arm64")

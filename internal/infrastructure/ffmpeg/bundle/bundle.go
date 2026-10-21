@@ -61,17 +61,16 @@ type Source struct {
 
 // Target is how one architecture's ffmpeg comes to be.
 //
-// A record with no `produced` names a toolchain: the container that holds it, the Containerfile that builds
-// it, the packages to install in it, and the configure arguments that make the compile cross to it. This
-// build compiles that target's ffmpeg and proves the pair it produced the way its `conformance` says to: by
-// running it, or, when no host this build runs on can start it, by reading out of the files what the record
-// names.
+// Every record names a toolchain: the container that holds it, the Containerfile that builds it, the packages
+// to install in it, and the configure arguments that make the compile cross to it. This build compiles that
+// target's ffmpeg and proves the pair it produced the way its `conformance` says to: by running it, or, when no
+// host this build runs on can start it, by reading out of the files what the record names.
 //
-// A record with `produced` saying `supplied` names no container, no packages, no cross arguments, and no
-// check environment: the machine that produces the releases has none of those for it, and asking for one
-// would be a build that fails for wanting a toolchain it was never going to have. What it does name is the
-// compile that runs on the platform the target runs on — `cflags` and `ldflags` are the extra configure
-// flags that compile adds, and `make` is the make program it runs.
+// A macOS record names a second compile as well: the one a Mac runs with its own compiler, linker, and signer.
+// The top-level `cflags` and `ldflags` belong to the container compile, and `host` holds the other one's flags
+// and make program: `--sysroot=` names a directory that exists only inside a container, and `-fuse-ld=` names a
+// linker a Mac does not run, so a machine standing where the binaries run compiles them with what that machine
+// has. A target with no host block is compiled in its container wherever this build stands.
 //
 // A target with no record in the manifest is an uncovered target: the build compiles no ffmpeg for it,
 // adopts nothing for it, and the server that runs on it uses the host's.
@@ -94,6 +93,9 @@ type Target struct {
 	// container's own operating system.
 	CC string `json:"cc"`
 
+	// CFlags and LDFlags are what the container compile passes as configure's --extra-cflags and
+	// --extra-ldflags. A target a host can also compile with its own toolchain names those flags apart, in
+	// Host: what a container has to be told is not what that compiler already knows.
 	CFlags  []string `json:"cflags"`
 	LDFlags []string `json:"ldflags"`
 
@@ -105,19 +107,31 @@ type Target struct {
 	SysrootDigest string  `json:"sysroot_digest"`
 	Sysroot       Sysroot `json:"sysroot"`
 
-	// Make is the make program a compile of this target runs. Empty is `make`.
-	Make string `json:"make"`
-
 	// Conformance is how the compiled program is run to be checked, which is not always the container
 	// that compiled it: a cross-compiled binary needs an interpreter, and a Windows program needs an
 	// operating system.
 	Conformance Conformance `json:"conformance"`
 
-	// Produced says how this target's ffmpeg comes to be. Empty is the ordinary case: this build compiles
-	// it, in a container. "supplied" is the ffmpeg binaries compiled on the target's own platform — by
-	// this build standing on that machine, or by the maintainer and dropped where this build finds it —
-	// and adopted from there.
-	Produced string `json:"produced"`
+	// Host is the compile this target's own platform runs when the build happens to be standing on it: the
+	// flags that floor the binary declares and link it the way that platform needs, and the make program
+	// that build runs. Only the two macOS records name one, because a Mac is the only host in the release
+	// matrix whose own toolchain can produce a target's ffmpeg, and the flags of a macOS target's two
+	// compiles differ — the container's carry the mounted sysroot and the linker it has to be told to use,
+	// and a Mac's carry neither, because its compiler knows the SDK it installed and links with the linker
+	// it ships.
+	Host Host `json:"host"`
+}
+
+// Host is the compile a target's own platform runs, named beside the container compile the same record
+// names. A record whose target has no such host names none, and every program a compile of that target runs
+// is in the container the record names.
+type Host struct {
+	CFlags  []string `json:"cflags"`
+	LDFlags []string `json:"ldflags"`
+
+	// Make is the make program that compile runs. Empty is `make`, which is what the Command Line Tools
+	// carry.
+	Make string `json:"make"`
 }
 
 // Sysroot is a sysroot somebody outside both repositories prepared, which is what an operating system's
