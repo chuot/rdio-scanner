@@ -1297,6 +1297,16 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 		}
 	}
 
+	// A run whose cache already holds the pair prints the line it says in its own words, and the two routes
+	// say it differently: the container compile says what it compiled, the Mac's own compile says what it
+	// built. The note is where a maintainer learns what a run that compiled nothing looks like, so a note
+	// quoting one of the two lines sends the reader on the other route hunting for a line that never appears.
+	for _, printed := range []string{"reusing the ffmpeg compiled for", "reusing the ffmpeg built for"} {
+		if !strings.Contains(body, printed) {
+			t.Errorf("COMPILING.md never names %q, which is a line the build prints when its cache already holds the pair", printed)
+		}
+	}
+
 	for _, gone := range []string{
 		"ffmpeg-check",
 		"digests it prints",

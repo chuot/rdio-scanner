@@ -1370,30 +1370,32 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 // it stays there, and every server binary built for that target embeds it beside the gzipped pair, which is
 // the cost COMPILING.md names.
 func TestADroppedPairIsAdoptedOnlyForAMacOSTargetOnAMacHost(t *testing.T) {
-	repo := t.TempDir()
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		repo := t.TempDir()
 
-	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
+		manifest := aDropOfSuppliedBinaries(t, repo, target)
 
-	onTheBuildHost, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aTreeReadyFor(t, manifest, "macos-arm64"), theReleaseHost)
-	if err != nil {
-		t.Fatalf("the build refused the macOS target its record says it compiles: %v", err)
-	}
+		onTheBuildHost, err := planFFmpeg(options{target: target}, repo, manifest, aTreeReadyFor(t, manifest, target), theReleaseHost)
+		if err != nil {
+			t.Fatalf("%s: the build refused the macOS target its record says it compiles: %v", target, err)
+		}
 
-	if onTheBuildHost.Adopts {
-		t.Error("the machine that produces the releases adopted binaries it did not compile, when its own record names the container that compiles them")
-	}
+		if onTheBuildHost.Adopts {
+			t.Errorf("%s: the machine that produces the releases adopted binaries it did not compile, when its own record names the container that compiles them", target)
+		}
 
-	if _, ok := stepNamed(onTheBuildHost, "make"); !ok {
-		t.Errorf("the build compiled no pair for macos-arm64 on the machine that compiles it: %d steps", len(onTheBuildHost.Steps))
-	}
+		if _, ok := stepNamed(onTheBuildHost, "make"); !ok {
+			t.Errorf("%s: the build compiled no pair on the machine that compiles it: %d steps", target, len(onTheBuildHost.Steps))
+		}
 
-	onItsOwnHost, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
-	if err != nil {
-		t.Fatalf("the build refused the binaries dropped for it on the host that is the target: %v", err)
-	}
+		onItsOwnHost, err := planFFmpeg(options{target: target}, repo, manifest, aNativeTree(target), aMachineForTarget(target))
+		if err != nil {
+			t.Fatalf("%s: the build refused the binaries dropped for it on the host that is the target: %v", target, err)
+		}
 
-	if !onItsOwnHost.Adopts {
-		t.Error("the host standing on the target adopted nothing, and the binaries are sitting in the directory it embeds")
+		if !onItsOwnHost.Adopts {
+			t.Errorf("%s: the host standing on the target adopted nothing, and the binaries are sitting in the directory it embeds", target)
+		}
 	}
 }
 
@@ -1689,6 +1691,13 @@ func TestTheMacOSTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 			}
 		}
 
+		// The container route names the image it compiles in and the runner it proves under, and this plan is
+		// not that route: a host plan naming either is a plan a run could carry into a container it has no
+		// reason to be in, and the host route's whole point is that it is not a container compile.
+		if plan.Image != "" || plan.Runner != "" {
+			t.Errorf("%s: the host compile names image %q and runner %q, and the host route has no container in it", target, plan.Image, plan.Runner)
+		}
+
 		if !plan.Source.Fetch {
 			t.Errorf("%s: the compile plans no source to fetch", target)
 		}
@@ -1748,14 +1757,20 @@ func TestTheMacOSTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 			t.Errorf("%s: the compile strips %v", target, strip.args)
 		}
 
-		if sign := stepFor(plan.Steps, "sign"); sign.name != "" {
-			if !carries(sign.args, "codesign") && sign.name != "codesign" {
-				t.Errorf("%s: the sign step is %s %v", target, sign.name, sign.args)
-			}
+		// The identity is the ad-hoc one: no developer identity, and no keychain, because the binaries have to
+		// start on a machine nobody prepared, and both of them are signed by the one command the host has.
+		sign := stepFor(plan.Steps, "sign")
 
-			if stepIndex(plan.Steps, "strip") > stepIndex(plan.Steps, "sign") {
-				t.Errorf("%s: the binaries are signed before they are stripped, and the signature is over bytes strip rewrote", target)
-			}
+		if sign.name != "codesign" {
+			t.Errorf("%s: the host compile signs with %s %v, want the host's own codesign", target, sign.name, sign.args)
+		}
+
+		if !sameWords(sign.args, []string{"-s", "-", "ffmpeg", "ffprobe"}) {
+			t.Errorf("%s: codesign is given %v, want -s - ffmpeg ffprobe: the ad-hoc identity signs both programs, and an identity the host does not hold fails the compile instead of producing binaries that start", target, sign.args)
+		}
+
+		if stepIndex(plan.Steps, "strip") > stepIndex(plan.Steps, "sign") {
+			t.Errorf("%s: the binaries are signed before they are stripped, and the signature is over bytes strip rewrote", target)
 		}
 	}
 }
@@ -2474,31 +2489,34 @@ func argAfter(args []string, flag string) string {
 // Binaries the maintainer dropped are adopted on their own host exactly as they are adopted anywhere
 // else: the compile is what the build does when there is nothing to adopt, not a replacement for the drop.
 // The plan carries the adoption, because the licence text the archive carries is written from the run that
-// adopted the binaries.
+// adopted the binaries. Both macOS targets are pinned, because the host route is the two of them and a route
+// that adopted only the Mac's own architecture would send the other target's operator back to a compile.
 func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testing.T) {
-	repo := t.TempDir()
+	for _, target := range []string{"macos-amd64", "macos-arm64"} {
+		repo := t.TempDir()
 
-	manifest := aDropOfSuppliedBinaries(t, repo, "macos-arm64")
+		manifest := aDropOfSuppliedBinaries(t, repo, target)
 
-	plan, err := planFFmpeg(options{target: "macos-arm64"}, repo, manifest, aNativeTree("macos-arm64"), aMachineForTarget("macos-arm64"))
-	if err != nil {
-		t.Fatalf("the build refused the binaries dropped for it: %v", err)
-	}
+		plan, err := planFFmpeg(options{target: target}, repo, manifest, aNativeTree(target), aMachineForTarget(target))
+		if err != nil {
+			t.Fatalf("%s: the build refused the binaries dropped for it: %v", target, err)
+		}
 
-	if plan.Native {
-		t.Error("the build compiled binaries when binaries are sitting in the directory it embeds")
-	}
+		if plan.Native {
+			t.Errorf("%s: the build compiled binaries when binaries are sitting in the directory it embeds", target)
+		}
 
-	if !plan.Adopts {
-		t.Error("the plan adopts nothing: the host standing on the target is the host that can run them")
-	}
+		if !plan.Adopts {
+			t.Errorf("%s: the plan adopts nothing: the host standing on the target is the host that can run them", target)
+		}
 
-	if !plan.Host {
-		t.Error("the plan does not say the binaries come from this machine, and the run that carries a plan out is chosen by that")
-	}
+		if !plan.Host {
+			t.Errorf("%s: the plan does not say the binaries come from this machine, and the run that carries a plan out is chosen by that", target)
+		}
 
-	if !strings.Contains(plan.Says, "supplied") {
-		t.Errorf("the message %q does not say the ffmpeg is supplied", plan.Says)
+		if !strings.Contains(plan.Says, "supplied") {
+			t.Errorf("%s: the message %q does not say the ffmpeg is supplied", target, plan.Says)
+		}
 	}
 }
 

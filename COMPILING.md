@@ -91,7 +91,7 @@ Then ask the artifact what it says it is:
 
 A release archive carries the server binary for its platform, the administrator guide as one self-contained HTML file, and `FFMPEG.txt`.
 
-A second run over unchanged sources compiles nothing: a run that says `reusing the ffmpeg compiled for` and prints no `server` line built nothing, and that is the phase rule doing its job.
+A second run over unchanged sources compiles nothing: a run that says `reusing the ffmpeg compiled for` — `reusing the ffmpeg built for` on the one host that compiles with its own toolchain — and prints no `server` line built nothing, and that is the phase rule doing its job.
 
 ## Why it is this way
 
