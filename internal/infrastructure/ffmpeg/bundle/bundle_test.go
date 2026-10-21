@@ -128,6 +128,22 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 			t.Errorf("%s has no toolchain packages", target)
 		}
 
+		// Every compiled record pins the image it compiles in, and pins the image a sysroot is copied out of
+		// and the image a proof runs in whenever it names one. A tag is a name the registry can point somewhere
+		// else tomorrow: a compile that resolves whatever the tag points at then is not the compile this record
+		// describes, and the pair it produced is filed under this record's name anyway.
+		if !anImagePinnedAtADigest(record.ContainerDigest) {
+			t.Errorf("%s compiles in %s named at %q: a record that names no digest names a moving tag", target, record.Container, record.ContainerDigest)
+		}
+
+		if record.SysrootImage != "" && !anImagePinnedAtADigest(record.SysrootDigest) {
+			t.Errorf("%s copies its sysroot out of %s named at %q: the image a sysroot is copied out of is pinned like the image doing the copying", target, record.SysrootImage, record.SysrootDigest)
+		}
+
+		if record.Conformance.Container != "" && !anImagePinnedAtADigest(record.Conformance.Digest) {
+			t.Errorf("%s checks its programs in %s named at %q: a container a record names to prove its pair is pinned like the container that compiled it", target, record.Conformance.Container, record.Conformance.Digest)
+		}
+
 		// What proves the pair each record names is gated where the plan is built, in the table that writes out
 		// what every compiled target is compiled with: a record naming both a run and a read is refused there.
 	}
@@ -676,4 +692,13 @@ func hasFlag(recipe []string, flag string) bool {
 	}
 
 	return false
+}
+
+// anImagePinnedAtADigest says whether a record names an image at the sum the registry hands back for it, rather
+// than at a tag alone: the algorithm, a colon, and the sixty-four lowercase hex digits an image content is
+// summed to. A record naming `latest`, or naming nothing, is a record naming wherever that tag points tomorrow.
+func anImagePinnedAtADigest(digest string) bool {
+	value, named := strings.CutPrefix(digest, "sha256:")
+
+	return named && len(value) == 64 && strings.Trim(value, "0123456789abcdef") == ""
 }

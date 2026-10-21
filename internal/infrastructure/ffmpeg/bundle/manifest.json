@@ -39,6 +39,7 @@
   "targets": {
     "linux-amd64": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "packages": [
         "build-essential"
       ],
@@ -53,6 +54,7 @@
     },
     "linux-arm64": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "packages": [
         "build-essential",
         "gcc-aarch64-linux-gnu",
@@ -79,6 +81,7 @@
     },
     "linux-arm": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "packages": [
         "build-essential",
         "gcc-arm-linux-gnueabihf",
@@ -105,6 +108,7 @@
     },
     "linux-386": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "packages": [
         "build-essential",
         "gcc-multilib",
@@ -129,6 +133,7 @@
     },
     "windows-amd64": {
       "container": "docker.io/alpine:latest",
+      "container_digest": "sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
       "packages": [
         "build-base",
         "mingw-w64-gcc"
@@ -145,6 +150,7 @@
       ],
       "conformance": {
         "container": "docker.io/debian:stable",
+        "conformance_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
         "packages": [
           "wine"
         ],
@@ -155,6 +161,7 @@
     },
     "macos-amd64": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "packages": [
         "build-essential",
         "clang",
@@ -209,6 +216,7 @@
     },
     "macos-arm64": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "packages": [
         "build-essential",
         "clang",
@@ -264,6 +272,7 @@
     },
     "freebsd-amd64": {
       "container": "docker.io/debian:stable",
+      "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
       "containerfile": "Containerfile.ffmpeg.freebsd",
       "packages": [
         "build-essential",
@@ -290,6 +299,7 @@
         "--sysroot=/sysroot"
       ],
       "sysroot_image": "docker.io/freebsd/freebsd-toolchain:15.1",
+      "sysroot_digest": "sha256:6b28def54592452cdcd4161b62e529a5964c038631efba5e2902a40614c65c45",
       "conformance": {
         "reads": [
           "elf64",

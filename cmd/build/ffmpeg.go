@@ -332,13 +332,18 @@ func pruneFFMpegCache(repo string) ([]string, error) {
 
 // cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the source this
 // project pinned, the target, the configure recipe, and that target's toolchain and check environment — the
-// image it compiles in, what gets installed in it, the file that image is built from, the image a sysroot is
-// copied out of when the target's operating system is not the container's own, the compiler the record
-// names, what makes the compile cross, the flags it links with, and where its programs are checked.
+// image it compiles in and the digest that image is pinned at, what gets installed in it, the file that image
+// is built from, the image a sysroot is copied out of and its digest when the target's operating system is not
+// the container's own, the compiler the record names, what makes the compile cross, the flags it links with,
+// and where its programs are checked and at what digest that container is pinned.
 //
 // The source digest is in here and not only in the run that proves the binaries after compiling, because a
 // cache hit skips that run: without it, a manifest whose pinned source was changed would quietly reuse
 // what the old source compiled.
+//
+// The digests a record pins its images at sit beside the names, for the same reason. A record pinned at
+// another digest describes another toolchain, and an entry warmed under the old one holds binaries built with
+// compilers nobody named — under the same target name, in the same release.
 //
 // A record that names a sysroot somebody prepared outside the repositories keys on that tree — the SDK
 // version, its digest, and the tool that prepared it — because those are the headers and libraries the compile
@@ -368,6 +373,21 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		strings.Join(record.Conformance.Run, " "),
 	}
 
+	// The digest a record pins an image at belongs in the key beside the name of that image, because a record
+	// pinned at another digest describes another toolchain and an entry warmed under the old one holds binaries
+	// built with compilers nobody named. A record naming no digest keys exactly as it keyed before the field
+	// landed, which is the rule the records naming no sysroot and no extra compiler already follow: the manifest
+	// gaining a field moves the entries of the records that gained it, and nothing else.
+	if record.ContainerDigest != "" {
+		parts = append(parts, record.ContainerDigest)
+	}
+
+	// The container a pair is proved in is part of what an entry describes, so its digest moves the entry too:
+	// binaries proved against another image were proved against another environment.
+	if record.Conformance.Digest != "" {
+		parts = append(parts, record.Conformance.Digest)
+	}
+
 	// The three inputs a compile that reads another operating system's tree adds to that list. A record
 	// naming none of them keys exactly as it keyed before, so the targets compiled with the build container's
 	// own headers and libraries keep the warm entries they already have, and the one that does name them moves
@@ -376,8 +396,15 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		parts = append(parts, record.Containerfile)
 	}
 
+	// The image a sysroot is copied out of and the digest it is pinned at are one input read two ways: the name
+	// says which image, the digest says which content of it. A record naming no sysroot names no digest either,
+	// and keys as it keyed before either field existed.
 	if record.SysrootImage != "" {
 		parts = append(parts, record.SysrootImage)
+
+		if record.SysrootDigest != "" {
+			parts = append(parts, record.SysrootDigest)
+		}
 	}
 
 	if record.CC != "" {
@@ -545,19 +572,20 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		result: image,
 		dir:    repo,
 		name:   program.name,
-		args:   buildImageArgs(image, theContainerfileFor(record), record.Container, record.SysrootImage, packages),
+		args:   buildImageArgs(image, theContainerfileFor(record), theImageTheRecordNames(record.Container, record.ContainerDigest), theImageTheRecordNames(record.SysrootImage, record.SysrootDigest), packages),
 	})
 
 	if runner != image {
 		// A check container has no record of its own: it is the shared toolchain file with the packages the
 		// record's conformance names, and it has no sysroot to copy because it runs the program rather than
-		// compiling it.
+		// compiling it. The image it is built from is pinned by the digest that same record names, because a
+		// pair proved against another image is a different proof.
 		plan.Steps = append(plan.Steps, step{
 			label:  "runner",
 			result: runner,
 			dir:    repo,
 			name:   program.name,
-			args:   buildImageArgs(runner, sharedContainerfile, record.Conformance.Container, "", record.Conformance.Packages),
+			args:   buildImageArgs(runner, sharedContainerfile, theImageTheRecordNames(record.Conformance.Container, record.Conformance.Digest), "", record.Conformance.Packages),
 		})
 	}
 
@@ -917,7 +945,9 @@ func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target st
 // empty directory on purpose: the image is a toolchain, and nothing of this repository belongs in it.
 //
 // Which file the image is built from and which image a sysroot is copied out of both come from the target's
-// record. A compile that reads another operating system's headers, libraries and startup files gets them
+// record, and both arrive as the name its record writes at the digest its record pins: that is the reference
+// the container program resolves, and it is what makes tomorrow's pull the same toolchain as today's.
+// A compile that reads another operating system's headers, libraries and startup files gets them
 // from an image the build copies out of and never runs; a target that needs none is built from the shared
 // file and names no sysroot at all.
 func buildImageArgs(image string, file string, base string, sysrootImage string, packages []string) []string {
@@ -952,6 +982,20 @@ func theContainerfileFor(record bundle.Target) string {
 	}
 
 	return sharedContainerfile
+}
+
+// theImageTheRecordNames is the reference the build hands the container program for an image its record names:
+// the name the record writes, at the digest its record pins that name to. The tag alone is a name the registry
+// can point somewhere else tomorrow, and a compile asked of wherever it points then is another toolchain
+// wearing this target's name, cached and published under this target's release. A digest is what the container
+// program resolves instead of a name, and a record that names none hands over the tag: which is what the
+// manifest's own test refuses for a target it compiles.
+func theImageTheRecordNames(name string, digest string) string {
+	if digest == "" {
+		return name
+	}
+
+	return name + "@" + digest
 }
 
 // darwinSysrootVariable names the directory an operator keeps a prepared sysroot in when they keep it somewhere

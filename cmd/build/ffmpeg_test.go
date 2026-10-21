@@ -205,6 +205,11 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // it links with, the container its programs are checked in when a run is what proves them, and the things the
 // build reads out of the pair when no run can.
 //
+// Every container named below is named at the digest its record pins, because that reference — not the tag — is
+// what the build hands the container program. A compile asked of wherever `stable` or `latest` happens to point
+// tomorrow is another toolchain wearing this target's name, and the pair it produced would still be filed under
+// this target's release.
+//
 // None of these targets is compiled with the toolchain of the machine that runs this build, and none is left
 // uncompiled. The two macOS records are here because the machine that produces the releases compiles them in a
 // container like every other target; what a Mac does instead is gated where the host is the target.
@@ -230,10 +235,10 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 	}{
 		{
 			target:      "freebsd-amd64",
-			container:   "docker.io/debian:stable",
+			container:   "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			from:        "Containerfile.ffmpeg.freebsd",
 			installs:    []string{"build-essential", "clang", "lld", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
-			sysrootFrom: "docker.io/freebsd/freebsd-toolchain:15.1",
+			sysrootFrom: "docker.io/freebsd/freebsd-toolchain:15.1@sha256:6b28def54592452cdcd4161b62e529a5964c038631efba5e2902a40614c65c45",
 			compiler:    "clang --target=x86_64-unknown-freebsd --sysroot=/sysroot",
 			cross:       []string{"--enable-cross-compile", "--target-os=freebsd", "--arch=x86_64"},
 			cflags:      "--sysroot=/sysroot",
@@ -242,43 +247,43 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 		},
 		{
 			target:    "linux-386",
-			container: "docker.io/debian:stable",
+			container: "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			installs:  []string{"build-essential", "gcc-multilib", "libc6-dev-i386", "qemu-user-static"},
 			cflags:    "-m32",
 			ldflags:   "-static -m32",
 		},
 		{
 			target:    "linux-amd64",
-			container: "docker.io/debian:stable",
+			container: "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			installs:  []string{"build-essential"},
 			ldflags:   "-static",
 		},
 		{
 			target:    "linux-arm",
-			container: "docker.io/debian:stable",
+			container: "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			installs:  []string{"build-essential", "gcc-arm-linux-gnueabihf", "libc6-dev-armhf-cross", "qemu-user-static"},
 			cross:     []string{"--enable-cross-compile", "--target-os=linux", "--arch=arm", "--cross-prefix=arm-linux-gnueabihf-"},
 			ldflags:   "-static",
 		},
 		{
 			target:    "linux-arm64",
-			container: "docker.io/debian:stable",
+			container: "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			installs:  []string{"build-essential", "gcc-aarch64-linux-gnu", "libc6-dev-arm64-cross", "qemu-user-static"},
 			cross:     []string{"--enable-cross-compile", "--target-os=linux", "--arch=aarch64", "--cross-prefix=aarch64-linux-gnu-"},
 			ldflags:   "-static",
 		},
 		{
 			target:      "windows-amd64",
-			container:   "docker.io/alpine:latest",
+			container:   "docker.io/alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
 			installs:    []string{"build-base", "mingw-w64-gcc"},
 			cross:       []string{"--enable-cross-compile", "--target-os=win64", "--arch=x86_64", "--cross-prefix=x86_64-w64-mingw32-"},
 			ldflags:     "-static -static-libgcc",
-			checked:     "docker.io/debian:stable",
+			checked:     "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			checkedWith: []string{"wine"},
 		},
 		{
 			target:     "macos-amd64",
-			container:  "docker.io/debian:stable",
+			container:  "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			installs:   []string{"build-essential", "clang", "lld", "llvm", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
 			compiler:   "clang --target=x86_64-apple-darwin20 --sysroot=/sysroot",
 			cross:      []string{"--enable-cross-compile", "--target-os=darwin", "--arch=x86_64"},
@@ -291,7 +296,7 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 		},
 		{
 			target:     "macos-arm64",
-			container:  "docker.io/debian:stable",
+			container:  "docker.io/debian:stable@sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
 			installs:   []string{"build-essential", "clang", "lld", "llvm", "curl", "ca-certificates", "tar", "xz-utils", "python3"},
 			compiler:   "clang --target=arm64-apple-darwin20 --sysroot=/sysroot",
 			cross:      []string{"--enable-cross-compile", "--target-os=darwin", "--arch=aarch64"},
@@ -527,9 +532,9 @@ func TestEveryContainerTargetIsCompiledInAContainerWhateverHostRunsTheBuild(t *t
 					c.target, machine.goos, machine.goarch, file, wantFile)
 			}
 
-			if built["base"] != record.Container {
-				t.Errorf("%s on a %s %s host compiles in %q, want the container its record names, %s",
-					c.target, machine.goos, machine.goarch, built["base"], record.Container)
+			if built["base"] != record.Container+"@"+record.ContainerDigest {
+				t.Errorf("%s on a %s %s host compiles in %q, want the container its record names at the digest it pins, %s@%s",
+					c.target, machine.goos, machine.goarch, built["base"], record.Container, record.ContainerDigest)
 			}
 
 			// The image installs what its record names. A target whose pair is started by an interpreter, and
@@ -554,9 +559,9 @@ func TestEveryContainerTargetIsCompiledInAContainerWhateverHostRunsTheBuild(t *t
 					c.target, machine.goos, machine.goarch, sysrootImage, image.args)
 			}
 
-			if record.SysrootImage != "" && sysrootImage != record.SysrootImage {
-				t.Errorf("%s on a %s %s host copies its sysroot out of %q, want %s",
-					c.target, machine.goos, machine.goarch, sysrootImage, record.SysrootImage)
+			if record.SysrootImage != "" && sysrootImage != record.SysrootImage+"@"+record.SysrootDigest {
+				t.Errorf("%s on a %s %s host copies its sysroot out of %q, want %s at the digest its record pins, %s",
+					c.target, machine.goos, machine.goarch, sysrootImage, record.SysrootImage, record.SysrootDigest)
 			}
 
 			// What proves the pair travels with the record and not with the machine: a pair no host in this list
@@ -744,6 +749,16 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 		t.Error("a changed toolchain reuses the previous toolchain's cache")
 	}
 
+	// The digest a record pins is one of the things its compile reads, exactly as the image's name is: an image
+	// pinned at another digest is another toolchain, and a warm entry carried over from the old one is a pair
+	// built with compilers nobody named.
+	record = manifest.Targets["linux-arm64"]
+	record.ContainerDigest = "sha256:" + strings.Repeat("a", 64)
+
+	if cacheKey(aManifestWithOtherTarget("linux-arm64", record), "linux-arm64") == same {
+		t.Error("a record naming another digest for the container it compiles in reuses the cache the image named by the old digest built")
+	}
+
 	// A FreeBSD compile's own three fields: the file its toolchain image is built from, the image its sysroot is
 	// copied out of, and the compiler invocation that reaches configure. Reusing the warm entry the old one
 	// produced would ship a binary built against a sysroot or a toolchain nobody named.
@@ -761,6 +776,25 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 
 	if cacheKey(aManifestWithOtherTarget("freebsd-amd64", record), "freebsd-amd64") == freebsd {
 		t.Error("a FreeBSD record naming another sysroot image reuses the cache of the binaries the old sysroot built")
+	}
+
+	record = manifest.Targets["freebsd-amd64"]
+	record.SysrootDigest = "sha256:" + strings.Repeat("b", 64)
+
+	if cacheKey(aManifestWithOtherTarget("freebsd-amd64", record), "freebsd-amd64") == freebsd {
+		t.Error("a FreeBSD record naming another digest for the image its sysroot is copied out of reuses the cache the sysroot named by the old digest built")
+	}
+
+	// The container a record names when its pair is proved by running it travels in the key with the container,
+	// the packages, and the program this build runs that proof with. For most targets that container is the one
+	// that compiled the pair, and its proof tools are installed inside it; where a record names a separate one,
+	// moving its digest moves the entry too, which is the conservative side of the rule: the environment a pair
+	// was proved in is named by the entry that holds that pair.
+	record = manifest.Targets["windows-amd64"]
+	record.Conformance.Digest = "sha256:" + strings.Repeat("c", 64)
+
+	if cacheKey(aManifestWithOtherTarget("windows-amd64", record), "windows-amd64") == cacheKey(manifest, "windows-amd64") {
+		t.Error("a record naming another digest for the container its pair is proved in reuses the cache of the proof ran in the container named by the old digest")
 	}
 
 	record = manifest.Targets["freebsd-amd64"]
@@ -870,20 +904,23 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 
 	// The eight keys are pinned by value. A warm cache is the only reason a release run takes minutes rather
 	// than hours, and a manifest that gains fields must not throw away the entries a compile that did not
-	// change produced: the six values below are the keys those targets had before this feature's records grew,
-	// and they are the values that must not move. The two macOS values are the keys of the compiles those
-	// records now name, and they move whenever the toolchain their records name moves — which is what happened
-	// when the two Darwin records gained the archiver and the indexer their link needs an index out of, and again
-	// when they gained the switch that keeps their programs exactly as that link wrote them.
+	// change produced. Every one of the eight values below moved when these records gained the digest each of
+	// them pins its images at, and that is the change this list exists to catch rather than absorb: a record
+	// pinned at another digest names another toolchain, and an entry warmed under the old one holds binaries
+	// built with compilers nobody named. Each value here is the key the run that moved them reported. The two
+	// macOS values are the keys of the compiles those records name, and they moved with the toolchain their
+	// records name — which is what happened when the two Darwin records gained the archiver and the indexer their
+	// link needs an index out of, and again when they gained the switch that keeps their programs exactly as that
+	// link wrote them.
 	want := map[string]string{
-		"freebsd-amd64": "3ea7f232258ba5ddd4f97f04b28452facda0c76e732dbc7e8950653f5c1cf8c3",
-		"linux-386":     "e6b0dcd5763abfee3ed4dcbd8888dbc3ec5d9eeeffb38378d2a7b5fa6996ab4f",
-		"linux-amd64":   "20793f67a5ed90ec23ac53388b8d15e9491294553ed753f7250feaf682ae1373",
-		"linux-arm":     "95e8a1ad5f04e1fef752f679a1f99fdd4585f85ccd9f2f96137fc34f5815ffa4",
-		"linux-arm64":   "13243228d40b52d03600f55b1f073c0ce87690e9831f541189d10cdb4420fd98",
-		"macos-amd64":   "e1fbed5b5cfb8efe28d08393b51a8d4875a080ff745f8fdb2092637aca4e8294",
-		"macos-arm64":   "ee739e4fecb49ec7fd55e8de24b937c4290e0f41abc593f812b517b0af881eb7",
-		"windows-amd64": "dfe8ad310c25f9487fc8206e3d79bc62ec5b46badd22583bd367eb11577a52a5",
+		"freebsd-amd64": "6a24ce46b1a94ae369f59356cb0694fdc78d3ec6ba7a366fcac3008d073128ea",
+		"linux-386":     "b461ab25eae7520a8b422b81a216fb7656894f976008d4e53f06ecbca48d695f",
+		"linux-amd64":   "0874a444ae98b7095e2ee1cc4120419339a70c2bbff37a558a8c5b51028f27c3",
+		"linux-arm":     "880e28925f5d09562a5a3f8d58598f6e29128e2e86ff3c8f9e62a6863b442013",
+		"linux-arm64":   "8191418631f748a0e548d07543b04e9f7577f70636fb157f8cb5b76b83ecc229",
+		"macos-amd64":   "a011a701e79d02d3fd275c69d11847e75dbaf4b33fd3d808299814e3d3f01b3d",
+		"macos-arm64":   "73ab680430c9d1ff43628a6a2433fca0789823eabff633dbf9524ef8762cd8f6",
+		"windows-amd64": "2bfd58046b5dcff72082aab48bfc76b9bfb173ec7def4247130cf909ffb141b0",
 	}
 
 	for _, target := range []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "macos-amd64", "macos-arm64", "windows-amd64"} {
