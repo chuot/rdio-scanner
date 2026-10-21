@@ -469,15 +469,23 @@ func TestAProgramWithNoProgramHeadersSaysNothingAboutHowItWasLinked(t *testing.T
 	}
 }
 
-// aBuildCompilingInAContainer is the ffmpeg phase standing on a Linux host that has podman, whose container
-// steps are answered by writing what the compile step is told to produce: the pair the fixture describes,
-// in the directory the container mounts. The read that follows is the build's own, reaching real files.
-func aBuildCompilingInAContainer(t *testing.T, repo string, pair anELFProgramFixture) (*tool, *bytes.Buffer) {
+// aBuildCompilingInAContainer is the ffmpeg phase standing on a Linux host that has the container program, whose
+// container steps are answered by writing what the compile step is told to produce: the pair the test describes, in
+// the directory the container mounts. The read that follows is the build's own, reaching real files. Where a target's
+// record pins a software development kit its compile reads, the home directory this run stands in has that tree
+// prepared in it, because the plan asks for the tree before it asks for a container.
+func aBuildCompilingInAContainer(t *testing.T, repo string, target string, produced func(t *testing.T, dir string, name string)) (*tool, *bytes.Buffer) {
 	t.Helper()
 
 	manifest := bundle.ReadManifest()
 
 	out := &bytes.Buffer{}
+
+	record := manifest.Targets[target]
+
+	if record.Sysroot != (bundle.Sysroot{}) {
+		aHomeWithTheSysrootPreparedInIt(t, record)
+	}
 
 	tl := &tool{
 		repo:   repo,
@@ -496,14 +504,14 @@ func aBuildCompilingInAContainer(t *testing.T, repo string, pair anELFProgramFix
 
 			// The container compiles in the directory the build mounts at /work, and the pair it produced
 			// is sitting there when the plan's steps are done. That is where the build looks for it.
-			dir := filepath.Join(ffmpegPathsFor(repo, manifest, "freebsd-amd64").scratch, sourceDir(manifest))
+			dir := filepath.Join(ffmpegPathsFor(repo, manifest, target).scratch, sourceDir(manifest))
 
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				t.Fatalf("making the tree the container compiled in: %v", err)
 			}
 
 			for _, program := range []string{"ffmpeg", "ffprobe"} {
-				anELFProgramWrittenTo(t, dir, program+programSuffix("freebsd-amd64"), pair)
+				produced(t, dir, program+programSuffix(target))
 			}
 
 			return nil
@@ -519,7 +527,9 @@ func aBuildCompilingInAContainer(t *testing.T, repo string, pair anELFProgramFix
 func TestAFreeBSDRunReadsThePairItCompiledAndSaysWhatItReads(t *testing.T) {
 	repo := t.TempDir()
 
-	tl, out := aBuildCompilingInAContainer(t, repo, theMeasuredFreeBSDPair)
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
 
 	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
 		t.Fatalf("the build refused the pair its own record accepts: %v\n%s", err, out.String())
@@ -573,7 +583,9 @@ func TestAFreeBSDRunReadsThePairItCompiledAndSaysWhatItReads(t *testing.T) {
 func TestAFreeBSDRunKeepsNothingForAPairItsReadRefuses(t *testing.T) {
 	repo := t.TempDir()
 
-	tl, out := aBuildCompilingInAContainer(t, repo, thePairThisBuildCompilesForLinux)
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, thePairThisBuildCompilesForLinux)
+	})
 
 	_, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out)
 	if err == nil {

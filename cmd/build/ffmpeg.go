@@ -642,8 +642,10 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 // digest, recipe, and flags the manifest already carries. Binaries the maintainer dropped win over the compile
 // every time: the drop is what he built and tested, and compiling over it would throw it away.
 //
-// The plan reads one thing from a drop: which machine code the files hold. The run that adopts them runs them,
-// on the machine standing here, through the same gate a compile runs its own binaries through.
+// The plan holds a drop to the reads that target's record names, which are the same rules the build holds a pair
+// it compiled to: the drop is adopted into the release, so it is admitted on the release's own standard and not on
+// a weaker one. The run that adopts them runs them, on the machine standing here, through the same gate a compile
+// runs its own binaries through.
 func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	// The cache key is the manifest's record and the target, so a warm cache is the entry this machine's
 	// own run published, and the drop is not needed again: it has already been consumed out of this
@@ -667,17 +669,17 @@ func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record
 		return planNativeFFmpeg(repo, manifest, target, record, paths, state, machine)
 	}
 
-	// The binaries a maintainer dropped are run by the run that adopts them, on this machine, through the
-	// same gate the compile runs its own binaries through. What the plan reads here is which machine code
-	// they hold, because that is the one thing running cannot say on a machine that runs both macOS
-	// architectures.
+	// The binaries a maintainer dropped are read here, and run by the run that adopts them, on this machine,
+	// through the same gate the compile runs its own binaries through. What this reads is the header and the load
+	// commands that target's own linker writes, because a run cannot say those things across the two macOS
+	// architectures: an Apple Silicon Mac starts arm64 and x86-64 programs alike.
 	for _, name := range []string{"ffmpeg", "ffprobe"} {
 		if !aFileIsThere(drop[name]) {
 			return ffmpegPlan{}, fmt.Errorf("the ffmpeg for %s is supplied and %s has no %s: drop ffmpeg and ffprobe in %s, or build them on a %s host with go run ./cmd/build ffmpeg %s",
 				target, paths.bundle, name, paths.bundle, target, target)
 		}
 
-		if err := checkSuppliedProgram(drop[name], target); err != nil {
+		if err := checkSuppliedProgram(drop[name], target, record); err != nil {
 			return ffmpegPlan{}, err
 		}
 	}
@@ -1377,6 +1379,40 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	return false, nil
 }
 
+// readTheCompiledPair reads out of the two programs the container produced everything their target's record says
+// proves them, and starts neither of them. It answers with the first refusal, and the build caches, licenses, and
+// publishes nothing after one.
+//
+// Which reader reaches a pair is decided by the operating system the target runs, and not by anything the record
+// names: the container that compiles a macOS target's pair uses that machine's own linker, and every other
+// target's container uses the linker of the operating system that target runs. A record cannot name its way into
+// the other format's reader, because the format is what the toolchain the plan tells the container to use writes.
+func readTheCompiledPair(paths ffmpegPaths, manifest bundle.Manifest, record bundle.Target, target string) error {
+	produced := filepath.Join(paths.scratch, sourceDir(manifest))
+
+	for _, program := range []string{"ffmpeg", "ffprobe"} {
+		path := filepath.Join(produced, program+programSuffix(target))
+
+		if theTargetRunsMachOPrograms(target) {
+			if err := readAMachOProgram(path, program, target, record.Conformance.Reads); err != nil {
+				return err
+			}
+		} else if err := readAnELFProgram(path, program, target, record.Conformance.Reads, record); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// aRecordNamingAReadWithNoRule is what this build says when a target's record names a proof it does not know how to
+// make. That is the record's failure and not the file's, and both of the build's gates say it the same way: the
+// gate that reads a program somebody dropped, and the read of the pair this build compiled.
+func aRecordNamingAReadWithNoRule(target string, read string) error {
+	return fmt.Errorf("the %s record names %s in its conformance reads, and this build has no rule for that read: it proves what it compiled by reading it, and runs no %s program, so it cannot promise a read it does not have",
+		target, read, target)
+}
+
 // runFFmpegOnHost does the work of the ffmpeg that comes from the machine running the build: the pair a
 // maintainer dropped for it, or the pair this machine's own run put in its cache.
 //
@@ -1385,7 +1421,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 // text the archive carries is written from that run: it names the machine that ran them.
 func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Adopts {
-		run, err := t.prove(target, plan.Paths, stdout)
+		run, err := t.prove(target, manifest.Targets[target], plan.Paths, stdout)
 		if err != nil {
 			return false, err
 		}
@@ -1469,7 +1505,7 @@ func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target 
 
 	fmt.Fprintf(stdout, "%-7s %s\n", "drop", plan.Paths.bundle)
 
-	run, err := t.prove(target, plan.Paths, stdout)
+	run, err := t.prove(target, manifest.Targets[target], plan.Paths, stdout)
 	if err != nil {
 		return false, err
 	}

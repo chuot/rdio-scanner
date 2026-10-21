@@ -83,7 +83,9 @@ type tool struct {
 	// prove is the gate the ffmpeg binaries pass before anything adopts them: the version line the
 	// programs say, the conversions the build runs them through, and the codecs they register. It runs
 	// them on the machine standing here, which is the machine that compiled them, and it records nothing.
-	prove func(target string, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error)
+	// The target's record comes along because a program the machine can run is held to the same reads the
+	// build would have read a compiled pair through, on the targets where a run is the proof.
+	prove func(target string, record bundle.Target, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error)
 
 	// source is the ffmpeg release the manifest pins arriving in the build's cache and being recognised
 	// as that release: the fetch when the tree does not have it, and the digest that says it is. Every

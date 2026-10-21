@@ -1533,7 +1533,7 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 			return nil
 		},
 
-		prove: func(target string, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
+		prove: func(target string, record bundle.Target, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
 			seen.ran = append(seen.ran, "prove")
 
 			drop := suppliedDropFor(paths, target)

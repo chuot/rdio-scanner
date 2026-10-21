@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
@@ -86,23 +85,6 @@ type anELFProgram struct {
 	segments   []uint32
 	comments   []string
 	hasComment bool
-}
-
-// readTheCompiledPair reads out of the two programs the container produced everything their target's record
-// says proves them, and starts neither of them. It answers with the first refusal, and the build caches,
-// licenses, and publishes nothing after one.
-func readTheCompiledPair(paths ffmpegPaths, manifest bundle.Manifest, record bundle.Target, target string) error {
-	produced := filepath.Join(paths.scratch, sourceDir(manifest))
-
-	for _, program := range []string{"ffmpeg", "ffprobe"} {
-		path := filepath.Join(produced, program+programSuffix(target))
-
-		if err := readAnELFProgram(path, program, target, record.Conformance.Reads, record); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // readAnELFProgram reads the file at path, and holds it to each name the record carries, in the order the
@@ -188,8 +170,7 @@ func theELFReadHolds(read string, file anELFProgram, program string, target stri
 		return theLinkTheCommentSectionNames(file, program, target, read, record)
 
 	default:
-		return fmt.Errorf("the %s record names %s in its conformance reads, and this build has no rule for that read: it proves what it compiled by reading it, and runs no %s program, so it cannot promise a read it does not have",
-			target, read, target)
+		return aRecordNamingAReadWithNoRule(target, read)
 	}
 
 	return nil

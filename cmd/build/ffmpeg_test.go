@@ -1153,9 +1153,9 @@ func aDropOfSuppliedBinariesWith(t *testing.T, repo string, target string, ffmpe
 	return bundle.ReadManifest()
 }
 
-// The machine code the file holds is the one thing the build reads of binaries it did not compile, and it
-// reads it before anything else: an Apple Silicon Mac runs the arm64 binaries and the x86-64 ones alike,
-// so the only thing that says the Intel archive carries Intel code is the header. The refusal names the
+// A drop is read by the same rule that reads a pair this build compiled, and which architecture's machine code the
+// file holds is one of the things that rule answers. An Apple Silicon Mac runs the arm64 binaries and the x86-64 ones
+// alike, so the only thing that says the Intel archive carries Intel code is the header. The refusal names the
 // architecture in both words, because the operator has to see which one is in front of them.
 func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 	repo := t.TempDir()
@@ -2202,6 +2202,36 @@ func writeASysrootTree(dir string) error {
 // the digest recorded beside it makes it the one a record pins.
 func writeTheSysrootDigestRecordedFor(record bundle.Target, tree string) error {
 	return os.WriteFile(filepath.Join(filepath.Dir(tree), theSysrootDigestFile), []byte(record.Sysroot.SHA256+"\n"), 0644)
+}
+
+// aHomeWithTheSysrootPreparedInIt is the home directory a whole run finds a prepared SDK tree in: the tree, and the
+// digest its preparation recorded beside it, are written where this build looks for them, and the run is moved into
+// that home for the length of the test. The variable a record's tree can be named by is emptied for the same reason:
+// a run is asked to answer the same way on the machine that built it as on the machine that ships it, and a tree
+// sitting in somebody's own environment would make this test answer to that machine.
+func aHomeWithTheSysrootPreparedInIt(t *testing.T, record bundle.Target) string {
+	t.Helper()
+
+	home := t.TempDir()
+
+	tree := filepath.Join(home, ".cache", "rdio-scanner", "ffmpeg-darwin-sdk", record.Sysroot.SDK, "MacOSX"+record.Sysroot.SDK+".sdk")
+
+	t.Setenv("HOME", home)
+	t.Setenv(darwinSysrootVariable, "")
+
+	if err := writeASysrootTree(tree); err != nil {
+		t.Fatalf("the test cannot write the sysroot it was given: %v", err)
+	}
+
+	if err := writeTheSysrootDigestRecordedFor(record, tree); err != nil {
+		t.Fatalf("the test cannot write the digest the preparation records beside its tree: %v", err)
+	}
+
+	if got, lookedIn := thePreparedSysrootFor(record, os.LookupEnv, home); got != tree || lookedIn != tree {
+		t.Fatalf("the test prepared the sysroot at %s and the run looks for it at %s", tree, lookedIn)
+	}
+
+	return home
 }
 
 // theFlagNamed is the value of one flag-bearing argument, which is how a test reads what a step was told

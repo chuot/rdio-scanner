@@ -557,7 +557,7 @@ func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) 
 
 	out := &bytes.Buffer{}
 
-	report, err := newTool(repo).prove("macos-arm64", paths, out)
+	report, err := newTool(repo).prove("macos-arm64", manifest.Targets["macos-arm64"], paths, out)
 
 	if err == nil {
 		t.Fatal("a Linux host ran and adopted the arm64 macOS binaries it cannot execute")
