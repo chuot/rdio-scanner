@@ -1757,8 +1757,15 @@ func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, l
 //
 // A target whose record names reads instead of a run also carries what the build did in place of running its
 // pair, because the archive is the only place that target's reader learns the pair was never started.
+//
+// What a compiled target's pair was built by, and how it was proved, is named from the record too: the
+// archive is the only place a reader of a release sees the toolchain, and a cache or a container store is
+// not something they can look at. The names are the ones the record carries, at the digests the record pins,
+// which is the same reference the build handed the container program.
 func ffmpegLicence(manifest bundle.Manifest, target string) string {
 	var text strings.Builder
+
+	record, pinned := manifest.Targets[target]
 
 	text.WriteString("# The ffmpeg this server carries\n\n")
 	text.WriteString(fmt.Sprintf(
@@ -1770,7 +1777,7 @@ func ffmpegLicence(manifest bundle.Manifest, target string) string {
 	// is the only place a reader of a release learns that. The claim is made of the proof the record names, so
 	// it appears for exactly the targets the build proves by reading and never for one it proved by running its
 	// own binaries in a container.
-	if record, pinned := manifest.Targets[target]; pinned && len(record.Conformance.Reads) > 0 {
+	if pinned && len(record.Conformance.Reads) > 0 {
 		text.WriteString(fmt.Sprintf(
 			"These two programs were compiled and not run. The machine that compiled them runs no %s program, and\nno machine this build reached runs one either: nothing was started, and the build published only what it could\nread out of the two programs — their own headers, and the records those headers point at. What a program's headers\nshow is how it was linked and what it was linked for, not what it does, and this build does not pretend\notherwise.\n\n",
 			target,
@@ -1790,12 +1797,156 @@ func ffmpegLicence(manifest bundle.Manifest, target string) string {
 
 	text.WriteString(theAudioOnlyPosture(manifest.Recipe))
 
+	if pinned {
+		text.WriteString(theCodecsTheRecipeSelects(manifest.Recipe, len(record.Conformance.Reads) > 0))
+		text.WriteString(theToolchainThatCompiledIt(record))
+		text.WriteString(theProofTheRecordDescribes(record))
+	}
+
 	text.WriteString(fmt.Sprintf(
-		"\nThe same recipe, the same digest and the same toolchain are recorded in this repository at\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and the command that produced this binary\nis `go run ./cmd/build ffmpeg %s`.\n",
+		"The same recipe, the same digest and the same toolchain are recorded in this repository at\ninternal/infrastructure/ffmpeg/bundle/manifest.json, and the command that produced this binary\nis `go run ./cmd/build ffmpeg %s`.\n",
 		target,
 	))
 
 	return text.String()
+}
+
+// theCodecsTheRecipeSelects names the codecs the compiled program was asked to carry, out of the recipe the
+// notice already quotes: the decoders and the encoder it enables, and the disabling switch the recipe starts
+// with when it starts with one.
+//
+// The list is composed rather than written out, for the same reason the audio posture is: a notice that names
+// codecs the recipe no longer selects is a notice the release cannot stand behind. And it is what the recipe
+// selects rather than what a run recorded, because a build that reuses a cached pair starts nothing and has no
+// run to report, while the notice it writes has to say the same thing as the one that compiled.
+//
+// A pair the build did start is asked what it registers, and a pair that registers a video codec is refused;
+// a pair the build never started is not asked anything, and the notice says so instead of implying a proof
+// that did not happen.
+//
+// The names go in an indented block, the way the recipe and the source digest are carried, so the words about
+// them stay short enough to read and a list that grows does not push a paragraph off the page.
+func theCodecsTheRecipeSelects(recipe []string, provedByReading bool) string {
+	var decoders, encoders []string
+
+	for _, flag := range recipe {
+		if value := strings.TrimPrefix(flag, "--enable-decoder="); value != flag {
+			decoders = append(decoders, value)
+		} else if value := strings.TrimPrefix(flag, "--enable-encoder="); value != flag {
+			encoders = append(encoders, value)
+		}
+	}
+
+	if len(decoders) == 0 && len(encoders) == 0 {
+		return ""
+	}
+
+	text := "The codecs its recipe selects:\n\n"
+
+	if len(decoders) > 0 {
+		text += "    decodes  " + strings.Join(decoders, ", ") + "\n"
+	}
+
+	if len(encoders) > 0 {
+		text += "    encodes  " + strings.Join(encoders, ", ") + "\n"
+	}
+
+	text += "\n"
+
+	if theRecipeCarries(recipe, "--disable-everything") {
+		text += "The recipe begins by disabling every component, so nothing else is in it.\n"
+	}
+
+	if provedByReading {
+		return text + "No run recorded what the two programs register, because nothing was run: what is named\nhere is what the recipe asked the compile for, and not what a build measured them doing.\n\n"
+	}
+
+	return text + "The two programs were compiled by a build that started them, read back the codecs they register,\nand refused them if either one registered a video codec.\n\n"
+}
+
+// theToolchainThatCompiledIt names the container the pair was compiled in at the digest its record pins, the
+// file that image was built from, and the tree its link read when its record names one. These are the names
+// and the digests the build passed to the container program, so the notice names the toolchain that was
+// actually resolved and not a tag that can point somewhere else by the time a reader asks.
+//
+// A pinned reference is never shortened and never folded into a sentence: it is the one string in this notice
+// a reader may have to compare against something a registry reports, and it is already that long.
+func theToolchainThatCompiledIt(record bundle.Target) string {
+	text := "The toolchain it was compiled in:\n\n    " +
+		theImageTheRecordNames(record.Container, record.ContainerDigest) +
+		"\n    built from " + theContainerfileFor(record) + "\n\n"
+
+	if record.SysrootImage != "" {
+		text += fmt.Sprintf(
+			`Its link read a FreeBSD tree of headers, libraries and startup files, copied out of this image
+into the container that compiled them. Nothing FreeBSD was run, and the whole tree is copied
+rather than a selection of it, which is what keeps a cross-compile from ending up half
+FreeBSD and half Debian without anyone deciding that. The image the copy was made from:
+
+    %s
+
+`,
+			theImageTheRecordNames(record.SysrootImage, record.SysrootDigest),
+		)
+	}
+
+	if record.Sysroot != (bundle.Sysroot{}) {
+		text += fmt.Sprintf(
+			`Its link read Apple's MacOSX %s SDK: a tree prepared outside this repository, by the tool its
+record names, and recorded by that preparation as what it measures:
+
+    %s
+    sha256 %s
+
+The compile reaches it through a mount that exists only while the container that compiled
+them runs, and that image carries no copy of it.
+
+`,
+			record.Sysroot.SDK, record.Sysroot.Generator, record.Sysroot.SHA256,
+		)
+	}
+
+	return text
+}
+
+// theProofTheRecordDescribes says what this build did to believe the two programs, in the shape the target's
+// record describes: a pair started in the image that compiled it, a pair started under a runner installed in
+// that image, a pair started under a runner in a second container the record names at a digest, or a pair
+// nothing ever started, held instead to the things the build read out of it.
+//
+// It names a runner because a proof run in an emulator is not the same proof as a run on the machine, and a
+// reader is the one who has to know which one the release is standing on.
+func theProofTheRecordDescribes(record bundle.Target) string {
+	if len(record.Conformance.Reads) > 0 {
+		return `What stands in place of a run is named by this target's record, and the build holds both
+programs to every one of them, in the order it reads them:
+
+    ` + strings.Join(record.Conformance.Reads, "  ") + `
+
+`
+	}
+
+	if record.Conformance.Container != "" {
+		return "These two programs were proved by starting them" + theRunnerTheRecordNames(record) + ` in a second
+container the build made from ` + sharedContainerfile + ` with the packages that record names for its proof:
+
+    ` + theImageTheRecordNames(record.Conformance.Container, record.Conformance.Digest) + `
+
+`
+	}
+
+	return "These two programs were proved by starting them in the container that compiled them" +
+		theRunnerTheRecordNames(record) + ".\n\n"
+}
+
+// theRunnerTheRecordNames is the clause naming the program a proof runs the pair through, when its record
+// names one, and says nothing when the pair was started directly.
+func theRunnerTheRecordNames(record bundle.Target) string {
+	if len(record.Conformance.Run) == 0 {
+		return ""
+	}
+
+	return " under " + strings.Join(record.Conformance.Run, " and ")
 }
 
 // theAudioOnlyPosture is what the recipe says is not compiled in, in the words the licence texts use.
@@ -1809,7 +1960,7 @@ func theAudioOnlyPosture(recipe []string) string {
 	var posture []string
 
 	if theRecipeCarries(recipe, "--disable-everything") {
-		posture = append(posture, "the recipe disables every component and enables only the audio demuxers, decoders, encoder, muxers and filters the server converts with, and the pipe, fd and file protocols the recording arrives and leaves on")
+		posture = append(posture, "the recipe disables every component and enables only the audio\ndemuxers, decoders, encoder, muxers and filters the server converts with, and the pipe, fd and file\nprotocols the recording arrives and leaves on")
 		posture = append(posture, "no video codec, video decoder, or video encoder is compiled in")
 	}
 
@@ -1821,7 +1972,7 @@ func theAudioOnlyPosture(recipe []string) string {
 		return ""
 	}
 
-	return "\nThis program is compiled for audio: " + strings.Join(posture, "; ") + ".\n\n"
+	return "\nThis program is compiled for audio: " + strings.Join(posture, ";\n") + ".\n\n"
 }
 
 // theRecipeCarries reports whether the recipe tells the build one switch.

@@ -1071,6 +1071,134 @@ func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) 
 		if saysItWasNotRun && !provenByReading {
 			t.Errorf("%s is proven by running its own binaries in a container, and its licence text says its pair was compiled and not run:\n%s", target, text)
 		}
+
+		// The archive is the only place a reader of a release finds out what compiled the pair inside it, and
+		// the record now pins that toolchain at a digest. The text names the reference the build handed the
+		// container program: the name the record writes, at the digest it pins, and the file the image was
+		// built from.
+		if !strings.Contains(text, record.Container+"@"+record.ContainerDigest) {
+			t.Errorf("%s's licence text does not name the container it was compiled in at the digest its record pins, %s@%s:\n%s",
+				target, record.Container, record.ContainerDigest, text)
+		}
+
+		containerfile := record.Containerfile
+		if containerfile == "" {
+			containerfile = "Containerfile.ffmpeg"
+		}
+
+		if !strings.Contains(text, containerfile) {
+			t.Errorf("%s's licence text does not name the %s its toolchain image was built from:\n%s", target, containerfile, text)
+		}
+
+		// A pair linked against another operating system's headers, libraries and startup files has to say which
+		// tree those came from, and the record names it: the FreeBSD project's toolchain image at its digest for
+		// one target, the SDK version with the digest its preparation recorded for the two macOS targets.
+		if record.SysrootImage != "" && !strings.Contains(text, record.SysrootImage+"@"+record.SysrootDigest) {
+			t.Errorf("%s's licence text does not name the image its sysroot was copied out of at its digest, %s@%s:\n%s",
+				target, record.SysrootImage, record.SysrootDigest, text)
+		}
+
+		if record.Sysroot != (bundle.Sysroot{}) {
+			for _, want := range []string{record.Sysroot.SDK, record.Sysroot.SHA256, record.Sysroot.Generator} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s's licence text does not name %s about the SDK tree it was cross-compiled against:\n%s", target, want, text)
+				}
+			}
+		}
+
+		// How the pair was proven is what its record describes, and the text says the same thing the build does:
+		// started in the container that compiled it, started under the runner the record names, started under a
+		// runner in the separate container the record names at its digest, or never started, with what was read
+		// out of it named in the order the record names it.
+		if provenByReading {
+			at := 0
+
+			for _, read := range record.Conformance.Reads {
+				found := strings.Index(text[at:], read)
+
+				if found < 0 {
+					t.Errorf("%s's licence text does not name the %s it reads out of the pair in the order its record names them:\n%s",
+						target, read, text)
+					break
+				}
+
+				at += found + len(read)
+			}
+
+			if !strings.Contains(text, "No run recorded") {
+				t.Errorf("%s's pair is never started, and its licence text does not say no run recorded what it registers:\n%s", target, text)
+			}
+		} else {
+			if strings.Contains(text, "No run recorded") {
+				t.Errorf("%s's pair is started by this build, and its licence text says no run recorded what it registers:\n%s", target, text)
+			}
+
+			if len(record.Conformance.Run) == 0 && record.Conformance.Container == "" && !strings.Contains(text, "the container that compiled them") {
+				t.Errorf("%s's pair is started in the container that compiled it, and its licence text does not say so:\n%s", target, text)
+			}
+
+			for _, runner := range record.Conformance.Run {
+				if !strings.Contains(text, runner) {
+					t.Errorf("%s's pair is started under %s, and its licence text does not name it:\n%s", target, runner, text)
+				}
+			}
+
+			if record.Conformance.Container != "" {
+				pinned := record.Conformance.Container + "@" + record.Conformance.Digest
+
+				if !strings.Contains(text, pinned) {
+					t.Errorf("%s's pair is proved in %s, and its licence text does not name that container at its digest:\n%s", target, pinned, text)
+				}
+			}
+		}
+
+		// The codecs the notice names are the ones the recipe selects, because a reused compile starts the pair
+		// nothing and so cannot report what a program registered: the recipe is the one place the codecs a
+		// release promises are written down.
+		for _, flag := range manifest.Recipe {
+			codec := strings.TrimPrefix(flag, "--enable-decoder=")
+
+			if codec == flag {
+				codec = strings.TrimPrefix(flag, "--enable-encoder=")
+			}
+
+			if codec == flag {
+				continue
+			}
+
+			if !strings.Contains(text, codec) {
+				t.Errorf("%s's licence text does not name the codec %s its recipe selects:\n%s", target, codec, text)
+			}
+		}
+	}
+
+	// Two mutations show the new sentences are composed from the record and not typed out for the targets this
+	// release happens to ship today: a runner the record changes is a runner the text follows, and a read the
+	// record drops is a read the text stops promising.
+	changed := bundle.ReadManifest()
+	record := changed.Targets["linux-amd64"]
+	record.Conformance.Run = []string{"qemu-x86_64"}
+	changed.Targets["linux-amd64"] = record
+
+	if text := ffmpegLicence(changed, "linux-amd64"); !strings.Contains(text, "qemu-x86_64") {
+		t.Error("the licence text for linux-amd64 does not follow the runner its record names, so it is written for today's records and not from them")
+	}
+
+	changed = bundle.ReadManifest()
+	record = changed.Targets["freebsd-amd64"]
+	record.Conformance.Reads = []string{"elf64", "exec", "x86_64", "static", "comment"}
+	changed.Targets["freebsd-amd64"] = record
+
+	if text := ffmpegLicence(changed, "freebsd-amd64"); strings.Contains(text, "osabi_freebsd") {
+		t.Error("the licence text names osabi_freebsd for a record that stopped naming it as something the build reads")
+	}
+
+	// And the codecs: the notice names what the recipe selects, so a recipe that stops selecting an encoder
+	// stops the notice promising it.
+	changed.Recipe = aRecipeWithout(changed.Recipe, "--enable-encoder=aac")
+
+	if text := ffmpegLicence(changed, "freebsd-amd64"); strings.Contains(text, "aac") {
+		t.Error("the licence text promises an aac encoder to a recipe that stopped enabling one")
 	}
 }
 
