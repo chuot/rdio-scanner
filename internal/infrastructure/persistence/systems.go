@@ -272,8 +272,13 @@ func saveSystemLevel(ctx context.Context, s store, systemID uint64, write func(t
 // readSystems is the legacy `Systems.Read`: one transaction that reads the catalog and then reads
 // each system's sites, talkgroups, and units through the same transaction, and hands back the
 // result sorted by display order.
+//
+// That transaction is asked for as read-only. The catalog is what every configuration save announces
+// through, so this read runs on the path of every save and on the path of every page that shows the
+// configuration: asking for the write lock here would queue the catalog behind whichever save was running
+// and make the busy timeout the price of reading.
 func readSystems(ctx context.Context, s store) (domain.Systems, error) {
-	tx, err := s.begin(ctx)
+	tx, err := s.beginRead(ctx)
 	if err != nil {
 		return nil, operationError("systems", "read", err)
 	}

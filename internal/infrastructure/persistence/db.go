@@ -127,6 +127,23 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		// `busy_timeout=10000`. It is kept because it works, and because a connection string
 		// that differs from the one the other server writes is a difference someone would have
 		// to explain.
+		//
+		// `_txlock=immediate` is this server's own addition, and it is here for the saves. A
+		// reconciling save reads the rows it is about to replace before it replaces them, and a read
+		// inside a transaction takes the database's read lock; a transaction that holds the read lock
+		// is not allowed to ask for the write lock. So the busy timeout above is a wait such a save
+		// could never make: begun deferred, it is refused the moment it writes, however briefly
+		// whatever else is holding the database means to keep holding it. Beginning immediate takes
+		// the write lock before the read, which turns a busy database into the ten-second wait this
+		// connection string promises rather than into a refusal the save was never allowed to avoid.
+		//
+		// Two things are deliberately outside that. A transaction asked for as read-only is begun
+		// without the begin mode, which is how the reads that only read — a listener fetching one
+		// recorded call, the stored catalog every save announces through — keep their lock; a server
+		// that took the write lock to answer a read would serialize its readers behind its writers,
+		// which is the opposite of what a busy timeout is for. And a statement that runs outside a
+		// transaction is not affected by a begin mode at all: it waits for a busy database exactly as
+		// it always waited.
 		// The path is escaped into the URL the driver reads: the
 		// legacy install lives under "Rdio Scanner", and a path with a space,
 		// a `#`, or a `?` in it is a path, not a query. Escaping is segment by
@@ -138,7 +155,7 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 			segments[i] = url.PathEscape(segment)
 		}
 
-		return "sqlite", "file:" + strings.Join(segments, "/") + "?_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000", nil
+		return "sqlite", "file:" + strings.Join(segments, "/") + "?_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000&_txlock=immediate", nil
 
 	case DialectMariadb, DialectMysql:
 		// ANSI_QUOTES is what lets the same double-quoted identifiers in the schema work on

@@ -66,8 +66,33 @@ func (s store) exec(ctx context.Context, query string, args ...any) (sql.Result,
 // begin starts the single transaction a reconciling save runs in. Every legacy `Write` is one
 // transaction, and a save that left half of a collection stored is one the next save would read
 // back as the configuration.
+//
+// It is begun with the write posture the sqlite connection string carries, which is what a save needs:
+// the write lock is held before the save reads the rows it is about to replace. A read belongs here as
+// little as a save belongs in beginRead.
 func (s store) begin(ctx context.Context) (transaction, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return transaction{}, err
+	}
+
+	return transaction{tx: tx, store: s}, nil
+}
+
+// beginRead starts the transaction a read runs in — one that reads several tables and needs what it
+// read to agree with itself, and writes nothing.
+//
+// It asks the driver for a read-only transaction, and the driver begins a transaction asked for that
+// way without the connection string's write posture. That is the whole of the difference: the rule the
+// two share is that a save holds the write lock before it reads, and a read does not ask for the write
+// lock at all. A server that took the write lock to answer a read would put every listener's call fetch
+// behind whichever writer happened to be running, and the busy timeout a busy database is met with would
+// become the time a listener waits.
+//
+// So this is for reads only, and a save that used it would be a save allowed to read before it held the
+// lock — the exact refusal the write posture exists to end.
+func (s store) beginRead(ctx context.Context) (transaction, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return transaction{}, err
 	}

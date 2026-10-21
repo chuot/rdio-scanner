@@ -53,8 +53,14 @@ func NewCalls(db *sql.DB, dialect Dialect) *Calls {
 //
 // The four reads run in one transaction, which is how the legacy `Calls.GetCall` runs them: a
 // listener fetching a call should not see the call and then find its frequencies gone.
+//
+// That transaction is asked for as read-only. This is a listener's read and not a save: it holds the
+// database's read lock for the length of its four statements, and a read has no business asking for the
+// write lock a save takes before it reads. A fetch that took the write lock would queue behind whichever
+// writer was running, and the ten-second wait a busy database is met with would become the time a
+// listener waits for its own call.
 func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error) {
-	tx, err := calls.begin(ctx)
+	tx, err := calls.beginRead(ctx)
 	if err != nil {
 		return domain.Call{}, operationError("calls", "getcall", err)
 	}

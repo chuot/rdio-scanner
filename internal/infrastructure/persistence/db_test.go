@@ -126,16 +126,21 @@ func TestOpenRejectsAnUnknownDatabaseTypeWithoutOpeningAnything(t *testing.T) {
 	}
 }
 
-func TestSqliteDataSourceIsTheLegacyOne(t *testing.T) {
+// TestSqliteDataSourceCarriesTheLegacyPragmasAndTheWritePosture pins the whole sqlite connection
+// string, because a deployment's ini file is not rewritten when it swaps one server for this one. The two
+// pragmas are the legacy server's, kept character for character down to the encoded `=`, and the begin mode
+// is this server's own addition: a save that reads what it is about to replace has to hold the write lock
+// before it reads, or the busy timeout the pragmas promise is a wait it is not allowed to make.
+func TestSqliteDataSourceCarriesTheLegacyPragmasAndTheWritePosture(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{Dialect: DialectSqlite, FilePath: "/var/lib/rdio-scanner/rdio-scanner.db"})
 	if err != nil {
 		t.Fatalf("dataSourceName: %v", err)
 	}
 
-	const want = "file:/var/lib/rdio-scanner/rdio-scanner.db?_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000"
+	const want = "file:/var/lib/rdio-scanner/rdio-scanner.db?_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000&_txlock=immediate"
 
 	if dsn != want {
-		t.Errorf("dsn = %q, want %q", dsn, want)
+		t.Errorf("dsn = %q, want %q: the legacy pair of pragmas and the write posture this server adds", dsn, want)
 	}
 }
 
@@ -341,8 +346,8 @@ func TestSqliteDataSourceEscapesThePathTheOperatorNames(t *testing.T) {
 		t.Errorf("the driver reads the database path %q, want %q: a path with a space or a # is a path, not a query", parsed.Path, path)
 	}
 
-	if parsed.RawQuery != "_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000" {
-		t.Errorf("the pragmas arrived as %q, want the legacy pair", parsed.RawQuery)
+	if parsed.RawQuery != "_pragma=foreign_keys=on&_pragma=busy_timeout%3d10000&_txlock=immediate" {
+		t.Errorf("the data source carries %q, want the pragmas and the write posture, and that escaping the path changed nothing in them", parsed.RawQuery)
 	}
 }
 

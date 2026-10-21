@@ -16,8 +16,11 @@
 package persistence
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"rdio-scanner/internal/domain"
@@ -185,5 +188,149 @@ func TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral(t *testing.T) {
 
 	if bound := DialectPostgresql.bind(query); bound != want {
 		t.Errorf("bound query = %s, want %s: the ? inside the literal is not a placeholder, and the numbering must not count it", bound, want)
+	}
+}
+
+// holdTheWriteLock borrows a connection from the pool the product opened, begins a transaction on it,
+// writes one log row, and leaves that transaction open: the state a save meets when a second connection
+// has written and not committed. The row goes into `logs`, which neither the access save nor either read
+// here touches, so the only thing they contend for is the database's write lock. The holder is rolled
+// back when the test ends.
+func holdTheWriteLock(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("Conn: %v", err)
+	}
+
+	holder, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.Close()
+
+		t.Fatalf("BeginTx: %v", err)
+	}
+
+	if _, err := holder.ExecContext(context.Background(),
+		`INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES (?, ?, ?, ?)`,
+		string(domain.LogLevelInfo),
+		string(domain.LogSourceServer),
+		"a transaction that holds the write lock",
+		callHistoryTime().UnixMilli(),
+	); err != nil {
+		holder.Rollback()
+		conn.Close()
+
+		t.Fatalf("the holder could not write: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if err := holder.Rollback(); err != nil {
+			t.Errorf("the holder rolls back as %v, want the write lock released when the test ends", err)
+		}
+
+		conn.Close()
+	})
+}
+
+// TestAReconcilingSaveIsRefusedAtItsBeginWhenTheWriteLockIsHeld pins where a writing transaction takes
+// the write lock, because that decides whether a busy database is a wait the server honours.
+//
+// A reconciling save reads the identities the store holds before it replaces them, and a read inside a
+// transaction takes the database's read lock. A transaction holding the read lock is not allowed to wait
+// for the write lock, so a save that reads first can never spend the ten-second busy timeout the
+// connection string promises: it is refused the moment it writes, and the report names a statement. The
+// write lock is therefore taken at the begin, before the read, and the refusal a busy database produces
+// names the transaction that could not start.
+//
+// The arrangement is the one a contended whole-suite run produces: a second connection has written and
+// not committed, and the submitted access list is not the list the store holds, so the first thing the
+// save writes is the delete of the row the submission dropped.
+func TestAReconcilingSaveIsRefusedAtItsBeginWhenTheWriteLockIsHeld(t *testing.T) {
+	db := openSchemaDatabase(t)
+
+	accesses := NewAccesses(db, DialectSqlite)
+
+	stored := domain.Accesses{{
+		Code:  "stored-access",
+		Ident: "the access the store holds",
+		Limit: 1,
+		Order: 1,
+		Scope: wildcardScope(t),
+	}}
+
+	if err := accesses.SaveAccesses(context.Background(), stored); err != nil {
+		t.Fatalf("SaveAccesses of the access the store is to hold: %v", err)
+	}
+
+	holdTheWriteLock(t, db)
+
+	err := accesses.SaveAccesses(context.Background(), domain.Accesses{{
+		Code:  "submitted-instead",
+		Ident: "the access the submission names",
+		Limit: 2,
+		Order: 2,
+		Scope: wildcardScope(t),
+	}})
+
+	if err == nil {
+		t.Fatal("SaveAccesses = nil while another connection holds the write lock, want the save refused")
+	}
+
+	message := err.Error()
+
+	if !strings.Contains(message, "accesses.write") {
+		t.Errorf("the save reported %v, want it to name the access store's write", message)
+	}
+
+	if !strings.Contains(message, "database is locked") {
+		t.Errorf("the save reported %v, want the busy database named as the cause", message)
+	}
+
+	// The refusal is the transaction's: a save whose begin was refused never reached a statement, and a
+	// report that names one is a save that read before it asked for the write lock.
+	for _, statement := range []string{`DELETE FROM "accesses"`, `UPDATE "accesses"`, `INSERT INTO "accesses"`, `SELECT "accessId"`} {
+		if strings.Contains(message, statement) {
+			t.Errorf("the save reported %v, want the failure of its transaction and not of the statement %q it never reached", message, statement)
+		}
+	}
+
+	if count := countRows(t, db, "accesses"); count != 1 {
+		t.Errorf("the table holds %d accesses after a save that was refused, want the stored one left exactly as it was", count)
+	}
+}
+
+// TestAReadTransactionIsNotHeldUpByAConnectionHoldingTheWriteLock pins the half of the same rule that
+// keeps the server serving: the write lock belongs to the transactions that write.
+//
+// Both reads here run inside a transaction because the product wants their statements to agree with each
+// other. GetCall reads a call with its audio, its frequencies, its source units and its patches in one
+// transaction, so a listener cannot see the call and then find its frequencies gone; the catalog read
+// brings the systems, talkgroups, sites and units back as the one configuration every save announces.
+// Neither is a save. A read that asked for the write lock at its begin would put every listener's call
+// fetch behind whichever writer is running, and the busy timeout would become the time a listener waits.
+func TestAReadTransactionIsNotHeldUpByAConnectionHoldingTheWriteLock(t *testing.T) {
+	fixture := newCallsFixture(t)
+
+	recorded := fixture.storeCall(t, 10001, 1514001, callHistoryTime())
+
+	holdTheWriteLock(t, fixture.db)
+
+	catalog, err := NewSystems(fixture.db, DialectSqlite).AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	if len(catalog) != 1 || catalog[0].SystemRef != 10001 {
+		t.Fatalf("AllSystems returned %+v, want the one system the fixture stored, read while another connection holds the write lock", catalog)
+	}
+
+	found, err := fixture.calls.GetCall(context.Background(), recorded.ID)
+	if err != nil {
+		t.Fatalf("GetCall: %v", err)
+	}
+
+	if found.ID != recorded.ID || found.Talkgroup.TalkgroupRef != 1514001 {
+		t.Errorf("GetCall returned %+v, want the recorded call and its talkgroup, read while another connection holds the write lock", found)
 	}
 }
