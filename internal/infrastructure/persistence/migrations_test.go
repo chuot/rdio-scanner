@@ -3208,13 +3208,24 @@ func TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// TestMigrateReportsAContextCancelledMidPreload: the talkgroups
-// migration preloads the systems the v6 talkgroups resolve against, and a preload is
-// a read like any other. A read cancelled mid-iteration leaves the map missing
-// entries, and the migrated talkgroups would point at the wrong systems; the pass
-// reports the failure and stops, and a pass that stopped mid-preload has read nothing
-// it may rewrite — the v6 table stays where it is.
-func TestMigrateReportsAContextCancelledMidPreload(t *testing.T) {
+// TestMigrateReportsAContextCancelledAtThePreload: the talkgroups migration preloads the systems
+// the v6 talkgroups resolve against, and a preload is a read like any other. A read the caller's
+// context has already ended is not a partial answer: the pass reports the failure and stops, and a pass
+// that stopped at a read has rewritten nothing — the v6 table stays where it is.
+//
+// The cancellation is arranged through the Progress callback the pass is given, which is the handle a
+// caller has on a migration while it is running: the callback ends the caller's context at the line that
+// announces the talkgroups step, and that line is said immediately before the preload is asked for.
+// Nothing here waits on a clock, and no size of seed is needed to make the read fail.
+//
+// Two shapes are not reached by this arrangement, and no deterministic arrangement on this driver
+// reaches them: a read that breaks partway through the rows it has already begun handing back, and a
+// scan that fails on a row already handed back. Both need a cancellation delivered at an iteration
+// boundary no test can name, and the code that answers them stays as written rather than being pinned
+// by an arrangement that only looks deterministic. What is pinned here is the half a caller can be held
+// to: a read that cannot be made is reported as that read failing, naming the statement the pass asked
+// for.
+func TestMigrateReportsAContextCancelledAtThePreload(t *testing.T) {
 	db := openSchemaDatabase(t)
 
 	defer db.Close()
@@ -3228,43 +3239,39 @@ func TestMigrateReportsAContextCancelledMidPreload(t *testing.T) {
 		t.Fatalf("seeding the v6 row: %v", err)
 	}
 
-	// The preload: two hundred-odd thousand systems, hundreds of milliseconds to
-	// read, filled by doubling — one statement per doubling, every reference
-	// distinct.
-	if _, err := db.Exec(`INSERT INTO "systems" ("systemRef", "label") VALUES (1, 'System 1')`); err != nil {
-		t.Fatalf("seeding the systems: %v", err)
-	}
-
-	for i := 0; i < 18; i++ {
-		if _, err := db.Exec(`INSERT INTO "systems" ("systemRef", "label") SELECT "systemRef" + (SELECT COUNT(*) FROM "systems"), "label" FROM "systems"`); err != nil {
-			t.Fatalf("doubling the systems: %v", err)
-		}
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go func() {
-		time.Sleep(50 * time.Millisecond)
+	defer cancel()
 
-		cancel()
-	}()
+	announced := []string{}
 
-	err := Migrate(ctx, db, DialectSqlite, nil, nil)
+	err := Migrate(ctx, db, DialectSqlite, nil, func(level, message string) {
+		announced = append(announced, message)
 
-	if err == nil {
-		t.Fatal("Migrate = nil for a preload read cancelled mid-iteration, want the pass to report the failure")
+		// The line the step says before it preloads the systems it resolves against.
+		// Ending the caller's context here is a cancellation landing on the preload, and
+		// it is landed there by the one callback the pass offers a caller.
+		if message == "migrating talkgroups..." {
+			cancel()
+		}
+	})
+
+	if !strings.Contains(strings.Join(announced, "\n"), "migrating talkgroups...") {
+		t.Fatalf("the pass never announced the talkgroups step, so nothing was arranged at its preload: %v", announced)
 	}
 
-	// The failure the pass reports has to name the preload read it could not
-	// finish. Today the preload swallows the cancelled rows, the map goes on
-	// missing entries, and the first thing to fail is a later write — an
-	// administrator reading that line is pointed at the wrong statement.
+	if err == nil {
+		t.Fatal("Migrate = nil for a preload read the caller's context had already ended, want the pass to report the failure")
+	}
+
+	// The failure the pass reports has to name the preload read it could not make. An
+	// administrator shown only "context canceled" is pointed at no statement at all.
 	if !strings.Contains(err.Error(), `SELECT "systemId", "systemRef" FROM "systems"`) {
-		t.Errorf("Migrate reported %v, want it to name the preload read it could not finish", err)
+		t.Errorf("Migrate reported %v, want it to name the preload read it could not make", err)
 	}
 
 	if !hasV6Table(t, db, "rdioScannerTalkgroups") {
-		t.Error("the v6 talkgroups table was dropped by a pass that failed mid-preload")
+		t.Error("the v6 talkgroups table was dropped by a pass that failed at its preload")
 	}
 }
 
