@@ -34,7 +34,7 @@ const (
 	IngestCallAccepted IngestCallOutcome = "accepted"
 
 	// IngestCallIncomplete means the call did not carry what a call needs. The upload
-	// endpoints answer this with the "incomplete call" status the frozen contract fixes.
+	// endpoints answer this with the "incomplete call" status the contract fixes.
 	IngestCallIncomplete IngestCallOutcome = "incomplete"
 
 	// IngestCallBlacklisted means the owning system refuses that talkgroup.
@@ -65,10 +65,8 @@ type IngestCallCommand struct {
 	Call domain.Call
 }
 
-// IngestCallHandler turns an ingest claim into a stored, delivered call.
-//
-// The order of the steps is the order the legacy server performs them in, because that
-// order is observable: a blacklisted call is never checked for duplication, a call that
+// IngestCallHandler turns an ingest claim into a stored, delivered call. The order of the
+// steps is observable: a blacklisted call is never checked for duplication, a call that
 // auto-populates broadcasts the new configuration before it is stored, and a duplicate is
 // rejected before its audio is converted.
 type IngestCallHandler struct {
@@ -86,29 +84,20 @@ type IngestCallHandler struct {
 	forwarder   ports.DownstreamForwarder
 	clock       ports.Clock
 
-	// writes holds one call being ingested at a time. The legacy server gets this for free: every call
-	// — from a watched directory, from an upload, from a downstream server — goes to one queue with one
-	// worker. That is what makes its duplicate detection mean anything, and what makes two calls naming a
-	// system the server does not know create that system once and not twice. Here the watchers run on
-	// their own goroutines and an upload is answered on the connection that posted it, so the rule has to
-	// be held on purpose.
+	// writes holds one call being ingested at a time. Duplicate detection and auto-
+	// populate's create-once both depend on that serialization, and with watchers on
+	// their own goroutines and uploads answered on their own connections the rule has
+	// to be held on purpose — see the ingest serialization maintainer note.
 	writes sync.Mutex
 }
 
-// NewIngestCallHandler builds the handler from its ports.
-//
-// The options are read through the options port rather than held, so that the composition
-// root decides whether that read reaches the database or an in-memory copy refreshed when
-// the configuration changes.
-//
-// The downstream repository and the forwarder belong to the same step: the repository says
-// which other servers this one posts its calls to and for which systems, and the forwarder
-// does the posting. A deployment with no downstreams is a repository that returns nothing,
-// not a handler built without them.
-//
-// The delayer is the part that decides whether a stored call is told to anybody now or later. A
-// deployment whose talkgroups and systems name no delay is a delayer that never takes a call, not
-// a handler built without one.
+// NewIngestCallHandler builds the handler from its ports. The options are read through the
+// options port rather than held, so the composition root decides whether that read reaches
+// the database or an in-memory copy. The downstream repository and the forwarder belong to
+// the same step: a deployment with no downstreams is a repository that returns nothing, not
+// a handler built without them. The delayer decides whether a stored call is told to anybody
+// now or later: a deployment naming no delay is a delayer that never takes a call, not a
+// handler built without one.
 func NewIngestCallHandler(
 	calls ports.CallRepository,
 	systems ports.SystemRepository,
@@ -141,12 +130,11 @@ func NewIngestCallHandler(
 	}
 }
 
-// Handle resolves, filters, stores, and delivers one ingested call.
-//
-// The delivery is made after the ingest lock is released: the store, the log,
-// and the duplicate decision are the server's own work and run under the lock, while the
-// delivery is the part a listener can stall — a listener that cannot keep up waits in its own
-// delivery, and the next call the server ingests is not serialized behind it.
+// Handle resolves, filters, stores, and delivers one ingested call. The delivery is made
+// after the ingest lock is released: the store, the log, and the duplicate decision are the
+// server's own work and run under the lock, while the delivery is the part a listener can
+// stall — a listener that cannot keep up waits in its own delivery, and the next ingested
+// call is not serialized behind it.
 func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallCommand) (IngestCallResult, error) {
 	var deliver domain.Call
 
@@ -185,30 +173,25 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		return handler.failed(err)
 	}
 
-	// The line every ingest decision gets: the call it is about, the decision, and the recording the
-	// call came from.
+	// The line every ingest decision gets: the call it is about, the decision, and the
+	// recording the call came from.
 	logCall := func(level string, call domain.Call, decision string) {
 		handler.log(ctx, level, domain.LogSourceIngest, fmt.Sprintf("call from system %v talkgroup %v %s, %s",
 			call.System.SystemRef, call.Talkgroup.TalkgroupRef, decision, call.AudioFilename))
 	}
 
-	// The line for a call the server could not finish with: what it was trying to do, then the
-	// failure's own text, which is the part that names the statement that failed.
+	// The line for a call the server could not finish with: what it was trying to do,
+	// then the failure's own text, which names the statement that failed.
 	logError := func(err error) (IngestCallResult, error) {
 		handler.log(ctx, domain.LogLevelError, domain.LogSourceIngest, fmt.Sprintf("the call could not be ingested: %v", err.Error()))
 
 		return IngestCallResult{Outcome: IngestCallFailed}, err
 	}
 
-	// What this recording changed in the administrator's configuration, in the order the changes were
-	// made. Auto-populate creates a system, a talkgroup or a unit because the recording named it, and until
-	// now it wrote nothing about it: a system appearing in a configuration nobody edited is a support
-	// request this product gets, and the recording that named it is the thing an operator has to be able to
-	// find.
-	//
-	// The sentences are built where the change is decided and written where the change is put on record,
-	// together with the systems that hold them. A call that fails before that write reports nothing about
-	// the configuration, which is what its own failure entry is for.
+	// What this recording changed in the administrator's configuration, in the order the
+	// changes were made: auto-populate creates a system, a talkgroup or a unit because
+	// the recording named it, and an operator has to be able to find the recording that
+	// named it — see the auto-populate configuration log maintainer note.
 	created := []string{}
 
 	logCreated := func(what string) {
@@ -221,8 +204,8 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		}
 	}
 
-	// The units this recording added, as opposed to the ones the system already had: merging reports only
-	// that something changed, and the entry has to name what.
+	// The units this recording added, as opposed to the ones the system already had:
+	// merging reports only that something changed, and the entry has to name what.
 	addedUnits := func(before, after domain.System) domain.Units {
 		added := domain.Units{}
 
@@ -269,8 +252,8 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 	// A previous auto-populated call may have created this talkgroup with its numeric
 	// reference as its label. A later upload that does describe it repairs that
-	// placeholder, and only that placeholder. As in the legacy server, this applies only
-	// when both the system and the talkgroup are already attached to the call.
+	// placeholder, and only that placeholder, and only when both the system and the
+	// talkgroup are already attached to the call.
 	if call.HasSystem() && call.HasTalkgroup() {
 		if repaired, ok := domain.RepairedTalkgroup(options, call.System, call.Meta, call.Talkgroup); ok {
 			call.System = call.System.WithTalkgroup(repaired)
@@ -285,8 +268,7 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		}
 	}
 
-	// Auto-populate invents a system only when the server-wide option enables it, as the
-	// legacy server does.
+	// Auto-populate invents a system only when the server-wide option enables it.
 	if domain.ShouldCreateSystem(options, call.Meta) && !call.HasSystem() {
 		populated = true
 
@@ -396,8 +378,8 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 			return logError(err)
 		}
 
-		// The configuration this recording changed is on record now, which is the moment the log can say
-		// it changed.
+		// The configuration this recording changed is on record now, which is the moment
+		// the log can say it changed.
 		reportCreated()
 
 		// The stored system and talkgroup are the ones the call is recorded against, so
@@ -425,9 +407,9 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 	}
 
 	if !call.HasSystem() || !call.HasTalkgroup() {
-		// Not the shared shape: this call has no system and no talkgroup to name, and naming the zeros
-		// they are stored as would tell an operator the call came from system 0. The recording is the
-		// only thing this line can name, and it is the thing the operator can go and look at.
+		// Not the shared shape: this call has no system and no talkgroup to name, and
+		// naming the zeros they are stored as would tell an operator the call came from
+		// system 0. The recording is the only thing this line can name.
 		handler.log(ctx, domain.LogLevelWarn, domain.LogSourceIngest, fmt.Sprintf("the recording %s does not match any system or talkgroup the server knows", call.AudioFilename))
 
 		return IngestCallResult{Outcome: IngestCallUnknown}, nil
@@ -468,19 +450,16 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 	return IngestCallResult{Outcome: IngestCallAccepted, CallID: stored.ID}, nil
 }
 
-// DeliverCall tells everyone about a call this server has stored: the other servers first, then the
-// listeners.
-//
-// It is the step the ingest path ends with, and it is the step a held call returns to when its hold
-// runs out, which is why the delay is decided here and nowhere else, and why a call that waited is
-// not delivered by a copy of this fan-out.
+// DeliverCall tells everyone about a call this server has stored: the other servers first,
+// then the listeners. It is the step the ingest path ends with, and the step a held call
+// returns to when its hold runs out — which is why the delay is decided here and nowhere
+// else, and why a call that waited is not delivered by a copy of this fan-out.
 func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.Call) {
 	held, err := handler.delayer.Hold(ctx, call)
 
 	if err != nil {
-		// The call is in the recording history and nothing is going to tell anybody about it. That is
-		// what the legacy server does when it cannot write the hold down: report it, and accept that
-		// this one call was recorded and never delivered.
+		// A call that cannot be held for delivery stays in the recording history and is
+		// never delivered: preserved legacy behavior.
 		handler.log(ctx, domain.LogLevelError, domain.LogSourceDelayer, fmt.Sprintf("the call could not be held for delivery: %v", err.Error()))
 
 		return
@@ -490,7 +469,7 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 		return
 	}
 
-	// The order is the legacy order: the other servers are told first, the listeners second.
+	// The other servers are told first, the listeners second: preserved legacy order.
 	// Neither waits for the other, and neither waits for a downstream server to answer.
 	handler.forwardCall(ctx, call)
 
@@ -498,21 +477,13 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 }
 
 // forwardCall re-posts a stored call to every downstream server whose scope covers it.
-//
-// It runs on its own goroutine, as the legacy server does, because a downstream server is
-// somebody else's server: one that is slow, or unreachable, holds its own re-post for the
-// full length of its timeout, and must not hold the calls that arrive after this one with
-// it. The consequence is that a forwarding failure is not this use case's failure — the call
-// was already stored and delivered here — so it is reported where the legacy reports it, in
-// the server log.
-//
-// The forwarding also outlives the request or the watch cycle that produced the call, which
-// is why its context is detached from that cycle's cancellation. What bounds it instead is
-// the forwarder's own timeout.
+// It runs on its own goroutine, bounded only by the forwarder's own timeout, so a slow
+// or unreachable downstream cannot hold up later calls — see the downstream forwarding
+// maintainer note. A forwarding failure is therefore a server-log line, not this use
+// case's failure: the call was already stored and delivered here.
 // forwardSlots caps how many calls the server posts to its downstreams at the same
-// time: a burst of ingested calls — a directory drained at startup, a
-// flood of uploads — must not turn into an unbounded flood of posts on the receiving
-// servers. The posts queue behind the eight in flight.
+// time: a burst of ingested calls must not become an unbounded flood of posts on the
+// receiving servers, and the posts queue behind the eight in flight.
 var forwardSlots = make(chan struct{}, 8)
 
 func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
@@ -547,27 +518,24 @@ func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.C
 	}()
 }
 
-// downstreamLine is the line for every downstream the server posts a call to, whether that server took
-// it or refused it. The recording is not named here: the neighbouring line the ingest wrote names it, and
-// this one is about which server the call went to.
+// downstreamLine is the line for every downstream the server posts a call to, whether
+// that server took it or refused it: this line names the receiving server, and the
+// neighbouring ingest line already names the recording.
 func downstreamLine(call domain.Call, url string, outcome string) string {
 	return fmt.Sprintf("call from system %d talkgroup %d sent to %s: %s",
 		call.System.SystemRef, call.Talkgroup.TalkgroupRef, url, outcome)
 }
 
-// convertAudio converts the call's audio and replaces it with the converted file. When
-// the converter cannot convert, the original audio is kept, which is what the legacy
-// server ends up storing; the difference is that this server records why.
-//
-// It is also the step that makes the call know how long its recording is, taking the
-// length from the first source that can name it: the uploader's own count, which the
-// server believes and never re-measures; the conversion's report of the running time of
-// the file it wrote; and ffprobe's measurement of the audio the server ends up storing.
-// A source that cannot answer leaves the call with no known length — the length is a
-// fact the server learns, never a reason to lose a recording.
+// convertAudio converts the call's audio and replaces it with the converted file; when
+// the converter cannot convert, the original audio is kept, as in the legacy server, and
+// this server records why. It is also the step that gives the call its known length,
+// from the first source that can name it: the uploader's own count, which the server
+// believes and never re-measures; the conversion's report of the file it wrote; and
+// ffprobe's measurement of the audio actually stored. A call can end with no known
+// length: the length is a learned fact, never a reason to lose a recording.
 func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain.Call, options domain.Options, tags domain.Tags) error {
-	// The recorder counted its own recording; the server takes its word and measures
-	// nothing, and the conversion the administrator configured runs all the same.
+	// The recorder counted its own recording: the server takes its word, measures
+	// nothing, and runs the configured conversion all the same.
 	known := call.AudioLength > 0
 
 	if options.AudioConversion == domain.AudioConversionDisabled {
@@ -623,8 +591,8 @@ func (handler *IngestCallHandler) convertAudio(ctx context.Context, call *domain
 }
 
 // probeLength asks ffprobe how long the audio the server is about to store lasts, and
-// records the answer on the call. A probe that cannot answer says so once, under the same
-// part of the server the conversion reports under, and the call keeps no length.
+// records the answer on the call. A probe that cannot answer says so once, under the
+// conversion's log subsystem, and the call keeps no length.
 func (handler *IngestCallHandler) probeLength(ctx context.Context, call *domain.Call) {
 	length, err := handler.prober.Probe(ctx, ports.AudioFile{
 		Filename: call.AudioFilename,
@@ -640,11 +608,8 @@ func (handler *IngestCallHandler) probeLength(ctx context.Context, call *domain.
 	call.AudioLength = length
 }
 
-// log writes one entry to the server log, naming the part of the server the entry is about.
-//
-// The ingest path is not one subsystem: it decides about a call (ingest), converts its audio (ffmpeg),
-// hands it to the thing that holds it back (delayer) and re-posts it to the other servers (downstream).
-// Each line says which of those it is about, because the log view filters on it.
+// log writes one entry to the server log, naming the part of the server the entry is
+// about: ingest, ffmpeg, delayer, or downstream, because the log view filters on it.
 func (handler *IngestCallHandler) log(ctx context.Context, level string, source domain.LogSource, message string) {
 	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: handler.clock.Now(),
@@ -652,8 +617,8 @@ func (handler *IngestCallHandler) log(ctx context.Context, level string, source 
 		Source:   source,
 		Message:  message,
 	}); err != nil {
-		// A log entry that cannot be written must not change what the server did; the
-		// ingest decision has already been taken and delivered.
+		// A log entry that cannot be written must not change what the server did: the
+		// ingest decision is already taken and delivered.
 		return
 	}
 }

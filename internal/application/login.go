@@ -27,24 +27,14 @@ import (
 
 const (
 	// loginAttemptsMax is how many login attempts one address is allowed before the server
-	// stops looking at what that address submits.
-	//
-	// The count is what the legacy server keeps, and it is counted before the credential
-	// is examined, so the boundary is observable: the attempt at this number is still
-	// answered on its merits, and the one past it is refused whatever credential it carries.
+	// stops looking at what that address submits. The count is counted before the
+	// credential is examined, so the boundary is observable: the attempt at this number is
+	// still answered on its merits, and the one past it is refused whatever it carries.
 	loginAttemptsMax = uint(3)
 
-	// loginAttemptsWindow is the interval an address's attempt count is measured over.
-	//
-	// The legacy server meant ten minutes here and enforced zero: it built the window with
-	// `time.Duration(time.Duration.Minutes(10))`, a method expression that takes the 10 as a
-	// Duration — ten nanoseconds — converts it to minutes and back, and truncates to zero. The
-	// consequence was that an address's count never aged out, so an address that had spent its
-	// budget stayed refused until a successful login or a restart.
-	//
-	// The window is the one the contract describes, per the owner's decision. `countAttempt`
-	// ages a history out over it, which is what makes "three attempts per window" mean what it
-	// says.
+	// loginAttemptsWindow is the interval an address's attempt count is measured over —
+	// the window the contract describes; countAttempt ages a history out over it, which is
+	// what makes "three attempts per window" mean what it says.
 	loginAttemptsWindow = 10 * time.Minute
 )
 
@@ -84,38 +74,31 @@ type AdminLoginResult struct {
 	Token string
 
 	// PasswordNeedChange is reported to the caller so the administrator can be nudged to
-	// replace the initial password.
-	//
-	// The legacy login response reports it as true on every successful login, whatever the
-	// stored option says; the option itself is only ever reported by the configuration
-	// endpoints. This server reproduces that, so a client that branches on this flag at login
-	// keeps branching the same way.
+	// replace the initial password. It reports true on every successful login, whatever
+	// the stored option says: preserved legacy behavior, so a client that branches on
+	// this flag at login keeps branching the same way.
 	PasswordNeedChange bool
 }
 
 // AdminLoginCommand asks the server to start an administrator session for the credential
 // somebody submitted.
 type AdminLoginCommand struct {
-	// RemoteAddr is the address the attempt is counted against. The REST layer resolves it from the
-	// request — the address of the connection, or the forwarding entry when the peer is a proxy the
-	// operator named — because it is the only layer that sees the request.
+	// RemoteAddr is the address the attempt is counted against. The REST layer resolves it
+	// from the request — the address of the connection, or the forwarding entry when the
+	// peer is a proxy the operator named — because it is the only layer that sees the request.
 	RemoteAddr string
 
 	// Credential is what the administrator submitted. A payload without a password, or one
-	// whose password is not text, arrives here as the empty string: the legacy server still
-	// counts that as an attempt and still refuses it.
-	//
-	// A body that is not readable JSON never reaches this command. The legacy login endpoint
-	// answers it with 400 before it counts anything, so a malformed request does not spend
-	// the address's budget, and the REST layer must keep that order.
+	// whose password is not text, arrives here as the empty string and is still counted and
+	// refused. A body that is not readable JSON never reaches this command: the REST layer
+	// refuses it before counting, so a malformed request does not spend the budget.
 	Credential string
 }
 
-// AdminLoginHandler decides whether an administrator may start a session.
-//
-// The attempt counts are the server's own session-state, held here rather than in a
-// repository: the legacy server holds them in process memory too, so a restart forgets
-// every address's count, and nothing about them is ever visible in the database.
+// AdminLoginHandler decides whether an administrator may start a session. The attempt
+// counts are the server's own session-state, held here rather than in a repository: a
+// restart forgets every address's count, and nothing about them is ever visible in the
+// database.
 type AdminLoginHandler struct {
 	options   ports.OptionsRepository
 	logs      ports.LogRepository
@@ -125,8 +108,8 @@ type AdminLoginHandler struct {
 	upgrader  ports.PasswordUpgrader
 	clock     ports.Clock
 
-	// attempts counts the login attempts seen from each address, in the shape the legacy
-	// server keeps them: a count and the instant of the most recent one.
+	// attempts counts the login attempts seen from each address: a count and the instant of
+	// the most recent one.
 	attempts map[string]*loginAttempt
 
 	// mutex guards attempts, because the HTTP layer drives this handler from more than one
@@ -141,11 +124,10 @@ type loginAttempt struct {
 	Date  time.Time
 }
 
-// NewAdminLoginHandler builds the handler from its ports.
-//
-// The credential check and the token are both ports: the hashing and the signing belong to
-// the adapters, and what the application owns is the decision — how many attempts an
-// address gets, and whether the credential on offer is the one on record.
+// NewAdminLoginHandler builds the handler from its ports: the credential check and the
+// token. Hashing and signing belong to the adapters; what the application owns is the
+// decision — how many attempts an address gets, and whether the credential on offer is the
+// one on record.
 func NewAdminLoginHandler(
 	options ports.OptionsRepository,
 	logs ports.LogRepository,
@@ -168,21 +150,19 @@ func NewAdminLoginHandler(
 }
 
 // Handle counts the attempt, refuses it if the address has spent its budget, and otherwise
-// starts a session for the right credential.
-//
-// The order is the order the legacy server performs the steps in, and it is observable:
-// the attempt is counted before anything is checked, so a refused credential and a malformed
-// one both consume the budget; an address that has spent its budget is refused before its
-// credential is examined, which is what makes the refusal silent; and the counts are only
-// cleared once a session has actually been started.
+// starts a session for the right credential. The order is observable: the attempt is counted
+// before anything is checked, so a refused credential and a malformed one both consume the
+// budget; an address that has spent its budget is refused before its credential is examined,
+// which is what makes the refusal silent; and the counts are only cleared once a session has
+// actually been started.
 func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginCommand) (AdminLoginResult, error) {
 	attempt := handler.countAttempt(cmd.RemoteAddr)
 
 	if attempt.Count > loginAttemptsMax {
 		// The warning is written once, on the attempt that crosses the limit, and never
-		// again for the same address: the legacy server counts it the same way, so a
-		// log view shows one entry per lockout rather than one per refused request. A
-		// lockout in a new window is a new lockout, and gets its own warning.
+		// again for the same address: the log view shows one entry per lockout rather
+		// than one per refused request. A lockout in a new window is a new lockout, and
+		// gets its own warning.
 		if attempt.Count == loginAttemptsMax+1 {
 			handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("too many login attempts from %v", cmd.RemoteAddr))
 		}
@@ -197,21 +177,18 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 		return AdminLoginResult{Outcome: AdminLoginFailed}, err
 	}
 
-	// An empty credential is refused here rather than handed to the verifier: the legacy
-	// server never compares an empty submission against the stored credential, which
-	// matters on a server whose stored credential is itself empty.
+	// An empty credential is refused here rather than handed to the verifier: an empty
+	// submission must never compare against a stored credential that is itself empty.
 	if cmd.Credential == "" || !handler.passwords.Matches(ctx, options.AdminPasswordHash, cmd.Credential) {
 		handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a login attempt from %v was refused", cmd.RemoteAddr))
 
 		return AdminLoginResult{Outcome: AdminLoginInvalidCredential}, nil
 	}
 
-	// The credential is proven, so the stored hash is renewed at the cost the
-	// deployment is configured for: a deployment that raised its
-	// bcrypt cost renews a stored hash the next time the credential is proven,
-	// and the stored form stops being the cheap one. The renewal is not the
-	// login — a login whose renewal failed is still a login, and the failure is
-	// said in the server log.
+	// The credential is proven, so the stored hash is renewed at the cost the deployment is
+	// configured for, and the stored form stops being the cheap one. The renewal is not the
+	// login: a login whose renewal failed is still a login, and the failure is said in the
+	// server log.
 	if handler.upgrader.NeedsUpgrade(options.AdminPasswordHash) {
 		hash, err := handler.hashes.Hash(ctx, cmd.Credential)
 		if err == nil {
@@ -237,17 +214,14 @@ func (handler *AdminLoginHandler) Handle(ctx context.Context, cmd AdminLoginComm
 		Outcome: AdminLoginAccepted,
 		Token:   token,
 
-		// Always true, as the legacy login response has it. See AdminLoginResult.
+		// Always true, whatever the stored option says; see AdminLoginResult.
 		PasswordNeedChange: true,
 	}, nil
 }
 
-// countAttempt records that an address made one more attempt and returns its history.
-//
-// The instant is refreshed on every attempt, including the refused ones, which is what the legacy
-// server does. What the legacy server never did was let a history age: its window was zero, so a
-// count that had been spent stayed spent until a successful login or a restart. Here a history whose
-// most recent attempt is older than the window starts over, because a budget measured over a window
+// countAttempt records that an address made one more attempt and returns its history. The
+// instant is refreshed on every attempt, including the refused ones, and a history whose
+// most recent attempt is older than the window starts over: a budget measured over a window
 // is a budget the window renews.
 func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt {
 	handler.mutex.Lock()
@@ -279,14 +253,11 @@ func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt 
 	return attempt
 }
 
-// forgetAttempt clears the attempt history of the address that just signed in.
-//
-// The legacy server cleared every address's history on any success, which let one successful login —
-// including one an attacker paid for — unlock brute-forcing from every address at once. The decision
-// repairs that: the budget belongs to the address that spent it, and only that address gets it back.
-//
-// It runs only after a session has been started: a login that failed on the way out leaves the
-// counts where they were.
+// forgetAttempt clears the attempt history of the address that just signed in: the budget
+// belongs to the address that spent it, and only that address gets it back, which repairs the
+// legacy clear-every-address-on-any-success behavior — see the login attempt budget maintainer
+// note. It runs only after a session has been started: a login that failed on the way out
+// leaves the counts where they were.
 func (handler *AdminLoginHandler) forgetAttempt(remoteAddr string) {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
@@ -294,12 +265,10 @@ func (handler *AdminLoginHandler) forgetAttempt(remoteAddr string) {
 	delete(handler.attempts, remoteAddr)
 }
 
-// reportFailure records a step of a sign-in the server could not carry out, and the failure's own text.
-//
-// The login decision is already taken by the time this runs: the caller gets the same outcome and the same
-// error it always got. What was missing was any trace that the server had been asked — a deployment whose
-// options table is broken refuses every sign-in and, until this, left no evidence of ever having been
-// approached.
+// reportFailure records a step of a sign-in the server could not carry out, in the server's
+// own login log. The login decision is already taken by the time this runs: the caller gets
+// the same outcome and error it always got, and the log keeps the trace that the server was
+// asked at all.
 func (handler *AdminLoginHandler) reportFailure(ctx context.Context, what string, reason error) {
 	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogin,
 		fmt.Sprintf("%s: %v", what, reason))

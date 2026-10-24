@@ -24,13 +24,11 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The status view: what this server is, what it is running right now, what it recorded lately, and
-// what it lately had to complain about. It is a projection for the administrator's landing page and not
-// a business thing: nothing here is a rule the domain enforces, and nothing here is written down.
-//
-// The window every tally is read over is this use case's own constant rather than a criterion the
-// caller submits. The page shows one window, and a caller that could widen it would be a caller asking
-// this server to count more than the page has room for.
+// The status view: what this server is, what it is running right now, what it recorded
+// lately, and what it lately had to complain about. It is a projection for the
+// administrator's landing page, not a business thing: nothing here is a rule the domain
+// enforces, and nothing here is written down. The window every tally is read over is this
+// use case's own constant, not a caller-submitted criterion: the page shows one window.
 
 const (
 	// StatusWindow is how far back the activity and log tallies are read over.
@@ -59,10 +57,9 @@ type RuntimeStatus struct {
 	Logs     RuntimeLogStatus
 }
 
-// RuntimeServerStatus carries only what this server can measure about itself. The identity strings the
-// published payload also names — the version, the container answer, the folder it serves — are already
-// held by the administrator surface and are added there: this use case cannot measure them and should
-// not be handed strings it can only repeat.
+// RuntimeServerStatus carries only what this server can measure about itself. The identity
+// strings the published payload also names — the version, the container answer, the folder
+// it serves — are added by the administrator surface: this use case cannot measure them.
 type RuntimeServerStatus struct {
 	StartedAt time.Time
 	Now       time.Time
@@ -112,9 +109,9 @@ type RuntimeLogStatus struct {
 	Sources []RuntimeLogSourceTally
 }
 
-// RuntimeLogSourceTally is the one shape this read model declares itself: the two severities one
-// subsystem wrote, carried together for the one card that shows them. The repository reports them as
-// two separate counts, and pairing them is this handler's work.
+// RuntimeLogSourceTally is the one shape this read model declares itself: the two severities
+// one subsystem wrote, carried together for the one card that shows them; pairing the
+// repository's two separate counts is this handler's work.
 type RuntimeLogSourceTally struct {
 	Source   domain.LogSource
 	Errors   uint64
@@ -151,11 +148,10 @@ func NewGetRuntimeStatusHandler(
 	}
 }
 
-// Handle reads the whole snapshot in one pass.
-//
-// A snapshot that could not be read is answered as nothing and with the failure. A half-read snapshot
-// presented as current is how a server whose database is unreachable looks like a server that is healthy
-// and idle, which is the one confusion this view must never cause.
+// Handle reads the whole snapshot in one pass. A snapshot that could not be read is answered
+// as nothing and with the failure: a half-read snapshot presented as current is how a server
+// with an unreachable database looks healthy and idle, the one confusion this view must
+// never cause.
 func (handler *GetRuntimeStatusHandler) Handle(ctx context.Context, _ GetRuntimeStatusQuery) (RuntimeStatus, error) {
 	now := handler.clock.Now()
 
@@ -230,11 +226,10 @@ func (handler *GetRuntimeStatusHandler) liveStatus(ctx context.Context) RuntimeL
 
 // activityStatus reads the window's tallies and the newest rows the view shows.
 func (handler *GetRuntimeStatusHandler) activityStatus(ctx context.Context, now, windowStart, windowEnd time.Time) (RuntimeActivityStatus, error) {
-	// The two headline counts are two different questions, and answering one with the other is how a
-	// dashboard reports a quiet hour as a busy day: the day starts at the server's own local midnight,
-	// and the last hour is a rolling hour that can start mid-hour. The window's own total is not read at
-	// all: the 24 buckets the view is handed already add up to it, and add up to it more exactly, because
-	// they stop at the window's end.
+	// The two headline counts answer different questions: the day starts at the server's
+	// own local midnight, the last hour is a rolling hour that can start mid-hour. The
+	// window's own total is not read at all — the buckets the view is handed already add
+	// up to it more exactly, because they stop at the window's end.
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	callsToday, err := handler.activity.CountCallsSince(ctx, dayStart)
@@ -280,12 +275,9 @@ func (handler *GetRuntimeStatusHandler) activityStatus(ctx context.Context, now,
 	return activity, nil
 }
 
-// hoursOver answers the whole window as whole hours, filling the hours the history said nothing about
-// with a zero.
-//
-// The repository reports only the hours that have something in them. Filling the rest here is what keeps
-// the chart's shape the same for every deployment: a quiet server shows the quiet hours, and not a chart
-// whose bars depend on what the database happened to contain.
+// hoursOver answers the whole window as whole hours, filling the hours the history said
+// nothing about with a zero: the repository reports only the hours that have something in
+// them, and filling the rest keeps the chart's shape the same for every deployment.
 func (handler *GetRuntimeStatusHandler) hoursOver(ctx context.Context, windowStart, windowEnd time.Time) ([]ports.CallHourCount, error) {
 	reported, err := handler.activity.CountCallsByHour(ctx, windowStart)
 	if err != nil {
@@ -309,10 +301,9 @@ func (handler *GetRuntimeStatusHandler) hoursOver(ctx context.Context, windowSta
 	return buckets, nil
 }
 
-// logStatus tallies what the server complained about over the last 24 hours.
-//
-// Its window is anchored on the instant the read ran and not on the activity window's whole hours: the
-// log card answers "has this server been in trouble lately", and lately is measured from now.
+// logStatus tallies what the server complained about over the last 24 hours. Its window is
+// anchored on the instant the read ran, not on the activity window's whole hours: the log
+// card answers whether the server has been in trouble lately, and lately is measured from now.
 func (handler *GetRuntimeStatusHandler) logStatus(ctx context.Context, now time.Time) (RuntimeLogStatus, error) {
 	windowStart := now.Add(-StatusWindow)
 

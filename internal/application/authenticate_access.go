@@ -46,9 +46,8 @@ const (
 	// AccessCodeInvalid means no access carries that code.
 	AccessCodeInvalid AuthenticateAccessOutcome = "code invalid"
 
-	// AccessLocked means the code was valid but arrived on the last allowed attempt, so the
-	// session is refused anyway. The legacy server behaves this way, and the behavior is
-	// preserved rather than smoothed over.
+	// AccessLocked means the code was valid but arrived on the last allowed attempt, so
+	// the session is refused anyway: preserved legacy behavior.
 	AccessLocked AuthenticateAccessOutcome = "locked"
 
 	// AccessExpired means the access's expiration date has passed.
@@ -68,21 +67,17 @@ type AuthenticateAccessResult struct {
 }
 
 // AuthenticateAccessCommand asks the server to authenticate one listener session with an
-// access code.
-//
-// The code arrives on the socket base64-encoded. Decoding it is transport work and belongs
-// to the websocket layer; the command carries the code the server compares.
+// access code. The code arrives on the socket base64-encoded; decoding it is transport work
+// belonging to the websocket layer, and the command carries the code the server compares.
 type AuthenticateAccessCommand struct {
 	ClientID string
 	Code     string
 }
 
-// AuthenticateAccessHandler decides whether a listener may hold an access.
-//
-// The order of the checks is the legacy order and it is observable: the attempt counter is
-// examined before the code is looked up, so a correct code arriving too late is refused; a
-// valid code arriving on the last allowed attempt is refused as well; and expiry is only
-// considered once the code is known to be real.
+// AuthenticateAccessHandler decides whether a listener may hold an access. The order of the
+// checks is observable: the attempt counter is examined before the code is looked up, so a
+// correct code arriving too late is refused, a valid code arriving on the last allowed
+// attempt is refused as well, and expiry is considered only once the code is known to be real.
 type AuthenticateAccessHandler struct {
 	accesses ports.AccessRepository
 	systems  ports.SystemRepository
@@ -148,9 +143,8 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 
 	access, ok := accesses.ByCode(cmd.Code)
 	if !ok {
-		// The code the listener presented is not written down. It is a credential, and a wrong guess at a
-		// credential is not something to keep in a log an operator reads. The warning names the address
-		// once per window, not once per guess: a guessing tool must not fill the log view.
+		// The code the listener presented is not written down: it is a credential, and
+		// the warning names the address once per window, not once per guess.
 		if handler.hub.ShouldWarnAccessAttempt(cmd.ClientID) {
 			handler.log(ctx, domain.LogLevelWarn, fmt.Sprintf("a listener from %s presented an access code that is not valid",
 				handler.hub.RemoteAddrOf(cmd.ClientID)))
@@ -161,9 +155,9 @@ func (handler *AuthenticateAccessHandler) Handle(ctx context.Context, cmd Authen
 		return AuthenticateAccessResult{Outcome: AccessCodeInvalid}, nil
 	}
 
-	// The access is attached before the remaining checks, as the legacy server does, so a
-	// session refused for expiry or for its connection limit is still known by the identity
-	// it presented — which is what the disconnect notice and the warnings name.
+	// The access is attached before the remaining checks so a session refused for expiry or
+	// for its connection limit is still known by the identity it presented, which is what
+	// the disconnect notice and the warnings name.
 	handler.hub.GrantAccess(cmd.ClientID, access)
 
 	if attempt == domain.MaxAccessAuthAttempts {
@@ -254,11 +248,10 @@ func (handler *AuthenticateAccessHandler) failed(err error) (AuthenticateAccessR
 	return AuthenticateAccessResult{Outcome: AccessFailed}, err
 }
 
-// AccessGate decides whether a listener may send a command at all.
-//
-// On a restricted server, a session that has not presented a real access is asked for its
-// access code instead of having its command processed. The version request is the one
-// exception, because a client needs the server's version before it can authenticate.
+// AccessGate decides whether a listener may send a command at all. On a restricted server,
+// a session that has not presented a real access is asked for its access code instead of
+// having its command processed; the version request is the one exception, because a client
+// needs the server's version before it can authenticate.
 type AccessGate struct {
 	accesses ports.AccessRepository
 	hub      ports.Hub
@@ -270,13 +263,9 @@ func NewAccessGate(accesses ports.AccessRepository, hub ports.Hub) *AccessGate {
 }
 
 // RequiresAccessCode reports whether the server is restricted and this session still holds
-// nothing but the anonymous access.
-//
-// The test is whether the session's access names any systems, which is how the legacy
-// server recognises an unauthenticated session. It has a consequence worth naming: an
-// access configured *without* systems stays gated for every command except the access code
-// even after it authenticates, because the gate cannot tell that session apart from an
-// anonymous one. That is preserved legacy behavior, pinned by a test rather than quietly repaired.
+// nothing but the anonymous access. The test is whether the session's access names any
+// systems, which is how the legacy server recognises an unauthenticated session; its
+// consequence for an access without systems lives in the access-gating maintainer note.
 func (gate *AccessGate) RequiresAccessCode(ctx context.Context, clientID string) (bool, error) {
 	accesses, err := gate.accesses.AllAccesses(ctx)
 	if err != nil {

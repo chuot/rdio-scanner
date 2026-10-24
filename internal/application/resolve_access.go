@@ -26,27 +26,21 @@ import (
 )
 
 const (
-	// accessAttemptsMax is how many access-code attempts one address is allowed before the server
-	// stops looking at what that address presents.
-	//
-	// It is the administrator login's own bound, chosen deliberately: a stateless surface has no
-	// session to count attempts against, so the address is the only thing a guess can be attributed
-	// to, and the product already says how many guesses per address per window it is willing to
-	// answer. Keeping the two bounds the same is what keeps one rule an operator can state.
+	// accessAttemptsMax is how many access-code attempts one address is allowed before the
+	// server stops looking at what that address presents. It is deliberately the
+	// administrator login's own bound: the address is the only thing a stateless guess can be
+	// attributed to, and one bound keeps one rule an operator can state.
 	accessAttemptsMax = uint(3)
 
-	// accessAttemptsWindow is the interval an address's attempt count is measured over — the same
-	// window the administrator login budget uses, for the same reason.
+	// accessAttemptsWindow is the interval an address's attempt count is measured over —
+	// the same window the administrator login budget uses, for the same reason.
 	accessAttemptsWindow = 10 * time.Minute
 )
 
-// ResolveAccessQuery asks what an access credential entitles a caller to.
-//
-// It is hub-free by construction. The listener socket's own use case drives a socket session: it
-// records the attempt against a connected client, grants the access to that client, pushes the
-// configuration the access allows down the socket, and asks for a code again when it must. A
-// stateless request has none of those things, and a use case that half-worked over HTTP would drag
-// the hub into a surface that has no use for it.
+// ResolveAccessQuery asks what an access credential entitles a caller to. It is hub-free by
+// construction: the listener socket's own use case drives a socket session — recording the
+// attempt, granting the access, pushing the configuration, re-prompting — and a stateless
+// request has none of those things.
 type ResolveAccessQuery struct {
 	// Address is the address the attempt is counted against. The presentation layer resolves it
 	// from the request — the address of the connection, or the forwarding entry when the peer is a
@@ -58,25 +52,21 @@ type ResolveAccessQuery struct {
 	Code string
 }
 
-// ResolveAccessQueryResult is what the credential entitles the caller to.
-//
-// The access is the anonymous access when the outcome is anonymous, and the listed access when the
-// code resolved. A refusal carries no access: an expired access does not yield a scope, and a
-// request from an address that spent its budget never looked at a credential at all.
+// ResolveAccessQueryResult is what the credential entitles the caller to. The access is the
+// anonymous access when the outcome is anonymous, and the listed access when the code
+// resolved; a refusal carries no access, because an expired access yields no scope and an
+// address that spent its budget never looked at a credential at all.
 type ResolveAccessQueryResult struct {
 	Outcome domain.AccessResolution
 	Access  domain.Access
 }
 
 // ResolveAccessQueryHandler decides what a caller that presents an access credential may see.
-//
-// The order of the checks is the listener's order, because the order is observable: the attempt
-// count is examined before the credential is looked at, so a correct code arriving after the budget
-// is spent is refused, and the refusal says nothing about the credential it refused.
-//
-// The attempt counts are the server's own state, held here rather than in a repository, exactly as
-// the administrator login holds its own: a restart forgets every address's count, and nothing about
-// them is ever visible in the database.
+// The order of the checks is the listener's order, because the order is observable: the
+// attempt count is examined before the credential is looked at, so a correct code arriving
+// after the budget is spent is refused, and the refusal says nothing about the credential it
+// refused. The attempt counts are the server's own state, held here rather than in a
+// repository: a restart forgets them, and nothing about them is visible in the database.
 type ResolveAccessQueryHandler struct {
 	accesses ports.AccessRepository
 	logs     ports.LogRepository
@@ -128,9 +118,9 @@ func (handler *ResolveAccessQueryHandler) Handle(ctx context.Context, query Reso
 
 	attempt := handler.historyFor(query.Address)
 
-	// Presenting nothing is not guessing. The listener socket's own prompt costs a session nothing,
-	// and each code it presents costs one attempt; a stateless caller that arrives without a
-	// credential and then presents its real one is not locked out by its own arrival.
+	// Presenting nothing is not guessing: the listener socket's prompt costs a session
+	// nothing and each presented code costs one attempt, so the stateless surface charges
+	// only non-empty codes.
 	if query.Code == "" {
 		handler.warnOnce(ctx, attempt, query.Address, "a caller from %s presented no access code")
 
@@ -146,9 +136,8 @@ func (handler *ResolveAccessQueryHandler) Handle(ctx context.Context, query Reso
 
 	access, ok := accesses.ByCode(query.Code)
 	if !ok {
-		// A code is a credential, and a wrong guess at a credential is not something to keep in a
-		// log an operator reads. The warning names the address, once per window: a guessing tool
-		// must not fill the log view, and must not learn from the log how far each guess got.
+		// A wrong guess at a credential is not kept in a log an operator reads: the
+		// warning names the address, once per window.
 		handler.warnOnce(ctx, attempt, query.Address, "a caller from %s presented an access code that is not valid")
 
 		return ResolveAccessQueryResult{Outcome: domain.AccessRefusedUnknown}, nil
@@ -160,24 +149,18 @@ func (handler *ResolveAccessQueryHandler) Handle(ctx context.Context, query Reso
 		return ResolveAccessQueryResult{Outcome: domain.AccessRefusedExpired}, nil
 	}
 
-	// A code that resolved gives its address its budget back. The budget is a limit on trying, not a
-	// penalty that outlives the success, and it belongs to the address that spent it: no other
-	// address gets anything back.
+	// A code that resolved gives its address its budget back: the budget limits trying, it
+	// is not a penalty that outlives the success.
 	handler.forgetAttempt(query.Address)
 
 	return ResolveAccessQueryResult{Outcome: domain.AccessResolvedCode, Access: access}, nil
 }
 
-// historyFor is the address's standing budget, aged to the current window: the record is created
-// when the address has no history, its count is cleared when its window has passed, and the
-// histories of addresses that have been quiet for longer than the window are dropped.
-//
-// It spends nothing. The caller spends an attempt by incrementing the count it gets back, which is
-// what keeps a request that presents no credential from charging the address that made it.
-//
-// The count is examined before the credential is looked at, which is what makes the bound
-// observable in the way the listener socket's bound is: the attempt at the bound is answered on its
-// merits, and the one past it is refused whatever it carries.
+// historyFor is the address's standing budget, aged to the current window: created on first
+// sight, cleared when its window has passed, and dropped — along with every history quiet
+// longer than the window — so the map cannot grow without bound. It spends nothing: the caller
+// spends an attempt by incrementing the count it gets back, and the count is examined before
+// the credential is looked at, the way the listener socket's bound is.
 func (handler *ResolveAccessQueryHandler) historyFor(address string) *accessAttempt {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
@@ -193,10 +176,8 @@ func (handler *ResolveAccessQueryHandler) historyFor(address string) *accessAtte
 		attempt.Warned = false
 	}
 
-	// Histories whose window has passed are dropped, as the login budget drops them: a budget
-	// measured over a window has nothing to say about an address that has been quiet for longer
-	// than the window, and a map that only ever grows is a memory a brute-force tool fills with
-	// spoofed keys.
+	// Quiet histories are dropped here, as the login budget drops them: a map that only
+	// ever grows is a memory a brute-force tool fills with spoofed keys.
 	for key, history := range handler.attempts {
 		if key != address && handler.clock.Now().Sub(history.Date) > accessAttemptsWindow {
 			delete(handler.attempts, key)

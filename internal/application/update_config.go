@@ -38,12 +38,9 @@ const (
 	TagsSection        ConfigSection = "tags"
 )
 
-// configurationSectionOrder is the order the sections are saved in, which is the order the
-// legacy server performs them in.
-//
-// It is not arbitrary: a save is not one transaction, so when it fails partway through the
-// earlier sections are changed and the later ones are not, and the order decides what an
-// administrator finds when that happens.
+// configurationSectionOrder is the order the sections are saved in. A save is not one
+// transaction, so when it fails partway through the earlier sections are changed and the
+// later ones are not: the order decides what an administrator finds when that happens.
 var configurationSectionOrder = []ConfigSection{
 	AccessSection,
 	ApikeysSection,
@@ -55,11 +52,9 @@ var configurationSectionOrder = []ConfigSection{
 	TagsSection,
 }
 
-// IsConfigSection reports whether a name is one of the eight configuration sections.
-//
-// It belongs here rather than in the REST layer because the eight sections are part of the
-// server's vocabulary, and "that is not a part of the configuration" is a business answer
-// rather than a routing one.
+// IsConfigSection reports whether a name is one of the eight configuration sections. It
+// belongs here rather than in the REST layer: the eight sections are part of the server's
+// vocabulary, and "that is not a part of the configuration" is a business answer.
 func IsConfigSection(name string) bool {
 	for _, section := range configurationSectionOrder {
 		if string(section) == name {
@@ -70,12 +65,11 @@ func IsConfigSection(name string) bool {
 	return false
 }
 
-// ConfigurationChanges are the parts of the configuration a save replaces.
-//
-// A section that is not named is left exactly as it is. A section that is named but empty
-// replaces the section with nothing — an administrator who removes their last group is left
-// with no groups, which is not the same as having said nothing about groups. That distinction
-// is why this is eight optional sections rather than a map.
+// ConfigurationChanges are the parts of the configuration a save replaces. A section that
+// is not named is left exactly as it is; a section that is named but empty replaces the
+// section with nothing — removing the last group leaves no groups, which is not the same
+// as saying nothing about groups. That distinction is why this is eight optional sections
+// rather than a map.
 type ConfigurationChanges struct {
 	Access      *domain.Accesses
 	Apikeys     *domain.Apikeys
@@ -133,18 +127,15 @@ type UpdateConfigurationOutcome string
 
 const (
 	// ConfigurationSaved means the save ran to the end. It does not mean every section took:
-	// a whole-configuration save reports each section it could not store in the server log and
-	// goes on with the rest, which is what the legacy server does and what its clients have
-	// always been answered.
+	// a whole-configuration save reports each section it could not store in the server log
+	// and goes on with the rest.
 	ConfigurationSaved UpdateConfigurationOutcome = "saved"
 
-	// ConfigurationSaveFailed means the save stopped before it finished, and which half stopped it
-	// is read from the lists it carries with it: a section the store refused appears in Failed, a
-	// section the store holds while the announcement of the result failed appears in Saved. The two
-	// are answered the same status by the REST layer and are not the same state, and only the
-	// server's log tells them apart. Only a per-section save reports a refusal this way — a
-	// whole-configuration save answers its section failures in the log and goes on with the rest —
-	// so for a whole-configuration save this outcome means the announcement failed.
+	// ConfigurationSaveFailed means the save stopped before it finished, and which half
+	// stopped it is read from the lists it carries: a section the store refused appears in
+	// Failed, a section the store holds while announcing the result failed appears in Saved.
+	// Only a per-section save reports a refusal this way, so for a whole-configuration save
+	// this outcome means the announcement failed.
 	ConfigurationSaveFailed UpdateConfigurationOutcome = "failed"
 )
 
@@ -159,7 +150,7 @@ type UpdateConfigurationResult struct {
 
 	// Failed lists the sections the server could not store. They are already in the server
 	// log; they are reported here so the REST layer can answer a per-section save with the
-	// failure status the frozen contract fixes.
+	// failure status the contract fixes.
 	Failed []ConfigSection
 }
 
@@ -174,9 +165,9 @@ type UpdateConfigurationSectionCommand struct {
 	Changes ConfigurationChanges
 }
 
-// ConfigurationPorts are everything a configuration save needs. They are gathered into one
-// value because reading the configuration, saving part of it, and announcing the change all
-// need the same set, and the composition root builds it once.
+// ConfigurationPorts are everything a configuration save needs, gathered into one value:
+// reading the configuration, saving part of it, and announcing the change all need the
+// same set, and the composition root builds it once.
 type ConfigurationPorts struct {
 	ConfigurationRepositories
 
@@ -187,9 +178,9 @@ type ConfigurationPorts struct {
 	Clock       ports.Clock
 }
 
-// configurationSaver is what both kinds of configuration save do with: the stores that own each
-// section, the things that have to be told when a section changes, and the bracket the save
-// performs around the directory watchers.
+// configurationSaver is what both kinds of configuration save do with: the stores that own
+// each section, the things that have to be told when a section changes, and the bracket the
+// save performs around the directory watchers.
 type configurationSaver struct {
 	repos       ConfigurationRepositories
 	logs        ports.LogRepository
@@ -210,18 +201,18 @@ func newConfigurationSaver(configuration ConfigurationPorts) configurationSaver 
 	}
 }
 
-// save stores one section, writing the section's whole aggregate: the systems section together
-// with the sites, talkgroups, and units under each system. A section the payload did not name is a
-// request to save nothing, which is a refusal rather than a no-op: it means the caller and the
-// server disagree about what was submitted.
+// save stores one section, writing the section's whole aggregate: the systems section
+// together with the sites, talkgroups, and units under each system. A section the payload
+// did not name is a request to save nothing, which is a refusal rather than a no-op: the
+// caller and the server disagree about what was submitted.
 func (saver configurationSaver) save(ctx context.Context, section ConfigSection, changes ConfigurationChanges) error {
 	return saver.saveSystemsSection(ctx, section, changes, saver.repos.Systems.SaveSystems)
 }
 
-// saveSection stores one section of a per-section save. The systems section is the one section
-// whose parts are saved on their own, elsewhere: its sites, talkgroups, and units are written by
-// the save of that level, for the system that level shows, so the section save writes the system
-// rows and leaves every level as the store holds it.
+// saveSection stores one section of a per-section save. The systems section is the one
+// section whose parts are saved on their own, elsewhere: its sites, talkgroups, and units are
+// written by the save of that level, for the system that level shows, so the section save
+// writes the system rows and leaves every level as the store holds it.
 func (saver configurationSaver) saveSection(ctx context.Context, section ConfigSection, changes ConfigurationChanges) error {
 	return saver.saveSystemsSection(ctx, section, changes, saver.repos.Systems.SaveSystemSettings)
 }
@@ -236,26 +227,24 @@ func (saver configurationSaver) saveSystemsSection(ctx context.Context, section 
 		return saver.repos.Accesses.SaveAccesses(ctx, *changes.Access)
 	case ApikeysSection:
 		// A credential list with a keyless row is refused here, at apply time, before it can
-		// be stored: the domain owns the rule, this is the door through which every submitted
-		// list passes.
+		// be stored: the domain owns the rule, this is the door every submitted list passes.
 		if err := changes.Apikeys.Validate(); err != nil {
 			return err
 		}
 
 		return saver.repos.Apikeys.SaveApikeys(ctx, *changes.Apikeys)
 	case DirwatchSection:
-		// Masks and extensions are refused at apply, before they can be
-		// stored: the domain owns the rules, this is the door through which every submitted
-		// watch list passes.
+		// Masks and extensions are refused at apply, before they can be stored: the domain
+		// owns the rules, this is the door every submitted watch list passes.
 		if err := changes.Dirwatches.Validate(); err != nil {
 			return err
 		}
 
 		return saver.repos.Dirwatches.SaveDirwatches(ctx, *changes.Dirwatches)
 	case DownstreamsSection:
-		// Addresses are refused at apply: the forwarder posts recordings
-		// and the apikey to whatever the administrator typed, and a scheme that is not
-		// http or https never gets stored to be posted to.
+		// Addresses are refused at apply: the forwarder posts recordings and the apikey to
+		// whatever the administrator typed, and a scheme that is not http or https never
+		// gets stored to be posted to.
 		if err := changes.Downstreams.Validate(); err != nil {
 			return err
 		}
@@ -274,12 +263,10 @@ func (saver configurationSaver) saveSystemsSection(ctx context.Context, section 
 	return fmt.Errorf("unknown configuration section %s", section)
 }
 
-// publish tells every listener and every open administrator connection what the configuration
-// now is.
-//
-// The two audiences are told different things on purpose: a listener is shown the sections that
-// decide what calls it sees, and only as much of them as its access allows; an administrator is
-// shown the whole configuration.
+// publish tells every listener and every open administrator connection what the
+// configuration now is. The two audiences are told different things on purpose: a listener
+// is shown the sections that decide what calls it sees, and only as much of them as its
+// access allows; an administrator is shown the whole configuration.
 func (saver configurationSaver) publish(ctx context.Context) error {
 	configuration, err := readConfiguration(ctx, saver.repos)
 	if err != nil {
@@ -298,12 +285,9 @@ func (saver configurationSaver) publish(ctx context.Context) error {
 	return nil
 }
 
-// announce records that the configuration changed, naming the section when the save was a per-section
-// one. The legacy server writes it after it has answered the administrator; the announcement is
-// server-side, so the difference is not something a client can see.
-//
-// An empty section is the whole-configuration save: it says the configuration changed, because it names
-// no single part of it.
+// announce records that the configuration changed, naming the section when the save was a
+// per-section one; an empty section is the whole-configuration save, which names no single
+// part of it.
 func (saver configurationSaver) announce(ctx context.Context, section ConfigSection) {
 	if section == "" {
 		saver.writeLog(ctx, domain.LogLevelWarn, domain.LogSourceConfig, "the configuration changed")
@@ -314,11 +298,9 @@ func (saver configurationSaver) announce(ctx context.Context, section ConfigSect
 	saver.writeLog(ctx, domain.LogLevelWarn, domain.LogSourceConfig, fmt.Sprintf("the %s configuration changed", section))
 }
 
-// reportFailure records a section the server could not store.
-//
-// The line says what happened and then the failure's own text, which is the part an operator needs: the
-// error names the statement that failed. The legacy line named the handler instead —
-// `admin.confighandler.put:` — and the handler is what the source field now says.
+// reportFailure records a section the server could not store, followed by the failure's own
+// text: the error names the statement that failed, which is the part an operator needs —
+// see the configuration-save failure maintainer note.
 func (saver configurationSaver) reportFailure(ctx context.Context, err error) {
 	saver.writeLog(ctx, domain.LogLevelError, domain.LogSourceConfig, fmt.Sprintf("the configuration could not be saved: %s", err))
 }
@@ -327,11 +309,9 @@ func (saver configurationSaver) writeLog(ctx context.Context, level string, sour
 	appendServerLog(ctx, saver.logs, saver.clock, level, source, message)
 }
 
-// UpdateConfigurationHandler saves the whole configuration.
-//
-// The save brackets itself around the directory watchers: they are stopped before anything
-// changes and started again afterwards, so a watcher cannot ingest a call against a half
-// replaced configuration.
+// UpdateConfigurationHandler saves the whole configuration. The save brackets itself around
+// the directory watchers: they are stopped before anything changes and started again
+// afterwards, so a watcher cannot ingest a call against a half replaced configuration.
 type UpdateConfigurationHandler struct {
 	saver configurationSaver
 }
@@ -342,11 +322,9 @@ func NewUpdateConfigurationHandler(configuration ConfigurationPorts) *UpdateConf
 }
 
 // Handle saves each named section in order, then announces the configuration that resulted.
-//
-// A section that cannot be stored is reported and the save continues with the next one. A
-// whole-configuration save is not one transaction, and an administrator finds out what failed
-// from the server log rather than from the status code, which is what the legacy server has
-// always answered.
+// A section that cannot be stored is reported and the save continues with the next one: a
+// whole-configuration save is not one transaction, and an administrator finds out what
+// failed from the server log rather than from the status code.
 func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd UpdateConfigurationCommand) (UpdateConfigurationResult, error) {
 	result := UpdateConfigurationResult{Outcome: ConfigurationSaved}
 
@@ -371,12 +349,11 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 	handler.saver.dirwatchers.Start(ctx, handler.watchesToStart(ctx, cmd.Changes, saved))
 
 	if err := handler.saver.publish(ctx); err != nil {
-		// Every section this save named is in the store, and reading back the configuration that resulted
-		// is what failed. The server is running with what was submitted; it could not tell anyone. The
-		// result carries both halves — which sections reached the store, and that the save as a whole did
-		// not complete — because the two answers send an administrator to different actions, and a result
-		// that named nothing would describe a store the save never wrote to. The reason is filed where
-		// every other refusal of this save files its reason.
+		// Every section this save named is in the store, and reading back the configuration
+		// that resulted is what failed. The result carries both halves — which sections
+		// reached the store, and that the save as a whole did not complete — because the two
+		// answers send an administrator to different actions — see the configuration-save
+		// failure maintainer note.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)
@@ -389,17 +366,10 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 	return result, nil
 }
 
-// watchesToStart decides which directories the server watches after a whole-configuration save.
-//
-// Two legacy rules make this worth writing down rather than doing the obvious thing:
-//
-// - Stopping the watchers empties the list the server watches from, and only a save that
-// names the dirwatch section fills it again. A whole-configuration save that says nothing
-// about dirwatch therefore leaves the server watching nothing until it restarts, even
-// though the watched directories are still stored. Recorded as a preserved quirk.
-// - When the section is named, what gets watched is what the store has, because the legacy
-// server reads back what it saved — except when the save failed, when it keeps watching
-// what it was given. Recorded as a preserved quirk.
+// watchesToStart decides which directories the server watches after a whole-configuration
+// save. Two preserved legacy quirks decide it, both recorded in the dirwatch save maintainer
+// note: a save that says nothing about dirwatch leaves the server watching nothing, and when
+// the section is named the watchers follow the store, except on a failed save.
 func (handler *UpdateConfigurationHandler) watchesToStart(ctx context.Context, changes ConfigurationChanges, saved map[ConfigSection]bool) domain.Dirwatches {
 	if !changes.names(DirwatchSection) {
 		return domain.Dirwatches{}
@@ -431,13 +401,11 @@ func NewUpdateConfigurationSectionHandler(configuration ConfigurationPorts) *Upd
 	return &UpdateConfigurationSectionHandler{saver: newConfigurationSaver(configuration)}
 }
 
-// Handle saves one section, or reports that it could not.
-//
-// Unlike a whole-configuration save, a failure here stops the save and is reported, which the
-// REST layer answers with the failure status the frozen contract fixes. The directory watchers
-// are restarted whatever happens — including for a save that failed — because the legacy server
-// restarts them unconditionally, so a rejected save leaves the server watching rather than
-// silently stopped.
+// Handle saves one section, or reports that it could not. Unlike a whole-configuration save,
+// a failure here stops the save and is reported, and the REST layer answers with the failure
+// status the contract fixes. The directory watchers are restarted whatever happens —
+// including for a save that failed — so a rejected save leaves the server watching rather
+// than silently stopped.
 func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cmd UpdateConfigurationSectionCommand) (UpdateConfigurationResult, error) {
 	result := UpdateConfigurationResult{Outcome: ConfigurationSaved}
 
@@ -458,19 +426,18 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 	handler.saver.dirwatchers.Start(ctx, handler.watchesToRestart(ctx, cmd, failure == nil))
 
 	if failure != nil {
-		// The watchers are back, but nothing was announced: a save that did not work is not a
-		// configuration change. The reason is returned alongside the outcome — the outcome is
-		// what the REST layer maps to a status, the error is what a caller logs.
+		// The watchers are back, but nothing was announced: a save that did not work is not
+		// a configuration change. The reason is returned alongside the outcome — the outcome
+		// is what the REST layer maps to a status, the error is what a caller logs.
 		return result, failure
 	}
 
 	if err := handler.saver.publish(ctx); err != nil {
-		// The section the page submitted is in the store, and reading back the configuration that resulted
-		// is what failed. The status the page gets is the same 417 a section the store refused gets, so the
-		// distinction has to live in the answer the use case returns and in the line the server files: the
-		// section named as stored is one the server is now running with, and a result that named nothing
-		// would tell the operator to edit it again. The reason is filed where the refusal above files its
-		// reason.
+		// The section the page submitted is in the store, and reading back the configuration
+		// that resulted is what failed. The page still gets the same 417 a refused section
+		// gets, so the distinction lives in the use case's answer and the server's log line:
+		// the section named as stored is one the server is now running with — see the
+		// configuration-save failure maintainer note.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)
@@ -484,11 +451,10 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 }
 
 // watchesToRestart decides which directories the server watches after a per-section save.
-//
-// Saving any other section reads the stored dirwatches back, because stopping the watchers
-// emptied them and this save said nothing about what to watch instead. Saving the dirwatch
-// section itself watches what the store has when the save worked, and what was submitted when
-// it did not, for the same reason a whole-configuration save does.
+// Saving any other section reads the stored dirwatches back: stopping the watchers emptied
+// them and this save said nothing about what to watch instead. Saving the dirwatch section
+// itself watches the store when the save worked, and what was submitted when it did not,
+// for the same reason a whole-configuration save does.
 func (handler *UpdateConfigurationSectionHandler) watchesToRestart(ctx context.Context, cmd UpdateConfigurationSectionCommand, saved bool) domain.Dirwatches {
 	if cmd.Section != DirwatchSection || saved {
 		watches, err := handler.saver.repos.Dirwatches.AllDirwatches(ctx)
