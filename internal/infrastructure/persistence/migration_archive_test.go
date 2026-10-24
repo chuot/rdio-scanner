@@ -33,20 +33,12 @@ type fixedClock struct{ at time.Time }
 
 func (c fixedClock) Now() time.Time { return c.at }
 
-// The migration archive is the table that holds every v6 row the migration pass read and could not
-// carry, so that dropping the v6 table never destroys a row.
-//
-// It lives in the migration pass and not in the dialect schemas for the reason the log source feature recorded for
-// the log indexes: ApplySchema's statements are the legacy
-// server's, and TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt requires that applying
-// them to a database the other server wrote changes nothing at all — a new table included. The step
-// that owns the archive runs after the schema and before any v6 table is read, so every database this
-// server starts on gains it, fresh or inherited.
+// The migration archive is the table that holds every v6 row the migration pass read
+// and could not carry, so dropping the v6 table never destroys a row; it lives in the
+// migration pass, not in the dialect schemas.
 
-// TestMigrateGivesEveryDatabaseTheMigrationArchive is the requirement's precondition: the table the pass
-// archives into exists on every database the pass runs on — the fresh one it created the schema of,
-// and the one the legacy server wrote and already migrated — with the unique index that makes
-// re-archiving a surviving v6 table hold each row once.
+// The archive table exists on every database the pass runs on, fresh or inherited,
+// with the unique index that makes re-archiving a surviving v6 table hold each row once.
 func TestMigrateGivesEveryDatabaseTheMigrationArchive(t *testing.T) {
 	fresh := openEmptyDatabase(t)
 
@@ -61,9 +53,8 @@ func TestMigrateGivesEveryDatabaseTheMigrationArchive(t *testing.T) {
 	assertMigrationArchive(t, inherited, "a database the legacy server wrote")
 }
 
-// TestApplySchemaAloneDoesNotCreateTheMigrationArchive is the fresh-schema half: the schema step is still
-// exactly the legacy server's. The archive belongs to the migration pass, which is the one place this
-// server changes a database that already exists.
+// Creating the archive is idempotent: a second migration pass leaves the table and
+// its rows unchanged.
 func TestApplySchemaAloneDoesNotCreateTheMigrationArchive(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -102,9 +93,8 @@ func TestMigrationArchiveIsUnchangedByASecondMigration(t *testing.T) {
 	}
 }
 
-// TestMigrationArchiveIsDeclaredForEveryDialect is the copy guard the log source column got: a table
-// present for SQLite and missing for the backend somebody actually deploys on is a migration that
-// destroys its rows on that backend with nowhere to put them.
+// The archive is declared for every dialect: a table present only for SQLite leaves a
+// deployed backend's uncarriable rows with nowhere to go.
 func TestMigrationArchiveIsDeclaredForEveryDialect(t *testing.T) {
 	for _, tc := range []struct {
 		dialect Dialect
@@ -136,10 +126,10 @@ func isMigrationArchiveIndex(object string) bool {
 	return strings.HasPrefix(object, "index migration_archive_table_row ")
 }
 
-// TestArchiveRowHoldsTheRowThePassCouldNotCarry is the requirement's mechanism: the row the pass read but did
-// not carry is held with its original values, the reason in the language of the system, and the moment
-// the server archived it. Binary columns come back base64-encoded, which is what makes an archived
-// call's audio recoverable from the contents column alone.
+// The row the pass read but did not carry is held with its original values, the
+// reason in the language of the system, and the moment the server archived it.
+// Binary columns come back base64-encoded, which makes an archived call's audio
+// recoverable from the contents column alone.
 func TestArchiveRowHoldsTheRowThePassCouldNotCarry(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -188,9 +178,9 @@ func TestArchiveRowHoldsTheRowThePassCouldNotCarry(t *testing.T) {
 	}
 }
 
-// TestArchivingTheSameRowTwiceHoldsItOnce is the re-run half of the requirement: a v6 table that survived
-// because a row of it could not be read is re-read on every later start, and its already-archived rows
-// archive again as nothing — the first reason stays on record.
+// A v6 table that survived because a row of it could not be read is re-read on every
+// later start, and its already-archived rows archive again as nothing: the first
+// reason stays on record.
 func TestArchivingTheSameRowTwiceHoldsItOnce(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -221,9 +211,8 @@ func TestArchivingTheSameRowTwiceHoldsItOnce(t *testing.T) {
 	}
 }
 
-// TestArchiveRowIsRefusedWhenTheArchiveIsNotThere is the failure shape the pass keeps: an archive
-// write that cannot run is a failure the caller is told about, not a row quietly dropped — which is
-// the whole point of the feature.
+// An archive write that cannot run is a failure the caller is told about, not a row
+// quietly dropped.
 func TestArchiveRowIsRefusedWhenTheArchiveIsNotThere(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -282,12 +271,10 @@ func archivedRows(t *testing.T, db *sql.DB, table string) [][]string {
 	return readRows(t, db, `SELECT "tableName", "rowId", "reason", "contents", "archivedAt" FROM "migrationArchive" WHERE "tableName" = '`+table+`' ORDER BY "rowId"`)
 }
 
-// archivedRow reads the one row the archive holds for one v6 identity, or nil when it holds none.
-//
-// A test that arranges one damaged row asserts what the pass said about that row. It does not assert
-// that nothing else was archived: the fixture holds the other shapes the pass is for, and a test that
-// failed every time the fixture grew would be a test of the fixture, not of the pass. The whole-archive
-// assertions live in the integrity audit, which is where the count belongs.
+// archivedRow reads the one row the archive holds for one v6 identity, or nil when it
+// holds none. A test that arranges one damaged row asserts what the pass said about
+// that row, not that nothing else was archived: the whole-archive assertions live in
+// the integrity audit, which is where the count belongs.
 func archivedRow(t *testing.T, db *sql.DB, table string, rowId int) []string {
 	t.Helper()
 
