@@ -80,12 +80,10 @@ func (downstream Downstream) Forwards() bool {
 // Downstreams is the server's list of downstream servers.
 type Downstreams []Downstream
 
-// Validate reports the first reason the list cannot be stored:
-// the forwarder posts recordings and the apikey to the address the administrator
-// typed, so an address that is not http or https is refused at apply — it is an
-// address the server must not post to over some other protocol, and a redirect or a
-// foreign scheme must not be able to carry the recording elsewhere. An empty address
-// is a downstream that forwards nothing, which the list already allows.
+// Validate reports the first reason the list cannot be stored. The forwarder
+// posts recordings and the apikey to the address the administrator typed, so
+// only http and https are accepted: a foreign scheme or a redirect must not be
+// able to carry the recording elsewhere. An empty address forwards nothing.
 func (downstreams Downstreams) Validate() error {
 	for _, downstream := range downstreams {
 		if err := downstream.Validate(); err != nil {

@@ -138,9 +138,9 @@ func TestCallIsValidAcceptsAnyTalkgroupClaim(t *testing.T) {
 	}
 }
 
-// TestIsDuplicateOfUsesTheLegacyRule pins Calls.CheckDuplicate: the same system
-// identifier, the same talkgroup identifier, and a timestamp within the window. Unit
-// sets, labels and audio are irrelevant to the rule.
+// TestIsDuplicateOfUsesTheLegacyRule pins the duplicate rule the server has
+// always used: same system identifier, same talkgroup identifier, timestamp
+// within the window; unit sets, labels and audio are irrelevant.
 func TestIsDuplicateOfUsesTheLegacyRule(t *testing.T) {
 	window := DefaultOptions().DuplicateDetectionWindow()
 

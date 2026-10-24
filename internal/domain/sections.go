@@ -15,15 +15,10 @@
 
 package domain
 
-// The seven configuration sections that are lists of entries are saved by replacing the whole list:
-// what the server runs with afterwards is what was submitted, entry for entry, and not what it had with
-// the submission added to it. Each entry starts as a new one of its kind — with the defaults that kind
-// has always started with — and then takes whatever the submitted entry names.
-//
-// These parsers are the entry point for a submitted list. They carry no rule of their own beyond the two
-// every section shares, which is why they are written together: an administrator saving groups and an
-// administrator saving downstreams are doing the same thing to different lists, and a server where those
-// two behave differently is a server an administrator has to learn around.
+// The seven configuration sections that are lists of entries are saved by replacing the whole
+// list: what the server runs with afterwards is what was submitted, entry for entry. These
+// parsers are the entry point for a submitted list; the save semantics every section shares
+// are the two rules below — sectionEntries and fresh-entry apply — and live in the domain note.
 
 // ParseAccesses builds the access codes from the list an administrator submitted.
 func ParseAccesses(value any) Accesses {
@@ -137,13 +132,10 @@ func ParseUnits(value any) Units {
 	return units
 }
 
-// sectionEntries is the rule every list section shares: the submitted value is a list of entries, each
-// entry is a set of fields, and anything that is neither is not part of the submission.
-//
-// A value that is not a list at all yields no entries, which the caller has to be able to tell apart
-// from an empty list: the legacy server looks at what was submitted under a section's name, does not
-// recognize a value that is not a list, and saves nothing for that section — while a list that is empty
-// is a submission that replaces the section with nothing.
+// sectionEntries is the rule every list section shares: the submitted value is a list of
+// entries, each entry is a set of fields, and anything that is neither is not part of the
+// submission. A value that is not a list yields no entries and saves nothing for that
+// section; an empty list is a submission that replaces the section with nothing.
 func sectionEntries(value any) []map[string]any {
 	items, ok := value.([]any)
 	if !ok {

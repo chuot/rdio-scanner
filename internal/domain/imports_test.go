@@ -61,13 +61,9 @@ func TestDomainImportsStandardLibraryOnly(t *testing.T) {
 	}
 }
 
-// TestTheDomainPackageImportsNoMathRand: the signing secret is
-// the value every session token is signed with, and math/rand is a clock-seeded
-// sequence — an attacker who knows roughly when the server first started can
-// reproduce the secret that start wrote, and a signing secret is exactly the value
-// an attacker wants: it opens every session. The domain builds that secret, so the
-// domain takes crypto/rand and not math/rand, and this is the vet-level check
-// the criterion asks for, said as a test so the suite runs it on every go test.
+// TestTheDomainPackageImportsNoMathRand is the vet-level check that the signing
+// secret comes from crypto/rand: math/rand is clock-seeded, so a server's first
+// secret is reproducible by anyone who knows roughly when it started.
 func TestTheDomainPackageImportsNoMathRand(t *testing.T) {
 	fset := token.NewFileSet()
 

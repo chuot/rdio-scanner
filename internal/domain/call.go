@@ -46,11 +46,8 @@ type CallUnit struct {
 
 // Call is a recorded transmission: the aggregate root that owns the audio, the
 // frequencies and units heard in it, the talkgroups it was patched to, and the system
-// and talkgroup it belongs to.
-//
-// AudioLength is how long the recording lasts — the length the server learned from the
-// uploader's own count, from the conversion, or from probing the audio, in that order.
-// Zero says the server never learned it; a call with no known length is a complete call.
+// and talkgroup it belongs to. AudioLength is what the server learned of its duration;
+// zero means it never learned one, and a call with no known length is still complete.
 type Call struct {
 	ID                 uint64
 	Audio              []byte
@@ -132,19 +129,11 @@ func (call Call) DuplicateWindow(window time.Duration) (time.Time, time.Time) {
 	return call.Timestamp.Add(-window), call.Timestamp.Add(window)
 }
 
-// IsDuplicateOf reports whether another call already covers this one: the same system,
-// the same talkgroup, the same site, and a timestamp within the window on either side.
-// Unit content, labels and audio are not part of the rule.
-//
-// The site is part of the rule because the same talkgroup heard on two sites is two
-// real calls: a time window alone used to suppress the second one. A call with no site
-// (SiteRef 0) matches only calls with no site; a site-bearing call never matches a
-// site-less one, in either direction.
-//
-// A window of zero means duplicate detection is switched off, and nothing is a
-// duplicate. Calls whose system and talkgroup have not been resolved cannot match each
-// other: their identifiers are both zero, and matching on that would suppress real
-// calls.
+// IsDuplicateOf reports whether another call already covers this one: the
+// same system, talkgroup, and site, and a timestamp within the window on
+// either side. A zero window switches detection off; unresolved system or
+// talkgroup identifiers never match. The site rule and its history live in
+// the domain maintainer note.
 func (call Call) IsDuplicateOf(other Call, window time.Duration) bool {
 	if window <= 0 {
 		return false

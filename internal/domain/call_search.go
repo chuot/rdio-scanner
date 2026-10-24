@@ -32,12 +32,10 @@ const (
 	MaxSearchOffset = uint(1<<31 - 1)
 )
 
-// clampPage reads one submitted page parameter. A negative value — which a uint conversion
-// wraps into a huge one, and which a hostile client uses to mean "no limit" — becomes the
-// floor; a value above the ceiling becomes the ceiling; a value between them keeps its
-// integer part, which is what the legacy conversion did to the numbers that were sane. An
-// explicit zero is left alone: for a limit it is the documented legacy answer of no rows,
-// and for an offset it is the start of the table.
+// clampPage reads one submitted page parameter: a negative value becomes the floor, a
+// value above the ceiling becomes the ceiling, and a value between them keeps its
+// integer part. An explicit zero is left alone: for a limit it means no rows, for an
+// offset the start of the table.
 func clampPage(v float64, floor uint, ceiling uint) uint {
 	if v < 0 {
 		return floor
@@ -128,12 +126,9 @@ func (search CallSearch) HasTag() bool {
 }
 
 // DateWindow returns the inclusive timestamp bounds the date criterion selects, or false
-// when there is no date criterion.
-//
-// This is the call-history window, and it is **not** the log-search window: descending
-// here runs back a day from the truncated instant and stops at that instant, while the
-// log view shifts its window back by the submitted hour and minute as well. The two are
-// separate rules in the legacy server and are kept separate here.
+// when there is no date criterion. This is the call-history window: descending runs back
+// one day from the truncated instant and stops at that instant. The log-search window
+// shifts additionally by the submitted hour and minute; the two rules stay separate.
 func (search CallSearch) DateWindow() (time.Time, time.Time, bool) {
 	if !search.HasDate() {
 		return time.Time{}, time.Time{}, false
@@ -159,23 +154,11 @@ type TalkgroupScope struct {
 	TalkgroupRefs []uint
 }
 
-// Scoped returns the catalog as one listener's view sees it.
-//
-// The rule is deliberately different from Access.Grants, which decides whether a *live
-// call* is delivered. For the catalog view, a listener with no scope named at all sees
-// every system — that is how an anonymous listener on an unrestricted server sees the
-// server. For live delivery, no scope named grants nothing.
-//
-// A talkgroup whose tag the server no longer knows is left out of the view entirely, as
-// the legacy server leaves it out of the configuration it sends.
-//
-// A system survives losing every talkgroup under it: it is still a system the listener sees, with
-// nothing under it. And a scope entry that names its talkgroups as a list — even an empty list —
-// says something different from one that names them some other way or not at all, which is the
-// difference between a system the listener sees empty and a system the listener never sees.
-//
-// The talkgroups under a scoped system come in the order the scope names them, and a system the
-// scope names twice is seen twice. Both are what the legacy server appends.
+// Scoped returns the catalog as one listener's view sees it. A listener with
+// no scope named sees every system here — unlike live delivery, where no
+// scope grants nothing. Talkgroups the server no longer knows are left out;
+// a system keeps its place even empty. The scope-list distinction and the
+// ordering quirks live in the domain maintainer note.
 func (systems Systems) Scoped(scope AccessScope, tags Tags) Systems {
 	out := Systems{}
 

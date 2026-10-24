@@ -153,13 +153,9 @@ const maxDirwatchDelayMinutes = 24 * 60
 var extensionPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,10}$`)
 
 // Validate refuses a watch list carrying a mask that does not compile or an
-// extension that is not a file extension.
-//
-// An uncompilable mask is stored today and crashes the server from a timer goroutine on the
-// next matching file — a panic with no recovery, on the server's own clock, in a build whose
-// web endpoints are answering while the part that watches directories is gone. The refusal
-// belongs to the list itself, at apply, where an administrator can be told, not in the dark
-// of a timer.
+// extension that is not a file extension. An uncompilable mask must be refused
+// here, at apply, where an administrator can be told: stored, it crashes the
+// server from a timer goroutine on the next matching file, with no recovery.
 func (dirwatches Dirwatches) Validate() error {
 	for _, dirwatch := range dirwatches {
 		if err := dirwatch.Validate(); err != nil {

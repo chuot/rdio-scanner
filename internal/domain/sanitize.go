@@ -21,14 +21,10 @@ import "unicode"
 // watched files, and a label of a megabyte is not a name, it is a payload.
 const MaxLabelLength = 256
 
-// SanitizeText makes text that arrived from outside the server safe to write into a log line,
-// to store as a label, and to broadcast to every listener: control characters — newline and
-// carriage return, which would forge a second log line; tab, which forges a column; and
-// escape, the introducer of an ANSI sequence that commands the terminal reading the log — all
-// become spaces, so the text keeps its shape and loses its power.
-//
-// The limit is a count of characters, and zero means no limit: the label paths cap at
-// MaxLabelLength, and the converter's report bounds its text by its own rule.
+// SanitizeText makes text that arrived from outside the server safe to log, store
+// as a label, and broadcast: control characters — newline, carriage return, tab, and
+// escape — become spaces, so outside text can never forge a log line or command a
+// terminal. The limit counts characters, and zero means no limit.
 func SanitizeText(s string, limit int) string {
 	runes := []rune(s)
 
@@ -46,12 +42,9 @@ func SanitizeText(s string, limit int) string {
 }
 
 // Sanitized returns the call with every text an outside source supplied made safe: the
-// recording's name, the system, talkgroup, group, tag and unit labels the call claims.
-//
-// This is the one door all of that text passes through on its way to the server's log lines,
-// the administrator's configuration, and the live broadcast, so the ingest use case runs it
-// once at its entry — an upload must not be able to forge a log line
-// or drive a terminal).
+// recording's name and the system, talkgroup, group, tag and unit labels the call claims.
+// This is the one door all of that text passes through on its way to log lines,
+// configuration, and the live broadcast, so the ingest use case runs it at its entry.
 func (call Call) Sanitized() Call {
 	call.AudioFilename = SanitizeText(call.AudioFilename, MaxLabelLength)
 	call.Meta.SystemLabel = SanitizeText(call.Meta.SystemLabel, MaxLabelLength)

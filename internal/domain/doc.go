@@ -13,11 +13,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package domain holds the Rdio Scanner business model: calls, systems, talkgroups,
-// groups, tags, units, sites, listener accesses, upload apikeys, server options,
-// directory watches, downstream targets, log entries, and the hardcoded alert and
-// keypad tones shipped to clients.
+// Package domain holds the business model: calls, systems, talkgroups, groups,
+// tags, units, sites, listener accesses, upload apikeys, server options,
+// directory watches, downstream targets, log entries, and the built-in alert
+// and keypad tone tables.
 //
-// Import rule: this package may import the Go standard library only. It must never
-// reference persistence, transport, frameworks, or third-party modules.
+// Import rule: the Go standard library only — never persistence, transport,
+// frameworks, or third-party modules.
 package domain

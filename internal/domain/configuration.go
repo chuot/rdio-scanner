@@ -15,18 +15,10 @@
 
 package domain
 
-// Configuration is everything the server is currently running with: the eight sections an
-// administrator reads and saves.
-//
-// It is a bundle rather than an aggregate with invariants of its own, and deliberately has no
-// behavior: every rule that decides what a configuration means lives on the section it belongs
-// to — whether a server is restricted lives on Accesses, what a listener may see lives on
-// Systems and AccessScope, how a call is converted lives on Options. Inventing a rule here
-// would only give the sections a place to disagree.
-//
-// It is worth naming as a type because "the configuration in effect" is a real thing the
-// server has: it is what an administrator reads, what a save replaces part of, and what every
-// open administrator connection is told when something changes.
+// Configuration is everything the server is currently running with: the eight
+// sections an administrator reads and saves. It is a bundle with no behavior
+// of its own: every rule lives on the section it belongs to, so a rule is
+// never decided in two places.
 type Configuration struct {
 	Access      Accesses
 	Apikeys     Apikeys

@@ -16,9 +16,7 @@
 package domain
 
 // AccessScope limits a listener access or an upload apikey to particular systems and
-// talkgroups. It is shared by both because the server scopes them identically.
-//
-// Three states are distinct and all three matter:
+// talkgroups; both are scoped identically. Three states are distinct and all three matter:
 //
 //	present=false no scope was supplied at all; the PIN gate treats the client as
 //	unauthenticated, and nothing is granted
@@ -30,13 +28,11 @@ type AccessScope struct {
 	Systems  []ScopedSystem
 }
 
-// ScopedSystem is one system an access or apikey may see, named by the reference clients use rather
-// than by the database identifier.
-//
-// TalkgroupsGiven is what separates two scope entries that otherwise look the same: one that named
-// its talkgroups as a list, even an empty one, and one that named them some other way or not at all.
-// The first sees that system with exactly those talkgroups under it, and the second does not see that
-// system at all.
+// ScopedSystem is one system an access or apikey may see, named by the
+// reference clients use rather than by the database identifier. TalkgroupsGiven
+// records whether the scope named the talkgroups as a list at all: an entry
+// that named an empty list sees that system empty, and one that did not name
+// a list does not see that system at all.
 type ScopedSystem struct {
 	SystemRef          uint
 	TalkgroupsGiven    bool
@@ -103,16 +99,10 @@ func (scope AccessScope) Grants(call Call) bool {
 	return scope.GrantsReferences(call.System.SystemRef, call.Talkgroup.TalkgroupRef)
 }
 
-// GrantsReferences reports whether one system reference and one talkgroup reference fall
-// inside the scope.
-//
-// It exists because the two things a scope is checked against are not always the same pair.
-// A live call is checked after its system and talkgroup have been resolved; an upload is
-// checked before that, when all the server has are the references the upload itself names.
-// The legacy server compares against the resolved pair in both places, and at the upload
-// boundary they are not resolved yet, which is what makes a scoped upload apikey dereference
-// a nil aggregate. Checking the submitted
-// references is what that comparison was written to do.
+// GrantsReferences reports whether one system reference and one talkgroup reference
+// fall inside the scope. It answers against submitted references rather than resolved
+// identifiers because at the upload boundary nothing is resolved yet; why the resolved
+// pair cannot be used there lives in the domain maintainer note.
 func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 	if scope.Wildcard {
 		return true
@@ -137,15 +127,11 @@ func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 	return false
 }
 
-// Value is the scope as the server stores it and announces it: the wildcard is the string
-// "*", an explicit scope is a list of systems each naming its talkgroups, and a scope that
-// was never supplied is nothing at all.
-//
-// It is the mirror of ParseAccessScope, and both are needed because the same shape appears in
-// the stored row and on the wire. A scope that names no systems is an empty list rather than
-// nothing, because "an empty list was supplied" and "nothing was supplied" are the two states
-// this distinction turns on. An entry that named no talkgroups gets no talkgroups key for the same reason:
-// inventing an empty list would turn a system the listener cannot see into one the listener can.
+// Value is the scope as the server stores it and announces it: the wildcard is the
+// string "*", an explicit scope is a list of systems each naming its talkgroups, and a
+// scope that was never supplied is nothing at all. It is the mirror of
+// ParseAccessScope: present-but-empty and absent are the two states the scope's
+// meaning turns on, so each is kept distinct here.
 func (scope AccessScope) Value() any {
 	if !scope.Present {
 		return nil

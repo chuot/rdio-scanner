@@ -41,11 +41,9 @@ func (call Call) VisibleAt() time.Time {
 }
 
 // IsWaiting reports whether this call is still being held back at the given instant.
-//
-// The delay is measured from the moment the call happened, not from the moment this server received
-// it. That is what makes a recording that arrived late wait out only what is left of its delay
-// rather than a whole delay on top of the lateness — and what makes a recording that arrived after
-// its own delay had run out be shown at once.
+// The delay is measured from when the call happened, not when the server received it:
+// a late recording waits out only what is left of its delay, and one that arrives after
+// the delay ran out is shown at once.
 func (call Call) IsWaiting(at time.Time) bool {
 	return call.Delay() > 0 && call.VisibleAt().After(at)
 }

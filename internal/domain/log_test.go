@@ -208,12 +208,10 @@ func TestKnownLogSourcesAreTheDeclaredVocabulary(t *testing.T) {
 	}
 }
 
-// TestEveryLogSourceSaysWhetherAWriterWritesIt is the classification the vocabulary owes whoever reads it: a
-// name is either a part of this server that writes entries, or a name that exists only so that rows written
-// before the source column existed can still be found.
-//
-// A name in neither group is an oversight, and it is an oversight an operator pays for: the log view offers
-// the filter, nothing this server writes can ever match it, and an empty result reads as "nothing happened".
+// TestEveryLogSourceSaysWhetherAWriterWritesIt is the classification the vocabulary owes
+// whoever reads it: a name is either a part of this server that writes entries, or a name
+// that exists only so rows written before the source column existed can still be found.
+// A name in neither group means a filter nothing can match reads as "nothing happened".
 func TestEveryLogSourceSaysWhetherAWriterWritesIt(t *testing.T) {
 	written := []LogSource{
 		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,

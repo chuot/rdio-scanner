@@ -96,12 +96,10 @@ func (options Options) AcceptSecret(value string) Options {
 	return options
 }
 
-// WithSigningSecret gives the options a secret they can sign sessions with, making a fresh one when
-// they hold nothing usable.
-//
-// It reports whether a secret was made, which is what tells the caller the new one has to be put on
-// record: a secret that only exists in this process is gone at the next start, and every token issued
-// with it dies with it.
+// WithSigningSecret gives the options a secret they can sign sessions with, making a
+// fresh one when they hold nothing usable. The second result says a secret was made,
+// so the caller knows to put the new one on record: a secret that lives only in this
+// process dies with every token issued under it at the next start.
 func (options Options) WithSigningSecret() (Options, bool) {
 	if len(options.Secret) == SecretLength {
 		return options, false
@@ -201,18 +199,11 @@ func (options Options) PruneBefore(now time.Time) time.Time {
 	return now.Add(-time.Duration(options.PruneDays) * 24 * time.Hour)
 }
 
-// GenerateSecret builds a new signing secret from the legacy alphabet.
-//
-// The picks come from crypto/rand: math/rand is seeded by the clock, so
-// an attacker who knows roughly when the server first started can reproduce the
-// secret that start wrote, and a signing secret is exactly the value an attacker
-// wants — it opens every session. The alphabet and the length are the legacy
-// server's, unchanged.
-//
-// A read that fails is the operating system's entropy pool failing. The standard
-// library's own crypto/rand.Read answers that by panicking, and this follows it:
-// a server that cannot make a signing secret must not fall back to a weak one, and
-// it must not do so in silence.
+// GenerateSecret builds a new signing secret. The picks come from crypto/rand
+// because a clock-seeded generator lets anyone who knows roughly when the
+// server started reproduce its secret. A failed entropy read panics, following
+// crypto/rand.Read: a server that cannot make a signing secret must not fall
+// back to a weak one, and must not do so in silence.
 func GenerateSecret(n int) string {
 	secret := make([]rune, n)
 	alphabet := []rune(secretAlphabet)

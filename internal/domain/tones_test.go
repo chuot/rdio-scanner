@@ -20,14 +20,11 @@ import (
 	"testing"
 )
 
-// The alert and keypad tone tables were copied out of the legacy server verbatim, and these two
-// tests used to prove it by reading server/alert.go and server/keypad.go. The legacy source is not
-// in this repository, so both tests skipped — every day, since the legacy trees were deleted — and
-// a test that always skips asserts nothing.
-//
-// The authority is the recorded tables in tones_fixtures_test.go, taken from git tree
-// 02ae33d4651fee4c46a93bdcf574d0aead89e542 and spelled with the same decimal literals the legacy
-// source spells, so the float32 values compared here are the float32 values the legacy server built.
+// The alert and keypad tone tables were copied verbatim from the retired server's
+// source, and the authority for them is the recorded tables in
+// tones_fixtures_test.go, taken from git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542
+// with the same decimal literals the original source spells. These tests compare the
+// live tables against those fixtures.
 
 func TestAlertTablesMatchTheLegacyServerVerbatim(t *testing.T) {
 	legacy := alertTables

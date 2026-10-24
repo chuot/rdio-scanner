@@ -24,11 +24,9 @@ import "strconv"
 const maxLivefeedEntries = 4096
 
 // Livefeed is one listener's live-watch selection: which talkgroups on which systems
-// that listener wants delivered as they happen. A listener with nothing switched on
-// receives no live calls.
-//
-// The selection is keyed by the client-facing references, not by database identifiers,
-// because that is what the listener submits and what a call carries.
+// that listener wants delivered as they happen; a listener with nothing switched on
+// receives no live calls. The selection is keyed by client-facing references, not
+// database identifiers, because that is what the listener submits and what a call carries.
 type Livefeed struct {
 	Matrix map[uint]map[uint]bool
 }

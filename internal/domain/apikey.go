@@ -32,8 +32,8 @@ type Apikey struct {
 	Scope    AccessScope
 }
 
-// NewApikey returns an apikey that may upload to anything, which is what a freshly
-// created one is in the legacy server.
+// NewApikey returns an apikey that may upload to anything: a freshly created
+// credential is unrestricted.
 func NewApikey() Apikey {
 	return Apikey{Scope: AccessScope{Present: true, Wildcard: true}}
 }
@@ -76,15 +76,9 @@ func (apikey Apikey) Accepts(call Call) bool {
 	return apikey.Scope.Grants(call)
 }
 
-// AcceptsUpload reports whether the credential an uploader presented covers the call it posted.
-//
-// It is the reference-boundary twin of Accepts, and the difference is the whole point of it. A call is
-// matched against a system and a talkgroup the server has resolved, and at the upload boundary nothing
-// about the call has been resolved yet — the server has only the references the upload itself names. The
-// legacy server compares the resolved pair here anyway, which means a credential scoped to particular
-// systems dereferences a system that does not exist yet and the connection ends with no reply at all,
-// the failure the owner asked to fix. Comparing the submitted references is what that
-// comparison was written to do.
+// AcceptsUpload reports whether the credential an uploader presented covers the call it posted,
+// comparing the references the upload itself names rather than resolved identifiers. Why the
+// upload boundary cannot use resolved identifiers lives in the domain maintainer note.
 func (apikeys Apikeys) AcceptsUpload(key string, call Call) bool {
 	apikey, ok := apikeys.ByKey(key)
 	if !ok || apikey.Disabled {
@@ -111,12 +105,9 @@ func (apikeys Apikeys) Validate() error {
 	return nil
 }
 
-// ByKey finds the apikey an ingest source presented. A disabled credential is still
-// found, so the caller can report why it was refused.
-//
-// A presentation of nothing matches nothing, even a keyless row an older server left in the list:
-// the empty key is not a credential, and refusing it here is the second door behind the
-// apply-time rule in Validate.
+// ByKey finds the apikey an ingest source presented; a disabled credential is
+// still found, so the caller can report why it was refused. Presenting nothing
+// matches nothing, even a keyless row an older server left in the list.
 func (apikeys Apikeys) ByKey(key string) (Apikey, bool) {
 	if len(key) == 0 {
 		return Apikey{}, false

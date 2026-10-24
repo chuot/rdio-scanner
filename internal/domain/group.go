@@ -85,7 +85,7 @@ func (groups Groups) ByLabel(label string) (Group, bool) {
 }
 
 // IDsForLabels maps group labels to identifiers, silently dropping labels that do
-// not exist, as the legacy GetGroupIds does.
+// not exist.
 func (groups Groups) IDsForLabels(labels []string) []uint64 {
 	ids := []uint64{}
 

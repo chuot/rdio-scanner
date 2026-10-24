@@ -27,22 +27,11 @@ const (
 	LogLevelError = "error"
 )
 
-// LogSource is the part of the server that recorded an entry.
-//
-// The names are the operator's names for the parts of the server, not the names of the functions that
-// write them: an entry about a directory watcher that stopped is LogSourceDirwatch whether the failure
-// came from fsnotify, from the walk of the directory, or from the hand-off to the ingest path. A name is
-// in this list because a writer writes it, or because rows this server did not write carry it — there is
-// no LogSourceApikey, because an apikey is only ever presented outbound to a downstream server and the
-// apikeys.read: and apikeys.write: lines the log holds are failed configuration section saves, which are
-// LogSourceConfig.
-//
-// The list is closed on purpose. A search for a name that is not here is not a filter that matches
-// nothing, it is a caller asking for a subsystem this server does not have, and answering it with an
-// empty log view teaches an operator that nothing happened.
-//
-// Every name in it is classified below as a part of this server that writes entries, or as a name that
-// exists only so that rows written before the source column existed can still be found.
+// LogSource is the part of the server that recorded an entry. The names are
+// the operator's names for the parts, not the functions that write them, and
+// the list is closed on purpose: a filter for a name outside it is rejected,
+// not answered with an empty view. The vocabulary's history and the names no
+// writer of this server writes live in the domain maintainer note.
 type LogSource string
 
 const (
@@ -88,19 +77,11 @@ var writtenLogSources = []LogSource{
 	LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
 }
 
-// backfillOnlyLogSources are the names in the vocabulary that no writer of this server writes. They are in
-// the vocabulary because the log view has to answer an operator who filters for them: the rows they name are
-// already in databases this server runs against.
-//
-// calls is the one worth naming, because it is the one this feature found rather than designed. The
-// calls.checkduplicate:, calls.getcall:, calls.prune:, calls.search: and calls.writecall: lines an existing
-// database holds came from the legacy server's call repository. This server writes nothing about a call under
-// this name: what it writes about a recording that arrived is filed under ingest, and what it refuses at the
-// upload endpoint is filed under upload. The name stays so that an operator can search the history of a
-// database this server did not write.
-//
-// legacy is the other. No writer files under it either: it is what the backfill gives a message whose prefix
-// meant nothing, and what the log view reports for a row whose column is blank.
+// backfillOnlyLogSources are vocabulary names no writer of this server
+// writes: the log view still offers them so an operator can find rows a
+// database written before the source column existed already holds. The
+// calls and legacy names and where their rows come from live in the domain
+// maintainer note.
 var backfillOnlyLogSources = []LogSource{
 	LogSourceCalls, LogSourceLegacy,
 }
@@ -266,12 +247,9 @@ func (search LogSearch) HasDate() bool {
 }
 
 // DateWindow returns the inclusive timestamp bounds the date criterion selects, or
-// false when there is no date criterion.
-//
-// The window depends on the sort direction, which is how the legacy server behaves:
+// false when there is no date criterion. The window depends on the sort direction:
 // ascending takes the submitted instant truncated to the minute and runs forward a
-// full day; descending runs back a full day and then back again by the submitted hour
-// and minute.
+// day; descending runs back a day and then back again by the submitted hour and minute.
 func (search LogSearch) DateWindow() (time.Time, time.Time, bool) {
 	if !search.HasDate() {
 		return time.Time{}, time.Time{}, false

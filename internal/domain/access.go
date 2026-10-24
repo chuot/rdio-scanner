@@ -25,9 +25,8 @@ import (
 // code before it is locked out.
 const MaxAccessAuthAttempts = 5
 
-// Access is a listener's permission to watch a server: the code they present, who they
-// are, when they stop being allowed, how many sessions they may hold at once, and what
-// they are allowed to see.
+// Access is a listener's permission to watch a server: code, identity,
+// expiration, session limit, display order, and visibility scope.
 type Access struct {
 	ID         uint64
 	Code       string
@@ -38,16 +37,14 @@ type Access struct {
 	Scope      AccessScope
 }
 
-// NewAccess returns the anonymous access a listener session holds before it has
-// authenticated: no code, no identity, and no scope named. It is what the legacy server
-// installs on every connection, and the server's PIN gate recognises a session by it.
+// NewAccess returns the anonymous access a listener session holds before it
+// has authenticated: no code, no identity, no scope.
 func NewAccess() Access {
 	return Access{}
 }
 
-// ApplyMap reads an access out of an administrator configuration payload. The scope is
-// assigned unconditionally: a payload that omits it clears the scope, which is what the
-// legacy server does.
+// ApplyMap reads an access out of an administrator configuration payload; a
+// payload that omits the scope clears the scope.
 func (access Access) ApplyMap(m map[string]any) Access {
 	if v, ok := m["id"].(float64); ok {
 		access.ID = uint64(v)
@@ -80,8 +77,8 @@ func (access Access) ApplyMap(m map[string]any) Access {
 	return access
 }
 
-// Expired reports whether the access has run out. An access with no expiration never
-// expires.
+// Expired reports whether the access has run out; one with no expiration
+// never expires.
 func (access Access) Expired(now time.Time) bool {
 	if access.Expiration == 0 {
 		return false
@@ -90,9 +87,9 @@ func (access Access) Expired(now time.Time) bool {
 	return time.Unix(int64(access.Expiration), 0).Before(now)
 }
 
-// HasScope reports whether the access names what its holder may see. An access with no
-// scope is treated as not yet authenticated, and the server answers such a client with
-// a PIN request instead of live data.
+// HasScope reports whether the access names what its holder may see. An
+// access without a scope is treated as unauthenticated, and the server
+// answers such a client with a PIN request instead of live data.
 func (access Access) HasScope() bool {
 	return access.Scope.Present
 }
@@ -111,9 +108,9 @@ func (accesses Accesses) Restricted() bool {
 	return len(accesses) > 0
 }
 
-// ByCode finds the access a listener presented. The comparison is constant-time: a code is a
-// credential, and a comparison that stops at the first wrong character tells a guessing tool how far
-// each guess got. Lengths still differ — which the window limit bounds — positions do not leak.
+// ByCode finds the access a listener presented. The comparison is
+// constant-time because a code is a credential: a comparison that stops at
+// the first wrong character would tell a guessing tool how far each guess got.
 func (accesses Accesses) ByCode(code string) (Access, bool) {
 	given := []byte(code)
 
@@ -137,12 +134,9 @@ func (accesses Accesses) ByIdent(ident string) (Access, bool) {
 	return Access{}, false
 }
 
-// UpsertByCode adds an access, or updates the one already configured under the same code.
-//
-// The code is what identifies an access for this purpose, and an update replaces the
-// expiration, the identity, the connection limit, and the scope of every access sharing that
-// code — but not its display order, which the administrator's own ordering keeps. It reports
-// whether the access was new, which the legacy server ignores and the save does not depend on.
+// UpsertByCode adds an access, or updates every access sharing the same
+// code: expiration, identity, limit, and scope are replaced, display order is
+// kept. It reports whether the access was new.
 func (accesses Accesses) UpsertByCode(access Access) (Accesses, bool) {
 	out := append(Accesses{}, accesses...)
 
@@ -168,12 +162,8 @@ func (accesses Accesses) UpsertByCode(access Access) (Accesses, bool) {
 	return out, added
 }
 
-// RemoveAllByIdent removes every access configured under an identity.
-//
-// More than one access may share an identity, and the legacy server removes all of them: an
-// administrator deleting a user deletes that user's accesses, not one row. It reports whether
-// anything went, which matters because a removal that matched nothing is answered as though it
-// worked.
+// RemoveAllByIdent removes every access configured under an identity; more
+// than one access may share one. It reports whether anything was removed.
 func (accesses Accesses) RemoveAllByIdent(ident string) (Accesses, bool) {
 	out := Accesses{}
 

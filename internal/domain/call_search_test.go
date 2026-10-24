@@ -462,15 +462,9 @@ func TestParseCallSearchClampsThePageParameters(t *testing.T) {
 	}
 }
 
-// The search screen's System and Talkgroup filters name the label the operator read, and the
-// history is narrowed by reference: ParseCallSearch reads a system and a talkgroup as numbers, and
-// a criterion arriving as text is read as no criterion at all. The screen answers with the whole
-// history, silently.
-//
-// The catalog the screen is given is keyed by the same references the history is stored under, and
-// the group and tag filters are expanded by label on the server. So the label the operator read
-// becomes a reference through the catalog the listener was already given, and a group and a tag
-// travel as labels.
+// TestCallSearchCriteriaFromTheFilterLabelsTheOperatorRead pins that search criteria arrive
+// as numbers — a criterion arriving as text is read as no criterion — and that the label the
+// operator read becomes a reference through the catalog, while group and tag travel as labels.
 func TestCallSearchCriteriaFromTheFilterLabelsTheOperatorRead(t *testing.T) {
 	systems, tags, groups := searchCatalog()
 

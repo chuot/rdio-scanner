@@ -17,15 +17,11 @@ package domain
 
 import "testing"
 
-// The configuration sections an administrator saves arrive as lists, and a save replaces the whole
-// section: what the server runs with afterwards is what was submitted, entry for entry, and not what it
-// had with whatever was submitted added to it. These parsers are where a submitted list becomes the
-// section the server runs on, so the rules every section shares are pinned here rather than once per
-// section.
+// Configuration sections arrive as lists and a save replaces the whole section, so the
+// rules every section shares are pinned here rather than once per section.
 
-// Each entry is built from the defaults that section's entries start with, plus whatever the submitted
-// object names. An entry that names only its label is a complete entry: everything else is what a new
-// one of that kind has always started as.
+// Each entry starts from the defaults that section's entries start with, plus whatever the
+// submitted object names: an entry naming only its label is a complete entry.
 func TestParseGroupsBuildsEachEntryFromWhatTheSubmittedObjectNames(t *testing.T) {
 	groups := ParseGroups([]any{
 		map[string]any{"id": float64(1), "label": "Dispatch Renamed", "led": "green"},
