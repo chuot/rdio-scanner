@@ -20,9 +20,8 @@ import (
 	"time"
 )
 
-// TestTheClockReportsTheMomentInTheServersLocalTimeZone pins the one thing about the real clock
-// that the rest of the server depends on: the moment it reports is a local one, because the
-// directory watch mask reads the date and time a filename names in the clock's own zone.
+// TestTheClockReportsTheMomentInTheServersLocalTimeZone: the moment the real clock reports
+// is a local one, the zone the directory watch mask reads filenames in.
 func TestTheClockReportsTheMomentInTheServersLocalTimeZone(t *testing.T) {
 	before := time.Now()
 

@@ -21,14 +21,9 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// Scheduler runs work after a delay, which is the other half of what this package is for: the clock
-// says when it is, and the scheduler says when something will be.
-//
-// It is the adapter behind the application's Scheduler port. The application owns the rules about time —
-// a listener-count report held back so that a burst of connections costs one report rather than one per
-// connection, a pruning that runs once an hour — and a rule about time that can only be tested by
-// waiting for real time is not a tested rule, so the rules are written against this port and tested
-// against a fake of it.
+// Scheduler runs work after a delay: the clock says when it is, and the scheduler says when
+// something will be. It is the adapter behind the application's Scheduler port; see the
+// clock-and-scheduler maintainer note.
 type Scheduler struct {
 	// report is told the panic a piece of scheduled work recovered, so the
 	// server says the failure in its own log instead of dying by it.
@@ -37,10 +32,8 @@ type Scheduler struct {
 
 var _ ports.Scheduler = (*Scheduler)(nil)
 
-// NewScheduler returns a scheduler that runs work on the clock's own timers.
-//
-// report is told the value a panicking piece of scheduled work recovered with; a nil report discards it, which is what the tests that do not care about
-// the report pass.
+// NewScheduler returns a scheduler that runs work on the clock's own timers. report is
+// told the value a panicking piece of scheduled work recovered with; a nil report discards it.
 func NewScheduler(report func(problem any)) *Scheduler {
 	if report == nil {
 		report = func(problem any) {}
@@ -50,16 +43,9 @@ func NewScheduler(report func(problem any)) *Scheduler {
 }
 
 // Schedule asks for work to run after the delay and hands back the handle that can abandon it.
-//
-// The work runs on a timer of its own, on a goroutine the scheduler owns rather than on the caller's:
-// a report that is scheduled from the connection that triggered it should not be held to that
-// connection's lifetime, which is what the application's rules about a listener that joined and left
-// again assume.
-//
-// The work is run under a recover: a panic on a timer's goroutine is a panic in a
-// goroutine nobody owns, and a server that loses a debounced listener report, an hourly pruning, or
-// a delayed call to a panic dies by it with no report in its own log. The recovered value is told
-// to the report the scheduler was built with, and the schedule goes on.
+// The work runs on a timer and a goroutine the scheduler owns rather than the caller's, and
+// under a recover that hands the recovered value to the report; see the clock-and-scheduler
+// maintainer note.
 func (scheduler *Scheduler) Schedule(delay time.Duration, work func()) ports.Timer {
 	return scheduled{timer: time.AfterFunc(delay, func() {
 		defer func() {

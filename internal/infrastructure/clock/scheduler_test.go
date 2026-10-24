@@ -21,9 +21,8 @@ import (
 	"time"
 )
 
-// The scheduler is the server's one way of saying "do this later", and the application layer's rules
-// about time — the listener-count report held back so a burst of connections costs one report, the
-// pruning that runs once an hour — are only testable if this thing actually does it later.
+// The scheduler is the server's one way of saying "do this later": the application's held-back
+// listener-count report and hourly pruning are only testable if it really runs work later.
 func TestSchedulerRunsTheWorkAfterTheDelay(t *testing.T) {
 	ran := make(chan struct{}, 1)
 
@@ -36,9 +35,9 @@ func TestSchedulerRunsTheWorkAfterTheDelay(t *testing.T) {
 	}
 }
 
-// Work that has not run yet can be abandoned, and abandoning it means it never runs. The listener-count
-// debouncer holds the handle of the report it has already scheduled, and a report that is abandoned has
-// to stay abandoned.
+// Work that has not run yet can be abandoned, and abandoning it means it never runs: the
+// listener-count debouncer holds the handle of the report it has already scheduled, and an
+// abandoned report has to stay abandoned.
 func TestSchedulerCancelsWorkThatHasNotRunYet(t *testing.T) {
 	ran := make(chan struct{}, 1)
 
@@ -53,8 +52,8 @@ func TestSchedulerCancelsWorkThatHasNotRunYet(t *testing.T) {
 	}
 }
 
-// Abandoning work that already ran is not an error and does not stop something else from running: the
-// handle outlives the work it stands for, and the holder of it does not know which half of its life the
+// Abandoning work that already ran is not an error and does not stop another run: the handle
+// outlives the work it stands for, and its holder does not know which half of that life the
 // handle is in.
 func TestSchedulerIgnoresACancelOfWorkThatAlreadyRan(t *testing.T) {
 	ran := make(chan struct{}, 1)
@@ -80,10 +79,8 @@ func TestSchedulerIgnoresACancelOfWorkThatAlreadyRan(t *testing.T) {
 	}
 }
 
-// TestScheduledWorkThatPanicsIsRecoveredAndReported: scheduled
-// work runs on the timer's own goroutine, and today a panic there is a panic in a
-// goroutine nobody owns — the whole server goes down with no report in its own log.
-// The scheduler recovers the panic and tells the report it was built with.
+// TestScheduledWorkThatPanicsIsRecoveredAndReported: a panic on the timer's own
+// goroutine is recovered and told to the report the scheduler was built with.
 func TestScheduledWorkThatPanicsIsRecoveredAndReported(t *testing.T) {
 	reported := make(chan any, 1)
 
