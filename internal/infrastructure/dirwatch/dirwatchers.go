@@ -46,9 +46,11 @@ type IngestSink interface {
 	IngestCall(ctx context.Context, call domain.Call) error
 }
 
-// Dirwatchers are the directory watchers the server keeps running, and the bracket a
-// configuration save performs around them: stopped while the configuration is replaced, started
-// again with what the configuration now says to watch.
+// Dirwatchers are the directory watchers the server keeps running, and the bracket
+// a configuration save performs around them. The save brackets them because watchers
+// hold the watch set they started with, and restarting them around the save is how a
+// saved watch list takes effect without a server restart; see the directory-watchers
+// maintainer note.
 type Dirwatchers struct {
 	parsers *parsers.Parsers
 	logs    ports.LogRepository
@@ -77,11 +79,9 @@ func NewDirwatchers(parsers *parsers.Parsers, logs ports.LogRepository, sink Ing
 	}
 }
 
-// Stop ends every running watcher and leaves nothing watching.
-//
-// The watchers are closed before the work they have in flight is cancelled: a call that is
-// halfway through being ingested is allowed to finish rather than being cut off by a
-// configuration save that happens to arrive at the same moment.
+// Stop ends every running watcher and leaves nothing watching. Watchers close before
+// in-flight work is cancelled so a call halfway through being ingested finishes rather
+// than being cut off by a save; see the directory-watchers maintainer note.
 func (watchers *Dirwatchers) Stop(ctx context.Context) {
 	watchers.mutex.Lock()
 
@@ -110,10 +110,9 @@ func (watchers *Dirwatchers) Stop(ctx context.Context) {
 func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatches) {
 	watchers.Stop(ctx)
 
-	// The watching a directory watch does outlives the request that asked for it: a save
-	// starts watchers that then run until the next save or the server stops, so their work
-	// belongs to a context of its own and not to the caller's. The caller's context is used
-	// for what Start itself reports.
+	// The watching a directory watch does outlives the request that asked for it;
+	// watcher work runs on a context of its own, not the caller's, and Start's own
+	// reporting uses the caller's; see the directory-watchers maintainer note.
 	run, cancel := context.WithCancel(context.Background())
 
 	watchers.mutex.Lock()
@@ -165,13 +164,10 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 	}
 }
 
-// Running reports how many directory watchers this server has started and has not stopped.
-//
-// It is not the number configured and not the number enabled: a disabled watch and a watch naming no
-// directory are never started, and a watch naming a folder this server cannot open is started, watches
-// nothing, and is reported by the log instead of by this count. The status view shows this beside the
-// configured and enabled counts the operator's own page already holds, and the difference between them is
-// what tells the operator that a watch is not doing anything.
+// Running reports how many directory watchers this server has started and has not
+// stopped — not configured and not enabled. Disabled watches, empty directories, and
+// watches whose folder this server cannot open are never started; see the directory-
+// watchers maintainer note.
 func (watchers *Dirwatchers) Running() int {
 	watchers.mutex.Lock()
 	defer watchers.mutex.Unlock()
@@ -179,9 +175,9 @@ func (watchers *Dirwatchers) Running() int {
 	return len(watchers.running)
 }
 
-// log writes one line to the administrator's log, which is the only place a watcher ever
-// reports anything. Every line a watcher writes is about the directory watchers, and the lines
-// name the directory they are about because the failure's own text names only the syscall.
+// log writes one line to the administrator's log: the only reporting channel a watcher
+// has, and lines name their directory because failure text names only the syscall; see
+// the directory-watchers maintainer note.
 func (watchers *Dirwatchers) log(ctx context.Context, level, message string) {
 	if err := watchers.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: watchers.clock.Now(),
@@ -189,8 +185,9 @@ func (watchers *Dirwatchers) log(ctx context.Context, level, message string) {
 		Source:   domain.LogSourceDirwatch,
 		Message:  message,
 	}); err != nil {
-		// A log entry that cannot be written is the end of the reporting: a watcher has
-		// nowhere else to say what went wrong.
+		// A log entry that cannot be written ends the reporting: a watcher has nowhere
+		// else to say what went wrong; see the reported-failures-and-preserved-quirks
+		// maintainer note.
 		return
 	}
 }
@@ -200,10 +197,10 @@ func watchDelay(dirwatch domain.Dirwatch) time.Duration {
 	return time.Duration(math.Max(float64(dirwatch.Delay), minimumWatchDelay)) * time.Millisecond
 }
 
-// isDirectory is what the legacy asks of every path an event names, and asks the same way:
-// a path that cannot be read is not a directory. It asks with Lstat, so a symlink to a
-// directory is not a directory: the server watches the tree it was told to watch, not
-// whatever a link inside it reaches.
+// isDirectory is what the legacy asks of every path an event names: a path it cannot
+// read is not a directory. It asks with Lstat so a symlink to a directory is not a
+// directory, and the server watches the tree it was told to watch; see the directory-
+// watchers maintainer note.
 func isDirectory(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -224,11 +221,10 @@ type watch struct {
 
 	watcher *fsnotify.Watcher
 
-	// mutex guards dirs, timers, and inFlight. It is not held while a file is read and
-	// ingested: the legacy held it that long, which made a slow ingest stop the event
-	// loop's arming and a configuration save's stop; the single-flight claim
-	// in inFlight is what keeps one recording from being ingested twice when the tool
-	// that wrote it produces a create event and then a write event for the same file.
+	// mutex guards dirs, timers, and inFlight, and is not held while a file is read
+	// and ingested; the single-flight claim in inFlight keeps one recording from being
+	// ingested twice across create and write events; see the locking-and-single-flight
+	// maintainer note.
 	mutex  sync.Mutex
 	dirs   map[string]bool
 	timers map[string]*time.Timer

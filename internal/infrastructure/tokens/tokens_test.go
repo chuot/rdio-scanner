@@ -25,9 +25,9 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-// secretSource is the signing secret an adapter test signs with, and the one knob that
-// lets a test reproduce the legacy re-derivation: replacing it is what a password change
-// does to a deployment whose stored secret is not a full-length one.
+// secretSource is the signing secret an adapter test signs with, and the knob for the legacy
+// re-derivation: replacing it is what a password change does to a deployment whose stored
+// secret is not a full-length one.
 type secretSource struct {
 	value string
 
@@ -63,10 +63,8 @@ func TestIssueReturnsACredentialThisServerAccepts(t *testing.T) {
 	}
 }
 
-// TestIssueClaimsOnlyTheSessionIdentifier pins the claim set: one identifier and the
-// seven-day expiry the decision adds — a session ends here when the server stops holding the
-// credential, and the expiry bounds the life of a stolen token the window cannot
-// evict on its own. The other time claims stay out, as the legacy issued none.
+// TestIssueClaimsOnlyTheSessionIdentifier: the claim set is the session identifier and the
+// seven-day expiry; the other time claims stay out, as the legacy issued none.
 func TestIssueClaimsOnlyTheSessionIdentifier(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
@@ -171,9 +169,9 @@ func TestIssueRetiresTheOldestCredentialBeyondTheWindow(t *testing.T) {
 	}
 }
 
-// TestValidateRefusesACredentialThisServerDidNotIssue pins the order the legacy checks in:
-// the window first. A credential that is well signed with the right secret is still refused
-// when this process never handed it out.
+// TestValidateRefusesACredentialThisServerDidNotIssue: the window check comes before the
+// signature check, as in the legacy, so a well-signed credential this process never handed
+// out is still refused.
 func TestValidateRefusesACredentialThisServerDidNotIssue(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
@@ -206,10 +204,9 @@ func TestValidateRefusesAnEmptyCredential(t *testing.T) {
 	}
 }
 
-// TestValidateRefusesACredentialThatIsNotSignedAtAll pins the window check doing its job on
-// garbage: the credential is refused as one this server did not issue, before the signature
-// is looked at. The signing-method check inside the parse is defense behind it, matching the
-// legacy order rather than being reachable on its own.
+// TestValidateRefusesACredentialThatIsNotSignedAtAll: garbage is refused as one this server
+// did not issue, before the signature is looked at; the signing-method check inside the parse
+// is defense behind that.
 func TestValidateRefusesACredentialThatIsNotSignedAtAll(t *testing.T) {
 	issuer := New(newSecretSource())
 
@@ -221,9 +218,8 @@ func TestValidateRefusesACredentialThatIsNotSignedAtAll(t *testing.T) {
 }
 
 // TestValidateRefusesACredentialIssuedUnderASupersededSecret is the legacy consequence of
-// re-deriving the options: a deployment whose stored secret is not a full-length one gets a
-// new secret on every re-derivation, so a password change retires every session the
-// administrator has open, even though those credentials are still in the window.
+// re-deriving the options: a deployment whose stored secret is not full-length gets a new
+// secret on every re-derivation, so a password change retires every open session.
 func TestValidateRefusesACredentialIssuedUnderASupersededSecret(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
@@ -293,8 +289,7 @@ func TestRevokeLeavesTheOtherSessionsAlone(t *testing.T) {
 }
 
 // TestRevokeOnACredentialThisServerDidNotIssueIsNotAFailure matches the legacy logout, which
-// removes what it finds and says nothing about what it does not. The logout use case checks
-// the credential first, so this is the adapter's own boundary rather than the caller's.
+// removes what it finds and says nothing about what it does not find.
 func TestRevokeOnACredentialThisServerDidNotIssueIsNotAFailure(t *testing.T) {
 	issuer := New(newSecretSource())
 
@@ -303,11 +298,9 @@ func TestRevokeOnACredentialThisServerDidNotIssueIsNotAFailure(t *testing.T) {
 	}
 }
 
-// TestIssueFailsWhenTheSigningSecretCannotBeRead: the signing
-// secret is read from the options when a token is made. A read that fails used to
-// answer with the empty string, and the server signed the token with it — the
-// login was reported as a success. The seam reports the failure, Issue fails with
-// it, and the administrator is told the session could not be started.
+// TestIssueFailsWhenTheSigningSecretCannotBeRead: the signing secret is read from the options
+// when a token is made, and a read that fails used to answer the empty string and sign with it,
+// reporting the login as a success; now the seam reports it and Issue fails with it.
 func TestIssueFailsWhenTheSigningSecretCannotBeRead(t *testing.T) {
 	source := newSecretSource()
 
@@ -325,10 +318,8 @@ func TestIssueFailsWhenTheSigningSecretCannotBeRead(t *testing.T) {
 	}
 }
 
-// TestIssueNeverSignsATokenWithAnEmptySecret: an empty signing
-// secret — what a failed read used to answer with — signs a token whose signature
-// is the HMAC of nothing, and the login is reported as a success. Issue refuses
-// it: a server that holds no signing secret does not issue sessions.
+// TestIssueNeverSignsATokenWithAnEmptySecret: an empty signing secret signs a token whose
+// signature is the HMAC of nothing, and the login reads as a success; Issue refuses it.
 func TestIssueNeverSignsATokenWithAnEmptySecret(t *testing.T) {
 	source := newSecretSource()
 
@@ -342,9 +333,8 @@ func TestIssueNeverSignsATokenWithAnEmptySecret(t *testing.T) {
 	}
 }
 
-// TestValidateRefusesWhenTheSigningSecretCannotBeRead: the
-// same seam answers every validation, and a read that fails there must refuse the
-// credential, not verify it against the empty string.
+// TestValidateRefusesWhenTheSigningSecretCannotBeRead: a read that fails at validation must
+// refuse the credential, not verify it against the empty string.
 func TestValidateRefusesWhenTheSigningSecretCannotBeRead(t *testing.T) {
 	source := newSecretSource()
 
@@ -362,11 +352,8 @@ func TestValidateRefusesWhenTheSigningSecretCannotBeRead(t *testing.T) {
 	}
 }
 
-// TestIssuedTokensCarryASevenDayExpiry: a token the server
-// stops holding is what ends a session here, and that is the primary rule — but a
-// stolen token is today valid until the window evicts it, and a server that keeps
-// issuing never evicts the fifth token on its own. The seven-day expiry bounds the
-// blast radius the window cannot.
+// TestIssuedTokensCarryASevenDayExpiry: the window staying primary is the rule, and the
+// expiry bounds the life of a stolen token the window cannot evict on its own.
 func TestIssuedTokensCarryASevenDayExpiry(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
@@ -401,17 +388,14 @@ func TestIssuedTokensCarryASevenDayExpiry(t *testing.T) {
 	}
 }
 
-// TestAnExpiredTokenIsRefusedInsideTheIssuedWindow: the
-// window stays the primary rule — a token this server issued and still holds is
-// the token it accepts — and expiry is the bound the window cannot provide: the
-// window never expires a token on its own, only the sixth login does.
+// TestAnExpiredTokenIsRefusedInsideTheIssuedWindow: the window is the primary rule, and the
+// expiry is the bound it cannot provide — the window only evicts on the sixth login.
 func TestAnExpiredTokenIsRefusedInsideTheIssuedWindow(t *testing.T) {
 	source := newSecretSource()
 	issuer := New(source)
 
-	// The issue instant is the real now, so the credential is live for every
-	// wall-clock check on the way, and it is the server's own clock — the fake
-	// one, eight days on — that must find it expired.
+	// The issue instant is the real now, so the credential is live for every wall-clock check
+	// on the way, and the fake clock eight days on is what must find it expired.
 	at := time.Now().UTC().Truncate(time.Second)
 
 	issuer.now = func() time.Time { return at }

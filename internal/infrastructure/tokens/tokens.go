@@ -120,8 +120,8 @@ func (tokens *Tokens) Issue(ctx context.Context) (string, error) {
 		return "", errors.New("tokens.issue: the server holds no signing secret to sign with")
 	}
 
-	// The session identifier is the claim, and the seven-day expiry rides with it
-	//: a token the server stops holding is what ends a session here — that
+	// The session identifier is the claim, and the seven-day expiry rides with it:
+	// a token the server stops holding is what ends a session here — that
 	// stays the primary rule — and the expiry bounds the life of a stolen token
 	// the window cannot evict on its own.
 	credential, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
