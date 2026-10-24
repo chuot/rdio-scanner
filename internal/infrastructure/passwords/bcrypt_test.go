@@ -23,10 +23,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// legacyStoredCredential is the hash the legacy server wrote into the options table of the database
-// the persistence integration tests rebuild, taken from that table with its JSON quoting removed. It
-// is the credential a real deployment has on record, and the point of these tests is that this adapter
-// reads it.
+// legacyStoredCredential is the bcrypt hash the legacy server wrote into a real deployment's
+// options table; this adapter reads it.
 const legacyStoredCredential = `$2a$10$1GFizQ/sWHxheggO6YSNk.D4RnbiFbnTnuiMEuuf3mCsYQhRcsBQ6`
 
 func TestACredentialTheLegacyServerStoredIsAcceptedByThisServer(t *testing.T) {
@@ -47,10 +45,9 @@ func TestAStoredCredentialRefusesAnotherOne(t *testing.T) {
 	}
 }
 
-// TestAStoredCredentialThatIsNotACredentialRefuses covers the state a real deployment can end up
-// in: the legacy server reads its stored credential out of the options table, and a value that is
-// not a hash — an empty column included — makes every comparison fail. The login use case treats
-// that as a refusal, and this adapter must not turn it into a success.
+// TestAStoredCredentialThatIsNotACredentialRefuses: a stored value that is not a hash,
+// an empty column included, makes every comparison fail, and the adapter never turns
+// that into a success.
 func TestAStoredCredentialThatIsNotACredentialRefuses(t *testing.T) {
 	hashes := NewBcrypt(bcrypt.DefaultCost)
 
@@ -78,9 +75,8 @@ func TestHashingACredentialProducesAHashThatVerifiesAgainstIt(t *testing.T) {
 	}
 }
 
-// TestHashingIsBcryptAtTheLegacyCost is what keeps the two servers interchangeable: the hash a
-// deployment already has was written at bcrypt's default cost, and a hash this server writes has
-// to be readable by the legacy one.
+// TestHashingIsBcryptAtTheLegacyCost: hashes are written at bcrypt's default cost,
+// readable by the legacy server, keeping the two servers interchangeable.
 func TestHashingIsBcryptAtTheLegacyCost(t *testing.T) {
 	hashes := NewBcrypt(bcrypt.DefaultCost)
 
@@ -94,9 +90,8 @@ func TestHashingIsBcryptAtTheLegacyCost(t *testing.T) {
 	}
 }
 
-// TestHashingTheSameCredentialTwiceProducesDifferentHashes is the property that makes a stored
-// hash useless on its own: two deployments with the same credential do not share a database value,
-// and a hash cannot be compared to another hash.
+// TestHashingTheSameCredentialTwiceProducesDifferentHashes: two hashes of one credential
+// never match, so a stored hash cannot be compared to another hash.
 func TestHashingTheSameCredentialTwiceProducesDifferentHashes(t *testing.T) {
 	hashes := NewBcrypt(bcrypt.DefaultCost)
 
@@ -121,9 +116,8 @@ func TestHashingTheSameCredentialTwiceProducesDifferentHashes(t *testing.T) {
 	}
 }
 
-// TestHashingACredentialLongerThanBcryptReadsIsAFailure pins the boundary the legacy server has
-// too: bcrypt stores at most 72 bytes, so a password change to a longer credential fails, and the
-// failure is returned rather than swallowed.
+// TestHashingACredentialLongerThanBcryptReadsIsAFailure: bcrypt stores at most 72 bytes,
+// so hashing a longer credential fails, as it does in the legacy password change.
 func TestHashingACredentialLongerThanBcryptReadsIsAFailure(t *testing.T) {
 	hashes := NewBcrypt(bcrypt.DefaultCost)
 
@@ -146,14 +140,11 @@ func TestHashingACredentialLongerThanBcryptReadsIsAFailure(t *testing.T) {
 	}
 }
 
-// TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte records a property of
-// bcrypt that a deployment can trip over: a login credential longer than 72 bytes is compared on
-// its first 72 bytes, so it is accepted on the strength of a prefix. The legacy server has this
-// behavior because it uses the same module, and it is preserved here rather than quietly tightened
-// — tightening it would refuse credentials a deployment may be using today.
-//
-// The asymmetry is worth stating: a credential longer than 72 bytes can never be stored, so this
-// only bites a deployment that logs in with a longer credential than it could ever set.
+// TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte: a login
+// credential longer than 72 bytes is compared on its first 72 bytes and accepted on the
+// strength of a prefix; the legacy has this and it stays, as tightening it would refuse
+// credentials a deployment may use today. Only logins trip it — a credential longer than
+// 72 bytes can never be stored.
 func TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte(t *testing.T) {
 	hashes := NewBcrypt(bcrypt.DefaultCost)
 
@@ -171,10 +162,8 @@ func TestACredentialLongerThanBcryptReadsIsCheckedOnlyUpToItsSeventySecondByte(t
 	}
 }
 
-// TestHashUsesTheConfiguredCost: the deployment's bcrypt cost
-// drives the hash the server writes. The legacy server hashed at 10 and this
-// server defaults to 10, so the default keeps the hashes the two servers write
-// identical; an operator who raises the cost gets hashes at the raised cost.
+// TestHashUsesTheConfiguredCost: the deployment's bcrypt cost drives the hash the server
+// writes; both servers default to 10, so the default keeps their hashes identical.
 func TestHashUsesTheConfiguredCost(t *testing.T) {
 	hashes := NewBcrypt(12)
 
@@ -188,10 +177,9 @@ func TestHashUsesTheConfiguredCost(t *testing.T) {
 	}
 }
 
-// TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost: a deployment that raises its cost keeps answering logins with the
-// cheap stored hash until the credential is proven and renewed. The upgrade
-// question is asked of the stored form and answered from it — the cost lives in
-// the hash, so nothing outside the adapter has to know bcrypt to ask it.
+// TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost: the upgrade question
+// is answered from the stored hash itself, whose cost lives inside it, so a raised cost keeps
+// answering logins with the cheap stored hash until the credential is renewed.
 func TestNeedsUpgradeReportsAStoredCredentialHashedBelowTheConfiguredCost(t *testing.T) {
 	cheap, err := NewBcrypt(10).Hash(context.Background(), "credential")
 	if err != nil {
