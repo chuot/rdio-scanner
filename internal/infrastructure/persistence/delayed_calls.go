@@ -23,12 +23,10 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// DelayedCalls stores the calls that are waiting out a talkgroup or system delay.
-//
-// Unlike the configuration repositories, this one is not held in memory: the legacy server reads
-// the `delayed` table at startup to re-arm the calls that were waiting when it stopped, and writes
-// a row when a call starts waiting and deletes it when its delay has run out. Nothing here decides
-// whether a call is delayed — that is the delay rule, and it lives in the application layer.
+// DelayedCalls stores the calls that are waiting out a talkgroup or system
+// delay. It is table-backed rather than held in memory, and nothing here
+// decides whether a call is delayed, per the delayed calls posture maintainer
+// note.
 type DelayedCalls struct {
 	store store
 }
@@ -40,11 +38,9 @@ func NewDelayedCalls(db *sql.DB, dialect Dialect) *DelayedCalls {
 	return &DelayedCalls{store: newStore(db, dialect)}
 }
 
-// AllDelayed returns every call still waiting, which is what the server re-arms at startup.
-//
-// The legacy server reads the table into a map, so it has no defined order for the result; the
-// list this port returns is ordered by call identifier so that the same table always answers the
-// same way.
+// AllDelayed returns every call still waiting, ordered by call identifier so
+// the same table always answers the same way; the legacy server had no
+// defined order.
 func (delayed *DelayedCalls) AllDelayed(ctx context.Context) ([]ports.DelayedCall, error) {
 	query := `SELECT "callId", "timestamp" FROM "delayed" ORDER BY "callId"`
 
@@ -92,12 +88,9 @@ func (delayed *DelayedCalls) ScheduleDelayed(ctx context.Context, callID uint64,
 	return nil
 }
 
-// UnscheduleDelayed removes one call from the waiting list once its delay has run.
-//
-// It removes the waiting row only. The `delayed` table cascades to `calls`, so a call that is
-// deleted loses its waiting row by itself; removing both would be deleting the same thing twice.
-// Removing a call that is not waiting is not a failure, exactly as the legacy `pop` of a DELETE
-// that matches nothing is not one.
+// UnscheduleDelayed removes one call from the waiting list once its delay has
+// run. It removes the waiting row only — the cascade to calls handles the
+// call itself — and removing a call that is not waiting is not a failure.
 func (delayed *DelayedCalls) UnscheduleDelayed(ctx context.Context, callID uint64) error {
 	query := `DELETE FROM "delayed" WHERE "callId" = ?`
 
@@ -108,8 +101,8 @@ func (delayed *DelayedCalls) UnscheduleDelayed(ctx context.Context, callID uint6
 	return nil
 }
 
-// ClearDelayed drops every waiting call, which is the step the legacy `Delayer.Start` runs after it
-// has read the table and before it re-arms each call. The calls themselves are left alone.
+// ClearDelayed drops every waiting call and leaves the calls themselves
+// alone; the legacy startup path clears the table before re-arming.
 func (delayed *DelayedCalls) ClearDelayed(ctx context.Context) error {
 	query := `DELETE FROM "delayed"`
 

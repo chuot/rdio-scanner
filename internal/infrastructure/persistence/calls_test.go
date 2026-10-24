@@ -30,16 +30,11 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The database written by the legacy server carries two calls, both recorded by its own upload
-// endpoint, recorded as the statements it ran in fixture_test.go):
-//
-// - call 1, on system reference 10001 / talkgroup reference 1514000, with one frequency, one
-// source unit, one patch to talkgroup reference 1514001, and site reference 77;
-// - call 2, on talkgroup reference 1514002, which the legacy delayer put in the `delayed`
-// table because that talkgroup carries a 90 minute delay.
-//
-// The read tests below read those two calls rather than calls this package wrote, which is the
-// half of the requirement that says this server opens a database the other server created.
+// The database written by the legacy server carries two calls, both recorded
+// by its own upload endpoint: call 1 on system reference 10001 / talkgroup
+// reference 1514000 with one frequency, one source unit, one patch to
+// talkgroup reference 1514001, and site reference 77, and call 2 on talkgroup
+// reference 1514002, which the legacy delayer left in the delayed table.
 const (
 	fixtureCallID        = uint64(1)
 	fixtureDelayedCallID = uint64(2)
@@ -49,7 +44,7 @@ const (
 // `dateTime=1750000000`, which the legacy server reads as seconds since the epoch.
 var fixtureCallTimestamp = time.Unix(1750000000, 0)
 
-// fixtureDelayedTimestamp is the instant call 2 was recorded at, chosen by generate.sh so that
+// fixtureDelayedTimestamp is the instant call 2 was recorded at, chosen so that
 // adding the talkgroup's delay still lands in the future.
 var fixtureDelayedTimestamp = time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -86,11 +81,8 @@ func TestGetCallReadsACallTheLegacyServerWrote(t *testing.T) {
 	}
 }
 
-// A call that was being held back when the server stopped is armed again for the delay its talkgroup or
-// system names *now*, which is what lets an administrator change a delay and have the calls already
-// waiting follow the new one. That decision is made from the call the history read hands back, so the
-// read carries the two delays it is made from — read from the configuration rows, not from anything the
-// call itself was written with.
+// The history read carries the two delays the re-arm rule is made from, read
+// from the configuration rows rather than from anything the call was written with.
 func TestGetCallCarriesTheDelaysThatHoldACallBack(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -117,8 +109,8 @@ func TestGetCallCarriesTheDelaysThatHoldACallBack(t *testing.T) {
 		t.Errorf("System.Delay = %d, want the 5 minutes the system is configured with now", call.System.Delay)
 	}
 
-	// A talkgroup with no delay of its own carries none, and the system's delay is still there for the
-	// rule to fall back on.
+	// A talkgroup with no delay of its own carries none, and the system's delay is still
+	// there for the rule to fall back on.
 	if _, err := fixture.db.Exec(`UPDATE "talkgroups" SET "delay" = 0 WHERE "talkgroupId" = ?`, fixture.talkgroupID(1514000)); err != nil {
 		t.Fatalf("undelaying the talkgroup: %v", err)
 	}
@@ -137,8 +129,8 @@ func TestGetCallCarriesTheDelaysThatHoldACallBack(t *testing.T) {
 	}
 }
 
-// TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte is the audio half of the requirement: a
-// recording written by one server is read back by the other without a byte moving.
+// The audio blob comes back byte for byte: a recording written by one server
+// is read back by the other without a byte moving.
 func TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte(t *testing.T) {
 	db := migratedLegacyDatabase(t)
 
@@ -158,11 +150,8 @@ func TestGetCallReadsTheAudioBlobTheLegacyServerStoredByteForByte(t *testing.T) 
 	}
 }
 
-// TestGetCallReportsTheAudioMimeTheLegacyServerStored pins what the fixture actually carries.
-//
-// The upload sent its `audio` part with a content type of `audio/wav`, and the legacy server
-// never looks at it: `ParseMultipartContent` records the part's filename only, so the stored
-// `audioMime` is empty. Reading the call back must not invent a type that was never stored.
+// The stored audio MIME is the empty value the legacy upload path leaves: it
+// records the part's filename only, and the read must not invent a type.
 func TestGetCallReportsTheAudioMimeTheLegacyServerStored(t *testing.T) {
 	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
@@ -247,9 +236,8 @@ func TestGetCallReadsThePatchTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestGetCallReportsACallThatWasNeverRecordedAsNotFound pins the port's answer. The legacy
-// server reports the same situation as `cannot retrieve system id 0 for call id N`, because it
-// carries on past its own no-rows result with every value still zero.
+// A call that was never recorded answers ErrNotFound; the legacy server
+// instead falls through its own no-rows result with every value still zero.
 func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
 	calls := NewCalls(migratedLegacyDatabase(t), DialectSqlite)
 
@@ -260,17 +248,9 @@ func TestGetCallReportsACallThatWasNeverRecordedAsNotFound(t *testing.T) {
 	}
 }
 
-// TestGetCallLeavesTheDatabaseFreeForTheNextWrite pins the consequence the legacy leak had, which
-// is the only reason a fetch of a call that is not there is interesting at all.
-//
-// The legacy `server/call.go` `GetCall` returns without rolling back when the call it found names a system or a
-// talkgroup it cannot resolve — and a call id that does not exist falls through its own no-rows
-// result with the system id still zero, so that is the ordinary case. The transaction stays open
-// until the garbage collector collects it, and on a SQLite deployment it holds the read lock that
-// blocks writers, so the next log insert or configuration save waits out the ten-second
-// `busy_timeout` the connection string sets and then fails with `database is locked`. Observed
-// while capturing the wire protocol: a client asking for call id 999999 is answered with nothing,
-// and the listener-count broadcast that follows arrives ten seconds late. Recorded as a preserved quirk.
+// A call that is not there must leave the database free for the next write: the
+// legacy server returns without rolling back, and the open read lock then
+// blocks writers until busy_timeout expires.
 func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
 	db := openMigratedLegacyDatabase(t)
 
@@ -291,10 +271,8 @@ func TestGetCallLeavesTheDatabaseFreeForTheNextWrite(t *testing.T) {
 	}
 }
 
-// TestGetCallDoesNotReportAStoredCallAsWaitingOutADelay pins what the legacy read does: the
-// `delayed` table is the delayer's own state, and `Calls.GetCall` never consults it, so a call
-// fetched out of the history carries no delayed flag. The delayer sets it on the call it hands
-// to the hub.
+// The calls table stores no delayed flag, and the history read never consults
+// the delayed table: the delayer sets that on the call it hands to the hub.
 func TestGetCallDoesNotReportAStoredCallAsWaitingOutADelay(t *testing.T) {
 	db := migratedLegacyDatabase(t)
 
@@ -337,10 +315,8 @@ func TestSearchCallsLeavesOutTheCallTheLegacyServerDelayed(t *testing.T) {
 	}
 }
 
-// TestSearchCallsLeavesOutADelayedCallForAScopedCaller pins a deliberate difference from the
-// legacy server, recorded in the task report: `Calls.Search` *replaces* its base filter with the
-// caller's scope instead of adding to it, so a listener with an explicit scope loses the
-// `delayed` exclusion and sees calls that have not been made visible yet.
+// A search replaces its base filter with the caller's scope instead of adding
+// to it, so a listener with an explicit scope loses the delayed exclusion.
 func TestSearchCallsLeavesOutADelayedCallForAScopedCaller(t *testing.T) {
 	db := migratedLegacyDatabase(t)
 
@@ -482,9 +458,9 @@ func TestSaveCallRoundTripsTheAudioBlobByteForByte(t *testing.T) {
 	}
 }
 
-// The length of the recording is stored with the recording: a call read back says how long
-// its audio lasts, and a call stored with no known length reads back with no known length —
-// the zero is the server's own "never measured", carried through the database unchanged.
+// A call read back says how long its audio lasts, and a call stored with no known length reads
+// back with no known length: the zero is the server's own never-measured value, carried through
+// the database unchanged.
 func TestSaveCallRoundTripsTheAudioLength(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -522,9 +498,8 @@ func TestSaveCallRoundTripsTheAudioLength(t *testing.T) {
 	}
 }
 
-// A call the legacy server wrote has no length: the column arrives with the default that
-// means never measured, and the history row for such a call says no length rather than
-// inventing one.
+// A call the legacy server wrote has no length: the column arrives with the default that means
+// never measured, and the history row for such a call says no length rather than inventing one.
 func TestSearchCallsCarriesTheAudioLengthInTheSummary(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -553,9 +528,8 @@ func TestSearchCallsCarriesTheAudioLengthInTheSummary(t *testing.T) {
 	}
 }
 
-// TestSaveCallDropsAPatchThatNamesATalkgroupTheSystemDoesNotHave pins the legacy `WriteCall`,
-// which looks each patched reference up on the call's own system and moves on when it is not
-// there.
+// A patch naming a talkgroup the call's system does not have is dropped, as the
+// legacy save path does.
 func TestSaveCallDropsAPatchThatNamesATalkgroupTheSystemDoesNotHave(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -598,10 +572,9 @@ func TestSaveCallReportsAFailedWriteInTheLegacyShape(t *testing.T) {
 	}
 }
 
-// TestSaveCallRollsBackTheWholeSaveWhenAChildRowCannotBeStored pins the transaction: the call row
-// is written first, so a save that fails afterwards must not leave a call with no children behind.
-// The failure is arranged with a trigger, because nothing about a well-formed call makes the child
-// inserts fail on their own.
+// The call row is written first, so a save that fails on a child row must not leave a call
+// with no children behind. The failure is arranged with a trigger, because nothing about a
+// well-formed call makes the child inserts fail on their own.
 func TestSaveCallRollsBackTheWholeSaveWhenAChildRowCannotBeStored(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -627,9 +600,8 @@ func TestSaveCallRollsBackTheWholeSaveWhenAChildRowCannotBeStored(t *testing.T) 
 	}
 }
 
-// TestSaveCallStoresAnAudioFilenameThatLooksLikeSQLAsItsOwnValue is the parameterization half of
-// the requirement: the legacy server pasted this value into its statement, so a filename like this one
-// changed what the statement did.
+// A filename that looks like SQL is stored as its own value: the legacy server pasted this
+// value into its statement, so a filename like this one changed what the statement did.
 func TestSaveCallStoresAnAudioFilenameThatLooksLikeSQLAsItsOwnValue(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -657,9 +629,8 @@ func TestSaveCallStoresAnAudioFilenameThatLooksLikeSQLAsItsOwnValue(t *testing.T
 	}
 }
 
-// TestSaveCallDoesNotScheduleTheDelayItself pins the boundary between this repository and the
-// delayed-call one: `Delayed` is a fact about the running server, and the row that keeps a call
-// out of the history belongs to the delayer.
+// Saving a call never writes the delayed row: that row belongs to the delayer, and
+// keeping a call out of the history is not this repository's decision.
 func TestSaveCallDoesNotScheduleTheDelayItself(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -758,11 +729,8 @@ func TestSearchCallsReportsTheSpanOfTheWholeMatchingHistoryNotThePage(t *testing
 	}
 }
 
-// TestSearchCallsReportsTheSpanOfTheBoundedMatch pins the choice this adapter makes rather than
-// follows: the legacy `Calls.Search` reads the two ends of the history *before* it adds the
-// submitted day to its filter, so `dateStart` and `dateStop` keep describing the whole history
-// even for a search bounded to one day. Here they describe the match the criteria actually
-// produced, which is what the in-memory repository the use cases run on already does.
+// The two ends of a search describe the match the submitted day actually produced, not
+// the whole history: the legacy server read them before adding the day to its filter.
 func TestSearchCallsReportsTheSpanOfTheBoundedMatch(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -783,11 +751,8 @@ func TestSearchCallsReportsTheSpanOfTheBoundedMatch(t *testing.T) {
 	}
 }
 
-// TestSearchCallsWithNothingToReturnReportsTheUnixEpoch pins what an empty history page carries. The
-// legacy server reads its span timestamps with `QueryRow`, leaves the variable at zero when there is no
-// row, and renders `time.UnixMilli(0)` — so an empty search answers `"dateStart":"1970-01-01T00:00:00Z"`
-// and the history view cannot tell that apart from a call recorded on 1 January 1970. It is preserved
-// because the captured empty `LCL` frame carries those bytes and a client reads them.
+// An empty search reports the unix epoch as both ends of its span, which is the
+// bytes the legacy server answers with and a captured client frame carries.
 func TestSearchCallsWithNothingToReturnReportsTheUnixEpoch(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -959,9 +924,8 @@ func TestSearchCallsAddsNoFilterWhenAnExpandedLabelStandsForNothing(t *testing.T
 	}
 }
 
-// TestSearchCallsCombinesTheScopeTheSystemAndTheLabelFilters runs every kind of filter at once,
-// with more than one talkgroup in each `IN` list, which is what proves the placeholders built for
-// those lists and the values passed with them agree.
+// Every kind of filter at once, with more than one talkgroup in each list, proves
+// the placeholders built for those lists and the values passed with them agree.
 func TestSearchCallsCombinesTheScopeTheSystemAndTheLabelFilters(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -1031,9 +995,8 @@ func TestFindDuplicateCandidatesLeavesOutCallsOnAnotherSystemOrTalkgroup(t *test
 	}
 }
 
-// TestFindDuplicateCandidatesIncludesACallWaitingOutADelay pins the legacy `CheckDuplicate`,
-// which counts every call in the window whether or not it has been made visible yet — a call
-// that is still waiting is enough to make a new one a duplicate.
+// A call waiting out its delay still counts as a duplicate candidate: the legacy
+// duplicate check counts every call in the window, visible or not.
 func TestFindDuplicateCandidatesIncludesACallWaitingOutADelay(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -1099,9 +1062,8 @@ func TestDeleteCallsBeforeKeepsACallRecordedAtTheInstant(t *testing.T) {
 	}
 }
 
-// TestDeleteCallsBeforeLeavesTheChildRowsToTheCascadingForeignKeys pins that the prune writes
-// the calls table only: the schema's cascading keys take the frequency, patch, unit, and delayed
-// rows with their call.
+// The prune writes the calls table only: the schema's cascading keys take the
+// frequency, patch, unit, and delayed rows with their call.
 func TestDeleteCallsBeforeLeavesTheChildRowsToTheCascadingForeignKeys(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -1133,8 +1095,8 @@ func TestDeleteCallsBeforeLeavesTheChildRowsToTheCascadingForeignKeys(t *testing
 	}
 }
 
-// testAudio is a recording in miniature, with the byte values a real one has: a NUL, a quote, and
-// bytes above 0x7f, so a blob that survives the round trip survived all of them.
+// testAudio is a recording in miniature with the byte values a real one has: a NUL, a
+// quote, and bytes above 0x7f, so a blob that survives the round trip survived all of them.
 var testAudio = []byte{
 	'R', 'I', 'F', 'F', 0x00, 0x24, 0x00, 0x00,
 	'W', 'A', 'V', 'E', '\'', 0x00, 0x80, 0xff,
@@ -1145,9 +1107,8 @@ func callHistoryTime() time.Time {
 	return time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC)
 }
 
-// callsFixture is a fresh database with the legacy schema applied and the configuration a call
-// needs already stored. The call tables have foreign keys into the systems and talkgroups tables,
-// and those belong to a later task, so the rows are stored directly here.
+// callsFixture is a fresh database with the legacy schema applied and the configuration
+// a call needs already stored; the call tables have foreign keys into those rows.
 type callsFixture struct {
 	db         *sql.DB
 	calls      *Calls
@@ -1278,8 +1239,8 @@ func (fixture *callsFixture) storeCall(t *testing.T, systemRef, talkgroupRef uin
 	return saved
 }
 
-// delay puts a stored call in the delayed table. That table is the delayer's own repository,
-// which is a later task, so the row is stored directly here.
+// delay puts a stored call in the delayed table, written directly because that
+// table belongs to the delayer's own repository.
 func (fixture *callsFixture) delay(t *testing.T, callID uint64, until time.Time) {
 	t.Helper()
 

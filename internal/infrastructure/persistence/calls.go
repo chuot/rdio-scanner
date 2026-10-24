@@ -26,15 +26,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Calls is the recorded call history: the `calls` table and its `callFrequencies`,
-// `callPatches`, and `callUnits` children, read and written in the shape the legacy server's
-// `Calls` section left them in.
-//
-// Every statement is written once, with `?` placeholders, and runs through the store helpers,
-// which number them for PostgreSQL. The legacy server assembled these same statements with
-// `fmt.Sprintf` and pasted the caller's own values — a talkgroup reference, an audio filename,
-// a scope out of an access row — directly into the SQL text. The queries here are those queries
-// with the values kept where they belong.
+// Calls is the recorded call history: the calls table and its callFrequencies,
+// callPatches, and callUnits children. Every statement keeps its values as
+// placeholders, per the call-history statements maintainer note.
 type Calls struct {
 	store
 }
@@ -47,18 +41,11 @@ func NewCalls(db *sql.DB, dialect Dialect) *Calls {
 	return &Calls{store: newStore(db, dialect)}
 }
 
-// GetCall returns one recorded call with its audio, its frequencies, its source units, and the
-// references of the talkgroups it was patched to, or ports.ErrNotFound when nothing was recorded
-// under that identifier.
-//
-// The four reads run in one transaction, which is how the legacy `Calls.GetCall` runs them: a
-// listener fetching a call should not see the call and then find its frequencies gone.
-//
-// That transaction is asked for as read-only. This is a listener's read and not a save: it holds the
-// database's read lock for the length of its four statements, and a read has no business asking for the
-// write lock a save takes before it reads. A fetch that took the write lock would queue behind whichever
-// writer was running, and the ten-second wait a busy database is met with would become the time a
-// listener waits for its own call.
+// GetCall returns one recorded call with its audio, its frequencies, its source
+// units, and the references of the talkgroups it was patched to, or
+// ports.ErrNotFound when nothing was recorded under that identifier. The four
+// reads run in one read-only transaction, per the call fetch transaction
+// posture maintainer note.
 func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error) {
 	tx, err := calls.beginRead(ctx)
 	if err != nil {
@@ -67,10 +54,10 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 
 	call, err := readCall(ctx, tx, id)
 	if err != nil {
-		// The legacy server returns here without rolling back, which is a preserved quirk: the open
-		// transaction holds the SQLite read lock that blocks writers until the garbage collector
-		// collects it. Pinned by `TestGetCallLeavesTheDatabaseFreeForTheNextWrite`, which fails in
-		// exactly ten seconds — the connection string's `busy_timeout` — if this line is removed.
+		// This rollback is a preserved quirk fix: without it the open
+		// transaction holds the SQLite read lock until the garbage collector
+		// runs. Pinned by TestGetCallLeavesTheDatabaseFreeForTheNextWrite,
+		// which fails at the connection string's busy_timeout if removed.
 		tx.rollback()
 
 		return domain.Call{}, err
@@ -86,12 +73,9 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 
 // readCall reads one call row and the three child tables that belong to it.
 func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, error) {
-	// The system and talkgroup are read as the pair of references the call history and the
-	// access rules compare, plus the labels the call payload carries, plus the delays that decide
-	// whether the call is being held back: the only moment a call fetch has to know a delay is when
-	// a call that was being held back has to be armed again for the delay its talkgroup or system
-	// names now. The rest of the two aggregates belongs to the configuration repositories, and a
-	// call fetch has no business loading every talkgroup, site, and unit of a system to answer it.
+	// Only the references, labels, and delays the call payload and the re-arm
+	// rule need are joined in; the rest of the two aggregates belongs to the
+	// configuration repositories.
 	const query = `SELECT c."audio", c."audioFilename", c."audioMime", c."audioLength", c."siteRef", c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef", t."label", t."name", s."delay", t."delay" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" = ?`
 
 	var (
@@ -152,13 +136,11 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 	return call, nil
 }
 
-// readCallPatches reads the references of the talkgroups a call was patched to.
-//
-// The legacy server reads them as one `GROUP_CONCAT` of the patched references and then splits
-// the text back apart, dropping anything that is not a positive number. Reading the rows is the
-// same answer without the round trip through a string, and the `COALESCE` and the `> 0` test are
-// kept because they are what makes a patch whose talkgroup is gone disappear in both servers.
+// readCallPatches reads the references of the talkgroups a call was patched
+// to, per the patched talkgroup reads maintainer note.
 func readCallPatches(ctx context.Context, tx transaction, id uint64) ([]uint, error) {
+	// COALESCE and the > 0 skip together make a patch whose talkgroup is gone
+	// disappear, as in the legacy server.
 	const query = `SELECT COALESCE(t."talkgroupRef", 0) FROM "callPatches" AS cp LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = cp."talkgroupId" WHERE cp."callId" = ? ORDER BY cp."callPatchId"`
 
 	rows, err := tx.query(ctx, query, id)
@@ -216,9 +198,8 @@ func readCallFrequencies(ctx context.Context, tx transaction, id uint64) ([]doma
 			return nil, statementError("calls", "getcall", err, query)
 		}
 
-		// `dbm` is a real column in all three schemas even though it counts whole decibels, so
-		// it is read as the number the column holds and converted here rather than in the
-		// driver.
+		// dbm is a REAL column in all three schemas although it counts whole
+		// decibels, so convert here rather than casting in SQL.
 		frequencies = append(frequencies, domain.CallFrequency{
 			ID:        uint64(rowID),
 			CallID:    id,
@@ -276,12 +257,10 @@ func readCallUnits(ctx context.Context, tx transaction, id uint64) ([]domain.Cal
 	return units, nil
 }
 
-// SaveCall stores a call together with its frequency, patch, and unit rows in one transaction,
-// and returns it with the identity the database assigned.
-//
-// The identity is taken from the database rather than from the call, exactly as the legacy
-// `Calls.WriteCall` takes it: PostgreSQL is asked to hand it back with `RETURNING`, and the other
-// three backends report it through `LastInsertId`.
+// SaveCall stores a call together with its frequency, patch, and unit rows in
+// one transaction, and returns it with the identity the database assigned —
+// via RETURNING on PostgreSQL, LastInsertId elsewhere, as the legacy server
+// takes it.
 func (calls *Calls) SaveCall(ctx context.Context, call domain.Call) (domain.Call, error) {
 	tx, err := calls.begin(ctx)
 	if err != nil {
@@ -355,12 +334,10 @@ func writeCallFrequencies(ctx context.Context, tx transaction, id uint64, freque
 	return nil
 }
 
-// writeCallPatches stores the talkgroups a call was patched to.
-//
-// A patch is submitted as a talkgroup *reference*, and the table stores the talkgroup row, so
-// each reference is resolved against the call's own system first. A reference the system does not
-// have is dropped rather than failing the write, which is what the legacy server does with its
-// `continue`.
+// writeCallPatches stores the talkgroups a call was patched to. Patches are
+// submitted as talkgroup references, resolved against the call's own system,
+// and an unresolved reference is dropped rather than failing the write, per
+// the patch reference resolution maintainer note.
 func writeCallPatches(ctx context.Context, tx transaction, call domain.Call, id uint64) error {
 	const findTalkgroup = `SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ? AND "talkgroupRef" = ?`
 	const insertPatch = `INSERT INTO "callPatches" ("callId", "talkgroupId") VALUES (?, ?)`
@@ -403,12 +380,10 @@ func writeCallUnits(ctx context.Context, tx transaction, id uint64, units []doma
 // the history until its delay has run.
 const callHistoryFrom = `FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId"`
 
-// SearchCalls returns one page of the recorded history, together with how many calls the criteria
-// matches in total and the span of their timestamps.
-//
-// The four statements are the four the legacy `Calls.Search` runs: the earliest matching instant,
-// the latest one, the total, and the page. The span and the total are read over the whole match
-// and not over the page, because that is what the client's day navigation is built from.
+// SearchCalls returns one page of the recorded history, together with how many
+// calls the criteria matches in total and the span of their timestamps — over
+// the whole match, not the page, per the history search statements maintainer
+// note.
 func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (ports.CallSearchPage, error) {
 	where, args := callSearchFilters(search)
 
@@ -416,9 +391,8 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 
 	page := ports.CallSearchPage{Results: []ports.CallSummary{}}
 
-	// The two ends of the history are read as the first row of each sort order rather than as an
-	// aggregate over the whole match, which is what lets the database stop as soon as it has the
-	// instant it needs.
+	// Each history end is the first row of a sort order, not an aggregate over
+	// the whole match, so the database stops once it has the instant.
 	span := `SELECT c."timestamp" ` + from
 
 	if err := calls.readSearchSpan(ctx, span+` ORDER BY c."timestamp" ASC LIMIT 1`, args, &page.DateStart); err != nil {
@@ -431,10 +405,9 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 
 	countQuery := `SELECT COUNT(*) ` + from
 
-	// The count is scanned as the 64-bit integer the database answers and
-	// clamped, not cast: `page.Count` is a `uint`, which on a
-	// 32-bit build is 32 bits wide, and a negative — the shape a signed
-	// column can carry — cast through it is the largest count there is.
+	// The count is scanned as a 64-bit integer and clamped, not cast:
+	// page.Count is a uint, and on a 32-bit build a negative value cast
+	// through it is the largest count there is.
 	var count int64
 
 	if err := calls.queryRow(ctx, countQuery, args...).Scan(&count); err != nil {
@@ -448,8 +421,8 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 		order = "ASC"
 	}
 
-	// The page is the summary the history view needs — identifier, references, instant — never the
-	// call with its audio, which is what a page of 200 would otherwise cost.
+	// The page carries summary fields only, never the audio a page of 200
+	// calls would otherwise cost.
 	pageQuery := `SELECT c."callId", c."timestamp", c."audioLength", s."systemRef", t."talkgroupRef" ` + from + ` ORDER BY c."timestamp" ` + order + ` LIMIT ? OFFSET ?`
 
 	rows, err := calls.query(ctx, pageQuery, append(append([]any{}, args...), search.Limit, search.Offset)...)
@@ -488,20 +461,17 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 	return page, nil
 }
 
-// readSearchSpan reads one end of the matching history into `at`. A match with no calls leaves it
-// at the zero instant: the legacy server leaves it at the Unix epoch, which the history view
-// cannot tell apart from a call recorded at that instant.
+// readSearchSpan reads one end of the matching history into at; an empty
+// match answers the Unix epoch, per the span empty match parity maintainer
+// note.
 func (calls *Calls) readSearchSpan(ctx context.Context, query string, args []any, at *time.Time) error {
 	var timestamp int64
 
 	err := calls.queryRow(ctx, query, args...).Scan(&timestamp)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		// A search that matches nothing reports the Unix epoch at both ends, not an absent span:
-		// the legacy server reads its timestamp variable with `QueryRow`, leaves it at zero when
-		// there is no row, and renders `time.UnixMilli(0)`. The captured empty `LCL` frame carries
-		// `"dateStart":"1970-01-01T00:00:00Z"`, and a client that has to answer with those bytes
-		// cannot be given year 1 instead.
+		// Parity with the legacy server's empty search, which reports the Unix
+		// epoch at both ends; the captured empty frame carries those bytes.
 		*at = instantOf(0)
 
 		return nil
@@ -516,16 +486,9 @@ func (calls *Calls) readSearchSpan(ctx context.Context, query string, args []any
 	return nil
 }
 
-// callSearchFilters turns the resolved criteria into the history query's filter and the values
-// that go with it.
-//
-// The filter is written so the predicates can reach the calls table through `calls_idx`, which is
-// built from `systemId`, `siteRef`, `talkgroupId`, and `timestamp`: the date bounds are plain
-// comparisons on `c."timestamp"`, and the system and talkgroup filters are equality comparisons
-// on the reference columns of tables joined on their primary keys, so the planner can resolve a
-// reference to a `systemId` and use the index's leading column instead of scanning the history.
-// Nothing here wraps an indexed column in an expression, which is what would make the index
-// unusable.
+// callSearchFilters turns the resolved criteria into the history query's
+// filter and the values that go with it, written to stay usable through the
+// calls index, per the search filter index shape maintainer note.
 func callSearchFilters(search ports.CallSearch) (string, []any) {
 	filters := []string{
 		`c."systemId" > 0`,
@@ -590,8 +553,8 @@ func callSearchFilters(search ports.CallSearch) (string, []any) {
 // and within each of them either every talkgroup or the listed ones.
 func accessScopeFilters(scope domain.AccessScope) ([]string, []any) {
 	if len(scope.Systems) == 0 {
-		// A scope that was supplied and names nothing sees nothing. The legacy server answers the
-		// same configuration with a filter it cannot run at all.
+		// A supplied scope that names nothing sees nothing; the legacy server
+		// answers the same configuration with a filter it cannot run at all.
 		return []string{nothingMatches}, nil
 	}
 
@@ -664,18 +627,13 @@ func expandedTalkgroups(pairs []domain.TalkgroupScope) []callSearchPair {
 // nothingMatches is a filter that matches no recorded call.
 const nothingMatches = `1 = 0`
 
-// FindDuplicateCandidates returns the recorded calls that could make a call a duplicate of an
-// earlier one: the calls on the same system, talkgroup and site whose timestamps fall between
-// from and to, inclusive.
-//
-// A call waiting out a delay is a candidate, because the legacy `Calls.CheckDuplicate` counts
-// every call in the window whether or not it has been made visible yet.
-//
-// The candidates are read as the identity, aggregates, and instant the duplicate rule compares —
-// not as whole aggregates. The rule never looks at audio, and loading the recording of every call
-// in the window would make duplicate detection the most expensive part of ingest; the legacy
-// server does not load them either, it only counts them.
+// FindDuplicateCandidates returns the recorded calls that could make a call a
+// duplicate of an earlier one: the calls on the same system, talkgroup and
+// site whose timestamps fall between from and to, inclusive, read lean and
+// including held calls, per the duplicate candidate window maintainer note.
 func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, siteRef uint, from, to time.Time) ([]domain.Call, error) {
+	// No delayed join here: the legacy duplicate check counts every call in the
+	// window, held or not.
 	const query = `SELECT c."callId", c."timestamp", c."systemId", c."talkgroupId", c."siteRef", s."systemRef", t."talkgroupRef" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."systemId" = ? AND c."talkgroupId" = ? AND c."siteRef" = ? AND c."timestamp" BETWEEN ? AND ? ORDER BY c."timestamp"`
 
 	rows, err := calls.query(ctx, query, systemID, talkgroupID, siteRef, millisOf(from), millisOf(to))
@@ -720,12 +678,9 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 	return candidates, nil
 }
 
-// DeleteCallsBefore removes the recorded calls older than the given instant and reports how many
-// went.
-//
-// Only the calls table is written to: the frequency, patch, unit, and delayed rows belong to their
-// call through cascading foreign keys, and go with it. Deleting them a second time would add
-// statements without changing the outcome.
+// DeleteCallsBefore removes the recorded calls older than the given instant
+// and reports how many went. Only the calls table is written: the child rows
+// go with their call through cascading foreign keys.
 func (calls *Calls) DeleteCallsBefore(ctx context.Context, before time.Time) (int, error) {
 	const query = `DELETE FROM "calls" WHERE "timestamp" < ?`
 

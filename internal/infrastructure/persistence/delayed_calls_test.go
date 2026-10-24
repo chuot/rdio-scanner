@@ -48,12 +48,10 @@ func openDelayedCallTestDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// delayTestDelay reproduces `server/delayer.go` `Delayer.getDelay` as test setup: the talkgroup's own
-// delay when it has one, the system's when it does not, and nothing when neither has one. The delay
-// is in minutes.
-//
-// It belongs in the tests and not in the adapter: deciding whether a call is delayed is the delay
-// rule, and the repository only stores the answer the application layer reached.
+// delayTestDelay reproduces the legacy delay rule as test setup: the talkgroup's
+// own delay when it has one, the system's when it does not, and nothing when
+// neither has one, in minutes. Deciding whether a call is delayed is the delay
+// rule, so it belongs in the tests and not in the adapter.
 func delayTestDelay(talkgroupDelay, systemDelay uint) uint {
 	if talkgroupDelay > 0 {
 		return talkgroupDelay
@@ -66,15 +64,14 @@ func delayTestDelay(talkgroupDelay, systemDelay uint) uint {
 	return 0
 }
 
-// delayTestTimestamp reproduces `server/delayer.go` `Delayer.getTimestamp` as test setup: the instant
-// a delayed call's delay runs out is its timestamp plus the delay, in minutes.
+// delayTestTimestamp reproduces the legacy delay expiry as test setup: the instant a
+// delayed call's delay runs out is its timestamp plus the delay, in minutes.
 func delayTestTimestamp(timestamp time.Time, delay uint) time.Time {
 	return timestamp.Add(time.Duration(delay) * time.Minute)
 }
 
-// seedDelayTestTalkgroup seeds one system and one talkgroup carrying the given delays, and returns
-// the talkgroup's identifier. A call cannot be recorded without them: `calls` has foreign keys to
-// both.
+// seedDelayTestTalkgroup seeds one system and one talkgroup carrying the given delays,
+// and returns the talkgroup's identifier; a call cannot be recorded without them.
 func seedDelayTestTalkgroup(t *testing.T, db *sql.DB, systemDelay, talkgroupDelay uint) uint64 {
 	t.Helper()
 
@@ -134,9 +131,8 @@ func seedDelayTestCall(t *testing.T, db *sql.DB, talkgroupID uint64, timestamp t
 	return uint64(callID)
 }
 
-// TestAllDelayedReadsTheCallTheLegacyServerStored is the the criterion half for this adapter: the call the
-// legacy server put in the delayed table reads back with its identifier and its instant, which the
-// table stores in milliseconds since the epoch.
+// AllDelayed reads the call the legacy server stored back with its identifier and its
+// instant, which the table keeps in milliseconds since the epoch.
 func TestAllDelayedReadsTheCallTheLegacyServerStored(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -162,12 +158,10 @@ func TestAllDelayedReadsTheCallTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestAllDelayedOnALegacyDatabaseMatchesTheDelayTheLegacyServerApplied checks the stored instant
-// against the rule that produced it, rather than against a number this test invents.
-//
-// `server/delayer.go` only stores a call in the delayed table when its timestamp plus the talkgroup
-// delay — or, failing that, the system delay — is still in the future (`CanDelay`), and the delay is
-// in minutes (`getTimestamp`). The fixture's delayed call is on a talkgroup with a 90 minute delay.
+// The stored instant is checked against the rule that produced it, not against a
+// number this test invents: the legacy server stores a call only while its
+// timestamp plus the talkgroup delay, or failing that the system delay, is still
+// in the future, and the delay is in minutes.
 func TestAllDelayedOnALegacyDatabaseMatchesTheDelayTheLegacyServerApplied(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -208,7 +202,7 @@ func TestAllDelayedOnALegacyDatabaseMatchesTheDelayTheLegacyServerApplied(t *tes
 	}
 }
 
-// TestAllDelayedReportsNoCallWhenNothingIsWaiting pins the empty table.
+// An empty delayed table reports no call.
 func TestAllDelayedReportsNoCallWhenNothingIsWaiting(t *testing.T) {
 	db := openDelayedCallTestDatabase(t)
 
@@ -222,8 +216,8 @@ func TestAllDelayedReportsNoCallWhenNothingIsWaiting(t *testing.T) {
 	}
 }
 
-// TestScheduleDelayedStoresTheInstantInMilliseconds pins the column: the instant the delay runs out is
-// stored as the milliseconds the schema means, which is what the startup re-arm reads back.
+// The instant the delay runs out is stored in the milliseconds the column means,
+// which is what the startup re-arm reads back.
 func TestScheduleDelayedStoresTheInstantInMilliseconds(t *testing.T) {
 	db := openDelayedCallTestDatabase(t)
 
@@ -274,8 +268,8 @@ func TestScheduleDelayedStoresTheInstantInMilliseconds(t *testing.T) {
 	}
 }
 
-// TestScheduleDelayedRefusesACallThatWasNotRecorded pins the cascading foreign key the legacy schema
-// puts on this table: a waiting row has to belong to a recorded call.
+// A waiting row has to belong to a recorded call: the legacy schema puts a
+// cascading foreign key on this table.
 func TestScheduleDelayedRefusesACallThatWasNotRecorded(t *testing.T) {
 	db := openDelayedCallTestDatabase(t)
 
@@ -293,8 +287,7 @@ func TestScheduleDelayedRefusesACallThatWasNotRecorded(t *testing.T) {
 	}
 }
 
-// TestUnscheduleDelayedRemovesTheWaitingCallAndKeepsTheCall pins `pop`: the call stops waiting, and
-// the recording itself is left alone.
+// Unscheduling stops the call waiting and leaves the recording itself alone.
 func TestUnscheduleDelayedRemovesTheWaitingCallAndKeepsTheCall(t *testing.T) {
 	db := openDelayedCallTestDatabase(t)
 
@@ -327,8 +320,8 @@ func TestUnscheduleDelayedRemovesTheWaitingCallAndKeepsTheCall(t *testing.T) {
 	}
 }
 
-// TestUnscheduleDelayedOnACallThatIsNotWaitingIsNotAFailure pins the legacy `pop`, which runs a DELETE
-// and reports only what the database says about it: a row that is already gone is not an error.
+// Removing a call that is not waiting is not a failure: the legacy removal runs a
+// DELETE and reports only what the database says about it.
 func TestUnscheduleDelayedOnACallThatIsNotWaitingIsNotAFailure(t *testing.T) {
 	db := openDelayedCallTestDatabase(t)
 
@@ -340,9 +333,8 @@ func TestUnscheduleDelayedOnACallThatIsNotWaitingIsNotAFailure(t *testing.T) {
 	}
 }
 
-// TestDeletingARecordedCallRemovesItsWaitingRowByItself pins the cascade the legacy schema declares
-// on this table, and the reason the repository does not delete twice: the call's own row is what a
-// pruned or deleted call goes through, and the waiting row follows it.
+// The legacy cascade declares the waiting row follows the call's own row, so a
+// pruned or deleted call takes it along and the repository does not delete twice.
 func TestDeletingARecordedCallRemovesItsWaitingRowByItself(t *testing.T) {
 	db := openDelayedCallTestDatabase(t)
 
@@ -374,7 +366,7 @@ func TestDeletingARecordedCallRemovesItsWaitingRowByItself(t *testing.T) {
 		t.Errorf("the delayed table stores %d rows, want 0", got)
 	}
 
-	// And the repository does not try to remove it a second time on the way through.
+	// And the repository does not remove it a second time on the way through.
 	if err := repo.UnscheduleDelayed(context.Background(), callID); err != nil {
 		t.Errorf("UnscheduleDelayed after the cascade: %v, want no failure", err)
 	}
