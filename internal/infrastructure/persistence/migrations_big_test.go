@@ -1,17 +1,10 @@
 //go:build live
 
-// The large-database timing: the migration pass measured on a deployment an operator
-// would actually wait through, on the file backend and on both real backends.
-//
-// It is its own file, behind the `live` tag and behind `run.sh --big`, for two reasons. It proves nothing
-// about correctness — every row it carries is a row the correctness tests already prove — and it is not
-// something the ordinary suite should pay for: the fixture is a hundred megabytes and a run is minutes.
-//
-// What it does assert is that the pass is still one pass rather than a query per row that went unnoticed.
-// The calls that came out are the calls that went in, the pass said nothing alarming while doing it, and
-// the whole thing fit inside the budget written down below. An upgrade that quietly became one round trip
-// per call takes an hour instead of a minute, and the person who finds that out should not be the one
-// standing in front of the server.
+// The large-database timing: the migration pass measured on a deployment an operator would
+// actually wait through, on the file backend and on both real backends, behind the `live` tag
+// and `run.sh --big`. It asserts that the pass is still one pass rather than a query per row
+// that went unnoticed, within the budget written down below; the rows themselves are proven by
+// the correctness tests, and the ordinary suite pays for neither the fixture nor the run.
 
 package persistence
 
@@ -31,15 +24,17 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// largeBudget is the requirement's "a time an operator can wait through" written as a number, so that a
-// regression fails a test instead of being noticed by someone watching a server start. It is deliberately
-// far above what the pass actually takes on this machine: the point is the cliff, not the record.
+// largeBudget is the requirement's "a time an operator can wait through" written as a number,
+// so that a regression fails a test instead of being noticed by someone watching a server
+// start. It is deliberately far above what the pass actually takes on this machine: the point
+// is the cliff, not the record.
 const largeBudget = 10 * time.Minute
 
-// largeSeedRows is how many rows one seeding statement carries. seedLive's one row per statement is the
-// right shape for a forty-row deployment, because a failure names the row; a hundred thousand of them
-// would measure the harness rather than the migration. A hundred rows of a call table is a statement of a
-// few hundred kilobytes, which every backend here accepts at its defaults.
+// largeSeedRows is how many rows one seeding statement carries. seedLive's one row per
+// statement is the right shape for a forty-row deployment, because a failure names the row; a
+// hundred thousand of them would measure the harness rather than the migration. A hundred rows
+// of a call table is a statement of a few hundred kilobytes, which every backend here accepts
+// at its defaults.
 const largeSeedRows = 100
 
 func TestLargeDatabaseOnFile(t *testing.T) {
@@ -104,9 +99,10 @@ func largeDatabaseOnBackend(t *testing.T, dialect Dialect) {
 	reportLargeTiming(t, dialect, elapsed, calls, db, fixture, lines)
 }
 
-// largeFixture is the generated v6.6.3-shaped database, named by the harness that wrote it. The
-// row count is checked against the fixture rather than trusted from the environment, because a stale
-// fixture would otherwise time a smaller database and still report the number the operator asked for.
+// largeFixture is the generated v6.6.3-shaped database, named by the harness that wrote it.
+// The row count is checked against the fixture rather than trusted from the environment,
+// because a stale fixture would otherwise time a smaller database and still report the number
+// the operator asked for.
 func largeFixture(t *testing.T) (path string, calls int) {
 	t.Helper()
 
@@ -289,9 +285,10 @@ func largeMigrate(t *testing.T, db *sql.DB, dialect Dialect) (time.Duration, []p
 	return time.Since(started), lines
 }
 
-// reportLargeTiming is the record the criterion asks for: the duration, the size of what was migrated, and the
-// two facts that make a duration mean anything — that the rows arrived, and that the pass finished what it
-// started rather than stopping partway and leaving a v6 table behind.
+// reportLargeTiming is the record the criterion asks for: the duration, the size of what was
+// migrated, and the two facts that make a duration mean anything — that the rows arrived, and
+// that the pass finished what it started rather than stopping partway and leaving a v6 table
+// behind.
 func reportLargeTiming(t *testing.T, dialect Dialect, elapsed time.Duration, wanted int, db *sql.DB, fixture string, lines []progressLine) {
 	t.Helper()
 

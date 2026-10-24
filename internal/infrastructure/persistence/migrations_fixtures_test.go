@@ -21,19 +21,14 @@ import (
 	"testing"
 )
 
-// legacyV6Schema is the schema a v6.6.3 deployment leaves behind, recorded as the statements the
-// legacy server ran to build it, and legacyV6Rows are the rows that cover every table the v6 → v7
-// migration pass reads. legacyV6PartialRows are the same rows with two of them carrying text in a
-// column sqlite declared `datetime` or `integer` and does not enforce, which this server cannot read.
-// They were taken from a database written by the legacy binary, statement by statement, and they live
-// in the package that consumes them, which is what the requirement asks for: no fixture directory, no binary
-// database file, and nothing outside the test that proves it.
-//
-// The expectations the migration tests state against them were read off the legacy server's own
-// output; where the legacy server cannot finish, the expectation comes from the legacy source, and the
-// test that pins it says so. The recorded schema and statements are themselves the rebuild: applying
-// them to an empty database writes the databases the fixtures were taken from, and the statements are
-// the pinned record.
+// legacyV6Schema is the schema a v6.6.3 deployment leaves behind, recorded as the statements
+// the legacy server ran to build it, and legacyV6Rows are the rows that cover every table the
+// v6 → v7 migration pass reads. legacyV6PartialRows are the same rows with two of them
+// carrying text in a column sqlite declared `datetime` or `integer` and does not enforce,
+// which this server cannot read. They were taken from a database written by the legacy binary,
+// statement by statement, and they live in the package that consumes them, which is what the
+// requirement asks for: no fixture directory, no binary database file, and nothing outside the
+// test that proves it.
 
 var legacyV6Schema = []string{
 	"CREATE TABLE `rdioScannerAccesses` (`_id` integer primary key autoincrement, `code` varchar(255) not null unique, `expiration` datetime, `ident` varchar(255), `limit` integer, `order` integer, `systems` text not null);",
@@ -179,11 +174,11 @@ var legacyV6PartialRows = []string{
 	"INSERT INTO \"sqlite_sequence\" VALUES('rdioScannerAccesses',904);",
 }
 
-// The damaged fixtures are databases a legacy server has already migrated, in the two states the
-// legacy migration pass actually leaves behind: migrated, where the pass finished and left the damage
-// in the units and the missing source links, and crashed, where the calls migration was rolled back
-// and the v6 calls table is still there. They are recorded as the statements the migrated database
-// holds, statement by statement, in the package that consumes them.
+// The damaged fixtures are databases a legacy server has already migrated, in the two states
+// the legacy migration pass actually leaves behind: migrated, where the pass finished and left
+// the damage in the units and the missing source links, and crashed, where the calls migration
+// was rolled back and the v6 calls table is still there. They are recorded as the statements
+// the migrated database holds, statement by statement, in the package that consumes them.
 
 var damagedMigratedSchema = []string{
 	"CREATE TABLE \"callFrequencies\" (\n    \"callFrequencyId\" integer not null primary key autoincrement,\n    \"callId\" integer not null,\n    \"dbm\" real not null default 0,\n    \"errors\" integer not null default 0,\n    \"frequency\" integer not null,\n    \"offset\" real not null,\n    \"spikes\" integer not null default 0,\n    foreign key (\"callId\") references \"calls\" (\"callId\") on delete cascade on update cascade\n);",
@@ -248,9 +243,9 @@ var damagedCrashedRows = []string{
 	"INSERT INTO \"units\" VALUES(302,'Car 4',2,101,0,0,0);",
 }
 
-// buildRecordedDatabase opens a database built from the recorded statements the way the server opens
-// its own database, foreign keys enforced, so that a test which writes to it cannot damage the
-// recorded statements.
+// buildRecordedDatabase opens a database built from the recorded statements the way the server
+// opens its own database, foreign keys enforced, so that a test which writes to it cannot
+// damage the recorded statements.
 func buildRecordedDatabase(t *testing.T, statements []string) *sql.DB {
 	t.Helper()
 

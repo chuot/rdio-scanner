@@ -2,26 +2,9 @@
 
 package persistence
 
-// The live tests are the requirement: the migration pass proven against a backend that is not a file.
-//
-// They are compiled only under the `live` build tag, and they never skip. With the tag set and a backend
-// not reachable, a test fails naming the host and port it could not reach. A live test that passed
-// because its backend was not there is worse than no live test at all: the record would say the backend
-// was proven.
-//
-// The live tests run against backends the developer starts: a MariaDB and a PostgreSQL, published on
-// the host and port the RDIO_LIVE_* variables name.
-//
-// Each test reseeds its backend from the same v6.6.3 deployment before it runs — the schema from
-// the recorded v6.6.3 schema, the rows out of the recorded v6.6.3 statements, which are the
-// fixture every other migration test reads. A harness that seeded once for the whole suite would make
-// every test depend on the one before it, and a migration test that depends on the previous test proves
-// nothing about the migration.
-//
-// The audit itself is not repeated here. auditConservation, auditValues, auditReferences and the rest are
-// the same functions the sqlite tests call, so a backend is measured against the same rules as the file
-// it is compared with, and a difference between backends shows up as a failure of a rule both of them
-// were already supposed to satisfy.
+// The live tests prove the migration pass against backends that are not files, compiled only
+// under the `live` tag: see the migration-tests maintainer note for the never-skip posture,
+// the reseed-per-test rule, and what each run proves.
 
 import (
 	"context"
@@ -37,10 +20,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// liveSeedOrder is the order the rows arrive in: the tables the migration pass looks a reference up in
-// before it carries the rows that name them. The v6 tables have no foreign keys, so the schema does not
-// require this order; what it buys is that a seeding failure names the row that is wrong instead of
-// looking like a migration that found nothing to resolve.
+// liveSeedOrder is the order the rows arrive in: the tables the migration pass looks a
+// reference up in before it carries the rows that name them. The v6 tables have no foreign
+// keys, so the schema does not require the order; it buys that a seeding failure names the
+// wrong row instead of looking like a migration that found nothing to resolve.
 var liveSeedOrder = []string{
 	"rdioScannerMeta",
 	"rdioScannerGroups",
@@ -57,10 +40,10 @@ var liveSeedOrder = []string{
 	"rdioScannerAccesses",
 }
 
-// liveSettings reads one backend's connection out of the environment, the way the server reads its own
-// database out of its configuration. Nothing here falls back to sqlite or to a default port: a live test
-// that quietly reached a different database than the harness started would report a proof it did not
-// produce.
+// liveSettings reads one backend's connection out of the environment, the way the server reads
+// its own database out of its configuration. Nothing here falls back to sqlite or to a default
+// port: a live test that quietly reached a different database than the harness started would
+// report a proof it did not produce.
 func liveSettings(t *testing.T, dialect Dialect) Settings {
 	t.Helper()
 
@@ -126,13 +109,12 @@ func liveDatabase(t *testing.T, dialect Dialect) *sql.DB {
 	return db
 }
 
-// resetLive empties the backend so that every test starts from the same seeded deployment rather than
-// from what the test before it left.
-//
-// The v8 tables have foreign keys and the catalog does not report them in the order they depend on, so
-// the backend is told to ignore them for the duration of the reset: MariaDB by its own switch,
-// PostgreSQL by cascading each drop, which is the difference between the two because PostgreSQL has no
-// switch and MariaDB does not cascade.
+// resetLive empties the backend so that every test starts from the same seeded deployment
+// rather than from what the test before it left. The v8 tables have foreign keys and the
+// catalog does not report them in dependency order, so the reset tells the backend to ignore
+// them for its duration: MariaDB by its own switch, PostgreSQL by cascading each drop, which
+// is the difference between the two because PostgreSQL has no switch and MariaDB does not
+// cascade.
 func resetLive(t *testing.T, db *sql.DB, dialect Dialect) {
 	t.Helper()
 
@@ -153,9 +135,9 @@ func resetLive(t *testing.T, db *sql.DB, dialect Dialect) {
 	}
 }
 
-// livePing reaches the backend, or says which one it could not reach. The deadline is the test's own:
-// a driver that keeps dialing for two minutes before it admits the port is dead makes a live failure as
-// hard to read as a hang.
+// livePing reaches the backend, or says which one it could not reach. The deadline is the
+// test's own: a driver that keeps dialing for two minutes before it admits the port is dead
+// makes a live failure as hard to read as a hang.
 func livePing(t *testing.T, db *sql.DB, settings Settings) {
 	t.Helper()
 
@@ -190,13 +172,12 @@ func liveStatements(dialect Dialect) []string {
 	panic(fmt.Sprintf("liveStatements: %s has no recorded v6.6.3 schema", dialect))
 }
 
-// seedLive copies the rows of the v6.6.3 sqlite fixture into the backend, through the same store the
-// repositories write through, so a live run migrates the deployment the sqlite tests migrate rather than
-// a second copy of it written out again in another language.
-//
-// Two values need converting on the way, because the fixture is a sqlite file and a sqlite file is the
-// one place a column's declared type is a suggestion: a datetime column holds the text Go's time package
-// prints, and neither real backend stores that. Both are converted by the column's declared type in the
+// seedLive copies the rows of the v6.6.3 sqlite fixture into the backend, through the same
+// store the repositories write through, so a live run migrates the deployment the sqlite tests
+// migrate rather than a second copy of it written out again in another language. Two values
+// need converting on the way, because a sqlite file is the one place a column's declared type
+// is a suggestion: a datetime column holds the text Go's time package prints, and an empty
+// blob comes back as a nil slice. Both are converted by the column's declared type in the
 // fixture, not by guessing at the value.
 func seedLive(t *testing.T, db *sql.DB, dialect Dialect) {
 	t.Helper()
@@ -245,10 +226,10 @@ func seedLive(t *testing.T, db *sql.DB, dialect Dialect) {
 	}
 }
 
-// liveSeedValue converts the fixture values a real backend cannot be handed as they are. Each conversion
-// is chosen by the type the fixture's own schema declares for the column, because a sqlite file is the one
-// place a declared type is a suggestion, and guessing at a value is how a seed ends up rewriting the
-// deployment it is supposed to reproduce.
+// liveSeedValue converts the fixture values a real backend cannot be handed as they are. Each
+// conversion is chosen by the type the fixture's own schema declares for the column, because
+// guessing at a value is how a seed ends up rewriting the deployment it is supposed to
+// reproduce.
 func liveSeedValue(t *testing.T, dialect Dialect, table, column, declared string, value any) any {
 	t.Helper()
 
@@ -418,9 +399,9 @@ func TestMigrateLiveOnPostgreSQLCarriesEveryValueIntoTheV8ColumnItsRuleNames(t *
 	liveValues(t, DialectPostgresql)
 }
 
-// liveValues is the value-fidelity and reference-integrity half of the audit on a live backend, which is
-// where the conversions that a sqlite file lets one backend get away with are measured: the datetimes,
-// the byte-for-byte audio, and the resolved references.
+// liveValues is the value-fidelity and reference-integrity half of the audit on a live
+// backend, which is where the conversions that a sqlite file lets one backend get away with
+// are measured: the datetimes, the byte-for-byte audio, and the resolved references.
 func liveValues(t *testing.T, dialect Dialect) {
 	t.Helper()
 
@@ -443,13 +424,11 @@ func TestMigrateLiveOnPostgreSQLMigratesTheDirwatchesItNames(t *testing.T) {
 	liveDirwatches(t, DialectPostgresql)
 }
 
-// liveDirwatches is the criterion: the proof on a backend that is case-sensitive about table names, which is the
-// only place the misspelling the dirwatch migration used could ever have been seen. sqlite matches table
-// names whatever their case is, which is why the defect survived every test this repository had.
-//
-// The v6 table is there under the name the v6 database created, the pass drops it, every dirwatch of the
-// deployment arrives, and nothing dirwatch is archived — because nothing about this deployment's dirwatches
-// had to be left behind.
+// liveDirwatches is the criterion: the proof on a backend that is case-sensitive about table
+// names, which is the only place the misspelling the dirwatch migration used could ever have
+// been seen, since sqlite matches table names whatever their case is. The v6 table is there
+// under the name the v6 database created, the pass drops it, every dirwatch of the deployment
+// arrives, and nothing dirwatch is archived.
 func liveDirwatches(t *testing.T, dialect Dialect) {
 	t.Helper()
 
@@ -487,13 +466,12 @@ func TestMigrateLiveOnPostgreSQLFilesWhatThePassSaid(t *testing.T) {
 	liveFiling(t, DialectPostgresql)
 }
 
-// liveFiling is the half of the requirement that the requirement asks for on a live backend: every line the pass said
-// about a row it could not carry is stored as a warn entry under the `database` source, and read back
-// through the same search the log view answers with.
-//
-// The entries are filed through the repository the server files them through, because the pass runs before
-// the server has a log repository to file them in — see server.wire. That is the boundary this test can
-// reach; that the server files them at all, in that order, is proven by TestTheMigrationPassFilesWhatItSaid.
+// liveFiling is the half of the requirement the criterion asks for on a live backend: every
+// line the pass said about a row it could not carry is stored as a warn entry under the
+// `database` source, and read back through the same search the log view answers with. The
+// entries are filed through the repository the server files them through, because the pass
+// runs before the server has a log repository to file them in; that the server files them at
+// all, in that order, is proven by TestTheMigrationPassFilesWhatItSaid.
 func liveFiling(t *testing.T, dialect Dialect) {
 	t.Helper()
 
@@ -562,9 +540,9 @@ func TestMigrateLiveOnPostgreSQLChangesNothingTwice(t *testing.T) {
 	liveIdempotence(t, DialectPostgresql)
 }
 
-// liveIdempotence is the requirement on a live backend: the pass that already ran leaves no v6 table behind, so a
-// second run finds nothing to migrate, says nothing, and changes nothing — not a row, not a column of the
-// archive, not an object of the schema.
+// liveIdempotence is the requirement on a live backend: the pass that already ran leaves no v6
+// table behind, so a second run finds nothing to migrate, says nothing, and changes nothing —
+// not a row, not a column of the archive, not an object of the schema.
 func liveIdempotence(t *testing.T, dialect Dialect) {
 	t.Helper()
 
@@ -654,9 +632,9 @@ func liveDifferences(before, after []string) []string {
 	return differences
 }
 
-// TestMigrateLiveOnMariaDBReportsABackendItCannotReach is the guard the criterion asks for on the harness itself:
-// a live test that skipped because its backend was not there would leave a record that says the backend
-// was proven. Pointing one test at a port nothing listens on is how that is caught.
+// A live test that skipped because its backend was not there would leave a record that says
+// the backend was proven: pointing one test at a port nothing listens on is how that is
+// caught.
 func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
 	settings := liveSettings(t, DialectMariadb)
 
@@ -680,10 +658,10 @@ func TestMigrateLiveOnMariaDBReportsABackendItCannotReach(t *testing.T) {
 		DialectMariadb, settings.Host, settings.Port)
 }
 
-// TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows: the duplicate-row fixture on the backend that creates the duplicates. MySQL
-// and MariaDB report an unchanged option update as no changed rows, the save reads
-// that as no row there, and every save writes every key again. The live pass removes
-// the duplicates, last row written wins, and the unique index refuses the next one.
+// The duplicate-row fixture on the backend that creates the duplicates: MySQL and MariaDB
+// report an unchanged option update as no changed rows, the save reads that as no row there,
+// and every save writes every key again. The live pass removes the duplicates, last row
+// written wins, and the unique index refuses the next one.
 func TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows(t *testing.T) {
 	db := liveDatabase(t, DialectMariadb)
 
