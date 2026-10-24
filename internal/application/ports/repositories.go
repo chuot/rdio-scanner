@@ -23,9 +23,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// ErrNotFound is returned by a repository when the thing asked for is not there. It is
-// declared here so that the use cases can recognise a missing call, system, or access
-// without knowing which database produced the answer.
+// ErrNotFound is returned by a repository when the thing asked for is not there, so
+// use cases can recognise a missing entity without knowing which database answered.
 var ErrNotFound = errors.New("not found")
 
 // CallRepository stores and reads recorded calls.
@@ -50,16 +49,16 @@ type CallRepository interface {
 	DeleteCallsBefore(ctx context.Context, before time.Time) (int, error)
 }
 
-// CallActivityRepository reads the tallies and the newest rows a status view draws. It is kept apart
-// from CallRepository: the history view pages through calls for a caller who has a scope, and the status
-// view counts calls for the operator who administers the whole server. Neither should depend on the
-// other's method, and neither is handed the audio the history's one full read carries.
+// CallActivityRepository reads the tallies and newest rows a status view draws. It is
+// kept apart from CallRepository: the history view pages calls for a scoped caller, the
+// status view counts calls for the operator who administers the whole server, and
+// neither depends on the other's method. The full read with audio stays in the history.
 type CallActivityRepository interface {
 	// CountCallsSince counts the recorded calls at or after the given instant.
 	CountCallsSince(ctx context.Context, from time.Time) (uint64, error)
 
-	// CountCallsByHour counts the recorded calls grouped into whole hours, oldest first. An hour with
-	// nothing in it is not reported; the query handler fills it.
+	// CountCallsByHour counts the recorded calls grouped into whole hours, oldest
+	// first; an empty hour is not reported, the query handler fills it.
 	CountCallsByHour(ctx context.Context, from time.Time) ([]CallHourCount, error)
 
 	// CountCallsByTalkgroup counts the recorded calls per talkgroup, most first, cut at limit.
@@ -75,8 +74,8 @@ type CallHourCount struct {
 	Count uint64
 }
 
-// CallTalkgroupCount is one talkgroup's share of the window, named the way the configuration names it
-// so that the status view can show a talkgroup instead of a pair of references.
+// CallTalkgroupCount is one talkgroup's share of the window, named the way the
+// configuration names it so the status view shows a talkgroup, not a pair of references.
 type CallTalkgroupCount struct {
 	SystemRef    uint
 	TalkgroupRef uint
@@ -85,59 +84,53 @@ type CallTalkgroupCount struct {
 	Count        uint64
 }
 
-// CallSearch is the resolved criteria a call-history search runs with. The presentation
-// layer submits raw criteria, the query handler resolves them — paging, sort direction,
-// the caller's access scope, and group and tag labels expanded into concrete
-// talkgroups — and the repository turns this into a query.
+// CallSearch is the resolved criteria a call-history search runs with. The
+// presentation layer submits raw criteria; the query handler resolves paging, sort
+// direction, the caller's access scope, and group and tag labels expanded into
+// concrete talkgroups.
 type CallSearch struct {
-	// Scope restricts the search to what the caller is allowed to see. An absent scope
-	// means the caller sees everything.
+	// Scope restricts the search to what the caller may see; absent means everything.
 	Scope domain.AccessScope
 
-	// From and To bound the timestamps to search, inclusive. A zero From leaves the
+	// From and To bound the timestamps to search, inclusive; a zero From leaves the
 	// history unbounded.
 	From time.Time
 	To   time.Time
 
-	// SystemRef and TalkgroupRef narrow the search to one talkgroup on one system. A
-	// zero SystemRef leaves the search unfiltered; a zero TalkgroupRef with a system
-	// means every talkgroup on that system.
+	// SystemRef and TalkgroupRef narrow to one talkgroup on one system. A zero
+	// SystemRef leaves the search unfiltered; a zero TalkgroupRef with a system means
+	// every talkgroup on it.
 	SystemRef    uint
 	TalkgroupRef uint
 
-	// GroupTalkgroups and TagTalkgroups are the talkgroups a group label or tag label
-	// stands for, expanded by the query handler into the pairs the history is filtered
-	// by.
+	// GroupTalkgroups and TagTalkgroups are the talkgroups a group or tag label stands
+	// for, expanded by the query handler.
 	GroupTalkgroups []domain.TalkgroupScope
 	TagTalkgroups   []domain.TalkgroupScope
 
-	// Limit is the resolved page size. It is never left unset by the query handler, and
-	// a zero Limit asks for no rows at all, which is what the stored query does with it.
+	// Limit is the resolved page size, never left unset by the query handler; a zero
+	// Limit asks for no rows at all.
 	Limit     uint
 	Offset    uint
 	Ascending bool
 }
 
-// CallSummary is the read model the call history view needs: enough to list a call and
-// to fetch it in full, without loading the audio of every call on the page.
+// CallSummary is the call history's read model: enough to list a call and fetch it in
+// full, without loading the audio of every call on the page.
 type CallSummary struct {
 	ID           uint64
 	SystemRef    uint
 	TalkgroupRef uint
 	Timestamp    time.Time
 
-	// AudioLength is how long the call's recording lasts, as stored; zero is the
-	// server's own "never measured", which is what every call carries until the
-	// length is learned.
+	// AudioLength is the stored length; zero is the server's "never measured".
 	AudioLength time.Duration
 }
 
-// CallSearchPage is one page of call history.
-//
-// Count is the number of calls the criteria matches in total, not the number on this
-// page. DateStart and DateStop are the earliest and latest timestamps the criteria
-// matches across the whole history, which is what the history view uses to offer its
-// day navigation.
+// CallSearchPage is one page of call history. Count is the total number of calls the
+// criteria match, not the number on this page. DateStart and DateStop are the earliest
+// and latest timestamps matched across the whole history, which is what the history
+// view's day navigation walks.
 type CallSearchPage struct {
 	Count     uint
 	DateStart time.Time
@@ -145,35 +138,33 @@ type CallSearchPage struct {
 	Results   []CallSummary
 }
 
-// SystemRepository stores systems together with the talkgroups, sites, and units that
-// belong to them, because a system is the aggregate those parts are reached through.
+// SystemRepository stores systems with the talkgroups, sites, and units that belong to
+// them, because a system is the aggregate those parts are reached through.
 type SystemRepository interface {
 	// AllSystems returns every system with its talkgroups, sites, and units loaded.
 	AllSystems(ctx context.Context) (domain.Systems, error)
 
-	// SaveSystems reconciles the stored systems with the given ones: systems that are
-	// not in the list are removed, and the rest are inserted or updated along with
-	// their talkgroups, sites, and units.
+	// SaveSystems reconciles the stored systems with the given ones: systems missing
+	// from the list are removed, the rest inserted or updated with their talkgroups,
+	// sites, and units.
 	SaveSystems(ctx context.Context, systems domain.Systems) error
 
-	// SaveSystemSettings reconciles the stored systems with the given ones and writes
-	// nothing under a system. The sites, talkgroups, and units of a system are stored
-	// by the save of that level, for the system that level shows, so a save of the
-	// system row's own fields leaves every level as the store holds it.
+	// SaveSystemSettings reconciles the stored systems and writes nothing under one:
+	// the levels are stored by the save of that level, so saving the system row leaves
+	// every level as the store holds it.
 	SaveSystemSettings(ctx context.Context, systems domain.Systems) error
 
-	// SaveSystemSites reconciles the stored sites of one system with the given ones,
-	// renumbering their order. A system the store does not have reports ErrNotFound.
+	// SaveSystemSites reconciles the stored sites of one system, renumbering their
+	// order; a missing system reports ErrNotFound.
 	SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error
 
-	// SaveSystemTalkgroups reconciles the stored talkgroups of one system with the
-	// given ones, renumbering their order, and stores the blacklist that was edited
-	// beside them in the same save. A nil blacklist leaves the stored text alone. A
-	// system the store does not have reports ErrNotFound.
+	// SaveSystemTalkgroups reconciles the stored talkgroups of one system, renumbering
+	// their order, and stores the blacklist edited beside them in the same save; a nil
+	// blacklist leaves the stored text alone. A missing system reports ErrNotFound.
 	SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups, blacklists *domain.Blacklists) error
 
-	// SaveSystemUnits reconciles the stored units of one system with the given ones,
-	// renumbering their order. A system the store does not have reports ErrNotFound.
+	// SaveSystemUnits reconciles the stored units of one system, renumbering their
+	// order; a missing system reports ErrNotFound.
 	SaveSystemUnits(ctx context.Context, systemID uint64, units domain.Units) error
 }
 
@@ -209,59 +200,45 @@ type ApikeyRepository interface {
 	SaveApikeys(ctx context.Context, apikeys domain.Apikeys) error
 }
 
-// OptionsRepository holds the server options, including the signing secret.
-//
-// It is the configuration in effect, not a database view: `ReadOptions` reports what the server
-// is currently running with, and `WriteOptions` replaces what it runs with and then persists it.
-// A reader that re-queried the table would answer the administrator with what is stored, not
-// with what the server is running with, which is the configuration a save has already committed to.
+// OptionsRepository holds the server options, including the signing secret. It is the
+// configuration in effect, not a database view: ReadOptions reports what the server runs
+// with, and WriteOptions replaces what it runs with and then persists it. Re-querying
+// the table would answer an administrator with stored rows rather than running state.
 type OptionsRepository interface {
 	ReadOptions(ctx context.Context) (domain.Options, error)
 	WriteOptions(ctx context.Context, options domain.Options) error
 
-	// ReloadOptions re-derives the options from what is stored and makes that what the server
-	// runs with. The legacy server does this in exactly one place — after changing the
-	// administrator password — and it is not a no-op: re-deriving resets every option to its
-	// default and then applies the stored rows, so an option stored under a name the reader does
-	// not look for comes back as the default.
+	// ReloadOptions re-derives the options from what is stored and makes that what the
+	// server runs with. Re-deriving resets every option to its default and then applies
+	// the stored rows, so an option stored under a name the reader does not look for
+	// comes back as the default.
 	ReloadOptions(ctx context.Context) (domain.Options, error)
 }
 
-// SigningSecretStore puts the signing secret the server issues its administrator sessions with on
-// record.
-//
-// It is its own port rather than another method on OptionsRepository: the startup step that needs it
-// reads the configuration and writes one value back, and it has no business with saving or
-// re-deriving the rest of it. The options adapter satisfies both.
+// SigningSecretStore puts the signing secret the server issues administrator sessions
+// with on record. It is its own port rather than another OptionsRepository method: the
+// startup step that needs it reads the configuration and writes one value back, with no
+// business saving or re-deriving the rest. The options adapter satisfies both.
 type SigningSecretStore interface {
 	StoreSecret(ctx context.Context, secret string) error
 }
 
 // LogSearchPage is the log view's envelope: the total number of entries the criteria
-// matches, the span of time everything that matches covers, and the matching entries
-// themselves.
+// match, the span of time everything that matches covers, and the matching entries.
 type LogSearchPage struct {
 	Count uint64
 
-	// DateStart and DateStop are the earliest and latest instants among everything the criteria
-	// match, and not among the entries this page carries. The log view pages through the span, so
-	// the span has to stay where it is while the page moves.
-	//
-	// A search that matches nothing leaves both ends unset, which is not the same as the Unix epoch:
-	// the log view shows the instant the page reports, and an empty log view has always shown the
-	// earliest instant a clock can name.
+	// DateStart and DateStop span everything the criteria match, not the entries this
+	// page carries, because the log view pages through the span. A search that matches
+	// nothing leaves both ends unset, which is not the Unix epoch.
 	DateStart time.Time
 	DateStop  time.Time
 
-	// SourceCounts says how many of the matching entries each part of the server wrote, ordered by
-	// descending count, so the log view can show where the noise is before the operator narrows to it.
-	//
-	// They describe everything the criteria match and not the page this envelope carries, and they are
-	// computed with the criteria as submitted except for the source itself: asking "how many of each"
-	// while already filtered to one source answers one row, which is true and useless. So the search
-	// reports two totals — `Count`, the narrowed match the page is paged through, and the total of the
-	// wider match these counts describe — and they are the same number whenever no source filter is
-	// submitted.
+	// SourceCounts says how many matching entries each part of the server wrote, by
+	// descending count. They describe the criteria as submitted except for the source
+	// filter itself — filtered to one source, "how many of each" answers one row — and
+	// Count stays the narrowed total the page walks. The two totals are equal whenever
+	// no source filter is submitted.
 	SourceCounts []LogSourceCount
 
 	Results []domain.LogEntry
@@ -284,20 +261,17 @@ type LogRepository interface {
 	DeleteLogsBefore(ctx context.Context, before time.Time) (int, error)
 }
 
-// LogTallyRepository counts what the server complained about. It is apart from LogRepository for the
-// same reason CallActivityRepository is apart from CallRepository: the log view pages and filters
-// entries for an operator reading them, and the status view tallies severities for an operator watching
-// a page.
+// LogTallyRepository counts what the server complained about, apart from LogRepository
+// for the same reason CallActivityRepository is apart from CallRepository: the log view
+// pages entries, the status view tallies severities.
 type LogTallyRepository interface {
-	// TallyLogLevels counts the error and warning entries written at or after the given instant, per
-	// severity and per subsystem. A severity with nothing written under it is not reported.
+	// TallyLogLevels counts the error and warning entries at or after the given
+	// instant, per severity and per subsystem; an empty severity is not reported.
 	TallyLogLevels(ctx context.Context, from time.Time) ([]LogLevelTally, error)
 }
 
-// LogLevelTally is how many entries one subsystem wrote at one severity over the window.
-//
-// The severity is the plain string the domain carries it as (internal/domain/log.go:177): the three
-// names are the constants the log view filters on, and a level is not a thing with its own identity.
+// LogLevelTally is how many entries one subsystem wrote at one severity over the
+// window. The severity is the domain's plain level string, not a type of its own.
 type LogLevelTally struct {
 	Level  string
 	Source domain.LogSource
@@ -336,7 +310,7 @@ type DelayedCallRepository interface {
 	// ScheduleDelayed records that a call is waiting until the given instant.
 	ScheduleDelayed(ctx context.Context, callID uint64, until time.Time) error
 
-	// UnscheduledDelayed removes one call from the waiting list once its delay has run.
+	// UnscheduleDelayed removes one call from the waiting list once its delay has run.
 	UnscheduleDelayed(ctx context.Context, callID uint64) error
 
 	// ClearDelayed drops every waiting call.

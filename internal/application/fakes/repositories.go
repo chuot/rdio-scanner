@@ -41,17 +41,16 @@ type Calls struct {
 	// Saved records the calls that were written, in the order they were written.
 	Saved []domain.Call
 
-	// Searched records the resolved criteria each history search ran with, in the order they ran.
-	// The paging bounds and the caller's scope are resolved by the query handler, and the endpoint
-	// tests need to see what the search actually ran with rather than infer it from a row count.
+	// Searched records the resolved criteria each history search ran with, in
+	// order: what the handler resolved is what the endpoint tests assert.
 	Searched []ports.CallSearch
 
-	// Entered, when set, is signalled when a write begins. Tests use it to know that the server is
-	// inside a write rather than merely about to start one.
+	// Entered, when set, is signalled when a write begins, so a test knows the
+	// server is inside a write rather than about to start one.
 	Entered chan struct{}
 
-	// Hold, when set, makes a write wait until it is closed. Tests use it to keep the server inside a
-	// write and see whether it starts another one.
+	// Hold, when set, makes a write wait until it is closed, so a test can keep
+	// the server inside a write and see whether it starts another one.
 	Hold chan struct{}
 
 	// Err, when set, is returned by every method instead of the stored state.
@@ -134,9 +133,8 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 	return out, nil
 }
 
-// SearchCalls applies the resolved criteria to the stored history. Delayed calls are
-// left out, because a call that is waiting out a delay is not part of the history until
-// its delay has run.
+// SearchCalls applies the resolved criteria to the stored history; delayed calls
+// are left out, a call waiting out a delay is not history until its delay runs.
 func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (ports.CallSearchPage, error) {
 	calls.Searched = append(calls.Searched, search)
 
@@ -288,15 +286,13 @@ type Systems struct {
 	SaveErr error
 
 	// SubSectionLevel, SubSectionSystemID and SubSectionSaved record the last
-	// per-level save: which level was asked for, of which system, and the rows the
-	// store kept, renumbered the way the stored tables renumber them.
+	// per-level save: level, system, and the renumbered rows the store kept.
 	SubSectionLevel    string
 	SubSectionSystemID uint64
 	SubSectionSaved    []any
 
-	// SubSectionDeletesSystem models the system being deleted under a per-level save:
-	// the level is stored, and the system the save was aimed at is gone from the store
-	// by the time the save is announced.
+	// SubSectionDeletesSystem models the system being deleted under a per-level
+	// save: the level is stored while the system it aimed at is already gone.
 	SubSectionDeletesSystem bool
 }
 
@@ -311,9 +307,8 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 	return systems.Stored, nil
 }
 
-// SaveSystems replaces the stored systems, assigning identifiers to a system and to the
-// talkgroups, sites, and units it carries, which is what the stored tables do to the
-// aggregates auto-populate has just created.
+// SaveSystems replaces the stored systems, assigning identifiers to a system
+// and to the talkgroups, sites, and units it carries, as the stored tables do.
 func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {
 	if systems.Err != nil {
 		return systems.Err
@@ -321,7 +316,7 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 
 	if systems.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		systems.Stored = next
 
 		return systems.SaveErr
@@ -380,9 +375,8 @@ func (systems *Systems) SaveSystemSettings(ctx context.Context, next domain.Syst
 			out[i].ID = systemID
 		}
 
-		// The levels under a system are written by the save of that level. A systems-section
-		// save keeps the rows the store holds for a system it stores, and a system the store
-		// does not have starts with none, as the stored tables do.
+		// A systems-section save writes nothing under a system: it keeps the
+		// stored rows for a system it stores, and a new system starts with none.
 		if stored, ok := systems.Stored.ByID(out[i].ID); ok {
 			out[i].Sites = stored.Sites
 			out[i].Talkgroups = stored.Talkgroups
@@ -513,15 +507,15 @@ func (systems *Systems) saveSubSection(level string, systemID uint64, rows any, 
 			systems.Stored[i].Units = typed
 		}
 
-		// The blacklist the talkgroups section edits beside its rows is stored by the same
-		// save. A save that names none leaves the text the stored system holds.
+		// The blacklist the talkgroups section edits is stored by the same save;
+		// a save that names none leaves the stored text.
 		if blacklists != nil {
 			systems.Stored[i].Blacklists = *blacklists
 		}
 	}
 
-	// The system is deleted under the save: the level is stored, and by the time the save is
-	// announced the system it was aimed at is no longer in the store.
+	// Models the system being deleted under the save: the level is stored while
+	// the system it aimed at is already gone.
 	if systems.SubSectionDeletesSystem {
 		kept := domain.Systems{}
 
@@ -682,8 +676,8 @@ func (groups *Groups) AllGroups(ctx context.Context) (domain.Groups, error) {
 	return groups.Stored, nil
 }
 
-// SaveGroups replaces the stored groups, assigning identifiers to the ones that have
-// none, which is what the stored table does to a group auto-populate just created.
+// SaveGroups replaces the stored groups, assigning identifiers to the ones
+// that have none, as the stored table does.
 func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error {
 	if groups.Err != nil {
 		return groups.Err
@@ -691,7 +685,7 @@ func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error 
 
 	if groups.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		groups.Stored = next
 
 		return groups.SaveErr
@@ -751,7 +745,7 @@ func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 
 	if tags.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		tags.Stored = next
 
 		return tags.SaveErr
@@ -805,7 +799,7 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 
 	if accesses.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		accesses.Stored = next
 
 		return accesses.SaveErr
@@ -842,7 +836,7 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 
 	if apikeys.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		apikeys.Stored = next
 
 		return apikeys.SaveErr
@@ -859,17 +853,16 @@ type Options struct {
 	Err     error
 	SaveErr error
 
-	// Reloaded is what re-deriving the options from the store produces, when a test wants that
-	// to differ from what was last written. The legacy server's re-derivation resets every
-	// option to its default and then applies the stored rows, so an option it stores under one
-	// name and reads under another comes back as the default.
+	// Reloaded is what re-deriving the options from the store produces, when a test wants
+	// that to differ from what was last written; why a stored re-derivation can change
+	// what was written lives in the ports and hub maintainer note.
 	Reloaded *domain.Options
 
-	// Secrets records what was put on record by StoreSecret, in the order it was put there. A test
-	// asserts that the secret the server signs with is the secret the store holds.
+	// Secrets records what StoreSecret put on record, in order, so a test can assert
+	// the signing secret matches the stored one.
 	Secrets []string
 
-	// SecretErr makes storing the secret fail, the way SaveErr makes saving the configuration fail.
+	// SecretErr makes storing the secret fail, as SaveErr makes saving fail.
 	SecretErr error
 }
 
@@ -895,7 +888,7 @@ func (options *Options) WriteOptions(ctx context.Context, next domain.Options) e
 
 	if options.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		options.Stored = next
 
 		return options.SaveErr
@@ -933,26 +926,22 @@ func (options *Options) StoreSecret(ctx context.Context, secret string) error {
 	return nil
 }
 
-// Logs is an in-memory log repository.
-//
-// The entries are behind a mutex because a log is written from the goroutines that fail — a
-// directory watcher, an ingest path — and a test that waits for a log line reads it from another
-// one.
+// Logs is an in-memory log repository. Entries sit behind a mutex because
+// failing goroutines write logs while tests read them from another goroutine.
 type Logs struct {
 	Stored []domain.LogEntry
 	Err    error
 
-	// SearchErr, when set, is returned by SearchLogs and by nothing else. The log view records the
-	// failures it cannot answer with, so a test needs the read to fail while the write still works.
+	// SearchErr, when set, is returned by SearchLogs and nothing else, so a test
+	// can fail a log-view read while writes still work.
 	SearchErr error
 
-	// DeleteErr, when set, is returned by DeleteLogsBefore and by nothing else. The retention pass records
-	// the half of its work it could not do, so a test needs the delete to fail while the write still works.
+	// DeleteErr, when set, is returned by DeleteLogsBefore and nothing else, so a
+	// test can fail the retention pass while writes still work.
 	DeleteErr error
 
-	// AppendErr, when set, is returned by AppendLog and by nothing else. Writing a log entry is
-	// best-effort and must not change the operation that wrote it, while reading and pruning the log view
-	// are part of the operations that do those things — so a test needs the write to fail on its own.
+	// AppendErr, when set, is returned by AppendLog and nothing else: writing a
+	// log entry is best-effort and must not change the operation that wrote it.
 	AppendErr error
 
 	mutex sync.Mutex
@@ -990,11 +979,9 @@ func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 	return nil
 }
 
-// SearchLogs applies the criteria to the stored entries, the way the stored repository applies them:
-// the level, the subsystem, a case-insensitive substring of the message, and the date window.
-//
-// The per-source counts are computed over everything the criteria match except the subsystem itself, so a
-// component test that checks what the log view offers sees the same shape the stored repository answers.
+// SearchLogs applies the criteria to the stored entries as the stored repository does:
+// level, subsystem, case-insensitive message substring, and date window, with per-source
+// counts over everything the criteria match except the subsystem itself.
 func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (ports.LogSearchPage, error) {
 	logs.mutex.Lock()
 	defer logs.mutex.Unlock()
@@ -1055,9 +1042,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		return matching[i].DateTime.After(matching[j].DateTime)
 	})
 
-	// The span belongs to everything the criteria match, and not to the page that is returned: the
-	// log view pages through the span, and its ends stay where they are while the page moves. A
-	// search that matches nothing leaves both ends unset.
+	// The span belongs to everything the criteria match, not to the returned page:
+	// its ends stay fixed while the log view pages through them, and a search
+	// that matches nothing leaves both ends unset.
 	page := ports.LogSearchPage{Count: uint64(len(matching))}
 
 	if len(matching) > 0 {
@@ -1102,8 +1089,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			break
 		}
 
-		// Reported as the log view reports it, which is how the stored repository reads a row written
-		// without a source. Recorded is the half that reports what a writer actually wrote.
+		// Reported as the log view reports it: a row written without a source reads back as legacy.
 		entry.Source = logSourceOf(entry)
 
 		page.Results = append(page.Results, entry)
@@ -1112,8 +1098,8 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	return page, nil
 }
 
-// logSourceOf is the source an entry is reported under: an entry written without one is legacy, which is
-// what the stored repository does with the rows the other server writes.
+// logSourceOf is the source an entry is reported under: an entry written without
+// one reads back as legacy, as the stored rows the other server wrote do.
 func logSourceOf(entry domain.LogEntry) domain.LogSource {
 	if entry.Source == "" {
 		return domain.LogSourceLegacy
@@ -1178,7 +1164,7 @@ func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Di
 
 	if dirwatches.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		dirwatches.Stored = next
 
 		return dirwatches.SaveErr
@@ -1215,7 +1201,7 @@ func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain
 
 	if downstreams.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// because the legacy server replaces what it is running with before it stores it.
+		// the legacy server's save order; see the ports and hub maintainer note.
 		downstreams.Stored = next
 
 		return downstreams.SaveErr
@@ -1284,20 +1270,19 @@ func (delayed *DelayedCalls) ClearDelayed(ctx context.Context) error {
 	return nil
 }
 
-// CallActivity is the fake the status read is tested against. It records the bounds and limits it was
-// asked with, the way Calls records the criteria a search ran with: the window the status read cuts is
-// the use case's own decision, and a test that cannot see the bounds it was handed cannot tell a window
-// from a day from an hour.
+// CallActivity is the fake the status read is tested against. Like Calls with a
+// search, it records the bounds and limits it was asked with: the status read's
+// window is the use case's own decision, and a test that cannot see the bound it
+// was handed cannot tell the window from a day from an hour.
 type CallActivity struct {
 	// SinceCount answers every CountCallsSince when SinceAnswers has nothing for the bound.
 	SinceCount uint64
 
-	// SinceAnswers answers a CountCallsSince by the bound it was given, in milliseconds since the Unix
-	// epoch. It is what lets one fake answer the window, the day, and the last hour with three different
-	// numbers.
+	// SinceAnswers answers a CountCallsSince by its bound, in milliseconds since the
+	// Unix epoch, so one fake can answer the window, the day, and the hour differently.
 	SinceAnswers map[int64]uint64
 
-	// SinceAsked records every bound CountCallsSince was asked with, in the order it was asked.
+	// SinceAsked records every bound CountCallsSince was asked with, in order.
 	SinceAsked []time.Time
 
 	Hours      []ports.CallHourCount

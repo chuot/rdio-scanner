@@ -22,9 +22,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// AudioFile is a chunk of audio together with the name and media type it is presented
-// under. Duration is how long the audio lasts — the length the adapter that produced the
-// file measured; zero means that adapter cannot say, and the use case asks the prober.
+// AudioFile is a chunk of audio with the name and media type it is served under.
+// Duration is the producer's own measurement; zero means it could not say, and the
+// use case asks the prober.
 type AudioFile struct {
 	Filename string
 	Mime     string
@@ -32,9 +32,8 @@ type AudioFile struct {
 	Data     []byte
 }
 
-// AudioMetadata are the tags written into a converted audio file. A nil metadata means
-// the file is converted without tags, which is what happens for a talkgroup that has no
-// tag.
+// AudioMetadata are the tags written into a converted audio file. A nil metadata
+// converts the file without tags.
 type AudioMetadata struct {
 	Album  string
 	Artist string
@@ -44,24 +43,17 @@ type AudioMetadata struct {
 }
 
 // AudioConverter turns the audio a call was recorded in into the format the server
-// stores and serves.
-//
-// The mode is one of the domain's audio conversion levels; the disabled level means the
-// audio is returned untouched.
-//
-// An adapter that cannot convert — because the converter is not installed, or because it
-// failed on this particular audio — reports an error, and the use case keeps the
-// original audio. The legacy server does the same thing silently; this server makes the
-// failure visible instead of swallowing it.
+// stores and serves. The mode is one of the domain's audio conversion levels; the
+// disabled level returns the audio untouched. An adapter that cannot convert reports
+// an error, and the use case keeps the original audio.
 type AudioConverter interface {
 	Convert(ctx context.Context, in AudioFile, mode uint, metadata *AudioMetadata) (AudioFile, error)
 }
 
 // AudioLengthProber reports how long one recording lasts, for the calls the converter
-// could not measure: conversion switched off, no converter installed, a conversion that
-// failed, or a conversion that stated no running time. The audio it is given is the audio
-// the server will store, and an adapter that cannot say — no program installed, a
-// recording the program refuses — reports an error and the call keeps no length.
+// could not measure: conversion off, no converter, a failed conversion, or a conversion
+// that stated no running time. It is given the audio the server will store; an adapter
+// that cannot say reports an error and the call keeps no length.
 type AudioLengthProber interface {
 	Probe(ctx context.Context, in AudioFile) (time.Duration, error)
 }
@@ -77,11 +69,9 @@ type DownstreamForwarder interface {
 	Forward(ctx context.Context, target DownstreamTarget, call domain.Call) error
 }
 
-// TokenIssuer issues and checks the administrator session tokens.
-//
-// A token is a signed, non-expiring credential, and only the tokens this process has
-// issued in its current rolling window are accepted: issuing a sixth token retires the
-// first, and revoking a token removes it from the window.
+// TokenIssuer issues and checks the administrator session tokens. A token is a signed,
+// non-expiring credential, and only tokens this process issued in its current rolling
+// window are accepted: issuing a sixth retires the first, and revoking removes one.
 type TokenIssuer interface {
 	Issue(ctx context.Context) (string, error)
 	Validate(ctx context.Context, token string) error

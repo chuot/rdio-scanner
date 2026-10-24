@@ -21,8 +21,8 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// Runtime is the fake the status read's live block is tested against: a server whose connections,
-// holds, and audio programs are set to whatever the test is asking about.
+// Runtime is the fake the status read's live block is tested against: a server
+// whose connections, holds, and audio programs are set to what the test asks.
 type Runtime struct {
 	StartedAt             time.Time
 	Listeners             int

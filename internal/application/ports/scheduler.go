@@ -23,13 +23,10 @@ type Timer interface {
 	Cancel()
 }
 
-// Scheduler runs work after a delay.
-//
-// It is declared as a port rather than using a clock timer directly because the
-// application has rules about *when* something happens — the listener-count report is
-// deliberately held back so that a burst of listeners joining and leaving produces one
-// report rather than one per event — and a rule about time that can only be tested by
-// waiting for real time is not a tested rule.
+// Scheduler runs work after a delay. It is a port rather than a clock timer because
+// the application has rules about when something happens — the listener-count report
+// is held back so a burst of listeners joining and leaving produces one report — and
+// a rule about time that can only be tested by waiting for real time is not tested.
 type Scheduler interface {
 	// Schedule asks for work to run after the delay, and returns the handle that can
 	// abandon it.

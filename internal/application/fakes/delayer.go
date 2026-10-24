@@ -23,34 +23,31 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Delayer is the fake call delayer the use cases are tested against.
-//
-// It applies the same rule the real one applies — a call is held when it names a delay and the
-// moment it happened plus that delay has not arrived yet — so that a use case tested against it is
-// tested against whether a call would actually be held back, and not against a stub that always
-// says yes.
+// Delayer is the fake call delayer the use cases are tested against. It applies
+// the real rule — hold when the call names a delay and that delay has not
+// elapsed — so a use case is tested against whether a call would actually be
+// held, not against a stub that always says yes.
 type Delayer struct {
 	// Now is the moment a hold is measured against.
 	Now time.Time
 
-	// Held records the calls this delayer took, oldest first. A call that appears here was not
-	// delivered by the use case that handed it over.
+	// Held records the calls this delayer took, oldest first; a call here was
+	// not delivered by the use case that handed it over.
 	Held []domain.Call
 
-	// Waiting names the calls to hold or not hold whatever their delay says, keyed by call identity.
-	// A test that is only interested in what a use case does with a held call uses this; a test of
-	// the rule itself belongs in the domain.
+	// Waiting names the calls to hold or not hold whatever their delay says,
+	// keyed by call identity; a test of the rule itself belongs in the domain.
 	Waiting map[uint64]bool
 
-	// Failure makes every hold fail with this error, which is how what happens to a call whose hold
-	// cannot be written down is tested.
+	// Failure makes every hold fail with this error, which is how a call whose
+	// hold cannot be written down is tested.
 	Failure error
 }
 
 var _ ports.CallDelayer = (*Delayer)(nil)
 
-// Hold records the calls it takes, so a test can see which calls a use case delivered and which it
-// handed over.
+// Hold records the calls it takes, so a test can see which calls a use case
+// delivered and which it handed over.
 func (delayer *Delayer) Hold(_ context.Context, call domain.Call) (bool, error) {
 	if delayer.Failure != nil {
 		return false, delayer.Failure

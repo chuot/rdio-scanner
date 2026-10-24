@@ -55,10 +55,11 @@ type Hub struct {
 	// AccessLimits records the sessions told their identity had too many sessions open.
 	AccessLimits []string
 
-	// Stall, when set, is a one-shot gate on the broadcast: the first BroadcastCall
-	// announces itself by closing Entered and waits for Release — the shape of a delivery
-	// that cannot finish, a listener whose queue is full. Every broadcast after the first
-	// passes through, so a test can tell a stalled delivery from a serialized server.
+	// Stall, when set, is a one-shot gate on the broadcast: the first
+	// BroadcastCall closes Entered and waits for Release — the shape of a
+	// delivery that cannot finish, a listener whose queue is full. Later
+	// broadcasts pass through, so a test can tell a stall from a serialized
+	// server.
 	Stall *BroadcastStall
 
 	// Versions records the version reports sent to each session.
@@ -76,10 +77,10 @@ type Hub struct {
 	// attempts records how many access-code attempts each session has made.
 	attempts map[string]uint
 
-	// addressAttempts records, per address, how many access-code attempts have been spent
-	// there and whether the refused-code warning has already been written for it. The
-	// per-session counter is bypassable by reconnecting; this is the counter that makes
-	// five tries mean five tries per machine.
+	// addressAttempts records, per address, how many access-code attempts have
+	// been spent there and whether the refused-code warning has already been
+	// written. The per-session counter is bypassable by reconnecting; this is
+	// the counter that makes five tries mean five tries per machine.
 	addressAttempts map[string]*fakesAddressAttempt
 
 	// remoteAddrs records where each session connected from.
@@ -293,10 +294,9 @@ func (hub *Hub) RemoteAddrOf(clientID string) string {
 	return hub.remoteAddrs[clientID]
 }
 
-// BroadcastStall is the one-shot gate the hub fake puts in front of its first broadcast.
-// Only the first broadcast waits on the gate; every later one passes straight through —
-// sync.Once would make every caller wait for the first to finish, which is exactly the
-// serialization a test using this gate is looking for.
+// BroadcastStall is the one-shot gate the hub fake puts in front of its first
+// broadcast. Only the first broadcast waits; every later one passes through —
+// making every caller wait is the serialization the test is looking for.
 type BroadcastStall struct {
 	// Entered is closed when the first broadcast is waiting.
 	Entered chan struct{}

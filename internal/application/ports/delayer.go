@@ -21,22 +21,15 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// CallDelayer is the part of the server that takes responsibility for the calls that have a delay
-// to wait out.
-//
-// It is a port rather than a rule the ingest path applies itself because holding a call back is not
-// a decision that can be made and forgotten: the call has to be kept somewhere that survives a
-// restart, and something has to remember to deliver it later. Both of those belong outside the use
-// case, and the use case only needs to know whether it still owns the call.
+// CallDelayer is the part of the server that takes responsibility for the calls that
+// have a delay to wait out. It is a port rather than an ingest-path rule because
+// holding a call back needs state that survives a restart and something that
+// remembers to deliver it later; the use case only asks whether it still owns the call.
 type CallDelayer interface {
-	// Hold reports whether a call is still being held back at the moment it is asked, and takes it
-	// when it is.
-	//
-	// A call that is held is not delivered now, and the caller must not deliver it: whoever is
-	// watching the delayer delivers it when the delay has run out. A call that is not held is the
-	// caller's to deliver.
-	//
-	// A hold that fails is neither of those. The call was not delivered and nothing is going to
-	// deliver it, which is what the failure has to be reported for.
+	// Hold reports whether a call is still being held back at the moment it is asked,
+	// and takes it when it is. A held call is delivered later by whoever watches the
+	// delayer; an unheld call is the caller's to deliver. A failed hold is neither:
+	// the call was not delivered and nothing will deliver it, so the failure must be
+	// reported.
 	Hold(ctx context.Context, call domain.Call) (held bool, err error)
 }

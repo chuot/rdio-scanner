@@ -22,17 +22,10 @@ import (
 )
 
 // Dirwatchers are the directory watchers the server keeps running to ingest calls from
-// watched folders.
-//
-// Saving a configuration brackets itself around these watchers: they are stopped before
-// anything changes and started again afterwards, because a watcher that fires in the middle
-// of a save is reading a configuration that is half replaced — a talkgroup that is about to
-// be deleted, a system that does not exist yet.
-//
-// Start takes the directories to watch rather than going to fetch them, because *which*
-// directories end up watched after a save is a decision the save makes, and the legacy
-// server's decision is not always the obvious one: a whole-configuration save that does not
-// name the dirwatch section leaves the server watching nothing until it restarts.
+// watched folders. A configuration save brackets itself around them: stopped before
+// anything changes, started again afterwards, because a watcher that fires mid-save
+// reads a half-replaced configuration. Start takes the directories to watch rather
+// than fetching them: which directories end up watched is a decision the save makes.
 type Dirwatchers interface {
 	// Stop ends the running watchers and leaves nothing watching.
 	Stop(ctx context.Context)
@@ -41,13 +34,12 @@ type Dirwatchers interface {
 	Start(ctx context.Context, watches domain.Dirwatches)
 }
 
-// AdministratorSessions are the open administrator connections that exist so the administration interface
-// learns about configuration changes as they happen, rather than on its next reload.
+// AdministratorSessions are the open administrator connections that exist so the
+// administration interface learns about configuration changes as they happen, rather
+// than on its next reload.
 type AdministratorSessions interface {
 	// NotifyConfigurationChanged tells every open administrator connection what the
-	// configuration now is.
-	//
-	// It carries the whole configuration, which is what the administrator's own view shows:
-	// every section, not the four a listener is shown.
+	// configuration now is: every section, which is what the administrator's own view
+	// shows, not the four a listener is shown.
 	NotifyConfigurationChanged(ctx context.Context, configuration domain.Configuration)
 }

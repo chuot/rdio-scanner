@@ -13,11 +13,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package ports declares the abstractions the application layer depends on:
-// repository interfaces for every aggregate, adapter interfaces for the audio
-// converter, downstream forwarder, token issuer and clock, and the listener hub
-// through which use cases emit calls, scoped configurations and listener counts.
+// Package ports declares the abstractions the application layer depends on: the
+// repository interfaces for every aggregate, the adapter interfaces for the audio
+// converter, downstream forwarder, token issuer, and clock, and the listener hub
+// through which use cases emit calls, scoped configurations, and listener counts.
 //
-// The implementations live in internal/infrastructure and internal/presentation;
-// they are injected by the composition root.
+// The implementations live in internal/infrastructure and internal/presentation,
+// injected by the composition root.
 package ports

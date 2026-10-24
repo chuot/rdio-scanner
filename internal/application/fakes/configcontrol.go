@@ -46,12 +46,10 @@ func (sessions *AdministratorSessions) AnnouncedCount() int {
 	return len(sessions.Announced)
 }
 
-// Dirwatchers records the brackets a configuration save performed around the directory watchers,
-// and what each bracket ended up watching.
-//
-// What a save leaves watching is the part a test needs to see: a save can store the watched
-// directories correctly and still leave the server watching nothing, which is exactly the
-// difference between the whole-configuration save and the per-section one.
+// Dirwatchers records the brackets a configuration save performed around the
+// directory watchers and what each bracket ended up watching. What a save
+// leaves watching is the part a test needs: a save can store the watched
+// directories correctly and still leave the server watching nothing.
 type Dirwatchers struct {
 	// Stops records how many times the watchers were stopped.
 	Stops int
@@ -77,8 +75,8 @@ func (dirwatchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwat
 	dirwatchers.Starts = append(dirwatchers.Starts, watches)
 }
 
-// Watching reports the directories the most recent Start was given, which is what the server is
-// left watching.
+// Watching reports the directories the most recent Start was given, what the
+// server is left watching.
 func (dirwatchers *Dirwatchers) Watching() domain.Dirwatches {
 	if len(dirwatchers.Starts) == 0 {
 		return nil

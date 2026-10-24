@@ -40,8 +40,8 @@ type Converter struct {
 	// Modes records the conversion level each conversion was asked for.
 	Modes []uint
 
-	// Duration is the length the converter reports on the file it returns, standing in
-	// for the running time a real ffmpeg states while it converts. Zero reports no length.
+	// Duration is the length the converter reports on the file it returns; zero
+	// reports no length.
 	Duration time.Duration
 
 	// Err, when set, is returned by every conversion.
@@ -85,9 +85,8 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 	return out, nil
 }
 
-// Prober is an in-memory audio length prober. It reports the length it was configured with
-// and records the audio it was asked about, standing in for the ffprobe that reads a
-// length off a file the converter could not measure.
+// Prober is an in-memory audio length prober: it records the audio it was asked
+// about and reports the length it was configured with.
 type Prober struct {
 	// Probed records each probe, in the order they were asked for.
 	Probed []ports.AudioFile
@@ -125,12 +124,10 @@ func extensionOf(name string) string {
 	return name[dot:]
 }
 
-// Forwarder is an in-memory downstream forwarder.
-//
-// It can be made to behave like a downstream server that refuses a call (Err) and like one
-// that takes its time (Started and Release): a test closes Release when it wants the re-post
-// to finish, so that how long the use case waits for it is something the test decides rather
-// than something it hopes about.
+// Forwarder is an in-memory downstream forwarder. It can stand in for a
+// downstream that refuses a call (Err) and one that takes its time (Started and
+// Release): the test closes Release, so how long a re-post waits is decided by
+// the test, not hoped about.
 type Forwarder struct {
 	// Forwarded records each re-post, with the target it went to.
 	Forwarded []ForwardedCall
@@ -148,9 +145,9 @@ type Forwarder struct {
 	// waiting re-post finish.
 	Release chan struct{}
 
-	// InFlight counts the re-posts entered and not yet returned, and maxInFlight is the
-	// most that were in at once — the shape a test watches when it wants the server to
-	// cap how many calls it posts to its downstreams at the same time.
+	// InFlight counts the re-posts entered and not yet returned; maxInFlight is
+	// the most in at once, what a test watches when checking the concurrent
+	// repost cap.
 	InFlight    int
 	maxInFlight int
 
@@ -231,8 +228,8 @@ type Tokens struct {
 	// Err, when set, is returned by Issue instead of a token.
 	Err error
 
-	// RevokeErr, when set, is returned by Revoke. Retiring a token is a step of its own, and a
-	// logout that cannot do it is a different failure from a login that cannot mint a token.
+	// RevokeErr, when set, is returned by Revoke: a failed logout is separate
+	// from a failed login.
 	RevokeErr error
 }
 

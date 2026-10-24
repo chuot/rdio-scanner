@@ -285,21 +285,9 @@ func TestLogsSearchAppliesTheDateWindowAndPaging(t *testing.T) {
 	}
 }
 
-// TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource keeps the in-memory log repository a
-// stand-in for the stored one: a component test that filters by subsystem or by text has to be answered
-// the way the real repository answers it, or the component test proves nothing.
-//
-// An entry written without a source is reported as legacy, which is what the stored repository does with
-// the rows the other server writes. Recorded is the other half: it reports what a writer actually wrote,
-// blank included, which is what the guard over the writers reads.
-
-// TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource keeps the in-memory log repository a
-// stand-in for the stored one: a component test that filters by subsystem or by text has to be answered
-// the way the real repository answers it, or the component test proves nothing.
-//
-// An entry written without a source is reported as legacy, which is what the stored repository does with
-// the rows the other server writes. Recorded is the other half: it reports what a writer actually wrote,
-// blank included, which is what the guard over the writers reads.
+// TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource pins the in-memory log
+// repository to the stored one's answers: subsystem and text filtering, per-source counts,
+// and an entry written without a source reported as legacy.
 func TestLogsSearchAppliesTheSourceAndTextCriteriaAndCountsEverySource(t *testing.T) {
 	logs := &Logs{Stored: []domain.LogEntry{
 		{ID: 1, DateTime: baseTime(), Level: domain.LogLevelError, Source: domain.LogSourceDirwatch, Message: "the watcher for /data/incoming stopped"},

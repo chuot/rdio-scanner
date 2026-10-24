@@ -17,9 +17,8 @@ package ports
 
 import "rdio-scanner/internal/domain"
 
-// ConfigSnapshot is the configuration in effect, handed to the hub so that it can be
-// delivered to listeners. The hub decides what each individual listener is allowed to
-// see and how it is framed; the application only says what is now in effect.
+// ConfigSnapshot is the configuration in effect, handed to the hub for delivery to
+// listeners. The hub decides what each listener may see and how it is framed.
 type ConfigSnapshot struct {
 	Groups  domain.Groups
 	Tags    domain.Tags
@@ -27,11 +26,9 @@ type ConfigSnapshot struct {
 	Options domain.Options
 }
 
-// Hub is the set of live listener sessions the application talks to. It is implemented
-// by the websocket presentation layer.
-//
-// A listener is named by an opaque identifier chosen by the hub: the application never
-// reaches a connection, and the hub never reaches into application state.
+// Hub is the set of live listener sessions the application talks to, implemented by the
+// websocket presentation layer. A listener is named by an opaque identifier the hub
+// chooses: the application never reaches a connection.
 type Hub interface {
 	// BroadcastCall delivers a recorded call to every listener whose access grants it
 	// and whose live-watch selection asks for it.
@@ -81,36 +78,31 @@ type Hub interface {
 	AccessOf(clientID string) (domain.Access, bool)
 
 	// RecordAccessAttempt counts one access-code attempt for a listener session and
-	// reports which attempt number that was, which is how the server knows when a session
-	// has used up its tries.
+	// reports which attempt number that was.
 	RecordAccessAttempt(clientID string) uint
 
 	// RecordAddressAccessAttempt counts one access-code attempt against the address the
 	// listener connected from and reports how many attempts that address has spent in the
-	// current window. The per-session counter alone is bypassable by reconnecting; the
-	// address counter is what makes "five tries" mean five tries per machine, and its
-	// window ages like the login budget.
+	// current window. The per-session counter is bypassable by reconnecting, so the
+	// address counter is what makes "five tries" mean five tries per machine.
 	RecordAddressAccessAttempt(clientID string) uint
 
-	// ShouldWarnAccessAttempt reports whether the refused-code warning should be written
-	// for this listener's address now: once per window per address, so a tool that guesses
-	// a hundred codes leaves one line in the operator's log view, not a hundred.
+	// ShouldWarnAccessAttempt reports whether to write the refused-code warning for this
+	// listener's address now: once per window per address.
 	ShouldWarnAccessAttempt(clientID string) bool
 
-	// ResetAccessAttempts clears a session's attempt counter, which happens only when an
-	// access code is accepted: a session that is refused for a bad code, for arriving too
-	// late, for an expired access, or for its connection limit keeps spending tries.
+	// ResetAccessAttempts clears a session's attempt counter, and only when an access code
+	// is accepted: a session refused for any reason keeps spending tries.
 	ResetAccessAttempts(clientID string)
 
 	// AccessSessionCount reports how many sessions are open under one access, counted by
-	// the access itself rather than by its label: the legacy server counts the sessions
-	// holding the same access, and two accesses may share a label.
+	// the access itself rather than its label: two accesses may share a label.
 	AccessSessionCount(accessID uint64) uint
 
 	// ListenerCount reports how many listener sessions are open.
 	ListenerCount() int
 
-	// RemoteAddrOf reports where a listener session connected from, which is what the
-	// server names in its warnings about refused access codes.
+	// RemoteAddrOf reports where a listener session connected from, the address the
+	// server names in warnings about refused access codes.
 	RemoteAddrOf(clientID string) string
 }

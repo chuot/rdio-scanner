@@ -21,12 +21,10 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// PasswordVerifier is an in-memory credential check. It reports a match when the submitted
-// credential is the one the handler says the server has on record, which is the shape of a
-// hashed-credential check without the test depending on a hashing module.
-//
-// It records every comparison it was asked to make, so a test can show that a refusal
-// decided on the attempt count never reached the credential at all.
+// PasswordVerifier is an in-memory credential check: it reports a match when the
+// submitted credential is the one on record, the shape of a hashed check without
+// a hashing module. It records every comparison, so a test can show a refusal
+// decided on the attempt count never reached the credential.
 type PasswordVerifier struct {
 	// Asked is the comparison the handler asked for, in the order it asked.
 	Asked []CredentialComparison
@@ -70,20 +68,19 @@ func (verifier *PasswordVerifier) AskedFor() int {
 	return len(verifier.Asked)
 }
 
-// PasswordHasher is the storing side of the credential check. It records each credential it was
-// asked to turn into a stored form and returns it unchanged, which is what lets the
-// PasswordVerifier fake above compare two credentials by equality: in this in-memory world the
-// stored form of a credential is the credential itself.
+// PasswordHasher is the storing side: it records each credential it was asked to
+// store and returns it unchanged, so the PasswordVerifier fake can compare
+// credentials by equality — in this world the stored form is the credential.
 type PasswordHasher struct {
 	// Hashed records each credential the handler asked to store, in order.
 	Hashed []string
 
-	// Err makes the storing itself fail, which is how a test exercises a password change the
-	// server could not complete.
+	// Err makes the storing itself fail, how a password change the server could
+	// not complete is tested.
 	Err error
 
-	// Form is the stored form Hash answers with when set — how a login test tells a
-	// renewed hash from the credential it was made from.
+	// Form is the stored form Hash answers with when set — how a login test
+	// tells a renewed hash from the credential it was made from.
 	Form string
 }
 
