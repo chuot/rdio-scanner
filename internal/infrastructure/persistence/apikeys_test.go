@@ -128,14 +128,9 @@ func TestAllApikeysAnswersFromTheLoadedListRatherThanFromTheDatabase(t *testing.
 	}
 }
 
-// TestSaveApikeysStoresADisabledCredentialTheLegacyServerReadsBack proves both directions of the
-// `disabled` column.
-//
-// The legacy server writes the flag with `%t` into an `integer(1)` column, and sqlite reads the
-// bare `true` and `false` that produces as the integer literals 1 and 0 — which is what the
-// fixture's `downstreams.disabled` actually holds. This server writes the flag as a bound boolean,
-// which the same column stores the same way, and both servers read it back with a plain scan into
-// a Go bool.
+// Both directions of the `disabled` column: the legacy server wrote `%t` into an
+// `integer(1)` column and sqlite read that as 1 and 0; this server writes a bound
+// boolean to the same column, and both read it back as a Go bool.
 func TestSaveApikeysStoresADisabledCredentialTheLegacyServerReadsBack(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	apikeys := NewApikeys(db, DialectSqlite)
@@ -185,8 +180,8 @@ func TestSaveApikeysStoresADisabledCredentialTheLegacyServerReadsBack(t *testing
 	}
 }
 
-// TestAllApikeysReadsADisabledFlagStoredAsTextAsTheBooleanItMeans covers the other shape the
-// column can carry: a row whose flag is the text `true` rather than the integer 1.
+// A flag stored as the text `true` rather than the integer 1 still reads as the boolean
+// it means.
 func TestAllApikeysReadsADisabledFlagStoredAsTextAsTheBooleanItMeans(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 
@@ -246,10 +241,9 @@ func TestSaveApikeysRemovesTheStoredCredentialTheSubmittedListDrops(t *testing.T
 	}
 }
 
-// TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne pins the same repaired
-// reconcile as the accesses one:
-// The legacy `server/apikey.go` `Apikeys.Write` stops its "is this stored row still named?" loop at the first
-// submitted credential with no identity, so a save that adds one credential deletes none.
+// A save that adds a new credential still removes the stored one the list dropped: the
+// legacy `server/apikey.go` `Apikeys.Write` stopped its loop at the first new credential,
+// and this server repairs that rule, as the accesses repository does.
 func TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	apikeys := NewApikeys(db, DialectSqlite)
@@ -288,11 +282,9 @@ func TestSaveApikeysRemovesAStoredCredentialEvenWhenTheSubmittedListNamesANewOne
 	}
 }
 
-// TestSaveApikeysStoresACredentialWhoseIdentContainsASingleQuote pins the parameterized write.
-//
-// The legacy `server/apikey.go` `Apikeys.Write` interpolates `ident` and `key` with `fmt.Sprintf` and no
-// escaping at all — unlike `Accesses.Write`, which calls `escapeQuotes` — so a credential named
-// with an apostrophe has always failed the whole save, transaction and all.
+// A credential whose ident contains a single quote saves: the write is parameterized,
+// where the legacy `server/apikey.go` `Apikeys.Write` interpolated `ident` and `key` with
+// no escaping at all and an apostrophe failed the whole save.
 func TestSaveApikeysStoresACredentialWhoseIdentContainsASingleQuote(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	apikeys := NewApikeys(db, DialectSqlite)
@@ -391,10 +383,8 @@ func readApikeyScopeText(t *testing.T, db *sql.DB, id uint64) string {
 	return text
 }
 
-// TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy: the credential list the server enforces with is the slice AllApikeys
-// hands out, not a copy of it. A caller that edits what it was handed — a sort, a
-// trim, a field — edits the enforced list, and the next AllApikeys answers from it.
-// The cache must hand out a copy.
+// AllApikeys hands out a copy: a caller that sorts, trims, or edits the slice it was
+// given must not change the credential list the server enforces with.
 func TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t *testing.T) {
 	apikeys := NewApikeys(openLegacyDatabase(t), DialectSqlite)
 
@@ -416,10 +406,8 @@ func TestMutatingTheApikeysListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t 
 	}
 }
 
-// TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning: the
-// order column is signed and the list reads it into an unsigned field; a stored
-// -3 becomes the largest display order there is, and the credential moves to the
-// end of every list the operator sees. The read clamps it to zero and says so.
+// The order column is signed and the list reads it into an unsigned field: a stored -3
+// clamps to zero and the clamp is reported.
 func TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -465,9 +453,8 @@ func TestStoredNegativeApikeyOrderReadsAsZeroWithAWarning(t *testing.T) {
 	}
 }
 
-// TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving: the
-// credential save asked the table, one COUNT per submitted row, which rows it was
-// saving. It asks once, in one statement, and the row outcomes are unchanged.
+// The credential save asks the table once, in one statement, which of the submitted
+// identities are stored, and the row outcomes are unchanged.
 func TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 
@@ -517,9 +504,8 @@ func TestSaveApikeysAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 	}
 }
 
-// TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase: the credential twin of the access cache — the listener check that
-// reads a credential answers from the cache, and today a save's mutex holds the
-// cache across every statement the save runs.
+// The credential twin of the access cache: the listener check answers from the cache
+// while the save's statements are still running.
 func TestAllApikeysAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 

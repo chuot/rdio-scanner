@@ -164,13 +164,9 @@ func TestAllAccessesOrdersTheStoredAccessesByTheirDisplayOrder(t *testing.T) {
 	}
 }
 
-// TestAllAccessesKeepsAccessesThatShareAnOrderInTheOrderTheTableReturnsThem records the one place
-// where this code is deliberately better than the legacy server rather than equal to it.
-//
-// The legacy `server/access.go` `Read` sorts with `sort.Slice`, which is not stable: two accesses stored under
-// the same display order came back in whatever order the sort happened to produce, so the access
-// list the administrator saw changed between restarts. domain.Accesses.Ordered sorts stably, and
-// the order the table returns rows in is what survives.
+// Accesses that share a display order keep the order the table returns them in: the
+// legacy `server/access.go` `Read` used the unstable `sort.Slice`, and this server's
+// stable sort is the deliberate repair.
 func TestAllAccessesKeepsAccessesThatShareAnOrderInTheOrderTheTableReturnsThem(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -242,9 +238,8 @@ func TestAllAccessesReportsTheLegacyFailureShape(t *testing.T) {
 	}
 }
 
-// TestSaveAccessesStoresANewAccessInTheShapeTheLegacyServerReadsBack pins the insert: the identity
-// is never written, the expiration is stored as Unix seconds, and the scope is stored as the JSON
-// the legacy server stored.
+// A new access stores with no identity written, the expiration as Unix seconds, and the
+// scope as the JSON the legacy server stored.
 func TestSaveAccessesStoresANewAccessInTheShapeTheLegacyServerReadsBack(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	accesses := NewAccesses(db, DialectSqlite)
@@ -368,14 +363,9 @@ func TestSaveAccessesRemovesTheStoredAccessTheSubmittedListDrops(t *testing.T) {
 	}
 }
 
-// TestSaveAccessesRemovesAStoredAccessEvenWhenTheSubmittedListNamesANewOne pins the repaired
-// reconcile.
-//
-// The legacy `server/access.go` `Accesses.Write` decides whether a stored row is still wanted by walking the
-// submitted list and returning at the first access with no identity — the loop that answers "is this
-// stored id in the new list?" treats a brand-new access as a match. A save that adds one user and
-// removes another therefore deletes nothing, and the read-back that follows a successful write puts
-// the removed user back in the configuration the administrator is shown. This server repairs the rule.
+// A save that adds a new access still removes the stored access the submitted list
+// dropped: the legacy `server/access.go` `Accesses.Write` returned at the first new access
+// when checking stored ids, so it deleted nothing, and this server repairs that rule.
 func TestSaveAccessesRemovesAStoredAccessEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 	accesses := NewAccesses(db, DialectSqlite)
@@ -413,10 +403,8 @@ func TestSaveAccessesRemovesAStoredAccessEvenWhenTheSubmittedListNamesANewOne(t 
 	}
 }
 
-// TestSaveAccessesStoresAnAccessWhoseIdentityNamesNoStoredRow pins the other half of the legacy
-// write: the row is chosen by counting the stored rows with that identity, so an access submitted
-// with an identity the table does not have becomes a new access with a new identity rather than an
-// edit of a row that is not there — and the stored accesses it does not name are stale.
+// An identity the table does not have becomes a new access with a new identity, not an
+// edit of a row that is not there, and the stored accesses it does not name are stale.
 func TestSaveAccessesStoresAnAccessWhoseIdentityNamesNoStoredRow(t *testing.T) {
 	db := openLegacyDatabase(t)
 	accesses := NewAccesses(db, DialectSqlite)
@@ -448,9 +436,8 @@ func TestSaveAccessesStoresAnAccessWhoseIdentityNamesNoStoredRow(t *testing.T) {
 	}
 }
 
-// TestSaveAccessesStoresNoAccessesForAnEmptySubmittedList pins what an empty access list does to the
-// table, because it is the state that makes a server unrestricted: with nothing submitted, every
-// stored row is stale.
+// An empty submitted list makes every stored row stale: the table ends with no accesses,
+// which is the state that makes a server unrestricted.
 func TestSaveAccessesStoresNoAccessesForAnEmptySubmittedList(t *testing.T) {
 	db := openLegacyDatabase(t)
 	accesses := NewAccesses(db, DialectSqlite)
@@ -513,9 +500,8 @@ func TestSaveAccessesWritesTheScopeBackAsTheTextTheLegacyServerStored(t *testing
 	}
 }
 
-// TestSaveAccessesKeepsTheDifferenceBetweenNoScopeAndAnEmptyOne pins the scope distinction: a scope that was never
-// supplied and a scope that names nothing are two different states, and the table stores them as
-// two different texts.
+// A scope that was never supplied and a scope that names nothing are two different states,
+// stored as two different texts.
 func TestSaveAccessesKeepsTheDifferenceBetweenNoScopeAndAnEmptyOne(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	accesses := NewAccesses(db, DialectSqlite)
@@ -574,8 +560,7 @@ func TestSaveAccessesKeepsTheDifferenceBetweenNoScopeAndAnEmptyOne(t *testing.T)
 	}
 }
 
-// TestSaveAccessesStoresAnAccessThatNeverExpires pins the expiration rule: zero is not an instant,
-// and an access with no expiration never runs out.
+// Expiration zero is not an instant: an access with no expiration never runs out.
 func TestSaveAccessesStoresAnAccessThatNeverExpires(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	accesses := NewAccesses(db, DialectSqlite)
@@ -724,9 +709,8 @@ func TestSaveAccessesReportsTheLegacyFailureShapeOfAWriteThatCannotStart(t *test
 	}
 }
 
-// TestSaveAccessesKeepsTheSubmittedAccessesInEffectWhenTheStoreRejectsTheWrite pins the legacy server's own order of operations: the submitted
-// list becomes what the server enforces before anything is written, and a write that fails does not
-// take the new configuration back out again.
+// The submitted list becomes what the server enforces before anything is written, and a
+// write that fails does not take the new configuration back out again.
 func TestSaveAccessesKeepsTheSubmittedAccessesInEffectWhenTheStoreRejectsTheWrite(t *testing.T) {
 	db := openLegacyDatabase(t)
 	accesses := NewAccesses(db, DialectSqlite)
@@ -755,9 +739,8 @@ func TestSaveAccessesKeepsTheSubmittedAccessesInEffectWhenTheStoreRejectsTheWrit
 	}
 }
 
-// TestSaveAccessesReadsBackTheStoredAccessesAfterAWriteThatSucceeded pins the read the legacy
-// server's own configuration handler runs after a successful write: the identities the table
-// assigned are what the administrator is shown next.
+// After a write that succeeded, the read-back gives the administrator the identities the
+// table assigned.
 func TestSaveAccessesReadsBackTheStoredAccessesAfterAWriteThatSucceeded(t *testing.T) {
 	db := openLegacyDatabase(t)
 	accesses := NewAccesses(db, DialectSqlite)
@@ -797,11 +780,8 @@ func identsOf(list domain.Accesses) []string {
 	return idents
 }
 
-// TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy: AllAccesses answers from the loaded list, and it hands that list
-// straight to the caller. A caller that sorts, trims, or edits the slice it was
-// handed is editing the list the server enforces with — the next AllAccesses
-// answers from the very same slice, and the server goes on enforcing what some
-// caller scribbled. The cache must hand out a copy.
+// AllAccesses hands out a copy: a caller that sorts, trims, or edits the slice it was
+// given must not change the list the server enforces with.
 func TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t *testing.T) {
 	accesses := NewAccesses(openLegacyDatabase(t), DialectSqlite)
 
@@ -824,13 +804,9 @@ func TestMutatingTheAccessesListTheCacheHandsOutDoesNotChangeTheEnforcedPolicy(t
 	}
 }
 
-// TestStoredNegativeAccessValuesReadAsZeroWithAWarning: the
-// expiration, limit, and order columns are signed, and the list reads them into
-// unsigned fields. A stored -1 — the value a legacy row carries for "no
-// expiration" — becomes the largest number of seconds there is: an access that
-// never expires, read as a success. The read clamps negatives to zero (an
-// expiration of 0 expires immediately, the safe direction) and says the clamp to
-// the operator rather than letting a deployment's policy change in silence.
+// The expiration, limit, and order columns are signed and the list reads them into
+// unsigned fields: a stored -1 clamps to zero with a warning to the operator, never a
+// silent policy change.
 func TestStoredNegativeAccessValuesReadAsZeroWithAWarning(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -876,12 +852,9 @@ func TestStoredNegativeAccessValuesReadAsZeroWithAWarning(t *testing.T) {
 	}
 }
 
-// TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving: the save
-// asked the table, one COUNT per submitted row, which rows it was saving — a
-// hundred-row list cost a hundred round trips inside the save's transaction, each
-// one a chance for the busy timeout to end a save an administrator meant to finish.
-// The save asks once, in one statement, which of the submitted identities are
-// stored, and the row outcomes of the save are unchanged by that.
+// The save asks the table once, in one statement, which of the submitted identities are
+// stored; one COUNT per submitted row cost a round trip per row inside the save's
+// transaction, and the row outcomes are unchanged by the batching.
 func TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 
@@ -934,10 +907,9 @@ func TestSaveAccessesAsksTheTableOnceWhichRowsItIsSaving(t *testing.T) {
 	}
 }
 
-// TestAllAccessesAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase: the access list the server enforces is read from the cache, and
-// today the cache's mutex is held across every statement of a save — an
-// administrator's slow save stops the listener checks that are answering from
-// the cached list a moment ago. The cache answers while the save is in flight.
+// The cache answers while a save is in flight: the mutex must not be held across every
+// statement of the save, because a slow save would stop the listener checks that read
+// the cached list.
 func TestAllAccessesAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 

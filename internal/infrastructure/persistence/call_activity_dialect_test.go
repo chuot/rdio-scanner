@@ -22,17 +22,15 @@ import (
 	"time"
 )
 
-// The hour bucket is the one part of the activity reads that is not the same statement in each
-// dialect this server speaks. Every timestamp in this schema is integer milliseconds since the Unix
-// epoch, so a bucket is the instant divided by one hour — but integer division is not one thing
-// across SQLite, MariaDB, MySQL, and PostgreSQL, and MySQL answers a DECIMAL for `/` between two
-// integers, which would bucket per value instead of per hour.
+// The hour bucket is the one part of the activity reads that is not the same statement
+// in each dialect: timestamps are integer milliseconds, and MySQL answers a DECIMAL for
+// `/` between two integers where SQLite and PostgreSQL truncate.
 
 func TestHourBucketExpressionDividesByWholeHoursInEveryDialect(t *testing.T) {
 	for _, tc := range []struct {
 		dialect Dialect
-		// The integer-division form that dialect answers. MySQL and MariaDB need `DIV`: their `/`
-		// yields a DECIMAL even between two integers, which groups per value and not per hour.
+		// The integer-division form that dialect answers: MySQL and MariaDB need
+		// `DIV`, their `/` yields a DECIMAL.
 		want string
 	}{
 		{DialectSqlite, `c."timestamp" / 3600000`},
@@ -47,9 +45,7 @@ func TestHourBucketExpressionDividesByWholeHoursInEveryDialect(t *testing.T) {
 				t.Errorf("hourBucketExpression(%q) = %q, want %q", tc.dialect, got, tc.want)
 			}
 
-			// The divisor is the same hour the Go side divides by. If the two ever name different
-			// hours, the buckets the database reports and the instants the view is handed stop
-			// meaning the same thing.
+			// The divisor must stay the same hour the Go side divides by.
 			if !strings.Contains(got, "3600000") {
 				t.Errorf("hourBucketExpression(%q) = %q, which does not divide by the 3600000 milliseconds an hour counts", tc.dialect, got)
 			}
@@ -57,12 +53,8 @@ func TestHourBucketExpressionDividesByWholeHoursInEveryDialect(t *testing.T) {
 	}
 }
 
-// TestHourBucketRoundTripNamesTheSameHourTheDatabaseGroupsBy is the coupling between the SQL
-// expression and the Go side that turns a bucket back into an instant. A bucket is an index, and the
-// view is handed an instant; the two have to be the same hour, at the hour boundary itself and at the
-// earliest instant the epoch can name. Every timestamp this schema holds is a recording's instant,
-// which is never before the epoch, and the division each dialect answers truncates the same way the
-// Go side does.
+// The SQL expression and the Go side that turns a bucket back into an instant must name
+// the same hour, at the hour boundary and at the epoch's earliest instant.
 func TestHourBucketRoundTripNamesTheSameHourTheDatabaseGroupsBy(t *testing.T) {
 	for _, instant := range []time.Time{
 		time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC),
@@ -81,8 +73,8 @@ func TestHourBucketRoundTripNamesTheSameHourTheDatabaseGroupsBy(t *testing.T) {
 	}
 }
 
-// TestCountCallsByHourGroupsByTheSameHourTheGoSideReports runs the SQLite expression and the Go
-// helper against the same stored rows, so the two are compared where they can actually disagree.
+// The SQLite expression and the Go helper run against the same stored rows, compared
+// where they can actually disagree.
 func TestCountCallsByHourGroupsByTheSameHourTheGoSideReports(t *testing.T) {
 	fixture := newCallsFixture(t)
 

@@ -22,13 +22,9 @@ import (
 	"time"
 )
 
-// The four tallies the status view reads. They are kept apart from the call history's page: the
-// history view pages calls for a caller who has a scope, and the status view counts calls for the
-// operator who administers the whole server.
-//
-// Every one of them is built on the join the call history uses, which is what keeps a call that is
-// still waiting out its hold out of the history — and out of every count here. A dashboard that
-// counted held calls would report calls the operator then cannot find.
+// The four tallies the status view reads stay apart from the call history's page —
+// scoped caller versus whole-server operator — and are built on the history's join, so
+// a call still waiting out its hold is in none of these counts.
 
 // TestCountCallsSinceCountsTheCallsAtOrAfterTheInstant names the bound: at or after, not after.
 func TestCountCallsSinceCountsTheCallsAtOrAfterTheInstant(t *testing.T) {
@@ -52,10 +48,8 @@ func TestCountCallsSinceCountsTheCallsAtOrAfterTheInstant(t *testing.T) {
 	}
 }
 
-// TestCountCallsByHourBucketsTheWindowIntoWholeHours is the chart's data. The buckets are whole
-// hours, oldest first, and an hour the window contains but the history has nothing in is not
-// reported here — the query handler answers it as a zero, so that the chart's shape does not depend
-// on what the database happened to contain.
+// Buckets are whole hours, oldest first, and an hour the window contains but the
+// history has nothing in gets no row here — the query handler answers it as a zero.
 func TestCountCallsByHourBucketsTheWindowIntoWholeHours(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -114,8 +108,7 @@ func TestCountCallsByHourBucketsTheWindowIntoWholeHours(t *testing.T) {
 	}
 }
 
-// TestCallActivityLeavesOutEveryCallStillWaitingOutItsHold is the rule that decides what a dashboard
-// number means. A call written into the delayed table is recorded but not yet part of the history, and
+// A call written into the delayed table is recorded but not yet part of the history:
 // it appears in no count, no bucket, no talkgroup tally, and no recent row.
 func TestCallActivityLeavesOutEveryCallStillWaitingOutItsHold(t *testing.T) {
 	fixture := newCallsFixture(t)
@@ -174,8 +167,7 @@ func TestCallActivityLeavesOutEveryCallStillWaitingOutItsHold(t *testing.T) {
 	}
 }
 
-// TestCountCallsByTalkgroupOrdersByDescendingCountAndCutsAtTheLimit is the busiest-talkgroups list:
-// most first, and no more than the caller asked for.
+// The busiest-talkgroups list: most first, and no more than the caller asked for.
 func TestCountCallsByTalkgroupOrdersByDescendingCountAndCutsAtTheLimit(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -239,8 +231,8 @@ func TestCountCallsByTalkgroupOrdersByDescendingCountAndCutsAtTheLimit(t *testin
 	}
 }
 
-// TestRecentCallsReturnsTheNewestCallsFirstWithoutTheirAudio. A status view is asked every few
-// seconds, and the audio column is the heaviest thing in the table.
+// The newest calls come first and never carry the audio column, the heaviest thing in
+// the table, because this view is polled every few seconds.
 func TestRecentCallsReturnsTheNewestCallsFirstWithoutTheirAudio(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -278,9 +270,7 @@ func TestRecentCallsReturnsTheNewestCallsFirstWithoutTheirAudio(t *testing.T) {
 	}
 }
 
-// TestCallActivityWithNothingInTheWindowAnswersZeroAndNoRows: a deployment that has recorded nothing
-// is a state the status view has to be able to report, and it is reported as zero and not as a
-// failure.
+// A deployment that has recorded nothing answers zero and no rows, not a failure.
 func TestCallActivityWithNothingInTheWindowAnswersZeroAndNoRows(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -322,9 +312,8 @@ func TestCallActivityWithNothingInTheWindowAnswersZeroAndNoRows(t *testing.T) {
 		t.Fatalf("RecentCalls: %v", err)
 	}
 
-	// The newest recorded call is a fact about the history and not about the window: a deployment whose
-	// last call was yesterday still has a last call, and the status view says when it was rather than
-	// saying nothing.
+	// The newest recorded call is a fact about the history, not about the window: a
+	// last call from yesterday is still the last call.
 	if len(recent) != 1 || recent[0].ID != quiet.ID {
 		t.Errorf("RecentCalls returned %v, want the one recorded call %d: the newest rows are not bounded by the window the tallies are",
 			recent, quiet.ID)

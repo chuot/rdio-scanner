@@ -23,13 +23,12 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// The tallies and the newest rows the status view draws. They are kept apart from the call history's
-// page: the history pages calls for a caller who has a scope, and the status view counts calls for the
-// operator who administers the whole server. Neither depends on the other's method.
-//
-// Every one of them is built on `callHistoryFrom`, the join that carries the `delayed` table and its
-// `d."callId" IS NULL` filter. That is what keeps a call still waiting out its hold out of the history,
-// and a dashboard that counted held calls would report calls the operator then cannot find.
+// The tallies and the newest rows the status view draws, kept apart from the call
+// history's page: the history pages calls for a scoped caller, the status view counts
+// for the operator of the whole server, and neither depends on the other. Every query
+// here joins the `delayed` table with its `d."callId" IS NULL` filter so calls still
+// held are absent from the status view; why the two stay apart is in the status-view-
+// tallies maintainer note.
 
 var _ ports.CallActivityRepository = (*Calls)(nil)
 
@@ -56,10 +55,8 @@ func (calls *Calls) CountCallsSince(ctx context.Context, from time.Time) (uint64
 }
 
 // CountCallsByHour counts the recorded calls grouped into whole hours, oldest first.
-//
-// An hour the window contains but the history has nothing in is not one of the rows this answers: the
-// status view is always shown the whole window, and filling the quiet hours with a zero is the query
-// handler's job, so that the chart's shape does not depend on what the database happened to contain.
+// Hours with no calls get no row: filling the quiet hours with a zero is the query
+// handler's job, so the chart's shape does not depend on what the database held.
 func (calls *Calls) CountCallsByHour(ctx context.Context, from time.Time) ([]ports.CallHourCount, error) {
 	bucket := hourBucketExpression(calls.dialect, `c."timestamp"`)
 
@@ -95,9 +92,8 @@ func (calls *Calls) CountCallsByHour(ctx context.Context, from time.Time) ([]por
 	return counts, nil
 }
 
-// CountCallsByTalkgroup counts the recorded calls per talkgroup over the window, most first, cut at
-// the limit. The tally names itself with the talkgroup's own name and label: the operator reads a
-// talkgroup, and not a pair of numbers they have to look up.
+// CountCallsByTalkgroup counts the recorded calls per talkgroup over the window, most
+// first, cut at the limit. Each tally carries the talkgroup's name and label.
 func (calls *Calls) CountCallsByTalkgroup(ctx context.Context, from time.Time, limit uint) ([]ports.CallTalkgroupCount, error) {
 	query := `SELECT s."systemRef", t."talkgroupRef", t."name", t."label", COUNT(*) ` + callHistoryFrom +
 		` WHERE d."callId" IS NULL AND c."timestamp" >= ?` +
@@ -142,9 +138,8 @@ func (calls *Calls) CountCallsByTalkgroup(ctx context.Context, from time.Time, l
 	return tallies, nil
 }
 
-// RecentCalls returns the newest recorded calls, newest first, as the same summaries the history page
-// is handed — never with the audio, which is the heaviest thing in the table and is read by a view
-// that asks every few seconds.
+// RecentCalls returns the newest recorded calls, newest first, as the same summaries the
+// history page is handed — never with the audio, which this polled view must not carry.
 func (calls *Calls) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSummary, error) {
 	const query = `SELECT c."callId", c."timestamp", c."audioLength", s."systemRef", t."talkgroupRef" ` +
 		callHistoryFrom + ` WHERE d."callId" IS NULL ORDER BY c."timestamp" DESC, c."callId" DESC LIMIT ?`
@@ -187,16 +182,11 @@ func (calls *Calls) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSu
 	return recent, nil
 }
 
-// hourBucketExpression is the hour bucket written for the dialect it is asked for.
-//
-// Every timestamp in this schema is integer milliseconds since the Unix epoch, so a bucket is the
-// instant divided by one hour — but integer division is not one thing across the four backends this
-// server speaks. MySQL and MariaDB answer a DECIMAL for `/` even between two integers, which would
-// bucket per value instead of per hour, and `DIV` is the integer form those two answer. SQLite and
-// PostgreSQL divide integers and truncate.
-//
-// The divisor is the same hour `hourOfBucket` and `bucketOfHour` divide by on the Go side, which is
-// what the test that names both holds.
+// hourBucketExpression is the hour bucket written for the dialect it is asked for:
+// MySQL and MariaDB need `DIV` to truncate, SQLite and PostgreSQL truncate `/`.
+// Why the operators differ is in the hour-bucket-dialect-divide maintainer note, and
+// the divisor is the same hour `hourOfBucket` and `bucketOfHour` divide by on the Go
+// side, which the test that names both holds.
 func hourBucketExpression(dialect Dialect, column string) string {
 	switch dialect {
 	case DialectMysql, DialectMariadb:
@@ -206,9 +196,8 @@ func hourBucketExpression(dialect Dialect, column string) string {
 	}
 }
 
-// bucketOfHour is the index of the whole hour an instant falls in. Every timestamp this schema holds is
-// a recording's instant, which is never before the epoch, so the truncation the backends answer and the
-// truncation Go answers are the same cut.
+// bucketOfHour is the index of the whole hour an instant falls in. Timestamps here are
+// recording instants, never before the epoch, so the backends' truncation and Go's agree.
 func bucketOfHour(instant time.Time) int64 {
 	return instant.UnixMilli() / hourMillis
 }

@@ -22,11 +22,8 @@ import (
 	"testing"
 )
 
-// The calls table the legacy server wrote has no length column, and ApplySchema cannot add
-// one: its statements are the legacy server's, every one `IF NOT EXISTS`, and their contract
-// is that a database the other server wrote comes out exactly as it went in. The column
-// arrives, like the log source column before it, in the migration pass that brings an
-// existing database up to this shape.
+// A legacy-written calls table has no length column, and ApplySchema never adds one:
+// its `IF NOT EXISTS` statements must leave a legacy database exactly as it went in.
 
 func callColumns(t *testing.T, db *sql.DB) []string {
 	t.Helper()
@@ -76,9 +73,8 @@ func TestMigrateAddsTheAudioLengthColumnToADatabaseThatAlreadyHasTheCallsTable(t
 	}
 }
 
-// The startup pass runs on every start; the second start must not re-add the column and
-// must not change a stored row. A deployment that stored calls with lengths keeps exactly
-// those lengths across restarts.
+// The startup pass runs on every start: the second start must not re-add the column
+// and must not change a stored length.
 func TestMigrateAddingTheAudioLengthColumnTwiceIsTheSameAsOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -105,8 +101,7 @@ func TestMigrateAddingTheAudioLengthColumnTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// A calls table that is not there at all ends the step with nothing said and nothing done,
-// which is how every other migration step answers the same question.
+// A `calls` table that is not there at all ends the step doing nothing.
 func TestEnsureCallAudioLengthColumnOnADatabaseWithNoCallsTable(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -121,9 +116,8 @@ func TestEnsureCallAudioLengthColumnOnADatabaseWithNoCallsTable(t *testing.T) {
 	}
 }
 
-// A call the legacy server wrote reads back with no length: the default the column arrives
-// with is the server's own "never measured", and the migration writes no length into a row
-// it cannot know.
+// A legacy-written call reads back with no length: the column's default is the
+// server's own "never measured".
 func TestMigrateLeavesLegacyWrittenCallsWithNoLength(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -143,10 +137,8 @@ func TestMigrateLeavesLegacyWrittenCallsWithNoLength(t *testing.T) {
 	}
 }
 
-// Every dialect's copy of the calls table declares the column with the default, for the
-// same reason the log source column does: the default is what lets a write that does not
-// name the column — the legacy server's own insert, and this server's writes of calls with
-// no measured length — land without naming what they do not know.
+// Every dialect schema declares the column with its default, so a write that does not
+// name the column still lands.
 func TestEveryDialectSchemaDeclaresTheAudioLengthColumn(t *testing.T) {
 	for _, tc := range []struct {
 		dialect Dialect

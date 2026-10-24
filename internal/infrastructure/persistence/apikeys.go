@@ -26,8 +26,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Apikeys is the server's upload credential list, held the same way the access list is held:
-// loaded once, replaced by a save before it is stored, and read back after a save that worked.
+// Apikeys is the server's upload credential list, held the same way the access list is
+// held: loaded once, replaced by a save before it is stored, and read back after a save
+// that worked; see the access-and-apikey configuration-in-effect maintainer note.
 type Apikeys struct {
 	store store
 
@@ -118,13 +119,9 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 	return nil
 }
 
-// read is the legacy `Apikeys.Read`: every row, sorted by display order.
-//
-// `disabled` is scanned straight into a Go bool, which is what the legacy server does, and it is
-// what makes both directions work: the legacy server writes the flag with `%t`, sqlite stores
-// that as the integer 1 or 0, and a row written by either server reads back as the boolean it
-// means. A row that carries the text `true` or `false` — which is what a database restored from
-// a text dump can hold — reads back the same way.
+// read is the legacy `Apikeys.Read`: every row, sorted by display order. `disabled` is
+// scanned straight into a Go bool, as the legacy server does; why both directions of the
+// flag work over the same column lives in the disabled-flag-parity maintainer note.
 func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, []string, error) {
 	rows, err := apikeys.store.query(ctx, apikeySelectQuery)
 	if err != nil {
@@ -151,10 +148,8 @@ func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, []string, err
 			return nil, nil, operationError("apikeys", "read", err)
 		}
 
-		// The order column is signed and the field is not: a stored -3
-		// read as unsigned is the largest display order there is, and the credential
-		// moves to the end of every list the operator sees. Zero is the first order,
-		// and the clamp is said.
+		// The signed order column is clamped to zero on the way into the unsigned
+		// field; why, recorded in the signed-column-clamp maintainer note.
 		if order < 0 {
 			clamped = append(clamped, fmt.Sprintf("apikeys.read: apikey %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
 				id, ident, order))
@@ -192,12 +187,9 @@ func (apikeys *Apikeys) reportClamps(clamped []string) {
 	}
 }
 
-// write is the legacy `Apikeys.Write`, in one transaction, with the values out of the statements.
-//
-// The legacy `Write` interpolates `ident` and `key` with no escaping at all — unlike
-// `Accesses.Write`, which escapes them — so a credential named with an apostrophe has always
-// failed the whole save. Parameterizing the statements fixes that, which is the same class of
-// fix that repairs the log insert.
+// write is the legacy `Apikeys.Write`, in one transaction, with the values out of the
+// statements: the legacy `Write` interpolated `ident` and `key` with no escaping at all,
+// which the placeholder fix repairs, as recorded in the reconciling-saves maintainer note.
 func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 	tx, err := apikeys.store.begin(ctx)
 	if err != nil {

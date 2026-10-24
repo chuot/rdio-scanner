@@ -19,30 +19,20 @@ import (
 	"context"
 )
 
-// The length of a call's recording, as a column of the calls table.
-//
-// Like the log source column before it, it is not something ApplySchema can do: the
-// dialect schemas carry it for a database created here, and every one of ApplySchema's
-// statements is `IF NOT EXISTS`, so over a `calls` table the legacy server wrote they
-// change nothing — which is their contract. The column arrives in the migration pass
-// that brings an existing database up to this shape.
-//
-// There is nothing to backfill: the default the column arrives with is zero, and zero is
-// exactly what a call the legacy server wrote means — the length was never measured. The
-// migration writes no length into a row it cannot know.
+// The length of a call's recording, as a column of the calls table. Like the log source
+// column before it, it arrives in the migration pass rather than in ApplySchema, whose
+// `IF NOT EXISTS` statements change nothing over a `calls` table the legacy server wrote.
+// There is nothing to backfill: the column's default zero is exactly what a legacy-written
+// call means — the length was never measured.
 const (
 	callAudioLengthColumnSqlite   = `ALTER TABLE "calls" ADD COLUMN "audioLength" integer NOT NULL DEFAULT 0`
 	callAudioLengthColumnServer   = `ALTER TABLE "calls" ADD COLUMN "audioLength" bigint NOT NULL DEFAULT 0`
 	callAudioLengthColumnPostgres = `ALTER TABLE "calls" ADD COLUMN "audioLength" bigint NOT NULL DEFAULT 0`
 )
 
-// ensureCallAudioLengthColumn gives the calls table the column that says how long each
-// call's recording lasts.
-//
-// It is idempotent in the way every other step of the startup pass is: it asks the
-// database what it already has and adds only what is missing. A `calls` table that is not
-// there at all ends the step with nothing said and nothing done, which is how every other
-// migration step answers the same question.
+// ensureCallAudioLengthColumn gives the calls table the audio length column, idempotent
+// the way every other step of the startup pass is: it asks what the database has and adds
+// only what is missing, and a `calls` table that is not there ends the step doing nothing.
 func ensureCallAudioLengthColumn(ctx context.Context, s store) error {
 	columns, err := callTableColumns(ctx, s)
 	if err != nil {
