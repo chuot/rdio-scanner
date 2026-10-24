@@ -55,11 +55,10 @@ func migrateLegacyV6Fixture(t *testing.T) (*sql.DB, []string) {
 	return db, migrateDatabase(t, db)
 }
 
-// The damaged fixtures are databases a legacy server has already migrated, in the two states the
-// legacy migration pass actually leaves behind: migrated, where the pass finished and left the
-// damage in the units and the missing source links, and crashed, where the calls migration was
-// rolled back and the v6 calls table is still there. Their statements are recorded in
-// migrations_fixtures_test.go.
+// The damaged fixtures are databases a legacy server already migrated: one
+// where the pass finished, damage left in the units and the missing source
+// links; one where the calls migration rolled back, the v6 calls table still
+// there. Their statements are recorded in migrations_fixtures_test.go.
 
 // openDamagedFixture builds one of the damaged fixtures by name, so that a test which writes to it
 // cannot damage the recorded statements.
@@ -111,9 +110,9 @@ func migrateDatabase(t *testing.T, db *sql.DB) []string {
 	return messages
 }
 
-// progressLine is one line the migration reported, with the level it was filed under. The level matters
-// on its own: the log view is filtered by it, so a problem filed as a notice is a problem an operator
-// never sees, and a notice filed as a problem is one they act on.
+// One line the migration reported, with the level it was filed under: the
+// log view is filtered by it, so a problem filed as a notice is one an
+// operator never sees, and a notice filed as a problem is one they act on.
 type progressLine struct {
 	level   string
 	message string
@@ -238,9 +237,9 @@ func holdsIdentity(t *testing.T, db *sql.DB, table, column string, identity int6
 	return count > 0
 }
 
-// hasV6Table reports whether a v6 table is still there. Since the archive exists that is not a success or a
-// failure on its own: it means the pass could not read every row of it and chose to leave it rather
-// than destroy it.
+// Whether a v6 table is still there is not a success or a failure once the
+// archive exists: it means the pass could not read every row of it and chose
+// to leave it rather than destroy it.
 func hasV6Table(t *testing.T, db *sql.DB, table string) bool {
 	t.Helper()
 
@@ -253,12 +252,9 @@ func hasV6Table(t *testing.T, db *sql.DB, table string) bool {
 	return false
 }
 
-// TestMigrateMovesEveryV6TableIntoTheV7Schema is the shape of the whole pass: a v6 database comes
-// out holding exactly the v7 tables, with none of the v6 tables left behind.
-// archivedTables are the tables a database holds after this server's migration pass: the legacy
-// tables, plus the migration archive this server owns. The archive belongs to the migration pass
-// and not to ApplySchema: the schema step is not allowed to add a table to a database the other
-// server wrote, and the archive is a table this server owns.
+// A v6 database comes out holding exactly the v7 schema's tables, none of
+// the v6 tables left behind; the archive and its unique index are the pass's
+// own, and ApplySchema may not add them to a database the other server wrote.
 var archivedTables = func() []string {
 	tables := append(append([]string{}, legacyTables...), "migrationArchive")
 
@@ -275,9 +271,9 @@ func TestMigrateMovesEveryV6TableIntoTheV7Schema(t *testing.T) {
 	}
 }
 
-// TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder pins the order of the pass, which is not a
-// detail: the talkgroup, unit, dirwatch, and call migrations resolve their v6 references against
-// tables the earlier ones have already filled.
+// The order of the pass is not a detail: the talkgroup, unit, dirwatch, and
+// call migrations resolve their v6 references against tables the earlier ones
+// have already filled.
 func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 	_, progress := migrateLegacyV6Fixture(t)
 
@@ -302,17 +298,14 @@ func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 	}
 }
 
-// TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems is the level half of the migration
-// report. The source already separates the migration's entries from everything else in the log view; the
-// level is what lets an operator narrow further, to the rows the pass could not carry and the damage it
-// could not repair, without reading thirteen lines about which tables it looked at.
-//
-// The damage report matters most here: on a deployment the legacy server left damaged it is written on
-// every start, and an entry buried at the same level as every ingested call is an entry nobody finds.
+// The level half of the report: the level lets an operator narrow to the
+// rows the pass could not carry and the damage it could not repair, and on a
+// damaged deployment the report is written on every start, so an entry buried
+// at the level of every ingested call is one nobody finds.
 func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *testing.T) {
-	// The clean fixture and the one with the rows the pass cannot read: the second is where the lines
-	// the archive adds are said, and a line the pass says has to be classifiable as one of the two things
-	// the pass says.
+	// The clean fixture and the one with the rows the pass cannot read: the
+	// second is where the lines the archive adds are said, and a line the pass
+	// says has to be classifiable as one of the two things the pass says.
 	for _, db := range []*sql.DB{openLegacyV6Database(t), openLegacyV6PartialDatabase(t)} {
 		lines := migrateLines(t, db)
 
@@ -349,10 +342,9 @@ func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *te
 	}
 }
 
-// TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind is the criterion at the level the pass reports
-// at: the wording of each line the archive adds, in the order the pass says it, and the level it is filed
-// under. The summary comes first because an operator reading the log needs the count before the list, the
-// same shape the startup damage report uses.
+// The wording of each line the archive adds, in the order the pass says it,
+// and the level it is filed under; the summary comes first because an operator
+// reading the log needs the count before the list.
 func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.T) {
 	db := openLegacyV6PartialDatabase(t)
 
@@ -400,9 +392,9 @@ func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.
 	}
 }
 
-// TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing is the case a deployment of this server
-// that has never run is in: there are no v6 tables, so the pass creates the schema and then does and
-// says nothing.
+// The case a deployment of this server that has never run is in: there are
+// no v6 tables, so the pass creates the schema and then does and says
+// nothing.
 func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -415,16 +407,10 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 	}
 }
 
-// TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing covers the deployment that swaps one server
-// binary for the other on a database the legacy server already migrated.
-//
-// The log source feature narrowed what "nothing" means here, and deliberately: the v6 migration pass still moves no
-// row and says no word on a database that has no v6 tables, but the startup pass now brings the log table
-// up to the shape this server writes — the column that names the part of the server that wrote each entry,
-// and the two indexes the log search runs against. The archive added one more object the pass owns: the
-// migration archive and its unique index, the table that holds every v6 row a pass could not carry so
-// that no upgrade destroys one quietly. That is the whole list of what this server changes on a database
-// the other server wrote, and the test says so exactly: those four objects and nothing else.
+// The deployment that swaps one server binary for the other on a database
+// the legacy server already migrated: no v6 row moves and no word is said,
+// and the only changes are the log source column, the two log-search indexes,
+// and the migration archive and its unique index.
 func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -441,10 +427,10 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, and the migration archive with its index", len(after)-len(before))
 	}
 
-	// The logs table and the calls table are the objects allowed to read differently
-	// afterwards, and only because each gained a column. Every other table, index and trigger
-	// has to be byte-identical, and the only new objects are the two indexes the log search
-	// runs against and the archive the migration writes into.
+	// The logs and calls tables are the objects allowed to read differently
+	// afterwards, and only because each gained a column; every other table, index
+	// and trigger is byte-identical, and the only new objects are the two
+	// log-search indexes and the archive.
 	for _, object := range before {
 		if isLogsTable(object) || isCallsTable(object) {
 			continue
@@ -512,10 +498,9 @@ func TestMigrateTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// TestMigrateTwiceOverAV6TableItLeftBehindCarriesNothingTwice is the case the archive creates, where
-// TestMigrateTwiceIsTheSameAsOnce above cannot reach it: a v6 table the pass could not read whole
-// survives to the next start, so the next start reads the rows it already carried a second time. They
-// must not be written twice, reported as constraint failures, or archived as if they had been lost.
+// A v6 table the pass could not read whole survives to the next start,
+// which reads the rows it already carried a second time: they must not be
+// written twice, reported as constraint failures, or archived as if lost.
 func TestMigrateTwiceOverAV6TableItLeftBehindCarriesNothingTwice(t *testing.T) {
 	once := openLegacyV6PartialDatabase(t)
 
@@ -559,10 +544,9 @@ func TestMigrateTwiceOverAV6TableItLeftBehindCarriesNothingTwice(t *testing.T) {
 	}
 }
 
-// TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing is the same guarantee over the database a
-// legacy server actually leaves when its calls migration rolls back: the v8 tables are already written,
-// the v6 calls table is still there, and this server's first pass carries the calls and drops it. The
-// start after that must find nothing to do.
+// The guarantee over the database a legacy server leaves when its calls
+// migration rolls back: this server's first pass carries the calls and drops
+// the v6 table, and the start after that must find nothing to do.
 func TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing(t *testing.T) {
 	db := openDamagedFixture(t, "crashed")
 
@@ -596,9 +580,9 @@ func TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing(t *testing.T) {
 	}
 }
 
-// TestMigrateAnnouncesAndDropsAV6TableThatHoldsNoRows pins the probe: it asks whether the v6 table
-// can be queried at all and throws the answer away, so an empty v6 table is announced, opened a
-// transaction for, and dropped, exactly like a full one.
+// The probe asks whether the v6 table can be queried at all and throws the
+// answer away: an empty v6 table is announced, opened a transaction for, and
+// dropped, exactly like a full one.
 func TestMigrateAnnouncesAndDropsAV6TableThatHoldsNoRows(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -639,12 +623,9 @@ func TestMigrateSkipsAV6TableThatIsNotThereWithoutSayingSo(t *testing.T) {
 	}
 }
 
-// TestMigrateLeavesAV6TableItCouldNotReadWhole is the requirement: the pass may not destroy what it never
-// read. sqlite lets a v6 deployment keep text in a column it declared `datetime` or `integer`, and
-// the pass reads a table row by row, so such a row is lost at the scan — before the pass has any
-// values to archive. The legacy server dropped the table at the end of the pass whatever happened,
-// which is how a deployment lost a row it could not even be told about. Here the table stays, with
-// its unread row in it, and the pass says why.
+// The pass may not destroy what it never read: a v6 row unreadable at the
+// scan is lost before the pass has any values to archive, so the table stays,
+// with its unread row in it, and the pass says why.
 func TestMigrateLeavesAV6TableItCouldNotReadWhole(t *testing.T) {
 	db := openLegacyV6PartialDatabase(t)
 
@@ -711,13 +692,10 @@ func TestMigrateLeavesAV6TableItCouldNotReadWhole(t *testing.T) {
 	}
 }
 
-// TestMigrateReturnsAFailureTheLegacyMigrationReturnedAndStopsThePass covers the failures the
-// legacy server returned rather than printed. The meta migration is the clearest one: it drops the
-// v6 bookkeeping table outside any transaction and returns when the drop fails, which ends the
-// whole upgrade with the v6 tables the later migrations would have consumed still in place.
-//
-// The arrange makes the drop fail by leaving a view where the table was: the probe reads a view as
-// easily as a table, and a table drop refuses a view.
+// A failure the legacy migration returned rather than printed, ending the
+// whole upgrade with the v6 tables still in place: the bookkeeping table is
+// dropped outside any transaction, and the pass stops when that drop fails.
+// The arrange leaves a view where the table was, which refuses the drop.
 func TestMigrateReturnsAFailureTheLegacyMigrationReturnedAndStopsThePass(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -787,9 +765,8 @@ func TestMigrateTagsKeepTheirIdentityAndAreOrderedByLabel(t *testing.T) {
 	}
 }
 
-// TestMigrateSystemsStoresTheBlacklistWithoutItsBrackets pins the one transformation the system
-// migration performs on a value: the v6 blacklist is a JSON array, and the legacy migration stores
-// it with the brackets cut out.
+// The one transformation the system migration performs on a value: the v6
+// blacklist is a JSON array, stored with the brackets cut out.
 func TestMigrateSystemsStoresTheBlacklistWithoutItsBrackets(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -804,15 +781,12 @@ func TestMigrateSystemsStoresTheBlacklistWithoutItsBrackets(t *testing.T) {
 	}
 }
 
-// TestMigrateSystemsStoresAQuoteTheLegacyStatementCouldNotHold is a deliberate deviation, and the
-// cost of binding values instead of writing them into the statement: the legacy migration escapes
-// the system label but not the blacklist or the color, so a single quote in either one ends the
-// string early and the INSERT is a syntax error. The legacy logs the failure and drops the system,
-// which then takes its talkgroups, units, calls, and dirwatches with it because nothing resolves to
-// it any more. Here the value is a parameter, the row lands, and the rows that hang off it resolve.
-//
-// See the legacy `server/migrations.go`, migrateSystems: `system.Blacklists` and `system.Led` are assigned
-// without escapeQuotes and then interpolated into the INSERT.
+// A deliberate deviation, the cost of binding values instead of writing
+// them into the statement: the legacy migration escaped the system label but
+// not the blacklist or the color, and a single quote in either one made its
+// INSERT a syntax error, dropping the system and everything that resolved to
+// it. Here the value is a parameter, the row lands, and the rows that hang
+// off it resolve.
 func TestMigrateSystemsStoresAQuoteTheLegacyStatementCouldNotHold(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -841,12 +815,9 @@ func TestMigrateSystemsStoresAQuoteTheLegacyStatementCouldNotHold(t *testing.T) 
 	}
 }
 
-// TestMigrateStoresTextTheLegacyInterpolatedWithoutEscaping covers the rest of the columns the
-// legacy migration writes into its statement without escaping them: the talkgroup color, the log
-// level, the dirwatch type, and the call audio type. Each one is stored as the v6 row held it.
-//
-// See the legacy `server/migrations.go`: `talkgroup.Led`, `l.Level`, `dirwatch.Kind`, and `call.AudioMime` are
-// assigned raw and interpolated into an INSERT that quotes them.
+// The rest of the columns the legacy migration wrote into its statement
+// without escaping them: the talkgroup color, the log level, the dirwatch
+// type, and the call audio type. Each one is stored as the v6 row held it.
 func TestMigrateStoresTextTheLegacyInterpolatedWithoutEscaping(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -880,9 +851,9 @@ func TestMigrateStoresTextTheLegacyInterpolatedWithoutEscaping(t *testing.T) {
 	}
 }
 
-// TestMigrateTalkgroupsResolveTheirSystemThroughTheSystemReference: a v6 talkgroup names its system
-// by the v6 system's `id`, not its row identity, and the migrated talkgroup lands on the identity
-// the systems migration gave that system.
+// A v6 talkgroup names its system by the v6 system's id, not its row
+// identity, and the migrated talkgroup lands on the identity the systems
+// migration gave that system.
 func TestMigrateTalkgroupsResolveTheirSystemThroughTheSystemReference(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -898,12 +869,10 @@ func TestMigrateTalkgroupsResolveTheirSystemThroughTheSystemReference(t *testing
 	}
 }
 
-// TestMigrateTalkgroupsSayWhichTalkgroupLostItsGroupLink is the repaired half of a legacy defect the
-// fixture pins. v6 stored 0 for a talkgroup in no group, and the migration handed that 0 to the group
-// link, whose foreign key rejects it: the refusal came back worded differently on every backend, and
-// PostgreSQL treats a refused statement as the end of the transaction rather than of the row. The pass
-// now asks whether the group is in this database before it writes the link. The talkgroup is carried
-// either way, no link is written for a group that does not exist, and the group the row named is said.
+// A talkgroup in no group carried the v6 zero into the group link, whose
+// foreign key rejected it; the pass now asks whether the group is in this
+// database before writing the link, carries the talkgroup either way, and
+// says the group the row named.
 func TestMigrateTalkgroupsSayWhichTalkgroupLostItsGroupLink(t *testing.T) {
 	db, progress := migrateLegacyV6Fixture(t)
 
@@ -931,13 +900,10 @@ func TestMigrateTalkgroupsSayWhichTalkgroupLostItsGroupLink(t *testing.T) {
 	}
 }
 
-// TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld is the repaired half of a preserved quirk.
-//
-// The legacy insert named `unit.Id` — the identity `NewUnit` never gave the unit — in the position the
-// unit reference belongs in, so every migrated unit landed with `unitRef` 0 and the v6 reference its row
-// was read for was thrown away. The v6 `id` column is the radio's own number, and it is what
-// `callUnits.unitRef` and the call migration's unit lookup go looking for, so losing it is what made a
-// migrated unit unfindable at the very next step of the same migration.
+// A preserved quirk repaired: the legacy insert named the identity the
+// unit was never given in the position the unit reference belongs in, so
+// every migrated unit lost the v6 reference that is the radio's own number —
+// what callUnits.unitRef and the call migration's unit lookup seek.
 func TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -960,10 +926,10 @@ func TestMigrateUnitsKeepTheRadioReferenceEachV6UnitHeld(t *testing.T) {
 	}
 }
 
-// TestMigrateTalkgroupsArchivesATalkgroupWhoseSystemIsNotInThisDatabase is the requirement on the shape the
-// legacy pass was worst at: a talkgroup in a radio system this deployment never had. The legacy
-// migration resolved its system, found nothing, said nothing, and the row went out of the database
-// with the v6 table. Here the row is kept and the reason is said.
+// A talkgroup in a radio system this deployment never had: the legacy
+// migration resolved its system, found nothing, said nothing, and the row
+// left the database with the v6 table. Here the row is kept and the reason is
+// said.
 func TestMigrateTalkgroupsArchivesATalkgroupWhoseSystemIsNotInThisDatabase(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -986,10 +952,10 @@ func TestMigrateTalkgroupsArchivesATalkgroupWhoseSystemIsNotInThisDatabase(t *te
 	}
 }
 
-// TestMigrateTalkgroupsArchivesATalkgroupTheDatabaseRefused is the other way a row is lost: the
-// migration had a system for it, but the row names a tag this database does not have, so the insert
-// into the v8 table is refused. The failure line the pass already says is kept, and the row itself is
-// archived rather than dropped with the v6 table.
+// The other way a row is lost: the migration had a system for it, but the
+// row names a tag this database does not have, so the insert is refused. The
+// failure line the pass already says is kept, and the row is archived rather
+// than dropped with the v6 table.
 func TestMigrateTalkgroupsArchivesATalkgroupTheDatabaseRefused(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1026,10 +992,9 @@ func TestMigrateTalkgroupsArchivesATalkgroupTheDatabaseRefused(t *testing.T) {
 	}
 }
 
-// TestMigrateUnitsArchivesAUnitWhoseSystemIsNotInThisDatabase is the requirement on the units table, which
-// resolves its system the same way and skips the same way. Unit 304 of the fixture is that unit: the v6
-// units table has a unique (systemId, id), so the fixture holds the one row of a system this database
-// does not have rather than every test adding its own.
+// The units table resolves its system the same way and skips the same way.
+// The fixture holds the one row of a system this database does not have,
+// because the v6 units table has a unique (systemId, id).
 func TestMigrateUnitsArchivesAUnitWhoseSystemIsNotInThisDatabase(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1050,11 +1015,10 @@ func TestMigrateUnitsArchivesAUnitWhoseSystemIsNotInThisDatabase(t *testing.T) {
 	}
 }
 
-// TestMigrateUnitsCarryNothingTwiceForAUnitTheV8TableAlreadyHolds is the state a v6 table that
-// survived a completed pass leaves behind: the next start reads the same rows again, into identities
-// the v8 table already holds. Those units are not lost — they are in the v8 table under the identity
-// they were written under — so they are not archived, nothing is said about them, and the pass does not
-// report a constraint failure for a row it has already carried.
+// The state a v6 table that survived a completed pass leaves behind: the
+// next start reads the same rows again, into identities the v8 table already
+// holds. Those units are not lost, so they are not archived, nothing is said
+// about them, and no constraint failure is reported.
 func TestMigrateUnitsCarryNothingTwiceForAUnitTheV8TableAlreadyHolds(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1090,9 +1054,10 @@ func TestMigrateUnitsCarryNothingTwiceForAUnitTheV8TableAlreadyHolds(t *testing.
 	}
 }
 
-// TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows: the v6 options blob is unpacked
-// into the fixed list of names the legacy migration names, in that order, each stored as the JSON
-// text of its value; every other row of the v6 configuration table is copied across as it stands.
+// The v6 options blob is unpacked into the fixed list of names the legacy
+// migration names, in that order, each stored as the JSON text of its value;
+// every other row of the v6 configuration table is copied across as it
+// stands.
 func TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1121,10 +1086,10 @@ func TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows(t *testing.T
 	}
 }
 
-// openLegacyV6DatabaseWithV8Schema is the state a start that carried rows but could not drop the v6
-// tables they came from leaves behind: the v6 rows are still there, and so is the v8 table they were
-// already written into. It is the state in which the next start finds the database refusing an
-// identity it already holds.
+// The state a start that carried rows but could not drop their v6 tables
+// leaves behind: the v6 rows are still there, and so is the v8 table they
+// were already written into — where the next start refuses an identity it
+// already holds.
 func openLegacyV6DatabaseWithV8Schema(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -1137,9 +1102,8 @@ func openLegacyV6DatabaseWithV8Schema(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestMigrateGroupsCarryNothingTwiceForAGroupTheV8TableAlreadyHolds is the requirement on the groups table,
-// in the state that produces it: the v8 table already holds the identity the v6 row would be written
-// under.
+// The requirement on the groups table, in the state that produces it: the
+// v8 table already holds the identity the v6 row would be written under.
 func TestMigrateGroupsCarryNothingTwiceForAGroupTheV8TableAlreadyHolds(t *testing.T) {
 	db := openLegacyV6DatabaseWithV8Schema(t)
 
@@ -1191,9 +1155,8 @@ func TestMigrateTagsCarryNothingTwiceForATagTheV8TableAlreadyHolds(t *testing.T)
 	}
 }
 
-// TestMigrateSystemsCarryNothingTwiceForASystemTheV8TableAlreadyHolds is the systems half, and the
-// one whose loss would reach furthest: every talkgroup, unit, and call of that system resolves
-// through it.
+// The systems half, and the one whose loss would reach furthest: every
+// talkgroup, unit, and call of that system resolves through it.
 func TestMigrateSystemsCarryNothingTwiceForASystemTheV8TableAlreadyHolds(t *testing.T) {
 	db := openLegacyV6DatabaseWithV8Schema(t)
 
@@ -1265,16 +1228,10 @@ func TestMigrateDirwatchesArchivesADirwatchThatHoldsNoDirectory(t *testing.T) {
 	}
 }
 
-// TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated pins the one spelling the dirwatch migration's
-// probe, read, archive, and drop use.
-//
-// No sqlite run can show the three spellings this migration used to disagree on: sqlite matches a table
-// name whatever its case, which is exactly why the defect survived — on the backend every development test
-// runs on, it has no effect at all. What sqlite can show is the name a v6 database carries for that table,
-// the name the pass records in the archive, and the name of the table the pass leaves behind. They are one
-// string, and the statements are built from it. The backend where the disagreement was real — a probe that
-// fails, and a table neither migrated nor dropped, on that start and every later one — is proved live
-// by the MariaDB run.
+// The one spelling the dirwatch migration's probe, read, archive, and drop
+// use, the name the archive records, and the name of the table it leaves
+// behind are one string; the live MariaDB run proves the backend where the
+// three spellings disagreed.
 func TestMigrateDirwatchesNameTheTableTheV6DatabaseCreated(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1353,9 +1310,9 @@ func TestMigrateOptionsArchivesAKeyV8HasNoOptionOf(t *testing.T) {
 	}
 }
 
-// TestMigrateOptionsArchivesAValueWithTheWrongShape is the other half of the blob: a name the unpack
-// list knows, holding a value of a type the legacy source does not accept. The other values of the same
-// blob are still carried.
+// The options blob's other half: a name the unpack list knows holding a
+// value of a type the source does not accept is archived, and the other
+// values of the same blob are still carried.
 func TestMigrateOptionsArchivesAValueWithTheWrongShape(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1392,8 +1349,8 @@ func TestMigrateOptionsArchivesAValueWithTheWrongShape(t *testing.T) {
 	}
 }
 
-// TestMigrateOptionsArchivesABlobThatCouldNotBeRead is the whole row lost at once: the options blob is
-// not JSON this server can read, so nothing of it can be unpacked. The row is archived as the v6 table
+// The whole options row lost at once: the blob is not JSON this server can
+// read, so nothing can be unpacked; the row is archived as the v6 table
 // holds it, and the pass says so.
 func TestMigrateOptionsArchivesABlobThatCouldNotBeRead(t *testing.T) {
 	db := openLegacyV6Database(t)
@@ -1462,11 +1419,9 @@ func TestMigrateLogsStoreTheTimestampInMilliseconds(t *testing.T) {
 	}
 }
 
-// TestMigrateDownstreamsCopyTheV6Row: a downstream is copied across with its v6 identity, and only
-// a row missing its apikey, its scope, or its url is skipped. Its scope is the JSON the v6
-// administrator's system picker wrote, and it is carried word for word because that JSON is the shape
-// this server's scope reads (v6.6.3:server/downstream.go:86) — a scope that meant "every talkgroup on
-// system 10001" before the upgrade means the same thing after it.
+// A downstream is copied across with its v6 identity, and only a row
+// missing its apikey, its scope, or its url is skipped; the scope JSON is
+// carried word for word because it is the shape this server's scope reads.
 func TestMigrateDownstreamsCopyTheV6Row(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1480,9 +1435,9 @@ func TestMigrateDownstreamsCopyTheV6Row(t *testing.T) {
 	}
 }
 
-// TestMigrateLogsArchivesALogThatHoldsNoMessage is the requirement on the deployment's own history: a log row
-// with nothing in the message column is a row the log view cannot show, and the legacy pass dropped it
-// with the v6 table without a word.
+// A log row with nothing in the message column is a row the log view cannot
+// show, and the legacy pass dropped it with the v6 table without a word; here
+// it is archived.
 func TestMigrateLogsArchivesALogThatHoldsNoMessage(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1517,9 +1472,8 @@ func TestMigrateLogsArchivesALogThatHoldsNoLevel(t *testing.T) {
 	}
 }
 
-// TestMigrateDownstreamsArchivesADownstreamThatHoldsNoUrl is the requirement on the configuration sections:
-// the url is the whole point of a downstream, and a row without one used to leave the database with
-// the v6 table.
+// The url is the whole point of a downstream, and a row without one used to
+// leave the database with the v6 table; here it is archived.
 func TestMigrateDownstreamsArchivesADownstreamThatHoldsNoUrl(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1538,10 +1492,9 @@ func TestMigrateDownstreamsArchivesADownstreamThatHoldsNoUrl(t *testing.T) {
 	}
 }
 
-// TestMigrateAccessesArchivesAnAccessThatHoldsNoCode is the accesses half: the code is what an operator
-// types, and an access without one cannot be used or even named. Access 904 of the fixture is that
-// access — `code` is `not null unique`, so the fixture holds the one row with no code rather than every
-// test adding its own.
+// The code is what an operator types, and an access without one cannot be
+// used or even named, so it is archived; the fixture holds the one row with
+// no code because the column is not null unique.
 func TestMigrateAccessesArchivesAnAccessThatHoldsNoCode(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1558,9 +1511,8 @@ func TestMigrateAccessesArchivesAnAccessThatHoldsNoCode(t *testing.T) {
 	}
 }
 
-// TestMigrateDirwatchesResolveSystemAndTalkgroupReferences: a v6 dirwatch names both of its
-// references as v6 references, and the lookup the dirwatch migration runs resolves them to v7
-// identities.
+// A v6 dirwatch names both of its references as v6 references, and the
+// lookup the dirwatch migration runs resolves them to v7 identities.
 func TestMigrateDirwatchesResolveSystemAndTalkgroupReferences(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1599,14 +1551,9 @@ func TestMigrateDirwatchesStoreZeroForATalkgroupThatDoesNotResolve(t *testing.T)
 	t.Errorf("the dirwatch naming a talkgroup nothing migrated was not kept: %v", got)
 }
 
-// TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated is the stale-variable defect, and
-// the reason it is worth pinning: the dirwatch rows are scanned into two of the four variables the
-// lookup query used, so whether a dirwatch's talkgroup resolves at all depends on a variable the
-// dirwatch rows never scan into. When the lookup finds no talkgroup, that variable is still NULL
-// from the lookup, the reference is handed on as a NULL, and the row is rejected and lost.
-//
-// See the legacy `server/migrations.go`, migrateDirwatches: `talkgroupId` is scanned only by the lookup query,
-// and the insert is built from it.
+// A dirwatch naming a talkgroup no lookup found: the legacy pass built its
+// insert from a variable the dirwatch scan never filled, so the reference
+// went out as NULL and the row was rejected and lost.
 func TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1631,9 +1578,9 @@ func TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated(t *testing.T)
 	}
 }
 
-// TestMigrateCallsStoreTheCallWithItsFrequenciesPatchesAndUnits: a call that resolves is stored
-// with its v6 identity, its audio, its site reference of 0, and its frequencies, patches, and source
-// units unpacked out of the JSON the v6 row holds.
+// A call that resolves is stored with its v6 identity, its audio, its site
+// reference of 0, and its frequencies, patches, and source units unpacked
+// out of the JSON the v6 row holds.
 func TestMigrateCallsStoreTheCallWithItsFrequenciesPatchesAndUnits(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1693,9 +1640,9 @@ func TestMigrateCallsKeepTheAudioBytesTheV6RowHeld(t *testing.T) {
 	}
 }
 
-// TestMigrateCallsArchivesACallWhoseSystemDoesNotResolve: a call whose references do not resolve is
-// not carried, and since the archive exists it is not lost either — the row is archived with its audio, and the
-// reason is said.
+// A call whose references do not resolve is not carried, and since the
+// archive exists it is not lost either: the row is archived with its audio,
+// and the reason is said.
 func TestMigrateCallsArchivesACallWhoseSystemDoesNotResolve(t *testing.T) {
 	db, progress := migrateLegacyV6Fixture(t)
 
@@ -1710,10 +1657,9 @@ func TestMigrateCallsArchivesACallWhoseSystemDoesNotResolve(t *testing.T) {
 	}
 }
 
-// TestMigrateCallsArchivesACallThatHoldsNoAudio is the shape the v6 table can actually hold: the audio
-// column is `not null`, but a zero-length upload leaves it empty, and a call without audio is a call
-// this server has nothing to play. Its frequencies, patches, and source units are archived with it,
-// which is what makes the row worth reading afterwards.
+// The audio column is not null but a zero-length upload leaves it empty,
+// and a call without audio is a call this server has nothing to play; its
+// frequencies, patches, and source units are archived with it.
 func TestMigrateCallsArchivesACallThatHoldsNoAudio(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1732,9 +1678,8 @@ func TestMigrateCallsArchivesACallThatHoldsNoAudio(t *testing.T) {
 	}
 }
 
-// TestMigrateCallsArchivesACallWhoseTalkgroupIsNotInThisDatabase is the other reference: the call
-// names a talkgroup no migrated talkgroup holds, so the v8 row would name a talkgroup that does not
-// exist.
+// A call naming a talkgroup no migrated talkgroup holds would name a
+// talkgroup that does not exist, so it is not carried; it is archived.
 func TestMigrateCallsArchivesACallWhoseTalkgroupIsNotInThisDatabase(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1753,9 +1698,9 @@ func TestMigrateCallsArchivesACallWhoseTalkgroupIsNotInThisDatabase(t *testing.T
 	}
 }
 
-// TestMigrateCallsCarryNothingTwiceForACallTheV8TableAlreadyHolds is the calls half of the same
-// state, and the one where writing a row twice would also have written its frequencies and its source
-// units twice.
+// The calls half of the already-held state, and the one where writing a row
+// twice would also have written its frequencies and its source units
+// twice.
 func TestMigrateCallsCarryNothingTwiceForACallTheV8TableAlreadyHolds(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1785,12 +1730,9 @@ func TestMigrateCallsCarryNothingTwiceForACallTheV8TableAlreadyHolds(t *testing.
 	}
 }
 
-// TestMigrateCallsResolvesATalkgroupOfAnotherSystemBecauseTheLookupJoinHasNoOnClause is a legacy
-// defect: the lookup that fills the reference maps is a LEFT JOIN with no ON clause, which every
-// backend this server supports reads as a cross product, so every talkgroup is known to every
-// system.
-//
-// See the legacy `server/migrations.go`, migrateCalls and migrateDirwatches: the lookup query has no ON clause.
+// The lookup that fills the reference maps is a LEFT JOIN with no ON
+// clause, which every backend reads as a cross product, so a talkgroup of
+// one system resolves for a call of another — the defect kept as written.
 func TestMigrateCallsResolvesATalkgroupOfAnotherSystemBecauseTheLookupJoinHasNoOnClause(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1809,14 +1751,9 @@ func TestMigrateCallsResolvesATalkgroupOfAnotherSystemBecauseTheLookupJoinHasNoO
 	t.Errorf("the call on system 10001 naming a talkgroup of system 10002 was not migrated: %v", got)
 }
 
-// TestMigrateCallsStoreNoFrequencyWhenTheListIsTheEmptyArray is a legacy defect: the frequency list
-// is tested for a non-empty string rather than for a non-empty list, so a call whose list is the
-// empty array takes the list branch and stores no frequency at all, even though its single
-// frequency column names one. The source list is tested for the empty array as well, which is why
-// the same call still gets its source unit.
-//
-// See the legacy `server/migrations.go`, migrateCalls: `frequencies.String` is only tested for length, while
-// `sources.String` is also tested against `[]`.
+// The frequency list is tested for a non-empty string rather than a
+// non-empty list, so a call whose list is the empty array stores no
+// frequency at all even though its single frequency column names one.
 func TestMigrateCallsStoreNoFrequencyWhenTheListIsTheEmptyArray(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1835,9 +1772,9 @@ func TestMigrateCallsStoreNoFrequencyWhenTheListIsTheEmptyArray(t *testing.T) {
 	t.Errorf("the call whose source list is the empty array did not fall through to its single source")
 }
 
-// TestMigrateCallsStoreTheSingleFrequencyWhenTheListIsAnEmptyString is the branch the defect above
-// never reaches: an empty string, as opposed to the empty array, does fall through to the single
-// frequency column.
+// The branch the empty-array defect never reaches: an empty string, as
+// opposed to the empty array, does fall through to the single frequency
+// column.
 func TestMigrateCallsStoreTheSingleFrequencyWhenTheListIsAnEmptyString(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1857,13 +1794,9 @@ func TestMigrateCallsStoreTheSingleFrequencyWhenTheListIsAnEmptyString(t *testin
 	t.Errorf("the call whose frequency list is an empty string stored no frequency: %v", got)
 }
 
-// TestMigrateCallsUseTheUnitTheUnitMigrationAlreadyWrote is the repaired half of a preserved quirk.
-//
-// The call migration asks whether the unit a call came from is already in the units table, by the number
-// the call names and the system the call belongs to. With the unit reference kept, the unit the unit
-// migration wrote is found, no second unit is created for it, and the call gets its `callUnits` row —
-// which the legacy migration wrote only on the branch where the unit insert had failed, leaving every
-// call whose unit had to be created without its source.
+// With the unit reference kept, the unit the units migration wrote is
+// found, no second unit is created, and the call gets its callUnits row —
+// which the legacy migration wrote only when the unit insert had failed.
 func TestMigrateCallsUseTheUnitTheUnitMigrationAlreadyWrote(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1882,11 +1815,10 @@ func TestMigrateCallsUseTheUnitTheUnitMigrationAlreadyWrote(t *testing.T) {
 	}
 }
 
-// TestMigrateCallsReportNoFailureForWorkThatSucceeded is the repaired half of a preserved quirk.
-//
-// The legacy migration reported the unit insert from the branch that only runs when the insert succeeded,
-// with the error it had just tested for being nil, and its error formatter called `Error` on that nil and
-// took the whole server down. A migration that had nothing to complain about now says nothing.
+// The legacy migration reported a successful unit insert with the nil
+// error it had just tested for, and its error formatter called Error on
+// that nil and took the whole server down; a pass with nothing to say now
+// says nothing.
 func TestMigrateCallsReportNoFailureForWorkThatSucceeded(t *testing.T) {
 	_, progress := migrateLegacyV6Fixture(t)
 
@@ -1897,10 +1829,9 @@ func TestMigrateCallsReportNoFailureForWorkThatSucceeded(t *testing.T) {
 	}
 }
 
-// TestMigrateCallsCreateOneUnitPerUnitNumberTheyHaveNeverSeen keeps the unit the call migration creates
-// a unit: one row per number per system, found by the next call that names the same number instead of
-// created again, and created for the system the call belongs to rather than wherever a matching number
-// happens to live.
+// A unit number the calls have never seen keeps a unit of its own: one
+// row per number per system, found by the next call naming that number
+// instead of created again.
 func TestMigrateCallsCreateOneUnitPerUnitNumberTheyHaveNeverSeen(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1977,10 +1908,9 @@ func TestMigrateCallsCreateOneUnitPerUnitNumberTheyHaveNeverSeen(t *testing.T) {
 	}
 }
 
-// TestMigrateApikeysCopyTheV6Rows: only a missing identity skips an apikey. One with no ident, no
-// scope, or no key is still stored, with the empty value the legacy migration stored. The two scopes
-// here are the two shapes a v6 deployment holds — a list of systems with their talkgroups, and the
-// `*` the administrator's form starts a new access or apikey with — carried across unchanged.
+// Only a missing identity skips an apikey; one with no ident, scope, or
+// key is still stored with the empty value. The scopes here are the two
+// shapes a v6 deployment holds, carried across unchanged.
 func TestMigrateApikeysCopyTheV6Rows(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -1995,9 +1925,9 @@ func TestMigrateApikeysCopyTheV6Rows(t *testing.T) {
 	}
 }
 
-// TestMigrateAccessesStoreTheExpirationInSeconds: an access expiration is the one timestamp in this
-// schema that is not Unix milliseconds, an access with no expiration is stored as 0, and the scope is
-// the v6 JSON, carried word for word.
+// An access expiration is the one timestamp in this schema that is not
+// Unix milliseconds, an access with no expiration stores 0, and the scope
+// is the v6 JSON carried word for word.
 func TestMigrateAccessesStoreTheExpirationInSeconds(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -2012,9 +1942,9 @@ func TestMigrateAccessesStoreTheExpirationInSeconds(t *testing.T) {
 	}
 }
 
-// TestMigrateKeepsGoingAfterAPerRowFailure is the reason a per-row failure is not an error here: a
-// deployment's upgrade either finishes or does not, and a row the database rejected in one table
-// has never stopped the tables after it.
+// A per-row failure is not an error here: a deployment's upgrade either
+// finishes or does not, and a row the database rejected in one table has
+// never stopped the tables after it.
 func TestMigrateKeepsGoingAfterAPerRowFailure(t *testing.T) {
 	db, progress := migrateLegacyV6Fixture(t)
 
@@ -2045,11 +1975,9 @@ func TestMigrateAcceptsANilProgressCallback(t *testing.T) {
 	}
 }
 
-// TestMigrateRecoversTheCallsASurvivingV6TableStillHolds is the recoverable half of the requirement: the
-// legacy server committed the units migration with its damage, crashed in the calls migration, and
-// rolled the call set back, leaving the v6 calls table in place. The repaired pass finishes the job
-// the legacy server could not — the calls come back with their unit links, and the v6 table is
-// dropped the way the legacy pass drops it.
+// The recoverable half: the legacy server committed the units migration
+// with its damage and rolled the call set back; this server's pass carries
+// the calls with their unit links and drops the v6 table.
 func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 	db := openDamagedFixture(t, "crashed")
 
@@ -2074,9 +2002,9 @@ func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 		t.Errorf("the recovered source units:\n  got  %v\n  want %v", got, want)
 	}
 
-	// Call 706 names a number no unit holds any more — the unit that held it is unit 302, left with
-	// reference 0 — so the call migration makes a unit for it, as it does for any number it has never
-	// seen. The reference unit 302 lost is not recovered, and the startup report names it.
+	// Call 706 names a number no unit holds any more, so the call migration
+	// makes a unit for it; the reference unit 302 lost is not recovered, and
+	// the startup report names it.
 	if got := readRows(t, db, `SELECT "label", "systemId", "unitRef" FROM "units" WHERE "unitRef" = 6789`); len(got) != 1 {
 		t.Errorf("the unit for the number call 706 names:\n  got  %v\n  want one unit of Grand Metro at 6789", got)
 	}
@@ -2087,17 +2015,15 @@ func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 	}
 }
 
-// TestMigrateReportsTheDamageItCannotRepair is the unrecoverable half of the requirement: a database the
-// legacy server finished migrating holds units whose radio reference was thrown away, and the numbers
-// they were migrated from are nowhere in it. The startup report names each one, and invents nothing.
+// The unrecoverable half: a finished damaged migration leaves units whose
+// radio reference was thrown away and the numbers they came from nowhere in
+// the database; the startup report names each one and invents nothing.
 func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
 
-	// The startup pass gives the calls table its audioLength column — a schema change the
-	// pass owns, said once — and this test is about the damage report leaving rows alone.
-	// The snapshot is taken after a first pass, so the comparison is about rows, and the
-	// damage report is read from the pass that follows it, which is the start that finds
-	// the database already in shape and says only the damage.
+	// The audioLength column is a schema change the pass owns, said once;
+	// this test is about the damage report leaving rows alone, read from the
+	// start that finds the database already in shape.
 	migrateDatabase(t, db)
 
 	before := tableSnapshot(t, db)
@@ -2131,9 +2057,9 @@ func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	}
 }
 
-// TestMigrateReportsTheSameDamageAtEveryStart is the idempotence rule: the report is a reading, not a
-// pass that leaves the database in a state the next start reads differently, so a second start on the
-// same damaged database says the same thing about the same rows.
+// The idempotence rule: the damage report is a reading, not a pass that
+// changes what the next start reads, so a second start on the same damaged
+// database says the same thing about the same rows.
 func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
 
@@ -2151,9 +2077,9 @@ func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
 	}
 }
 
-// TestMigrateDeletesNoRowItIsAskedToRepair is the criterion: the repair recovers rows and reports rows, and
-// removes nothing. The v6 tables it drops are the ones whose rows it has just migrated, which is what
-// the legacy pass does too.
+// The repair recovers rows and reports rows, and removes nothing; the v6
+// tables it drops are the ones whose rows it has just migrated, as the
+// legacy pass did.
 func TestMigrateDeletesNoRowItIsAskedToRepair(t *testing.T) {
 	for _, fixture := range []string{"migrated", "crashed"} {
 		db := openDamagedFixture(t, fixture)
@@ -2229,10 +2155,9 @@ type auditTable struct {
 	v6, v6Identity, v8, v8Identity string
 }
 
-// auditTables is every v6 table whose rows are deployment data. `rdioScannerConfigs` is not in it,
-// because its rows do not arrive one for one — the options row unpacks into up to fourteen — and it is
-// audited on its own. `rdioScannerMeta` is not in it either: it is v6 bookkeeping with no v8 counterpart,
-// and `TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor` is where that declared exception is proved.
+// Every v6 table whose rows are deployment data. The configs table is
+// audited on its own — its options row unpacks into up to fourteen — and the
+// v6 bookkeeping table is the declared exception proved by the drop test.
 var auditTables = []auditTable{
 	{v6: "rdioScannerGroups", v6Identity: "_id", v8: "groups", v8Identity: "groupId"},
 	{v6: "rdioScannerTags", v6Identity: "_id", v8: "tags", v8Identity: "tagId"},
@@ -2247,9 +2172,9 @@ var auditTables = []auditTable{
 	{v6: "rdioScannerAccesses", v6Identity: "_id", v8: "accesses", v8Identity: "accessId"},
 }
 
-// auditShadow copies every v6 table before the pass runs. The pass drops the v6 tables it reads, and the
-// audit has to compare the deployment's database with what the same database holds afterwards, so it
-// keeps its own copy of the rows the pass is about to remove. Only this test's database ever sees them.
+// Copies every v6 table before the pass runs: the pass drops the tables
+// it reads, and the audit has to compare the deployment's database with what
+// it holds afterwards. Only this test's database ever sees the copies.
 func auditShadow(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -2268,12 +2193,10 @@ func auditIdentities(t *testing.T, db *sql.DB, table, column string) []string {
 	return auditIdentitiesWhere(t, db, table, column, "")
 }
 
-// auditIdentitiesWhere reads the identities one table holds under a condition, in identity order.
-//
-// Every one of them has to be a number. sqlite reads a quoted name that matches no column as the word
-// itself, so a column name this audit got wrong would come back as the same word on both sides of every
-// comparison and read as a pass. A value that is not an identity is that mistake, and it is fatal here
-// rather than a mismatch further down.
+// Reads the identities one table holds under a condition, in identity
+// order, and fails fatally when one is not a number: sqlite reads a quoted
+// name matching no column as the word itself, so a wrong column name would
+// read as a pass on both sides of every comparison.
 func auditIdentitiesWhere(t *testing.T, db *sql.DB, table, column, where string) []string {
 	t.Helper()
 
@@ -2312,10 +2235,10 @@ func auditColumnValues(t *testing.T, db *sql.DB, table, column, where string) []
 	return values
 }
 
-// TestTheMigrationCarriesOrArchivesEveryRowOfTheLegacyDatabase is the conservation invariant: for every
-// row of every v6 table that holds deployment data, the pass either carried it into the v8 table its rule
-// names or archived it with a reason. A row in neither is the defect this feature exists to end. A row in
-// both is a pass that cannot say what it did.
+// The conservation invariant: every row of every v6 table holding
+// deployment data is either carried into the v8 table its rule names or
+// archived with a reason. A row in neither is the defect this feature exists
+// to end; a row in both is a pass that cannot say what it did.
 func TestTheMigrationCarriesOrArchivesEveryRowOfTheLegacyDatabase(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -2326,9 +2249,9 @@ func TestTheMigrationCarriesOrArchivesEveryRowOfTheLegacyDatabase(t *testing.T) 
 	auditConservation(t, db)
 }
 
-// auditConservation is the conservation invariant on a database that already holds its shadow copies and
-// has already been migrated. The sqlite test and the live-backend tests are one audit run on three
-// backends, which is what keeps a backend from being proven by a different set of rules than the others.
+// The conservation invariant on a migrated database holding its shadow
+// copies: one audit run on three backends, which keeps a backend from being
+// proven by a different set of rules than the others.
 func auditConservation(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -2364,14 +2287,11 @@ func auditConservation(t *testing.T, db *sql.DB) {
 	}
 }
 
-// TestTheMigrationCarriesOrArchivesEveryConfigRowOfTheLegacyDatabase is the conservation invariant on the
-// one v6 table whose rows do not arrive one for one.
-//
-// A config row that is not the options row arrives as one options row of the same key. The options row
-// unpacks into up to fourteen options rows, so it is carried and archived at the same time when some of
-// its keys have no v8 counterpart: the archive holds the v6 row whole, which is what makes the keys that
-// were dropped recoverable. The audit therefore counts conservation per key, which is what the v8 table
-// actually holds.
+// The conservation invariant on the one v6 table whose rows do not arrive
+// one for one: a non-options row arrives as one options row of the same key,
+// the options row unpacks into up to fourteen, and it is carried and archived
+// at once when some keys have no v8 counterpart — the archive holds the v6 row
+// whole and the audit counts conservation per key.
 func TestTheMigrationCarriesOrArchivesEveryConfigRowOfTheLegacyDatabase(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -2468,17 +2388,17 @@ func number(v6, v8 string) string {
 	return `COALESCE(v."` + v6 + `", 0), COALESCE(t."` + v8 + `", 0)`
 }
 
-// flag is a v6 flag column and its v8 counterpart. The fallback is `false` and not 0 because PostgreSQL
-// stores these as a boolean and COALESCE will not mix a boolean with an integer; MariaDB and sqlite read
-// the same word as the 0 and 1 their columns hold.
+// A v6 flag column and its v8 counterpart. The fallback is false and not
+// 0: PostgreSQL stores these as a boolean and COALESCE will not mix a boolean
+// with an integer, while MariaDB and sqlite read the same word as 0 and 1.
 func flag(v6, v8 string) string {
 	return `COALESCE(v."` + v6 + `", false), COALESCE(t."` + v8 + `", false)`
 }
 
-// assertCarriedValues compares each named column's v6 value with the v8 value it arrived in.
-//
-// The query has to read the row's identity first and then the pairs in the order `columns` names them,
-// which is what lets a failure name the table, the row, and the column.
+// Compares each named column's v6 value with the v8 value it arrived in;
+// the query reads the row's identity first and then the pairs in the order
+// the columns list names them, which is what lets a failure name the table,
+// the row, and the column.
 func assertCarriedValues(t *testing.T, db *sql.DB, table string, query string, columns ...string) {
 	t.Helper()
 
@@ -2651,11 +2571,11 @@ func assertOrderedByLabel(t *testing.T, db *sql.DB, v6Table, v6Identity, v8Table
 	}
 }
 
-// assertCarriedTimes compares the datetime text a v6 row holds with the integer the v8 table holds for it,
-// in the unit the data model's rule names. v6 wrote these as text in the layout Go's time package prints;
-// no dialect converts that text to an epoch count the same way, so the audit converts it here. The query
-// reads the two columns side by side so that a failure can name both: the reader of a datetime failure
-// sees which pair the audit compared, not only the v6 side of it.
+// Compares the datetime text a v6 row holds with the integer the v8
+// table holds for it, in the unit the data model's rule names. v6 wrote these
+// as text in the layout Go's time package prints and no dialect converts it
+// to an epoch count the same way, so the audit converts it here and reads the
+// two columns side by side so a failure can name both.
 func assertCarriedTimes(t *testing.T, db *sql.DB, table, v6Column, v8Column, unitName string, unit time.Duration, query string) {
 	t.Helper()
 
@@ -2681,9 +2601,10 @@ func assertCarriedTimes(t *testing.T, db *sql.DB, table, v6Column, v8Column, uni
 	}
 }
 
-// assertCarriedJSONLists is the calls rule the child tables hold: the frequencies, patches, and source
-// units a v6 call kept in three JSON columns arrive as rows of callFrequencies, callPatches, and
-// callUnits, and the counts match what the JSON held.
+// The calls rule the child tables hold: the frequencies, patches, and
+// source units a v6 call kept in three JSON columns arrive as rows of
+// callFrequencies, callPatches, and callUnits, with counts matching what the
+// JSON held.
 func assertCarriedJSONLists(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -2694,10 +2615,9 @@ func assertCarriedJSONLists(t *testing.T, db *sql.DB) {
 			continue
 		}
 
-		// The frequencies list a call wrote arrives as one callFrequencies row for each entry of it — an
-		// empty list arrives as none. A call that wrote no list at all arrives with the one row for the
-		// frequency the call itself names, which is what the legacy migration wrote for the calls that
-		// only had a frequency.
+		// The frequencies list a call wrote arrives as one callFrequencies row
+		// per entry, an empty list as none; a call that wrote no list at all arrives
+		// with the one row for the frequency the call itself names.
 		want := len(jsonNames(t, frequencies))
 
 		if frequencies == "" && isNumber(frequency) && frequency != "0" {
@@ -2724,9 +2644,10 @@ func assertCarriedJSONLists(t *testing.T, db *sql.DB) {
 				callId, patches, want, system, got)
 		}
 
-		// The source units a call wrote arrive as one callUnits row each. A call that wrote no list
-		// arrives with the one row for the unit number the call itself names — and with a unit created
-		// for that number when no unit holds it, which is the unit-number repair.
+		// The source units a call wrote arrive as one callUnits row each; a call
+		// that wrote no list arrives with the one row for the unit number the call
+		// names — and a unit created for that number when none holds it, the
+		// unit-number repair.
 		want = len(sourceUnits(t, sources))
 
 		if (sources == "" || sources == "[]") && isNumber(source) && source != "0" {
@@ -2776,13 +2697,11 @@ func sourceUnits(t *testing.T, raw string) []string {
 	return units
 }
 
-// assertDirwatchReferences is the dirwatch reference rule: the system and the talkgroup a v6 dirwatch
-// names arrive as the v8 rows they name, and a number the legacy lookup had no row for arrives as no
-// reference at all.
-//
-// That last branch is what the legacy pass wrote and what the fresh schema pins: the v6 number it replaced is
-// not kept anywhere, which is recorded as a residual risk. The audit proves the branch only ever happens for
-// a reference the deployment really had no row for.
+// The dirwatch reference rule: the system and the talkgroup a v6 dirwatch
+// names arrive as the v8 rows they name, and a number the legacy lookup had
+// no row for arrives as no reference at all — the v6 number it replaced is
+// kept nowhere, a residual risk the audit proves only ever happens for a
+// reference the deployment really had no row for.
 func assertDirwatchReferences(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -2851,9 +2770,10 @@ func jsonNames(t *testing.T, raw string) []string {
 	return names
 }
 
-// TestTheMigrationArchivesTheAudioOfTheCallsItCouldNotCarry is the recoverable half of the archive rule:
-// an archived call holds its audio base64-encoded, because a call the pass could not carry is still a call
-// somebody recorded, and the audio is the only part of it that cannot be typed back in.
+// The recoverable half of the archive rule: an archived call holds its
+// audio base64-encoded, because a call the pass could not carry is still a
+// call somebody recorded, and the audio is the one part that cannot be typed
+// back in.
 func TestTheMigrationArchivesTheAudioOfTheCallsItCouldNotCarry(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -2898,9 +2818,10 @@ func auditArchivedCallAudio(t *testing.T, db *sql.DB) {
 	}
 }
 
-// TestTheMigrationLeavesNoV8RowPointingAtNothing is the reference-integrity half of the requirement: a row that
-// arrives pointing at a system, talkgroup, tag, group, or call that is not there is a row the operator
-// cannot open, and a migration that produced one would look like a success.
+// The reference-integrity half of the requirement: a v8 row pointing at a
+// system, talkgroup, tag, group, or call that is not there is a row the
+// operator cannot open, and a migration that produced one would look like a
+// success.
 func TestTheMigrationLeavesNoV8RowPointingAtNothing(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -2956,13 +2877,11 @@ func auditReferences(t *testing.T, db *sql.DB) {
 	}
 }
 
-// TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor is the declared-exception half of the requirement: the things
-// the pass does remove, because the v8 schema has no place for them.
-//
-// `rdioScannerMeta` is v6's own migration bookkeeping: the table is dropped, and since the criterion its
-// rows are archived first, so the deployment's migration history outlives the table. `usePolling` is a
-// v6 dirwatch column v7 removed with the polling feature: the dirwatch row itself is carried, and the
-// one value of it v8 cannot hold is said to be dropped here rather than left to be discovered.
+// The declared-exception half: the things the pass does remove because
+// the v8 schema has no place for them. The v6 migration bookkeeping table is
+// archived before its drop, so the migration history outlives it; usePolling
+// is a dirwatch column v7 removed with the polling feature — the row is
+// carried and that one dropped value is said here.
 func TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -2973,9 +2892,10 @@ func TestTheMigrationDropsWhatTheV8SchemaHasNoRoomFor(t *testing.T) {
 	auditDeclaredDrops(t, db, DialectSqlite)
 }
 
-// hasTable reports whether a database holds a table, read out of the catalog that backend itself offers.
-// sqlite, MariaDB, and PostgreSQL each list their tables out of a view of their own, and an audit that
-// asks one backend in the way another one answers reports a table missing because of the question.
+// Reports whether a database holds a table, read out of the catalog that
+// backend itself offers: each backend lists its tables out of a view of its
+// own, and asking one backend the way another answers reports a table
+// missing because of the question.
 func hasTable(t *testing.T, db *sql.DB, dialect Dialect, table string) bool {
 	t.Helper()
 
@@ -3012,8 +2932,8 @@ func auditDeclaredDrops(t *testing.T, db *sql.DB, dialect Dialect) {
 	}
 
 	// The v6 migration bookkeeping is archived before its drop: the
-	// deployment's migration history is exactly what the table holds, and the drop
-	// is exactly what takes it away, so every row of it is kept in the archive.
+	// deployment's migration history is exactly what the table holds, and the
+	// drop is exactly what takes it away.
 	if got, want := len(readRows(t, db, `SELECT "rowId" FROM "migrationArchive" WHERE "tableName" = 'rdioScannerMeta'`)), len(readRows(t, db, `SELECT "name" FROM "auditrdioScannerMeta"`)); got != want {
 		t.Errorf("the archive holds %d rdioScannerMeta rows, want the %d the v6 table had: the migration history is archived before its drop", got, want)
 	}
@@ -3047,17 +2967,17 @@ func mustAtoi(t *testing.T, text string) int {
 	return n
 }
 
-// largeAudioBytes is one call's worth of audio here. The number is chosen for the page cache, not for
-// realism: twenty kilobytes across five hundred calls is more than sqlite keeps dirty in memory, which is
-// the moment the pass used to stop at.
+// One call's worth of audio here, chosen for the page cache, not for
+// realism: twenty kilobytes across five hundred calls is more than sqlite
+// keeps dirty in memory, the moment the pass used to stop at.
 const largeAudioBytes = 20 * 1024
 
 func TestMigrateCallsCarriesATableSqliteCannotReadAndWriteAtOnce(t *testing.T) {
 	db := openLegacyV6Database(t)
 
-	// The arranged calls resolve through the systems, talkgroups and units the fixture already holds. A
-	// call naming something the database does not hold would be archived here rather than carried, and
-	// what this test is about is carrying a hundred times more of it than the fixture holds.
+	// The arranged calls resolve through the systems, talkgroups and units
+	// the fixture already holds; what this test is about is carrying a hundred
+	// times more of it than the fixture holds.
 	for n := range 500 {
 		id := 720 + n
 
@@ -3080,9 +3000,9 @@ func TestMigrateCallsCarriesATableSqliteCannotReadAndWriteAtOnce(t *testing.T) {
 		}
 	}
 
-	// A pass that is waiting on itself never comes back, so the deadline is what makes this test fail
-	// rather than freeze the suite. It is not a bar on speed: the pass carries this table in a fraction
-	// of a second, and the deadline only ever speaks for the case where it stopped.
+	// A pass that is waiting on itself never comes back, so the deadline is
+	// what makes this test fail rather than freeze the suite — not a bar on
+	// speed, as the pass carries this table in a fraction of a second.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -3117,11 +3037,11 @@ func countArrangedCalls(t *testing.T, db *sql.DB) int {
 	return carried
 }
 
-// TestMigrateDeduplicatesDuplicateOptionRowsKeepingTheLastWritten: the shape a MySQL deployment's options table reaches — every key
-// written again by every save, because the driver reports no changed rows and the save
-// reads that as no row there. The pass removes the duplicates, the last row written
-// for each key winning (it is the value the server has been running with), and the
-// table carries the unique index that refuses a duplicate from then on.
+// The shape a MySQL deployment's options table reaches — every key
+// written again by every save, because the driver reports no changed rows and
+// the save reads that as no row there. The pass removes the duplicates, the
+// last row written for each key winning, and the table carries the unique
+// index that refuses a duplicate from then on.
 func TestMigrateDeduplicatesDuplicateOptionRowsKeepingTheLastWritten(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -3182,10 +3102,9 @@ func TestMigrateGivesAFreshDatabaseTheUniqueOptionKeyIndex(t *testing.T) {
 	}
 }
 
-// TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce: the
-// dedup and the index are a step of the startup pass, and a restart runs the pass
-// again over the table it already fixed — with no row to remove, no index to create,
-// and no word to say.
+// The dedup and the index are a step of the startup pass, and a restart
+// runs the pass again over the table it already fixed — with no row to
+// remove, no index to create, and no word to say.
 func TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -3208,23 +3127,15 @@ func TestMigrateDeduplicatesOptionRowsTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// TestMigrateReportsAContextCancelledAtThePreload: the talkgroups migration preloads the systems
-// the v6 talkgroups resolve against, and a preload is a read like any other. A read the caller's
-// context has already ended is not a partial answer: the pass reports the failure and stops, and a pass
-// that stopped at a read has rewritten nothing — the v6 table stays where it is.
-//
-// The cancellation is arranged through the Progress callback the pass is given, which is the handle a
-// caller has on a migration while it is running: the callback ends the caller's context at the line that
-// announces the talkgroups step, and that line is said immediately before the preload is asked for.
-// Nothing here waits on a clock, and no size of seed is needed to make the read fail.
-//
-// Two shapes are not reached by this arrangement, and no deterministic arrangement on this driver
-// reaches them: a read that breaks partway through the rows it has already begun handing back, and a
-// scan that fails on a row already handed back. Both need a cancellation delivered at an iteration
-// boundary no test can name, and the code that answers them stays as written rather than being pinned
-// by an arrangement that only looks deterministic. What is pinned here is the half a caller can be held
-// to: a read that cannot be made is reported as that read failing, naming the statement the pass asked
-// for.
+// The talkgroups migration preloads the systems its v6 rows resolve
+// against, and a read the caller's context has already ended is not a
+// partial answer: the pass reports the failure and stops, and a pass that
+// stopped at a read has rewritten nothing — the v6 table stays. The
+// cancellation arrives through the Progress callback, the one handle a caller
+// has on a running migration, ending its context at the line said
+// immediately before the preload. Two shapes stay unpinned by any
+// deterministic arrangement — a read breaking partway through the rows it
+// began handing back, and a scan failing on a row already handed back.
 func TestMigrateReportsAContextCancelledAtThePreload(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -3248,9 +3159,9 @@ func TestMigrateReportsAContextCancelledAtThePreload(t *testing.T) {
 	err := Migrate(ctx, db, DialectSqlite, nil, func(level, message string) {
 		announced = append(announced, message)
 
-		// The line the step says before it preloads the systems it resolves against.
-		// Ending the caller's context here is a cancellation landing on the preload, and
-		// it is landed there by the one callback the pass offers a caller.
+		// The line the step says before it preloads the systems it resolves
+		// against: ending the caller's context here lands a cancellation on the
+		// preload, landed by the one callback the pass offers a caller.
 		if message == "migrating talkgroups..." {
 			cancel()
 		}
@@ -3275,13 +3186,12 @@ func TestMigrateReportsAContextCancelledAtThePreload(t *testing.T) {
 	}
 }
 
-// TestMigrateReportsAProbeThatCannotRead: the v6-table probe
-// answers one question — is this v6 table there. A table that is not there means
-// nothing to do, and the step says nothing and does nothing. A probe that cannot
-// read — a locked database, an expired context — is not an answer to that question,
-// and today every failure is read as "not there": the pass moves no rows, says no
-// word, and the deployment's v6 rows sit un-migrated behind a startup log that
-// names nothing.
+// The v6-table probe answers one question — is this v6 table there. A
+// table that is not there means nothing to do; a probe that cannot read — a
+// locked database, an expired context — is not an answer, and today every
+// failure is read as not there: the pass moves no rows, says no word, and
+// the deployment's v6 rows sit un-migrated behind a startup log that names
+// nothing.
 func TestMigrateReportsAProbeThatCannotRead(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -3328,12 +3238,12 @@ func TestMigrateReportsAProbeThatCannotRead(t *testing.T) {
 	}
 }
 
-// TestMigrateArchivesTheMetaRowsItDrops: the v6 migration
-// bookkeeping table has no v7 counterpart, so the pass drops it — today with its
-// rows in it, the deployment's migration history gone with no record left behind,
-// the very defect the archive exists to end. The rows are archived under their
-// table name, in name order, before the drop, and the pass says so the way it
-// says every row it left in the archive.
+// The v6 migration bookkeeping table has no v7 counterpart, so the pass
+// drops it — today with its rows in it, the deployment's migration history
+// gone with no record left behind, the very defect the archive exists to
+// end. The rows are archived under their table name, in name order, before
+// the drop, and the pass says so the way it says every row it left in the
+// archive.
 func TestMigrateArchivesTheMetaRowsItDrops(t *testing.T) {
 	db := openLegacyV6Database(t)
 
