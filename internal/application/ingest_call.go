@@ -476,16 +476,16 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 	handler.hub.BroadcastCall(call)
 }
 
-// forwardCall re-posts a stored call to every downstream server whose scope covers it.
-// It runs on its own goroutine, bounded only by the forwarder's own timeout, so a slow
-// or unreachable downstream cannot hold up later calls — see the downstream forwarding
-// maintainer note. A forwarding failure is therefore a server-log line, not this use
-// case's failure: the call was already stored and delivered here.
 // forwardSlots caps how many calls the server posts to its downstreams at the same
 // time: a burst of ingested calls must not become an unbounded flood of posts on the
 // receiving servers, and the posts queue behind the eight in flight.
 var forwardSlots = make(chan struct{}, 8)
 
+// forwardCall re-posts a stored call to every downstream server whose scope covers it.
+// It runs on its own goroutine, bounded only by the forwarder's own timeout, so a slow
+// or unreachable downstream cannot hold up later calls — see the downstream forwarding
+// maintainer note. A forwarding failure is therefore a server-log line, not this use
+// case's failure: the call was already stored and delivered here.
 func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
 	go func() {
 		ctx = context.WithoutCancel(ctx)
